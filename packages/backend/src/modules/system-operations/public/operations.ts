@@ -55,7 +55,18 @@ import {
   type StageRestoreInput,
   type StageRestoreResult,
   type StartDatabaseMigrationInput,
+  type MaintenanceDiskReport,
 } from './types'
+
+export interface MaintenanceDiskOperations {
+  report(): Promise<MaintenanceDiskReport>
+  cleanupRetiredStores(): Promise<{ readonly removedBytes: number }>
+}
+
+export type {
+  ResourceLimitOperations,
+  ResourceLimitPersistence,
+} from '../application/ports/resourceLimitPersistence'
 
 const emptyInputSchema = z.object({}).strict()
 const PUBLIC_ERRORS = Object.freeze(['validation-failed', 'internal-error'] as const)

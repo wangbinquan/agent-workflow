@@ -28,9 +28,16 @@ import type {
   StartDatabaseMigrationInput,
 } from '../public/types'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
-import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
-import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import {
+  openPostgresqlLogicalTarget,
+  type PostgresqlLogicalTarget,
+} from '@/platform/persistence/postgresqlLogicalTarget'
+import {
+  createPostgresqlDatabaseRuntime,
+  PostgresqlRuntimeError,
+} from '@/platform/persistence/postgresqlRuntime'
 import { preflightPostgresqlTarget } from '@/platform/persistence/postgresqlPreflight'
+import { ValidationError } from '@/util/errors'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import {
   buildLogicalSchemaContract,
@@ -43,6 +50,25 @@ import type {
 import { openSqliteLogicalSourceWorker } from '@/platform/persistence/sqliteLogicalSourceWorkerSupervisor'
 
 type PostgresqlConfig = Extract<DatabaseConfig, { provider: 'postgresql' }>
+
+function mapPostgresqlPreflightConfigurationError(error: unknown, urlEnv: string): never {
+  if (!(error instanceof PostgresqlRuntimeError)) throw error
+  if (error.code === 'postgresql-url-env-missing') {
+    throw new ValidationError(
+      error.code,
+      `PostgreSQL connection environment variable ${urlEnv} is not available to the running daemon. Set it in the daemon startup environment, restart the daemon, then test the target again.`,
+      { field: 'urlEnv', urlEnv },
+    )
+  }
+  if (error.code === 'postgresql-url-invalid') {
+    throw new ValidationError(
+      error.code,
+      `PostgreSQL connection environment variable ${urlEnv} must contain a postgresql:// URL in the daemon startup environment.`,
+      { field: 'urlEnv', urlEnv },
+    )
+  }
+  throw error
+}
 
 export class DatabaseMigrationCoordinatorError extends Error {
   constructor(
@@ -215,13 +241,65 @@ export function createDatabaseMigrationCoordinator(
       generationId: `dbg_pg_${operationId.slice(4)}`,
       env: options.env,
     })
-    const logicalTarget = await openPostgresqlLogicalTarget({
-      runtime,
+    // Opening the logical target reserves one PostgreSQL session for the
+    // operation-scoped advisory lock. Keep it lazy so planned-phase readiness
+    // and permission probes can run even when the configured pool has max=1.
+    // Cancellation before prepare likewise never opens or mutates the target.
+    let openingTarget: Promise<PostgresqlLogicalTarget> | null = null
+    const openTarget = (): Promise<PostgresqlLogicalTarget> => {
+      openingTarget ??= openPostgresqlLogicalTarget({
+        runtime,
+        operationId,
+        sourceGenerationId: manifest.payload.source.generationId,
+        contract,
+        plan,
+      })
+      return openingTarget
+    }
+    const logicalTarget: PostgresqlLogicalTarget = {
+      provider: 'postgresql' as const,
       operationId,
-      sourceGenerationId: manifest.payload.source.generationId,
-      contract,
-      plan,
-    })
+      async prepare(now) {
+        await (await openTarget()).prepare(now)
+      },
+      async copyChunk(table, chunk, now) {
+        await (await openTarget()).copyChunk(table, chunk, now)
+      },
+      async finalizeSchema(now, expectedTables) {
+        await (await openTarget()).finalizeSchema(now, expectedTables)
+      },
+      async prepareGeneration(input) {
+        await (await openTarget()).prepareGeneration(input)
+      },
+      async activateGeneration(generationId, activatedAt) {
+        await (await openTarget()).activateGeneration(generationId, activatedAt)
+      },
+      async assertReady(generationId) {
+        await (await openTarget()).assertReady(generationId)
+      },
+      async firstLiveWriteAt(generationId) {
+        return await (await openTarget()).firstLiveWriteAt(generationId)
+      },
+      async retireGenerationIfUnwritten(generationId) {
+        return await (await openTarget()).retireGenerationIfUnwritten(generationId)
+      },
+      async markFinalized(finalizedAt) {
+        await (await openTarget()).markFinalized(finalizedAt)
+      },
+      async close() {
+        if (openingTarget === null) return
+        let target: PostgresqlLogicalTarget
+        try {
+          target = await openingTarget
+        } catch {
+          // A failed open has no successfully reserved target session to
+          // release. The opening failure remains authoritative.
+          return
+        }
+        await target.close()
+      },
+    }
+    Object.freeze(logicalTarget)
     const admission: DatabaseMigrationAdmissionPort = {
       freezeAndDrain: (input) => options.admission.freezeAndDrain(input),
       async reopenSqlite(input) {
@@ -272,7 +350,7 @@ export function createDatabaseMigrationCoordinator(
         // forever in `planned` with no resumable failure receipt.
         const manifest = controlPlane.readManifest(operationId)
         if (manifest.payload.failure === null) {
-          const failure = classifyDatabaseMigrationFailure(error)
+          const failure = classifyDatabaseMigrationFailure(error, manifest.payload.phase)
           controlPlane.fail(operationId, {
             ownerId: manifest.payload.owner.id,
             ownerFence: manifest.payload.owner.fence,
@@ -308,11 +386,16 @@ export function createDatabaseMigrationCoordinator(
       assertSqliteSource()
       const source = await inspectSqliteSource()
       const token = randomUUID().replaceAll('-', '')
-      const runtime = createPostgresqlDatabaseRuntime({
-        config: targetConfig(input.target),
-        generationId: `dbg_preflight_${token}`,
-        env: options.env,
-      })
+      let runtime: ReturnType<typeof createPostgresqlDatabaseRuntime>
+      try {
+        runtime = createPostgresqlDatabaseRuntime({
+          config: targetConfig(input.target),
+          generationId: `dbg_preflight_${token}`,
+          env: options.env,
+        })
+      } catch (error) {
+        mapPostgresqlPreflightConfigurationError(error, input.target.urlEnv)
+      }
       try {
         const target = await preflightPostgresqlTarget({
           runtime,
@@ -335,28 +418,6 @@ export function createDatabaseMigrationCoordinator(
     },
 
     async start(input: StartDatabaseMigrationInput) {
-      const duplicate = controlPlane
-        .list()
-        .map((status) => controlPlane.readManifest(status.operationId))
-        .find((manifest) => manifest.payload.idempotencyKey === input.idempotencyKey)
-      if (duplicate !== undefined) {
-        if (!sameTarget(duplicate.payload.target, input.target)) {
-          throw new DatabaseMigrationCoordinatorError(
-            'database-migration-target-config-mismatch',
-            'idempotent migration start reused an operation with a different target config',
-          )
-        }
-        const status = await coordinator.get({ operationId: duplicate.payload.operationId })
-        if (
-          status.failure === null &&
-          status.rolledBackAt === null &&
-          status.phase !== 'accepting-writes' &&
-          status.phase !== 'finalized'
-        ) {
-          return await executeOperation(status.operationId)
-        }
-        return status
-      }
       const sourceGenerationId = assertSqliteSource()
       const sourceSnapshot = await inspectSqliteSource()
       const status = controlPlane.start({
@@ -380,7 +441,15 @@ export function createDatabaseMigrationCoordinator(
           'idempotent migration start reused an operation with a different target config',
         )
       }
-      return await executeOperation(status.operationId)
+      if (
+        status.failure === null &&
+        status.rolledBackAt === null &&
+        status.phase !== 'accepting-writes' &&
+        status.phase !== 'finalized'
+      ) {
+        return await executeOperation(status.operationId)
+      }
+      return status
     },
 
     async resume(input: DatabaseMigrationOperationInput) {

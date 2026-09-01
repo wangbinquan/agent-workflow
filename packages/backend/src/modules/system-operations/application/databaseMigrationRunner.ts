@@ -34,6 +34,7 @@ import type {
   SqliteLogicalSource,
   SqliteLogicalSourceSnapshot,
 } from '@/platform/persistence/sqliteLogicalSource'
+import type { LogicalTargetTableVerification } from '@/platform/persistence/logicalDatabaseRestore'
 
 export interface DatabaseMigrationAdmissionPort {
   freezeAndDrain(input: {
@@ -83,6 +84,7 @@ export class DatabaseMigrationRunnerError extends Error {
   constructor(
     public readonly code:
       | 'database-migration-source-mismatch'
+      | 'database-migration-manifest-corrupt'
       | 'database-migration-resume-required'
       | 'database-migration-rollback-not-eligible'
       | 'database-migration-finalize-not-ready',
@@ -119,39 +121,119 @@ function targetGenerationId(operationId: string): string {
   return `dbg_pg_${operationId.slice(4)}`
 }
 
+function phaseCommittedAt(
+  manifest: DatabaseMigrationManifest,
+  phase: DatabaseMigrationPhase,
+): number {
+  const checkpoint = manifest.payload.checkpoints.find((candidate) => candidate.phase === phase)
+  if (checkpoint === undefined) {
+    throw new DatabaseMigrationRunnerError(
+      'database-migration-manifest-corrupt',
+      `database migration manifest is missing the ${phase} checkpoint`,
+    )
+  }
+  return checkpoint.committedAt
+}
+
 export function classifyDatabaseMigrationFailure(
   error: unknown,
+  phase?: DatabaseMigrationPhase,
 ): Pick<DatabaseMigrationFailure, 'category' | 'detailCode' | 'retryable'> {
-  const name = error instanceof Error ? error.name : 'unknown'
-  const code =
-    typeof error === 'object' && error !== null && 'code' in error
-      ? String((error as { code: unknown }).code)
-      : name
+  const codes: string[] = []
+  let current: unknown = error
+  const seen = new Set<object>()
+  for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
+    if (seen.has(current)) break
+    seen.add(current)
+    if ('code' in current) {
+      const candidate = current.code
+      if (typeof candidate === 'string' || typeof candidate === 'number') {
+        codes.push(String(candidate))
+      }
+    }
+    current = 'cause' in current ? current.cause : undefined
+  }
+  const code = codes[0] ?? (error instanceof Error ? error.name : 'unknown')
   const detailCode =
     code
       .toLowerCase()
       .replaceAll(/[^a-z0-9._-]+/g, '-')
       .replaceAll(/^-+|-+$/g, '')
       .slice(0, 128) || 'internal'
-  if (code.includes('codec')) return { category: 'source-codec', detailCode, retryable: false }
-  if (code.includes('integrity') || code.includes('schema')) {
+  const normalized = codes.length > 0 ? codes.join(' ').toLowerCase() : code.toLowerCase()
+  if (normalized.includes('drain') && normalized.includes('timeout')) {
+    return { category: 'drain-timeout', detailCode, retryable: true }
+  }
+  if (normalized.includes('backup') || normalized.includes('vacuum')) {
+    return { category: 'backup-failed', detailCode, retryable: true }
+  }
+  if (normalized.includes('permission')) {
+    return { category: 'target-permission', detailCode, retryable: false }
+  }
+  if (normalized.includes('codec')) {
+    return { category: 'source-codec', detailCode, retryable: false }
+  }
+  if (
+    normalized.includes('source-integrity') ||
+    normalized.includes('source-schema') ||
+    normalized.includes('source-mutated') ||
+    normalized.includes('source-mismatch')
+  ) {
     return { category: 'source-integrity', detailCode, retryable: false }
   }
-  const connectivityCode = code.toLowerCase()
-  if (
-    connectivityCode.includes('unreachable') ||
-    connectivityCode.includes('readiness') ||
-    connectivityCode.includes('connection') ||
-    connectivityCode.includes('socket') ||
-    connectivityCode.includes('timeout') ||
-    connectivityCode.includes('econnrefused')
-  ) {
-    return { category: 'target-unreachable', detailCode, retryable: true }
-  }
-  if (code.includes('chunk-mismatch') || code.includes('verification')) {
+  if (normalized.includes('verification') || normalized.includes('chunk-mismatch')) {
     return { category: 'verification-mismatch', detailCode, retryable: false }
   }
-  if (code.includes('target') || code.includes('postgresql')) {
+  if (
+    normalized.includes('owner') ||
+    normalized.includes('lock-held') ||
+    normalized.includes('operation-locked')
+  ) {
+    return { category: 'owner-conflict', detailCode, retryable: true }
+  }
+  if (normalized.includes('manifest') || normalized.includes('artifact-corrupt')) {
+    return { category: 'manifest-corrupt', detailCode, retryable: false }
+  }
+  const connectivityFailure =
+    normalized.includes('unreachable') ||
+    normalized.includes('readiness') ||
+    normalized.includes('connection') ||
+    normalized.includes('socket') ||
+    normalized.includes('timeout') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('econnreset') ||
+    normalized.includes('etimedout') ||
+    normalized.includes('ehostunreach') ||
+    normalized.includes('enetunreach') ||
+    normalized.includes('epipe') ||
+    codes.some((candidate) => /^08[0-9a-z]{3}$/i.test(candidate)) ||
+    codes.some((candidate) =>
+      ['40001', '40P01', '57014', '57P01', '57P02', '57P03'].includes(candidate.toUpperCase()),
+    )
+
+  if (phase === 'copying') {
+    return connectivityFailure
+      ? { category: 'copy-transient', detailCode, retryable: true }
+      : { category: 'copy-permanent', detailCode, retryable: false }
+  }
+  if (
+    (phase === 'switched' || phase === 'health-checked') &&
+    (normalized.includes('health') || normalized.includes('readiness'))
+  ) {
+    return { category: 'health-failed', detailCode, retryable: true }
+  }
+  if (
+    phase === 'cutover-prepared' ||
+    phase === 'switched' ||
+    phase === 'health-checked' ||
+    phase === 'accepting-writes'
+  ) {
+    return { category: 'cutover-failed', detailCode, retryable: false }
+  }
+  if (connectivityFailure) {
+    return { category: 'target-unreachable', detailCode, retryable: true }
+  }
+  if (normalized.includes('target') || normalized.includes('postgresql')) {
     return { category: 'target-schema', detailCode, retryable: false }
   }
   return { category: 'internal', detailCode, retryable: false }
@@ -190,6 +272,22 @@ export function createDatabaseMigrationRunner(deps: {
   const now = deps.now ?? Date.now
   const chunkRows = deps.chunkRows ?? 250
   const ownerLeaseMs = deps.ownerLeaseMs ?? 60_000
+  const targetVerification = (): readonly LogicalTargetTableVerification[] =>
+    deps.contract.tables.map((table) => {
+      const rowCount = deps.sourceSnapshot.tableRows[table.id]
+      if (rowCount === undefined) {
+        throw new DatabaseMigrationRunnerError(
+          'database-migration-source-mismatch',
+          `SQLite source row census is missing ${table.id}`,
+        )
+      }
+      return Object.freeze({
+        table: table.id,
+        disposition: table.disposition,
+        rowCount,
+        chunkCount: rowCount === 0 ? 0 : Math.ceil(rowCount / chunkRows),
+      })
+    })
 
   const advance = (
     operationId: string,
@@ -231,7 +329,10 @@ export function createDatabaseMigrationRunner(deps: {
     generationId: string,
   ): Promise<DatabaseMigrationStatusView> => {
     const manifest = deps.controlPlane.readManifest(operationId)
-    const rolledBackAt = now()
+    // Receipt bodies are immutable write-once artifacts. Derive their time
+    // from a durable phase checkpoint so a crash after the file write but
+    // before the manifest CAS can replay byte-for-byte.
+    const rolledBackAt = phaseCommittedAt(manifest, manifest.payload.phase)
     const receiptDigest = deps.artifacts.writeRollbackReceipt(operationId, {
       version: 1,
       operationId,
@@ -283,6 +384,8 @@ export function createDatabaseMigrationRunner(deps: {
     readonly manifest: LogicalDatabaseArtifactManifest
     readonly archiveDigest: string
   } | null> => {
+    const copyingManifest = deps.controlPlane.readManifest(operationId)
+    const artifactCreatedAt = phaseCommittedAt(copyingManifest, 'copying')
     const entries: LogicalTableArtifactEntry[] = []
     let rowsCopied = 0
     let bytesCopied = 0
@@ -367,7 +470,7 @@ export function createDatabaseMigrationRunner(deps: {
       sourceProvider: 'sqlite',
       sourceGenerationId: deps.controlPlane.readManifest(operationId).payload.source.generationId,
       contract: deps.contract,
-      createdAt: now(),
+      createdAt: artifactCreatedAt,
       tables: entries,
     })
     deps.artifacts.writeLogicalManifest(operationId, artifactManifest)
@@ -474,7 +577,7 @@ export function createDatabaseMigrationRunner(deps: {
             }
             case 'verifying': {
               await deps.source.assertUnchanged(deps.sourceSnapshot)
-              await deps.target.finalizeSchema(now())
+              await deps.target.finalizeSchema(now(), targetVerification())
               const generationId = targetGenerationId(operationId)
               await deps.target.prepareGeneration({
                 generationId,
@@ -491,7 +594,7 @@ export function createDatabaseMigrationRunner(deps: {
                 legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
                 activeTableCount: deps.contract.activeTableCount,
                 archiveOnlyTableCount: deps.contract.archiveOnlyTableCount,
-                verifiedAt: now(),
+                verifiedAt: phaseCommittedAt(manifest, 'verifying'),
               })
               advance(operationId, 'cutover-prepared', { verificationDigest })
               break
@@ -503,7 +606,11 @@ export function createDatabaseMigrationRunner(deps: {
               const generationId = targetGenerationId(operationId)
               refreshPointer(operationId)
               await deps.target.activateGeneration(generationId, now())
-              await deps.targetRuntime.readiness()
+              // The logical target owns the operation-scoped advisory-lock
+              // session through cutover. Probe the active generation and one
+              // representative read on that same session so poolMax=1 cannot
+              // deadlock waiting for a second connection.
+              await deps.target.assertReady(generationId)
               advance(operationId, 'health-checked')
               refreshPointer(operationId)
               break
@@ -524,7 +631,7 @@ export function createDatabaseMigrationRunner(deps: {
       } catch (error) {
         const current = deps.controlPlane.readManifest(operationId)
         if (current.payload.failure === null) {
-          const failure = classifyDatabaseMigrationFailure(error)
+          const failure = classifyDatabaseMigrationFailure(error, current.payload.phase)
           deps.controlPlane.fail(operationId, {
             ...owner(current),
             ...failure,
@@ -639,12 +746,18 @@ export function createDatabaseMigrationRunner(deps: {
         )
       }
       if (manifest.payload.phase !== 'accepting-writes') {
-        if (manifest.payload.phase === 'finalized') return deps.controlPlane.get(operationId)
+        if (manifest.payload.phase === 'finalized') {
+          const finalizedAt = phaseCommittedAt(manifest, 'accepting-writes')
+          await deps.target.markFinalized(finalizedAt)
+          refreshPointer(operationId)
+          return deps.controlPlane.get(operationId)
+        }
         throw new DatabaseMigrationRunnerError(
           'database-migration-finalize-not-ready',
           'database migration can only finalize after PostgreSQL is accepting writes',
         )
       }
+      const finalizedAt = phaseCommittedAt(manifest, 'accepting-writes')
       const receiptDigest = deps.artifacts.writeFinalReceipt(operationId, {
         version: 1,
         operationId,
@@ -655,11 +768,14 @@ export function createDatabaseMigrationRunner(deps: {
         legacyArchiveDigest: manifest.payload.legacyArchiveDigest,
         verificationDigest: manifest.payload.verificationDigest,
         firstLiveWriteAt: manifest.payload.firstLiveWriteAt,
-        finalizedAt: now(),
+        finalizedAt,
       })
+      // Commit target metadata first. If the process dies before the external
+      // manifest advances, markFinalized and the write-once receipt both
+      // replay idempotently from the accepting-writes checkpoint.
+      await deps.target.markFinalized(finalizedAt)
       const status = advance(operationId, 'finalized', { receiptDigest })
       refreshPointer(operationId)
-      await deps.target.markFinalized(now())
       return status
     },
   }

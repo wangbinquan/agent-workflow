@@ -14,6 +14,8 @@ import {
   markDatabaseFirstLiveWrite,
   markDatabaseMigrationRolledBack,
   markDatabaseMigrationCancelled,
+  databaseMigrationManifestOperationIdempotencyKey,
+  databaseMigrationOperationIdempotencyKey,
   requestDatabaseMigrationCancellation,
   resumeDatabaseMigration,
   type AdvanceDatabaseMigrationInput,
@@ -199,10 +201,19 @@ export function createDatabaseMigrationControlPlane(deps: {
   const controlPlane: DatabaseMigrationControlPlane = {
     start(input) {
       const all = deps.store.list()
+      const canonicalIdempotencyKey = databaseMigrationOperationIdempotencyKey({
+        source: {
+          provider: 'sqlite',
+          generationId: input.sourceGenerationId,
+          schemaDigest: input.sourceSchemaDigest,
+          databaseFingerprint: input.sourceDatabaseFingerprint,
+        },
+        target: input.target,
+        execution: { mode: 'automatic' },
+      })
       const duplicate = all.find(
         (manifest) =>
-          manifest.payload.source.generationId === input.sourceGenerationId &&
-          manifest.payload.idempotencyKey === input.idempotencyKey,
+          databaseMigrationManifestOperationIdempotencyKey(manifest) === canonicalIdempotencyKey,
       )
       if (duplicate !== undefined) return view(duplicate)
 
@@ -223,7 +234,7 @@ export function createDatabaseMigrationControlPlane(deps: {
         deps.store.create(
           createDatabaseMigrationManifest({
             operationId: newOperationId(),
-            idempotencyKey: input.idempotencyKey,
+            idempotencyKey: canonicalIdempotencyKey,
             sourceGenerationId: input.sourceGenerationId,
             sourceSchemaDigest: input.sourceSchemaDigest,
             sourceDatabaseFingerprint: input.sourceDatabaseFingerprint,

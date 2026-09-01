@@ -2,10 +2,7 @@
 // and logical replay. The target session is opened only after the outer
 // manifest/envelope pass and is always released by portableDatabaseRestore.
 
-import type {
-  LogicalDatabaseRestoreProgress,
-  LogicalDatabaseRestoreTarget,
-} from '@/platform/persistence/logicalDatabaseRestore'
+import type { LogicalDatabaseRestoreProgress } from '@/platform/persistence/logicalDatabaseRestore'
 import {
   openPostgresqlLogicalTarget,
   type PostgresqlLogicalTarget,
@@ -19,11 +16,7 @@ import {
   type PortableRestoreFilesystemAssets,
 } from './portableDatabaseRestore'
 
-type ProviderRestoreTarget = LogicalDatabaseRestoreTarget &
-  Readonly<{
-    provider: 'postgresql'
-    close(): Promise<void>
-  }>
+type ProviderRestoreTarget = PostgresqlLogicalTarget
 
 export interface OpenPostgresqlProviderRestoreTargetInput {
   readonly runtime: PostgresqlDatabaseRuntime
@@ -45,6 +38,12 @@ export interface RestorePostgresqlProviderBackupOptions {
   readonly contract: LogicalSchemaContract
   readonly plan: PostgresqlSchemaPlan
   readonly filesystem: PortableRestoreFilesystemAssets
+  /**
+   * Existing verified live-generation identity from the external pointer.
+   * Recovery restores into an empty configured profile, then recreates this
+   * fence before bootstrap is allowed to admit business traffic.
+   */
+  readonly targetGenerationId?: string
   readonly now?: () => number
   readonly onProgress?: (progress: LogicalDatabaseRestoreProgress) => void
   /** Infrastructure test seam; production opens the advisory-lock target. */
@@ -54,6 +53,7 @@ export interface RestorePostgresqlProviderBackupOptions {
 export async function restorePostgresqlProviderBackup(
   options: RestorePostgresqlProviderBackupOptions,
 ): Promise<PortableDatabaseRestoreResult> {
+  const targetGenerationId = options.targetGenerationId
   const openTarget: OpenPostgresqlProviderRestoreTarget =
     options.openTarget ??
     (openPostgresqlLogicalTarget as (
@@ -78,6 +78,20 @@ export async function restorePostgresqlProviderBackup(
       })
       return Object.freeze({
         target,
+        ...(targetGenerationId === undefined
+          ? {}
+          : {
+              async afterApply() {
+                await target.prepareGeneration({
+                  generationId: targetGenerationId,
+                  sourceGenerationId: envelope.payload.sourceGenerationId,
+                })
+                const now = options.now?.() ?? Date.now()
+                await target.activateGeneration(targetGenerationId, now)
+                await target.assertReady(targetGenerationId)
+                await target.markFinalized(now)
+              },
+            }),
         close: () => target.close(),
       })
     },

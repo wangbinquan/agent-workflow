@@ -2,17 +2,20 @@
 // mechanisms. The adapter is the only System Operations path that imports the
 // legacy services; RFC-294 W9-E replaces its physical restore internals.
 
-import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
-import { createBackup } from '@/services/backup'
+import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
 import {
   clearPendingRestore,
   listFailedRestores,
   readPendingRestore,
   stagePendingRestore,
 } from '@/services/pendingRestore'
-import { ensureCredentialsSealed } from '@/services/repoCredentials'
-import { planRestore, restoreBackup, validateBackupForStage } from '@/services/restore'
+import {
+  planRestore,
+  restoreBackup,
+  type SqlitePostRestoreRecovery,
+  validateBackupForStage,
+} from '@/platform/persistence/sqlite/systemProviderRestore'
 import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
 import type { AdminBackupCoordinatorPort } from '../application/ports/adminBackupCoordinator'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
@@ -20,11 +23,9 @@ import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'
 
 interface BackupResources {
   readonly db: DbClient
-  readonly secretBox: SecretBox | undefined
 }
 
 export interface LegacySystemOperationMechanisms {
-  readonly ensureCredentialsSealed: typeof ensureCredentialsSealed
   readonly createBackup: typeof createBackup
   readonly planRestore: typeof planRestore
   readonly validateBackupForStage: typeof validateBackupForStage
@@ -39,7 +40,6 @@ export interface LegacySystemOperationMechanisms {
 }
 
 const DEFAULT_MECHANISMS: LegacySystemOperationMechanisms = {
-  ensureCredentialsSealed,
   createBackup,
   planRestore,
   validateBackupForStage,
@@ -61,10 +61,15 @@ export interface LegacyPlatformRecoveryAdapter {
 export function createLegacyPlatformRecoveryAdapter(deps: {
   readonly artifacts: RestoreArtifactPathResolver
   readonly backupResources: () => Promise<BackupResources> | BackupResources
+  /** Source Control owns credential sealing and the credential-in-path safety
+   * gate. Its closed public participant is bound by bootstrap; System
+   * Operations never receives RepositoryWorkspaceStore. */
+  readonly prepareBackup: () => Promise<void>
   readonly appHome: string
   readonly dbPath: string
   readonly lockPath: string
   readonly resolveRestoreMigrations: () => Promise<string>
+  readonly postOpenRecovery: SqlitePostRestoreRecovery
   readonly now?: () => number
   readonly mechanisms?: Partial<LegacySystemOperationMechanisms>
 }): LegacyPlatformRecoveryAdapter {
@@ -77,9 +82,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
   const backup: AdminBackupCoordinatorPort = {
     async request(input) {
       const resources = await deps.backupResources()
-      mechanisms.ensureCredentialsSealed(resources.db, resources.secretBox, {
-        blockOnCredentialedPath: true,
-      })
+      await deps.prepareBackup()
       return mechanisms.createBackup({
         db: resources.db,
         includeWorktrees: input.includeWorktrees,
@@ -148,6 +151,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
           noSafetyBackup: input.noSafetyBackup,
           noMigrate: input.noMigrate,
           skipIntegrityCheck: input.skipIntegrityCheck,
+          postOpenRecovery: deps.postOpenRecovery,
         })
         return { status: 'completed', ...result }
       } finally {

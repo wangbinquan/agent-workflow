@@ -9,7 +9,9 @@ import {
   type LogicalDatabaseBackupEnvelope,
 } from '@/platform/persistence/logicalDatabaseExport'
 import {
+  verifyLogicalDatabaseArtifactTree,
   restoreLogicalDatabaseBackup,
+  type LogicalDatabaseArtifactVerification,
   type LogicalDatabaseRestoreProgress,
   type LogicalDatabaseRestoreReceipt,
   type LogicalDatabaseRestoreTarget,
@@ -35,7 +37,12 @@ export interface PortableRestoreFilesystemAssets {
   apply(input: {
     readonly stagingDirectory: string
     readonly manifest: BackupManifestV2
-  }): Promise<void>
+  }): Promise<PortableRestoreFilesystemReceipt | void>
+}
+
+export interface PortableRestoreFilesystemReceipt {
+  readonly config: boolean
+  readonly skills: boolean
 }
 
 interface RestorePortableDatabaseBackupCommonOptions {
@@ -50,7 +57,15 @@ interface RestorePortableDatabaseBackupCommonOptions {
 
 export interface PortableRestoreTargetHandle {
   readonly target: LogicalDatabaseRestoreTarget
+  afterApply?(input: PortableRestoreAfterApplyInput): Promise<void>
   close(): Promise<void>
+}
+
+export interface PortableRestoreAfterApplyInput {
+  readonly stagingDirectory: string
+  readonly manifest: BackupManifestV2
+  readonly envelope: LogicalDatabaseBackupEnvelope
+  readonly receipt: LogicalDatabaseRestoreReceipt
 }
 
 export interface PortableRestoreTargetFactoryInput {
@@ -76,6 +91,20 @@ export interface PortableDatabaseRestoreResult {
   readonly manifest: BackupManifestV2
   readonly envelope: LogicalDatabaseBackupEnvelope
   readonly receipt: LogicalDatabaseRestoreReceipt
+  readonly filesystem: PortableRestoreFilesystemReceipt
+}
+
+export interface InspectPortableDatabaseBackupOptions {
+  readonly tarballPath: string
+  readonly appHome: string
+  readonly restoreOperationId: string
+  readonly contract: LogicalSchemaContract
+}
+
+export interface PortableDatabaseBackupInspection {
+  readonly manifest: BackupManifestV2
+  readonly envelope: LogicalDatabaseBackupEnvelope
+  readonly verification: LogicalDatabaseArtifactVerification
 }
 
 function validateEnvelope(
@@ -104,6 +133,57 @@ function validateEnvelope(
       'portable-restore-envelope',
       'portable database restore manifest and logical envelope differ',
     )
+  }
+}
+
+/**
+ * Verify the complete portable artifact without opening or mutating a target.
+ * System Operations uses this before it admits a staged restore, so corrupt
+ * uploads never create a pending marker and PostgreSQL target preflight can
+ * remain a separate read-mostly decision.
+ */
+export async function inspectPortableDatabaseBackup(
+  options: InspectPortableDatabaseBackupOptions,
+): Promise<PortableDatabaseBackupInspection> {
+  const stagingDirectory = join(
+    options.appHome,
+    'backups',
+    `.logical-inspect-${options.restoreOperationId}-${crypto.randomUUID()}`,
+  )
+  mkdirSync(stagingDirectory, { recursive: true })
+  try {
+    await extractTarGz(options.tarballPath, stagingDirectory)
+    const manifest = readManifest(stagingDirectory)
+    if (manifest?.manifestVersion !== 2) {
+      throw new PortableDatabaseRestoreError(
+        'portable-restore-manifest',
+        'portable database restore requires a valid V2 backup manifest',
+      )
+    }
+    let envelope: LogicalDatabaseBackupEnvelope
+    try {
+      envelope = readLogicalDatabaseBackupEnvelope({
+        artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
+        expectedFileDigest: manifest.database.envelopeFileDigest,
+      })
+    } catch {
+      throw new PortableDatabaseRestoreError(
+        'portable-restore-envelope',
+        'portable database restore logical envelope is corrupt',
+      )
+    }
+    validateEnvelope(manifest, envelope, options.contract)
+    const verification = verifyLogicalDatabaseArtifactTree({
+      artifactRoot: join(stagingDirectory, manifest.database.logicalPath),
+      expectedManifestDigest: envelope.payload.logicalManifestDigest,
+      expectedLegacyArchiveFileDigest: envelope.payload.legacyArchiveFileDigest,
+      contract: options.contract,
+    })
+    return Object.freeze({ manifest, envelope, verification })
+  } finally {
+    if (existsSync(stagingDirectory)) {
+      rmSync(stagingDirectory, { recursive: true, force: true })
+    }
   }
 }
 
@@ -168,8 +248,12 @@ export async function restorePortableDatabaseBackup(
         now: options.now,
         onProgress: options.onProgress,
       })
-      await options.filesystem.apply({ stagingDirectory, manifest })
-      return Object.freeze({ manifest, envelope, receipt })
+      const filesystem = (await options.filesystem.apply({ stagingDirectory, manifest })) ?? {
+        config: false,
+        skills: false,
+      }
+      await opened?.afterApply?.({ stagingDirectory, manifest, envelope, receipt })
+      return Object.freeze({ manifest, envelope, receipt, filesystem: Object.freeze(filesystem) })
     } finally {
       await opened?.close()
     }

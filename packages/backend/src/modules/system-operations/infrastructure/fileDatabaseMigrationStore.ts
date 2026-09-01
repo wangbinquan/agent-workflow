@@ -12,10 +12,11 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { DatabaseMigrationStorePort } from '../application/ports/databaseMigrationStore'
 import {
   serializeDatabaseMigrationManifest,
@@ -78,11 +79,152 @@ export interface FileDatabaseMigrationStoreOptions {
   readonly beforeReplaceForTest?: (operationId: string, revision: number) => void
   /** Test-only crash oracle immediately after a manifest replace. */
   readonly afterReplaceForTest?: (operationId: string, revision: number) => void
+  /** Test seams for deterministic crash-left lock recovery. */
+  readonly now?: () => number
+  readonly isProcessAlive?: (pid: number) => boolean
+  readonly staleLockMs?: number
+}
+
+interface ManifestLockRecord {
+  readonly pid: number
+  readonly createdAt: number
+  readonly nonce: string
+}
+
+interface HeldManifestLock extends ManifestLockRecord {
+  readonly handle: number
+  readonly body: string
+}
+
+function lockBody(record: ManifestLockRecord): string {
+  return `version=1\npid=${record.pid}\ncreatedAt=${record.createdAt}\nnonce=${record.nonce}\n`
+}
+
+function parseLockBody(value: string): ManifestLockRecord | null {
+  const lines = Object.fromEntries(
+    value
+      .trim()
+      .split('\n')
+      .map((line) => {
+        const separator = line.indexOf('=')
+        return separator < 1 ? ['', ''] : [line.slice(0, separator), line.slice(separator + 1)]
+      }),
+  )
+  const pid = Number(lines.pid)
+  const createdAt = Number(lines.createdAt)
+  if (
+    lines.version !== '1' ||
+    !Number.isSafeInteger(pid) ||
+    pid < 1 ||
+    !Number.isSafeInteger(createdAt) ||
+    createdAt < 0 ||
+    typeof lines.nonce !== 'string' ||
+    !/^[A-Za-z0-9-]{8,128}$/.test(lines.nonce)
+  ) {
+    return null
+  }
+  return { pid, createdAt, nonce: lines.nonce }
+}
+
+function defaultIsProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
 }
 
 export function createFileDatabaseMigrationStore(
   options: FileDatabaseMigrationStoreOptions,
 ): DatabaseMigrationStorePort {
+  const now = options.now ?? Date.now
+  const isProcessAlive = options.isProcessAlive ?? defaultIsProcessAlive
+  const staleLockMs = options.staleLockMs ?? 60_000
+
+  const acquireManifestLock = (lockPath: string, operationId: string): HeldManifestLock => {
+    const record: ManifestLockRecord = {
+      pid: process.pid,
+      createdAt: now(),
+      nonce: crypto.randomUUID(),
+    }
+    const body = lockBody(record)
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const handle = openSync(lockPath, 'wx', 0o600)
+        try {
+          writeFileSync(handle, body, { encoding: 'utf8' })
+          fsyncSync(handle)
+        } catch (error) {
+          closeSync(handle)
+          try {
+            unlinkSync(lockPath)
+          } catch {
+            // Preserve the lock-record write failure.
+          }
+          throw error
+        }
+        return { ...record, handle, body }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      }
+
+      let existing: ManifestLockRecord | null = null
+      let oldEnough = false
+      try {
+        existing = parseLockBody(readFileSync(lockPath, 'utf8'))
+        const mtime = statSync(lockPath).mtimeMs
+        const oldestObservedAt = existing === null ? mtime : Math.min(mtime, existing.createdAt)
+        oldEnough = now() - oldestObservedAt >= staleLockMs
+      } catch {
+        // The lock may have been released between open and inspection.
+        continue
+      }
+      // A lock owned by a live process is never safe to steal merely because
+      // its wall-clock age crossed a threshold. The original owner may resume
+      // after a slow fsync and would otherwise overwrite the recovered CAS.
+      // Age is only an escape hatch for a corrupt token whose owner cannot be
+      // identified; a well-formed dead-process token is safe to reclaim now.
+      if (
+        (existing !== null && isProcessAlive(existing.pid)) ||
+        (existing === null && !oldEnough)
+      ) {
+        throw new DatabaseMigrationStoreError(
+          'migration-operation-locked',
+          `database migration operation is being updated: ${operationId}`,
+        )
+      }
+
+      const quarantine = `${lockPath}.stale-${record.nonce}`
+      try {
+        renameSync(lockPath, quarantine)
+        unlinkSync(quarantine)
+        fsyncDirectory(dirname(lockPath))
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw new DatabaseMigrationStoreError(
+            'migration-operation-locked',
+            `database migration operation lock could not be recovered: ${operationId}`,
+          )
+        }
+      }
+    }
+    throw new DatabaseMigrationStoreError(
+      'migration-operation-locked',
+      `database migration operation is being updated: ${operationId}`,
+    )
+  }
+
+  const releaseManifestLock = (lockPath: string, held: HeldManifestLock): void => {
+    closeSync(held.handle)
+    try {
+      if (readFileSync(lockPath, 'utf8') === held.body) unlinkSync(lockPath)
+    } catch {
+      // A missing/replaced lock belongs to another recovery attempt. Never
+      // delete a path whose ownership token no longer matches this process.
+    }
+  }
+
   const operationDir = (operationId: string): string => {
     assertOperationId(operationId)
     return join(options.root, operationId)
@@ -192,15 +334,7 @@ export function createFileDatabaseMigrationStore(
       assertOperationId(expected.operationId)
       const directory = operationDir(expected.operationId)
       const lockPath = join(directory, '.manifest.lock')
-      let lockHandle: number
-      try {
-        lockHandle = openSync(lockPath, 'wx', 0o600)
-      } catch {
-        throw new DatabaseMigrationStoreError(
-          'migration-operation-locked',
-          `database migration operation is being updated: ${expected.operationId}`,
-        )
-      }
+      const lock = acquireManifestLock(lockPath, expected.operationId)
       try {
         const current = read(expected.operationId)
         if (
@@ -219,12 +353,7 @@ export function createFileDatabaseMigrationStore(
         writeRevision(directory, verifyDatabaseMigrationManifest(next), false)
         return readManifest(manifestPath(expected.operationId))
       } finally {
-        closeSync(lockHandle)
-        try {
-          unlinkSync(lockPath)
-        } catch {
-          // A leftover lock fails closed until operator recovery.
-        }
+        releaseManifestLock(lockPath, lock)
       }
     },
   }

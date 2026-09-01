@@ -2,6 +2,22 @@
 
 import { z } from 'zod'
 
+export interface ReclaimableDiskItem {
+  readonly id: 'retired-runtime-stores'
+  readonly path: string
+  readonly exists: boolean
+  readonly bytes: number
+  readonly entries: number
+}
+
+export interface MaintenanceDiskReport {
+  readonly items: readonly ReclaimableDiskItem[]
+  /** Provider-owned estimate of storage reusable by database maintenance. */
+  readonly dbFreelistBytes: number
+  /** Current physical database size reported by the selected provider. */
+  readonly dbFileBytes: number
+}
+
 // RFC-349 — the system-operations public contract is shared byte-for-byte with
 // Settings. Keep provider clients and raw connection URLs outside this surface.
 export {

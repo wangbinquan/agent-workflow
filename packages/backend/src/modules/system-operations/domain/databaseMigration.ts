@@ -3,7 +3,12 @@
 // user data are forbidden from the manifest by construction.
 
 import { z } from 'zod'
+import {
+  databaseMigrationStartIdempotencyKeyWith,
+  type DatabaseMigrationStartIdentity,
+} from '@agent-workflow/shared'
 import { canonicalSchemaJson, digestSchemaContract } from '@/platform/persistence/schemaContract'
+import { sha256Hex } from '@/util/hash'
 
 export const DATABASE_MIGRATION_PHASES = [
   'planned',
@@ -42,6 +47,31 @@ export const DatabaseMigrationTargetConfigSchema = z
   .strict()
 
 export type DatabaseMigrationTargetConfig = z.infer<typeof DatabaseMigrationTargetConfigSchema>
+
+/**
+ * Authoritative operation identity. Adapters may send a request key, but the
+ * control plane always re-derives this key from the live SQLite generation,
+ * target profile and execution contract before it performs duplicate-start
+ * admission.
+ */
+export function databaseMigrationOperationIdempotencyKey(
+  input: DatabaseMigrationStartIdentity,
+): string {
+  return databaseMigrationStartIdempotencyKeyWith(
+    databaseMigrationStartIdentitySchemaCompatible(input),
+    sha256Hex,
+  )
+}
+
+function databaseMigrationStartIdentitySchemaCompatible(
+  input: DatabaseMigrationStartIdentity,
+): DatabaseMigrationStartIdentity {
+  return {
+    source: { ...input.source },
+    target: DatabaseMigrationTargetConfigSchema.parse(input.target),
+    execution: { mode: 'automatic' },
+  }
+}
 
 const DatabaseMigrationProgressSchema = z
   .object({
@@ -194,6 +224,28 @@ export const DatabaseMigrationManifestSchema = z
   .strict()
 
 export type DatabaseMigrationManifest = z.infer<typeof DatabaseMigrationManifestSchema>
+
+export function databaseMigrationManifestOperationIdempotencyKey(
+  manifest: DatabaseMigrationManifest,
+): string {
+  return databaseMigrationOperationIdempotencyKey({
+    source: {
+      provider: 'sqlite',
+      generationId: manifest.payload.source.generationId,
+      schemaDigest: manifest.payload.source.schemaDigest,
+      databaseFingerprint: manifest.payload.source.databaseFingerprint,
+    },
+    target: {
+      provider: 'postgresql',
+      urlEnv: manifest.payload.target.urlEnv,
+      poolMax: manifest.payload.target.poolMax,
+      connectTimeoutMs: manifest.payload.target.connectTimeoutMs,
+      statementTimeoutMs: manifest.payload.target.statementTimeoutMs,
+      idleTimeoutMs: manifest.payload.target.idleTimeoutMs,
+    },
+    execution: { mode: 'automatic' },
+  })
+}
 
 export class DatabaseMigrationStateError extends Error {
   constructor(
