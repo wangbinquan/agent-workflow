@@ -1142,3 +1142,5 @@ export function composePostgresqlDigitalEmployee(
     migrationStatus: () => composePostgresqlDigitalEmployeeWriterCutover(options.db).analyze(),
   })
 }
+
+export { createDigitalEmployeeResourceCatalogAclProviders } from './composition/resourceCatalogAcl'

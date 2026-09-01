@@ -27,6 +27,7 @@ import { runGit, gitStashSnapshot, rollbackToSnapshot } from '../src/util/git'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resumeTask } from '../src/services/task'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -187,6 +188,7 @@ describe('resumeTask freshest-row selection locks isFresherNodeRun id-order (NOT
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       appHome: h.appHome,
       binaryOverride: ['/usr/bin/env', 'true'],
     })

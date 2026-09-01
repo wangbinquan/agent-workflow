@@ -42,6 +42,19 @@ describe('RFC-186 PR-2 — decideAssignmentReconcile', () => {
 describe('RFC-186 PR-2 — source wiring locks', () => {
   const read = (f: string) =>
     readFileSync(resolve(import.meta.dir, '..', 'src', 'services', f), 'utf8')
+  const turnsDriver = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'application',
+      'workgroups',
+      'workgroupTurnsDriver.ts',
+    ),
+    'utf8',
+  )
 
   test('autoResume no longer excludes turn-engine workgroups', () => {
     const src = read('autoResume.ts')
@@ -49,15 +62,7 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
   })
 
   test('reconcileRunningAssignments is wired into the engine (re)entry', () => {
-    const src = [
-      'workgroup/engine.ts',
-      'workgroup/memberTurns.ts',
-      'workgroup/strategies/leaderWorker.ts',
-      'workgroup/strategies/freeCollab.ts',
-    ]
-      .map(read)
-      .join('\n')
-    expect(src).toContain('reconcileRunningAssignments(db, taskId')
+    expect(turnsDriver).toContain('await reconcileRunningAssignments(persistence, first)')
   })
 
   // RFC-186 T5 (audit §5 F6): the normal cursor advances no longer sit immediately
@@ -68,23 +73,14 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
   // clarify-forbidden retries are exhausted, preventing the same old input from
   // hot-looping without claiming that any host-node effect succeeded.
   test('T5: no advanceMemberCursor immediately precedes runHostNode (F6 pattern removed)', () => {
-    const src = [
-      'workgroup/engine.ts',
-      'workgroup/memberTurns.ts',
-      'workgroup/strategies/leaderWorker.ts',
-      'workgroup/strategies/freeCollab.ts',
-    ]
-      .map(read)
-      .join('\n')
-    expect(src).not.toMatch(
+    expect(turnsDriver).not.toMatch(
       /advanceMemberCursor\([^)]*\)\s*\n\s*\n\s*const result = await hooks\.runHostNode/,
     )
-    // Exactly four advances: successful leader / exhausted-forbidden leader /
-    // assignment / message. The exhausted branch must consume then return.
-    expect((src.match(/advanceMemberCursor\(db, taskId/g) ?? []).length).toBe(4)
-    expect(src).toMatch(
-      /if \(outcome\.kind === 'clarify-forbidden-exhausted'\) {\s*await advanceMemberCursor\(db, taskId, leaderId, maxMessageId\(state\.messages\)\)\s*return\s*}/,
-    )
-    expect((src.match(/RFC-186 T5/g) ?? []).length).toBeGreaterThanOrEqual(3)
+    expect(turnsDriver).not.toContain('advanceMemberCursor(')
+    // The provider-neutral ledger has one cursor operation constructor plus
+    // four exact call sites (assignment, missing-agent, message and leader).
+    expect((turnsDriver.match(/cursorOperation\(/g) ?? []).length).toBe(5)
+    expect(turnsDriver).toContain('const outcome = await executeHostTurn<')
+    expect(turnsDriver).toContain('`leader-cursor:${outcome.runId}`')
   })
 })

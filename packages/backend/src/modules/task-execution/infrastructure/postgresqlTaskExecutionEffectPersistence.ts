@@ -6,6 +6,8 @@ import { ulid } from 'ulid'
 import {
   nodeRunOutputs,
   nodeRuns,
+  taskRepos,
+  taskSpaceNodes,
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
   taskExecutionEffects,
@@ -30,6 +32,7 @@ import {
   type AttemptEvidence,
 } from '../domain/executionEffect'
 import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
+import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
 const MAX_RECEIPT_BYTES = 64 * 1024
@@ -958,6 +961,44 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
       this.db,
       async (tx) => await this.settleTx(tx, input.settlement, input.projection),
     )
+  }
+
+  async settleWorkspacePreparation(
+    input: Parameters<TaskExecutionEffectPersistence['settleWorkspacePreparation']>[0],
+  ): Promise<void> {
+    await serializable(this.db, async (tx) => {
+      await this.settleTx(tx, input.settlement)
+      await tx
+        .update(tasks)
+        .set(input.projection.task)
+        .where(eq(tasks.id, input.projection.taskId))
+        .run()
+      if (input.projection.repositories.length > 0) {
+        await tx
+          .insert(taskRepos)
+          .values(input.projection.repositories.map((row) => ({ ...row })))
+          .run()
+      }
+      if (input.projection.nodePaths.length > 0) {
+        await tx
+          .insert(taskSpaceNodes)
+          .values(
+            input.projection.nodePaths.map((nodePath) => ({
+              taskId: input.projection.taskId,
+              nodePath,
+              schemaVersion: 1,
+            })),
+          )
+          .run()
+      }
+      await createPostgresqlNodeRunLifecycleParticipantInTx(tx).set({
+        nodeRunId: input.projection.prepNodeRunId,
+        to: 'done',
+        allowedFrom: ['running'],
+        reason: 'repo-prep-done',
+        extra: { finishedAt: input.projection.finishedAt },
+      })
+    })
   }
 
   async recordProcessSpawn(

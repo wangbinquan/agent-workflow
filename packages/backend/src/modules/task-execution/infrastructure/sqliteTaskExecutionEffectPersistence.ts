@@ -5,6 +5,8 @@ import type { DbClient } from '@/db/client'
 import {
   nodeRunOutputs,
   nodeRuns,
+  taskRepos,
+  taskSpaceNodes,
   taskExecutionEffectAttempts,
   taskExecutionEffects,
   taskExecutionIntents,
@@ -216,6 +218,45 @@ export class SqliteTaskExecutionEffectPersistence implements TaskExecutionEffect
               ? {}
               : { failureCode: input.projection.failureCode }),
           },
+        })
+      },
+    })
+  }
+
+  async settleWorkspacePreparation(
+    input: Parameters<TaskExecutionEffectPersistence['settleWorkspacePreparation']>[0],
+  ): Promise<void> {
+    this.effects.settle({
+      db: this.db,
+      ...input.settlement,
+      onSettledTx: (tx) => {
+        tx.update(tasks)
+          .set(input.projection.task)
+          .where(eq(tasks.id, input.projection.taskId))
+          .run()
+        if (input.projection.repositories.length > 0) {
+          tx.insert(taskRepos)
+            .values(input.projection.repositories.map((row) => ({ ...row })))
+            .run()
+        }
+        if (input.projection.nodePaths.length > 0) {
+          tx.insert(taskSpaceNodes)
+            .values(
+              input.projection.nodePaths.map((nodePath) => ({
+                taskId: input.projection.taskId,
+                nodePath,
+                schemaVersion: 1,
+              })),
+            )
+            .run()
+        }
+        setNodeRunStatusTx({
+          tx,
+          nodeRunId: input.projection.prepNodeRunId,
+          to: 'done',
+          allowedFrom: ['running'],
+          reason: 'repo-prep-done',
+          extra: { finishedAt: input.projection.finishedAt },
         })
       },
     })

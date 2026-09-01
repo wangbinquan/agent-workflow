@@ -251,17 +251,19 @@ describe('RFC-347 exact production source locks', () => {
       'src/modules/identity-access/composition.ts',
     ])
     expect(callPaths('createIdentityAccessRuntime(')).toEqual([
-      'src/cli/start.ts',
       'src/main.ts',
       'src/modules/identity-access/composition.ts',
+      'src/modules/identity-access/infrastructure/legacySqliteUserService.ts',
       'src/server.ts',
-      'src/services/users.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([
-      'src/cli/start.ts',
+      'src/cli/postgresqlDaemonApplication.ts',
       'src/main.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',
+      'src/services/ownerIdentity.ts',
+      'src/services/ownerScopedName.ts',
+      'src/services/userIdentities.ts',
       'src/services/users.ts',
     ])
     expect(source('src/modules/identity-access/composition.ts')).not.toContain('/ws/')
@@ -298,15 +300,19 @@ describe('RFC-347 exact production source locks', () => {
     expect(callPaths('.legacyProjection.fromResolvedSubject(')).toEqual([
       'src/services/intent/dispatcher.ts',
     ])
-    // The only remaining production plain-facts caller is RFC-342's
-    // transaction-fresh Memory oracle, owned by RFC-294 W4-E2.
-    expect(callPaths('buildActor(')).toEqual(['src/auth/actor.ts', 'src/services/memory.ts'])
+    expect(callPaths('buildActor(')).toEqual([
+      'src/auth/actor.ts',
+      'src/cli/postgresqlDaemonApplication.ts',
+      'src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts',
+      'src/modules/memory/infrastructure/sqliteMemoryCatalog.ts',
+      'src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts',
+    ])
   })
 
   test('bootstrap admin and local CLI remain distinct exact participants', () => {
     const authRoutes = source('src/routes/auth.ts')
-    expect(authRoutes).toContain('completeBootstrapWithAdmin(')
-    expect(authRoutes).toContain('identityAccess.initialUserAccess')
+    expect(authRoutes).toContain('auth.completeBootstrap({')
+    expect(authRoutes).not.toContain('identityAccess.initialUserAccess')
     expect(authRoutes).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(authRoutes).not.toContain('fromAuthenticatedPrincipal(')
 
@@ -325,7 +331,8 @@ describe('RFC-347 exact production source locks', () => {
     expect(mainRoot).not.toContain('fromAuthenticatedPrincipal(')
 
     const packageConsumer = source('src/cli/package.ts')
-    expect(packageConsumer).toContain('.localIdentityForUser(')
+    expect(packageConsumer).toContain('resolveLocalIdentityByUsername(username)')
+    expect(mainRoot).toContain('identityAccess.localOperator.forUser(user.id)')
     expect(packageConsumer).not.toContain('identity-access/composition')
     expect(packageConsumer).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(packageConsumer).not.toContain('fromAuthenticatedPrincipal(')

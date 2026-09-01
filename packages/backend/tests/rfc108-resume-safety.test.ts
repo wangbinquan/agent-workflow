@@ -28,6 +28,7 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { getTask, resumeTask } from '../src/services/task'
 import { gitStashSnapshot, runGit, snapshotRefName } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DEPS_CMD = ['/usr/bin/env', 'true']
@@ -139,6 +140,7 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: DEPS_CMD,
       })
@@ -176,6 +178,7 @@ describe('RFC-108 T6 (AR-15) — resume worktree-missing 410 pre-flight', () => 
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: DEPS_CMD,
       })
@@ -225,6 +228,7 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: DEPS_CMD,
       })
@@ -260,6 +264,7 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       appHome: h.appHome,
       binaryOverride: DEPS_CMD,
     })

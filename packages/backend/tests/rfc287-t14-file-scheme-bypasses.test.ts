@@ -81,7 +81,11 @@ describe('RFC-287 G5 —— 存量 file:// 镜像不可运行（design §10.7 �
       await resolveRepoSourceSingle(
         { cachedRepoId: id } as never,
         {} as never,
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome: '/tmp/aw-t14-g5' } as never,
+        {
+          db,
+          repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
+          appHome: '/tmp/aw-t14-g5',
+        } as never,
       )
     } catch (err) {
       // 判据必须是 `.code`——码在 `.code`，message 里一个字都没有。原来写的是

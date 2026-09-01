@@ -43,6 +43,27 @@ import { hasUndispatchedDesignerRecoveryEvidence } from '../application/ports/ta
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
 
 const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
+const LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE = 400
+
+function chunksOf<T>(values: readonly T[], size: number): readonly (readonly T[])[] {
+  const chunks: T[][] = []
+  for (let offset = 0; offset < values.length; offset += size) {
+    chunks.push(values.slice(offset, offset + size))
+  }
+  return chunks
+}
+
+function rowsByTask<T extends { readonly taskId: string }>(
+  rows: readonly T[],
+): ReadonlyMap<string, readonly T[]> {
+  const grouped = new Map<string, T[]>()
+  for (const row of rows) {
+    const taskRows = grouped.get(row.taskId)
+    if (taskRows === undefined) grouped.set(row.taskId, [row])
+    else taskRows.push(row)
+  }
+  return grouped
+}
 
 function runProjection(row: {
   readonly id: string
@@ -194,10 +215,12 @@ async function loadLifecycleInvariantSnapshots(
               : isNull(tasks.deletedAt),
           )
   const snapshots: TaskLifecycleInvariantSnapshot[] = []
-  for (const task of taskRows) {
-    const [documentVersions, roundRows, runRows, undispatched] = await Promise.all([
+  for (const taskChunk of chunksOf(taskRows, LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE)) {
+    const taskIds = taskChunk.map((task) => task.taskId)
+    const [documentVersions, roundRows, runRows, questionRows] = await Promise.all([
       db
         .select({
+          taskId: docVersions.taskId,
           id: docVersions.id,
           reviewNodeRunId: docVersions.reviewNodeRunId,
           reviewNodeId: docVersions.reviewNodeId,
@@ -205,39 +228,144 @@ async function loadLifecycleInvariantSnapshots(
           decision: docVersions.decision,
         })
         .from(docVersions)
-        .where(eq(docVersions.taskId, task.taskId)),
+        .where(inArray(docVersions.taskId, taskIds)),
       db
         .select({
+          taskId: clarifyRounds.taskId,
           id: clarifyRounds.id,
           kind: clarifyRounds.kind,
           status: clarifyRounds.status,
+          directive: clarifyRounds.directive,
           clarifyNodeRunId: clarifyRounds.intermediaryNodeRunId,
           clarifyNodeId: clarifyRounds.intermediaryNodeId,
         })
         .from(clarifyRounds)
-        .where(eq(clarifyRounds.taskId, task.taskId)),
+        .where(inArray(clarifyRounds.taskId, taskIds)),
       db
         .select({
+          taskId: nodeRuns.taskId,
           id: nodeRuns.id,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
+          iteration: nodeRuns.iteration,
+          rerunCause: nodeRuns.rerunCause,
+          startedAt: nodeRuns.startedAt,
           parentNodeRunId: nodeRuns.parentNodeRunId,
           reviewIteration: nodeRuns.reviewIteration,
           shardKey: nodeRuns.shardKey,
         })
         .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, task.taskId)),
-      hasUndispatchedDesignerQuestions(db, task.taskId),
+        .where(inArray(nodeRuns.taskId, taskIds)),
+      db
+        .select({
+          taskId: taskQuestions.taskId,
+          originNodeRunId: taskQuestions.originNodeRunId,
+          sourceKind: taskQuestions.sourceKind,
+          roleKind: taskQuestions.roleKind,
+          confirmation: taskQuestions.confirmation,
+          dispatchedAt: taskQuestions.dispatchedAt,
+          triggerRunId: taskQuestions.triggerRunId,
+          defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
+          overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
+        })
+        .from(taskQuestions)
+        .where(inArray(taskQuestions.taskId, taskIds)),
     ])
-    snapshots.push(
-      Object.freeze({
-        ...task,
-        hasUndispatchedDesignerQuestions: undispatched,
-        documentVersions: Object.freeze(documentVersions.map((row) => Object.freeze({ ...row }))),
-        clarifyRounds: Object.freeze(roundRows.map((row) => Object.freeze({ ...row }))),
-        nodeRuns: Object.freeze(runRows.map((row) => Object.freeze({ ...row }))),
-      }),
-    )
+    const outputRows: { readonly nodeRunId: string }[] = []
+    for (const runIdChunk of chunksOf(
+      runRows.map((run) => run.id),
+      LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE,
+    )) {
+      outputRows.push(
+        ...(await db
+          .select({ nodeRunId: nodeRunOutputs.nodeRunId })
+          .from(nodeRunOutputs)
+          .where(inArray(nodeRunOutputs.nodeRunId, runIdChunk))),
+      )
+    }
+    const documentsByTask = rowsByTask(documentVersions)
+    const roundsByTask = rowsByTask(roundRows)
+    const runsByTask = rowsByTask(runRows)
+    const questionsByTask = rowsByTask(questionRows)
+    const outputRunIds = new Set(outputRows.map((row) => row.nodeRunId))
+    for (const task of taskChunk) {
+      const taskRounds = roundsByTask.get(task.taskId) ?? []
+      const answeredContinueRoundIds = new Set(
+        taskRounds
+          .filter((round) => round.status === 'answered' && round.directive === 'continue')
+          .map((round) => round.clarifyNodeRunId),
+      )
+      const taskQuestionsForRecovery = questionsByTask.get(task.taskId) ?? []
+      const toEntry = (
+        question: (typeof taskQuestionsForRecovery)[number],
+      ): TaskRecoveryQuestionParkEntry => ({
+        dispatchedAt: question.dispatchedAt,
+        triggerRunId: question.triggerRunId,
+        defaultTargetNodeId: question.defaultTargetNodeId,
+        overrideTargetNodeId: question.overrideTargetNodeId,
+      })
+      const entries: readonly TaskRecoveryQuestionParkEntry[] = [
+        ...taskQuestionsForRecovery
+          .filter(
+            (question) =>
+              question.roleKind === 'designer' &&
+              question.confirmation !== 'confirmed' &&
+              answeredContinueRoundIds.has(question.originNodeRunId),
+          )
+          .map(toEntry),
+        ...taskQuestionsForRecovery
+          .filter(
+            (question) =>
+              question.roleKind === 'designer' &&
+              question.sourceKind === 'manual' &&
+              question.confirmation !== 'confirmed',
+          )
+          .map(toEntry),
+      ]
+      const taskRuns = runsByTask.get(task.taskId) ?? []
+      const lineage: readonly TaskRecoveryQuestionRunLineage[] = taskRuns.map((run) => ({
+        id: run.id,
+        nodeId: run.nodeId,
+        iteration: run.iteration,
+        loopIter: 0,
+        rerunCause: run.rerunCause,
+        status: run.status,
+        startedAt: run.startedAt,
+        hasOutput: outputRunIds.has(run.id),
+        parentNodeRunId: run.parentNodeRunId,
+        shardKey: run.shardKey,
+      }))
+      snapshots.push(
+        Object.freeze({
+          ...task,
+          hasUndispatchedDesignerQuestions: hasUndispatchedDesignerRecoveryEvidence({
+            entries,
+            runs: lineage,
+          }),
+          documentVersions: Object.freeze(
+            (documentsByTask.get(task.taskId) ?? []).map(({ taskId: _taskId, ...row }) =>
+              Object.freeze(row),
+            ),
+          ),
+          clarifyRounds: Object.freeze(
+            taskRounds.map(({ taskId: _taskId, directive: _directive, ...row }) =>
+              Object.freeze(row),
+            ),
+          ),
+          nodeRuns: Object.freeze(
+            taskRuns.map(
+              ({
+                taskId: _taskId,
+                iteration: _iteration,
+                rerunCause: _rerunCause,
+                startedAt: _startedAt,
+                ...row
+              }) => Object.freeze(row),
+            ),
+          ),
+        }),
+      )
+    }
   }
   return Object.freeze(snapshots)
 }

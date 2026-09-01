@@ -115,21 +115,20 @@ async function uploadBytes(
 }
 
 describe('rfc310 pr3 upload security — HTTP surface', () => {
-  test('upload routes resolve their evidence store on the first request, not while mounting', async () => {
+  test('upload routes create the selected app-home evidence store on the first request', async () => {
     const h = await buildHarness()
-    const requestHome = mkdtempSync(join(tmpdir(), 'aw-upsec-lazy-request-'))
-    process.env.AGENT_WORKFLOW_HOME = requestHome
-    try {
-      const evidenceRoot = join(requestHome, 'evidence')
-      expect(existsSync(evidenceRoot)).toBe(false)
+    const evidenceRoot = join(appHome, 'evidence')
+    const content = 'lazy evidence'
+    const digest = createHash('sha256').update(content).digest('hex')
+    const blobPath = join(evidenceRoot, 'blobs', digest.slice(0, 2), digest)
+    // Other development participants may create the shared evidence
+    // directories at composition time. The upload-owned content must still be
+    // absent until its first request and land in the selected app home.
+    expect(existsSync(blobPath)).toBe(false)
 
-      const uploaded = await uploadBytes(h, h.tokenA, 'lazy evidence')
-      expect(uploaded.status).toBe(201)
-      expect(existsSync(evidenceRoot)).toBe(true)
-    } finally {
-      process.env.AGENT_WORKFLOW_HOME = appHome
-      rmSync(requestHome, { recursive: true, force: true })
-    }
+    const uploaded = await uploadBytes(h, h.tokenA, content)
+    expect(uploaded.status).toBe(201)
+    expect(existsSync(blobPath)).toBe(true)
   })
 
   test('unauthenticated requests are rejected before any byte lands', async () => {

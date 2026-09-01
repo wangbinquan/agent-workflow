@@ -23,7 +23,7 @@ import { buildWorkflowValidationContext } from '../../src/services/workflow.vali
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
-export function createTestRepositoryPublicationTransport() {
+export function createTestRepositoryPublicationTransport(runNetwork: typeof runGit = runGit) {
   return Object.freeze({
     async open(input: { readonly remoteUrl: string }) {
       return {
@@ -36,7 +36,7 @@ export function createTestRepositoryPublicationTransport() {
             endpointSource: 'local-fixture' as const,
             endpointBindingDigest: null,
           },
-          runNetwork: runGit,
+          runNetwork,
           close() {},
         },
       }

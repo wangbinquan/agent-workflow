@@ -19,7 +19,7 @@ export function composeSqliteCommitPushDeps(
     nodeExecution: new SqliteNodeExecutionPersistence(db),
     effects: new SqliteTaskExecutionEffectPersistence(db),
     publicationTransport:
-      overrides.publicationTransport ?? createTestRepositoryPublicationTransport(),
+      overrides.publicationTransport ?? createTestRepositoryPublicationTransport(overrides.runGit),
     ...(overrides.runGit === undefined ? {} : { runGit: overrides.runGit }),
     ...(overrides.log === undefined ? {} : { log: overrides.log }),
   }

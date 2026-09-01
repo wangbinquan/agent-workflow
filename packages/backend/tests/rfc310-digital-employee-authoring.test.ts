@@ -682,14 +682,6 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-frozen-type-revision-'))
     roots.push(appHome)
-    const app = createApp({
-      token: 'a'.repeat(64),
-      configPath: join(appHome, 'config.json'),
-      appHome,
-      opencodeVersion: null,
-      dbVersion: 1,
-      db,
-    })
     const admin = await createUser(db, {
       username: 'frozen-revision-admin',
       displayName: 'Frozen Revision Admin',
@@ -714,6 +706,18 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         registeredAt: 900,
       })
       .run()
+
+    // The daemon composes the published type registry once at startup. Seed
+    // the frozen persisted revision before creating the application, exactly
+    // as a real restart after a package upgrade would observe it.
+    const app = createApp({
+      token: 'a'.repeat(64),
+      configPath: join(appHome, 'config.json'),
+      appHome,
+      opencodeVersion: null,
+      dbVersion: 1,
+      db,
+    })
 
     const frozenRef = `${frozen.typeRef.typeId}@${frozen.typeRef.revision}`
     const workItemRef = frozen.authoringManifest.workItems[0]?.workItemRef

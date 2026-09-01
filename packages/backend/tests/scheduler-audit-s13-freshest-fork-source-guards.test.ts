@@ -191,7 +191,10 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
       /eq\(nodeRuns\.nodeId, REPO_PREP_NODE_ID\)\)\)\s*\.orderBy\(desc\(nodeRuns\.retryIndex\), desc\(nodeRuns\.id\)\)/g,
     )
     expect(prepCausalReads).toHaveLength(2)
-    expect(srcInventory(FORK_MARKER)).toEqual({ 'services/task.ts': 2 })
+    expect(srcInventory(FORK_MARKER)).toEqual({
+      'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 1,
+      'services/task.ts': 2,
+    })
   })
 
   test('G7 (RFC-096 §4 new ratchet): desc(nodeRuns.startedAt) appears NOWHERE in src/ — startedAt is not a freshness ordering', () => {
@@ -214,7 +217,16 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // Positive anchors for the two converged call sites (cheap drift probes;
     // behavior is locked by rfc096-designer-rerun-pick.test.ts and the
     // cross-clarify suite).
-    const dispatchSrc = readFileSync(join(SRC_ROOT, 'services', 'taskQuestionDispatch.ts'), 'utf-8')
+    const dispatchSrc = readFileSync(
+      join(
+        SRC_ROOT,
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteTaskQuestionDispatch.ts',
+      ),
+      'utf-8',
+    )
     // RFC-172 (route 2, S3): the inheritance source is now `scoped` (targetRuns filtered to the
     // dispatch shard for workgroup members; === targetRuns when shardKey is undefined). Still
     // pickFreshestRun + {topLevelOnly:false} — the freshness comparator, NOT a startedAt fork.
@@ -255,7 +267,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // 这场 review，而 review 的结论是「本处该用 retryIndex」——白名单正是为此存在
     //（本条注释上方原话：whitelist 刻意宽松，目标是任何新出现的至少被 review 看见）。
     expect(srcInventory('retryIndex > ')).toEqual({
-      'services/nodeRunMint.ts': 1,
+      'modules/task-execution/application/nextRetryIndex.ts': 1,
       'services/task.ts': 1,
     })
   })

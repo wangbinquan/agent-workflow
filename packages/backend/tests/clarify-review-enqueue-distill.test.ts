@@ -174,12 +174,26 @@ describe('source-code grep guard — review distill is a durable committed-event
       'utf8',
     )
     const consumer = fs.readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'collaboration',
+        'application',
+        'collaborationCommittedEventConsumers.ts',
+      ),
+      'utf8',
+    )
+    const bootstrap = fs.readFileSync(
       resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'),
       'utf8',
     )
     expect(review).not.toContain('enqueueDistillJob(')
-    expect(consumer.match(/enqueueDistillJob\(/g) ?? []).toHaveLength(1)
-    expect(consumer).toContain('...createCollaborationDurableConsumerDefinitions({')
-    expect(consumer).toContain('async enqueueReviewDistill(input) {')
+    expect(consumer.match(/await input\.enqueueReviewDistill\(/g) ?? []).toHaveLength(1)
+    expect(
+      bootstrap.match(/\.\.\.createCollaborationDurableConsumerDefinitions\(\{/g) ?? [],
+    ).toHaveLength(2)
+    expect(bootstrap).toContain('async enqueueReviewDistill(input) {')
   })
 })

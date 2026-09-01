@@ -74,6 +74,51 @@ export interface CodeHostNodeSettlementProjection {
   readonly outputs?: readonly Readonly<{ portName: string; content: string }>[]
 }
 
+/** Closed projection written together with a successful workspace-prepare
+ * effect. Infrastructure owns the provider transaction; callers cannot pass a
+ * database callback through this contract. */
+export interface WorkspacePreparationRepositoryProjection {
+  readonly taskId: string
+  readonly repoIndex: number
+  readonly repoPath: string
+  readonly repoUrl: string | null
+  readonly cachedRepoId: string | null
+  readonly baseBranch: string
+  readonly branch: string
+  readonly workingBranch: string | null
+  readonly baseCommit: string | null
+  readonly worktreePath: string
+  readonly worktreeDirName: string
+  readonly mountPath: string
+  readonly subdir: string
+  readonly readonly: boolean
+  readonly readonlyDirtyCount: null
+  readonly workspaceProfileVersion: number | null
+  readonly workspaceProfileDigest: string | null
+  readonly hasSubmodules: boolean
+  readonly submoduleInitOk: boolean
+  readonly submoduleInitError: string | null
+  readonly schemaVersion: number
+}
+
+export interface WorkspacePreparationSettlementProjection {
+  readonly taskId: string
+  readonly prepNodeRunId: string
+  readonly finishedAt: number
+  readonly task: Readonly<{
+    worktreePath: string
+    branch: string
+    baseCommit: string | null
+    repoPath: string
+    repoUrl: string | null
+    cachedRepoId: string | null
+    baseBranch: string
+    repoCount: number
+  }>
+  readonly repositories: readonly WorkspacePreparationRepositoryProjection[]
+  readonly nodePaths: readonly string[]
+}
+
 /** Provider-neutral effect journal and resource-fence boundary. Business
  * projections that must share settlement atomicity are exposed as separate
  * named ports by their owning use case, never as a transaction callback. */
@@ -96,6 +141,10 @@ export interface TaskExecutionEffectPersistence {
   settleCodeHostNode(input: {
     readonly settlement: TaskEffectAttemptSettlement
     readonly projection: CodeHostNodeSettlementProjection
+  }): Promise<void>
+  settleWorkspacePreparation(input: {
+    readonly settlement: TaskEffectAttemptSettlement
+    readonly projection: WorkspacePreparationSettlementProjection
   }): Promise<void>
   recordProcessSpawn(input: {
     readonly token: OwnershipToken

@@ -195,10 +195,10 @@ describe('RFC-060 PR-B — coexistence with RFC-005 outputKinds', () => {
       outputWrapperPortNames: {},
     })
 
-    // The service response must distinguish an explicit clear (`{}`) from an
-    // omitted sparse-patch field (`undefined`) while preserving adjacent data.
-    expect(updated.outputKinds).toEqual({})
-    expect(updated.outputWrapperPortNames).toEqual({})
+    // The write receipt uses the canonical sparse DTO: empty sidecar maps are
+    // omitted after the clear, while the raw tombstones below remain durable.
+    expect(updated.outputKinds).toBeUndefined()
+    expect(updated.outputWrapperPortNames).toBeUndefined()
     expect(updated.role).toBe('aggregator')
     expect(updated.frontmatterExtra).toEqual({ user_key: 'kept' })
 

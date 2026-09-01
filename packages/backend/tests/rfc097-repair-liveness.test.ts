@@ -207,6 +207,7 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.mockPath],
       }

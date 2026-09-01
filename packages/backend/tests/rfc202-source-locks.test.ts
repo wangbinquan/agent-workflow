@@ -55,7 +55,8 @@ describe('RFC-202 source locks', () => {
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts',
     ]) {
       const source = read(adapter)
-      expect(source).toContain("errorSummary: 'daemon-restart'")
+      expect(source).toContain('DAEMON_RESTART_ERROR_SUMMARY')
+      expect(source).toContain('errorSummary: DAEMON_RESTART_ERROR_SUMMARY')
       expect(source).not.toContain("errorSummary: 'daemon-shutdown'")
     }
   })

@@ -22,7 +22,10 @@ const NODE_MECHANICS = readFileSync(
   resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
   'utf8',
 )
-const MINT = readFileSync(resolve(SRC, 'nodeRunMint.ts'), 'utf8')
+const RUN_ROW_RESOLVER = readFileSync(
+  resolve(SRC, '..', 'modules', 'task-execution', 'application', 'resolveSchedulerRunRow.ts'),
+  'utf8',
+)
 
 /** 取某函数体（到下一个顶格 `}` 为止）。 */
 function bodyOf(signature: string): string {
@@ -116,13 +119,15 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     // 前奏的两个特征形状：①「找 pending 行并盖 consumed 戳」；②「按
     // schedulerMintCause 铸 pending 行」。两者在 scheduler.ts 里都必须归零
     // ——它们现在只存在于 nodeRunMint.ts 的收编函数里。
-    expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toMatch(
-      /status === 'pending' && r\.parentNodeRunId === null/,
+    expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toContain(
+      "topLevelRows.find((row) => row.status === 'pending')",
     )
     expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toMatch(/cause: schedulerMintCause\(/)
     // 正向：收编函数里各有且仅有一处。
-    expect(MINT.split("status === 'pending' && r.parentNodeRunId === null").length - 1).toBe(1)
-    expect(MINT.split('cause: schedulerMintCause(').length - 1).toBe(1)
+    expect(
+      RUN_ROW_RESOLVER.split("topLevelRows.find((row) => row.status === 'pending')").length - 1,
+    ).toBe(1)
+    expect(RUN_ROW_RESOLVER.split('cause: schedulerMintCause(').length - 1).toBe(1)
   })
 
   test('领养区仍带 RFC-243-LOCK 标记，且标记内不得出现 mintNodeRun', () => {

@@ -484,7 +484,13 @@ describe('RFC-311 性能防护 —— 未受保护的无界读只许减不许增
         scanned += 1
         const norm = readFileSync(full, 'utf-8').replace(/\s+/g, ' ')
         for (const m of norm.matchAll(pattern)) {
-          if (!m[2]!.includes('.limit(')) hits.push(`${relative(src, full)}  ←  ${m[1]}`)
+          // The bounded window may cross from a completed point lookup into the
+          // next query. `.get()` terminates the first builder just as `.limit()`
+          // bounds it; neither is evidence that the later `.all()` belongs to
+          // the table captured at the start of this match.
+          if (!m[2]!.includes('.limit(') && !m[2]!.includes('.get()')) {
+            hits.push(`${relative(src, full)}  ←  ${m[1]}`)
+          }
         }
       }
     }
@@ -496,7 +502,9 @@ describe('RFC-311 性能防护 —— 未受保护的无界读只许减不许增
       hits.length,
       `未受保护的无界读从 ${UNBOUNDED_READ_RATCHET} 涨到了 ${hits.length}。\n` +
         `新增的读点要么接分页、要么加进上面的 GUARDED 注册表；确实无界且可接受的，\n` +
-        `连同理由一起调低/说明这条棘轮。当前清单：\n${[...new Set(hits)].sort().join('\n')}`,
+        `连同理由一起调低/说明这条棘轮。当前清单（重复项代表同文件多处）：\n${[...hits]
+          .sort()
+          .join('\n')}`,
     ).toBeLessThanOrEqual(UNBOUNDED_READ_RATCHET)
   })
 })

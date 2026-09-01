@@ -27,6 +27,14 @@ import {
 export interface RepositoryWorkspaceSqlExecutor {
   all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]>
   run(query: SQLWrapper): Promise<number>
+  cachedRepoFacets(input: {
+    readonly referenced: SQLWrapper
+    readonly attention: SQLWrapper
+  }): Promise<{
+    readonly all_count: number
+    readonly referenced_count: number
+    readonly attention_count: number
+  }>
 }
 
 interface RawCachedRepoRow {
@@ -359,26 +367,31 @@ export class RepositoryWorkspaceSqlStore {
       ids.map((id) => sql`${id}`),
       sql`, `,
     )
-    const rows = await this.executor.all<{
+    const explicitRows = await this.executor.all<{
       cached_repo_id: string
       count: number
     }>(sql`
-      SELECT cached_repo_id, count(*) AS count FROM (
-        SELECT ${taskRepos.cachedRepoId} AS cached_repo_id, ${taskRepos.taskId} AS task_id
-        FROM ${taskRepos}
-        WHERE ${taskRepos.cachedRepoId} IN (${idSet})
-        GROUP BY ${taskRepos.cachedRepoId}, ${taskRepos.taskId}
-        UNION ALL
-        SELECT ${tasks.cachedRepoId} AS cached_repo_id, ${tasks.id} AS task_id
-        FROM ${tasks}
-        WHERE ${tasks.cachedRepoId} IN (${idSet})
-          AND NOT EXISTS (
-            SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
-          )
-      ) AS task_refs
-      GROUP BY cached_repo_id
+      SELECT ${taskRepos.cachedRepoId} AS cached_repo_id, count(distinct ${taskRepos.taskId}) AS count
+      FROM ${taskRepos}
+      WHERE ${taskRepos.cachedRepoId} IN (${idSet})
+      GROUP BY ${taskRepos.cachedRepoId}
     `)
-    for (const row of rows) counts.set(row.cached_repo_id, Number(row.count))
+    const legacyRows = await this.executor.all<{
+      cached_repo_id: string
+      count: number
+    }>(sql`
+      SELECT ${tasks.cachedRepoId} AS cached_repo_id, count(*) AS count
+      FROM ${tasks}
+      WHERE ${tasks.cachedRepoId} IN (${idSet})
+        AND NOT EXISTS (
+          SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
+        )
+      GROUP BY ${tasks.cachedRepoId}
+    `)
+    for (const row of explicitRows) counts.set(row.cached_repo_id, Number(row.count))
+    for (const row of legacyRows) {
+      counts.set(row.cached_repo_id, (counts.get(row.cached_repo_id) ?? 0) + Number(row.count))
+    }
     const known = new Set(ids)
     for (const schedule of await this.schedulePayloadRows()) {
       const seen = new Set<string>()
@@ -443,23 +456,16 @@ export class RepositoryWorkspaceSqlStore {
     const counts = await this.cachedRepoReferenceCounts(page.map((row) => row.id))
     let facets = cachedFacets?.facets
     if (facets === undefined) {
-      const facetRows = await this.executor.all<{
-        all_count: number
-        referenced_count: number
-        attention_count: number
-      }>(sql`
-        SELECT
-          count(*) AS all_count,
-          sum(case when ${referenced} then 1 else 0 end) AS referenced_count,
-          sum(case when ${attentionCondition} then 1 else 0 end) AS attention_count
-        FROM ${cachedRepos}
-      `)
-      const all = Number(facetRows[0]?.all_count ?? 0)
-      const referencedCount = Number(facetRows[0]?.referenced_count ?? 0)
+      const facetRow = await this.executor.cachedRepoFacets({
+        referenced,
+        attention: attentionCondition,
+      })
+      const all = Number(facetRow.all_count)
+      const referencedCount = Number(facetRow.referenced_count)
       facets = {
         all,
         referenced: referencedCount,
-        attention: Number(facetRows[0]?.attention_count ?? 0),
+        attention: Number(facetRow.attention_count),
         unused: all - referencedCount,
       }
       this.facetsCache = {

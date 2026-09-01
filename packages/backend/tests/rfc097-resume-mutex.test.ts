@@ -30,6 +30,7 @@ import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { cancelTask, resumeTask, retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -197,6 +198,7 @@ function deps(h: Harness, mockPath: string) {
   return {
     db: h.db,
     schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
+    taskRecoveryOperations: taskRecoveryOperations(h.db),
     appHome: h.appHome,
     binaryOverride: ['bun', 'run', mockPath],
     defaultNodeRetries: 0,

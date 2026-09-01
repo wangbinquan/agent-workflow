@@ -137,7 +137,15 @@ describe('resolveReviewRoundMode 三态格（decision 侧唯一轮模式判据�
 // ---------------------------------------------------------------------------
 
 const REVIEW_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'review.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'collaboration',
+    'infrastructure',
+    'legacySqliteReview.ts',
+  ),
   'utf8',
 )
 

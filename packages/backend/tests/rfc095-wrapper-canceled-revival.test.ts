@@ -35,6 +35,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -244,6 +245,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.mockPath],
       },
@@ -331,6 +333,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', h.mockPath],
       },

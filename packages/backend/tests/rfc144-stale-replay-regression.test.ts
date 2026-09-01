@@ -39,6 +39,7 @@ import {
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { transitionMergeState } from '../src/services/lifecycle'
 import { retryNode } from '../src/services/task'
 import { createLogger } from '../src/util/log'
@@ -48,6 +49,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
@@ -219,6 +221,7 @@ emit(envelope)`,
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['bun', 'run', mockPath],
       },
@@ -353,7 +356,10 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
           baseBranch: 'main',
         },
       ],
-      opts: { appHome: h.appHome },
+      opts: {
+        appHome: h.appHome,
+        persistence: createSqliteTaskExecutionPersistence(h.db),
+      },
       log: createLogger('rfc144-test'),
       writeSem: new Semaphore(1),
     } as unknown as Parameters<typeof createOrRebuildWrapperIso>[0]
@@ -719,18 +725,41 @@ describe('RFC-144 deriveFrontier — abandoned 分桶（穷举 switch 的新格�
 })
 
 describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
-  test('mintNodeRun：dbTxSync 内先 abandonSupersededMergeStates 再 insert（D12/P1-1）', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'services', 'nodeRunMint.ts'), 'utf-8')
-    const txAt = src.indexOf('dbTxSync(')
-    const abandonAt = src.indexOf('abandonSupersededMergeStates({', txAt)
+  test('SQLite mint participant：同一 reserved tx 内先 abandon superseded rows 再 insert（D12/P1-1）', () => {
+    const src = readFileSync(
+      join(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'sqliteNodeRunMintParticipant.ts',
+      ),
+      'utf-8',
+    )
+    const participantAt = src.indexOf('createSqliteNodeRunMintParticipantInTx(')
+    const abandonAt = src.indexOf(".set({ mergeState: 'abandoned' })", participantAt)
     const insertAt = src.indexOf('.insert(nodeRuns)', abandonAt)
-    expect(txAt).toBeGreaterThan(-1)
-    expect(abandonAt).toBeGreaterThan(txAt)
+    expect(participantAt).toBeGreaterThan(-1)
+    expect(abandonAt).toBeGreaterThan(participantAt)
     expect(insertAt).toBeGreaterThan(abandonAt)
   })
 
   test('taskQuestionDispatch：同步 tx 内 mint 前同参 abandon（RFC-120 原子 claim+mint 通道）', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'services', 'taskQuestionDispatch.ts'), 'utf-8')
-    expect(src).toContain('abandonSupersededMergeStates(')
+    const src = readFileSync(
+      join(
+        BACKEND_SRC,
+        'modules',
+        'collaboration',
+        'infrastructure',
+        'legacySqliteTaskQuestionDispatch.ts',
+      ),
+      'utf-8',
+    )
+    const txAt = src.indexOf('dbTxSync(db, (tx) => {')
+    const participantAt = src.indexOf('createSqliteNodeRunMintParticipantInTx(tx)', txAt)
+    const mintAt = src.indexOf('nodeRunMint.mint(p.input)', participantAt)
+    expect(txAt).toBeGreaterThan(-1)
+    expect(participantAt).toBeGreaterThan(txAt)
+    expect(mintAt).toBeGreaterThan(participantAt)
   })
 })

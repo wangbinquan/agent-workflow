@@ -221,7 +221,12 @@ describe('RFC-133 causeClassForEntry — single shared definition', () => {
 
   test('grep guard: taskQuestionDispatch has NO private causeClassForEntry definition left', async () => {
     const src = await Bun.file(
-      fileURLToPath(new URL('../src/services/taskQuestionDispatch.ts', import.meta.url)),
+      fileURLToPath(
+        new URL(
+          '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+          import.meta.url,
+        ),
+      ),
     ).text()
     expect(src).not.toMatch(/function causeClassForEntry/)
     expect(src).toContain('causeClassForEntry,')

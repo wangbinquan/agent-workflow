@@ -76,6 +76,7 @@ export class PostgresqlMemoryInjectionReadStore implements MemoryInjectionReadSt
         .select({ id: cachedRepos.id })
         .from(cachedRepos)
         .where(inArray(cachedRepos.id, [...repositoryIds]))
+        .limit(repositoryIds.length)
         .all()
     ).map((row) => row.id)
   }

@@ -102,7 +102,10 @@ describe('CLI subcommands (P-1-05)', () => {
   // too. (Root-caused on the ARM64 VM: 0 lingering processes, leaked DB handle.)
   test('migrateCommand closes its DB handle (no leaked bun:sqlite lock)', () => {
     const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'migrate.ts'), 'utf8')
-    expect(source).toContain('.$client.close()')
+    const openAt = source.indexOf('provider.openClient(')
+    const closeAt = source.indexOf('await provider.close()', openAt)
+    expect(openAt).toBeGreaterThan(-1)
+    expect(closeAt).toBeGreaterThan(openAt)
   })
 
   // --- doctor ---

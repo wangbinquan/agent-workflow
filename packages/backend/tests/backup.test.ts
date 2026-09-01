@@ -269,7 +269,15 @@ describe('createBackup', () => {
 
   test('workflow YAML uses each list-captured row without an N+1 by-id reread', () => {
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'backup.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'systemProviderBackup.ts',
+      ),
       'utf8',
     )
     expect(source).toContain('stringifyWorkflowYaml(wf)')

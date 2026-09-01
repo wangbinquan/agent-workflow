@@ -8,6 +8,7 @@ import {
   type LineageSlot,
 } from '../domain/executionIntent'
 import type { TaskExecutionEffectPersistence } from './ports/taskExecutionEffectStore'
+import type { WorkspacePreparationSettlementProjection } from './ports/taskExecutionEffectStore'
 import { currentTaskExecutionContext, type TaskExecutionContext } from './taskExecutionContext'
 import { TaskExecutionError } from './taskExecutionError'
 import { waitForEffectResourceTurn } from './effectResourceWait'
@@ -24,6 +25,10 @@ export interface LocalEffectAttemptObserver {
   beforeAct(): Promise<void>
   retry(error: unknown, authority: 'convergent' | 'transport-policy'): Promise<void>
   succeed(receipt?: Readonly<Record<string, unknown>>): Promise<void>
+  succeedWorkspacePreparation(
+    receipt: Readonly<Record<string, unknown>>,
+    projection: WorkspacePreparationSettlementProjection,
+  ): Promise<void>
   fail(error: unknown, receipt?: Readonly<Record<string, unknown>>): Promise<void>
 }
 
@@ -50,10 +55,11 @@ export function createLocalEffectAttemptObserver(input: {
     readonly receipt: Readonly<Record<string, unknown>>
     readonly failureCode?: string
     readonly retryAuthority?: 'none' | 'convergent' | 'transport-policy'
+    readonly workspacePreparation?: WorkspacePreparationSettlementProjection
   }) => {
     if (prepared === null) throw new Error(`${input.kind} effect settled before preparation`)
     if (settled) throw new Error(`${input.kind} effect settled twice`)
-    await input.persistence.settle({
+    const settlement = {
       token: context.token,
       effectId: prepared.effectId,
       attemptId: prepared.attemptId,
@@ -63,7 +69,15 @@ export function createLocalEffectAttemptObserver(input: {
       receiptJson: JSON.stringify({ v: 1, ...args.receipt }),
       ...(args.failureCode === undefined ? {} : { failureCode: args.failureCode }),
       now: Date.now(),
-    })
+    } as const
+    if (args.workspacePreparation === undefined) {
+      await input.persistence.settle(settlement)
+    } else {
+      await input.persistence.settleWorkspacePreparation({
+        settlement,
+        projection: args.workspacePreparation,
+      })
+    }
     settled = true
   }
 
@@ -157,6 +171,14 @@ export function createLocalEffectAttemptObserver(input: {
     },
     async succeed(receipt = {}) {
       await settle({ state: 'succeeded', applicationEvidence: 'applied', receipt })
+    },
+    async succeedWorkspacePreparation(receipt, projection) {
+      await settle({
+        state: 'succeeded',
+        applicationEvidence: 'applied',
+        receipt,
+        workspacePreparation: projection,
+      })
     },
     async fail(error, receipt = {}) {
       await settle({

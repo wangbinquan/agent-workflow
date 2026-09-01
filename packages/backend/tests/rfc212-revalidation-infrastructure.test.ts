@@ -83,10 +83,16 @@ describe('RFC-212 T1 — live connection set', () => {
       const next = after.search(/\n {2}(?:async )?function /)
       return next < 0 ? after : after.slice(0, next)
     }
-    expect(bodyOf('async function handleOpen').includes('trackConnection(ws)')).toBe(true)
-    expect(bodyOf('function handleClose').includes('untrackConnection(ws)')).toBe(true)
+    const openBody = bodyOf('async function handleOpen')
+    const closeBody = bodyOf('function handleClose')
+    expect(openBody).toContain('admission.acceptConnection(ws)')
+    const acceptStart = src.indexOf('acceptConnection(ws) {')
+    expect(acceptStart).toBeGreaterThan(-1)
+    expect(src.slice(acceptStart, acceptStart + 500)).toContain('trackConnection(ws)')
+    expect(closeBody).toContain('admission.releaseConnection(ws)')
+    expect(closeBody).toContain('untrackConnection(ws)')
     // …and that the two are not the same slice (guards the regex above).
-    expect(bodyOf('async function handleOpen').includes('untrackConnection(ws)')).toBe(false)
+    expect(openBody.includes('untrackConnection(ws)')).toBe(false)
   })
 })
 

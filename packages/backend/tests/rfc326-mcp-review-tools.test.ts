@@ -44,6 +44,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
+import { createSqliteReviewDecisionCommand } from '../src/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,
@@ -139,6 +140,7 @@ async function harness(): Promise<Harness> {
       db,
       appHome,
       taskExecutionReadModels: taskExecutionRuntime.readModels,
+      reviewDecisions: createSqliteReviewDecisionCommand({ db, appHome }),
     }),
   }
   const app = createApp(deps)
@@ -798,10 +800,12 @@ describe('RFC-326 P16 — the decision route binds the acting user into the coll
   test('source lock', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'routes', 'reviews.ts'), 'utf8')
     const start = src.indexOf("path: '/api/reviews/:nodeRunId/decision'")
-    const end = src.indexOf('const result = await submitReviewDecision(commandContext', start)
+    const end = src.indexOf('return c.json({', start)
     expect(start).toBeGreaterThan(0)
     expect(end).toBeGreaterThan(start)
+    expect(src.slice(start, end)).toContain('const actor = actorOf(c)')
+    expect(src.slice(start, end)).toContain('requireReviewOperations(operations).submitDecision({')
     expect(src.slice(start, end)).toContain('actor,')
-    expect(src.slice(start, end)).toContain('createReviewDecisionCommandContext({')
+    expect(src.slice(start, end)).toContain('authorRole: role,')
   })
 })

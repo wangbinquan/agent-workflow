@@ -36,7 +36,7 @@ function actor(id: string) {
   })
 }
 
-async function fixture() {
+async function fixture(appHome?: string) {
   const db = createInMemoryDb(MIGRATIONS)
   const now = 1_789_000_000_000
   await db.insert(users).values(
@@ -132,6 +132,7 @@ async function fixture() {
   const taskExecutionReadModels = createSqliteTaskExecutionReadModels(db)
   const context = createCollaborationCommandContext({
     db,
+    ...(appHome === undefined ? {} : { appHome }),
     taskExecutionReadModels,
   })
   return { db, context, taskExecutionReadModels }
@@ -257,7 +258,9 @@ describe('RFC-340 review access matrix', () => {
   })
 
   test('HTTP reviewer surface lists assigned gates, permits own edits, and refuses delete/decision/selection', async () => {
-    const { db, context, taskExecutionReadModels } = await fixture()
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc340-comment-'))
+    writeFileSync(join(appHome, 'not-read.md'), '# Review document\n', 'utf8')
+    const { db, context, taskExecutionReadModels } = await fixture(appHome)
     await replaceReviewNodeReviewers(context, {
       actor: actor('owner'),
       taskId: 'task',
@@ -304,6 +307,7 @@ describe('RFC-340 review access matrix', () => {
       opencodeVersion: 'test',
       dbVersion: 217,
       db,
+      appHome,
       collaborationContext: context,
       taskExecutionReadModels,
     })
@@ -327,10 +331,6 @@ describe('RFC-340 review access matrix', () => {
     const count = await request('/api/reviews/pending-count')
     expect(await count.json()).toEqual({ count: 1 })
 
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc340-comment-'))
-    const previousAppHome = process.env.AGENT_WORKFLOW_HOME
-    writeFileSync(join(appHome, 'not-read.md'), '# Review document\n', 'utf8')
-    process.env.AGENT_WORKFLOW_HOME = appHome
     try {
       const detail = await request('/api/reviews/run')
       expect(detail.status).toBe(200)
@@ -360,8 +360,6 @@ describe('RFC-340 review access matrix', () => {
         authorRole: 'reviewer',
       })
     } finally {
-      if (previousAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
-      else process.env.AGENT_WORKFLOW_HOME = previousAppHome
       rmSync(appHome, { recursive: true, force: true })
     }
 

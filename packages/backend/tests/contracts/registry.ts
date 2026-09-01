@@ -933,6 +933,14 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'PUT', path: '/api/workflows/:id/acl' },
   { method: 'GET', path: '/api/workgroups/:id/acl' },
   { method: 'PUT', path: '/api/workgroups/:id/acl' },
+  { method: 'GET', path: '/api/capability-templates/:id/acl' },
+  { method: 'PUT', path: '/api/capability-templates/:id/acl' },
+  { method: 'GET', path: '/api/digital-employee-job-templates/:id/acl' },
+  { method: 'PUT', path: '/api/digital-employee-job-templates/:id/acl' },
+  { method: 'GET', path: '/api/digital-employee-tools/:id/acl' },
+  { method: 'PUT', path: '/api/digital-employee-tools/:id/acl' },
+  { method: 'GET', path: '/api/digital-employees/:id/acl' },
+  { method: 'PUT', path: '/api/digital-employees/:id/acl' },
   // RFC-317 T8 —— 员工定义（第 13 类 ACL 资源）。
   //
   // 注意本清单**只有**这 7 类，而 ACL 资源今天有 13 类：RFC-310 的五类配置资源经

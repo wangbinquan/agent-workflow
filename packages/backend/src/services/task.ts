@@ -221,6 +221,9 @@ import { branchTraceForTask } from '@/modules/task-execution/application/branchT
 import { SqliteBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
+type WorkspacePreparationRepositoryProjection = Parameters<
+  NonNullable<ReturnType<typeof createLocalEffectAttemptObserver>>['succeedWorkspacePreparation']
+>[1]['repositories'][number]
 type RepositoryPreparationStep = taskDriveComposition.RepositoryPreparationStep
 type RepositoryPreparationDescriptorReader =
   taskDriveComposition.RepositoryPreparationDescriptorReader
@@ -2833,7 +2836,7 @@ function taskRepoRowsFor(
   taskId: string,
   materializedRepos: MaterializedRepo[],
   workingBranch: string | null,
-): (typeof taskRepos.$inferInsert)[] {
+): WorkspacePreparationRepositoryProjection[] {
   return materializedRepos.map((r) => ({
     taskId,
     repoIndex: r.repoIndex,
@@ -5882,6 +5885,8 @@ async function runDeferredRepoPreparation(args: {
   // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
   // 丢失远端 URL / cache id / base branch。
   const preparedHead = prepared.repos[0]
+  const preparedRepoRows = taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null)
+  const preparedFinishedAt = Date.now()
   const persistPreparedProjection = (tx: LegacySqliteTaskTransaction): void => {
     tx.update(tasks)
       .set({
@@ -5901,9 +5906,7 @@ async function runDeferredRepoPreparation(args: {
       .where(eq(tasks.id, taskId))
       .run()
     if (prepared.repos.length > 0) {
-      tx.insert(taskRepos)
-        .values(taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null))
-        .run()
+      tx.insert(taskRepos).values(preparedRepoRows).run()
     }
     if (prepared.nodePaths.length > 0) {
       tx.insert(taskSpaceNodes)
@@ -5931,15 +5934,38 @@ async function runDeferredRepoPreparation(args: {
       to: 'done',
       allowedFrom: ['running'],
       reason: 'repo-prep-done',
-      extra: { finishedAt: Date.now() },
+      extra: { finishedAt: preparedFinishedAt },
     })
   }
-  dbTxSync(deps.db, persistPreparedProjection)
-  await prepEffect?.succeed({
+  const preparationReceipt = {
     phase: 'prepared',
     repoCount: prepared.repos.length,
     spaceKind: prepared.spaceKind,
-  })
+  } as const
+  if (prepEffect === undefined) {
+    dbTxSync(deps.db, persistPreparedProjection)
+  } else {
+    await prepEffect.succeedWorkspacePreparation(preparationReceipt, {
+      taskId,
+      prepNodeRunId: prepRunId,
+      finishedAt: preparedFinishedAt,
+      task: {
+        worktreePath: prepared.worktreePath,
+        branch: prepared.branch,
+        baseCommit: prepared.baseCommit,
+        repoPath: preparedHead?.repoPath ?? '',
+        repoUrl:
+          preparedHead?.repoUrl !== null && preparedHead?.repoUrl !== undefined
+            ? redactGitUrl(preparedHead.repoUrl)
+            : null,
+        cachedRepoId: preparedHead?.cachedRepoId ?? null,
+        baseBranch: preparedHead?.baseBranch ?? '',
+        repoCount: Math.max(1, prepared.repos.length),
+      },
+      repositories: preparedRepoRows,
+      nodePaths: prepared.nodePaths,
+    })
+  }
   // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
   // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
   // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在

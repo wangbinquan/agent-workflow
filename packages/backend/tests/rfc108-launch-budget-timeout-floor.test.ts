@@ -69,8 +69,12 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
     expect(start).toContain('const gateContinuationDeps = {')
     expect(start).toContain('...resolveLaunchRuntimeConfig(Paths.config)')
     expect(start).toContain('drive: composeHumanGateContinuationDriver(gateContinuationDeps)')
-    expect(src('routes/clarify.ts')).toContain('submitClarifyDecision(commandContext, {')
-    expect(src('routes/reviews.ts')).toContain('submitReviewDecision(commandContext, {')
+    expect(src('routes/clarify.ts')).toContain(
+      'requireClarifyOperations(operations).submitDecision({',
+    )
+    expect(src('routes/reviews.ts')).toContain(
+      'requireReviewOperations(operations).submitDecision({',
+    )
     expect(src('routes/fusions.ts')).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
   })
 

@@ -35,6 +35,9 @@ import {
 } from './helpers/integrationTriggerResourceBinding'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeSqliteAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 
 function withRealSchedulerDriver<T extends { readonly db: DbClient }>(
   deps: T,
@@ -976,6 +979,11 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const row = (await getScheduledTaskRow(scheduledTaskRuntime(db2).operations, created.id))!
 
     // ① 不再抛：接线前，准备在落行之前跑，克隆一失败 fireSchedule 就整个抛出去。
+    const resourceCatalog = composeSqliteResourceCatalog({ db: db2 })
+    const agentIntegrity = composeSqliteAgentResourceIntegrity({
+      db: db2,
+      authorization: resourceCatalog.authorization,
+    })
     const { taskId } = await fireSchedule(
       scheduledTaskRuntime(db2).operations,
       row,
@@ -984,6 +992,10 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
         createTaskExecutionTestTopology({ db: db2, driver: 'real' }).schedulerDriver,
         cfgPath,
         createIdentityAccessRuntime({ db: db2 }),
+        {
+          resources: composeSqliteAgentLaunchResourceOperations(db2),
+          integrity: agentIntegrity.launch,
+        },
       ),
       Date.now(),
       withIntegrationTriggerResources(db2, createIdentityAccessRuntime({ db: db2 })),
@@ -1024,14 +1036,12 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
         'modules',
         'integration',
         'infrastructure',
-        'sqliteWebhookDispatchRuntime.ts',
+        'webhookExecutionRuntime.ts',
       ),
       'utf8',
     )
-    const i = src.indexOf('const launchDeps = {')
-    expect(i, 'webhookDispatch 应有 launchDeps').toBeGreaterThan(-1)
-    const j = src.indexOf('\n  }', i)
-    expect(src.slice(i, j)).toContain('deferRepoPreparation: true')
+    expect(src).toContain('readonly taskExecutions: WebhookTaskExecutionParticipant<')
+    expect(src).toContain('await dependencies.taskExecutions.launch({')
   })
 })
 
@@ -1293,7 +1303,18 @@ describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
 // 看起来更严谨，实际会把 AC-11 整条打死，且现有用例一条都不会红。
 describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', () => {
   test('惰性补墓碑必须跳过 worktreePath 为空的任务', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'lifecycle.ts'), 'utf8')
+    const src = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'taskLifecycle.ts',
+      ),
+      'utf8',
+    )
     // 补写分支的守卫必须同时要求「路径非空」与「路径不存在」。
     const m = src.match(
       /if \(row\.worktreePath !== '' && !existsSync\(row\.worktreePath\)\) \{[\s\S]{0,400}?workspacePrunedAt: Date\.now\(\)/,
@@ -1348,6 +1369,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
           actorUserId: s.userId,
           appHome: TEST_HOME,
           launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+          taskRecoveryOperations: taskRecoveryOperations(db),
         }),
       )
     } catch (err) {
@@ -1574,7 +1596,7 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
       'utf8',
     )
-    expect(src).toMatch(/const adoptId =[\s\S]{0,400}cachedRepos\.urlHash, hash/)
+    expect(src).toMatch(/const adoptId =[\s\S]{0,400}findCachedRepoByHash\(hash\)/)
     expect(src, '领养分支要用复读到的 id').toMatch(/if \(adoptId !== null\)/)
     // F5：那句「与 resolveCachedRepo 共用同一把 per-URL 锁」在拆锁后是假命题，
     // 正是它让 F3 在评审里隐形。不得复辟。
@@ -1755,26 +1777,40 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
   })
 
   test('已挂进每小时 GC（否则函数写了也没人调）', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'gc.ts'), 'utf8')
+    const src = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'maintenanceJobRunner.ts'),
+      'utf8',
+    )
     // 光有实现不算数——二轮门自查的老教训：判据算得对 ≠ 有人用。
-    const i = src.indexOf('runClaimedWebhookWorkspacePrunes(db, {')
+    const i = src.indexOf("case 'worktreeGc':")
     expect(i, 'GC ticker 应存在').toBeGreaterThan(-1)
     const ticker = src.slice(i, i + 1600)
-    expect(ticker).toContain('runPartialCloneGc(appHome')
+    expect(ticker).toContain('ownerCommands.workspace.runGcPhase({')
     // 两个参数都得接上：年龄阈值要随配置的克隆超时放大（否则长超时下会删掉仍在写的
     // partial），而删除必须 await（同步 rmSync 一个接近完整镜像体量的目录会把 Bun 的
     // 单事件循环冻住，取消请求与 timer 全排在它后面）。
-    expect(ticker, '必须把 gitCloneTimeoutMs 传下去').toContain('loadConfig().gitCloneTimeoutMs')
-    expect(ticker, '调用点要 await').toMatch(/await runPartialCloneGc\(/)
+    expect(ticker, '必须把 gitCloneTimeoutMs 传下去').toContain('gitCloneTimeoutMs:')
+    expect(ticker, '调用点要 await').toMatch(/await ownerCommands\.workspace\.runGcPhase\(/)
     // ⚠️ 上面那条测的是**调用点**的 await，与「删除原语是不是同步的」完全两码事
     // ——五轮门自查实测：把函数体里的 `await rm` 改回 `rmSync`，用例全绿（函数是
     // async，rmSync 照样过 typecheck）。真正要防的是同步递归删除冻住 Bun 的单事件
     // 循环，所以锁必须落在函数体本身。
-    const gcSrc = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'gc.ts'), 'utf8')
-    const at = gcSrc.indexOf('export async function runPartialCloneGc(')
-    const fn = gcSrc.slice(at, gcSrc.indexOf('\n}\n', at))
-    expect(fn, '必须用异步 rm').toMatch(/await rm\(dir/)
-    expect(fn, '不得退回同步 rmSync').not.toMatch(/rmSync\(dir/)
+    const gcSrc = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'nodeWorkspaceMaintenanceFilesystem.ts',
+      ),
+      'utf8',
+    )
+    const at = gcSrc.indexOf('async runPartialCloneGc(')
+    const fn = gcSrc.slice(at, gcSrc.indexOf('\n    },', at))
+    expect(fn, '必须用异步 rm').toMatch(/await rm\(path/)
+    expect(fn, '不得退回同步 rmSync').not.toMatch(/rmSync\(path/)
   })
 })
 
@@ -1784,8 +1820,19 @@ describe('RFC-287 五轮门 —— 对抗输入', () => {
   test('F1：合法仓库名不得与半成品目录同形（分隔符必须是 slug 产不出的字符）', async () => {
     const { gitUrlCacheKeyWith, parseGitUrl } = await import('@agent-workflow/shared')
     const { sha1Hex } = await import('@/util/hash')
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'gc.ts'), 'utf8')
-    const m = src.match(/const PARTIAL_CLONE_DIR = (\/.+\/)\n/)
+    const src = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'nodeWorkspaceMaintenanceFilesystem.ts',
+      ),
+      'utf8',
+    )
+    const m = src.match(/const PARTIAL_CLONE_DIRECTORY = (\/.+\/)\n/)
     expect(m, 'GC 应有半成品判据').not.toBeNull()
     const re = new RegExp(m![1]!.slice(1, -1))
 
@@ -1898,8 +1945,10 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
       'utf8',
     )
     // 冷路径返回处的计数与 `cached.id` 同源。
-    expect(src).toMatch(/await refTaskCount\(deps\.db, rowId\)/)
-    expect(src, '不得对幽灵 id 计数').not.toMatch(/await refTaskCount\(deps\.db, id\)/)
+    expect(src).toMatch(/await deps\.store\.cachedRepoReferenceCount\(rowId\)/)
+    expect(src, '不得对幽灵 id 计数').not.toMatch(
+      /await deps\.store\.cachedRepoReferenceCount\(id\)/,
+    )
   })
 })
 
@@ -1909,10 +1958,12 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
 describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => {
   test('回填与 setNodeRunStatusTx 共用一个事务回调（不是事务后的下一次 await）', () => {
     const src = readSrc(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf8')
-    // RFC-328 把回填抽成命名回调：无 effect 上下文时交给 dbTxSync；有上下文时
-    // 作为 effect settle 的 onSettledTx 交给同一个同步事务。锚到这份唯一回调，既不
-    // 依赖内联写法，也不会误切到 startTask 的占位落行事务。
-    const at = src.indexOf('const persistPreparedProjection = (tx: DbTxSync): void => {')
+    // 无 effect 上下文时由 SQLite 兼容事务消费该回调；有上下文时走 closed
+    // workspace-preparation settlement DTO，由 provider infrastructure 把 effect 与
+    // 同一份投影写进一个事务，不能把 DbTx callback 暴露到 application port。
+    const at = src.indexOf(
+      'const persistPreparedProjection = (tx: LegacySqliteTaskTransaction): void => {',
+    )
     expect(at, '应有唯一的准备投影事务回调').toBeGreaterThan(-1)
     // 回调体用**括号配平**切（内层还有多个 `})`，取第一个会切在半路）。
     const open = src.indexOf('{', at)
@@ -1928,14 +1979,17 @@ describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => 
     expect(tx, 'prep 置 done 必须在事务内').toMatch(
       /setNodeRunStatusTx\(\{[\s\S]{0,200}nodeRunId: prepRunId[\s\S]{0,120}to: 'done'/,
     )
-    // 两条执行路径都消费完整回调；effect 路径通过 succeed 的 onSettledTx 与
-    // attempt/fence 收口同事务，不能只在无上下文的兼容分支保持原子性。
+    // 两条执行路径都保持原子性；effect 路径只能传 closed projection，不能把
+    // SQLite transaction callback 穿过 provider-neutral contract。
     const after = src.slice(txEnd)
     expect(after.slice(0, 900), '兼容路径必须把完整回调交给 dbTxSync').toMatch(
       /dbTxSync\(deps\.db, persistPreparedProjection\)/,
     )
-    expect(after.slice(0, 900), 'effect 路径必须把完整回调交给 settle 事务').toMatch(
-      /prepEffect\.succeed\([\s\S]{0,500}persistPreparedProjection/,
+    expect(after.slice(0, 1_800), 'effect 路径必须调用具名 workspace settlement port').toMatch(
+      /await prepEffect\.succeedWorkspacePreparation\([\s\S]{0,1400}repositories: preparedRepoRows/,
+    )
+    expect(after.slice(0, 1_800), 'effect 路径不得透传 SQLite transaction callback').not.toMatch(
+      /succeedWorkspacePreparation\([\s\S]{0,1400}persistPreparedProjection/,
     )
     // 反向：事务**之后**不得再有一次异步的 prep-done 写入（那就是旧形态）。
     expect(after.slice(0, 600), '事务后不得再异步置 done').not.toMatch(
@@ -2012,7 +2066,8 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
       .set({ status: 'pending', startedAt: Date.now() - 10 * 60_000, finishedAt: null })
       .where(eq(tasks.id, id))
 
-    const r = await runStuckTaskDetector({ db, taskIdFilter: [id] } as never)
+    const operations = taskRecoveryOperations(db)
+    const r = await runStuckTaskDetector({ operations, taskIdFilter: [id] })
     const s4 = r.openAlerts.filter((a) => a.rule === 'S4')
     // 10 分钟 < 45 分钟的准备阈值 ⇒ 不该报。
     expect(s4.length, '准备窗口内不得按 5 分钟判卡死').toBe(0)
@@ -2020,7 +2075,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     // 反向前提复核：把它挪出准备窗口（给个工作树）之后，同样 10 分钟必须**报**
     // ——否则上面那条零断言可能只是因为探测器压根没扫到它。
     await db.update(tasks).set({ worktreePath: '/tmp/wt-probe' }).where(eq(tasks.id, id))
-    const r2 = await runStuckTaskDetector({ db, taskIdFilter: [id] } as never)
+    const r2 = await runStuckTaskDetector({ operations, taskIdFilter: [id] })
     expect(
       r2.openAlerts.filter((a) => a.rule === 'S4').length,
       '前提复核：非准备窗口的同龄 pending 应当报 S4',

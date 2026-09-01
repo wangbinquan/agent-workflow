@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, notLike, sql } from 'drizzle-
 
 import type { DbClient } from '@/db/client'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
+import { retrySqliteWrite } from '@/db/sqliteWriteRetry'
 import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
 import type {
   NodeExecutionPersistence,
@@ -216,26 +217,28 @@ export class SqliteNodeExecutionPersistence implements NodeExecutionPersistence 
       .where(eq(nodeRuns.id, input.nodeRunId))
       .get()
     if (row === undefined) return
-    withTaskExecutionMutation({
-      db: this.db,
-      taskId: row.taskId,
-      ...(input.executionContext === undefined ? {} : { context: input.executionContext }),
-      now: input.events[input.events.length - 1]!.ts,
-      run: (tx) => {
-        tx.insert(nodeRunEvents)
-          .values(
-            input.events.map((event) => ({
-              nodeRunId: input.nodeRunId,
-              ts: event.ts,
-              kind: event.kind,
-              payload: event.payload,
-              sessionId: event.sessionId ?? null,
-              parentSessionId: event.parentSessionId ?? null,
-            })),
-          )
-          .run()
-      },
-    })
+    await retrySqliteWrite(() =>
+      withTaskExecutionMutation({
+        db: this.db,
+        taskId: row.taskId,
+        ...(input.executionContext === undefined ? {} : { context: input.executionContext }),
+        now: input.events[input.events.length - 1]!.ts,
+        run: (tx) => {
+          tx.insert(nodeRunEvents)
+            .values(
+              input.events.map((event) => ({
+                nodeRunId: input.nodeRunId,
+                ts: event.ts,
+                kind: event.kind,
+                payload: event.payload,
+                sessionId: event.sessionId ?? null,
+                parentSessionId: event.parentSessionId ?? null,
+              })),
+            )
+            .run()
+        },
+      }),
+    )
   }
 
   async retagSessionEpochs(

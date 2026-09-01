@@ -501,7 +501,12 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
 // alien-cause collapse without failing any type check (the param is optional on the oracle).
 test('source lock: taskQuestionDispatch threads mintCauseByTarget into BOTH gate call sites', async () => {
   const src = await Bun.file(
-    fileURLToPath(new URL('../src/services/taskQuestionDispatch.ts', import.meta.url)),
+    fileURLToPath(
+      new URL(
+        '../src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+        import.meta.url,
+      ),
+    ),
   ).text()
   const matches = src.match(/mintCauseByTarget/g) ?? []
   expect(matches.length).toBeGreaterThanOrEqual(4) // decl + assertNoInFlightDispatch + in-tx recheck + param

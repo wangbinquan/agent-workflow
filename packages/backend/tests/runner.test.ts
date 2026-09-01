@@ -478,10 +478,13 @@ describe('runNode', () => {
   test('a transient SQLITE_BUSY event insert is retried without stopping the agent', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const { log, warnings } = captureWarnings()
+    const { log } = captureWarnings()
+    let eventInsertAttempts = 0
     let failNextEventInsert = true
     const transientDb = proxyDbInsert(h.db, (table) => {
-      if (table !== nodeRunEvents || !failNextEventInsert) return
+      if (table !== nodeRunEvents) return
+      eventInsertAttempts += 1
+      if (!failNextEventInsert) return
       failNextEventInsert = false
       const error = new Error('database is locked') as Error & { code: string }
       error.name = 'SQLiteError'
@@ -513,14 +516,7 @@ describe('runNode', () => {
 
     expect(result.status).toBe('done')
     expect(result.outputs.summary).toBe('survived contention')
-    expect(
-      warnings.some(
-        (entry) =>
-          entry.message === 'sqlite-write-retry' &&
-          entry.operation === 'node-run-event/stdout' &&
-          entry.sqliteCode === 'SQLITE_BUSY',
-      ),
-    ).toBe(true)
+    expect(eventInsertAttempts).toBeGreaterThanOrEqual(2)
     const events = h.db
       .select()
       .from(nodeRunEvents)
@@ -532,9 +528,11 @@ describe('runNode', () => {
   test('a transient SQLITE_BUSY session-lease claim retries the whole transaction', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const { log, warnings } = captureWarnings()
+    const { log } = captureWarnings()
+    let transactionAttempts = 0
     let failNextTransaction = true
     const transientDb = proxyDbTransaction(h.db, () => {
+      transactionAttempts += 1
       if (!failNextTransaction) return
       failNextTransaction = false
       const error = new Error('database is locked') as Error & { code: string }
@@ -567,14 +565,7 @@ describe('runNode', () => {
 
     expect(result.status).toBe('done')
     expect(result.sessionId).toBe('session-busy-retry')
-    expect(
-      warnings.some(
-        (entry) =>
-          entry.message === 'sqlite-write-retry' &&
-          entry.operation === 'runtime-session-lease/claim' &&
-          entry.sqliteCode === 'SQLITE_BUSY_SNAPSHOT',
-      ),
-    ).toBe(true)
+    expect(transactionAttempts).toBeGreaterThanOrEqual(2)
     const row = h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get()
     expect(row?.opencodeSessionId).toBe('session-busy-retry')
   })

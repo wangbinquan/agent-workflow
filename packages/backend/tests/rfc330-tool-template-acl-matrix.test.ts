@@ -505,6 +505,6 @@ describe('RFC-330 —— 列表按可见性过滤并带档位（kernel 单元 + 
     expect(source).toMatch(
       /'employee_tool',\s*\n?\s*items\.filter\(\(tool\) => tool\.origin !== 'platform'\)/,
     )
-    expect(source).toContain("'employee_job_template',\n          module.queries.listJobTemplates(")
+    expect(source).toMatch(/'employee_job_template',\s*await module\.queries\.listJobTemplates\(/)
   })
 })

@@ -37,6 +37,20 @@ function postgresqlExecutor(db: PostgresqlDatabaseClient): RepositoryWorkspaceSq
     async run(query): Promise<number> {
       return changes(await db.run(query))
     },
+    async cachedRepoFacets(input) {
+      const rows = await db.all<{
+        all_count: number
+        referenced_count: number
+        attention_count: number
+      }>(sql`
+        SELECT
+          count(*) AS all_count,
+          sum(case when ${input.referenced} then 1 else 0 end) AS referenced_count,
+          sum(case when ${input.attention} then 1 else 0 end) AS attention_count
+        FROM ${cachedRepos}
+      `)
+      return rows[0] ?? { all_count: 0, referenced_count: 0, attention_count: 0 }
+    },
   }
 }
 

@@ -342,13 +342,21 @@ describe('RFC-311 T28 — listCachedReposPage oracle', () => {
     expect(detail).toContain('idx_cached_repos_fetched_id')
     expect(detail).not.toContain('TEMP B-TREE')
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'gitRepoCache.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'repositoryWorkspaceSqlStore.ts',
+      ),
       'utf8',
     )
     // 源码守卫:任何人改回展开式都在这里红(plan 断言本身打的是手写 SQL,
     // 绑不到实现,见实现门 P2-9 的同类判据)。
-    expect(src).toMatch(/lastFetchedAt\}, \$\{cachedRepos\.id\}\) < \(/)
-    expect(src).not.toMatch(/lastFetchedAt\} = \$\{c\.lastFetchedAt\} and/)
+    expect(src).toMatch(/lastFetchedAt\}, \$\{cachedRepos\.id\}\s*\) < \(/)
+    expect(src).not.toMatch(/lastFetchedAt\} = \$\{query\.cursor\.lastFetchedAt\} and/)
   })
 
   test('page query drives the keyset index, not a full sort', () => {

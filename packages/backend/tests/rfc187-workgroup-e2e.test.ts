@@ -28,6 +28,7 @@ import { resumeTask } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
@@ -241,6 +242,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: opencodeCmd(),
         awaitScheduler: true,

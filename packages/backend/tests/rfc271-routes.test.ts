@@ -25,7 +25,15 @@ const SRC = readFileSync(
   'utf8',
 )
 const OPERATIONS = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'modules', 'resource-catalog', 'public', 'operations.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'resource-catalog',
+    'composition',
+    'catalogOperationDescriptors.ts',
+  ),
   'utf8',
 )
 const SESSION = readFileSync(resolve(import.meta.dir, '..', 'src', 'auth', 'session.ts'), 'utf8')

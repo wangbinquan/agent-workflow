@@ -73,6 +73,7 @@ export class SqliteMemoryInjectionReadStore implements MemoryInjectionReadStore 
       .select({ id: cachedRepos.id })
       .from(cachedRepos)
       .where(inArray(cachedRepos.id, [...repositoryIds]))
+      .limit(repositoryIds.length)
       .all()
       .map((row) => row.id)
   }

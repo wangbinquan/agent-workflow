@@ -27,6 +27,7 @@ import { retryNode } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -310,6 +311,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -336,6 +338,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -367,6 +370,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       },
@@ -402,6 +406,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       },
@@ -472,6 +477,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
           db: flakyDb,
           schedulerDriver: createTaskExecutionTestTopology({ db: flakyDb, driver: 'real' })
             .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(flakyDb),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -514,6 +520,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
           db: starvingDb,
           schedulerDriver: createTaskExecutionTestTopology({ db: starvingDb, driver: 'real' })
             .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(starvingDb),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -552,6 +559,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
         appHome: h.appHome,
         binaryOverride: ['/usr/bin/env', 'true'],
       },
@@ -581,6 +589,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },
@@ -612,6 +621,7 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
+          taskRecoveryOperations: taskRecoveryOperations(h.db),
           appHome: h.appHome,
           binaryOverride: ['/usr/bin/env', 'true'],
         },

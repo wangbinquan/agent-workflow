@@ -36,7 +36,6 @@ import { join, resolve } from 'node:path'
 import {
   DISPATCH_CALL_POLICY,
   FANOUT_HYDRATE_CALL_POLICY,
-  PREVIEW_CALL_POLICY,
   VALIDATE_CALL_POLICY,
   type RefCallPolicy,
 } from '@agent-workflow/shared'
@@ -93,14 +92,11 @@ function markerCallSites(symbol: string): string[] {
 }
 
 describe('调用级三属性 —— active legacy closure policies 必须真的被调用点消费', () => {
-  test('validate / preview policy 各自至少有一个生产调用点（删掉调用点 ⇒ 这条红）', () => {
+  test('active validate policy 至少有一个生产调用点（删掉调用点 ⇒ 这条红）', () => {
     // `resolveNodeAgentRef` 拿到 policy 后 `void call`——它是**文档标记**，
     // 真正的分支在调用点。标记的价值全在「被传出去」这一下：一条谁都不传的
     // policy 就是纯装饰，正是 T43 删掉那两条的判据。
-    const named: Array<[string, RefCallPolicy]> = [
-      ['VALIDATE_CALL_POLICY', VALIDATE_CALL_POLICY],
-      ['PREVIEW_CALL_POLICY', PREVIEW_CALL_POLICY],
-    ]
+    const named: Array<[string, RefCallPolicy]> = [['VALIDATE_CALL_POLICY', VALIDATE_CALL_POLICY]]
     for (const [name, policy] of named) {
       expect(
         markerCallSites(name).length,

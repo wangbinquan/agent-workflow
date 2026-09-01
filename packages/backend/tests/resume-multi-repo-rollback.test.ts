@@ -29,6 +29,7 @@ import { nodeRuns, tasks as tasksTbl, workflows } from '../src/db/schema'
 import { gitStashSnapshot, runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -121,6 +122,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       appHome: h.appHome,
     })
 
@@ -179,6 +181,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       appHome: h.appHome,
     })
 
@@ -226,6 +229,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       appHome: h.appHome,
     })
 

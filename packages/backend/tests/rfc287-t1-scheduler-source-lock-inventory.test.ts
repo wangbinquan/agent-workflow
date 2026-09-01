@@ -42,7 +42,6 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc098-commitpush-nonblocking.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
   'rfc200-source-lock.test.ts',
-  'rfc202-source-locks.test.ts',
   'rfc282-b2-resolve-injection.test.ts',
   'rfc287-t1-broadcast-sequence.test.ts',
   'rfc287-t1-discard-failure-paths.test.ts',

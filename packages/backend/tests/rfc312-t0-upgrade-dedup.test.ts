@@ -22,6 +22,7 @@ import { createSession } from '../src/auth/sessionStore'
 import { resolveActorWithWsCredential } from '../src/auth/session'
 import { userSessions } from '../src/db/schema'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { createSqliteAuthRuntime } from '../src/auth/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -59,9 +60,18 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
     seedUser(db, 'u-1')
     const { token } = await createSession({ db, userId: 'u-1', now: 1_000 })
 
-    const counter = countSessionUpdates(db)
+    const auth = createSqliteAuthRuntime({ db })
+    const lookupActiveSession = auth.lookupActiveSession.bind(auth)
+    let lookups = 0
+    const countedAuth = Object.freeze({
+      ...auth,
+      async lookupActiveSession(...args: Parameters<typeof lookupActiveSession>) {
+        lookups += 1
+        return await lookupActiveSession(...args)
+      },
+    })
     const resolved = await resolveActorWithWsCredential(
-      db,
+      countedAuth,
       token,
       Buffer.from('daemon-token'),
       createIdentityAccessRuntime({ db }),
@@ -77,8 +87,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
     ).toBeGreaterThan(0)
 
     // 这就是本条的红→绿判据：拆开的实现会数到 2。
-    expect(counter.writes()).toBe(1)
-    counter.restore()
+    expect(lookups).toBe(1)
   })
 
   test('rolling renewal 仍然生效：升级确实推进了 last_used_at', async () => {

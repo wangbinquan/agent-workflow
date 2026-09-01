@@ -44,6 +44,15 @@ const ARTIFACT_SRC = resolve(
   'intent',
   'journalArtifacts.ts',
 )
+const SQLITE_ARTIFACT_LIFECYCLE_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'intent',
+  'infrastructure',
+  'sqliteIntentApplyArtifactLifecycle.ts',
+)
 
 const actorOf = (id: string) =>
   buildActor({
@@ -205,7 +214,7 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
 
   test('收敛器只按完整 codec 的精确 generation 目录补偿', () => {
     const codec = readFileSync(ARTIFACT_SRC, 'utf8')
-    const converger = readFileSync(SRC, 'utf8')
+    const converger = readFileSync(SQLITE_ARTIFACT_LIFECYCLE_SRC, 'utf8')
     expect(converger).toContain('rmSync(artifact.generationDir, { recursive: true, force: true })')
     expect(codec).toContain('generationId: NonEmptyString')
     expect(codec).toContain('generationDir: NonEmptyString')

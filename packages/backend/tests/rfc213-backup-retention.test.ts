@@ -184,7 +184,7 @@ describe('startBackupScheduler side-effects (AC-6)', () => {
     // A slow createBackup must not overlap itself. Behavioural timing is flaky, so
     // lock the invariant at the source (same class as the sibling tickers).
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'backupScheduler.ts'),
+      resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'providerBackupScheduler.ts'),
       'utf-8',
     )
     expect(src.includes('let running = false')).toBe(true)

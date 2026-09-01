@@ -185,19 +185,26 @@ describe('RFC-266 concurrency hot-apply', () => {
     }
   })
 
-  test('the route reaches the SAME DbClient the scheduler keys its pools by', () => {
-    // WeakMap 键控要求路由与调度器共用同一个 db 对象；cli/start.ts 只 openDb 一次，
-    // 同时喂给 createApp 与 buildStartTaskDeps。若哪天有人在中间包一层新对象，
-    // 热生效会静默失效（改到另一份预算），故在源码层锁死这条接线。
-    const startSrc = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
-    expect(startSrc.match(/openDb\(\{/g)).toHaveLength(1)
+  test('the route reaches the SAME selected-provider scope the scheduler keys its pools by', () => {
+    // RFC-349 之后路由不再取 DbClient；它只调用已选 provider 组装的
+    // hot-apply command。SQLite compatibility 与 PostgreSQL production composition 都必须
+    // 把同一 daemon scope 同时交给 scheduler pools 与 hot apply，否则修改会
+    // 静默落到另一组 WeakMap 预算上。
     const routesSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'config.ts'),
       'utf8',
     )
-    expect(routesSrc).toContain('resizeAllNodePools(deps.db, {')
-    expect(routesSrc).toContain(
-      'resizeAllTaskFanoutSems(updated.multiProcessSubprocessConcurrency)',
+    expect(routesSrc).toContain('await deps.concurrencyHotApply.apply({')
+
+    const serverSrc = readFileSync(resolve(import.meta.dir, '..', 'src', 'server.ts'), 'utf8')
+    expect(serverSrc).toContain('composeLegacyConfigConcurrencyHotApply(deps.db)')
+    expect(serverSrc).toContain('resizeAllNodePools(daemonScope, {')
+
+    const postgresqlSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'cli', 'postgresqlDaemonApplication.ts'),
+      'utf8',
     )
+    expect(postgresqlSrc).toContain('processConcurrencyScope: input.provider.runtime')
+    expect(postgresqlSrc).toContain('resizeAllNodePools(input.provider.runtime, {')
   })
 })

@@ -19,6 +19,7 @@ function guards(): MrLaunchGuardCoordinator {
   return {
     supervisor: { abortAll: () => [] },
     abortRevoked: () => 0,
+    hasLaunchBarrier: async () => false,
     reconcileStaleOnBoot: () => {},
   } as unknown as MrLaunchGuardCoordinator
 }

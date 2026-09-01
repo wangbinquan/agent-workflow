@@ -261,6 +261,7 @@ import { rowToWorkgroup } from '@/services/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
+import { createDigitalEmployeeResourceCatalogAclProviders } from '@/modules/digital-employee/composition'
 import type {
   DigitalEmployeePlatformToolCatalogParticipant,
   EmployeeCaseDetailProjectionParticipant,
@@ -1460,7 +1461,16 @@ function composeSqliteDevelopmentConfigAclRoutes(
         param: 'id',
         load: input.load,
         canView: (actor, row) => canViewResource(db, actor, input.type, row),
-        read: (actor, row) => getResourceAcl(db, actor, input.type, row),
+        read: (actor, row) =>
+          getResourceAcl(
+            db,
+            actor,
+            input.type,
+            row,
+            input.type === developmentAdapterAclIdentity.type
+              ? developmentAdapterAclIdentity
+              : undefined,
+          ),
         update: (actor, row, body, updatedAt) =>
           updateResourceAcl(db, actor, input.type, row, body, {
             ...(input.type === developmentAdapterAclIdentity.type
@@ -2437,6 +2447,10 @@ function composeSqliteApiRouteMounts(
       contexts: identityAccess.contexts,
       authorization: resourceScopeAuthorization,
     })
+  const agentLaunchResources = Object.freeze({
+    resources: composeSqliteAgentLaunchResourceOperations(deps.db),
+    integrity: agentResourceIntegrity.launch,
+  })
   const taskRouteLaunch =
     deps.taskRouteLaunch ??
     createSqliteTaskRouteLaunchOperations({
@@ -2451,10 +2465,7 @@ function composeSqliteApiRouteMounts(
           deps.secretBox,
           identityAccess,
         ),
-        agentLaunchResources: Object.freeze({
-          resources: composeSqliteAgentLaunchResourceOperations(deps.db),
-          integrity: agentResourceIntegrity.launch,
-        }),
+        agentLaunchResources,
       },
     })
   const workgroupTaskRoom = composeSqliteWorkgroupTaskRoom({
@@ -2482,7 +2493,13 @@ function composeSqliteApiRouteMounts(
   })
   const scheduledLaunch =
     deps.buildScheduleLaunch ??
-    buildScheduleLaunch(deps.db, schedulerDriver, deps.configPath, identityAccess)
+    buildScheduleLaunch(
+      deps.db,
+      schedulerDriver,
+      deps.configPath,
+      identityAccess,
+      agentLaunchResources,
+    )
   const webhookEndpointService =
     deps.secretBox === undefined
       ? null
@@ -2597,13 +2614,34 @@ function composeSqliteApiRouteMounts(
       ? {}
       : { runTurn: deps.intentTestDependencies.runFn }),
   } satisfies IntentSessionRouteDependencies)
+  const digitalEmployeeAclIdentityProviders = createDigitalEmployeeResourceCatalogAclProviders(
+    deps.db,
+  )
+  const digitalEmployeeAclIdentityFor = (type: DigitalEmployeeAclResourceType) => {
+    switch (type) {
+      case 'employee_definition':
+        return digitalEmployeeAclIdentityProviders.employeeDefinition
+      case 'employee_tool':
+        return digitalEmployeeAclIdentityProviders.employeeTool
+      case 'employee_job_template':
+        return digitalEmployeeAclIdentityProviders.employeeJobTemplate
+      default: {
+        const exhaustive: never = type
+        return exhaustive
+      }
+    }
+  }
   const digitalEmployeePersistence = composeDigitalEmployeeRoutePersistence({
     identityAccess,
     resourceCatalog: providerResourceCatalog,
     acl: Object.freeze({
-      getResourceAcl: (actor, type, row) => getResourceAcl(deps.db, actor, type, row),
+      getResourceAcl: (actor, type, row) =>
+        getResourceAcl(deps.db, actor, type, row, digitalEmployeeAclIdentityFor(type)),
       updateResourceAcl: (actor, type, row, body, options) =>
-        updateResourceAcl(deps.db, actor, type, row, body, options),
+        updateResourceAcl(deps.db, actor, type, row, body, {
+          ...options,
+          identityPersistence: digitalEmployeeAclIdentityFor(type),
+        }),
     }),
   })
   const missionInputUploads = composeSqliteMissionInputUploadOperations({ db: deps.db, appHome })

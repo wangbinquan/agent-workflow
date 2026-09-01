@@ -142,15 +142,8 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   const routesSrc = readFileSync(join(import.meta.dir, '../src/routes/tasks.ts'), 'utf8')
   const taskSrc = readFileSync(join(import.meta.dir, '../src/services/task.ts'), 'utf8')
 
-  test('routes/tasks.ts + startTaskDeps 的 8 个逻辑入口都线程 resolveLaunchRuntimeConfig', () => {
-    const calls = routesSrc.match(/resolveLaunchRuntimeConfig\(deps\.configPath\)/g) ?? []
-    // RFC-159 T2: JSON 启动改走 buildStartTaskDeps（工厂内 thread resolveLaunchRuntimeConfig），
-    // 第 8 个逻辑入口（JSON）经工厂覆盖。RFC-284 T25：multipart 臂整体迁
-    // services/multipartTaskStart.ts（在任何副作用前解析一次，先汇入统一的
-    // routeLaunchDeps；identity 解析、物化、fail/success 三条路径复用同一份 deps）。
-    // tasks.ts 剩 5 个解析点：resume / retry / repair-options / repair /
-    // sync-workflow。
-    expect(calls.length).toBe(5)
+  test('provider-neutral task routes delegate launch config to the SQLite operation adapter', () => {
+    expect(routesSrc).not.toContain('resolveLaunchRuntimeConfig(')
     const orch = readFileSync(
       join(import.meta.dir, '../src/services/multipartTaskStart.ts'),
       'utf8',
@@ -161,12 +154,18 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     expect(orch).toContain('materializeSpace(startInput, resolvedRouteLaunchDeps, appHome)')
     // T25 后路由侧不再持有 launchRuntime spread（三处全随编排体走）。
     expect(routesSrc.includes('...launchRuntime')).toBe(false)
-    // JSON 入口的运行时配置由 buildStartTaskDeps 携带（数据路径不变）。
     const depsSrc = readFileSync(join(import.meta.dir, '../src/services/startTaskDeps.ts'), 'utf8')
     expect(depsSrc).toContain('resolveLaunchRuntimeConfig(configPath)')
-    expect(routesSrc).toMatch(
-      /buildStartTaskDeps\(\s*deps\.db,\s*requireSchedulerDriver\(deps\.schedulerDriver\),\s*deps\.configPath,/,
+    const sqliteOperations = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
+      ),
+      'utf8',
     )
+    expect(
+      (sqliteOperations.match(/\.\.\.dependencies\.startDepsFor\(actor\)/g) ?? []).length,
+    ).toBe(6)
   })
 
   test('routes 不再保留旧的「只 start 传 commitPush」单点写法', () => {
@@ -186,8 +185,8 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       expect(block, `${path} must retain its authenticated actor`).toContain(
         'const actor = actorOf(c)',
       )
-      expect(block, `${path} must pass actorUserId into StartTaskDeps`).toContain(
-        'actorUserId: actor.user.id',
+      expect(block, `${path} must pass the authenticated actor to its closed operation`).toContain(
+        'actor,',
       )
     }
   })
@@ -227,13 +226,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       runtimeStart,
       nodeMechanicsSrc.indexOf('\n}\n', runtimeStart),
     )
-    const depsStart = nodeMechanicsSrc.indexOf('function buildChildDeps(')
-    expect(depsStart).toBeGreaterThan(-1)
-    const depsBody = nodeMechanicsSrc.slice(depsStart, nodeMechanicsSrc.indexOf('\n}\n', depsStart))
-    // RFC-331 后继形状：端口 runtime 仍由唯一注册表拾取，legacy child deps
-    // 只展开这份已拾取结果；两段任一断开都会让子任务静默丢配置。
+    // The closed child runtime is now the handoff itself; there is no second
+    // legacy dependency expansion that can silently drop a key.
     expect(runtimeBody).toContain('runConfig: pickInheritableRunConfig(state.opts)')
-    expect(depsBody).toContain('...runtime.runConfig')
     for (const key of [
       'maxConcurrentNodes',
       'maxConcurrentScriptNodes',
@@ -265,13 +260,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       runtimeStart,
       nodeMechanicsSrc.indexOf('\n}\n', runtimeStart),
     )
-    const depsStart = nodeMechanicsSrc.indexOf('function buildChildDeps(')
-    expect(depsStart).toBeGreaterThan(-1)
-    const depsBody = nodeMechanicsSrc.slice(depsStart, nodeMechanicsSrc.indexOf('\n}\n', depsStart))
-    // RFC-331：configPath 先进入 child runtime port，再由 legacy adapter
-    // 展开回 StartTaskDeps；两段都要锁，不能只看注册表里“名字在场”。
+    // The provider-neutral scheduler consumes this exact child runtime port;
+    // `configPath` therefore crosses one closed handoff instead of two spreads.
     expect(runtimeBody).toContain('runConfig: pickInheritableRunConfig(state.opts)')
-    expect(depsBody).toContain('...runtime.runConfig')
     expect(topologySrc).toContain("'configPath',")
   })
 

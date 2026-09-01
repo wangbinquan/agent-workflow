@@ -47,6 +47,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -202,6 +203,7 @@ function runtimeDeps(harness: Harness, mock: string) {
     db: harness.db,
     schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
       .schedulerDriver,
+    taskRecoveryOperations: taskRecoveryOperations(harness.db),
     appHome: harness.appHome,
     binaryOverride: [process.execPath, 'run', mock],
     defaultNodeRetries: 0,

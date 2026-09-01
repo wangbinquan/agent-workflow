@@ -21,7 +21,7 @@ import type { SchedulerDriverPort } from '@/modules/task-execution/public/comman
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { StartTaskDeps } from '@/services/task'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { startExecution } from '@/services/execution/executor'
+import { startExecution, type StartExecutionDeps } from '@/services/execution/executor'
 import type {
   ScheduledAgentPayload,
   ScheduledWorkgroupPayload,
@@ -38,6 +38,7 @@ export function buildScheduleLaunch(
   schedulerDriver: SchedulerDriverPort,
   configPath: string,
   identityAccess: NonNullable<StartTaskDeps['identityAccess']>,
+  agentLaunchResources: NonNullable<StartExecutionDeps['agentLaunchResources']>,
 ): BuildScheduleLaunch {
   return (ownerUserId, scheduledTaskId) => async (kind, payload, actor: Actor, resources) => {
     const deps = {
@@ -49,6 +50,7 @@ export function buildScheduleLaunch(
         undefined,
         identityAccess,
       ),
+      agentLaunchResources,
       launchResources: resources,
       // RFC-287 G7：定时/webhook 触发与手动启动**同一套语义**（proposal §G7 原话：
       // 「定时任务与 webhook 触发同一套语义」）。这里没有等 HTTP 响应的用户，但 G7

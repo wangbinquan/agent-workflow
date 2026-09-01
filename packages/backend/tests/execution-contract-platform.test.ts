@@ -937,7 +937,7 @@ describe('platform execution contracts', () => {
       bodyMd: '',
     })
     expect(created.outputs).toEqual(['agent-result'])
-    expect(created.outputKinds).toEqual({})
+    expect(created.outputKinds).toBeUndefined()
     expect(created.branchPorts).toBeUndefined()
 
     const protectedPort = await updateAgent(db, created.id, {
@@ -946,7 +946,7 @@ describe('platform execution contracts', () => {
       branchPorts: ['agent-result'],
     })
     expect(protectedPort.outputs).toEqual(['agent-result'])
-    expect(protectedPort.outputKinds).toEqual({})
+    expect(protectedPort.outputKinds).toBeUndefined()
     expect(protectedPort.branchPorts).toBeUndefined()
 
     const removed = await updateAgent(db, created.id, {
