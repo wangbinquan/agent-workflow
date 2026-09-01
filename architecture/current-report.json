@@ -2,42 +2,22 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 6028,
+    "architectureExceptions": 6036,
     "backgroundJobs": 365,
-    "crossContextImports": 6231,
+    "crossContextImports": 6238,
     "facades": 354,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25580,
-    "mutationEntrypoints": 1906,
+    "moduleSymbolOwners": 25592,
+    "mutationEntrypoints": 1907,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 934,
+    "publicSurfaces": 945,
     "transactionExternalEffects": 476
   },
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1875,
+    "backendProductionFiles": 1879,
     "backendValueSccs": [
-      [
-        "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
-        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
-        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationEffectPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRuntimeLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/public/participants.ts",
-        "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "packages/backend/src/services/lifecycle.ts"
-      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -71,7 +51,7 @@
     ],
     "directNativeIntervals": 24,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 404,
+    "inboundBoundaryEdges": 325,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -80,7 +60,7 @@
       },
       {
         "context": "collaboration",
-        "files": 127
+        "files": 129
       },
       {
         "context": "development-automation",
@@ -136,10 +116,10 @@
       },
       {
         "context": "task-execution",
-        "files": 316
+        "files": 318
       }
     ],
-    "moduleFiles": 1243,
+    "moduleFiles": 1247,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -162,28 +142,8 @@
         "symbol": "createSqliteNodeRunMintParticipantInTx"
       }
     ],
-    "outboundBoundaryEdges": 12,
+    "outboundBoundaryEdges": 11,
     "repoValueSccs": [
-      [
-        "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateOpenParticipant.ts",
-        "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
-        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRecoveryOperations.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationEffectPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteHumanGateTaskLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskDecisionPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
-        "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRuntimeLifecyclePersistence.ts",
-        "packages/backend/src/modules/task-execution/public/participants.ts",
-        "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-        "packages/backend/src/services/lifecycle.ts"
-      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -205,5 +165,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bd3417c2067f801ea3b3e653795b3d377d396e53ff14a36fd948dba400506973"
+  "sourceDigest": "sha256:19e88cb32bd38f27d9d5f28b4814214b4cf90ca3c39215dc76263d23b9c9bfcb"
 }

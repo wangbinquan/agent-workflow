@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 354,
-    "thinFacades": 77
+    "thinFacades": 78
   },
   "entries": [
     {
@@ -445,8 +445,8 @@
       "boundaryEdgeIds": [
         "import:36f1b9cf8b4af5a660ea",
         "import:384c37b2d0db0ec5b6b0",
-        "import:8d3000141d4889c1abec",
-        "import:a4a45484f07ebf226c11"
+        "import:a4a45484f07ebf226c11",
+        "import:b15bb64fe691d00f2894"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/autoDispatch.ts",
@@ -1706,10 +1706,10 @@
         "import:28d3a78f9bc808d19096",
         "import:3f681fd39ec81754364e",
         "import:6d4dd55fb5471e2376ca",
-        "import:703acfcb66a3c1842225",
         "import:71d3a9eedbcc90b75e7f",
         "import:72d6ff98075103026425",
         "import:7fc319259a8835d153f5",
+        "import:8c4ac180d94806b3d46b",
         "import:96ac7dbf92a4e284bd34",
         "import:ded267a52ec8fe408230",
         "import:e82e3ce34b2c0ca0848d",
@@ -1995,7 +1995,6 @@
       "boundaryEdgeIds": [
         "import:0b5d48a45de5a9739079",
         "import:197746371c0b741a84d9",
-        "import:1f0b9e04d9f8e572687a",
         "import:2a368a687055a9380d5b",
         "import:2af557f5dc96e75c906d",
         "import:2bb49d49ad90ea062d7a",
@@ -2009,14 +2008,12 @@
         "import:672f8de26e0ccddb9b70",
         "import:68be674a077204e3e011",
         "import:6bc0d96a18cff27716d2",
-        "import:7763e00e06d44d76ef4a",
         "import:7ece29e98a8ee290d6d5",
         "import:7fa9292d275e33981f9b",
         "import:825b4b88080cd39aef0f",
         "import:92195b19fe7bee30e397",
         "import:97fc18515661bad39480",
         "import:9c8eceaa5f410087fda5",
-        "import:ae67824390995d920632",
         "import:b99ff6a3b945e8252db3",
         "import:bd0e77d598925cfb243e",
         "import:c03d7d384cf732703275",
@@ -4594,7 +4591,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:6b375a9e795d946987ab",
+        "import:6724e6685039747baea4",
         "import:82fe8360538897bd89c9"
       ],
       "exportedSymbols": [],
@@ -5563,11 +5560,11 @@
         "import:059db0d841a2f75e2314",
         "import:066c853fca987668f726",
         "import:1e1e92bf881073062336",
-        "import:3d9236b5cc89246b371d",
         "import:7d98f8116ddfd3f54902",
         "import:8560dbf0705aecf7cb91",
         "import:998fd65ab077856a1a2a",
         "import:ae39b5aa97c0e6d132ec",
+        "import:bb691cc044791fa7e1ab",
         "import:e44b0833070c49ad0c50"
       ],
       "exportedSymbols": [
@@ -6863,19 +6860,17 @@
       "boundaryEdgeIds": [
         "import:22c0e44233e9a498f5e8",
         "import:4bc4413518d0a48094d5",
-        "import:f69b5a3db3aa85ef5b86"
+        "import:58a1d67c7459d04b04ec",
+        "import:8382b61b0129eb74d28e",
+        "import:a6832c8146f59fbbe071",
+        "import:a7e3c12b7aaac7de2130"
       ],
-      "exportedSymbols": [
-        "TASK_PLATFORM_INPUT_PATHS_MAX",
-        "TASK_PLATFORM_INPUT_PATH_MAX_LENGTH",
-        "normalizeTaskPlatformInputPaths",
-        "parseTaskPlatformInputPaths"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/taskPlatformInputPaths.ts",
       "id": "facade:packages/backend/src/services/taskPlatformInputPaths.ts",
       "ownerEntryId": "owner:packages/backend/src/services/taskPlatformInputPaths.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -6902,8 +6897,8 @@
     {
       "boundaryEdgeIds": [
         "import:0cc942259033b0a4d7b5",
+        "import:1e67a02e625882cb45ca",
         "import:2ee30e92acf176a08414",
-        "import:8f4ca7f763d2d95b75aa",
         "import:bcaf0b190dfbac44dd63",
         "import:c2d20f277d3e2ac6ad27",
         "import:ff5b154e84fd77b2d606"
@@ -7635,5 +7630,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bd3417c2067f801ea3b3e653795b3d377d396e53ff14a36fd948dba400506973"
+  "sourceDigest": "sha256:19e88cb32bd38f27d9d5f28b4814214b4cf90ca3c39215dc76263d23b9c9bfcb"
 }
