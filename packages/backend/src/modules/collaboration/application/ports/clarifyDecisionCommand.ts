@@ -1,11 +1,15 @@
 import type { ClarifyAnswer, ClarifyDirective } from '@agent-workflow/shared'
 import type { GateDecisionReceipt } from '../../domain/gateReceipt'
+import type { ReviewActor } from '../../public/types'
+import type { TaskActorRole } from '@agent-workflow/shared'
 import type {
   QuestionDispatchDeferredReceipt,
   QuestionDispatchRerunReceipt,
 } from '../../domain/questionDispatchDecision'
 
 export interface SubmitClarifyDecisionCommandInput {
+  readonly actor: ReviewActor
+  readonly actorRole: TaskActorRole
   readonly nodeRunId: string
   readonly answers: readonly ClarifyAnswer[]
   readonly directive: ClarifyDirective

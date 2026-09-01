@@ -1,6 +1,7 @@
 // RFC-333 — SQLite adapter for clarify preparation's exact question snapshot.
 
 import { and, eq } from 'drizzle-orm'
+import type { DbClient } from '@/db/client'
 import { taskQuestions } from '@/db/schema'
 import type {
   ClarifyQuestionSnapshot,
@@ -8,11 +9,13 @@ import type {
 } from '../application/ports/clarifyQuestionSnapshotReader'
 
 export class SqliteClarifyQuestionSnapshotReader implements ClarifyQuestionSnapshotReader {
-  findTx(
-    input: Parameters<ClarifyQuestionSnapshotReader['findTx']>[0],
-  ): ClarifyQuestionSnapshot | null {
+  constructor(private readonly db: DbClient) {}
+
+  async find(
+    input: Parameters<ClarifyQuestionSnapshotReader['find']>[0],
+  ): Promise<ClarifyQuestionSnapshot | null> {
     return (
-      input.tx
+      this.db
         .select({
           id: taskQuestions.id,
           taskId: taskQuestions.taskId,

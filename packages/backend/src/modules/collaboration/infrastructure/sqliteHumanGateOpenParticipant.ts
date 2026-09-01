@@ -13,13 +13,13 @@ import {
   taskQuestions,
 } from '@/db/schema'
 import { transitionNodeRunStatusTx } from '@/services/lifecycle'
-import { mintNodeRunTx } from '@/services/nodeRunMint'
 import { sha256Hex } from '@/util/hash'
 import type {
+  HumanGateNodeRunMintParticipantInTx,
   HumanGateOpenParticipantInTx,
   HumanGateOpenParticipantResult,
 } from '../application/ports/humanGateOpenParticipant'
-import type { HumanGateOperationStore } from '../application/ports/humanGateOperationStore'
+import type { HumanGateOperationTransactionStore } from './humanGateOperationTransactionStore'
 import { HumanGateOperationError } from '../domain/humanGateOperation'
 import {
   decodeClarifyGateOpenManifest,
@@ -79,7 +79,11 @@ function decodePreparedOpenManifest(raw: string): PreparedOpenManifest {
 }
 
 /** The collaboration-owned review projection applied inside TaskParkTx. */
-function projectReviewGateOpenTx(tx: DbTxSync, manifest: ReviewGateOpenManifest): void {
+function projectReviewGateOpenTx(
+  tx: DbTxSync,
+  nodeRunMint: HumanGateNodeRunMintParticipantInTx<string>,
+  manifest: ReviewGateOpenManifest,
+): void {
   const node = manifest.node
   if (node.mode === 'mint') {
     if (tx.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.id, node.id)).get()) {
@@ -88,7 +92,7 @@ function projectReviewGateOpenTx(tx: DbTxSync, manifest: ReviewGateOpenManifest)
         `review-open node projection '${node.id}' already exists`,
       )
     }
-    mintNodeRunTx(tx, {
+    nodeRunMint.mint({
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -237,7 +241,11 @@ function projectReviewGateOpenTx(tx: DbTxSync, manifest: ReviewGateOpenManifest)
 }
 
 /** The collaboration-owned clarify node + round + eager question projection. */
-export function projectClarifyGateOpenTx(tx: DbTxSync, manifest: ClarifyGateOpenManifest): void {
+export function projectClarifyGateOpenTx(
+  tx: DbTxSync,
+  nodeRunMint: HumanGateNodeRunMintParticipantInTx<string>,
+  manifest: ClarifyGateOpenManifest,
+): void {
   const node = manifest.node
   if (node.mode === 'mint') {
     if (tx.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.id, node.id)).get()) {
@@ -246,7 +254,7 @@ export function projectClarifyGateOpenTx(tx: DbTxSync, manifest: ClarifyGateOpen
         `clarify-open node projection '${node.id}' already exists`,
       )
     }
-    mintNodeRunTx(tx, {
+    nodeRunMint.mint({
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -455,7 +463,8 @@ function manualQuestionStillOutstanding(
 export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticipantInTx {
   constructor(
     private readonly tx: DbTxSync,
-    private readonly operations: HumanGateOperationStore,
+    private readonly operations: HumanGateOperationTransactionStore,
+    private readonly nodeRunMint: HumanGateNodeRunMintParticipantInTx<string>,
   ) {}
 
   listPreparedManualQuestionParksTx(taskId: string): readonly string[] {
@@ -601,7 +610,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
           )
         }
       }
-      projectReviewGateOpenTx(this.tx, reviewManifest)
+      projectReviewGateOpenTx(this.tx, this.nodeRunMint, reviewManifest)
       collaborationEventRef = appendHumanGateOpenedCommittedEventTx(this.tx, {
         family: 'review',
         gate: {
@@ -630,7 +639,7 @@ export class SqliteHumanGateOpenParticipantInTx implements HumanGateOpenParticip
           'clarify-open operation identity or artifact set changed',
         )
       }
-      projectClarifyGateOpenTx(this.tx, clarifyManifest)
+      projectClarifyGateOpenTx(this.tx, this.nodeRunMint, clarifyManifest)
       collaborationEventRef = appendHumanGateOpenedCommittedEventTx(this.tx, {
         family: 'clarify',
         gate: {

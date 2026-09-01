@@ -2,13 +2,13 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, or } from 'dri
 
 import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
-import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from '../application/ports/humanGateOperationStore'
 import type {
-  BeginHumanGateOperationInput,
+  BeginHumanGateOperationTxInput,
   BegunHumanGateOperation,
   HumanGateArtifactSnapshot,
-  HumanGateOperationStore,
-} from '../application/ports/humanGateOperationStore'
+  HumanGateOperationTransactionStore,
+} from './humanGateOperationTransactionStore'
+import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from './humanGateOperationTransactionStore'
 import {
   canonicalHumanGateRequestHash,
   canonicalHumanGateJson,
@@ -106,7 +106,7 @@ function staleOperation(row: OperationRow, expectedClaimEpoch: number): never {
   )
 }
 
-function assertRequest(input: BeginHumanGateOperationInput): void {
+function assertRequest(input: BeginHumanGateOperationTxInput): void {
   const { request } = input
   if (
     request.schemaVersion !== 1 ||
@@ -127,7 +127,7 @@ function assertRequest(input: BeginHumanGateOperationInput): void {
 
 function existingIdempotency(
   tx: DbTxSync,
-  input: BeginHumanGateOperationInput,
+  input: BeginHumanGateOperationTxInput,
   requestHash: string,
 ): BegunHumanGateOperation | null {
   const { request } = input
@@ -153,7 +153,7 @@ function existingIdempotency(
 
 function activeOperation(
   tx: DbTxSync,
-  input: BeginHumanGateOperationInput,
+  input: BeginHumanGateOperationTxInput,
 ): OperationRow | undefined {
   const { request } = input
   return tx
@@ -217,8 +217,8 @@ function artifactSnapshot(row: ArtifactRow): HumanGateArtifactSnapshot {
   }
 }
 
-export class SqliteHumanGateOperationStore implements HumanGateOperationStore {
-  beginTx(input: BeginHumanGateOperationInput): BegunHumanGateOperation {
+export class SqliteHumanGateOperationStore implements HumanGateOperationTransactionStore {
+  beginTx(input: BeginHumanGateOperationTxInput): BegunHumanGateOperation {
     assertRequest(input)
     const requestHash = canonicalHumanGateRequestHash(input.request)
     const replay = existingIdempotency(input.tx, input, requestHash)
@@ -278,7 +278,7 @@ export class SqliteHumanGateOperationStore implements HumanGateOperationStore {
   }
 
   findByIdempotencyTx(
-    input: Parameters<HumanGateOperationStore['findByIdempotencyTx']>[0],
+    input: Parameters<HumanGateOperationTransactionStore['findByIdempotencyTx']>[0],
   ): HumanGateOperationSnapshot | null {
     const row = input.tx
       .select()
@@ -296,7 +296,7 @@ export class SqliteHumanGateOperationStore implements HumanGateOperationStore {
   }
 
   latestGateRevisionTx(
-    input: Parameters<HumanGateOperationStore['latestGateRevisionTx']>[0],
+    input: Parameters<HumanGateOperationTransactionStore['latestGateRevisionTx']>[0],
   ): number {
     const row = input.tx
       .select({ revision: collaborationGateOperations.resultGateRevision })
@@ -724,7 +724,9 @@ export class SqliteHumanGateOperationStore implements HumanGateOperationStore {
     return snapshot(operationById(input.tx, input.operationId))
   }
 
-  declareArtifactsTx(input: Parameters<HumanGateOperationStore['declareArtifactsTx']>[0]): void {
+  declareArtifactsTx(
+    input: Parameters<HumanGateOperationTransactionStore['declareArtifactsTx']>[0],
+  ): void {
     const operation = operationById(input.tx, input.operationId)
     if (operation.state !== 'preparing') staleOperation(operation, operation.claimEpoch)
     const seen = new Set<string>()
@@ -766,7 +768,7 @@ export class SqliteHumanGateOperationStore implements HumanGateOperationStore {
   }
 
   transitionArtifactTx(
-    input: Parameters<HumanGateOperationStore['transitionArtifactTx']>[0],
+    input: Parameters<HumanGateOperationTransactionStore['transitionArtifactTx']>[0],
   ): void {
     if (input.expectedClaimEpoch !== undefined) {
       const operation = operationById(input.tx, input.operationId)

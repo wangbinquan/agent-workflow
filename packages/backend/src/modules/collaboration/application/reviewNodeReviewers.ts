@@ -120,7 +120,7 @@ export async function replaceReviewNodeReviewers(
       a.reviewNodeId.localeCompare(b.reviewNodeId) ||
       a.reviewerUserId.localeCompare(b.reviewerUserId),
   )
-  deps.reviewerStore.replaceTask(taskId, assignments, actor.user.id, Date.now())
+  await deps.reviewerStore.replaceTask(taskId, assignments, actor.user.id, Date.now())
   return getReviewNodeReviewerConfig(deps, actor, taskId)
 }
 

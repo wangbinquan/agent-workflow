@@ -1,8 +1,6 @@
 // RFC-333 T7 — prepare one complete clarify round before TaskParkTx.
 
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyQuestionSnapshotReader } from './ports/clarifyQuestionSnapshotReader'
 import type { HumanGateOperationStore } from './ports/humanGateOperationStore'
@@ -151,210 +149,199 @@ function assertReplayMatches(
 
 export class ClarifyGateOpenPreparation {
   constructor(
-    private readonly db: DbClient,
     private readonly operations: HumanGateOperationStore,
     private readonly questions: ClarifyQuestionSnapshotReader,
   ) {}
 
-  prepare(input: PrepareClarifyGateOpenInput): PrepareClarifyGateOpenResult {
+  async prepare(input: PrepareClarifyGateOpenInput): Promise<PrepareClarifyGateOpenResult> {
     assertInput(input)
     const requestedAt = input.now ?? Date.now()
-    return dbTxSync(this.db, (tx) => {
-      const existing = this.operations.findByIdempotencyTx({
-        tx,
-        taskId: input.taskId,
-        gateKind: 'clarify',
-        operationKind: 'open',
-        idempotencyKey: input.idempotencyKey,
-      })
-      if (existing !== null) {
-        if (
-          existing.state !== 'prepared' &&
-          existing.state !== 'committed' &&
-          existing.state !== 'completed'
-        ) {
-          throw new HumanGateOperationError(
-            'human-gate-operation-stale',
-            `clarify-open operation '${existing.id}' cannot resume from '${existing.state}'`,
-            { operationId: existing.id, currentState: existing.state },
-          )
-        }
-        const manifest = decodeClarifyGateOpenManifest(existing.manifestJson)
-        assertReplayMatches(manifest, input)
-        if (existing.state === 'prepared') {
-          return {
-            kind: 'prepared',
-            operation: existing,
-            prepared: preparedHumanGateRef(existing),
-            manifest,
-          }
-        }
-        return { kind: 'already-committed', operation: existing, manifest }
-      }
-
-      const operationId = ulid(requestedAt)
-      const nodeRunId = input.reuseNodeRun?.id ?? operationId
-      const gateRef = `clarify:${nodeRunId}`
-      const latestGateRevision = this.operations.latestGateRevisionTx({
-        tx,
-        gateKind: 'clarify',
-        gateRef,
-      })
-      const expectedGateRevision = input.expectedGateRevision ?? latestGateRevision
-      if (expectedGateRevision !== latestGateRevision) {
+    const existing = await this.operations.findByIdempotency({
+      taskId: input.taskId,
+      gateKind: 'clarify',
+      operationKind: 'open',
+      idempotencyKey: input.idempotencyKey,
+    })
+    if (existing !== null) {
+      if (
+        existing.state !== 'prepared' &&
+        existing.state !== 'committed' &&
+        existing.state !== 'completed'
+      ) {
         throw new HumanGateOperationError(
           'human-gate-operation-stale',
-          `clarify-open gate '${gateRef}' revision changed before preparation`,
-          { expectedGateRevision, currentGateRevision: latestGateRevision },
+          `clarify-open operation '${existing.id}' cannot resume from '${existing.state}'`,
+          { operationId: existing.id, currentState: existing.state },
         )
       }
-      const reused = input.reuseNodeRun
-      const node: ClarifyGateNodeProjection = {
-        mode:
-          reused === undefined
-            ? 'mint'
-            : reused.status === 'pending'
-              ? 'reuse-pending'
-              : reused.status === 'running'
-                ? 'reuse-running'
-                : 'reuse-awaiting',
-        id: nodeRunId,
-        taskId: input.taskId,
-        nodeId: input.intermediaryNodeId,
-        runIteration: reused?.iteration ?? (input.kind === 'self' ? 0 : input.loopIter),
-        parentNodeRunId: reused === undefined ? input.parentNodeRunId : reused.parentNodeRunId,
-        shardKey: reused === undefined ? input.askingShardKey : reused.shardKey,
-        previousStartedAt: reused?.startedAt ?? null,
-        startedAt:
-          reused === undefined
-            ? requestedAt
-            : reused.status === 'awaiting_human'
-              ? reused.startedAt
-              : (reused.startedAt ?? requestedAt),
-        cause: input.kind === 'self' ? 'clarify-park' : 'cross-clarify-park',
-      }
-      const round: ClarifyGateRoundProjection = {
-        id: `${operationId}:round`,
-        taskId: input.taskId,
-        kind: input.kind,
-        askingNodeId: input.askingNodeId,
-        askingNodeRunId: input.askingNodeRunId,
-        askingShardKey: input.kind === 'self' ? input.askingShardKey : null,
-        intermediaryNodeId: input.intermediaryNodeId,
-        intermediaryNodeRunId: nodeRunId,
-        targetConsumerNodeId: input.kind === 'cross' ? input.targetConsumerNodeId : null,
-        loopIter: input.kind === 'cross' ? input.loopIter : 0,
-        iteration: input.iteration,
-        questionsJson: input.questionsJson,
-        answersJson: null,
-        directive: null,
-        status: 'awaiting_human',
-        truncationWarningsJson: input.kind === 'self' ? input.truncationWarningsJson : null,
-        designerRunTriggeredAt: null,
-        abandonedAt: null,
-        createdAt: requestedAt,
-        answeredAt: null,
-        answeredBy: null,
-        submittedByRole: null,
-        answerAttributionsJson: null,
-        draftAnswersJson: null,
-      }
-      const sourceKind = input.kind
-      const roleKind = input.kind === 'self' ? 'self' : 'questioner'
-      const questions: ClarifyGateQuestionProjection[] = input.questions.map((question, index) => {
-        const previous = this.questions.findTx({
-          tx,
-          originNodeRunId: nodeRunId,
-          questionId: question.id,
-          roleKind,
-        })
-        if (
-          previous !== null &&
-          (previous.taskId !== input.taskId ||
-            previous.sourceKind !== sourceKind ||
-            previous.iteration !== input.iteration ||
-            previous.loopIter !== round.loopIter)
-        ) {
-          throw new HumanGateOperationError(
-            'human-gate-operation-stale',
-            `clarify-open question '${question.id}' conflicts with its existing snapshot`,
-          )
-        }
+      const manifest = decodeClarifyGateOpenManifest(existing.manifestJson)
+      assertReplayMatches(manifest, input)
+      if (existing.state === 'prepared') {
         return {
-          mode: previous === null ? 'insert' : 'refresh-existing',
-          id: previous?.id ?? `${operationId}:question:${String(index).padStart(6, '0')}`,
-          taskId: input.taskId,
-          originNodeRunId: nodeRunId,
-          questionId: question.id,
-          questionTitle: question.title,
-          sourceKind,
-          roleKind,
-          iteration: input.iteration,
-          loopIter: round.loopIter,
-          defaultTargetNodeId: input.askingNodeId,
-          createdAt: previous?.createdAt ?? requestedAt,
-          updatedAt: requestedAt,
-          previousQuestionTitle: previous?.questionTitle ?? null,
-          previousDefaultTargetNodeId: previous?.defaultTargetNodeId ?? null,
-          previousUpdatedAt: previous?.updatedAt ?? null,
+          kind: 'prepared',
+          operation: existing,
+          prepared: preparedHumanGateRef(existing),
+          manifest,
         }
-      })
-      const nodeProjectionDigest = clarifyGateProjectionDigest({
-        sourceSnapshotDigest: input.sourceSnapshotDigest,
-        node,
-        round,
-        questions,
-      })
-      const manifest: ClarifyGateOpenManifest = {
-        schemaVersion: 1,
-        kind: 'clarify-open',
-        gateRef,
-        sourceSnapshotDigest: input.sourceSnapshotDigest,
-        nodeProjectionDigest,
-        committedEventRef: `clarify-open:${operationId}`,
-        node,
-        round,
-        questions,
       }
-      const manifestJson = encodeClarifyGateOpenManifest(manifest)
-      const request: CanonicalHumanGateRequest = {
-        schemaVersion: 1,
-        taskId: input.taskId,
-        gateKind: 'clarify',
-        operationKind: 'open',
-        gateRef,
-        actorUserId: input.actorUserId ?? null,
-        expectedTaskRevision: input.expectedTaskRevision,
-        expectedGateRevision,
-        payload: { kind: 'open', manifestDigest: sha256Hex(manifestJson) },
-      }
-      const begun = this.operations.beginTx({
-        tx,
-        operationId,
-        request,
-        idempotencyKey: input.idempotencyKey,
-        now: requestedAt,
+      return { kind: 'already-committed', operation: existing, manifest }
+    }
+
+    const operationId = ulid(requestedAt)
+    const nodeRunId = input.reuseNodeRun?.id ?? operationId
+    const gateRef = `clarify:${nodeRunId}`
+    const latestGateRevision = await this.operations.latestGateRevision({
+      gateKind: 'clarify',
+      gateRef,
+    })
+    const expectedGateRevision = input.expectedGateRevision ?? latestGateRevision
+    if (expectedGateRevision !== latestGateRevision) {
+      throw new HumanGateOperationError(
+        'human-gate-operation-stale',
+        `clarify-open gate '${gateRef}' revision changed before preparation`,
+        { expectedGateRevision, currentGateRevision: latestGateRevision },
+      )
+    }
+    const reused = input.reuseNodeRun
+    const node: ClarifyGateNodeProjection = {
+      mode:
+        reused === undefined
+          ? 'mint'
+          : reused.status === 'pending'
+            ? 'reuse-pending'
+            : reused.status === 'running'
+              ? 'reuse-running'
+              : 'reuse-awaiting',
+      id: nodeRunId,
+      taskId: input.taskId,
+      nodeId: input.intermediaryNodeId,
+      runIteration: reused?.iteration ?? (input.kind === 'self' ? 0 : input.loopIter),
+      parentNodeRunId: reused === undefined ? input.parentNodeRunId : reused.parentNodeRunId,
+      shardKey: reused === undefined ? input.askingShardKey : reused.shardKey,
+      previousStartedAt: reused?.startedAt ?? null,
+      startedAt:
+        reused === undefined
+          ? requestedAt
+          : reused.status === 'awaiting_human'
+            ? reused.startedAt
+            : (reused.startedAt ?? requestedAt),
+      cause: input.kind === 'self' ? 'clarify-park' : 'cross-clarify-park',
+    }
+    const round: ClarifyGateRoundProjection = {
+      id: `${operationId}:round`,
+      taskId: input.taskId,
+      kind: input.kind,
+      askingNodeId: input.askingNodeId,
+      askingNodeRunId: input.askingNodeRunId,
+      askingShardKey: input.kind === 'self' ? input.askingShardKey : null,
+      intermediaryNodeId: input.intermediaryNodeId,
+      intermediaryNodeRunId: nodeRunId,
+      targetConsumerNodeId: input.kind === 'cross' ? input.targetConsumerNodeId : null,
+      loopIter: input.kind === 'cross' ? input.loopIter : 0,
+      iteration: input.iteration,
+      questionsJson: input.questionsJson,
+      answersJson: null,
+      directive: null,
+      status: 'awaiting_human',
+      truncationWarningsJson: input.kind === 'self' ? input.truncationWarningsJson : null,
+      designerRunTriggeredAt: null,
+      abandonedAt: null,
+      createdAt: requestedAt,
+      answeredAt: null,
+      answeredBy: null,
+      submittedByRole: null,
+      answerAttributionsJson: null,
+      draftAnswersJson: null,
+    }
+    const sourceKind = input.kind
+    const roleKind = input.kind === 'self' ? 'self' : 'questioner'
+    const questions: ClarifyGateQuestionProjection[] = []
+    for (const [index, question] of input.questions.entries()) {
+      const previous = await this.questions.find({
+        originNodeRunId: nodeRunId,
+        questionId: question.id,
+        roleKind,
       })
-      if (begun.replayed) {
+      if (
+        previous !== null &&
+        (previous.taskId !== input.taskId ||
+          previous.sourceKind !== sourceKind ||
+          previous.iteration !== input.iteration ||
+          previous.loopIter !== round.loopIter)
+      ) {
         throw new HumanGateOperationError(
-          'human-gate-operation-conflict',
-          `clarify-open operation '${begun.operation.id}' raced its preparation`,
-          { winnerOperationId: begun.operation.id },
+          'human-gate-operation-stale',
+          `clarify-open question '${question.id}' conflicts with its existing snapshot`,
         )
       }
-      const operation = this.operations.markPreparedTx({
-        tx,
-        operationId,
-        expectedClaimEpoch: begun.operation.claimEpoch,
-        manifestJson,
-        now: requestedAt,
+      questions.push({
+        mode: previous === null ? 'insert' : 'refresh-existing',
+        id: previous?.id ?? `${operationId}:question:${String(index).padStart(6, '0')}`,
+        taskId: input.taskId,
+        originNodeRunId: nodeRunId,
+        questionId: question.id,
+        questionTitle: question.title,
+        sourceKind,
+        roleKind,
+        iteration: input.iteration,
+        loopIter: round.loopIter,
+        defaultTargetNodeId: input.askingNodeId,
+        createdAt: previous?.createdAt ?? requestedAt,
+        updatedAt: requestedAt,
+        previousQuestionTitle: previous?.questionTitle ?? null,
+        previousDefaultTargetNodeId: previous?.defaultTargetNodeId ?? null,
+        previousUpdatedAt: previous?.updatedAt ?? null,
       })
-      return {
-        kind: 'prepared',
-        operation,
-        prepared: preparedHumanGateRef(operation),
-        manifest,
-      }
+    }
+    const nodeProjectionDigest = clarifyGateProjectionDigest({
+      sourceSnapshotDigest: input.sourceSnapshotDigest,
+      node,
+      round,
+      questions,
     })
+    const manifest: ClarifyGateOpenManifest = {
+      schemaVersion: 1,
+      kind: 'clarify-open',
+      gateRef,
+      sourceSnapshotDigest: input.sourceSnapshotDigest,
+      nodeProjectionDigest,
+      committedEventRef: `clarify-open:${operationId}`,
+      node,
+      round,
+      questions,
+    }
+    const manifestJson = encodeClarifyGateOpenManifest(manifest)
+    const request: CanonicalHumanGateRequest = {
+      schemaVersion: 1,
+      taskId: input.taskId,
+      gateKind: 'clarify',
+      operationKind: 'open',
+      gateRef,
+      actorUserId: input.actorUserId ?? null,
+      expectedTaskRevision: input.expectedTaskRevision,
+      expectedGateRevision,
+      payload: { kind: 'open', manifestDigest: sha256Hex(manifestJson) },
+    }
+    const begun = await this.operations.begin({
+      operationId,
+      request,
+      idempotencyKey: input.idempotencyKey,
+      now: requestedAt,
+      preparedManifestJson: manifestJson,
+    })
+    if (begun.replayed) {
+      throw new HumanGateOperationError(
+        'human-gate-operation-conflict',
+        `clarify-open operation '${begun.operation.id}' raced its preparation`,
+        { winnerOperationId: begun.operation.id },
+      )
+    }
+    const operation = begun.operation
+    return {
+      kind: 'prepared',
+      operation,
+      prepared: preparedHumanGateRef(operation),
+      manifest,
+    }
   }
 }

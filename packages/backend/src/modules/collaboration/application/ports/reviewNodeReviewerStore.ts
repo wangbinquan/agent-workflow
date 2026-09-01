@@ -20,5 +20,5 @@ export interface ReviewNodeReviewerStore {
     assignments: readonly ReviewNodeReviewerAssignmentInput[],
     assignedByUserId: string,
     assignedAt: number,
-  ): void
+  ): Promise<void>
 }

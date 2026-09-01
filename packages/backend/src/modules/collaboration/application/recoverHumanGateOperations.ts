@@ -1,5 +1,3 @@
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
 import type { HumanGateArtifactStore } from './ports/humanGateArtifactStore'
 import {
   DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS,
@@ -26,7 +24,6 @@ export interface HumanGateRecoveryReport {
 }
 
 export interface HumanGateOperationRecoveryOptions {
-  readonly db: DbClient
   readonly operations: HumanGateOperationStore
   readonly artifacts: HumanGateArtifactStore
   readonly preparedInspector: PreparedHumanGateRecoveryInspector
@@ -50,16 +47,13 @@ export class HumanGateOperationRecovery {
     this.batchLimit = options.batchLimit ?? 50
   }
 
-  runOnce(): HumanGateRecoveryReport {
+  async runOnce(): Promise<HumanGateRecoveryReport> {
     const at = this.now()
-    const claimed = dbTxSync(this.options.db, (tx) =>
-      this.options.operations.claimRecoveryBatchTx({
-        tx,
-        now: at,
-        leaseMs: this.leaseMs,
-        limit: this.batchLimit,
-      }),
-    )
+    const claimed = await this.options.operations.claimRecoveryBatch({
+      now: at,
+      leaseMs: this.leaseMs,
+      limit: this.batchLimit,
+    })
     const report = {
       claimed: claimed.length,
       retained: 0,
@@ -84,16 +78,16 @@ export class HumanGateOperationRecovery {
               report.retained++
               break
             }
-            this.beginCleanup(operation, at)
-            this.finishCleanup(operation, at)
+            await this.beginCleanup(operation, at)
+            await this.finishCleanup(operation, at)
             report.cleaned++
             break
           case 'committed':
-            this.finalizeCommitted(operation, at)
+            await this.finalizeCommitted(operation, at)
             report.finalized++
             break
           case 'cleanup_pending':
-            this.finishCleanup(operation, at)
+            await this.finishCleanup(operation, at)
             report.cleaned++
             break
           case 'completed':
@@ -108,48 +102,38 @@ export class HumanGateOperationRecovery {
     return report
   }
 
-  private artifactsFor(operationId: string): readonly HumanGateArtifactSnapshot[] {
-    return dbTxSync(this.options.db, (tx) =>
-      this.options.operations.listArtifactsTx(tx, operationId),
-    )
+  private async artifactsFor(operationId: string): Promise<readonly HumanGateArtifactSnapshot[]> {
+    return await this.options.operations.listArtifacts(operationId)
   }
 
-  private beginCleanup(operation: HumanGateOperationSnapshot, at: number): void {
-    dbTxSync(this.options.db, (tx) => {
-      this.options.operations.markCleanupPendingTx({
-        tx,
-        operationId: operation.id,
-        expectedClaimEpoch: operation.claimEpoch,
-        now: at,
-      })
+  private async beginCleanup(operation: HumanGateOperationSnapshot, at: number): Promise<void> {
+    await this.options.operations.markCleanupPending({
+      operationId: operation.id,
+      expectedClaimEpoch: operation.claimEpoch,
+      now: at,
     })
   }
 
-  private finishCleanup(operation: HumanGateOperationSnapshot, at: number): void {
-    for (const artifact of this.artifactsFor(operation.id)) {
+  private async finishCleanup(operation: HumanGateOperationSnapshot, at: number): Promise<void> {
+    for (const artifact of await this.artifactsFor(operation.id)) {
       this.options.artifacts.cleanupReviewArtifact(artifact)
     }
-    dbTxSync(this.options.db, (tx) => {
-      this.options.operations.deleteCleanupArtifactsTx({
-        tx,
-        operationId: operation.id,
-        expectedClaimEpoch: operation.claimEpoch,
-      })
-      this.options.operations.completeCleanupTx({
-        tx,
-        operationId: operation.id,
-        expectedClaimEpoch: operation.claimEpoch,
-        failureJson: JSON.stringify({
-          code: 'prepared-gate-stale-cleaned',
-          recoveredAt: at,
-        }),
-        now: at,
-      })
+    await this.options.operations.completeCleanup({
+      operationId: operation.id,
+      expectedClaimEpoch: operation.claimEpoch,
+      failureJson: JSON.stringify({
+        code: 'prepared-gate-stale-cleaned',
+        recoveredAt: at,
+      }),
+      now: at,
     })
   }
 
-  private finalizeCommitted(operation: HumanGateOperationSnapshot, at: number): void {
-    const artifacts = this.artifactsFor(operation.id)
+  private async finalizeCommitted(
+    operation: HumanGateOperationSnapshot,
+    at: number,
+  ): Promise<void> {
+    const artifacts = await this.artifactsFor(operation.id)
     for (const artifact of artifacts) {
       if (artifact.state === 'finalized') {
         this.options.artifacts.finalizeReviewArtifact(artifact)
@@ -161,26 +145,20 @@ export class HumanGateOperationRecovery {
         )
       }
       const receiptJson = this.options.artifacts.finalizeReviewArtifact(artifact)
-      dbTxSync(this.options.db, (tx) => {
-        this.options.operations.transitionArtifactTx({
-          tx,
-          operationId: operation.id,
-          artifactKey: artifact.artifactKey,
-          from: 'consumed',
-          to: 'finalized',
-          receiptJson,
-          expectedClaimEpoch: operation.claimEpoch,
-          now: at,
-        })
-      })
-    }
-    dbTxSync(this.options.db, (tx) => {
-      this.options.operations.completeTx({
-        tx,
+      await this.options.operations.transitionArtifact({
         operationId: operation.id,
+        artifactKey: artifact.artifactKey,
+        from: 'consumed',
+        to: 'finalized',
+        receiptJson,
         expectedClaimEpoch: operation.claimEpoch,
         now: at,
       })
+    }
+    await this.options.operations.complete({
+      operationId: operation.id,
+      expectedClaimEpoch: operation.claimEpoch,
+      now: at,
     })
   }
 }

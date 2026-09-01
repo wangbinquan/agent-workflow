@@ -19,6 +19,7 @@ import {
   type CollaborationCommittedV1,
   type CollaborationProjectionFrame,
 } from '../domain/collaborationCommittedEvent'
+import type { CollaborationCommittedEventProjection } from '../application/ports/collaborationCommittedEventProjection'
 
 function parseArray<T>(value: string | null): T[] | undefined {
   if (value === null) return undefined
@@ -275,15 +276,27 @@ function projectionFrames(
   return clarifyDecisionFrames(db, event)
 }
 
-export function createCollaborationWsProjector(db: DbClient): CommittedEventConsumerDefinition {
+export function createSqliteCollaborationCommittedEventProjection(
+  db: DbClient,
+): CollaborationCommittedEventProjection {
+  return Object.freeze({
+    async frames(event: CollaborationCommittedV1) {
+      return projectionFrames(db, event)
+    },
+  })
+}
+
+export function createCollaborationWsProjector(
+  projection: CollaborationCommittedEventProjection,
+): CommittedEventConsumerDefinition {
   return {
     id: 'collaboration-ws-projector',
     eventTypes: COLLABORATION_COMMITTED_EVENT_TYPES,
     deliveryClass: 'ephemeral',
     settle: 'projection-attempted',
-    handle(value) {
+    async handle(value) {
       const event = decodeCollaborationCommittedEvent(value)
-      for (const frame of projectionFrames(db, event)) {
+      for (const frame of await projection.frames(event)) {
         taskBroadcaster.broadcast(TASK_CHANNEL(event.payload.gate.taskId), frame as TaskWsMessage)
       }
     },

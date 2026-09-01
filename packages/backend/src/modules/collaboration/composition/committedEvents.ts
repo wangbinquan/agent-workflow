@@ -5,4 +5,8 @@ export {
   createCollaborationDurableConsumerDefinitions,
 } from '../application/collaborationCommittedEventConsumers'
 export { createHumanGateContinuationWorkerDefinition } from '../application/humanGateContinuationWorker'
-export { createCollaborationWsProjector } from '../infrastructure/collaborationCommittedEventWsProjector'
+export {
+  createCollaborationWsProjector,
+  createSqliteCollaborationCommittedEventProjection,
+} from '../infrastructure/collaborationCommittedEventWsProjector'
+export { createPostgresqlCollaborationCommittedEventProjection } from '../infrastructure/postgresqlCollaborationCommittedEventProjection'

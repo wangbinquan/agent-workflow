@@ -2,8 +2,12 @@ import type { ReviewCommentAnchor } from '@agent-workflow/shared'
 import type { ReviewAnchorRequest } from '../../public/types'
 import type { GateDecisionReceipt } from '../../domain/gateReceipt'
 import type { ReviewGateDecision } from '../../domain/canonicalGateRequest'
+import type { ReviewActor } from '../../public/types'
+import type { TaskActorRole } from '@agent-workflow/shared'
 
 export interface SubmitReviewDecisionCommandInput {
+  readonly actor: ReviewActor
+  readonly authorRole: TaskActorRole
   readonly nodeRunId: string
   readonly decision: ReviewGateDecision
   readonly rejectReason?: string

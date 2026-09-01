@@ -10,6 +10,50 @@ import {
 } from '../infrastructure/collaborationCommittedEventParticipant'
 
 export type { HumanGateOpenParticipantResult } from '../application/ports/humanGateOpenParticipant'
+export type {
+  DeferredTaskQuestionDispatcher,
+  TaskDagCollaborationOperations,
+  TaskDagOpenClarifyEvidence,
+} from '../application/ports/taskDagCollaborationOperations'
+export type {
+  CollaborationAgentClarifyOpenInput,
+  CollaborationAgentClarifyOpenReceipt,
+  CollaborationAutonomousDismissalInput,
+  CollaborationAutonomousDismissalResult,
+  CollaborationBorrowResolutionInput,
+  CollaborationClarifyDirectiveInput,
+  CollaborationClarifyQueueContext,
+  CollaborationClarifyQueueInput,
+  CollaborationClarifySuppressionInput,
+  CollaborationCrossClarifyInspectInput,
+  CollaborationCrossClarifyInspectResult,
+  CollaborationReviewDispatchInput,
+  CollaborationReviewDispatchResult,
+  CollaborationReviewPromptInput,
+  CollaborationRuntimeMechanics,
+  CollaborationTaskRuntimeOperations,
+} from '../application/ports/collaborationRuntimeMechanics'
+export type { ClarifyRepairParticipant } from '../application/ports/clarifyRepairParticipant'
+export type {
+  ReviewRepairInspection,
+  ReviewRepairParticipant,
+} from '../application/ports/reviewRepairParticipant'
+export type {
+  AddReviewCommentInput,
+  AddedReviewComment,
+  CollaborationClarifyDraftEventPublisher,
+  CollaborationRouteActor,
+  CollaborationRouteOperations,
+  CollaborationTaskQuestionView,
+  ListClarifySummariesInput,
+  ListReviewSummariesInput,
+  ReassignTaskQuestionAction,
+  ReviewCommentWriteAuthority,
+  SaveClarifyDraftInput,
+  SaveClarifyDraftResult,
+  SealClarifyQuestionsInput,
+  SealClarifyQuestionsResult,
+} from '../application/ports/collaborationRouteOperations'
 
 // Keep infrastructure bindings behind exact public participant values. A
 // direct re-export makes the public contract recursively expose DbTxSync and

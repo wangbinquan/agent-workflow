@@ -7,7 +7,7 @@ import { taskQuestions, tasks } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import type { HumanGateOperationStore } from '../application/ports/humanGateOperationStore'
+import type { HumanGateOperationTransactionStore } from './humanGateOperationTransactionStore'
 import type {
   CreateManualQuestionOpenInput,
   CreatedManualQuestionOpen,
@@ -29,10 +29,10 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter {
   constructor(
     private readonly db: DbClient,
-    private readonly operations: HumanGateOperationStore,
+    private readonly operations: HumanGateOperationTransactionStore,
   ) {}
 
-  create(input: CreateManualQuestionOpenInput): CreatedManualQuestionOpen {
+  async create(input: CreateManualQuestionOpenInput): Promise<CreatedManualQuestionOpen> {
     const at = input.now ?? Date.now()
     const operationId = ulid(at)
     const questionId = ulid(at)
@@ -159,7 +159,7 @@ export class SqliteManualQuestionOpenWriter implements ManualQuestionOpenWriter 
         eventRefs: eventRef === null ? [] : [eventRef],
       }
     })
-    publishCommittedEventsAfterCommit(created.eventRefs)
+    await publishCommittedEventsAfterCommit(created.eventRefs)
     return created
   }
 }

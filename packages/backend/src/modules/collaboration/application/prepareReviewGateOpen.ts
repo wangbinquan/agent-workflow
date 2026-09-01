@@ -1,8 +1,6 @@
 // RFC-333 T6 — prepare the complete review round before TaskParkTx.
 
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
 import { sha256Hex } from '@/util/hash'
 import type { HumanGateArtifactStore, PlannedReviewArtifact } from './ports/humanGateArtifactStore'
 import type { HumanGateOperationStore } from './ports/humanGateOperationStore'
@@ -164,31 +162,28 @@ function sameArtifact(
 
 export class ReviewGateOpenPreparation {
   constructor(
-    private readonly db: DbClient,
     private readonly operations: HumanGateOperationStore,
     private readonly artifacts: HumanGateArtifactStore,
   ) {}
 
-  prepare(input: PrepareReviewGateOpenInput): PrepareReviewGateOpenResult {
+  async prepare(input: PrepareReviewGateOpenInput): Promise<PrepareReviewGateOpenResult> {
     assertInput(input)
     const requestedAt = input.now ?? Date.now()
-    const existing = dbTxSync(this.db, (tx) =>
-      this.operations.findByIdempotencyTx({
-        tx,
-        taskId: input.taskId,
-        gateKind: 'review',
-        operationKind: 'open',
-        idempotencyKey: input.idempotencyKey,
-      }),
-    )
+    const existing = await this.operations.findByIdempotency({
+      taskId: input.taskId,
+      gateKind: 'review',
+      operationKind: 'open',
+      idempotencyKey: input.idempotencyKey,
+    })
     const operationId = existing?.id ?? ulid(requestedAt)
     const createdAt = existing?.createdAt ?? requestedAt
     const reviewNodeRunId =
       input.reusePendingNodeRunId ?? input.reuseAwaitingNodeRun?.id ?? operationId
     const gateRef = existing?.gateRef ?? `review:${reviewNodeRunId}`
-    const latestGateRevision = dbTxSync(this.db, (tx) =>
-      this.operations.latestGateRevisionTx({ tx, gateKind: 'review', gateRef }),
-    )
+    const latestGateRevision = await this.operations.latestGateRevision({
+      gateKind: 'review',
+      gateRef,
+    })
     const expectedGateRevision =
       existing?.expectedGateRevision ?? input.expectedGateRevision ?? latestGateRevision
     if (existing === null && expectedGateRevision !== latestGateRevision) {
@@ -296,36 +291,27 @@ export class ReviewGateOpenPreparation {
       expectedGateRevision,
       payload: { kind: 'open', manifestDigest: sha256Hex(manifestJson) },
     }
-    let operation = dbTxSync(this.db, (tx) => {
-      const begun = this.operations.beginTx({
-        tx,
-        operationId,
-        request,
-        idempotencyKey: input.idempotencyKey,
-        now: requestedAt,
-      })
-      if (!begun.replayed) {
-        this.operations.declareArtifactsTx({
-          tx,
-          operationId: begun.operation.id,
-          artifacts: planned.map(({ plan }) => plan),
-          now: requestedAt,
-        })
-      } else if (begun.operation.state === 'preparing') {
-        const declared = this.operations.listArtifactsTx(tx, begun.operation.id)
-        if (
-          declared.length !== planned.length ||
-          declared.some((artifact, index) => !sameArtifact(artifact, planned[index]!.plan))
-        ) {
-          throw new HumanGateOperationError(
-            'human-gate-idempotency-conflict',
-            `review-open operation '${begun.operation.id}' artifact plan changed during replay`,
-            { operationId: begun.operation.id },
-          )
-        }
-      }
-      return begun.operation
+    const begun = await this.operations.begin({
+      operationId,
+      request,
+      idempotencyKey: input.idempotencyKey,
+      now: requestedAt,
+      artifacts: planned.map(({ plan }) => plan),
     })
+    let operation = begun.operation
+    if (begun.replayed && operation.state === 'preparing') {
+      const declared = await this.operations.listArtifacts(operation.id)
+      if (
+        declared.length !== planned.length ||
+        declared.some((artifact, index) => !sameArtifact(artifact, planned[index]!.plan))
+      ) {
+        throw new HumanGateOperationError(
+          'human-gate-idempotency-conflict',
+          `review-open operation '${operation.id}' artifact plan changed during replay`,
+          { operationId: operation.id },
+        )
+      }
+    }
 
     if (operation.state === 'prepared') {
       const stored = decodeReviewGateOpenManifest(operation.manifestJson)
@@ -353,28 +339,22 @@ export class ReviewGateOpenPreparation {
 
     for (const entry of planned) {
       const receiptJson = this.artifacts.stageReviewArtifact(entry.plan, entry.body)
-      dbTxSync(this.db, (tx) =>
-        this.operations.transitionArtifactTx({
-          tx,
-          operationId: operation.id,
-          artifactKey: entry.plan.artifactKey,
-          from: 'declared',
-          to: 'staged',
-          receiptJson,
-          expectedClaimEpoch: operation.claimEpoch,
-          now: requestedAt,
-        }),
-      )
-    }
-    operation = dbTxSync(this.db, (tx) =>
-      this.operations.markPreparedTx({
-        tx,
+      await this.operations.transitionArtifact({
         operationId: operation.id,
+        artifactKey: entry.plan.artifactKey,
+        from: 'declared',
+        to: 'staged',
+        receiptJson,
         expectedClaimEpoch: operation.claimEpoch,
-        manifestJson,
         now: requestedAt,
-      }),
-    )
+      })
+    }
+    operation = await this.operations.markPrepared({
+      operationId: operation.id,
+      expectedClaimEpoch: operation.claimEpoch,
+      manifestJson,
+      now: requestedAt,
+    })
     return {
       kind: 'prepared',
       operation,

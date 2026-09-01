@@ -12,7 +12,7 @@ export type { CreateManualQuestionOpenInput, CreatedManualQuestionOpen }
 export class ManualQuestionOpenCreation {
   constructor(private readonly writer: ManualQuestionOpenWriter) {}
 
-  create(input: CreateManualQuestionOpenInput): CreatedManualQuestionOpen {
-    return this.writer.create(input)
+  async create(input: CreateManualQuestionOpenInput): Promise<CreatedManualQuestionOpen> {
+    return await this.writer.create(input)
   }
 }

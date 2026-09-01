@@ -18,7 +18,7 @@ export interface HumanGateContinuationWorkerCycle {
 }
 
 export function createHumanGateContinuationWorkerDefinition(input: {
-  readonly listPending: () => readonly PendingHumanGateContinuation[]
+  readonly listPending: () => Promise<readonly PendingHumanGateContinuation[]>
   readonly drive: (continuation: PendingHumanGateContinuation) => Promise<void>
   readonly reconcileMs?: number
   readonly now?: () => number
@@ -40,7 +40,7 @@ export function createHumanGateContinuationWorkerDefinition(input: {
   let lastError: string | null = null
 
   const runCycle = async (): Promise<HumanGateContinuationWorkerCycle> => {
-    const pending = input.listPending()
+    const pending = await input.listPending()
     let cycleCompleted = 0
     let cycleFailed = 0
     for (const continuation of pending) {
@@ -65,7 +65,7 @@ export function createHumanGateContinuationWorkerDefinition(input: {
     owner: 'collaboration',
     kind: 'long-running',
     phase: 'after-ready',
-    dependencies: ['task-execution', 'sqlite'],
+    dependencies: ['task-execution'],
     readiness: () => readiness,
     state: () => ({ running, cycles, attempted, completed, failed, lastError }),
     start() {

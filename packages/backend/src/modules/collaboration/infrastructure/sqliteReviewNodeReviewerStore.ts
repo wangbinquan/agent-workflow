@@ -75,12 +75,12 @@ export class SqliteReviewNodeReviewerStore implements ReviewNodeReviewerStore {
     return new Set(rows.map((row) => row.id))
   }
 
-  replaceTask(
+  async replaceTask(
     taskId: string,
     assignments: readonly ReviewNodeReviewerAssignmentInput[],
     assignedByUserId: string,
     assignedAt: number,
-  ): void {
+  ): Promise<void> {
     dbTxSync(this.db, (tx) => {
       tx.delete(reviewNodeReviewers).where(eq(reviewNodeReviewers.taskId, taskId)).run()
       if (assignments.length === 0) return

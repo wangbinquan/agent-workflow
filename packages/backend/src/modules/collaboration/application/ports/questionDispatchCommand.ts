@@ -1,11 +1,14 @@
 import type { TaskActorRole } from '@agent-workflow/shared'
 import type { GateDecisionReceipt } from '../../domain/gateReceipt'
+import type { ReviewActor } from '../../public/types'
 import type {
   QuestionDispatchDeferredReceipt,
   QuestionDispatchRerunReceipt,
 } from '../../domain/questionDispatchDecision'
 
 export interface DispatchTaskQuestionsCommandInput {
+  readonly actor: ReviewActor
+  readonly actorRole: TaskActorRole
   readonly taskId: string
   readonly entryIds: readonly string[]
   readonly expectedTaskRevision?: number

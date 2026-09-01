@@ -21,5 +21,5 @@ export interface CreatedManualQuestionOpen {
 }
 
 export interface ManualQuestionOpenWriter {
-  create(input: CreateManualQuestionOpenInput): CreatedManualQuestionOpen
+  create(input: CreateManualQuestionOpenInput): Promise<CreatedManualQuestionOpen>
 }

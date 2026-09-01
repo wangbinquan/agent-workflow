@@ -2,7 +2,43 @@
 // temporary service bridge until their constructors receive these dependencies.
 
 export { composeTaskExecutionHumanGateAdapter } from './application/adapters/task-execution-human-gate-adapter'
-export { createCollaborationCommandContext } from './composition/commandContext'
+export { createSqliteCollaborationTaskAccessPort } from './infrastructure/sqliteCollaborationTaskAccess'
+export { planMembersReplacement } from './infrastructure/legacySqliteTaskCollab'
+export { createSqliteClarifyRepairParticipant } from './infrastructure/sqliteClarifyRepairParticipant'
+export { createPostgresqlClarifyRepairParticipant } from './infrastructure/postgresqlClarifyRepairParticipant'
+export { createSqliteReviewRepairParticipant } from './infrastructure/sqliteReviewRepairParticipant'
+export { createPostgresqlReviewRepairParticipant } from './infrastructure/postgresqlReviewRepairParticipant'
+export {
+  createPostgresqlCollaborationRuntimeMechanics,
+  type PostgresqlCollaborationNodeRunLifecycleParticipantFactory,
+  type PostgresqlCollaborationRuntimeMechanicsDependencies,
+} from './infrastructure/postgresqlCollaborationRuntimeMechanics'
+export { createPostgresqlTaskDagCollaborationOperations } from './infrastructure/postgresqlTaskDagCollaborationOperations'
+export {
+  createCollaborationWsProjector,
+  createSqliteCollaborationCommittedEventProjection,
+} from './infrastructure/collaborationCommittedEventWsProjector'
+export { createPostgresqlCollaborationCommittedEventProjection } from './infrastructure/postgresqlCollaborationCommittedEventProjection'
+export { createSqliteHumanGateContinuationRecoveryQueries } from './infrastructure/sqliteHumanGateContinuationRecovery'
+export { createPostgresqlHumanGateContinuationRecoveryQueries } from './infrastructure/postgresqlHumanGateContinuationRecovery'
+export { createSqliteHumanGateTerminalSweepCommand } from './infrastructure/sqliteHumanGateTerminalSweep'
+export { createPostgresqlHumanGateTerminalSweepCommand } from './infrastructure/postgresqlHumanGateTerminalSweep'
+export { createCollaborationClarifyDraftEventPublisher } from './infrastructure/collaborationClarifyDraftEventPublisher'
+export {
+  createPostgresqlCollaborationRouteOperations,
+  type CreatePostgresqlCollaborationRouteOperationsInput,
+  type PostgresqlCollaborationRouteNodeLifecycleParticipantFactory,
+} from './infrastructure/postgresqlCollaborationRouteOperations'
+export {
+  createCollaborationCommandContext,
+  createPostgresqlCollaborationCommandContext,
+} from './composition/commandContext'
+export {
+  composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
+  composeSqliteWorkgroupTaskRoomClarifyParticipantFactory,
+  type PostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
+  type SqliteWorkgroupTaskRoomClarifyParticipantFactory,
+} from './composition/workgroupTaskRoomClarify'
 
 // RFC-333 temporary legacy bridge inventory. These symbols stay internal to
 // the collaboration context: services/humanGateComposition.ts is the sole
