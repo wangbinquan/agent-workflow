@@ -21,6 +21,48 @@ afterEach(() => {
 const realTest = process.env.RFC349_DATABASE_URL === undefined ? test.skip : test
 
 describe('RFC-349 production database migration coordinator', () => {
+  test('missing target environment is an actionable validation error instead of HTTP 500', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rfc349-coordinator-preflight-env-'))
+    roots.push(root)
+    const sqlitePath = join(root, 'db.sqlite')
+    const drizzle = createInMemoryDb(MIGRATIONS)
+    const sqlite = (drizzle as unknown as { $client: Database }).$client
+    writeFileSync(sqlitePath, sqlite.serialize())
+    sqlite.close()
+
+    const coordinator = createDatabaseMigrationCoordinator({
+      sqlitePath,
+      operationsRoot: join(root, 'database-migrations'),
+      generationPointerPath: join(root, 'database-generation.json'),
+      env: {},
+      admission: {
+        async freezeAndDrain() {},
+        async reopenSqlite() {},
+        async activatePostgresql() {},
+        async openPostgresqlAdmission() {},
+      },
+      activateTargetConfig() {},
+      activateSourceConfig() {},
+    })
+
+    await expect(
+      coordinator.preflight({
+        target: {
+          provider: 'postgresql',
+          urlEnv: 'AGENT_WORKFLOW_DATABASE_URL',
+          poolMax: 4,
+          connectTimeoutMs: 5_000,
+          statementTimeoutMs: 30_000,
+          idleTimeoutMs: 30_000,
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: 'postgresql-url-env-missing',
+      status: 422,
+      details: { field: 'urlEnv', urlEnv: 'AGENT_WORKFLOW_DATABASE_URL' },
+    })
+  })
+
   test('persists failures raised while constructing the target runtime', async () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc349-coordinator-bootstrap-failure-'))
     roots.push(root)
@@ -114,7 +156,10 @@ describe('RFC-349 production database migration coordinator', () => {
         target: {
           provider: 'postgresql' as const,
           urlEnv: 'RFC349_DATABASE_URL',
-          poolMax: 4,
+          // A logical target holds one operation-scoped session after
+          // preflight. The production coordinator must sequence preflight
+          // before that reservation so the supported minimum pool remains 1.
+          poolMax: 1,
           connectTimeoutMs: 5_000,
           statementTimeoutMs: 30_000,
           idleTimeoutMs: 30_000,

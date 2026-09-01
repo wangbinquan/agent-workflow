@@ -34,11 +34,13 @@ function rows(value: readonly Record<string, unknown>[]) {
 function fakePool(input: {
   readonly responses?: readonly (readonly Record<string, unknown>[])[]
   readonly reserveError?: unknown
+  readonly reserveFailureAt?: number
 }) {
   const queries: Array<{ sql: string; parameters: readonly unknown[] | undefined }> = []
   let responseIndex = 0
   let releases = 0
   let closes = 0
+  let reserves = 0
   const connection: PostgresqlReservedConnection = {
     unsafe(sql, parameters) {
       queries.push({ sql, parameters })
@@ -50,7 +52,9 @@ function fakePool(input: {
   }
   const pool: PostgresqlPool = {
     async reserve() {
+      reserves += 1
       if (input.reserveError !== undefined) throw input.reserveError
+      if (reserves === input.reserveFailureAt) throw new Error('fixture reserve failed')
       return connection
     },
     unsafe(sql, parameters) {
@@ -209,7 +213,7 @@ describe('RFC-349 PostgreSQL runtime', () => {
       poolFactory: () => fake.pool,
     })
 
-    expect(runtime.providerPool()).toBe(fake.pool)
+    expect(runtime.providerPool()).not.toBe(fake.pool)
     await runtime.close()
     await runtime.close()
     expect(fake.closes).toBe(1)
@@ -218,5 +222,43 @@ describe('RFC-349 PostgreSQL runtime', () => {
     await expect(runtime.acquireMigrationAdvisoryLock('dbm_operation_1234')).rejects.toThrow(
       'PostgreSQL runtime is closed',
     )
+  })
+
+  test('reports real reserved-connection pool wait percentiles without exposing pool state', async () => {
+    const fake = fakePool({ reserveFailureAt: 2 })
+    const ticks = [0, 10, 10, 40, 40, 100]
+    const runtime = createPostgresqlDatabaseRuntime({
+      config,
+      generationId: 'dbg_pg_telemetry',
+      env: { RFC349_DATABASE_URL: 'postgresql://db.example/app' },
+      poolFactory: () => fake.pool,
+      telemetryWallNow: () => 1_000,
+      telemetryMonotonicNow: () => ticks.shift() ?? 100,
+    })
+
+    await runtime
+      .providerPool()
+      .reserve()
+      .then((connection) => connection.release())
+    await expect(runtime.providerPool().reserve()).rejects.toThrow('fixture reserve failed')
+    await runtime
+      .providerPool()
+      .reserve()
+      .then((connection) => connection.release())
+
+    expect(runtime.telemetry()).toEqual({
+      version: 1,
+      provider: 'postgresql',
+      poolWait: {
+        windowMs: 600_000,
+        sampleCount: 3,
+        acquiredCount: 2,
+        failedCount: 1,
+        p50Ms: 30,
+        p95Ms: 60,
+        maxMs: 60,
+      },
+    })
+    expect(runtime.telemetry()).not.toHaveProperty('url')
   })
 })

@@ -19,6 +19,13 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
+import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
+import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
+import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -148,16 +155,26 @@ describe('RFC-349 PostgreSQL task-execution read-model adapter', () => {
   test('runtime preserves an injected provider-neutral read-model identity', () => {
     const sqlite = createInMemoryDb(MIGRATIONS)
     const readModels = fixture([]).readModels
-    const runtime = composeTaskExecutionRuntime({ db: sqlite, readModels })
+    const runtime = composeTaskExecutionRuntime({
+      readModels,
+      participants: createSqliteTaskExecutionRuntimeParticipants({
+        db: sqlite,
+        memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
+        collaborationRuntime: createSqliteCollaborationRuntimeMechanics(sqlite),
+        persistence: createSqliteTaskExecutionPersistence(sqlite),
+        runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(sqlite),
+        runtimeRegistry: composeSqliteRuntimeRegistryOperations(sqlite),
+        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+      }),
+    })
 
     expect(runtime.readModels).toBe(readModels)
   })
 
   test('daemon bootstrap explicitly selects SQLite instead of relying on runtime fallback', () => {
     const start = readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8')
-    expect(start).toContain(
-      'const taskExecutionReadModels = composeSqliteTaskExecutionReadModels(db)',
-    )
-    expect(start).toContain('readModels: taskExecutionReadModels,')
+    expect(start).toContain('composeSqliteTaskExecutionProviderRuntime(db, {')
+    expect(start).toContain('taskExecutionReadModels: taskExecutionRuntime.readModels,')
+    expect(start).not.toContain('composeTaskExecutionRuntime({\n          readModels: undefined')
   })
 })

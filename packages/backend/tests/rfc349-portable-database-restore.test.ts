@@ -25,6 +25,7 @@ import {
   type LogicalDatabaseRestoreTarget,
 } from '@/platform/persistence/logicalDatabaseRestore'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import type { PostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type {
   LogicalColumnContract,
@@ -214,6 +215,30 @@ function target(
   }
 }
 
+function postgresqlTarget(
+  operationId: string,
+  calls: string[],
+  restoredRows: CanonicalLogicalRow[],
+): PostgresqlLogicalTarget {
+  return {
+    ...target('postgresql', operationId, calls, restoredRows),
+    provider: 'postgresql',
+    async prepareGeneration() {},
+    async activateGeneration() {},
+    async assertReady() {},
+    async firstLiveWriteAt() {
+      return null
+    },
+    async retireGenerationIfUnwritten() {
+      return true
+    },
+    async markFinalized() {},
+    async close() {
+      calls.push('close')
+    },
+  }
+}
+
 describe('RFC-349 portable database restore', () => {
   test('restores a PostgreSQL backup into an inactive SQLite target and then applies assets', async () => {
     const backup = await postgresqlBackup()
@@ -334,14 +359,7 @@ describe('RFC-349 portable database restore', () => {
           contract: CONTRACT,
           plan,
         })
-        const restoreTarget = target('postgresql', operationId, calls, restoredRows)
-        return {
-          ...restoreTarget,
-          provider: 'postgresql' as const,
-          async close() {
-            calls.push('close')
-          },
-        }
+        return postgresqlTarget(operationId, calls, restoredRows)
       },
     })
 
@@ -377,14 +395,7 @@ describe('RFC-349 portable database restore', () => {
           },
         },
         async openTarget() {
-          const restoreTarget = target('postgresql', operationId, calls, [])
-          return {
-            ...restoreTarget,
-            provider: 'postgresql' as const,
-            async close() {
-              calls.push('close')
-            },
-          }
+          return postgresqlTarget(operationId, calls, [])
         },
       }),
     ).rejects.toThrow('filesystem application failed')

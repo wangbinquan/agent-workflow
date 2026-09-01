@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   databaseCommand,
+  databaseMigrationStartIdempotencyKey,
   formatDatabaseMigrationStatus,
   type LocalDatabaseMigrationOperations,
 } from '@/cli/database'
@@ -228,8 +229,17 @@ describe('RFC-349 database CLI', () => {
       fake.lockFactory,
     )
     expect(result.status).toBe('ok')
-    expect(fake.calls[0]).toMatchObject({ action: 'start', input: { target } })
-    expect(fake.calls[0]?.input).toMatchObject({ idempotencyKey: expect.stringMatching(/^cli:/) })
+    expect(fake.calls.map((call) => call.action)).toEqual(['overview', 'start'])
+    expect(fake.calls[1]).toMatchObject({
+      action: 'start',
+      input: {
+        target,
+        idempotencyKey: databaseMigrationStartIdempotencyKey(overview, target),
+      },
+    })
+    expect(fake.calls[1]?.input).toMatchObject({
+      idempotencyKey: expect.stringMatching(/^database-migration:v1:[a-f0-9]{64}$/),
+    })
     expect(fake.acquired).toBe(1)
     expect(fake.released).toBe(1)
   })

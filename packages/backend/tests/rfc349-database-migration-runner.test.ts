@@ -96,6 +96,7 @@ function harness(
     failFirstChunk?: boolean
     firstLiveWriteAt?: number | null
     cancelAfterFirstChunk?: boolean
+    failFinalizeOnce?: boolean
     failAt?: 'target-activation' | 'target-readiness' | 'admission-activation' | 'admission-open'
   } = {},
 ) {
@@ -127,6 +128,7 @@ function harness(
   }
   const calls: string[] = []
   let failFirstChunk = options.failFirstChunk === true
+  let failFinalize = options.failFinalizeOnce === true
   const target: PostgresqlLogicalTarget = {
     provider: 'postgresql',
     operationId: 'dbm_operation_01',
@@ -157,6 +159,13 @@ function harness(
         })
       }
     },
+    assertReady: async () => {
+      if (options.failAt === 'target-readiness') {
+        throw Object.assign(new Error('target readiness failed'), {
+          code: 'target-readiness-failed',
+        })
+      }
+    },
     firstLiveWriteAt: async () => options.firstLiveWriteAt ?? null,
     retireGenerationIfUnwritten: async () => {
       calls.push('target:retired')
@@ -164,6 +173,12 @@ function harness(
     },
     markFinalized: async () => {
       calls.push('target:finalized')
+      if (failFinalize) {
+        failFinalize = false
+        throw Object.assign(new Error('target finalize interrupted'), {
+          code: 'target-finalize-interrupted',
+        })
+      }
     },
     close: async () => undefined,
   }
@@ -180,11 +195,6 @@ function harness(
       errorCategory: null,
     }),
     readiness: async () => {
-      if (options.failAt === 'target-readiness') {
-        throw Object.assign(new Error('target readiness failed'), {
-          code: 'target-readiness-failed',
-        })
-      }
       return {
         provider: 'postgresql',
         generationId: 'dbg_target_0001',
@@ -278,6 +288,76 @@ describe('RFC-349 database migration runner', () => {
     })
   })
 
+  test('classifies phase-specific failures without confusing target and source integrity', () => {
+    const classify = (
+      code: string,
+      phase: Parameters<typeof classifyDatabaseMigrationFailure>[1],
+    ) => classifyDatabaseMigrationFailure(Object.assign(new Error(code), { code }), phase)
+
+    expect(classify('database-admission-drain-timeout', 'preflighted')).toMatchObject({
+      category: 'drain-timeout',
+      retryable: true,
+    })
+    expect(classify('sqlite-migration-safety-backup-failed', 'source-frozen')).toMatchObject({
+      category: 'backup-failed',
+      retryable: true,
+    })
+    expect(classify('postgresql-permission-probe-failed', 'planned')).toMatchObject({
+      category: 'target-permission',
+      retryable: false,
+    })
+    expect(classify('target-unreachable', 'copying')).toMatchObject({
+      category: 'copy-transient',
+      retryable: true,
+    })
+    for (const code of ['ECONNRESET', '57014', '40001', '40P01']) {
+      expect(classify(code, 'copying')).toEqual({
+        category: 'copy-transient',
+        detailCode: code.toLowerCase(),
+        retryable: true,
+      })
+    }
+    expect(
+      classifyDatabaseMigrationFailure(
+        Object.assign(new Error('redacted driver wrapper'), {
+          cause: Object.assign(new Error('redacted PostgreSQL failure'), { code: '40001' }),
+        }),
+        'copying',
+      ),
+    ).toEqual({
+      category: 'copy-transient',
+      detailCode: '40001',
+      retryable: true,
+    })
+    for (const code of ['23505', '53100']) {
+      expect(classify(code, 'copying')).toEqual({
+        category: 'copy-permanent',
+        detailCode: code,
+        retryable: false,
+      })
+    }
+    expect(classify('postgresql-target-chunk-conflict', 'copying')).toMatchObject({
+      category: 'copy-permanent',
+      retryable: false,
+    })
+    expect(classify('postgresql-target-verification', 'verifying')).toMatchObject({
+      category: 'verification-mismatch',
+      retryable: false,
+    })
+    expect(classify('postgresql-target-schema-finalize', 'verifying')).toMatchObject({
+      category: 'target-schema',
+      retryable: false,
+    })
+    expect(classify('target-readiness-failed', 'switched')).toMatchObject({
+      category: 'health-failed',
+      retryable: true,
+    })
+    expect(classify('database-generation-pointer-failed', 'health-checked')).toMatchObject({
+      category: 'cutover-failed',
+      retryable: false,
+    })
+  })
+
   test('one action runs all safe phases, writes a verified pointer and leaves finalize explicit', async () => {
     const fixture = harness()
     const status = await fixture.runner.run('dbm_operation_01')
@@ -312,7 +392,7 @@ describe('RFC-349 database migration runner', () => {
     await expect(fixture.runner.run('dbm_operation_01')).rejects.toThrow('temporary target outage')
     expect(fixture.controlPlane.get('dbm_operation_01')).toMatchObject({
       phase: 'copying',
-      failure: { category: 'target-unreachable', retryable: true },
+      failure: { category: 'copy-transient', retryable: true },
     })
     expect(fixture.calls).toContain('admission:sqlite')
 
@@ -440,5 +520,19 @@ describe('RFC-349 database migration runner', () => {
         expectedSchemaDigest: DIGEST,
       }).payload.provider,
     ).toBe('postgresql')
+  })
+
+  test('finalize replays the immutable receipt after target metadata interruption', async () => {
+    const fixture = harness({ failFinalizeOnce: true })
+    await fixture.runner.run('dbm_operation_01')
+
+    await expect(fixture.runner.finalize('dbm_operation_01')).rejects.toThrow(
+      'target finalize interrupted',
+    )
+    expect(fixture.controlPlane.get('dbm_operation_01').phase).toBe('accepting-writes')
+    expect(existsSync(join(fixture.migrationsDir, 'dbm_operation_01', 'receipt.json'))).toBe(true)
+
+    expect((await fixture.runner.finalize('dbm_operation_01')).phase).toBe('finalized')
+    expect(fixture.calls.filter((call) => call === 'target:finalized')).toHaveLength(2)
   })
 })

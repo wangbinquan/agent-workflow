@@ -33,7 +33,6 @@ const MISSION_OPERATIONS_SOURCE = resolve(
   'missionOperations.ts',
 )
 const SERVER_SOURCE = resolve(import.meta.dir, '..', 'src', 'server.ts')
-const START_SOURCE = resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts')
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -83,24 +82,22 @@ afterEach(() => {
 })
 
 describe('RFC-349 PostgreSQL development admission lookup', () => {
-  test('bootstrap injects one selected lookup into reconcile and HTTP launch', () => {
+  test('selected-provider persistence supplies the required reconcile and HTTP lookup', () => {
     const composition = readFileSync(COMPOSITION_SOURCE, 'utf8')
     const missionOperations = readFileSync(MISSION_OPERATIONS_SOURCE, 'utf8')
     const server = readFileSync(SERVER_SOURCE, 'utf8')
-    const start = readFileSync(START_SOURCE, 'utf8')
 
+    expect(composition).toContain('readonly admissionLookup: AdmissionLookup')
     expect(composition).toContain(
-      'const lookup = deps.admissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db)',
+      'const lookup = deps.admissionLookup ?? persistence.admissionLookup',
     )
+    expect(composition).toContain('admissionLookup: createSqliteAdmissionLookup(deps.db)')
+    expect(composition).toContain('admissionLookup: createPostgresqlAdmissionLookup(deps.db)')
+    expect(missionOperations).toContain('readonly admissionLookup: AdmissionLookup')
     expect(missionOperations).toContain('lookup: deps.admissionLookup')
     expect(missionOperations).not.toContain('createSqliteAdmissionLookup')
-    expect(server).toContain('admissionLookup: deps.developmentAdmissionLookup')
+    expect(server).toContain('readonly developmentAdmissionLookup: DevelopmentAdmissionLookup')
     expect(server).toContain('admissionLookup: runtimeDeps.developmentAdmissionLookup')
-    expect(start).toContain(
-      'const developmentAdmissionLookup = composeSqliteDevelopmentAdmissionLookup(db)',
-    )
-    expect(start).toContain('admissionLookup: developmentAdmissionLookup')
-    expect(start).toContain('developmentAdmissionLookup,')
   })
 
   test('returns the repository assignment without consulting wider scopes', async () => {

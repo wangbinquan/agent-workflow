@@ -13,7 +13,11 @@ import {
   digestDatabaseArtifact,
   writeDatabaseGenerationAtomic,
 } from '@/platform/persistence/generationStore'
-import type { PostgresqlPool } from '@/platform/persistence/postgresqlRuntime'
+import type {
+  PostgresqlPool,
+  PostgresqlReservedConnection,
+  SqlRows,
+} from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 
 const roots: string[] = []
@@ -40,6 +44,14 @@ function fixture() {
     generationPointerPath: join(root, 'database-generation.json'),
     operationsRoot: join(root, 'database-migrations'),
   }
+}
+
+function rows(values: readonly Record<string, unknown>[] = []): SqlRows {
+  return Object.assign(Promise.resolve(values), {
+    async values() {
+      return values.map((value) => Object.values(value))
+    },
+  })
 }
 
 describe('RFC-349 database provider runtime resolution', () => {
@@ -97,11 +109,25 @@ describe('RFC-349 database provider runtime resolution', () => {
       },
     })
     let closed = 0
-    const pool = {
+    let reserves = 0
+    const connection: PostgresqlReservedConnection = {
+      unsafe() {
+        return rows()
+      },
+      release() {},
+    }
+    const pool: PostgresqlPool = {
+      async reserve() {
+        reserves += 1
+        return connection
+      },
+      unsafe() {
+        return rows()
+      },
       async close() {
         closed += 1
       },
-    } as PostgresqlPool
+    }
     const resolved = resolveDatabaseProviderRuntime({
       ...paths,
       config: {
@@ -120,7 +146,9 @@ describe('RFC-349 database provider runtime resolution', () => {
       provider: 'postgresql',
       generation: { payload: { generationId: 'dbg_pg_provider_runtime_1234' } },
     })
+    expect(reserves).toBe(0)
     await resolved.close()
     expect(closed).toBe(1)
+    expect(reserves).toBe(0)
   })
 })

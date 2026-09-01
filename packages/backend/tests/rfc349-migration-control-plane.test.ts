@@ -7,6 +7,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
+import { databaseMigrationStartIdempotencyKey } from '@/cli/database'
 import {
   advanceDatabaseMigration,
   DATABASE_MIGRATION_PHASES,
@@ -16,6 +17,11 @@ import {
   createFileDatabaseMigrationStore,
   DatabaseMigrationStoreError,
 } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
+import {
+  databaseMigrationStartIdempotencyKeyWith,
+  databaseMigrationStartIdentityFromOverview,
+} from '@agent-workflow/shared'
+import { sha256Hex } from '@/util/hash'
 
 const roots: string[] = []
 const SCHEMA_DIGEST = `sha256:${'a'.repeat(64)}`
@@ -27,6 +33,17 @@ const TARGET = {
   connectTimeoutMs: 10_000,
   statementTimeoutMs: 60_000,
   idleTimeoutMs: 30_000,
+}
+const SOURCE_OVERVIEW = {
+  provider: 'sqlite' as const,
+  generationId: 'dbg_legacy_sqlite',
+  schemaDigest: SCHEMA_DIGEST,
+  databaseFingerprint: 'sqlite:fixture',
+  serverVersion: null,
+  operationId: null,
+  target: null,
+  source: { databaseFingerprint: 'sqlite:fixture', fileBytes: 4096, totalRows: 12_345 },
+  tableCounts: { source: 184, active: 178, archiveOnly: 6 },
 }
 
 function fixture(options?: {
@@ -44,9 +61,13 @@ function fixture(options?: {
   return { root, store, control }
 }
 
-function start(control: ReturnType<typeof createDatabaseMigrationControlPlane>, now = 1000) {
+function start(
+  control: ReturnType<typeof createDatabaseMigrationControlPlane>,
+  now = 1000,
+  idempotencyKey = 'settings-click-0001',
+) {
   return control.start({
-    idempotencyKey: 'settings-click-0001',
+    idempotencyKey,
     sourceGenerationId: 'dbg_legacy_sqlite',
     sourceSchemaDigest: SCHEMA_DIGEST,
     sourceDatabaseFingerprint: 'sqlite:fixture',
@@ -87,11 +108,24 @@ afterEach(() => {
 })
 
 describe('RFC-349 migration control plane', () => {
-  test('Settings/CLI duplicate start is idempotent and a different operation is rejected', () => {
+  test('Settings and CLI converge on one canonical operation while target/options drift does not', () => {
     const { control } = fixture()
-    const first = start(control)
-    const duplicate = start(control, 2000)
+    const identity = databaseMigrationStartIdentityFromOverview(SOURCE_OVERVIEW, TARGET)
+    expect(identity).not.toBeNull()
+    const settingsKey = databaseMigrationStartIdempotencyKeyWith(identity!, sha256Hex)
+    const cliKey = databaseMigrationStartIdempotencyKey(SOURCE_OVERVIEW, TARGET)
+    expect(cliKey).toBe(settingsKey)
+
+    const first = start(control, 1000, settingsKey)
+    const duplicate = start(control, 2000, cliKey)
     expect(duplicate).toEqual(first)
+    expect(duplicate.operationId).toBe(first.operationId)
+    expect(control.readManifest(first.operationId).payload.idempotencyKey).toBe(settingsKey)
+
+    // The control plane also canonicalizes independently of adapter-provided
+    // request keys, so a stale pre-RFC-349 surface prefix cannot fork an
+    // otherwise equivalent active operation.
+    expect(start(control, 3000, 'cli-legacy-request-0002').operationId).toBe(first.operationId)
 
     expect(() =>
       control.start({
@@ -99,12 +133,28 @@ describe('RFC-349 migration control plane', () => {
         sourceGenerationId: 'dbg_legacy_sqlite',
         sourceSchemaDigest: SCHEMA_DIGEST,
         sourceDatabaseFingerprint: 'sqlite:fixture',
-        target: TARGET,
+        target: { ...TARGET, poolMax: TARGET.poolMax + 1 },
         tableCounts: { source: 184, active: 178, archiveOnly: 6 },
         ownerLeaseMs: 30_000,
-        now: 2000,
+        now: 4000,
       }),
     ).toThrow('already active')
+    const changedOptionsIdentity = databaseMigrationStartIdentityFromOverview(SOURCE_OVERVIEW, {
+      ...TARGET,
+      poolMax: TARGET.poolMax + 1,
+    })
+    expect(changedOptionsIdentity).not.toBeNull()
+    expect(databaseMigrationStartIdempotencyKeyWith(changedOptionsIdentity!, sha256Hex)).not.toBe(
+      settingsKey,
+    )
+    const changedTargetIdentity = databaseMigrationStartIdentityFromOverview(SOURCE_OVERVIEW, {
+      ...TARGET,
+      urlEnv: 'OTHER_DATABASE_URL',
+    })
+    expect(changedTargetIdentity).not.toBeNull()
+    expect(databaseMigrationStartIdempotencyKeyWith(changedTargetIdentity!, sha256Hex)).not.toBe(
+      settingsKey,
+    )
     expect(control.list()).toHaveLength(1)
   })
 
