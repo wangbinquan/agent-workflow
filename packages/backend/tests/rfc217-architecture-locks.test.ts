@@ -311,9 +311,10 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
       }
     }
     walk('packages/backend/src')
+    offenders.sort()
     expect(offenders).toEqual([
-      'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
       'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
+      'packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationWorkgroupClarify.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoomCommands.ts',

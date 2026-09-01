@@ -341,6 +341,19 @@ describe('RFC-349 database migration runner', () => {
       detailCode: 'err_postgres_server_error',
       retryable: true,
     })
+    expect(
+      classifyDatabaseMigrationFailure(
+        Object.assign(new Error('canceling statement due to statement timeout'), {
+          code: 'ERR_POSTGRES_SERVER_ERROR',
+          sqlState: '57014',
+        }),
+        'copying',
+      ),
+    ).toEqual({
+      category: 'copy-transient',
+      detailCode: '57014',
+      retryable: true,
+    })
     for (const code of ['23505', '53100']) {
       expect(classify(code, 'copying')).toEqual({
         category: 'copy-permanent',

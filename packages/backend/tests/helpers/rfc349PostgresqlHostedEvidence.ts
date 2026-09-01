@@ -15,6 +15,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -766,6 +767,29 @@ function hiddenDaemonEnvironment(url: string, hiddenPath: string): Record<string
   }
 }
 
+function createPostgresqlToolsHiddenPath(root: string): string {
+  const isolatedPath = join(root, 'no-postgresql-tools')
+  mkdirSync(isolatedPath, { recursive: true })
+  const git = Bun.which('git', { PATH: process.env.PATH ?? '' })
+  if (git === null) {
+    throw new Error('compiled PostgreSQL evidence requires git on the host PATH')
+  }
+
+  // Git is a required daemon dependency, not a PostgreSQL sidecar tool. Keep
+  // exactly its executable directory on Windows (Git for Windows needs its
+  // adjacent launcher files); on POSIX expose only one symlink to the already
+  // resolved executable. The application still cannot resolve psql, pg_dump
+  // or postgres from this deliberately isolated PATH.
+  const hiddenPath = process.platform === 'win32' ? `${isolatedPath};${dirname(git)}` : isolatedPath
+  if (process.platform !== 'win32') symlinkSync(git, join(isolatedPath, 'git'))
+  for (const tool of ['psql', 'pg_dump', 'postgres']) {
+    if (Bun.which(tool, { PATH: hiddenPath }) !== null) {
+      throw new Error(`PostgreSQL tool remained visible on isolated application PATH: ${tool}`)
+    }
+  }
+  return hiddenPath
+}
+
 async function runBinary(input: {
   readonly binary: string
   readonly argv: readonly string[]
@@ -840,8 +864,7 @@ async function runCompiledSmoke(
   await resetPostgresqlSchemas(url)
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc349-compiled-'))
   const home = join(root, 'home')
-  const hiddenPath = join(root, 'no-postgresql-tools')
-  mkdirSync(hiddenPath, { recursive: true })
+  const hiddenPath = createPostgresqlToolsHiddenPath(root)
   const env = binaryEnvironment(home, url, hiddenPath)
   let daemon: DaemonHandle | null = null
   try {
@@ -1526,8 +1549,7 @@ async function runLargeSoak(
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc349-large-'))
   const home = join(root, 'home')
   const dbPath = join(home, 'db.sqlite')
-  const hiddenPath = join(root, 'no-postgresql-tools')
-  mkdirSync(hiddenPath, { recursive: true })
+  const hiddenPath = createPostgresqlToolsHiddenPath(root)
   const configOverrides = {
     maintenanceSchedule: futureDailySchedule(),
     eventsArchiveThresholds: {

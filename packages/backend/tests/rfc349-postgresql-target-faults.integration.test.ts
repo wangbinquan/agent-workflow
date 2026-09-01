@@ -51,6 +51,12 @@ function errorCodes(error: unknown): readonly string[] {
     if (seen.has(current)) break
     seen.add(current)
     if (
+      'sqlState' in current &&
+      (typeof current.sqlState === 'string' || typeof current.sqlState === 'number')
+    ) {
+      codes.push(String(current.sqlState).toUpperCase())
+    }
+    if (
       'code' in current &&
       (typeof current.code === 'string' || typeof current.code === 'number')
     ) {

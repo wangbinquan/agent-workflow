@@ -295,6 +295,8 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(harness).toContain('HIDDEN_POSTGRESQL_HOST_KEYS.has(entry[0].toUpperCase())')
     expect(harness).toContain('PATH: hiddenPath')
     expect(harness).toContain('Path: hiddenPath')
+    expect(harness).toContain("Bun.which('git', { PATH: process.env.PATH ?? '' })")
+    expect(harness).toContain('PostgreSQL tool remained visible on isolated application PATH')
     expect(harness).toContain("status.database?.provider === 'postgresql'")
     expect(harness).toContain('status.database.poolWait')
     expect(harness).toContain('external-bun-sql-sidecar-acquire')

@@ -146,6 +146,12 @@ export function classifyDatabaseMigrationFailure(
   for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
     if (seen.has(current)) break
     seen.add(current)
+    if ('sqlState' in current) {
+      const candidate = current.sqlState
+      if (typeof candidate === 'string' || typeof candidate === 'number') {
+        codes.push(String(candidate))
+      }
+    }
     if ('code' in current) {
       const candidate = current.code
       if (typeof candidate === 'string' || typeof candidate === 'number') {
