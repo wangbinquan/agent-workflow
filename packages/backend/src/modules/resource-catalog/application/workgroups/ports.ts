@@ -11,7 +11,7 @@ import type {
   CopyWorkgroupCatalogInput,
   DeleteWorkgroupCatalogReceipt,
   UpdateWorkgroupCatalogInput,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 
 export interface WorkgroupInitialAcl {
   readonly ownerUserId: string | null

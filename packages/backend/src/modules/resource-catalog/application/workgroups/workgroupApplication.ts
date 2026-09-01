@@ -15,7 +15,7 @@ import type {
   DeleteWorkgroupCatalogInput,
   RenameWorkgroupCatalogInput,
   UpdateWorkgroupCatalogInput,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 import type { WorkgroupOperationContext } from '../../public/participants'
 import type { WorkgroupQueries } from '../../public/queries'
 import type { GetWorkgroupCatalogInput, WorkgroupCatalogDetail } from '../../public/types'

@@ -7,7 +7,7 @@ import {
   loadClosureRefNames,
   renameAgent,
   updateAgent,
-} from '@/services/agent'
+} from './legacy/agent'
 import type { AgentRepository } from '../application/agents/ports'
 import type { AgentReferenceLabels } from '../public/types'
 

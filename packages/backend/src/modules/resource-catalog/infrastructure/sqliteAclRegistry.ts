@@ -13,9 +13,9 @@ import {
   workflows,
   workgroups,
 } from '@/db/schema'
-import type { ForeignResourceAclType } from '../application/ports/resourceAclPersistence'
+import type { ResourceCatalogOwnedAclType } from '../application/ports/providerResourceCatalogPersistence'
 
-export type SqliteAclResourceType = Exclude<AclResourceType, ForeignResourceAclType>
+export type SqliteAclResourceType = ResourceCatalogOwnedAclType
 
 /** RFC-345 D4 — the canonical ACL roster's SQLite-only table registry. */
 export const SQLITE_ACL_TABLES = {

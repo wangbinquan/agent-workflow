@@ -1,7 +1,5 @@
 import type { AclResourceType, ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
 import { ForbiddenError, NotFoundError } from '@/util/errors'
 import {
   canEditAccess,
@@ -17,11 +15,15 @@ import {
   type AclRow,
   type DisclosedRefs,
 } from '../domain/resourceAccess'
-import type { ResourceGrantReadPort } from './ports/resourceAclPersistence'
+import type { ResourceCatalogGrantReadPort } from './ports/providerResourceCatalogPersistence'
 
-export function createResourceAuthorizationApplication(grants: ResourceGrantReadPort) {
+/**
+ * Provider-bound authorization application used by PostgreSQL and by the
+ * provider-neutral bootstrap successor.  It preserves the exact access ladder
+ * while keeping every database/transaction handle behind the grant port.
+ */
+export function createResourceAuthorizationApplication(grants: ResourceCatalogGrantReadPort) {
   async function discloseRefs(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     rows: ReadonlyArray<AclRow & { readonly name: string }>,
@@ -29,12 +31,11 @@ export function createResourceAuthorizationApplication(grants: ResourceGrantRead
     const granted =
       hasResourceAclBypass(actor) || !hasPrivateResourceAccess(actor)
         ? new Set<string>()
-        : await grants.listGrantedResourceIds(db, actor, type)
+        : await grants.listGrantedResourceIds(actor, type)
     return discloseRefsSync(actor, rows, granted)
   }
 
   async function filterVisibleRows<T extends AclRow>(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     rows: readonly T[],
@@ -43,132 +44,78 @@ export function createResourceAuthorizationApplication(grants: ResourceGrantRead
     if (!hasPrivateResourceAccess(actor)) {
       return rows.filter((row) => (row.visibility ?? 'public') === 'public')
     }
-    const granted = await grants.listGrantedResourceIds(db, actor, type)
+    const granted = await grants.listGrantedResourceIds(actor, type)
     return rows.filter((row) => isVisibleRow(actor, row, granted))
   }
 
   async function projectVisibleRowsWithAccess<T extends AclRow>(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     rows: readonly T[],
   ): Promise<Array<T & { readonly access: ResourceAccess }>> {
     const authority = resourceAclAudienceAuthority(actor)
-    const grantLevels =
+    const levels =
       authority.bypass || !authority.private || rows.length === 0
         ? new Map<string, ResourceGrantLevel>()
         : await grants.loadGrantLevelsForUser(
-            db,
             type,
             rows.map((row) => row.id),
             actor.user.id,
           )
-    const out: Array<T & { readonly access: ResourceAccess }> = []
-    for (const row of rows) {
-      const access = resolveAccessFrom(
-        authority,
-        actor.user.id,
-        row,
-        grantLevels.get(row.id) ?? null,
-      )
-      if (access !== 'none') out.push({ ...row, access })
-    }
-    return out
+    return rows.flatMap((row) => {
+      const access = resolveAccessFrom(authority, actor.user.id, row, levels.get(row.id) ?? null)
+      return access === 'none' ? [] : [{ ...row, access }]
+    })
   }
 
   async function resolveResourceAccessFor(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     row: AclRow,
   ): Promise<ResourceAccess> {
     const authority = resourceAclAudienceAuthority(actor)
-    if (authority.bypass || !authority.private) {
-      return resolveAccessFrom(authority, actor.user.id, row, null)
-    }
-    return resolveAccessFrom(
-      authority,
-      actor.user.id,
-      row,
-      await grants.loadGrantLevel(db, type, row.id, actor.user.id),
-    )
-  }
-
-  function resolveResourceAccessForInTx(
-    tx: DbTxSync,
-    actor: Actor,
-    type: AclResourceType,
-    row: AclRow,
-  ): ResourceAccess {
-    const authority = resourceAclAudienceAuthority(actor)
-    if (authority.bypass || !authority.private) {
-      return resolveAccessFrom(authority, actor.user.id, row, null)
-    }
-    return resolveAccessFrom(
-      authority,
-      actor.user.id,
-      row,
-      grants.loadGrantLevelInTx(tx, type, row.id, actor.user.id),
-    )
+    const level =
+      authority.bypass || !authority.private
+        ? null
+        : await grants.loadGrantLevel(type, row.id, actor.user.id)
+    return resolveAccessFrom(authority, actor.user.id, row, level)
   }
 
   async function canViewResource(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     row: AclRow,
   ): Promise<boolean> {
-    return canViewAccess(await resolveResourceAccessFor(db, actor, type, row))
-  }
-
-  function canViewResourceInTx(
-    tx: DbTxSync,
-    actor: Actor,
-    type: AclResourceType,
-    row: AclRow,
-  ): boolean {
-    return canViewAccess(resolveResourceAccessForInTx(tx, actor, type, row))
+    return canViewAccess(await resolveResourceAccessFor(actor, type, row))
   }
 
   async function canEditResource(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     row: AclRow,
   ): Promise<boolean> {
-    return canEditAccess(await resolveResourceAccessFor(db, actor, type, row))
-  }
-
-  function canEditResourceInTx(
-    tx: DbTxSync,
-    actor: Actor,
-    type: AclResourceType,
-    row: AclRow,
-  ): boolean {
-    return canEditAccess(resolveResourceAccessForInTx(tx, actor, type, row))
-  }
-
-  async function requireResourceView(
-    db: DbClient,
-    actor: Actor,
-    type: AclResourceType,
-    row: AclRow,
-  ): Promise<void> {
-    if (await canViewResource(db, actor, type, row)) return
-    throw new NotFoundError('not-found', `${type} not found`)
+    return canEditAccess(await resolveResourceAccessFor(actor, type, row))
   }
 
   function canGovernResource(actor: Actor, row: AclRow): boolean {
     return canGovernAccess(resolveResourceAccess(actor, row, null))
   }
 
-  async function requireResourceGovern(
-    db: DbClient,
+  async function requireResourceView(
     actor: Actor,
     type: AclResourceType,
     row: AclRow,
   ): Promise<void> {
-    await requireResourceView(db, actor, type, row)
+    if (await canViewResource(actor, type, row)) return
+    throw new NotFoundError('not-found', `${type} not found`)
+  }
+
+  async function requireResourceGovern(
+    actor: Actor,
+    type: AclResourceType,
+    row: AclRow,
+  ): Promise<void> {
+    await requireResourceView(actor, type, row)
     if (canGovernResource(actor, row)) return
     throw new ForbiddenError(
       'resource-govern-owner-only',
@@ -177,12 +124,11 @@ export function createResourceAuthorizationApplication(grants: ResourceGrantRead
   }
 
   async function requireResourceEdit(
-    db: DbClient,
     actor: Actor,
     type: AclResourceType,
     row: AclRow,
   ): Promise<ResourceAccess> {
-    const access = await resolveResourceAccessFor(db, actor, type, row)
+    const access = await resolveResourceAccessFor(actor, type, row)
     if (!canViewAccess(access)) throw new NotFoundError('not-found', `${type} not found`)
     if (canEditAccess(access)) return access
     throw new ForbiddenError(
@@ -191,12 +137,10 @@ export function createResourceAuthorizationApplication(grants: ResourceGrantRead
     )
   }
 
-  return {
+  return Object.freeze({
     canEditResource,
-    canEditResourceInTx,
     canGovernResource,
     canViewResource,
-    canViewResourceInTx,
     discloseRefs,
     filterVisibleRows,
     projectVisibleRowsWithAccess,
@@ -204,8 +148,7 @@ export function createResourceAuthorizationApplication(grants: ResourceGrantRead
     requireResourceGovern,
     requireResourceView,
     resolveResourceAccessFor,
-    resolveResourceAccessForInTx,
-  }
+  })
 }
 
 export type ResourceAuthorizationApplication = ReturnType<

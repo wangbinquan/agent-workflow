@@ -8,6 +8,7 @@ import {
   hasResourceAclBypass,
   type ResourceAclActorProjection,
 } from '../domain/resourceAccess'
+import type { ResourceCatalogGrantReadPort } from '../application/ports/providerResourceCatalogPersistence'
 
 /** The canonical grant-set predicate, shared by async and in-transaction reads. */
 export function grantsOfUserWhere(type: GrantResourceType, userId: string) {
@@ -179,4 +180,15 @@ export function visibleRowsCondition(
       .where(grantsOfUserWhere(type, actor.user.id)),
   )
   return or(isPublic, sql`${cols.ownerUserId} = ${actor.user.id}`, granted)!
+}
+
+/** Provider-bound Promise facade used by the RFC-349 composition root. */
+export function createSqliteResourceGrantReadPort(db: DbClient): ResourceCatalogGrantReadPort {
+  const port: ResourceCatalogGrantReadPort = {
+    listGrantedResourceIds: (actor, type) => listGrantedResourceIds(db, actor, type),
+    loadGrantLevel: (type, resourceId, userId) => loadGrantLevel(db, type, resourceId, userId),
+    loadGrantLevelsForUser: (type, resourceIds, userId) =>
+      loadGrantLevelsForUser(db, type, resourceIds, userId),
+  }
+  return Object.freeze(port)
 }

@@ -1,23 +1,25 @@
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
-import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
-import { legacyResourcePackageMutationRuntimeFactory } from '@/services/bundle/legacyResourcePackageMutationDependencies'
-import type { HumanMemberMapping, ImportDecision } from '@/services/resourcePackage/commit'
-import { commitResourcePackage } from '@/services/resourcePackage/commit'
-import { exportResourcePackage } from '@/services/resourcePackage/export'
-import { parseResourcePackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreview } from '@/services/resourcePackage/preview'
-import type { PackageSecretInput } from '@/services/resourcePackage/secretInputs'
 import { sha256Hex } from '@/util/hash'
 import { createResourcePackageApplication } from '../application/package/packageApplication'
-import type { ResourcePackageExecutionPort } from '../application/package/ports'
-import { findOwnedAclResourceIdsByName } from '../infrastructure/sqliteAclReadRepository'
+import type {
+  ResourcePackageExecutionPort,
+  ResourcePackageHumanMemberMapping,
+  ResourcePackageImportDecision,
+  ResourcePackageOwnedResourceLookupPort,
+  ResourcePackageReadPort,
+  ResourcePackageSecretInput,
+  ResourcePackageSkillTree,
+} from '../application/package/ports'
 import {
-  createResourcePackageOperationDescriptors,
-  type ResourcePackageCatalogModule,
-} from '../public/operations'
+  createSqliteResourcePackageOwnedResourceLookup,
+  createSqliteResourcePackageReadPort,
+} from '../infrastructure/sqlitePackageResourceRows'
+import { readSqlitePackageSkillTree } from '../infrastructure/sqlitePackageSkillTree'
+import { createResourcePackageOperationDescriptors } from './catalogOperationDescriptors'
+import type { ResourcePackageCatalogModule } from '../public/operations'
 import {
   type PackageResourceKind,
   type PackageResourceRef,
@@ -36,23 +38,23 @@ export interface ResourcePackageExportFence {
   readonly expectedConfigHash?: string
 }
 
-interface StagedInspect {
+export interface ResourcePackageInspectExecutionInput {
   readonly kind: 'inspect'
   readonly actor: Actor
   readonly bytes: Uint8Array
 }
 
-interface StagedApply {
+export interface ResourcePackageApplyExecutionInput {
   readonly kind: 'apply'
   readonly actor: Actor
   readonly bytes: Uint8Array
   readonly previewToken: string
-  readonly decisions: readonly ImportDecision[]
-  readonly humanMemberMappings: readonly HumanMemberMapping[]
-  readonly secretInputs: readonly PackageSecretInput[]
+  readonly decisions: readonly ResourcePackageImportDecision[]
+  readonly humanMemberMappings: readonly ResourcePackageHumanMemberMapping[]
+  readonly secretInputs: readonly ResourcePackageSecretInput[]
 }
 
-interface StagedExport {
+export interface ResourcePackageExportExecutionInput {
   readonly kind: 'export'
   readonly actor: Actor
   readonly root: PackageResourceRef
@@ -60,7 +62,35 @@ interface StagedExport {
   readonly expect: ResourcePackageExportFence
 }
 
-type StagedResourcePackageInput = StagedInspect | StagedApply | StagedExport
+type StagedResourcePackageInput =
+  | ResourcePackageInspectExecutionInput
+  | ResourcePackageApplyExecutionInput
+  | ResourcePackageExportExecutionInput
+
+/**
+ * Provider-neutral execution seam. Composition retains ownership of the
+ * one-shot staged handles while the selected provider owns all persistence and
+ * transaction mechanics behind these closed inputs.
+ */
+export interface ResourcePackageExecutionAdapter {
+  inspect(context: CommandContext, input: ResourcePackageInspectExecutionInput): Promise<string>
+  apply(context: CommandContext, input: ResourcePackageApplyExecutionInput): Promise<string>
+  export(
+    context: CommandContext,
+    input: ResourcePackageExportExecutionInput,
+  ): Promise<Readonly<{ zip: Uint8Array; filename: string }>>
+}
+
+/**
+ * Closed provider capabilities consumed by the external W6 execution owner.
+ * The bundle algorithms stay outside Resource Catalog while provider-specific
+ * lookup and managed-skill reads remain owned here.
+ */
+export interface ResourcePackageProviderComposition {
+  readonly resources: ResourcePackageOwnedResourceLookupPort
+  readonly reads: ResourcePackageReadPort
+  readonly readSkillTree: (skillId: string) => Promise<ResourcePackageSkillTree>
+}
 
 export interface ResourcePackageTransport {
   findOwnedResourceIdsByName(
@@ -73,9 +103,9 @@ export interface ResourcePackageTransport {
     input: Readonly<{
       bytes: Uint8Array
       previewToken: string
-      decisions: readonly ImportDecision[]
-      humanMemberMappings: readonly HumanMemberMapping[]
-      secretInputs: readonly PackageSecretInput[]
+      decisions: readonly ResourcePackageImportDecision[]
+      humanMemberMappings: readonly ResourcePackageHumanMemberMapping[]
+      secretInputs: readonly ResourcePackageSecretInput[]
     }>,
   ): ApplyResourcePackage
   stageExport(
@@ -93,16 +123,19 @@ export interface ComposedResourcePackageCatalog extends ResourcePackageCatalogMo
   readonly transport: ResourcePackageTransport
 }
 
-export interface ResourcePackageCompositionDependencies {
+export interface SqliteResourcePackageProviderDependencies {
   readonly db: DbClient
   readonly appHome: string
-  readonly box: SecretBox
-  readonly pluginInstallOpts?: { pluginsDir?: string; npmBin?: string; timeoutMs?: number }
+}
+
+export interface ResourcePackageAdapterCompositionDependencies {
+  readonly execution: ResourcePackageExecutionAdapter
+  readonly resources: ResourcePackageOwnedResourceLookupPort
   readonly id?: () => string
 }
 
-export function composeResourcePackageOperations(
-  deps: ResourcePackageCompositionDependencies,
+export function composeResourcePackageOperationsFromAdapters(
+  deps: ResourcePackageAdapterCompositionDependencies,
 ): ComposedResourcePackageCatalog {
   const nextId = deps.id ?? ulid
   const staged = new Map<string, StagedResourcePackageInput>()
@@ -122,55 +155,20 @@ export function composeResourcePackageOperations(
   }
 
   const execution: ResourcePackageExecutionPort = Object.freeze({
-    async inspect(_context: CommandContext, handle: string): Promise<string> {
+    async inspect(context: CommandContext, handle: string): Promise<string> {
       const input = take(handle)
       if (input.kind !== 'inspect') throw new Error('resource-package-staged-input-kind-mismatch')
-      const pkg = await parseResourcePackage(input.bytes)
-      const preview = await buildPackagePreview(deps.db, input.actor, pkg, {
-        box: deps.box,
-        importId: nextId(),
-      })
-      return JSON.stringify(preview)
+      return deps.execution.inspect(context, input)
     },
     async apply(context: CommandContext, handle: string): Promise<string> {
       const input = take(handle)
       if (input.kind !== 'apply') throw new Error('resource-package-staged-input-kind-mismatch')
-      const pkg = await parseResourcePackage(input.bytes)
-      const receipt = await commitResourcePackage(
-        {
-          db: deps.db,
-          appHome: deps.appHome,
-          box: deps.box,
-          resourcePackageMutations: legacyResourcePackageMutationRuntimeFactory,
-          currentAuthority: () => context.authority,
-          ...(deps.pluginInstallOpts === undefined
-            ? {}
-            : { pluginInstallOpts: deps.pluginInstallOpts }),
-        },
-        input.actor,
-        {
-          pkg,
-          previewToken: input.previewToken,
-          decisions: [...input.decisions],
-          humanMemberMappings: [...input.humanMemberMappings],
-          secretInputs: [...input.secretInputs],
-        },
-      )
-      return JSON.stringify(receipt)
+      return deps.execution.apply(context, input)
     },
-    async export(_context: CommandContext, handle: string) {
+    async export(context: CommandContext, handle: string) {
       const input = take(handle)
       if (input.kind !== 'export') throw new Error('resource-package-staged-input-kind-mismatch')
-      const pkg = await exportResourcePackage(
-        deps.db,
-        input.actor,
-        { type: input.root.kind, id: input.root.id },
-        {
-          appHome: deps.appHome,
-          exportedAt: input.exportedAt,
-          expect: { ...input.expect },
-        },
-      )
+      const pkg = await deps.execution.export(context, input)
       const packageId = nextId()
       exports.set(packageId, pkg.zip)
       return Object.freeze({ packageId, filename: pkg.filename })
@@ -189,7 +187,11 @@ export function composeResourcePackageOperations(
       actor: Actor,
       input: Readonly<{ kind: PackageResourceKind; name: string }>,
     ): Promise<readonly string[]> {
-      return findOwnedAclResourceIdsByName(deps.db, input.kind, actor.user.id, input.name)
+      return deps.resources.findOwnedIdsByName({
+        kind: input.kind,
+        ownerUserId: actor.user.id,
+        name: input.name,
+      })
     },
     stageInspect(actor: Actor, bytes: Uint8Array): InspectResourcePackage {
       return Object.freeze({
@@ -238,4 +240,20 @@ export function composeResourcePackageOperations(
     operations,
     transport,
   })
+}
+
+export function composeSqliteResourcePackageProvider(
+  deps: SqliteResourcePackageProviderDependencies,
+): ResourcePackageProviderComposition {
+  return Object.freeze({
+    resources: createSqliteResourcePackageOwnedResourceLookup(deps.db),
+    reads: createSqliteResourcePackageReadPort(deps.db),
+    readSkillTree: (skillId: string) => readSqlitePackageSkillTree(deps.db, deps.appHome, skillId),
+  })
+}
+
+export function composeResourcePackageOperations(
+  deps: ResourcePackageAdapterCompositionDependencies,
+): ComposedResourcePackageCatalog {
+  return composeResourcePackageOperationsFromAdapters(deps)
 }

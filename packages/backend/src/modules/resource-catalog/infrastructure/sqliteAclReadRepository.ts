@@ -3,7 +3,12 @@ import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { AclRow } from '../domain/resourceAccess'
+import type {
+  ResourceCatalogAclIdentityReadPort,
+  ResourceCatalogAclSnapshotReadPort,
+} from '../application/ports/providerResourceCatalogPersistence'
 import { isSqliteAclResourceType, SQLITE_ACL_TABLES } from './sqliteAclRegistry'
+import { loadGrantLevelInTx } from './sqliteResourceGrantRepository'
 
 function sqliteAclTable(type: AclResourceType) {
   if (!isSqliteAclResourceType(type)) {
@@ -216,4 +221,26 @@ export async function listAclResourceIdentityRowsByNames(
     })
     .from(table)
     .where(inArray(table.name, [...names]))) as AclResourceIdentitySnapshot[]
+}
+
+/** Internal provider-neutral owner/name reads used by Intent apply preflight. */
+export function createSqliteResourceCatalogAclIdentityReadPort(
+  db: DbClient,
+): ResourceCatalogAclIdentityReadPort {
+  const port: ResourceCatalogAclIdentityReadPort = {
+    getOwner: (type, id) => getAclResourceOwner(db, type, id),
+    listOwnedNames: (type, ownerUserId) => listOwnedAclResourceNames(db, type, ownerUserId),
+  }
+  return Object.freeze(port)
+}
+
+export function createSqliteResourceCatalogAclSnapshotReadPort(
+  transaction: DbTxSync,
+): ResourceCatalogAclSnapshotReadPort {
+  const port: ResourceCatalogAclSnapshotReadPort = {
+    getAccessRow: (type, resourceId) => getAclResourceAccessRowInTx(transaction, type, resourceId),
+    getGrantLevel: (type, resourceId, userId) =>
+      loadGrantLevelInTx(transaction, type, resourceId, userId),
+  }
+  return Object.freeze(port)
 }

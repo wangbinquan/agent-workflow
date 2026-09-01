@@ -14,7 +14,7 @@ import type {
   RenamePluginCatalogInput,
   UpdatePluginCatalogInput,
   UpgradePluginCatalogInput,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 import type { PluginOperationContext } from '../../public/participants'
 import type { PluginQueries } from '../../public/queries'
 import type { GetPluginCatalogInput, PluginCatalogResource } from '../../public/types'

@@ -14,15 +14,27 @@ import type {
   DeleteAgentCatalogReceipt,
   RenameAgentCatalogInput,
   UpdateAgentCatalogInput,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 import type { AgentOperationContext } from '../../public/participants'
-import type { AgentQueries, AgentReferenceQueries } from '../../public/queries'
+import type {
+  AgentDependencyQueries,
+  AgentQueries,
+  AgentReferenceQueries,
+} from '../../public/queries'
 import type {
   AgentCatalogResource,
   GetAgentCatalogInput,
   AgentReferenceLabelsInput,
+  ResolveAgentDependencyClosureInput,
+  ResolveAgentDependencyIdsInput,
+  ResolvedAgentDependencyIds,
+  ValidateAgentDependenciesInput,
 } from '../../public/types'
 import type { AgentAccessPort, AgentPolicyPort, AgentRepository } from './ports'
+import {
+  resolveAgentDependencyClosure,
+  validateAgentDependencies,
+} from './agentDependencyValidation'
 
 export interface AgentApplicationDependencies {
   readonly repository: AgentRepository
@@ -136,6 +148,39 @@ export function createAgentApplication(deps: AgentApplicationDependencies) {
       deps.repository.referenceLabels(authority, input),
   })
 
+  const dependencyQueries: AgentDependencyQueries = Object.freeze({
+    closure: (_authority: AgentOperationContext, input: ResolveAgentDependencyClosureInput) =>
+      resolveAgentDependencyClosure(deps.repository, input),
+    async resolveUsableIds(
+      authority: AgentOperationContext,
+      input: ResolveAgentDependencyIdsInput,
+    ): Promise<ResolvedAgentDependencyIds> {
+      const ids: string[] = []
+      const missing: Array<{ readonly type: 'agent'; readonly name: string }> = []
+      const seen = new Set<string>()
+      for (const id of input.ids) {
+        if (seen.has(id)) continue
+        seen.add(id)
+        const agent = await deps.repository.get(id)
+        if (agent === null) {
+          ids.push(id)
+          continue
+        }
+        if (!(await deps.access.canView(authority, agent))) {
+          missing.push(Object.freeze({ type: 'agent', name: id }))
+        }
+        ids.push(agent.id)
+      }
+      return Object.freeze({ ids: Object.freeze(ids), missing: Object.freeze(missing) })
+    },
+    async validate(
+      _authority: AgentOperationContext,
+      input: ValidateAgentDependenciesInput,
+    ): Promise<void> {
+      await validateAgentDependencies(deps.repository, input.selfId, input.dependsOn)
+    },
+  })
+
   const commands = Object.freeze({
     async create(
       authority: AgentOperationContext,
@@ -204,5 +249,5 @@ export function createAgentApplication(deps: AgentApplicationDependencies) {
     },
   })
 
-  return Object.freeze({ commands, queries, referenceQueries })
+  return Object.freeze({ commands, queries, referenceQueries, dependencyQueries })
 }

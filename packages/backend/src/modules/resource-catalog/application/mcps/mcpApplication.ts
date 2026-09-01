@@ -11,7 +11,7 @@ import type {
   DeleteMcpCatalogInput,
   RenameMcpCatalogInput,
   UpdateMcpCatalogInput,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 import type { McpOperationContext } from '../../public/participants'
 import type { McpQueries } from '../../public/queries'
 import type { McpCatalogResource } from '../../public/types'

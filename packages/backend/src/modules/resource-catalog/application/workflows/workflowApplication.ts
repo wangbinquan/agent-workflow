@@ -15,15 +15,16 @@ import type {
   DeleteWorkflowCatalogReceipt,
   UpdateWorkflowCatalogInput,
   UpdateWorkflowCatalogReceipt,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 import type { WorkflowOperationContext } from '../../public/participants'
 import type { WorkflowQueries } from '../../public/queries'
+import type { GetWorkflowCatalogInput, WorkflowCatalogDetail } from '../../public/types'
 import type {
-  GetWorkflowCatalogInput,
+  WorkflowAccessPort,
   WorkflowAclIdentity,
-  WorkflowCatalogDetail,
-} from '../../public/types'
-import type { WorkflowAccessPort, WorkflowPolicyPort, WorkflowRepository } from './ports'
+  WorkflowPolicyPort,
+  WorkflowRepository,
+} from './ports'
 
 export interface WorkflowApplicationDependencies {
   readonly repository: WorkflowRepository

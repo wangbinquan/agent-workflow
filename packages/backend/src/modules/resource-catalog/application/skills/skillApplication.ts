@@ -11,7 +11,7 @@ import type {
   DeleteSkillCatalogInput,
   DeleteSkillCatalogReceipt,
   SaveSkillCatalogInput,
-} from '../../domain/catalogOperationTypes'
+} from '../../public/types'
 import type { SkillFileCommands, SkillVersionCommands } from '../../public/commands'
 import type { SkillOperationContext } from '../../public/participants'
 import type { SkillFileQueries, SkillQueries, SkillVersionQueries } from '../../public/queries'

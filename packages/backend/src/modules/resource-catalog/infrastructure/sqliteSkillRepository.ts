@@ -12,13 +12,13 @@ import {
   saveSkillWithToken,
   writeSkillFile,
   type SkillFsOptions,
-} from '@/services/skill'
+} from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   diffSkillVersions,
   getSkillVersionContent,
   listSkillVersions,
   restoreSkillVersion,
-} from '@/services/skillVersion'
+} from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import type { SkillRepository } from '../application/skills/ports'
 
 /**
@@ -93,9 +93,15 @@ export function createSqliteSkillRepository(
         token: await getSkillPreconditionTokenById(db, current.id),
       })
     },
-    listVersions: (id) => listSkillVersions(db, fsOptions, id),
-    diffVersions: (id, from, to) => diffSkillVersions(db, fsOptions, id, from, to),
-    getVersionContent: (id, version) => getSkillVersionContent(db, fsOptions, id, version),
+    async listVersions(id) {
+      return listSkillVersions(db, fsOptions, id)
+    },
+    async diffVersions(id, from, to) {
+      return diffSkillVersions(db, fsOptions, id, from, to)
+    },
+    async getVersionContent(id, version) {
+      return getSkillVersionContent(db, fsOptions, id, version)
+    },
     async restoreVersion(authority, current, version, input) {
       const result = restoreSkillVersion(
         db,

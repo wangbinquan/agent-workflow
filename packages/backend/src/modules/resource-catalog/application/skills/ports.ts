@@ -5,6 +5,7 @@ import type {
   FileNode,
   RestoreSkillVersion,
   Skill,
+  SkillZipDecisionMap,
   WriteSkillFile,
 } from '@agent-workflow/shared'
 import type { ActorSource } from '@/auth/actor'
@@ -16,6 +17,8 @@ import type {
   SkillCatalogVersion,
   SkillCatalogVersionContent,
   SkillCatalogVersionDiff,
+  CommitSkillZipCatalogReceipt,
+  ParseSkillZipCatalogReceipt,
   WriteSkillFileCatalogReceipt,
 } from '../../public/types'
 
@@ -44,9 +47,9 @@ export interface SkillRepository {
     path: string,
     expectedToken: string | undefined,
   ): Promise<DeleteSkillFileCatalogReceipt>
-  listVersions(id: string): readonly SkillCatalogVersion[]
-  diffVersions(id: string, from: number, to: number): SkillCatalogVersionDiff
-  getVersionContent(id: string, version: number): SkillCatalogVersionContent
+  listVersions(id: string): Promise<readonly SkillCatalogVersion[]>
+  diffVersions(id: string, from: number, to: number): Promise<SkillCatalogVersionDiff>
+  getVersionContent(id: string, version: number): Promise<SkillCatalogVersionContent>
   restoreVersion(
     authority: SkillOperationContext,
     current: Skill,
@@ -69,4 +72,14 @@ export interface SkillDeleteConfirmationPort {
 
 export interface SkillMutationClock {
   nextUpdatedAt(skill: Skill): number
+}
+
+/** Provider-owned ZIP mechanics behind the closed base64 public participant. */
+export interface SkillZipImportPort {
+  parse(authority: SkillOperationContext, archive: Uint8Array): Promise<ParseSkillZipCatalogReceipt>
+  commit(
+    authority: SkillOperationContext,
+    archive: Uint8Array,
+    decisions: SkillZipDecisionMap,
+  ): Promise<CommitSkillZipCatalogReceipt>
 }

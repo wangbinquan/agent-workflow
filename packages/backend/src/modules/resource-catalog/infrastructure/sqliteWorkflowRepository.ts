@@ -7,7 +7,7 @@ import {
   getWorkflowAclRow,
   listWorkflows,
   updateWorkflow,
-} from '@/services/workflow'
+} from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import type { WorkflowRepository } from '../application/workflows/ports'
 
 /**

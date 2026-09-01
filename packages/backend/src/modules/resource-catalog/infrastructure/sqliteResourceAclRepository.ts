@@ -1,4 +1,9 @@
-import type { AclResourceType, UserPublic } from '@agent-workflow/shared'
+import type {
+  AclResourceType,
+  ResourceGrantLevel,
+  ResourceVisibility,
+  UserPublic,
+} from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync, type NotPromise } from '@/db/txSync'
@@ -6,16 +11,47 @@ import { resourceGrants, users } from '@/db/schema'
 import type {
   ResourceAclIdentityMutation,
   ResourceAclIdentityPersistence,
-  ResourceAclMutationContext,
-  ResourceAclMutationRow,
 } from '../application/ports/resourceAclPersistence'
+import type {
+  ResourceCatalogAclMutationChange,
+  ResourceCatalogAclMutationPort,
+  ResourceCatalogAclReadPort,
+} from '../application/ports/providerResourceCatalogPersistence'
+import type { AclRow } from '../domain/resourceAccess'
 import {
   isSqliteAclResourceType,
   SQLITE_ACL_TABLES,
   SQLITE_OWNER_NAME_UNIQUE_TYPES,
   sqliteOwnerNamePartitionOf,
 } from './sqliteAclRegistry'
-import { grantsOfResourceWhere } from './sqliteResourceGrantRepository'
+import { grantsOfResourceWhere, listResourceGrantsInTx } from './sqliteResourceGrantRepository'
+
+interface SqliteResourceAclMutationRow {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly aclRevision: number
+}
+
+interface SqliteResourceAclMutationContext {
+  readonly tx: DbTxSync
+  readonly current: SqliteResourceAclMutationRow
+  readonly ownerNameIsUnique: boolean
+  hasOwnerNameCollision(nextOwnerUserId: string): boolean
+  activeUserIds(userIds: readonly string[]): ReadonlySet<string>
+  updateAclRow(input: {
+    readonly ownerUserId: string | null
+    readonly visibility: ResourceVisibility
+    readonly aclRevision: number
+    readonly updatedAt: number
+  }): void
+  replaceGrants(
+    grants: ReadonlyMap<string, ResourceGrantLevel>,
+    addedBy: string,
+    addedAt: number,
+  ): void
+}
 
 export async function getSqliteResourceAclRevision(
   db: DbClient,
@@ -48,7 +84,7 @@ function runResourceAclMutation<T>(
   type: AclResourceType,
   resourceId: string,
   identity: ResourceAclIdentityMutation,
-  run: (context: ResourceAclMutationContext) => NotPromise<T>,
+  run: (context: SqliteResourceAclMutationContext) => NotPromise<T>,
 ): T {
   return run({
     tx,
@@ -116,7 +152,7 @@ export function withSqliteResourceAclMutation<T>(
   type: AclResourceType,
   resourceId: string,
   identityPersistence: ResourceAclIdentityPersistence | undefined,
-  run: (context: ResourceAclMutationContext) => NotPromise<T>,
+  run: (context: SqliteResourceAclMutationContext) => NotPromise<T>,
 ): T | undefined {
   if (identityPersistence !== undefined) {
     if (identityPersistence.type !== type) {
@@ -148,10 +184,10 @@ export function withSqliteResourceAclMutation<T>(
       })
       .from(table)
       .where(eq(table.id, resourceId))
-      .get() as (ResourceAclMutationRow & Record<string, unknown>) | undefined
+      .get() as (SqliteResourceAclMutationRow & Record<string, unknown>) | undefined
     if (raw === undefined) return undefined
 
-    const current: ResourceAclMutationRow = {
+    const current: SqliteResourceAclMutationRow = {
       id: resourceId,
       name: raw.name,
       ownerUserId: raw.ownerUserId ?? null,
@@ -203,4 +239,133 @@ export function withSqliteResourceAclMutation<T>(
 export function isSqliteOwnerNameConstraintError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return /UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE|constraint failed/i.test(message)
+}
+
+export function createSqliteResourceAclReadPort(
+  db: DbClient,
+  identityPersistence?: ResourceAclIdentityPersistence,
+): ResourceCatalogAclReadPort<AclResourceType> {
+  const port: ResourceCatalogAclReadPort<AclResourceType> = {
+    async readSnapshot(type, resourceId, fallbackIdentity) {
+      return dbTxSync(db, (transaction) => {
+        let identity: AclRow & { readonly aclRevision: number }
+        if (identityPersistence !== undefined) {
+          if (identityPersistence.type !== type) {
+            throw new Error(
+              `ACL identity persistence type ${identityPersistence.type} cannot serve ${type}`,
+            )
+          }
+          identity = {
+            ...fallbackIdentity,
+            aclRevision: identityPersistence.getRevision(resourceId),
+          }
+        } else {
+          if (!isSqliteAclResourceType(type)) {
+            throw new Error(`ACL identity persistence is required for ${type}`)
+          }
+          const table = SQLITE_ACL_TABLES[type]
+          const row = transaction
+            .select({
+              id: table.id,
+              ownerUserId: table.ownerUserId,
+              visibility: table.visibility,
+              aclRevision: table.aclRevision,
+            })
+            .from(table)
+            .where(eq(table.id, resourceId))
+            .get()
+          if (row === undefined) return null
+          identity = row
+        }
+        const grants = listResourceGrantsInTx(transaction, type, resourceId)
+        const userIds = [
+          ...new Set([
+            ...(typeof identity.ownerUserId === 'string' ? [identity.ownerUserId] : []),
+            ...grants.keys(),
+          ]),
+        ]
+        const userRows =
+          userIds.length === 0
+            ? []
+            : transaction
+                .select({
+                  id: users.id,
+                  username: users.username,
+                  displayName: users.displayName,
+                  role: users.role,
+                  status: users.status,
+                })
+                .from(users)
+                .where(inArray(users.id, userIds))
+                .all()
+        return {
+          identity: {
+            id: identity.id,
+            ownerUserId: identity.ownerUserId,
+            visibility: identity.visibility,
+          },
+          aclRevision: identity.aclRevision,
+          grants: [...grants].map(([userId, level]) => ({ userId, level })),
+          users: new Map<string, UserPublic>(userRows.map((row) => [row.id, row])),
+        }
+      })
+    },
+  }
+  return Object.freeze(port)
+}
+
+export interface SqliteResourceAclMutationLifecycle {
+  afterWriteInTransaction?(
+    transaction: DbTxSync,
+    change: ResourceCatalogAclMutationChange<AclResourceType>,
+  ): void
+}
+
+/**
+ * Provider-bound Promise port for resource-catalog-owned ACL rows.  The
+ * synchronous SQLite transaction and table registry remain private to this
+ * adapter; application code receives only a complete decision snapshot.
+ */
+export function createSqliteResourceAclMutationPort(
+  db: DbClient,
+  lifecycle: SqliteResourceAclMutationLifecycle = {},
+  identityPersistence?: ResourceAclIdentityPersistence,
+): ResourceCatalogAclMutationPort<AclResourceType> {
+  const port: ResourceCatalogAclMutationPort<AclResourceType> = {
+    async mutate(request, decide) {
+      return withSqliteResourceAclMutation(
+        db,
+        request.type,
+        request.resourceId,
+        identityPersistence,
+        (context) => {
+          const currentGrants = listResourceGrantsInTx(context.tx, request.type, request.resourceId)
+          const candidateOwner = request.candidateOwnerUserId
+          const decision = decide({
+            current: context.current,
+            ownerNameIsUnique: context.ownerNameIsUnique,
+            ownerNameCollision:
+              typeof candidateOwner === 'string' && context.hasOwnerNameCollision(candidateOwner),
+            activeUserIds: context.activeUserIds(request.referencedUserIds),
+            currentGrants,
+            actorGrantLevel: currentGrants.get(request.actorUserId) ?? null,
+          })
+          context.updateAclRow(decision.update)
+          context.replaceGrants(decision.grants, decision.addedBy, decision.addedAt)
+          lifecycle.afterWriteInTransaction?.(context.tx, {
+            type: request.type,
+            resourceId: request.resourceId,
+            ownerUserId: decision.update.ownerUserId,
+            visibility: decision.update.visibility,
+            aclRevision: decision.update.aclRevision,
+            grantedUserIds: new Set(decision.grants.keys()),
+            now: decision.update.updatedAt,
+          })
+          return decision.result
+        },
+      )
+    },
+    isOwnerNameConstraintError: isSqliteOwnerNameConstraintError,
+  }
+  return Object.freeze(port)
 }

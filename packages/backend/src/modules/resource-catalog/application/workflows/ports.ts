@@ -1,14 +1,26 @@
 import type {
+  ResourceVisibility,
   CopyWorkflowRequest,
   CreateWorkflow,
   DeleteWorkflow,
   SaveWorkflowReceipt,
   Workflow,
   WorkflowDetail,
+  WorkflowCandidateHash,
+  WorkflowDefinition,
+  WorkflowValidationContextHash,
+  WorkflowValidationResult,
   UpdateWorkflow,
 } from '@agent-workflow/shared'
 import type { WorkflowOperationContext } from '../../public/participants'
-import type { WorkflowAclIdentity } from '../../public/types'
+
+export interface WorkflowAclIdentity {
+  readonly id: string
+  readonly name: string
+  readonly ownerUserId: string | null
+  readonly visibility: ResourceVisibility
+  readonly builtin: boolean
+}
 
 export type WorkflowAccessRow = Workflow | WorkflowAclIdentity
 
@@ -43,4 +55,34 @@ export interface WorkflowAccessPort {
 export interface WorkflowPolicyPort {
   excludeBuiltin(rows: readonly Workflow[]): Workflow[]
   assertMutable(row: WorkflowAccessRow): void
+}
+
+export interface WorkflowValidationCandidate {
+  readonly definition: WorkflowDefinition
+  readonly currentWorkflow: Readonly<{ id: string; name: string }>
+}
+
+/** Provider-owned inventory loader plus the shared pure validator. */
+export interface WorkflowValidationPort {
+  candidateHash(definition: WorkflowDefinition): WorkflowCandidateHash
+  validate(candidate: WorkflowValidationCandidate): Promise<
+    Readonly<{
+      validationContextHash: WorkflowValidationContextHash
+      result: WorkflowValidationResult
+    }>
+  >
+}
+
+export interface WorkflowReferenceAdmissionGroup {
+  readonly resourceType: 'agent' | 'workflow' | 'workgroup'
+  readonly references: readonly string[]
+  readonly domain: 'id' | 'name'
+}
+
+/** Provider-specific visibility check for references newly added by a draft. */
+export interface WorkflowReferenceAdmissionPort {
+  assertUsable(
+    authority: WorkflowOperationContext,
+    groups: readonly WorkflowReferenceAdmissionGroup[],
+  ): Promise<void>
 }

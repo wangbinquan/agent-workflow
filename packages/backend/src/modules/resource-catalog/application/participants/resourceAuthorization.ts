@@ -1,28 +1,26 @@
 import type { ResourceVisibility } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbTxSync } from '@/db/txSync'
 import { ForbiddenError, NotFoundError } from '@/util/errors'
-import { canEditAccess, canGovernAccess, canViewAccess } from '../../domain/resourceAccess'
-import type { AclResourceRef } from '../../domain/resourceRef'
+import {
+  canEditAccess,
+  canGovernAccess,
+  canViewAccess,
+  resolveAccessFrom,
+  resourceAclAudienceAuthority,
+} from '../../domain/resourceAccess'
 import type {
   ResourceRequestContext,
   ResourceScopeAuthorizationInTx,
 } from '../../public/participants'
 import type { ResourceMemoryScopeRef, ResourceScopeAccess } from '../../public/types'
-import type { ResourceAccessRowReadPort } from '../ports/resourceAclPersistence'
-import type { ResourceAuthorizationApplication } from '../resourceAuthorization'
+import type { ResourceCatalogAclSnapshotReadPort } from '../ports/providerResourceCatalogPersistence'
 
 export interface ResourceCurrentAuthorityResolver {
   resolve(authority: ResourceRequestContext): Actor
 }
 
-export interface ResourceAuthorizationParticipantDependencies {
-  readonly accessRows: ResourceAccessRowReadPort
-  readonly authorization: Pick<ResourceAuthorizationApplication, 'resolveResourceAccessForInTx'>
-}
-
 interface ResourceAclTarget {
-  readonly ref: AclResourceRef
+  readonly ref: ResourceMemoryScopeRef
   readonly ownerUserId: string | null
   readonly visibility: ResourceVisibility
 }
@@ -34,22 +32,19 @@ interface ResourceAccessEvaluator {
   assertGovern(authority: ResourceRequestContext, target: ResourceAclTarget): void
 }
 
-function resourceAuthorizationForTransaction(
-  tx: DbTxSync,
+function resourceAuthorizationForSnapshot(
   authorityResolver: ResourceCurrentAuthorityResolver,
-  dependencies: ResourceAuthorizationParticipantDependencies,
+  snapshots: ResourceCatalogAclSnapshotReadPort,
 ): ResourceAccessEvaluator {
-  const accessOf = (authority: ResourceRequestContext, target: ResourceAclTarget) =>
-    dependencies.authorization.resolveResourceAccessForInTx(
-      tx,
-      authorityResolver.resolve(authority),
-      target.ref.kind,
-      {
-        id: target.ref.id,
-        ownerUserId: target.ownerUserId,
-        visibility: target.visibility,
-      },
-    )
+  const accessOf = (authority: ResourceRequestContext, target: ResourceAclTarget) => {
+    const actor = authorityResolver.resolve(authority)
+    const audience = resourceAclAudienceAuthority(actor)
+    const grant =
+      audience.bypass || !audience.private
+        ? null
+        : snapshots.getGrantLevel(target.ref.kind, target.ref.id, actor.user.id)
+    return resolveAccessFrom(audience, actor.user.id, target, grant)
+  }
 
   const participant = Object.freeze({
     accessOf,
@@ -85,15 +80,14 @@ function resourceAuthorizationForTransaction(
 
 const trustedResourceScopeAuthorizations = new WeakSet<ResourceScopeAuthorizationInTx>()
 
-export function createResourceScopeAuthorizationInTx(
-  tx: DbTxSync,
+export function createResourceScopeAuthorization(
   authorityResolver: ResourceCurrentAuthorityResolver,
-  dependencies: ResourceAuthorizationParticipantDependencies,
+  snapshots: ResourceCatalogAclSnapshotReadPort,
 ): ResourceScopeAuthorizationInTx {
-  const authorization = resourceAuthorizationForTransaction(tx, authorityResolver, dependencies)
+  const authorization = resourceAuthorizationForSnapshot(authorityResolver, snapshots)
   const participant = Object.freeze({
     accessOf(authority: ResourceRequestContext, scope: ResourceMemoryScopeRef) {
-      const row = dependencies.accessRows.getInTx(tx, scope.kind, scope.id)
+      const row = snapshots.getAccessRow(scope.kind, scope.id)
       if (row === null) return 'none'
       return authorization.accessOf(authority, {
         ref: { kind: scope.kind, id: scope.id },

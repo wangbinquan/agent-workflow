@@ -1,66 +1,27 @@
-import { PluginSchema, pluginOperationConfigHashWith, type Plugin } from '@agent-workflow/shared'
+import type { Plugin } from '@agent-workflow/shared'
 import { and, eq, isNull, like, ne, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { DbClient } from '@/db/client'
 import { agents, plugins } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type {
   PluginAgentReference,
   PluginProjection,
   PluginRepository,
 } from '../application/plugins/ports'
-import type { PluginCatalogResource } from '../public/types'
+import {
+  collectPluginAgentReferences,
+  pluginConfigHash,
+  pluginFromPersistenceRow,
+  pluginProjection,
+} from './pluginPersistence'
 
 type PluginRow = typeof plugins.$inferSelect
 
 export interface SqlitePluginRepositoryBundle {
   readonly repository: PluginRepository
   readonly projection: PluginProjection
-}
-
-function rowToPlugin(row: PluginRow): Plugin {
-  let options: unknown
-  try {
-    options = JSON.parse(row.optionsJson)
-  } catch {
-    options = {}
-  }
-  const parsed = PluginSchema.safeParse({
-    id: row.id,
-    name: row.name,
-    spec: row.spec,
-    options,
-    description: row.description,
-    ownerUserId: row.ownerUserId,
-    visibility: row.visibility,
-    aclRevision: row.aclRevision,
-    enabled: row.enabled,
-    sourceKind: row.sourceKind,
-    cachedPath: row.cachedPath,
-    resolvedVersion: row.resolvedVersion,
-    installedAt: row.installedAt,
-    schemaVersion: row.schemaVersion,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  })
-  if (!parsed.success) {
-    throw new ValidationError(
-      'plugin-row-corrupt',
-      `plugin row '${row.name}' (id=${row.id}) failed schema validation`,
-      { issues: parsed.error.issues },
-    )
-  }
-  return parsed.data
-}
-
-function configHashOf(plugin: Plugin): string {
-  return pluginOperationConfigHashWith(plugin, sha256Hex)
-}
-
-function resourceOf(plugin: Plugin): PluginCatalogResource {
-  return Object.freeze({ ...plugin, operationConfigHash: configHashOf(plugin) })
 }
 
 function ownerScopedNameWhere(
@@ -93,8 +54,8 @@ function nameConflict(name: string, purpose: 'create' | 'rename'): ConflictError
 }
 
 function assertExpectedHash(row: PluginRow, expectedConfigHash: string, action: string): Plugin {
-  const plugin = rowToPlugin(row)
-  const currentConfigHash = configHashOf(plugin)
+  const plugin = pluginFromPersistenceRow(row)
+  const currentConfigHash = pluginConfigHash(plugin)
   if (currentConfigHash !== expectedConfigHash) {
     throw staleConflictError('plugin', `plugin changed before ${action}; reload and retry`, {
       expectedConfigHash,
@@ -102,35 +63,6 @@ function assertExpectedHash(row: PluginRow, expectedConfigHash: string, action: 
     })
   }
   return plugin
-}
-
-function collectAgentReferences(
-  rows: ReadonlyArray<{
-    readonly id: string
-    readonly name: string
-    readonly raw: unknown
-    readonly ownerUserId: string | null
-    readonly visibility: 'public' | 'private'
-  }>,
-  pluginId: string,
-): PluginAgentReference[] {
-  const references: PluginAgentReference[] = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(String(row.raw)) as unknown
-      if (Array.isArray(parsed) && parsed.includes(pluginId)) {
-        references.push({
-          id: row.id,
-          name: row.name,
-          ownerUserId: row.ownerUserId,
-          visibility: row.visibility,
-        })
-      }
-    } catch {
-      // Preserve the legacy corrupt-JSON behavior: malformed rows do not disclose a reference.
-    }
-  }
-  return references
 }
 
 const referenceSelect = {
@@ -142,7 +74,7 @@ const referenceSelect = {
 }
 
 function findAgentReferencesInTx(tx: DbTxSync, pluginId: string): PluginAgentReference[] {
-  return collectAgentReferences(
+  return collectPluginAgentReferences(
     tx
       .select(referenceSelect)
       .from(agents)
@@ -188,7 +120,7 @@ function changesOf(result: unknown): number {
 export function createSqlitePluginRepository(db: DbClient): SqlitePluginRepositoryBundle {
   async function get(id: string): Promise<Plugin | null> {
     const row = (await db.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0]
-    return row === undefined ? null : rowToPlugin(row)
+    return row === undefined ? null : pluginFromPersistenceRow(row)
   }
 
   async function requireAfterWrite(id: string, action: string): Promise<Plugin> {
@@ -199,7 +131,7 @@ export function createSqlitePluginRepository(db: DbClient): SqlitePluginReposito
 
   const repository: PluginRepository = {
     async list(): Promise<Plugin[]> {
-      return (await db.select().from(plugins)).map(rowToPlugin)
+      return (await db.select().from(plugins)).map(pluginFromPersistenceRow)
     },
     get,
     async assertNameAvailable(input): Promise<void> {
@@ -313,7 +245,7 @@ export function createSqlitePluginRepository(db: DbClient): SqlitePluginReposito
       return requireAfterWrite(input.id, 'after rename')
     },
     async findAgentReferences(id): Promise<readonly PluginAgentReference[]> {
-      return collectAgentReferences(
+      return collectPluginAgentReferences(
         await db
           .select(referenceSelect)
           .from(agents)
@@ -342,6 +274,6 @@ export function createSqlitePluginRepository(db: DbClient): SqlitePluginReposito
 
   return Object.freeze({
     repository,
-    projection: Object.freeze({ configHashOf, resourceOf }),
+    projection: pluginProjection,
   })
 }

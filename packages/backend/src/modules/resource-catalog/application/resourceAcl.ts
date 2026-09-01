@@ -2,96 +2,75 @@ import {
   UpdateResourceAclBodySchema,
   type AclResourceType,
   type ResourceAcl,
-  type ResourceGrantLevel,
   type ResourceVisibility,
   type UpdateResourceAclBody,
 } from '@agent-workflow/shared'
-import type {
-  GetResourceAclCatalogInput,
-  UpdateResourceAclCatalogInput,
-} from '../domain/catalogOperationTypes'
+import type { GetResourceAclCatalogInput, UpdateResourceAclCatalogInput } from '../public/types'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   canEditAccess,
   canGovernAccess,
+  canViewAccess,
   hasResourceAclBypass,
+  resolveAccessFrom,
   resolveResourceAccess,
+  resourceAclAudienceAuthority,
   type AclRow,
 } from '../domain/resourceAccess'
 import type {
-  ResourceAclIdentityPersistence,
-  ResourceAclMutationPort,
-  ResourceAclReadPort,
-} from './ports/resourceAclPersistence'
+  ResourceCatalogAclMutationChange,
+  ResourceCatalogAclMutationPort,
+  ResourceCatalogAclReadPort,
+  ResourceCatalogOwnedAclType,
+} from './ports/providerResourceCatalogPersistence'
 import type { ResourceAuthorizationApplication } from './resourceAuthorization'
 
-export interface ResourceAclWriteEffects {
-  readonly identityPersistence?: ResourceAclIdentityPersistence
-  readonly afterWriteInTx?: (
-    tx: DbTxSync,
-    change: {
-      readonly resourceId: string
-      readonly ownerUserId: string | null
-      readonly visibility: ResourceVisibility
-      readonly grantedUserIds: ReadonlySet<string>
-      readonly now: number
-    },
-  ) => void
-  readonly afterCommit?: (db: DbClient) => void
+export interface ResourceAclWriteEffects<
+  Type extends AclResourceType = ResourceCatalogOwnedAclType,
+> {
+  readonly updatedAt?: number
+  afterCommit?(change: ResourceCatalogAclMutationChange<Type>): void | Promise<void>
 }
 
-export interface ResourceAclApplicationDependencies {
-  readonly authorization: Pick<
-    ResourceAuthorizationApplication,
-    'canViewResourceInTx' | 'requireResourceGovern'
-  >
-  readonly mutation: ResourceAclMutationPort
-  readonly read: ResourceAclReadPort
+export interface ResourceAclApplicationDependencies<
+  Type extends AclResourceType = ResourceCatalogOwnedAclType,
+> {
+  readonly authorization: Pick<ResourceAuthorizationApplication, 'requireResourceGovern'>
+  readonly mutation: ResourceCatalogAclMutationPort<Type>
+  readonly read: ResourceCatalogAclReadPort<Type>
 }
 
-export function createResourceAclApplication({
-  authorization,
-  mutation,
-  read,
-}: ResourceAclApplicationDependencies) {
-  async function getResourceAcl(
-    db: DbClient,
-    actor: Actor,
-    type: AclResourceType,
-    row: AclRow,
-    identityPersistence?: ResourceAclIdentityPersistence,
-  ): Promise<ResourceAcl> {
-    const [aclRevision, grantRows] = await Promise.all([
-      read.getRevision(db, type, row.id, identityPersistence),
-      read.listGrants(db, type, row.id),
-    ])
-    const wantedIds = [
-      ...new Set([
-        ...(row.ownerUserId ? [row.ownerUserId] : []),
-        ...grantRows.map((grant) => grant.userId),
-      ]),
-    ]
-    const byId = await read.loadUsers(db, wantedIds)
+/**
+ * Provider-neutral ACL use case for resource-catalog-owned aggregates.  The
+ * application computes one closed decision over a transaction snapshot; each
+ * infrastructure adapter owns how that decision is read and committed.
+ */
+export function createResourceAclApplication<
+  Type extends AclResourceType = ResourceCatalogOwnedAclType,
+>({ authorization, mutation, read }: ResourceAclApplicationDependencies<Type>) {
+  async function getResourceAcl(actor: Actor, type: Type, row: AclRow): Promise<ResourceAcl> {
+    const snapshot = await read.readSnapshot(type, row.id, row)
+    if (snapshot === null) throw new NotFoundError('not-found', `${type} not found`)
+    const { aclRevision, grants: grantRows, users: byId } = snapshot
+    const current = snapshot.identity
     const owner =
-      row.ownerUserId != null && row.ownerUserId !== SYSTEM_USER_ID
-        ? (byId.get(row.ownerUserId) ?? null)
+      current.ownerUserId != null && current.ownerUserId !== SYSTEM_USER_ID
+        ? (byId.get(current.ownerUserId) ?? null)
         : null
     const grants = grantRows.flatMap(({ userId, level }) => {
       const user = byId.get(userId)
       return user === undefined ? [] : [{ user, level }]
     })
     const selfGrant = grantRows.find((grant) => grant.userId === actor.user.id)?.level ?? null
-    const selfAccess = resolveResourceAccess(actor, row, selfGrant)
+    const selfAccess = resolveResourceAccess(actor, current, selfGrant)
     return {
       resourceType: type,
-      resourceId: row.id,
-      ownerUserId: row.ownerUserId ?? null,
+      resourceId: current.id,
+      ownerUserId: current.ownerUserId ?? null,
       owner,
-      visibility: row.visibility ?? 'public',
+      visibility: current.visibility ?? 'public',
       grants,
       canManage: canGovernAccess(selfAccess),
       canEdit: canEditAccess(selfAccess),
@@ -100,130 +79,154 @@ export function createResourceAclApplication({
   }
 
   async function updateResourceAcl(
-    db: DbClient,
     actor: Actor,
-    type: AclResourceType,
+    type: Type,
     row: AclRow,
     body: UpdateResourceAclBody,
-    options: ResourceAclWriteEffects & { readonly updatedAt?: number } = {},
+    options: ResourceAclWriteEffects<Type> = {},
   ): Promise<ResourceAcl> {
-    await authorization.requireResourceGovern(db, actor, type, row)
+    await authorization.requireResourceGovern(actor, type, row)
 
     const referenced = new Set<string>((body.grants ?? []).map((grant) => grant.userId))
     if (body.ownerUserId !== undefined) referenced.add(body.ownerUserId)
     const now = options.updatedAt ?? Date.now()
+    const nextOwnerCandidate = body.ownerUserId
 
-    const updatedRow = mutation.withMutation(
-      db,
-      type,
-      row.id,
-      options.identityPersistence,
-      (context) => {
-        const current = context.current
-        if (!authorization.canViewResourceInTx(context.tx, actor, type, current)) {
-          throw new NotFoundError('not-found', `${type} not found`)
+    let updated:
+      | {
+          readonly id: string
+          readonly ownerUserId: string | null
+          readonly visibility: ResourceVisibility
+          readonly aclRevision: number
+          readonly grantedUserIds: ReadonlySet<string>
         }
-        if (body.expectedResourceId !== row.id) {
-          throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
-        }
-        if (current.aclRevision !== body.expectedAclRevision) {
-          throw new ConflictError(
-            'acl-revision-conflict',
-            `acl revision is ${current.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+      | undefined
+    try {
+      updated = await mutation.mutate(
+        {
+          type,
+          resourceId: row.id,
+          actorUserId: actor.user.id,
+          referencedUserIds: [...referenced],
+          candidateOwnerUserId: nextOwnerCandidate,
+        },
+        (snapshot) => {
+          const current = snapshot.current
+          const access = resolveAccessFrom(
+            resourceAclAudienceAuthority(actor),
+            actor.user.id,
+            current,
+            snapshot.actorGrantLevel,
           )
-        }
-        if (!hasResourceAclBypass(actor) && current.ownerUserId !== actor.user.id) {
-          throw new ForbiddenError(
-            'forbidden',
-            `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
-          )
-        }
+          if (!canViewAccess(access)) {
+            throw new NotFoundError('not-found', `${type} not found`)
+          }
+          if (body.expectedResourceId !== row.id) {
+            throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
+          }
+          if (current.aclRevision !== body.expectedAclRevision) {
+            throw new ConflictError(
+              'acl-revision-conflict',
+              `acl revision is ${current.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
+            )
+          }
+          if (!hasResourceAclBypass(actor) && current.ownerUserId !== actor.user.id) {
+            throw new ForbiddenError(
+              'forbidden',
+              `only the ${type} owner or an actor with resource-acl:bypass can modify it`,
+            )
+          }
 
-        if (referenced.size > 0) {
-          const active = context.activeUserIds([...referenced])
           const invalid = [...referenced].filter(
-            (userId) => userId === SYSTEM_USER_ID || !active.has(userId),
+            (userId) => userId === SYSTEM_USER_ID || !snapshot.activeUserIds.has(userId),
           )
           if (invalid.length > 0) {
             throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
               userIds: invalid,
             })
           }
-        }
 
-        const previousOwner = current.ownerUserId
-        const nextOwner = body.ownerUserId !== undefined ? body.ownerUserId : previousOwner
-        const nextVisibility: ResourceVisibility =
-          body.visibility !== undefined ? body.visibility : (current.visibility ?? 'public')
-
-        if (
-          nextOwner !== previousOwner &&
-          nextOwner !== null &&
-          context.hasOwnerNameCollision(nextOwner)
-        ) {
-          throw new ConflictError(
-            'resource-name-conflict',
-            `${type} '${current.name}' already exists for the target owner`,
-            { resourceType: type, name: current.name, ownerUserId: nextOwner },
-          )
-        }
-
-        let nextGrants: Map<string, ResourceGrantLevel>
-        if (body.grants !== undefined) {
-          nextGrants = new Map(body.grants.map((grant) => [grant.userId, grant.level] as const))
-        } else {
-          nextGrants = mutation.listGrantsInTx(context.tx, type, row.id)
-        }
-        if (
-          nextOwner !== previousOwner &&
-          previousOwner !== null &&
-          previousOwner !== SYSTEM_USER_ID &&
-          !nextGrants.has(previousOwner)
-        ) {
-          nextGrants.set(previousOwner, 'read')
-        }
-        if (nextOwner !== null) nextGrants.delete(nextOwner)
-
-        try {
-          context.updateAclRow({
-            ownerUserId: nextOwner,
-            visibility: nextVisibility,
-            aclRevision: current.aclRevision + 1,
-            updatedAt: now,
-          })
-        } catch (error) {
-          if (
-            nextOwner !== previousOwner &&
-            context.ownerNameIsUnique &&
-            mutation.isOwnerNameConstraintError(error)
-          ) {
+          const previousOwner = current.ownerUserId
+          const nextOwner = body.ownerUserId ?? previousOwner
+          const nextVisibility = body.visibility ?? current.visibility
+          if (nextOwner !== previousOwner && nextOwner !== null && snapshot.ownerNameCollision) {
             throw new ConflictError(
               'resource-name-conflict',
               `${type} '${current.name}' already exists for the target owner`,
               { resourceType: type, name: current.name, ownerUserId: nextOwner },
             )
           }
-          throw error
-        }
-        context.replaceGrants(nextGrants, actor.user.id, now)
-        options.afterWriteInTx?.(context.tx, {
-          resourceId: row.id,
-          ownerUserId: nextOwner,
-          visibility: nextVisibility,
-          grantedUserIds: new Set(nextGrants.keys()),
-          now,
-        })
-        return { id: row.id, ownerUserId: nextOwner, visibility: nextVisibility }
-      },
-    )
 
-    if (updatedRow === undefined) throw new NotFoundError('not-found', `${type} not found`)
-    options.afterCommit?.(db)
-    return getResourceAcl(db, actor, type, updatedRow, options.identityPersistence)
+          const nextGrants =
+            body.grants === undefined
+              ? new Map(snapshot.currentGrants)
+              : new Map(body.grants.map((grant) => [grant.userId, grant.level] as const))
+          if (
+            nextOwner !== previousOwner &&
+            previousOwner !== null &&
+            previousOwner !== SYSTEM_USER_ID &&
+            !nextGrants.has(previousOwner)
+          ) {
+            nextGrants.set(previousOwner, 'read')
+          }
+          if (nextOwner !== null) nextGrants.delete(nextOwner)
+
+          const aclRevision = current.aclRevision + 1
+          const grantedUserIds = new Set(nextGrants.keys())
+          return {
+            update: {
+              ownerUserId: nextOwner,
+              visibility: nextVisibility,
+              aclRevision,
+              updatedAt: now,
+            },
+            grants: nextGrants,
+            addedBy: actor.user.id,
+            addedAt: now,
+            result: {
+              id: row.id,
+              ownerUserId: nextOwner,
+              visibility: nextVisibility,
+              aclRevision,
+              grantedUserIds,
+            },
+          }
+        },
+      )
+    } catch (error) {
+      if (nextOwnerCandidate !== undefined && mutation.isOwnerNameConstraintError(error)) {
+        const resourceName = 'name' in row && typeof row.name === 'string' ? row.name : row.id
+        throw new ConflictError(
+          'resource-name-conflict',
+          `${type} '${resourceName}' already exists for the target owner`,
+          {
+            resourceType: type,
+            name: resourceName,
+            ownerUserId: nextOwnerCandidate,
+          },
+        )
+      }
+      throw error
+    }
+
+    if (updated === undefined) throw new NotFoundError('not-found', `${type} not found`)
+    await options.afterCommit?.({
+      type,
+      resourceId: updated.id,
+      ownerUserId: updated.ownerUserId,
+      visibility: updated.visibility,
+      aclRevision: updated.aclRevision,
+      grantedUserIds: updated.grantedUserIds,
+      now,
+    })
+    return getResourceAcl(actor, type, updated)
   }
 
-  return { getResourceAcl, updateResourceAcl }
+  return Object.freeze({ getResourceAcl, updateResourceAcl })
 }
+
+export type ResourceAclApplication<Type extends AclResourceType = ResourceCatalogOwnedAclType> =
+  ReturnType<typeof createResourceAclApplication<Type>>
 
 export interface ResourceAclOperationLinearizer<Row extends AclRow> {
   runExclusive(resourceId: string, task: () => Promise<ResourceAcl>): Promise<ResourceAcl>

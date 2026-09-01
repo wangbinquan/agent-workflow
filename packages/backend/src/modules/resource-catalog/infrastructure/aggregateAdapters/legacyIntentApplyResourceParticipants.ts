@@ -22,9 +22,11 @@ import { stringify as stringifyYaml } from 'yaml'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
+import { eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
+import { agents, mcps, plugins, skillOperations, skills, workflows, workgroups } from '@/db/schema'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import { createIntentApplyResourceParticipantInTx } from '../../application/participants/intentApplyResourceParticipant'
@@ -37,7 +39,11 @@ import type {
   ResourceSummaryRevision,
   VersionedIntentResourceChangesetPlan,
 } from '../../public/types'
-import type { CatalogSelectorKind } from '../../domain/resourceKinds'
+import { CATALOG_SELECTOR_KINDS, type CatalogSelectorKind } from '../../domain/resourceKinds'
+import type { ResourceCatalogAclIdentityReadPort } from '../../application/ports/providerResourceCatalogPersistence'
+import { encodeSkillToken } from '../legacy/skillToken'
+import { mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
+import { pluginConfigHash, pluginFromPersistenceRow } from '../pluginPersistence'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
   VersionedIntentResourceChangesetPlan,
@@ -406,7 +412,165 @@ export interface LegacyIntentApplyCommitContext {
   }
 }
 
+export interface LegacyIntentApplyManifestEntry {
+  readonly handle: string
+  readonly resourceType: string
+  readonly resourceId: string
+}
+
+export interface LegacyIntentApplyChangeset {
+  readonly ops: ReadonlyArray<{
+    readonly action: string
+    readonly resourceType: string
+    readonly target?: string
+  }>
+}
+
+export interface LegacyIntentApplyResourcePreflight {
+  readonly occupiedNames: ReadonlyMap<CatalogSelectorKind, ReadonlySet<string>>
+  readonly copyOnlyTargets: ReadonlyMap<string, string>
+}
+
+function isCatalogSelectorKind(value: string): value is CatalogSelectorKind {
+  return CATALOG_SELECTOR_KINDS.some((kind) => kind === value)
+}
+
+/**
+ * Provider-neutral ownership preflight for one named Intent apply session.
+ * Persistence identity stays in the owner adapter; Intent receives only the
+ * two closed decisions needed by bundle resolution.
+ */
+export async function resolveIntentApplyResourcePreflight(
+  identities: ResourceCatalogAclIdentityReadPort,
+  ownerUserId: string,
+  manifest: readonly LegacyIntentApplyManifestEntry[],
+  changeset: LegacyIntentApplyChangeset,
+): Promise<LegacyIntentApplyResourcePreflight> {
+  const occupiedNames = new Map<CatalogSelectorKind, ReadonlySet<string>>()
+  for (const type of CATALOG_SELECTOR_KINDS) {
+    const names = await identities.listOwnedNames(type, ownerUserId)
+    occupiedNames.set(type, new Set(names.map((name) => name.toLowerCase())))
+  }
+
+  const copyOnlyTargets = new Map<string, string>()
+  const byHandle = new Map(manifest.map((entry) => [entry.handle, entry] as const))
+  for (const op of changeset.ops) {
+    if (op.action !== 'update' || op.target === undefined) continue
+    const entry = byHandle.get(op.target)
+    if (entry === undefined || !isCatalogSelectorKind(entry.resourceType)) continue
+    const resourceOwnerUserId = await identities.getOwner(entry.resourceType, entry.resourceId)
+    if (resourceOwnerUserId !== undefined && resourceOwnerUserId !== ownerUserId) {
+      copyOnlyTargets.set(op.target, 'owned by another user or built-in')
+    }
+  }
+
+  return Object.freeze({ occupiedNames, copyOnlyTargets })
+}
+
+function requireRevisionRow<T>(row: T | undefined, kind: CatalogSelectorKind): T {
+  if (row === undefined) throw new NotFoundError(`${kind}-not-found`, `${kind} not found`)
+  return row
+}
+
+/** SQLite-only revision projection retained inside the owner infrastructure. */
+export function loadLegacyIntentResourceRevisionInTx<K extends CatalogSelectorKind>(
+  tx: DbTxSync,
+  kind: K,
+  resourceId: string,
+): ResourceSummaryRevision<K> {
+  switch (kind) {
+    case 'agent': {
+      const row = requireRevisionRow(
+        tx
+          .select({ updatedAt: agents.updatedAt, aclRevision: agents.aclRevision })
+          .from(agents)
+          .where(eq(agents.id, resourceId))
+          .get(),
+        kind,
+      )
+      return {
+        kind,
+        updatedAt: row.updatedAt,
+        aclRevision: row.aclRevision,
+      } as ResourceSummaryRevision<K>
+    }
+    case 'skill': {
+      const row = requireRevisionRow(
+        tx
+          .select({ contentVersion: skills.contentVersion, metaRevision: skills.metaRevision })
+          .from(skills)
+          .where(eq(skills.id, resourceId))
+          .get(),
+        kind,
+      )
+      return {
+        kind,
+        token: encodeSkillToken({
+          skillId: resourceId,
+          contentVersion: row.contentVersion,
+          metaRevision: row.metaRevision,
+        }),
+      } as ResourceSummaryRevision<K>
+    }
+    case 'mcp': {
+      const row = requireRevisionRow(
+        tx.select().from(mcps).where(eq(mcps.id, resourceId)).get(),
+        kind,
+      )
+      return {
+        kind,
+        configHash: mcpConfigHash(mcpFromPersistenceRow(row)),
+      } as ResourceSummaryRevision<K>
+    }
+    case 'plugin': {
+      const row = requireRevisionRow(
+        tx.select().from(plugins).where(eq(plugins.id, resourceId)).get(),
+        kind,
+      )
+      return {
+        kind,
+        configHash: pluginConfigHash(pluginFromPersistenceRow(row)),
+      } as ResourceSummaryRevision<K>
+    }
+    case 'workflow': {
+      const row = requireRevisionRow(
+        tx
+          .select({ version: workflows.version })
+          .from(workflows)
+          .where(eq(workflows.id, resourceId))
+          .get(),
+        kind,
+      )
+      return { kind, version: row.version } as ResourceSummaryRevision<K>
+    }
+    case 'workgroup': {
+      const row = requireRevisionRow(
+        tx
+          .select({ version: workgroups.version })
+          .from(workgroups)
+          .where(eq(workgroups.id, resourceId))
+          .get(),
+        kind,
+      )
+      return { kind, version: row.version } as ResourceSummaryRevision<K>
+    }
+  }
+}
+
+/** Exact operation-state read used by the legacy SQLite roll-forward tail. */
+export function loadLegacyIntentSkillOperationState(db: DbClient, opId: string) {
+  return db
+    .select({ active: skillOperations.active, phase: skillOperations.phase })
+    .from(skillOperations)
+    .where(eq(skillOperations.opId, opId))
+    .get()
+}
+
 export interface LegacyIntentApplyResourceSession {
+  preflight(
+    manifest: readonly LegacyIntentApplyManifestEntry[],
+    changeset: LegacyIntentApplyChangeset,
+  ): Promise<LegacyIntentApplyResourcePreflight>
   prepare(
     plan: VersionedIntentResourceChangesetPlan,
     context: LegacyIntentApplyPrepareContext,
@@ -472,6 +636,7 @@ function writeSkillTree(root: string, payload: ReturnType<typeof skillPayload>):
 export function createLegacyIntentApplyResourceSession(
   options: LegacyIntentApplyResourceSessionOptions,
   dependencies: LegacyIntentApplyResourceDependencies,
+  identities: ResourceCatalogAclIdentityReadPort,
 ): LegacyIntentApplyResourceSession {
   const { db, appHome, actor } = options
   const preparedByOperationId = new Map<string, PreparedMutation>()
@@ -635,6 +800,9 @@ export function createLegacyIntentApplyResourceSession(
   }
 
   const session: LegacyIntentApplyResourceSession = {
+    preflight(manifest, changeset) {
+      return resolveIntentApplyResourcePreflight(identities, actor.user.id, manifest, changeset)
+    },
     async prepare(plan, context) {
       switch (plan.kind) {
         case 'agent': {
