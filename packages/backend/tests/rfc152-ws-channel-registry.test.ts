@@ -46,6 +46,8 @@ import {
   type WsConnectionData,
 } from '../src/ws/registry'
 import { stubIdentityAccessWsBinding, TEST_DIRECT_AUTHORITY } from './helpers/identityAccessWs'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import { composeTestSqliteRealtimeRuntime, STUB_REALTIME_RUNTIME } from './helpers/realtimeRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -75,6 +77,8 @@ function makeFakeWs(
     actor,
     authority: TEST_DIRECT_AUTHORITY,
     identityAccess,
+    channels: STUB_REALTIME_RUNTIME.channels,
+    credentials: STUB_REALTIME_RUNTIME.credentials,
     // RFC-212 — the registry never reads these; they exist so the fixture stays
     // structurally identical to a real connection.
     credential: { kind: 'daemon' },
@@ -281,22 +285,24 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
 })
 
 describe('RFC-152 — upgrade gates', () => {
+  const db = createInMemoryDb(MIGRATIONS)
+  const identityAccess = composeIdentityAccess(db)
+  const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
+
   test('memory-distill-jobs checks effective capabilities, not the account role', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
     const params: AnyChannelParams = { kind: 'memory-distill-jobs' }
-    const refusal = await checkUpgradeGate(db, makeActor('user'), params)
+    const refusal = await checkUpgradeGate(channels, makeActor('user'), params)
     expect(refusal).toEqual({
       code: 'permission-required',
       message: 'memory-distill-jobs channel requires memory-distill-jobs:manage',
     })
-    expect(await checkUpgradeGate(db, makeActor('admin'), params)).toBe(true)
+    expect(await checkUpgradeGate(channels, makeActor('admin'), params)).toBe(true)
     // The manager preset currently includes both required points.
-    expect(await checkUpgradeGate(db, makeActor('manager'), params)).toBe(true)
+    expect(await checkUpgradeGate(channels, makeActor('manager'), params)).toBe(true)
   })
 
   test('task: missing task row refused with task-not-visible (fail closed)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const refusal = await checkUpgradeGate(db, makeActor('user'), {
+    const refusal = await checkUpgradeGate(channels, makeActor('user'), {
       kind: 'task',
       taskId: 'no-such-task',
     })
@@ -307,20 +313,19 @@ describe('RFC-152 — upgrade gates', () => {
   })
 
   test('channels without upgrade gates pass through upgrade checks', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
     const actor = makeActor('user')
     // RFC-285 B6②：repo-import 不再免门——缺行/非发起者同形拒绝（batch-not-found）。
-    expect(await checkUpgradeGate(db, actor, { kind: 'repo-import', batchId: 'b' })).toMatchObject({
-      code: 'batch-not-found',
-    })
-    expect(await checkUpgradeGate(db, actor, { kind: 'tasks-list' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'workflows' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'workgroups' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'memories' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'scheduled-tasks' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'intent-sessions' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'mcp-runtime-tests' })).toBe(true)
-    expect(await checkUpgradeGate(db, actor, { kind: 'authority' })).toBe(true)
+    expect(
+      await checkUpgradeGate(channels, actor, { kind: 'repo-import', batchId: 'b' }),
+    ).toMatchObject({ code: 'batch-not-found' })
+    expect(await checkUpgradeGate(channels, actor, { kind: 'tasks-list' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'workflows' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'workgroups' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'memories' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'scheduled-tasks' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'intent-sessions' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'mcp-runtime-tests' })).toBe(true)
+    expect(await checkUpgradeGate(channels, actor, { kind: 'authority' })).toBe(true)
   })
 })
 
@@ -360,6 +365,8 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
   }
 
   const db = createInMemoryDb(MIGRATIONS)
+  const identityAccess = composeIdentityAccess(db)
+  const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
   db.$client.exec(`
     INSERT INTO users (
       id, username, email, display_name, password_hash, role, status,
@@ -375,17 +382,17 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
 
   test('hello frame is sent first; since is echoed when params carry one', () => {
     const { ws, sent } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws, WS_CHANNELS.task, { kind: 'task', taskId: 'T9', since: 42 }, db)
+    gatedSubscribe(ws, WS_CHANNELS.task, { kind: 'task', taskId: 'T9', since: 42 }, channels)
     expect(sent[0]).toEqual({ type: 'hello', channel: 'tasks/T9', since: 42 })
     const { ws: ws2, sent: sent2 } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws2, WS_CHANNELS.task, { kind: 'task', taskId: 'T9' }, db)
+    gatedSubscribe(ws2, WS_CHANNELS.task, { kind: 'task', taskId: 'T9' }, channels)
     expect(sent2[0]).toEqual({ type: 'hello', channel: 'tasks/T9' })
   })
 
   test('no frameGate ⇒ every frame forwards; unsubscribe is wired onto ws.data', () => {
     const probe = makeProbeSpec({})
     const { ws, sent } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     probe.fire({ type: 'x', n: 1 })
     expect(sent).toEqual([
       { type: 'hello', channel: 'probe' },
@@ -401,7 +408,7 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
   test('revalidating=true synchronously drops frames; clearing it resumes delivery', () => {
     const probe = makeProbeSpec({})
     const { ws, sent } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
     // Freeze for an in-flight rescan → the frame is dropped (not queued).
     ws.data.revalidating = true
@@ -433,7 +440,7 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
       },
     }
     const { ws, sent } = makeFakeWs(makeActor('user'), dbBackedIdentityAccess)
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     db.$client.query("UPDATE users SET access_revision = 1 WHERE id = 'u-test'").run()
     probe.fire({ type: 'x', n: 1 })
     expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
@@ -450,7 +457,7 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
         }),
     })
     const { ws, sent } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     probe.fire({ type: 'x', n: 1 })
     db.$client.query("UPDATE users SET access_revision = 1 WHERE id = 'u-test'").run()
     ws.data.actor = buildActor({
@@ -480,7 +487,7 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
       },
     })
     const { ws, sent } = makeFakeWs(makeActor('admin'))
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     probe.fire({ type: 'x', n: 1 })
     // Synchronous — visible before any await.
     expect(sent).toEqual([
@@ -495,7 +502,7 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
       frameGate: async (_ctx, msg) => msg.n % 2 === 0,
     })
     const { ws, sent } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     probe.fire({ type: 'x', n: 1 })
     probe.fire({ type: 'x', n: 2 })
     await flush()
@@ -512,14 +519,14 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
       },
     })
     const { ws, sent } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws, probe.spec, { kind: 'tasks-list' }, channels)
     probe.fire({ type: 'x', n: 1 })
     await flush()
     expect(sent).toEqual([{ type: 'hello', channel: 'probe' }])
     // The subscription survives — the next passing frame still arrives.
     const probe2 = makeProbeSpec({ frameGate: async () => true })
     const { ws: ws2, sent: sent2 } = makeFakeWs(makeActor('user'))
-    gatedSubscribe(ws2, probe2.spec, { kind: 'tasks-list' }, db)
+    gatedSubscribe(ws2, probe2.spec, { kind: 'tasks-list' }, channels)
     probe2.fire({ type: 'ok', n: 3 })
     await flush()
     expect(sent2).toEqual([
@@ -572,7 +579,12 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
     const stranger = makeFakeWs(makeActor('user', 'stranger-1'))
     const admin = makeFakeWs(makeActor('admin', 'admin-1'))
     for (const target of [owner, stranger, admin]) {
-      gatedSubscribe(target.ws, WS_CHANNELS['mcp-runtime-tests'], { kind: 'mcp-runtime-tests' }, db)
+      gatedSubscribe(
+        target.ws,
+        WS_CHANNELS['mcp-runtime-tests'],
+        { kind: 'mcp-runtime-tests' },
+        channels,
+      )
     }
     const locator = {
       type: 'mcp-runtime-test.updated',

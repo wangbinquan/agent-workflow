@@ -19,6 +19,7 @@ import {
   recordRecoveryEvent,
   recoveryCountersSnapshot,
 } from '../src/services/recovery'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -56,14 +57,15 @@ describe('RFC-108 T3 — recordRecoveryEvent + counters', () => {
   test('records a durable row, bumps the counter, lists newest-first', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
-    await recordRecoveryEvent(db, {
+    const operations = taskRecoveryOperations(db)
+    await recordRecoveryEvent(operations, {
       taskId,
       kind: 'auto-resume',
       reason: 'x',
       before: { status: 'interrupted' },
       after: { status: 'pending' },
     })
-    const rows = await listRecoveryEventsForTask(db, taskId)
+    const rows = await listRecoveryEventsForTask(operations, taskId)
     expect(rows).toHaveLength(1)
     expect(rows[0]!.kind).toBe('auto-resume')
     expect(rows[0]!.actor).toBe('system')
@@ -79,8 +81,9 @@ describe('RFC-108 T3 — actors record recovery_events', () => {
   test('reapOrphanRuns records a boot-reap event for each flipped task', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
-    await reapOrphanRuns(db)
-    const rows = await listRecoveryEventsForTask(db, taskId)
+    const operations = taskRecoveryOperations(db)
+    await reapOrphanRuns(operations)
+    const rows = await listRecoveryEventsForTask(operations, taskId)
     expect(rows.some((r) => r.kind === 'boot-reap')).toBe(true)
     expect(recoveryCountersSnapshot()['boot-reap']).toBeGreaterThanOrEqual(1)
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))

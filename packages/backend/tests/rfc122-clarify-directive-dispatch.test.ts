@@ -14,6 +14,7 @@
 // Plus a store round-trip and a source-level lock on the scheduler wiring (the
 // dispatch read + the three threads) so a refactor that drops any of them goes red.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -347,6 +348,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
     await setNodeClarifyDirective(c.db, task.id, 'designer', 'stop', 'u-tester')
     await autoDispatchClarifyRound({
       db: c.db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
       answers: [ANSWER],
       directive: 'continue',

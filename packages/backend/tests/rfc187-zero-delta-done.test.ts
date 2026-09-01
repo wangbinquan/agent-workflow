@@ -11,7 +11,7 @@ import { resolve } from 'node:path'
 import {
   detectZeroDeltaDone,
   warnIfZeroDeltaDone,
-} from '../src/services/workgroup/strategies/leaderWorker'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
 
 describe('RFC-187 §4 — detectZeroDeltaDone', () => {
   test('zero files + completed work = suspect (probe A shape)', () => {
@@ -54,7 +54,17 @@ describe('RFC-187 §4 — source locks', () => {
 
   test('the leader protocol tells briefs to use relative, not absolute, paths', () => {
     const ctx = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'context.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'context.ts',
+      ),
       'utf8',
     )
     expect(ctx).toContain('RELATIVE path')
@@ -63,7 +73,17 @@ describe('RFC-187 §4 — source locks', () => {
 
   test('the engine wires a zero-delta warn on done (both the gated and un-gated finish)', () => {
     const runner = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'engine.ts',
+      ),
       'utf8',
     )
     // called before BOTH `return { kind: 'ok' }` sites (autonomous done + gate-approved done).

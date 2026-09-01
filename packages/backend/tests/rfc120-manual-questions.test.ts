@@ -17,6 +17,7 @@
 //   E. golden-lock — zero manual rows ⇒ the cross-clarify injection block is byte-identical
 //      (no `Manual instruction` contamination).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -672,6 +673,7 @@ describe('RFC-120 §15 — golden-lock (no manual rows ⇒ clarify unchanged)', 
     // selects it without manual stamping.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [
         {

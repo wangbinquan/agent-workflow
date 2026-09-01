@@ -12,6 +12,7 @@
 // per-round single path (auto and manual never double-dispatch); RFC-125 single-path invariant
 // (flag never flipped); lock non-reentry; the P5-0 guard (RFC-132: lifted universally).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { join, resolve } from 'node:path'
@@ -36,9 +37,9 @@ import {
   finishCommittedClarifyAutoDispatch,
 } from '../src/services/clarifyAutoDispatch'
 import { prepareClarifyDecision } from '../src/services/clarifyDecision'
-import { createGateContinuationPreDriveStep } from '../src/services/humanGateContinuationEffects'
+import { createSqliteGateContinuationPreDriveStep as createGateContinuationPreDriveStep } from '../src/modules/task-execution/composition/sqliteGateContinuationPreDrive'
 import { createTaskExecutionTestModule } from '../src/modules/task-execution/composition'
-import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
+import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { resolveTaskDriveConfig } from '../src/modules/task-execution/application/drive/taskDriveTypes'
 import { sealRoundQuestions } from '../src/services/clarifySeal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
@@ -99,6 +100,7 @@ async function commitClarifyDecisionThenInterrupt(input: {
 
   await autoDispatchClarifyRound({
     db: input.db,
+    memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(input.db),
     originNodeRunId: input.originNodeRunId,
     answers: input.answers,
     directive,
@@ -177,6 +179,7 @@ describe('RFC-333 clarify decision transaction', () => {
     const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
     const command = {
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -231,6 +234,7 @@ describe('RFC-333 clarify decision transaction', () => {
     const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
     const command = {
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'stop' as const,
@@ -282,7 +286,10 @@ describe('RFC-333 clarify decision transaction', () => {
       signal: new AbortController().signal,
       runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence' }),
     }
-    const step = createGateContinuationPreDriveStep(db)
+    const step = createGateContinuationPreDriveStep({
+      db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+    })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     const firstRunCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
       .length
@@ -293,6 +300,7 @@ describe('RFC-333 clarify decision transaction', () => {
 
     const finished = await finishCommittedClarifyAutoDispatch({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       operationId: operation.id,
       expectedTaskId: taskId,
       expectedOriginNodeRunId: intermediaryNodeRunId,
@@ -336,7 +344,10 @@ describe('RFC-333 clarify decision transaction', () => {
     const module = createTaskExecutionTestModule(`daemon-${ulid()}`)
     const claimed = module.claim({ db, intentId: intent.id })
     module.claimGate.leave(claimed.permit)
-    const step = createGateContinuationPreDriveStep(db)
+    const step = createGateContinuationPreDriveStep({
+      db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+    })
     await expect(
       step.run({
         taskId,
@@ -369,6 +380,7 @@ describe('RFC-333 clarify decision transaction', () => {
     await expect(
       autoDispatchClarifyRoundWithDecision({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -578,6 +590,7 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
 
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -635,6 +648,7 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
 
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -662,6 +676,7 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
 
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -700,6 +715,7 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
 
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -750,6 +766,7 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
 
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -768,6 +785,7 @@ describe('RFC-128 P5-D — quick-channel seal + autodispatch (fast-path → auto
 
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
       directive: 'stop',
@@ -798,6 +816,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     const a = await seedSealableSelfRound(dbA, taskA, [mkQ('q1', 't')])
     const resA = await autoDispatchClarifyRound({
       db: dbA,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(dbA),
       originNodeRunId: a.intermediaryNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -816,6 +835,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     // The unified path seals + auto-dispatches on every task now (no 'task-not-deferred-dispatch').
     const result = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -837,6 +857,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     try {
       await autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         ifMatchIteration: 99, // round.iteration is 0
@@ -851,6 +872,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     // The matching iteration succeeds.
     const ok = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       ifMatchIteration: 0,
@@ -873,6 +895,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     // Only q1 supplied (a stale / malformed quick submit).
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -923,6 +946,7 @@ describe('RFC-128 P5-D golden-lock (full-seal autodispatch keeps the legacy whol
     try {
       await autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -955,6 +979,7 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
     ])
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -988,6 +1013,7 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
     ])
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -1014,6 +1040,7 @@ describe('RFC-128 P5-D single-path (auto + manual never double-dispatch; RFC-125
     // Quick channel autodispatch (the whole-round answers include the already-sealed q1).
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1'), ans('q2')],
       actor,
@@ -1090,6 +1117,7 @@ describe('RFC-128 P5-D lock-B non-reentry', () => {
     const res = await Promise.race([
       autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -1257,6 +1285,7 @@ describe('RFC-128 P5-D self-clarify isolated rollback (RFC-098 B1, Codex round-4
 
       const res = await autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -1300,6 +1329,7 @@ describe('RFC-128 P5-D self-clarify isolated rollback (RFC-098 B1, Codex round-4
 
       await autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -1338,6 +1368,7 @@ describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idemp
     ])
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -1365,6 +1396,7 @@ describe('RFC-128 P5-D post-seal dispatch conflict → deferred to manual (idemp
     ])
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -1389,6 +1421,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     await autoDispatchClarifyRoundWithDecision({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -1406,6 +1439,7 @@ describe('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 1)', () => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     await autoDispatchClarifyRoundWithDecision({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossNodeRunId,
       answers: [ans('q1')],
       directive: 'stop',
@@ -1450,6 +1484,7 @@ describe('RFC-128 P5-D non-recoverable dispatch conflict NOT swallowed (Codex ro
     try {
       await autoDispatchClarifyRoundWithDecision({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -1522,6 +1557,7 @@ describe('RFC-128 P5-D self rollback pre-flight (Codex round-8 finding 1 — no 
 
       const res = await autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,

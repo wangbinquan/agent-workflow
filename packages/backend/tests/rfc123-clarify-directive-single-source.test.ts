@@ -20,6 +20,7 @@
 //
 // 若任一变红 = 双向单一事实源契约漂移，先查再放。
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import {
   createClarifyRound,
   dispatchCrossClarifyNode,
@@ -173,6 +174,7 @@ async function seedSelfStopAnswered(
   })
   await autoDispatchClarifyRound({
     db,
+    memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: clarifyNodeRunId,
     answers: [makeAns()],
     directive: opts.directive,
@@ -217,6 +219,7 @@ async function seedCrossStopAnswered(
   })
   await autoDispatchClarifyRound({
     db,
+    memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: crossClarifyNodeRunId,
     answers: [makeAns()],
     directive,

@@ -21,6 +21,7 @@
 // 时序确定性：gate 文件慢 mock（同 rfc092-midrun-clarify-dispatch.test.ts），
 // 测试侧轮询 DB 状态，绝不裸 sleep 赌时机。
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -513,6 +514,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
 
       await autoDispatchClarifyRound({
         db: h.db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: session.intermediaryNodeRunId,
         answers: [CLARIFY_ANSWER],
         directive: 'stop', // RFC-100: finalize round → wrapper-inner agent's <workflow-output> accepted

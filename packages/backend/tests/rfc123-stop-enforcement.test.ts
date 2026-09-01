@@ -29,7 +29,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
-import { runNode } from '../src/services/runner'
+import { runNode } from './helpers/runner'
 import {
   decideEnvelopeFollowup,
   type PreviousAttemptShape,

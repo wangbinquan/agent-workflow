@@ -31,6 +31,7 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { createSqliteFusionPersistence } from '../src/modules/memory/infrastructure/sqliteFusionPersistence'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/services/agent'
 import {
@@ -67,6 +68,10 @@ async function api(app: Hono, path: string, init?: RequestInit): Promise<Respons
   })
 }
 
+function fusionPersistence(db: DbClient) {
+  return createSqliteFusionPersistence({ db, appHome: '/tmp' })
+}
+
 // Mirrors the proven-valid create payload from agents.test.ts (returns 201).
 function samplePayload(name: string): Record<string, unknown> {
   return {
@@ -91,7 +96,7 @@ describe('RFC-101 built-in fusion resources are hidden from user-facing lists', 
 
   test('GET /api/agents (as daemon/admin) excludes the system-owned aw-skill-merger', async () => {
     const { db, app } = await buildApp()
-    await seedFusionResources(db)
+    await seedFusionResources(fusionPersistence(db))
 
     // Sanity: the row really is seeded, system-owned, and still resolvable at
     // the service layer (the fusion engine resolves it by name there).
@@ -107,7 +112,7 @@ describe('RFC-101 built-in fusion resources are hidden from user-facing lists', 
 
   test('GET /api/workflows (as daemon/admin) excludes the system-owned aw-skill-fusion', async () => {
     const { db, app } = await buildApp()
-    await seedFusionResources(db)
+    await seedFusionResources(fusionPersistence(db))
 
     const fusion = (await listWorkflows(db)).find((w) => w.name === SKILL_FUSION_WORKFLOW_NAME)
     expect(fusion).toBeDefined()
@@ -125,7 +130,7 @@ describe('RFC-101 built-in fusion resources are hidden from user-facing lists', 
     // it is NOT a built-in and must remain in the list. The name+owner
     // conjunction keeps it; the owner-only filter wrongly dropped it.
     const { db, app } = await buildApp()
-    await seedFusionResources(db)
+    await seedFusionResources(fusionPersistence(db))
     const created = await api(app, '/api/agents', {
       method: 'POST',
       body: JSON.stringify(samplePayload('my-coder')),

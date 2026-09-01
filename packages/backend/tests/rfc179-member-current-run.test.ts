@@ -10,7 +10,7 @@ import {
   deriveMemberCurrentRuns,
   type HostRunLite,
   type MemberLite,
-} from '../src/services/workgroup/room'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/room'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '../src/services/workgroup/launch'
 
 const LEADER = 'M_leader'

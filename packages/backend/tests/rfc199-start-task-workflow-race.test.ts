@@ -35,6 +35,7 @@ import {
 import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-launch-race-test' }
@@ -220,7 +221,13 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     // RFC-248: 两个源仓先经 createRepoGroup 的 URL 导入路径落成 cached_repos，
     // 再组成一个平铺两仓的组（挂载点 r0 / r1）。
     const group = await createRepoGroup(
-      { db: harness.db, cache: { db: harness.db, appHome: harness.appHome } },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(harness.db),
+        cache: {
+          store: composeSqliteRepositoryWorkspaceStore(harness.db),
+          appHome: harness.appHome,
+        },
+      },
       {
         name: 'rfc199-multi',
         description: '',
@@ -409,7 +416,13 @@ describe('RFC-199 startTask workflow delete/version race', () => {
     // RFC-248 T32: 入口换成仓库组（`repos[]` 已退役），不变量照旧——第二个成员
     // 物化失败必须把**已经建好的**第一个成员的工作树 / 分支 / 容器目录全回收。
     const group = await createRepoGroup(
-      { db: harness.db, cache: { db: harness.db, appHome: harness.appHome } },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(harness.db),
+        cache: {
+          store: composeSqliteRepositoryWorkspaceStore(harness.db),
+          appHome: harness.appHome,
+        },
+      },
       {
         name: 'rfc199-partial',
         description: '',

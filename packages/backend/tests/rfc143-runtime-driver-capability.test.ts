@@ -343,7 +343,9 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
 
   it('memoryDistiller 无 protocol 判别（spawn 与 transcript capture 均走 driver capability）', () => {
     const src = SRC('services/memoryDistiller.ts')
-    expect(src).toContain('getRuntimeDriver(protocol).captureDistillSession?.(')
+    expect(src).not.toContain('captureDistillSession')
+    const memoryCapture = SRC('modules/memory/infrastructure/memoryDistillSessionCapture.ts')
+    expect(memoryCapture).toContain('getRuntimeDriver(input.protocol).captureDistillSession?.(')
     expect(src).not.toContain('bridgeCredentials')
     // 锁读取形态（注释可提及）：env 覆盖不再在 distiller 侧读取，回退逻辑在
     // opencode driver 的 buildSpawn 里。

@@ -18,6 +18,7 @@ import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
 import type { RepairOption } from '@agent-workflow/shared'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
@@ -76,9 +77,10 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   test('enabled rule + exactly one eligible+available → applies + records event', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskWithAlert(db)
+    const operations = taskRecoveryOperations(db)
     const applied: string[] = []
     const res = await runAutoRepairOnce({
-      db,
+      operations,
       breaker: BREAKER,
       isRuleEnabled: enableAll,
       resolveOptions: async () => [
@@ -94,16 +96,17 @@ describe('RFC-108 T19 — auto-repair loop', () => {
     expect(res.repaired[0]!.optionId).toBe('S4.kick-task')
     expect(applied).toEqual(['S4.kick-task'])
     expect(
-      (await listRecoveryEventsForTask(db, taskId)).some((e) => e.kind === 'auto-repair'),
+      (await listRecoveryEventsForTask(operations, taskId)).some((e) => e.kind === 'auto-repair'),
     ).toBe(true)
   })
 
   test('disabled rule → skipped, applyOption never called', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedTaskWithAlert(db)
+    const operations = taskRecoveryOperations(db)
     let applyCalled = false
     const res = await runAutoRepairOnce({
-      db,
+      operations,
       breaker: BREAKER,
       isRuleEnabled: () => false,
       resolveOptions: async () => [mkOption('S4.kick-task', true, true)],
@@ -120,8 +123,9 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   test('two eligible+available options → no-single-eligible, not applied', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedTaskWithAlert(db)
+    const operations = taskRecoveryOperations(db)
     const res = await runAutoRepairOnce({
-      db,
+      operations,
       breaker: BREAKER,
       isRuleEnabled: enableAll,
       resolveOptions: async () => [mkOption('a', true, true), mkOption('b', true, true)],
@@ -134,9 +138,12 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   test('quarantined task → skipped', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskWithAlert(db)
-    for (let i = 0; i < 4; i++) await recordAutoRecoveryAttempt(db, taskId, BREAKER, 1000)
+    const operations = taskRecoveryOperations(db)
+    for (let i = 0; i < 4; i++) {
+      await recordAutoRecoveryAttempt(operations, taskId, BREAKER, 1000)
+    }
     const res = await runAutoRepairOnce({
-      db,
+      operations,
       breaker: BREAKER,
       isRuleEnabled: enableAll,
       resolveOptions: async () => [mkOption('S4.kick-task', true, true)],
@@ -149,8 +156,9 @@ describe('RFC-108 T19 — auto-repair loop', () => {
   test('applyOption throws → skipped, not counted as repaired', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedTaskWithAlert(db)
+    const operations = taskRecoveryOperations(db)
     const res = await runAutoRepairOnce({
-      db,
+      operations,
       breaker: BREAKER,
       isRuleEnabled: enableAll,
       resolveOptions: async () => [mkOption('S4.kick-task', true, true)],

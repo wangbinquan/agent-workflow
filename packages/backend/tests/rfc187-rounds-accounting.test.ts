@@ -20,11 +20,31 @@ describe('RFC-187 §3-3 — wg-protocol-retry cause', () => {
 
 describe('RFC-187 §3-3 — source locks', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'workgroup',
+      'engine.ts',
+    ),
     'utf8',
   ).concat(
     readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'memberTurns.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'memberTurns.ts',
+      ),
       'utf8',
     ),
     readFileSync(
@@ -40,13 +60,34 @@ describe('RFC-187 §3-3 — source locks', () => {
       'utf8',
     ),
     readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'strategies', 'freeCollab.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'strategies',
+        'freeCollab.ts',
+      ),
       'utf8',
     ),
   )
-  // RFC-209 —— 回合账本的推导本体（原先在 workgroupRunner.ts 的 countBudgetUsed 里）。
+  // RFC-345 —— provider-neutral 回合账本推导本体。SQLite/PG room adapters
+  // 共用 application owner；legacy rounds.ts 只保留 DB read/write mechanics。
   const ROUNDS = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'rounds.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'application',
+      'workgroups',
+      'workgroupRoomProjection.ts',
+    ),
     'utf8',
   )
 
@@ -65,10 +106,9 @@ describe('RFC-187 §3-3 — source locks', () => {
     // there must be a rerunCause !== 'wg-protocol-retry' guard for both the lw (leader)
     // and fc (member) counting branches.
     //
-    // RFC-209 —— 推导本体从 workgroupRunner.ts 搬到了 services/workgroup/rounds.ts
-    // （回合账本单一事实源：引擎 / 消息写入 / 房间聚合三方共用）。这条锁跟着搬家，
-    // 否则一次**逐字节等价**的重构就会让它从 2 变 0 而变红。
-    const occurrences = ROUNDS.split("r.rerunCause !== 'wg-protocol-retry'").length - 1
+    // RFC-345 —— 推导本体搬到 provider-neutral application owner；引擎、
+    // SQLite/PG room projection 仍共用一个 exact grammar。
+    const occurrences = ROUNDS.split("row.rerunCause !== 'wg-protocol-retry'").length - 1
     expect(occurrences).toBeGreaterThanOrEqual(2)
   })
 })

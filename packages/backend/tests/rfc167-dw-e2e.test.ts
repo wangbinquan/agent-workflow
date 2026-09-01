@@ -45,6 +45,7 @@ import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -195,6 +196,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             task.id,
             {
               db,
+              taskRecoveryOperations: taskRecoveryOperations(db),
               schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
                 .schedulerDriver,
               appHome,
@@ -330,11 +332,12 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       const res = await withActiveTaskDeadline(() =>
         withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '恢复后完成' }) }, () =>
           autoResumeInterruptedTasks({
-            db,
+            operations: taskRecoveryOperations(db),
             breaker: { maxPerWindow: 3, windowMs: 3600_000 },
             resume: (id) =>
               resumeTask(db, id, {
                 db,
+                taskRecoveryOperations: taskRecoveryOperations(db),
                 schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
                   .schedulerDriver,
                 appHome,

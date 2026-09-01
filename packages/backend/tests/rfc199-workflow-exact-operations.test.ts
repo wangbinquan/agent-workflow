@@ -259,7 +259,7 @@ describe('RFC-199 route source lock', () => {
     )
 
     expect(validateBlock.match(/loadVisibleWorkflow\(/g)).toHaveLength(1)
-    expect(validateBlock).toContain('validateWorkflowDefinition(workflow.definition, context)')
+    expect(validateBlock).toContain('module.validationQueries.validateStored(')
     expect(validateBlock).not.toMatch(/\bvalidateWorkflowById\s*\(/)
   })
 })

@@ -18,6 +18,7 @@
 //      seals the answer and PARKS the dispatch — dispatchDeferredReason — instead of the
 //      legacy pre-seal reject).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -397,6 +398,7 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
     })
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -440,6 +442,7 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
     // ConflictError — the mint is still blocked: no rerun, no new node_run.
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -479,6 +482,7 @@ describe('RFC-133 quick-channel mint guards — same-cause queued entry no longe
     // cross answer + continue → mints the questioner cascade rerun on DOWN (RFC-162: scope deleted).
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',

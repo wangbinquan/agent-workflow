@@ -27,6 +27,7 @@ import {
   seedBuiltinRuntimes,
   setRuntimeEnabled,
 } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createSession } from '../src/auth/sessionStore'
 import { createPat } from '../src/auth/patStore'
 import { createUser } from '../src/services/users'
@@ -80,7 +81,7 @@ async function makeHarness(opts: { probeTimeoutMs?: number } = {}): Promise<Harn
   // tests may or may not have real opencode/claude on PATH.
   applyConfigPatch(configPath, { opencodePath: opencodeBin, claudeCodePath: claudeBin })
   const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const app = createApp({
     token: TOKEN,
     configPath,
@@ -157,14 +158,18 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('disabled runtime is excluded (enabled filter)', async () => {
-    await setRuntimeEnabled(h.db, 'claude-code', false, 'opencode')
+    await setRuntimeEnabled(runtimeRegistryPersistence(h.db), 'claude-code', false, 'opencode')
     const json = await bodyOf(await req(h.app))
     expect(json.runtimes.map((r) => r.name)).toEqual(['opencode'])
   })
 
   test('fixture-admitted row probes ITS binaryPath, not the protocol default', async () => {
     const forkBin = writeVersionBinary(h.tmp, 'my-fork', 'myfork 9.9.9')
-    await createRuntime(h.db, { name: 'my-fork', protocol: 'opencode', binaryPath: forkBin })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'my-fork',
+      protocol: 'opencode',
+      binaryPath: forkBin,
+    })
     const json = await bodyOf(await req(h.app))
     const fork = json.runtimes.find((r) => r.name === 'my-fork')
     expect(fork).toBeDefined()
@@ -176,7 +181,11 @@ describe('RFC-135 GET /api/runtimes/status', () => {
 
   test('older reported OpenCode version remains runnable', async () => {
     const oldBin = writeVersionBinary(h.tmp, 'old-opencode', 'stub-opencode 1.17.9')
-    await createRuntime(h.db, { name: 'old-opencode', protocol: 'opencode', binaryPath: oldBin })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'old-opencode',
+      protocol: 'opencode',
+      binaryPath: oldBin,
+    })
     const json = await bodyOf(await req(h.app))
     const old = json.runtimes.find((r) => r.name === 'old-opencode')
     expect(old!.ok).toBe(true)
@@ -186,7 +195,11 @@ describe('RFC-135 GET /api/runtimes/status', () => {
 
   test('non-semver reported version remains runnable', async () => {
     const weirdBin = writeVersionBinary(h.tmp, 'weird-fork', 'fork build fortytwo')
-    await createRuntime(h.db, { name: 'weird-fork', protocol: 'opencode', binaryPath: weirdBin })
+    await createRuntime(runtimeRegistryPersistence(h.db), {
+      name: 'weird-fork',
+      protocol: 'opencode',
+      binaryPath: weirdBin,
+    })
     const json = await bodyOf(await req(h.app))
     const weird = json.runtimes.find((r) => r.name === 'weird-fork')
     expect(weird!.ok).toBe(true)
@@ -196,7 +209,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
 
   test('opaque CodeAgent version remains ready on the homepage status path', async () => {
     const codeAgentBin = writeVersionBinary(h.tmp, 'codeagent', 'CodeAgentCLI build-20260813')
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'codeagent',
       protocol: 'claude-code',
       binaryPath: codeAgentBin,
@@ -211,7 +224,7 @@ describe('RFC-135 GET /api/runtimes/status', () => {
   })
 
   test('missing binary → ok:false, version:null, endpoint still 200', async () => {
-    await createRuntime(h.db, {
+    await createRuntime(runtimeRegistryPersistence(h.db), {
       name: 'gone',
       protocol: 'claude-code',
       binaryPath: join(h.tmp, 'does-not-exist'),
@@ -285,7 +298,11 @@ describe('RFC-135 GET /api/runtimes/status', () => {
         // hang for a leaked descendant during pressure runs.
         const hangMarker = `sleep 63047.${process.pid}`
         writeHangingBinary(hangBin, hangMarker)
-        await createRuntime(slow.db, { name: 'hangs', protocol: 'opencode', binaryPath: hangBin })
+        await createRuntime(runtimeRegistryPersistence(slow.db), {
+          name: 'hangs',
+          protocol: 'opencode',
+          binaryPath: hangBin,
+        })
 
         const started = performance.now()
         const res = await req(slow.app)
@@ -329,7 +346,11 @@ describe('RFC-135 GET /api/runtimes/status', () => {
       const bin = join(h.tmp, 'forks-and-dies')
       writeFileSync(bin, `#!/bin/sh\n${marker} &\nexit 7\n`)
       chmodSync(bin, 0o755)
-      await createRuntime(h.db, { name: 'forks-and-dies', protocol: 'opencode', binaryPath: bin })
+      await createRuntime(runtimeRegistryPersistence(h.db), {
+        name: 'forks-and-dies',
+        protocol: 'opencode',
+        binaryPath: bin,
+      })
 
       const res = await req(h.app)
       expect(res.status).toBe(200)

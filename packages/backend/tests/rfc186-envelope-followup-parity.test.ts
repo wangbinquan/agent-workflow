@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { followupForFailure, wgFollowupNotice } from '../src/services/workgroup/engine'
-import { renderWgProtocolBlock } from '../src/services/workgroup/context'
+import { renderWgProtocolBlock } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
 // Every narrow envelope failure in the shared policy table is retryable in the
@@ -106,7 +106,20 @@ describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)',
   // RFC-217 T3 dissolved workgroupRunner.ts into engine + strategies +
   // memberTurns; the banned branches must stay out of ALL of them.
   const wg = (...seg: string[]): string =>
-    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...seg), 'utf8')
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        ...seg,
+      ),
+      'utf8',
+    )
   const src = wg('engine.ts').concat(
     wg('memberTurns.ts'),
     wg('strategies', 'leaderWorker.ts'),
@@ -127,7 +140,17 @@ describe('RFC-186 — source locks (workgroup engine, RFC-217 T3 split layout)',
     // 收编后所有 driver 经 executeTurn 走同一次 FOLLOWUP_POLICY consult —— runner
     // 里不允许再长出第二个消费点（那意味着有人绕开骨架手写失败路由）。
     const skeleton = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'turnExecution.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'turnExecution.ts',
+      ),
       'utf8',
     )
     expect((skeleton.match(/followupForFailure\(result\.failureCode\)/g) ?? []).length).toBe(1)

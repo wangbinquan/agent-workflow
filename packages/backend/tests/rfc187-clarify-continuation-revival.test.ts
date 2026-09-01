@@ -23,6 +23,7 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { isKilledClarifyContinuation } from '../src/services/workgroup/engine'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
 // recovery counters. bun shares the module registry across test files under CI's
@@ -108,7 +109,7 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
   const sweep = async (db: DbClient) => {
     const resumed: string[] = []
     const res = await autoResumeInterruptedTasks({
-      db,
+      operations: taskRecoveryOperations(db),
       breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
       resume: (id) => {
         resumed.push(id)
@@ -158,7 +159,17 @@ describe('RFC-187 T13 — auto-resume sweeps the answer-handoff wedge', () => {
 describe('RFC-187 T13 — source locks (engine-entry revive)', () => {
   // RFC-217 T3: the engine entry lives in engine.ts (runner.ts dissolved).
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'workgroup',
+      'engine.ts',
+    ),
     'utf8',
   )
 

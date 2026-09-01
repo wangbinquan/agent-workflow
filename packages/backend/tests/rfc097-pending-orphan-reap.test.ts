@@ -29,6 +29,7 @@ import { reapOrphanRuns } from '../src/services/orphans'
 import { resumeTask, startTaskWithLocalRepo } from '../src/services/task'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -185,7 +186,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
       updatedAt: Date.now() - 30_000,
     })
 
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(r.tasks).toBe(1)
     // 节点行是历史 failed（不在 running/pending 收割集）→ 行侧零收割。
     expect(r.runs).toBe(0)
@@ -213,6 +214,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     // Resume 即可把崩溃残留任务跑到终态。
     const resumed = await resumeTask(h.db, taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,
@@ -229,7 +231,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     // boot 时库里没有任何任务 → 收割零命中（design §3：boot 在 HTTP listen 之前，
     // 彼刻不可能存在合法 pending 任务；startTask 的 pending 窗口只出现在 boot 之后
     // 且 insert 后同进程立即 kick，收割永远摸不到它）。
-    const boot = await reapOrphanRuns(h.db)
+    const boot = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(boot).toEqual({ tasks: 0, runs: 0 })
 
     const task = await startTaskWithLocalRepo(

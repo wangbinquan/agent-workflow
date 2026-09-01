@@ -36,7 +36,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { resolveEffectiveClarifyChannel } from '../src/services/clarifyRounds'
 import { continuesClarifyLineage } from '../src/services/nodeRunMint'
-import { runNode } from '../src/services/runner'
+import { runNode } from './helpers/runner'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

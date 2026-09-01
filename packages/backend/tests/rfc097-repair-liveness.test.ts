@@ -37,6 +37,7 @@ import {
   type RepairHarness,
 } from './lifecycle-repair-harness'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const ulid = monotonicFactory()
@@ -243,6 +244,7 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
       try {
         await applyRepairOption({
           db: h.db,
+          operations: taskRecoveryOperations(h.db),
           taskId,
           alertId,
           optionId: 'S3.demote-task',

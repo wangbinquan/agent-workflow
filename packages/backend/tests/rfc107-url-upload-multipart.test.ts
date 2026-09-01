@@ -53,6 +53,7 @@ import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
 import { createApp } from '../src/server'
 import { createAgent } from '../src/services/agent'
 import { createRuntime } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {
   createWorkflow,
   getWorkflow,
@@ -210,7 +211,7 @@ async function buildHarness(): Promise<Harness> {
 
   const stubOpencode = makeStubOpencode(tmp)
   const db = createInMemoryDb(MIGRATIONS)
-  await createRuntime(db, {
+  await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',
@@ -632,7 +633,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
   async function buildUploadApp(tmp: string): Promise<{ db: DbClient; app: Hono; wfId: string }> {
     const stubOpencode = makeStubOpencode(tmp)
     const db = createInMemoryDb(MIGRATIONS)
-    await createRuntime(db, {
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: VALID_OPENCODE_RUNTIME,
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -800,7 +801,7 @@ describe('RFC-107 — startTask preResolvedSource (resolve-once + redaction)', (
     git('-C', realRepo, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
 
     const stubOpencode = makeStubOpencode(tmp)
-    await createRuntime(db, {
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: VALID_OPENCODE_RUNTIME,
       protocol: 'opencode',
       model: 'openai/gpt-5.6',

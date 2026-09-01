@@ -2,7 +2,7 @@
 //
 // 锁定：元数据/内容双形态、MIME 按源扩展名、portName percent-encode 往返、
 // 跨任务 nodeRunId 404 同形、无归档时 worktree 回退、回退也 miss → 404、
-// 截断响应头。ACL 面与 worktree-files 同一 canViewTask 门（源码断言锁定，
+// 截断响应头。ACL 面由 provider-neutral TaskExecution read model 闭合，
 // 多用户不可见→404 同形行为（RFC-285 B1，旧 403）由 worktree-files-acl.test.ts
 // 对同一原语覆盖，含 byte-oracle）。
 
@@ -257,12 +257,13 @@ describe('RFC-193 GET /api/tasks/:taskId/port-artifacts (case 7)', () => {
     expect(res.headers.get('x-aw-artifact-truncated')).toBe('1')
   })
 
-  test('route enforces canViewTask (same member gate as worktree-files)', () => {
+  test('route delegates visibility and artifact rows to the provider read model', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'routes', 'port-artifacts.ts'),
       'utf8',
     )
-    expect(src).toContain('canViewTask')
+    expect(src).toContain('taskExecutionReadModels.portArtifacts.find')
+    expect(src).not.toMatch(/@\/db|drizzle-orm/)
     // RFC-285 B1：不可见分支必须与 missing 分支同形 404（旧 403 task-not-visible
     // 已退役且不得回潮）。
     expect(src).toContain("throw new NotFoundError('task-not-found'")

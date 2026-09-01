@@ -34,6 +34,7 @@ import {
 } from '../src/ws/broadcaster'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 type AnyServer = Server<unknown>
 
@@ -81,10 +82,11 @@ async function buildHarness(): Promise<Harness> {
   const adminToken = (await createSession({ db, userId: admin.id })).token
   const aliceToken = (await createSession({ db, userId: alice.id })).token
   const carolToken = (await createSession({ db, userId: carol.id })).token
+  const identityAccess = createIdentityAccessRuntime({ db })
   const ws = buildWebSocketAdapter({
     daemonToken: DAEMON_TOKEN,
-    db,
-    identityAccess: createIdentityAccessRuntime({ db }),
+    realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+    identityAccess,
   })
   const server = Bun.serve({
     port: 0,

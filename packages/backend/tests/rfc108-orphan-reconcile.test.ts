@@ -23,6 +23,8 @@ import {
   claimNewRuntimeSession,
   markRuntimeSessionResetPending,
 } from '../src/services/runtimeSessionLease'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createSqliteRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_000_000
@@ -74,17 +76,20 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000) // older than grace
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
+      taskHasDriver: () => false,
     })
     expect(res.reapedRuns).toEqual([runId])
     expect(res.reapedTasks).toEqual([taskId])
     const t = await db.select().from(tasks).where(eq(tasks.id, taskId))
     expect(t[0]!.status).toBe('interrupted')
     expect(
-      (await listRecoveryEventsForTask(db, taskId)).some((e) => e.kind === 'periodic-reap'),
+      (await listRecoveryEventsForTask(taskRecoveryOperations(db), taskId)).some(
+        (e) => e.kind === 'periodic-reap',
+      ),
     ).toBe(true)
   })
 
@@ -92,7 +97,8 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
-    const lease = claimNewRuntimeSession(db, {
+    const leaseOperations = createSqliteRuntimeSessionLeaseOperations(db)
+    const lease = await claimNewRuntimeSession(leaseOperations, {
       protocol: 'claude-code',
       sessionId: 'periodic-reset-old',
       taskId,
@@ -101,13 +107,14 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
       leaseNonceDigest: 'periodic-reset-nonce',
       leasedAt: NOW - 40_000,
     })
-    expect(markRuntimeSessionResetPending(db, lease)).toBe(true)
+    expect(await markRuntimeSessionResetPending(leaseOperations, lease)).toBe(true)
 
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
+      taskHasDriver: () => false,
       reapHeldNativeSessionProcess: async () => 'not-alive',
     })
 
@@ -126,7 +133,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
     db.update(nodeRuns).set({ pid: null }).where(eq(nodeRuns.id, runId)).run()
-    claimNewRuntimeSession(db, {
+    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(db), {
       protocol: 'claude-code',
       sessionId: 'periodic-unproven-native',
       taskId,
@@ -136,10 +143,11 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     })
 
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
+      taskHasDriver: () => false,
       reapHeldNativeSessionProcess: async () => 'no-pid',
     })
 
@@ -164,7 +172,7 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000)
-    claimNewRuntimeSession(db, {
+    await claimNewRuntimeSession(createSqliteRuntimeSessionLeaseOperations(db), {
       protocol: 'claude-code',
       sessionId: 'periodic-command-mismatch-native',
       taskId,
@@ -174,12 +182,13 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     })
 
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       // The coarse probe cannot tell a dead process from a recycled/live PID
       // whose command no longer matches the recorded binary.
       probeProcessAlive: () => false,
+      taskHasDriver: () => false,
       reapHeldNativeSessionProcess: async () => 'command-mismatch',
     })
 
@@ -205,10 +214,11 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 100) // newer than grace 1000
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
+      taskHasDriver: () => false,
     })
     expect(res.reapedRuns).toHaveLength(0)
   })
@@ -218,10 +228,11 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 50_000)
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => true,
+      taskHasDriver: () => false,
     })
     expect(res.reapedRuns).toHaveLength(0)
     expect(res.reapedTasks).toHaveLength(0)
@@ -233,10 +244,11 @@ describe('RFC-108 T17 — reconcileDeadRunningRuns', () => {
     const goneId = await seedRun(db, taskId, 'running', NOW - 50_000)
     await seedRun(db, taskId, 'pending', NOW - 50_000) // still active
     const res = await reconcileDeadRunningRuns({
-      db,
+      operations: taskRecoveryOperations(db),
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
+      taskHasDriver: () => false,
     })
     expect(res.reapedRuns).toEqual([goneId])
     expect(res.reapedTasks).toHaveLength(0) // task kept running (pending run remains)

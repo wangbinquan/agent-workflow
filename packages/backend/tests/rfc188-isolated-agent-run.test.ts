@@ -32,6 +32,8 @@ import {
 } from '../src/services/isolatedAgentRun'
 import { discardNodeIso, type CanonRepo, type IsoHandle } from '../src/services/nodeIsolation'
 import { runGit, snapshotFullState } from '../src/util/git'
+import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
+import type { IsolatedAgentRunBinding } from '../src/services/isolatedAgentRun'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -100,6 +102,10 @@ function canonRepos(worktreePath: string): CanonRepo[] {
   return [{ repoPath: worktreePath, worktreePath, worktreeDirName: '', baseBranch: 'main' }]
 }
 
+function isolatedRunBinding(db: DbClient): IsolatedAgentRunBinding {
+  return Object.freeze({ persistence: createSqliteTaskExecutionPersistence(db) })
+}
+
 async function mintedRow(db: DbClient, taskId: string): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
@@ -120,21 +126,22 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
     const runId = await mintedRow(db, taskId)
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home-'))
     const writeSem = stubWriteSem()
+    const binding = isolatedRunBinding(db)
 
     const iso: IsoHandle = await createIsoUnderLock({
       writeSem,
       appHome,
       taskId,
-      db,
+      binding,
       isoKeyRunId: runId,
       canonRepos: canonRepos(repo),
     })
     expect(writeSem.maxDepth()).toBeGreaterThanOrEqual(1)
-    await persistIsoBase(db, runId, 1, iso)
+    await persistIsoBase(binding, runId, 1, iso)
     writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'out.txt'), 'from-agent\n')
 
     const settle = await mergeBackAndSettle({
-      db,
+      binding,
       writeSem,
       handle: iso,
       nodeRunId: runId,
@@ -161,6 +168,7 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
     const taskId = await seedTaskRow(db, repo)
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home2-'))
     const writeSem = stubWriteSem()
+    const binding = isolatedRunBinding(db)
 
     for (const resolved of [false, true]) {
       const runId = await mintedRow(db, taskId)
@@ -168,18 +176,18 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
         writeSem,
         appHome,
         taskId,
-        db,
+        binding,
         isoKeyRunId: runId,
         canonRepos: canonRepos(repo),
       })
-      await persistIsoBase(db, runId, 1, iso)
+      await persistIsoBase(binding, runId, 1, iso)
       // iso 与 canonical 同文件分叉 → 真冲突。
       writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'f.txt'), `iso-${resolved}\n`)
       writeFileSync(join(repo, 'f.txt'), `canon-${resolved}\n`)
 
       let sawConflicts = 0
       const settle = await mergeBackAndSettle({
-        db,
+        binding,
         writeSem,
         handle: iso,
         nodeRunId: runId,
@@ -215,16 +223,17 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
     const runId = await mintedRow(db, taskId)
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc188-home3-'))
     const writeSem = stubWriteSem()
+    const binding = isolatedRunBinding(db)
 
     const iso = await createIsoUnderLock({
       writeSem,
       appHome,
       taskId,
-      db,
+      binding,
       isoKeyRunId: runId,
       canonRepos: canonRepos(repo),
     })
-    await persistIsoBase(db, runId, 1, iso)
+    await persistIsoBase(binding, runId, 1, iso)
     writeFileSync(join(iso.repos[0]!.isoWorktreePath, 'crash.txt'), 'survived\n')
     // 模拟 runner 成功后崩溃：pin 树、置 pending-merge、丢 iso 工作树。
     const nodeTree = await snapshotFullState(iso.repos[0]!.isoWorktreePath)
@@ -235,7 +244,7 @@ describe('RFC-188 A/B — createIsoUnderLock + mergeBackAndSettle（live 干净�
     await discardNodeIso(iso)
 
     const settle = await mergeBackAndSettle({
-      db,
+      binding,
       writeSem,
       handle: iso, // rebuildIsoHandle 等价物：repos 元数据仍在
       nodeRunId: runId,
@@ -259,12 +268,13 @@ describe('RFC-188 C — markMergeFailed try-variant', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTaskRow(db, repo)
     const runId = await mintedRow(db, taskId)
+    const binding = isolatedRunBinding(db)
     await db.update(nodeRuns).set({ mergeState: 'pending-merge' }).where(eq(nodeRuns.id, runId))
-    await markMergeFailed(db, runId, 'boom')
+    await markMergeFailed(binding, runId, 'boom')
     const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
     expect(row?.mergeState).toBe('merge-failed')
     // 二次调用（已 merge-failed，非法转移）不得抛——RFC-144 §5。
-    await markMergeFailed(db, runId, 'boom-again')
+    await markMergeFailed(binding, runId, 'boom-again')
     rmSync(repo, { recursive: true, force: true })
   })
 })

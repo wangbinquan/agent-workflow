@@ -26,7 +26,10 @@ import { StartTaskSchema } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { scheduledTasks, users, workflows } from '../src/db/schema'
-import { getScheduledTask, healScheduledLaunchPayloads } from '../src/services/scheduledTasks'
+import {
+  getScheduledTask,
+  healScheduledLaunchPayloads,
+} from './helpers/integrationTriggerResourceBinding'
 import { updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask } from './helpers/integrationTriggerResourceBinding'
 import { runGit } from '../src/util/git'
 import { pathToFileURL } from 'node:url'

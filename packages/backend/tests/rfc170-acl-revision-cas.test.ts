@@ -15,7 +15,11 @@ import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users } from '../src/db/schema'
-import { getResourceAcl, updateResourceAcl, type AclRow } from '../src/services/resourceAcl'
+import {
+  getResourceAcl,
+  updateResourceAcl,
+} from '../src/modules/resource-catalog/composition/resourceAcl'
+import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
 import { ConflictError, ValidationError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -37,9 +37,11 @@ describe('RFC-182 — pending 帧源级锁', () => {
     // RFC-217 T3：四个 driver 的真 mint 收编进 executeTurn——广播点随之唯一
     //（args.broadcastPendingMint 注入）。runner 里再出现调用点=有人绕开骨架。
     // RFC-217 T3b：定义迁 messages.ts；骨架直连调用（唯一真 mint 广播点）。
-    const messages = SRC('services/workgroup/messages.ts')
+    const messages = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/messages.ts')
     expect(messages).toContain('export function broadcastPendingMint(')
-    const skeleton = SRC('services/workgroup/turnExecution.ts')
+    const skeleton = SRC(
+      'modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+    )
     expect(skeleton.split('broadcastPendingMint(taskId, runId, spec.nodeId)').length - 1).toBe(1)
   })
 })

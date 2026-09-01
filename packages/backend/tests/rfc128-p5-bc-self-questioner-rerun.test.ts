@@ -13,6 +13,7 @@
 // dispatched entry) survive below as HAND-SEEDED pre-upgrade leftovers — the dispatch gate must
 // keep protecting them through the migration window.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -850,6 +851,7 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     // Virgin: no listTaskQuestions / no seal before the quick finalize.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1'), ans('q2')],
       actor,
@@ -909,6 +911,7 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     })
     const res = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [ans('q1')],
       actor,
@@ -957,12 +960,14 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
     const results = await Promise.allSettled([
       autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,
       }),
       autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
         actor,
@@ -1031,6 +1036,7 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
       dispatchTaskQuestions(db, taskId, [q1!.id], actor),
       autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1'), ans('q2')],
         actor,
@@ -1098,6 +1104,7 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
     // quick-finalize (unified autodispatch), posting a DIFFERENT q1 (option B) + q2 (option A).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,
       answers: [
         {

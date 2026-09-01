@@ -42,6 +42,7 @@ import {
   validateConfigDirEnv,
   validateConfigDirName,
 } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import type { BusinessNodeSpawnContext } from '../src/services/runtime/types'
 import { stageSkills } from '../src/services/runtime/stageSkills'
 import { createLogger } from '../src/util/log'
@@ -113,53 +114,71 @@ describe('RFC-154 resolve — NULL → protocol default, overrides win', () => {
 
   test('seeded built-ins resolve to the protocol default', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    const oc = await resolveRuntimeByName(db, 'opencode')
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    const oc = await resolveRuntimeByName(runtimeRegistryPersistence(db), 'opencode')
     expect(oc.configDir).toEqual({ env: 'OPENCODE_CONFIG_DIR', name: '.opencode' })
-    const cc = await resolveRuntimeByName(db, 'claude-code')
+    const cc = await resolveRuntimeByName(runtimeRegistryPersistence(db), 'claude-code')
     expect(cc.configDir).toEqual({ env: 'CLAUDE_CONFIG_DIR', name: '.claude' })
     // Unseeded-name + unknown-name fallbacks carry the default too.
     const db2 = createInMemoryDb(MIGRATIONS)
-    expect((await resolveRuntimeByName(db2, 'claude-code')).configDir.env).toBe('CLAUDE_CONFIG_DIR')
-    expect((await resolveRuntimeByName(db2, 'no-such')).configDir.env).toBe('OPENCODE_CONFIG_DIR')
+    expect(
+      (await resolveRuntimeByName(runtimeRegistryPersistence(db2), 'claude-code')).configDir.env,
+    ).toBe('CLAUDE_CONFIG_DIR')
+    expect(
+      (await resolveRuntimeByName(runtimeRegistryPersistence(db2), 'no-such')).configDir.env,
+    ).toBe('OPENCODE_CONFIG_DIR')
   })
 
   test('custom row: create → resolve overrides; update → clears back to default', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'myfork',
       protocol: 'opencode',
       binaryPath: canonicalBinaryPath('myfork'),
       configDirEnv: 'MYFORK_CONFIG_DIR',
       configDirName: '.myfork',
     })
-    const r = await resolveRuntimeByName(db, 'myfork')
+    const r = await resolveRuntimeByName(runtimeRegistryPersistence(db), 'myfork')
     expect(r.configDir).toEqual({ env: 'MYFORK_CONFIG_DIR', name: '.myfork' })
     // Partial override: only the env customized → name stays default.
-    await updateRuntime(db, 'myfork', { configDirName: null })
-    expect((await resolveRuntimeByName(db, 'myfork')).configDir).toEqual({
+    await updateRuntime(runtimeRegistryPersistence(db), 'myfork', { configDirName: null })
+    expect(
+      (await resolveRuntimeByName(runtimeRegistryPersistence(db), 'myfork')).configDir,
+    ).toEqual({
       env: 'MYFORK_CONFIG_DIR',
       name: '.opencode',
     })
     // Empty string on update folds to NULL (unset).
-    await updateRuntime(db, 'myfork', { configDirEnv: '' })
-    expect((await resolveRuntimeByName(db, 'myfork')).configDir).toEqual(
-      DEFAULT_CONFIG_DIR_PROFILE.opencode,
-    )
+    await updateRuntime(runtimeRegistryPersistence(db), 'myfork', { configDirEnv: '' })
+    expect(
+      (await resolveRuntimeByName(runtimeRegistryPersistence(db), 'myfork')).configDir,
+    ).toEqual(DEFAULT_CONFIG_DIR_PROFILE.opencode)
   })
 
   test('create/update reject invalid values (service-level, not just the route)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     expect(
-      createRuntime(db, { name: 'bad1', protocol: 'opencode', configDirName: '../evil' }),
+      createRuntime(runtimeRegistryPersistence(db), {
+        name: 'bad1',
+        protocol: 'opencode',
+        configDirName: '../evil',
+      }),
     ).rejects.toThrow()
     expect(
-      createRuntime(db, { name: 'bad2', protocol: 'opencode', configDirEnv: 'PWD' }),
+      createRuntime(runtimeRegistryPersistence(db), {
+        name: 'bad2',
+        protocol: 'opencode',
+        configDirEnv: 'PWD',
+      }),
     ).rejects.toThrow()
-    await createRuntime(db, { name: 'ok', protocol: 'opencode' })
-    expect(updateRuntime(db, 'ok', { configDirEnv: 'OPENCODE_CONFIG_CONTENT' })).rejects.toThrow()
+    await createRuntime(runtimeRegistryPersistence(db), { name: 'ok', protocol: 'opencode' })
+    expect(
+      updateRuntime(runtimeRegistryPersistence(db), 'ok', {
+        configDirEnv: 'OPENCODE_CONFIG_CONTENT',
+      }),
+    ).rejects.toThrow()
   })
 })
 
@@ -196,8 +215,8 @@ async function seedRun(db: DbClient): Promise<string> {
 describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
   test('frozen at first dispatch; a later row edit does NOT re-route resume', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'myfork',
       protocol: 'opencode',
       configDirEnv: 'MYFORK_CONFIG_DIR',
@@ -207,15 +226,18 @@ describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
     const first = await resolveFrozenRuntime(db, id, 'myfork', null)
     expect(first.configDir).toEqual({ env: 'MYFORK_CONFIG_DIR', name: '.myfork' })
     // Mutate the registry row — the frozen snapshot must not follow.
-    await updateRuntime(db, 'myfork', { configDirEnv: 'CHANGED_DIR', configDirName: '.changed' })
+    await updateRuntime(runtimeRegistryPersistence(db), 'myfork', {
+      configDirEnv: 'CHANGED_DIR',
+      configDirName: '.changed',
+    })
     const resumed = await resolveFrozenRuntime(db, id, 'myfork', null)
     expect(resumed.configDir).toEqual({ env: 'MYFORK_CONFIG_DIR', name: '.myfork' })
   })
 
   test('frozenRuntimeOfSession returns the frozen configDir', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
-    await createRuntime(db, {
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'myfork',
       protocol: 'claude-code',
       configDirEnv: 'MYFORK_CONFIG_DIR',
@@ -246,7 +268,7 @@ describe('RFC-154 freeze — configDir rides the runtime snapshot', () => {
 
   test('params whitelist keeps __configDir out of RuntimeProfile', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db)
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
     const id = await seedRun(db)
     const frozen = await resolveFrozenRuntime(db, id, 'opencode', null)
     expect('__configDir' in frozen.params).toBe(false)

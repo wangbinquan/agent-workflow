@@ -32,6 +32,7 @@ import {
 } from '../src/services/workgroup/launch'
 import { runTestCommand, runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
 // recovery counters. bun shares the module registry across test files under CI's
@@ -344,11 +345,12 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const res = await withActiveTaskDeadline(() =>
         autoResumeInterruptedTasks({
-          db: h.db,
+          operations: taskRecoveryOperations(h.db),
           breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
           resume: (id) =>
             resumeTask(h.db, id, {
               db: h.db,
+              taskRecoveryOperations: taskRecoveryOperations(h.db),
               schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
                 .schedulerDriver,
               appHome: h.appHome,

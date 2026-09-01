@@ -31,6 +31,10 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createApp } from '../src/server'
+import {
+  composeRepositoryWorkspaceOperations,
+  composeSqliteRepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 import { buildOverview as buildOverviewWithAuthority } from '../src/services/overview'
 import { createUser } from '../src/services/users'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
@@ -39,7 +43,11 @@ const DAEMON_TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function buildOverview(db: DbClient, actor: Actor, now?: () => number) {
-  return buildOverviewWithAuthority(db, resourceScopeAuthority(db, actor), now)
+  const repositories = composeRepositoryWorkspaceOperations(
+    composeSqliteRepositoryWorkspaceStore(db),
+    undefined,
+  ).overviewQueries
+  return buildOverviewWithAuthority(db, resourceScopeAuthority(db, actor), repositories, now)
 }
 
 interface Harness {

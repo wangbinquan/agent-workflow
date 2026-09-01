@@ -12,6 +12,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -60,7 +61,10 @@ describe('RFC-108 T14 — S6 member-deadlock', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const owner = await seedUser(db, 'disabled')
     const taskId = await seedAwaitingTask(db, owner)
-    const r = await runStuckTaskDetector({ db, now: () => Date.now() })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      now: () => Date.now(),
+    })
     expect(s6(r, taskId)).toBe(true)
   })
 
@@ -68,14 +72,20 @@ describe('RFC-108 T14 — S6 member-deadlock', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const owner = await seedUser(db, 'active')
     const taskId = await seedAwaitingTask(db, owner)
-    const r = await runStuckTaskDetector({ db, now: () => Date.now() })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      now: () => Date.now(),
+    })
     expect(s6(r, taskId)).toBe(false)
   })
 
   test('system-owned / no human members → no S6 (no membership boundary)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedAwaitingTask(db, '__system__')
-    const r = await runStuckTaskDetector({ db, now: () => Date.now() })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      now: () => Date.now(),
+    })
     expect(s6(r, taskId)).toBe(false)
   })
 
@@ -91,7 +101,10 @@ describe('RFC-108 T14 — S6 member-deadlock', () => {
       addedBy: owner,
       addedAt: Date.now(),
     })
-    const r = await runStuckTaskDetector({ db, now: () => Date.now() })
+    const r = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      now: () => Date.now(),
+    })
     expect(s6(r, taskId)).toBe(false)
   })
 })

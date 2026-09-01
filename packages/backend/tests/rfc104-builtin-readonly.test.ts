@@ -38,11 +38,13 @@ import {
   isBuiltinRow,
 } from '../src/services/systemResources'
 import { WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/constants'
+import { composeSqliteFusionPersistence } from '../src/modules/memory/composition/fusion'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { listWorkflows } from '../src/services/workflow'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ForbiddenError } from '../src/util/errors'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const TOKEN = 'a'.repeat(64) // 64-char hex → the __system__ ADMIN daemon actor
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -58,6 +60,15 @@ function buildApp(): { db: DbClient; app: Hono } {
     db,
   })
   return { db, app }
+}
+
+function seedFusionResourcesForDb(db: DbClient): Promise<void> {
+  return seedFusionResources(
+    composeSqliteFusionPersistence({
+      db,
+      appHome: '/tmp',
+    }),
+  )
 }
 
 async function api(app: Hono, path: string, init?: RequestInit): Promise<Response> {
@@ -164,7 +175,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('Settings resolves the merger through its stable semantic route', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
 
     const response = await api(app, '/api/agents/builtins/skill-merger')
     expect(response.status).toBe(200)
@@ -177,7 +188,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('agent PUT / DELETE / rename on the built-in → 403 builtin-readonly', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const base = `/api/agents/${builtinAgentId(db)}`
     const revision = await agentRevision(app, builtinAgentId(db))
 
@@ -207,8 +218,12 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
   // other field, or a mixed patch, is still 403 (RFC-104).
   test('RFC-117: built-in agent accepts a runtime-ONLY patch; mixed/other fields still 403', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
-    await createRuntime(db, { name: 'oc-haiku', protocol: 'opencode', model: 'haiku' })
+    await seedFusionResourcesForDb(db)
+    await createRuntime(runtimeRegistryPersistence(db), {
+      name: 'oc-haiku',
+      protocol: 'opencode',
+      model: 'haiku',
+    })
     const base = `/api/agents/${builtinAgentId(db)}`
     const revision = await agentRevision(app, builtinAgentId(db))
 
@@ -244,7 +259,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('workflow PUT / DELETE on the built-in → 403 builtin-readonly', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const id = await builtinWorkflowId(db)
     const workflow = await workflowDetail(app, id)
 
@@ -273,7 +288,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('ACL PUT (owner/visibility/grants) on built-in agent + workflow → 403 (the footgun)', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const id = await builtinWorkflowId(db)
 
     const agentId = builtinAgentId(db)
@@ -306,7 +321,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('POST /api/tasks launching the built-in workflow → 403 builtin-readonly', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const id = await builtinWorkflowId(db)
     const res = await api(app, '/api/tasks', {
       method: 'POST',
@@ -328,8 +343,8 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('the guard does NOT over-block normal (non-built-in) resources', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
-    await createRuntime(db, {
+    await seedFusionResourcesForDb(db)
+    await createRuntime(runtimeRegistryPersistence(db), {
       name: 'opencode',
       protocol: 'opencode',
       model: 'openai/gpt-5.6',
@@ -354,7 +369,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
 
   test('POST /api/tasks (multipart) launching the built-in workflow → 403 builtin-readonly', async () => {
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const id = await builtinWorkflowId(db)
     const form = new FormData()
     form.append(
@@ -375,7 +390,7 @@ describe('RFC-104 — route guards refuse mutating a built-in (even as admin)', 
     // them via the SERVICE (clarify/review → resumeTask, daemon recovery), never
     // these user-facing routes — so blocking the routes is safe.
     const { db, app } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const taskId = seedTaskOnWorkflow(db, await builtinWorkflowId(db))
     await expect403Builtin(await api(app, `/api/tasks/${taskId}/resume`, { method: 'POST' }))
     await expect403Builtin(
@@ -421,7 +436,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
 
   test('owner/visibility drift on the built-in workflow is repaired on re-seed', async () => {
     const { db } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const id = await builtinWorkflowId(db)
     // Simulate someone having moved owner + flipped visibility (builtin kept).
     db.update(workflows)
@@ -429,7 +444,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .where(eq(workflows.id, id))
       .run()
 
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const wf = db.select().from(workflows).where(eq(workflows.id, id)).all()[0]
     expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
     expect(wf?.visibility).toBe('public')
@@ -438,18 +453,18 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
 
   test('built-in flag lost (owner still __system__) is re-adopted on re-seed', async () => {
     const { db } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const id = await builtinWorkflowId(db)
     // Migration backfill could miss a row; simulate builtin=0 with owner intact.
     db.update(workflows).set({ builtin: false }).where(eq(workflows.id, id)).run()
 
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     expect(db.select().from(workflows).where(eq(workflows.id, id)).all()[0]?.builtin).toBe(true)
   })
 
   test('agent drift with __system__ owner intact (builtin/visibility) is repaired on re-seed', async () => {
     const { db } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     // The fixed ID is the authority, so identity-field drift is repaired.
     // A random-ID same-name squatter is still never adopted (covered below).
     db.update(agents)
@@ -457,7 +472,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
       .run()
 
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const row = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()[0]
     expect(row?.builtin).toBe(true)
     expect(row?.ownerUserId).toBe(SYSTEM_USER_ID)
@@ -466,7 +481,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
 
   test('re-seed preserves merger customization and repairs only workflow agentId once', async () => {
     const { db } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const workflow = db
       .select()
       .from(workflows)
@@ -494,7 +509,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
       .run()
 
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const agent = db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).get()!
     expect(agent.runtime).toBe('custom-runtime')
     expect(agent.bodyMd).toBe('custom merger instructions')
@@ -516,7 +531,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
     )
     expect(repaired.version).toBe(workflow.version + 1)
 
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     expect(
       db
         .select({ version: workflows.version })
@@ -528,7 +543,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
 
   test('workflow repair never adopts another node by the merger display name', async () => {
     const { db } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const workflow = db
       .select()
       .from(workflows)
@@ -548,7 +563,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
       .run()
 
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     const repaired = JSON.parse(
       db
         .select({ definition: workflows.definition })
@@ -570,7 +585,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .values({ id: SKILL_MERGER_AGENT_ID, name: 'ordinary-agent', builtin: false })
       .run()
 
-    await expect(seedFusionResources(db)).rejects.toThrow(/stable built-in agent id/)
+    await expect(seedFusionResourcesForDb(db)).rejects.toThrow(/stable built-in agent id/)
     expect(
       db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).get(),
     ).toMatchObject({ name: 'ordinary-agent', builtin: false })
@@ -578,7 +593,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
 
   test('a user same-named workflow (builtin=false) coexists; exactly one built-in remains', async () => {
     const { db } = buildApp()
-    await seedFusionResources(db)
+    await seedFusionResourcesForDb(db)
     // A user creates/imports their own workflow reusing the reserved name.
     db.insert(workflows)
       .values({
@@ -635,7 +650,7 @@ describe('RFC-104 — seed self-heal & the ≤1-built-in-per-name guarantee', ()
       .values({ id: userAgentId, name: SKILL_MERGER_AGENT_NAME, ownerUserId: uid, builtin: false })
       .run()
 
-    await expect(seedFusionResources(db)).resolves.toBeUndefined()
+    await expect(seedFusionResourcesForDb(db)).resolves.toBeUndefined()
     const rows = db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)).all()
     expect(rows).toHaveLength(2)
     expect(rows.find((row) => row.id === userAgentId)).toMatchObject({
@@ -667,14 +682,23 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
       'utf-8',
     )
     expect(snapshotAdapter).toContain("dependencies.assertNotBuiltin('workflow', row)")
-    const launchGateCalls = (tasksSrc.match(/assertWorkflowSnapshotLaunchable\(/g) ?? []).length
-    expect(launchGateCalls).toBeGreaterThanOrEqual(1) // JSON launch
+    expect(tasksSrc).toContain('operations.launchWorkflow(actor, parsed.data)')
+    expect(tasksSrc).toContain('operations.launchMultipart(c.req.raw, actorOf(c))')
     const orchSrc = readFileSync(resolve(SRC, 'services', 'multipartTaskStart.ts'), 'utf-8')
     expect(
       (orchSrc.match(/assertWorkflowSnapshotLaunchable\(/g) ?? []).length,
     ).toBeGreaterThanOrEqual(1)
-    expect(tasksSrc).toContain('assertTaskWorkflowNotBuiltin') // resume + retry routes
-    const yaml = readFileSync(resolve(SRC, 'services', 'workflow.yaml.ts'), 'utf-8')
+    const taskRouteOperations = readFileSync(
+      resolve(SRC, 'modules', 'task-execution', 'infrastructure', 'sqliteTaskRouteOperations.ts'),
+      'utf-8',
+    )
+    expect(taskRouteOperations).toContain("assertNotBuiltin('workflow', workflow)")
+    expect(tasksSrc).toContain('operations.resume({ actor, taskId:')
+    expect(tasksSrc).toContain('operations.retry({')
+    const yaml = readFileSync(
+      resolve(SRC, 'modules', 'resource-catalog', 'infrastructure', 'legacy', 'workflow.yaml.ts'),
+      'utf-8',
+    )
     expect(yaml).toContain("assertNotBuiltin('workflow', existing)")
     const acl = readFileSync(resolve(SRC, 'routes', 'resourceAcl.ts'), 'utf-8')
     // RFC-201: the ACL mutation coordinator reloads inside its resource lock;

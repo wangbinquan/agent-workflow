@@ -31,10 +31,11 @@ import type { Agent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { reapOrphanRuns } from '../src/services/orphans'
-import { runNode } from '../src/services/runner'
+import { runNode } from './helpers/runner'
 import { resumeTask } from '../src/services/task'
-import { STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
+import { isProcessAlive, STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const STUBBORN = resolve(import.meta.dir, 'fixtures', 'stubborn-opencode.ts')
@@ -79,12 +80,7 @@ afterEach(() => {
 })
 
 function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (err) {
-    return (err as NodeJS.ErrnoException).code === 'EPERM'
-  }
+  return isProcessAlive(pid)
 }
 
 async function waitDead(pid: number, timeoutMs = 5_000): Promise<boolean> {
@@ -344,7 +340,7 @@ describe('RFC-098 WP-8 — reapOrphanRuns kills live orphans before flipping', (
       startedAt: Date.now(),
     })
 
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(r).toEqual({ tasks: 1, runs: 1 })
 
     // The stubborn child trapped SIGTERM — only the KILL escalation (and the
@@ -368,7 +364,7 @@ describe('RFC-098 WP-8 — reapOrphanRuns kills live orphans before flipping', (
       startedAt: Date.now() - STALE_RUN_PID_MAX_AGE_MS - 60_000,
     })
 
-    const r = await reapOrphanRuns(h.db)
+    const r = await reapOrphanRuns(taskRecoveryOperations(h.db))
     expect(r).toEqual({ tasks: 1, runs: 1 })
 
     // Window gate refused the kill — the process is presumed PID-reuse.
@@ -399,6 +395,7 @@ describe('RFC-098 WP-8 — resumeTask kills the target row’s live child before
 
     const after = await resumeTask(h.db, h.taskId, {
       db: h.db,
+      taskRecoveryOperations: taskRecoveryOperations(h.db),
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
       appHome: h.appHome,

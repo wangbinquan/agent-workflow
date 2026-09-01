@@ -16,8 +16,8 @@ import {
   decideWorkgroupOutcome,
   deriveWakeSet,
   type WakeInput,
-} from '../src/services/workgroup/wake'
-import { deriveLeaderClarifyPark } from '../src/services/workgroup/strategies/leaderWorker'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+import { deriveLeaderClarifyPark } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -172,12 +172,32 @@ describe('RFC-187 F3 — deriveWakeSet does not re-drive a clarify-parked leader
 
 describe('RFC-187 F3 — source locks (engine wiring)', () => {
   const RUNNER = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'engine.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'workgroup',
+      'engine.ts',
+    ),
     'utf8',
   )
   // RFC-217 T3 — loadDbState 迁入 state.ts（EngineDbState 的家）；锁随迁。
   const STATE = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'state.ts'),
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'legacy',
+      'workgroup',
+      'state.ts',
+    ),
     'utf8',
   )
 

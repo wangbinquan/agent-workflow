@@ -20,6 +20,7 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runtimes } from '../src/db/schema'
 import { assertConfigDefaultsMigrated, seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -29,7 +30,7 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
   let cfg: string
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    await seedBuiltinRuntimes(db) // built-in opencode / claude-code rows, profile NULL
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db)) // built-in opencode / claude-code rows, profile NULL
     tmp = mkdtempSync(join(tmpdir(), 'aw-cfg-guard-'))
     cfg = join(tmp, 'config.json')
   })
@@ -37,7 +38,7 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
 
   test('legacy defaults on disk + ALL built-in profiles NULL → ABORT (fail-loud)', async () => {
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-    await expect(assertConfigDefaultsMigrated(db, cfg)).rejects.toThrow(
+    await expect(assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg)).rejects.toThrow(
       /un-migrated generation defaults/,
     )
   })
@@ -46,23 +47,29 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
     // Simulate RFC-113's config→runtime backfill having migrated the default.
     await db.update(runtimes).set({ model: 'anthropic/opus' }).where(eq(runtimes.name, 'opencode'))
-    await expect(assertConfigDefaultsMigrated(db, cfg)).resolves.toBeUndefined()
+    await expect(
+      assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+    ).resolves.toBeUndefined()
   })
 
   test('no legacy defaults in config → passes (normal upgraded / fresh config)', async () => {
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, opencodePath: '/x' }))
-    await expect(assertConfigDefaultsMigrated(db, cfg)).resolves.toBeUndefined()
+    await expect(
+      assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+    ).resolves.toBeUndefined()
   })
 
   test('no config file (fresh install) → passes', async () => {
     await expect(
-      assertConfigDefaultsMigrated(db, join(tmp, 'nonexistent.json')),
+      assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), join(tmp, 'nonexistent.json')),
     ).resolves.toBeUndefined()
   })
 
   test('defaultClaudeModel alone also triggers the guard (names the offending key)', async () => {
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultClaudeModel: 'claude-opus' }))
-    await expect(assertConfigDefaultsMigrated(db, cfg)).rejects.toThrow(/defaultClaudeModel/)
+    await expect(assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg)).rejects.toThrow(
+      /defaultClaudeModel/,
+    )
   })
 
   // F4 (Codex gate followup): built-ins absent + legacy config must STILL abort —
@@ -73,7 +80,7 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
   test('built-ins absent (seed failed) + legacy config → ABORTs with seed-aware message', async () => {
     await db.delete(runtimes) // simulate seedBuiltinRuntimes never having run
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-    await expect(assertConfigDefaultsMigrated(db, cfg)).rejects.toThrow(
+    await expect(assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg)).rejects.toThrow(
       /seed failed|rows are missing or all-NULL/,
     )
   })
@@ -91,7 +98,7 @@ describe('RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard', (
       model: 'anthropic/opus',
     })
     writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-    await expect(assertConfigDefaultsMigrated(db, cfg)).rejects.toThrow(
+    await expect(assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg)).rejects.toThrow(
       /un-migrated generation defaults/,
     )
   })

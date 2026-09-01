@@ -35,6 +35,7 @@ import { addReviewComment, submitReviewDecision } from '../src/services/review'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import { submitTaskContinuation } from '../src/modules/task-execution/application/submitTaskContinuation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runGit } from '../src/util/git'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -298,7 +299,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     })
 
     const launchIntentId = ulid()
-    submitTaskContinuation(h.db, {
+    await submitTaskContinuation(createSqliteTaskExecutionPersistence(h.db).intents, {
       taskId,
       intentId: launchIntentId,
       kind: 'launch',

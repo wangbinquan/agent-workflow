@@ -55,7 +55,7 @@ import {
   canTransitionAssignment,
   dismissOpenClarifyParksForAutonomous,
   isTaskClarifySuppressed,
-} from '../src/services/workgroup/lifecycle'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -507,20 +507,26 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('workgroupRunner：leader/worker 均有 clarify-forbidden 重试分支（结构化路由）+ 三调用点传 clarifyEnabled', () => {
-    const runner = SRC('services/workgroup/engine.ts')
+    const runner = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts')
     // 调度架构审视 2026-07-14：软拒分支改按结构化 failureCode 路由（leader +
     // worker 各一处）。RFC-145 棘轮：errorMessage 是人读面包屑，绝不再当机器键
     // —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
     // RFC-217 T3 —— 软拒分支收编进 executeTurn（唯一一处结构化路由）；各 driver
     // 只提供角色化 notice。runner 里回潮出第二个分支/直连 runHostNode 即红。
-    const skeleton = SRC('services/workgroup/turnExecution.ts')
+    const skeleton = SRC(
+      'modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution.ts',
+    )
     expect(skeleton.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(1)
     expect(runner.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(0)
     expect(runner).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
     // RFC-217 T3b：角色化 notice 随 driver 迁至策略/成员模块。
-    const lw = SRC('services/workgroup/strategies/leaderWorker.ts')
-    const member = SRC('services/workgroup/memberTurns.ts')
-    const fc = SRC('services/workgroup/strategies/freeCollab.ts')
+    const lw = SRC(
+      'modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker.ts',
+    )
+    const member = SRC('modules/resource-catalog/infrastructure/legacy/workgroup/memberTurns.ts')
+    const fc = SRC(
+      'modules/resource-catalog/infrastructure/legacy/workgroup/strategies/freeCollab.ts',
+    )
     expect(lw).toContain('Ask-back is OFF')
     expect(member).toContain('Ask-back is OFF')
     expect(fc).toContain('Ask-back is OFF')
@@ -534,7 +540,8 @@ describe('RFC-181 C — 源级契约锁', () => {
   test('route：A2 对 dynamic_workflow 免疫 + 遣散后新鲜状态复读 kick（实现门 P2）', () => {
     // RFC-217 T4：业务体在 taskActions/configActions（routes 纯 transport）。
     const route =
-      SRC('services/workgroup/taskActions.ts') + SRC('services/workgroup/configActions.ts')
+      SRC('modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts') +
+      SRC('modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts')
     expect(route).toContain("config.mode !== 'dynamic_workflow'")
     expect(route).toContain('const kickIfParked')
     expect(route).toContain('lateKick.unref?.()')

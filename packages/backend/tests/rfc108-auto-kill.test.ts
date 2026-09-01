@@ -20,6 +20,7 @@ import {
 import { __clearDriverLeasesForTest } from '../src/services/driverLease'
 import { listRecoveryEventsForTask, __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { recordAutoRecoveryAttempt } from '../src/services/recoveryBreaker'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
@@ -59,8 +60,9 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
     const run = stalled(taskId)
+    const operations = taskRecoveryOperations(db)
     const res = await runHeartbeatKillOnce({
-      db,
+      operations,
       enabled: true,
       breaker: BREAKER,
       findStalledRuns: async () => [run],
@@ -68,15 +70,18 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
     })
     expect(res.killed).toEqual([{ taskId, nodeRunId: run.id }])
     expect(
-      (await listRecoveryEventsForTask(db, taskId)).some((e) => e.kind === 'heartbeat-kill'),
+      (await listRecoveryEventsForTask(operations, taskId)).some(
+        (e) => e.kind === 'heartbeat-kill',
+      ),
     ).toBe(true)
   })
 
   test('disabled → no-op (never queries or kills)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const operations = taskRecoveryOperations(db)
     let queried = false
     const res = await runHeartbeatKillOnce({
-      db,
+      operations,
       enabled: false,
       breaker: BREAKER,
       findStalledRuns: async () => {
@@ -92,9 +97,12 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
   test('quarantined task → skipped', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
-    for (let i = 0; i < 4; i++) await recordAutoRecoveryAttempt(db, taskId, BREAKER, 1000)
+    const operations = taskRecoveryOperations(db)
+    for (let i = 0; i < 4; i++) {
+      await recordAutoRecoveryAttempt(operations, taskId, BREAKER, 1000)
+    }
     const res = await runHeartbeatKillOnce({
-      db,
+      operations,
       enabled: true,
       breaker: BREAKER,
       findStalledRuns: async () => [stalled(taskId)],
@@ -107,8 +115,9 @@ describe('RFC-108 T20 — heartbeat-kill loop', () => {
   test('kill outcome other than killed → skipped (window-expired / command-mismatch)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
+    const operations = taskRecoveryOperations(db)
     const res = await runHeartbeatKillOnce({
-      db,
+      operations,
       enabled: true,
       breaker: BREAKER,
       findStalledRuns: async () => [stalled(taskId)],
@@ -147,7 +156,7 @@ describe('RFC-108 T20 — findStalledRunningChildren query', () => {
     await seedRun(db, taskId, { status: 'done', pid: 333, startedAt: now - 5000 }) // not running → excluded
     await seedRun(db, taskId, { status: 'running', pid: null, startedAt: now - 5000 }) // no pid → excluded
 
-    const found = await findStalledRunningChildren(db, stallMs, now)
+    const found = await findStalledRunningChildren(taskRecoveryOperations(db), stallMs, now)
     expect(found.map((r) => r.id)).toEqual([silent])
   })
 })

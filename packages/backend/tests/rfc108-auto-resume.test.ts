@@ -19,6 +19,7 @@ import {
   clearAutoRecoverySuspension,
   recordAutoRecoveryAttempt,
 } from '../src/services/recoveryBreaker'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BREAKER = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
@@ -68,9 +69,10 @@ describe('RFC-108 T18 — boot auto-resume', () => {
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
     await seedTask(db, 'interrupted', 'node-timeout') // other errorSummary → skipped
     await seedTask(db, 'failed', 'daemon-restart') // other status → skipped
+    const operations = taskRecoveryOperations(db)
     const resumedCalls: string[] = []
     const res = await autoResumeInterruptedTasks({
-      db,
+      operations,
       breaker: BREAKER,
       resume: async (id) => {
         resumedCalls.push(id)
@@ -78,9 +80,9 @@ describe('RFC-108 T18 — boot auto-resume', () => {
     })
     expect(res.resumed.sort()).toEqual([a, b].sort())
     expect(resumedCalls.sort()).toEqual([a, b].sort())
-    expect((await listRecoveryEventsForTask(db, a)).some((e) => e.kind === 'auto-resume')).toBe(
-      true,
-    )
+    expect(
+      (await listRecoveryEventsForTask(operations, a)).some((e) => e.kind === 'auto-resume'),
+    ).toBe(true)
   })
 
   test('RFC-186 PR-2: turn-engine workgroup tasks ALSO auto-resume (were previously excluded)', async () => {
@@ -97,8 +99,9 @@ describe('RFC-108 T18 — boot auto-resume', () => {
       workgroupId: 'wg-dyn',
       mode: 'dynamic_workflow',
     })
+    const operations = taskRecoveryOperations(db)
     const res = await autoResumeInterruptedTasks({
-      db,
+      operations,
       breaker: BREAKER,
       resume: async () => {},
     })
@@ -112,14 +115,25 @@ describe('RFC-108 T18 — boot auto-resume', () => {
   test('skips a quarantined task', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
+    const operations = taskRecoveryOperations(db)
     // Trip the breaker for `a` (4 attempts > maxPerWindow 3 → suspended).
-    for (let i = 0; i < 4; i++) await recordAutoRecoveryAttempt(db, a, BREAKER, 1000)
-    const res = await autoResumeInterruptedTasks({ db, breaker: BREAKER, resume: async () => {} })
+    for (let i = 0; i < 4; i++) {
+      await recordAutoRecoveryAttempt(operations, a, BREAKER, 1000)
+    }
+    const res = await autoResumeInterruptedTasks({
+      operations,
+      breaker: BREAKER,
+      resume: async () => {},
+    })
     expect(res.resumed).not.toContain(a)
     expect(res.skipped).toContain(a)
     // clearing the quarantine makes it eligible again
-    await clearAutoRecoverySuspension(db, a)
-    const res2 = await autoResumeInterruptedTasks({ db, breaker: BREAKER, resume: async () => {} })
+    await clearAutoRecoverySuspension(operations, a)
+    const res2 = await autoResumeInterruptedTasks({
+      operations,
+      breaker: BREAKER,
+      resume: async () => {},
+    })
     expect(res2.resumed).toContain(a)
   })
 
@@ -127,8 +141,9 @@ describe('RFC-108 T18 — boot auto-resume', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
+    const operations = taskRecoveryOperations(db)
     const res = await autoResumeInterruptedTasks({
-      db,
+      operations,
       breaker: BREAKER,
       resume: async (id) => {
         if (id === a) throw new Error('snapshot-lost')

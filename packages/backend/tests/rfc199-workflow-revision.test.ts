@@ -19,7 +19,8 @@ import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, tasks, users, workflows } from '../src/db/schema'
-import { AGENT_HOST_WORKFLOW_ID, ensureAgentHostWorkflow } from '../src/services/agentLaunch'
+import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
+import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -131,7 +132,7 @@ describe('RFC-199 workflow revision fencing', () => {
 
   test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await ensureAgentHostWorkflow(db)
+    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
     await ensureWorkgroupHostWorkflow(db)
 
     const rows = await db

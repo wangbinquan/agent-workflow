@@ -17,7 +17,20 @@ const SRC = [
   ['messages.ts'],
 ]
   .map((parts) =>
-    readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...parts), 'utf8'),
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        ...parts,
+      ),
+      'utf8',
+    ),
   )
   .join('\n')
 
@@ -69,7 +82,17 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
   // WgMemberRefSchema). Reconcile the copy so a weak model isn't confused.
   test('TRAP-2: protocol no longer contradicts the roster on the @ prefix', () => {
     const ctx = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', 'context.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'workgroup',
+        'context.ts',
+      ),
       'utf8',
     )
     expect(ctx).toContain('the leading @ shown in the')

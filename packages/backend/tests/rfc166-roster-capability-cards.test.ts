@@ -20,7 +20,7 @@ import {
   type CreateAgent,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { renderRosterBlock } from '../src/services/workgroup/context'
+import { renderRosterBlock } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
 import { buildRosterAgentCards } from '../src/services/workgroup/state'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'

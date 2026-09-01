@@ -18,6 +18,7 @@ import {
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
 } from '../src/services/recoveryBreaker'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -46,36 +47,40 @@ describe('RFC-108 T11 — circuit-breaker / quarantine', () => {
   test('quarantines after maxPerWindow attempts + records event; clear resets', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
+    const operations = taskRecoveryOperations(db)
     const cfg = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
     let r = { suspended: false, attempts: 0 }
-    for (let i = 1; i <= 3; i++) r = await recordAutoRecoveryAttempt(db, taskId, cfg, 1000)
+    for (let i = 1; i <= 3; i++) {
+      r = await recordAutoRecoveryAttempt(operations, taskId, cfg, 1000)
+    }
     expect(r.attempts).toBe(3)
     expect(r.suspended).toBe(false) // 3 ≤ 3, not over yet
 
-    r = await recordAutoRecoveryAttempt(db, taskId, cfg, 1000)
+    r = await recordAutoRecoveryAttempt(operations, taskId, cfg, 1000)
     expect(r.suspended).toBe(true) // 4 > 3 → quarantine
-    expect(await isAutoRecoverySuspended(db, taskId)).toBe(true)
-    expect((await listRecoveryEventsForTask(db, taskId)).some((e) => e.kind === 'quarantine')).toBe(
-      true,
-    )
+    expect(await isAutoRecoverySuspended(operations, taskId)).toBe(true)
+    expect(
+      (await listRecoveryEventsForTask(operations, taskId)).some((e) => e.kind === 'quarantine'),
+    ).toBe(true)
 
     // Already suspended → returns suspended without re-incrementing.
-    const again = await recordAutoRecoveryAttempt(db, taskId, cfg, 1000)
+    const again = await recordAutoRecoveryAttempt(operations, taskId, cfg, 1000)
     expect(again.suspended).toBe(true)
     expect(again.attempts).toBe(4)
 
-    await clearAutoRecoverySuspension(db, taskId)
-    expect(await isAutoRecoverySuspended(db, taskId)).toBe(false)
+    await clearAutoRecoverySuspension(operations, taskId)
+    expect(await isAutoRecoverySuspended(operations, taskId)).toBe(false)
   })
 
   test('window rolls over: an attempt outside the window resets the count to 1', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db)
+    const operations = taskRecoveryOperations(db)
     const cfg = { maxPerWindow: 3, windowMs: 1000 }
-    await recordAutoRecoveryAttempt(db, taskId, cfg, 0)
-    await recordAutoRecoveryAttempt(db, taskId, cfg, 500)
-    const r = await recordAutoRecoveryAttempt(db, taskId, cfg, 5000) // 5000-0 ≥ 1000 → reset
+    await recordAutoRecoveryAttempt(operations, taskId, cfg, 0)
+    await recordAutoRecoveryAttempt(operations, taskId, cfg, 500)
+    const r = await recordAutoRecoveryAttempt(operations, taskId, cfg, 5000) // 5000-0 ≥ 1000 → reset
     expect(r.attempts).toBe(1)
     expect(r.suspended).toBe(false)
   })

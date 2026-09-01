@@ -34,6 +34,7 @@ import {
 import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import {
   agents,
   lifecycleAlerts,
@@ -887,7 +888,10 @@ describe('RFC-164 engine — stuck detector S1/S2 workgroup exemption', () => {
     }
     const wgTask = await seedTask(true)
     const plainTask = await seedTask(false)
-    await runStuckTaskDetector({ db, now: () => Date.now() })
+    await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      now: () => Date.now(),
+    })
     const alerts = await db.select().from(lifecycleAlerts)
     const byTask = (id: string) => alerts.filter((a) => a.taskId === id && a.rule === 'S1')
     expect(byTask(wgTask)).toHaveLength(0)

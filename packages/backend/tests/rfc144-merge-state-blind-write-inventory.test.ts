@@ -27,7 +27,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 /** 永久 allowlist：唯一合法的 merge_state 直写者（lifecycle.ts 的两个 helper）。 */
 const MERGE_STATE_WRITE_ALLOWLIST: Record<string, number> = {
-  'services/lifecycle.ts': 2,
+  'platform/persistence/sqlite/taskLifecycle.ts': 2,
 }
 
 function walkTsFiles(dir: string): string[] {
@@ -102,7 +102,7 @@ function countMergeStateSites(): Counts {
   return { updateWrites, insertWrites }
 }
 
-describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to services/lifecycle.ts', () => {
+describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to SQLite lifecycle persistence', () => {
   const counts = countMergeStateSites()
 
   test('update writes: exactly the allowlist — everything else routes through transitionMergeState', () => {
@@ -124,11 +124,14 @@ describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to servi
     expect(violations).toEqual([])
     // allowlist 本身必须被占用（防扫描器失效的空洞绿）：
     // transitionMergeState 的 CAS 写 + abandonSupersededMergeStates 的集合写。
-    expect(counts.updateWrites['services/lifecycle.ts']).toBe(2)
+    expect(counts.updateWrites['platform/persistence/sqlite/taskLifecycle.ts']).toBe(2)
   })
 
   test('both allowlisted writes carry the rfc144 marker comment', () => {
-    const helper = readFileSync(join(BACKEND_SRC, 'services', 'lifecycle.ts'), 'utf8')
+    const helper = readFileSync(
+      join(BACKEND_SRC, 'platform', 'persistence', 'sqlite', 'taskLifecycle.ts'),
+      'utf8',
+    )
     const markers = helper.match(/rfc144-allow-direct-merge-state-write/g) ?? []
     expect(markers.length).toBe(2)
   })

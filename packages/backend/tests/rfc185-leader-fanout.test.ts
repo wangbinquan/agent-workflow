@@ -38,7 +38,7 @@ import {
 } from '../src/db/schema'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
-import { renderWgProtocolBlock } from '../src/services/workgroup/context'
+import { renderWgProtocolBlock } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
@@ -58,9 +58,12 @@ import {
   type WorkgroupHostRunRequest,
   type WorkgroupHostRunResult,
 } from '../src/services/workgroup/engine'
-import { deriveWakeSet, type WakeInput } from '../src/services/workgroup/wake'
+import {
+  deriveWakeSet,
+  type WakeInput,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
 import { createLogger } from '../src/util/log'
-import { executeTurn } from '../src/services/workgroup/turnExecution'
+import { executeTurn } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/turnExecution'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc185-fanout-test')

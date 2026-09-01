@@ -12,6 +12,7 @@
 //          不丢已 seal 的 scope（P2-2/P2-3）。旧「一次性 seal == legacy 整轮 submit 逐字一致」
 //          对比锁随 legacy immediate 路径一起删除（RFC-132 §8——有意行为变更，非回归）。
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -391,6 +392,7 @@ describe('RFC-128 P1 — P2-2 quick-channel 不覆盖已 sealed (self)', () => {
     // q1 → index 1.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId,
       answers: [makeAns('q1', 1), makeAns('q2', 1)],
       actor,
@@ -409,6 +411,7 @@ describe('RFC-128 P1 — P2-2 quick-channel 不覆盖已 sealed (self)', () => {
     const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId,
       answers: [makeAns('q1', 1), makeAns('q2', 0)],
       actor,

@@ -12,6 +12,7 @@
 //                   non-blocking warn (the scenario stub writes no files, so every
 //                   scenario done is zero-delta — exactly the detection surface).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -223,6 +224,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
       // answer the clarify → resume → leader continues → dispatch → worker → done.
       await autoDispatchClarifyRound({
         db: h.db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: clar!.intermediaryNodeRunId,
         answers: [
           {

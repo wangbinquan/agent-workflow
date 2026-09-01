@@ -20,6 +20,8 @@
 // deferred model); the legacy immediate mint + the flag-based submit split are deleted.
 // The park fixtures below drive the CONTROL channel (seal), mirroring the board flow.
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq, sql } from 'drizzle-orm'
@@ -350,6 +352,7 @@ describe('RFC-120 T9 — answer outcomes (control-channel park vs quick-channel 
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     const ret = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
@@ -456,7 +459,10 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
     await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
     // park the task (the scheduler would do this at quiescence)
     await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
-    const result = await runLifecycleInvariants({ db, scope: { taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(0)
   })
 
@@ -466,13 +472,17 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
     // The unified quick channel dispatches everything (designer + questioner) → no park.
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
       actor: { userId: 'u1', role: 'owner' },
     })
     await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
-    const result = await runLifecycleInvariants({ db, scope: { taskId } })
+    const result = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(db),
+      scope: { taskId },
+    })
     // fully dispatched → loadUndispatchedDesignerTargets is empty → T2 fires as before
     expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(1)
   })
@@ -494,7 +504,10 @@ describe('RFC-120 T9 — T2 / S2 treat the park as valid (deferred) and corrupt 
       .update(tasks)
       .set({ status: 'awaiting_human', startedAt: Date.now() - 60 * 60 * 1000 })
       .where(eq(tasks.id, taskId))
-    const result = await runStuckTaskDetector({ db, stuckThresholdMs: 1000 })
+    const result = await runStuckTaskDetector({
+      operations: taskRecoveryOperations(db),
+      stuckThresholdMs: 1000,
+    })
     expect(result.openAlerts.filter((a) => a.rule === 'S2')).toHaveLength(0)
   })
 })
@@ -1413,6 +1426,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     // auto-dispatches designers — they ride the board's 批量下发, RFC-162 reconcile derives none).
     await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'continue',
@@ -2079,6 +2093,7 @@ describe('RFC-120 T9 — run-scoped layer Codex folds (H1/M1/H2)', () => {
     // quick channel still reruns the QUESTIONER (stop) via dispatch.
     const submit = await autoDispatchClarifyRound({
       db,
+      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
       directive: 'stop',

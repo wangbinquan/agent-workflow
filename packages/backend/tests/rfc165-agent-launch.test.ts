@@ -61,9 +61,11 @@ import {
   AGENT_HOST_INPUT_KEY,
   AGENT_HOST_WORKFLOW_ID,
   buildAgentHostSnapshot,
-  ensureAgentHostWorkflow,
   startAgentTask,
 } from '../src/services/agentLaunch'
+import { composeSqliteAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
+import { composeSqliteAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { createUser } from '../src/services/users'
 import {
@@ -73,6 +75,7 @@ import {
 import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -101,6 +104,13 @@ function daemonActor() {
     user: { id: 'u-admin', username: 'admin', displayName: 'A', role: 'admin', status: 'active' },
     source: 'daemon',
   })
+}
+
+function agentResourceIntegrity(db: DbClient) {
+  return composeSqliteAgentResourceIntegrity({
+    db,
+    authorization: composeSqliteResourceCatalog({ db }).authorization,
+  }).launch
 }
 
 beforeAll(async () => {
@@ -225,12 +235,20 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A3 happy path (scratch): anchor row + sourceAgentName + frozen synthesized snapshot', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    const task = await startAgentTask(db, daemonActor(), solo.id, BODY(), {
-      db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
-      appHome,
-      launchProvenance: { kind: 'direct-json', initiator: 'api' },
-    })
+    const task = await startAgentTask(
+      composeSqliteAgentLaunchResourceOperations(db),
+      daemonActor(),
+      solo.id,
+      BODY(),
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        integrity: agentResourceIntegrity(db),
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
+      },
+    )
 
     expect(task.status).toBe('pending')
     expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
@@ -255,13 +273,20 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   test('RFC-223 PR-7: service input is canonical id; an existing name is not resolved', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
-      startAgentTask(db, daemonActor(), 'solo', BODY(), {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      }),
+      startAgentTask(
+        composeSqliteAgentLaunchResourceOperations(db),
+        daemonActor(),
+        'solo',
+        BODY(),
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          integrity: agentResourceIntegrity(db),
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
+      ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     expect((await db.select().from(tasks)).length).toBe(0)
   })
@@ -297,22 +322,36 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     })
 
     await expect(
-      startAgentTask(db, strangerActor, 'no-such-id', BODY(), {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-      }),
+      startAgentTask(
+        composeSqliteAgentLaunchResourceOperations(db),
+        strangerActor,
+        'no-such-id',
+        BODY(),
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          integrity: agentResourceIntegrity(db),
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        },
+      ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
     await expect(
-      startAgentTask(db, strangerActor, privateAgent.id, BODY(), {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        launchProvenance: { kind: 'direct-json', initiator: 'manual' },
-      }),
+      startAgentTask(
+        composeSqliteAgentLaunchResourceOperations(db),
+        strangerActor,
+        privateAgent.id,
+        BODY(),
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          integrity: agentResourceIntegrity(db),
+          launchProvenance: { kind: 'direct-json', initiator: 'manual' },
+        },
+      ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
     const builtinId = ulid()
@@ -333,19 +372,26 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       updatedAt: Date.now(),
     })
     await expect(
-      startAgentTask(db, daemonActor(), builtinId, BODY(), {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      }),
+      startAgentTask(
+        composeSqliteAgentLaunchResourceOperations(db),
+        daemonActor(),
+        builtinId,
+        BODY(),
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          integrity: agentResourceIntegrity(db),
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
+      ),
     ).rejects.toMatchObject({ code: 'builtin-readonly' })
 
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
     await expect(
       startAgentTask(
-        db,
+        composeSqliteAgentLaunchResourceOperations(db),
         daemonActor(),
         solo.id,
         StartAgentTaskSchema.parse({ name: 't', description: 'd' }),
@@ -354,6 +400,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
           schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
             .schedulerDriver,
           appHome,
+          integrity: agentResourceIntegrity(db),
           launchProvenance: { kind: 'direct-json', initiator: 'api' },
         },
       ),
@@ -362,7 +409,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A5 F17: agent deleted between gate and insert → launch fails atomically', async () => {
     await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await ensureAgentHostWorkflow(db)
+    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
     // Simulate the race by handing startTask an agentLaunch whose agent no
     // longer exists at transaction time (the outer service gate already
     // passed in the real interleaving; here we call startTask directly the
@@ -393,7 +440,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
 
   test('A8 delete: live task 409s; display rename is id-stable; terminal delete proceeds', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await ensureAgentHostWorkflow(db)
+    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
     const liveId = ulid()
     await db.insert(tasks).values({
       id: liveId,
@@ -492,7 +539,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   }
 
   test('A6 lifecycle guards: agent host passes builtin lock; workgroup host stays 403; both sync 422', async () => {
-    await ensureAgentHostWorkflow(db)
+    await composeSqliteAgentLaunchResourceOperations(db).ensureHostWorkflow()
     const { ensureWorkgroupHostWorkflow, WORKGROUP_HOST_WORKFLOW_ID } =
       await import('../src/services/workgroup/launch')
     await ensureWorkgroupHostWorkflow(db)
@@ -771,6 +818,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
     await expect(
       applyRepairOption({
         db,
+        operations: taskRecoveryOperations(db),
         taskId,
         alertId,
         optionId: 'S4.kick-task',
@@ -805,17 +853,25 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     const agentId = solo.id
 
     // Baseline launch stamps the stable id onto the task.
-    const t1 = await startAgentTask(db, daemonActor(), agentId, BODY(), {
-      db,
-      schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' }).schedulerDriver,
-      appHome,
-      launchProvenance: { kind: 'direct-json', initiator: 'api' },
-    })
+    const t1 = await startAgentTask(
+      composeSqliteAgentLaunchResourceOperations(db),
+      daemonActor(),
+      agentId,
+      BODY(),
+      {
+        db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+          .schedulerDriver,
+        appHome,
+        integrity: agentResourceIntegrity(db),
+        launchProvenance: { kind: 'direct-json', initiator: 'api' },
+      },
+    )
     expect(t1.sourceAgentId).toBe(agentId)
 
     // Relaunch carrying the CORRECT expected id succeeds.
     const t2 = await startAgentTask(
-      db,
+      composeSqliteAgentLaunchResourceOperations(db),
       daemonActor(),
       agentId,
       BODY({ expectedAgentId: agentId }),
@@ -824,6 +880,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
         schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
           .schedulerDriver,
         appHome,
+        integrity: agentResourceIntegrity(db),
         launchProvenance: { kind: 'direct-json', initiator: 'api' },
       },
     )
@@ -832,13 +889,20 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
     // Relaunch carrying a STALE id (the delete+recreate-same-name ABA the guard
     // exists to close) → 409, and no ghost task row is minted.
     await expect(
-      startAgentTask(db, daemonActor(), agentId, BODY({ expectedAgentId: 'stale-other-id' }), {
-        db,
-        schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
-          .schedulerDriver,
-        appHome,
-        launchProvenance: { kind: 'direct-json', initiator: 'api' },
-      }),
+      startAgentTask(
+        composeSqliteAgentLaunchResourceOperations(db),
+        daemonActor(),
+        agentId,
+        BODY({ expectedAgentId: 'stale-other-id' }),
+        {
+          db,
+          schedulerDriver: createTaskExecutionTestTopology({ db: db, driver: 'real' })
+            .schedulerDriver,
+          appHome,
+          integrity: agentResourceIntegrity(db),
+          launchProvenance: { kind: 'direct-json', initiator: 'api' },
+        },
+      ),
     ).rejects.toMatchObject({ code: 'agent-id-mismatch' })
     expect((await db.select().from(tasks)).length).toBe(2)
   })

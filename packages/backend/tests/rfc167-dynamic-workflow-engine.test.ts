@@ -53,8 +53,12 @@ import {
   DW_MAX_GENERATE_ATTEMPTS,
   DW_MAX_REJECT_ROUNDS,
   extractJsonPayload,
-  runDynamicWorkflowGenerate,
+  runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithProvider,
+  type DynamicWorkflowEngineArgs,
 } from '../src/services/dynamicWorkflowRunner'
+import { composeSqliteDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { SqliteNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence'
+import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
 import {
   DW_ORCHESTRATOR_NODE_ID,
   ORCHESTRATOR_AGENT_ID,
@@ -64,11 +68,11 @@ import {
 import { createUser } from '../src/services/users'
 import { createWorkgroup } from '../src/services/workgroups'
 import { startWorkgroupTask } from '../src/services/workgroup/launch'
+import type { WorkgroupHostRunResult } from '../src/services/workgroup/engine'
 import type {
-  WorkgroupEngineHooks,
-  WorkgroupHostRunRequest,
-  WorkgroupHostRunResult,
-} from '../src/services/workgroup/engine'
+  WorkgroupTurnHostOperations,
+  WorkgroupTurnHostRequest,
+} from '../src/modules/task-execution/public/commands'
 import { createLogger } from '../src/util/log'
 import {
   createTaskExecutionTestTopology,
@@ -79,6 +83,20 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const OPENCODE_CMD = ['bun', 'run', MOCK_OPENCODE]
 const log = createLogger('rfc167-dw-engine-test')
+
+const runDynamicWorkflowGenerate = (
+  args: Omit<DynamicWorkflowEngineArgs, 'persistence' | 'nodeRuns' | 'validationContext'> & {
+    db: DbClient
+  },
+) => {
+  const { db, ...rest } = args
+  return runDynamicWorkflowGenerateWithProvider({
+    ...rest,
+    persistence: composeSqliteDynamicWorkflowPersistence(db),
+    nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
+    validationContext: { load: () => buildWorkflowValidationContext(db) },
+  })
+}
 
 // ---------------------------------------------------------------------------
 // seeds
@@ -236,14 +254,14 @@ async function seedDynamicTask(
 
 /** Scripted hooks: pops results in order; records every request. */
 function scriptedHooks(queue: WorkgroupHostRunResult[]): {
-  hooks: WorkgroupEngineHooks
-  requests: WorkgroupHostRunRequest[]
+  hooks: WorkgroupTurnHostOperations
+  requests: WorkgroupTurnHostRequest[]
 } {
-  const requests: WorkgroupHostRunRequest[] = []
+  const requests: WorkgroupTurnHostRequest[] = []
   return {
     requests,
     hooks: {
-      runHostNode: (req) => {
+      runHost: (req) => {
         requests.push(req)
         const next = queue.shift()
         return Promise.resolve(
@@ -487,9 +505,9 @@ describe('RFC-167 engine — generation pass', () => {
 
   test('a mid-generation config edit survives the dw persist (json_set slot write, Codex P2)', async () => {
     const { taskId } = await seedDynamicTask(db, { dw: initialDwState() })
-    const requests: WorkgroupHostRunRequest[] = []
-    const hooks: WorkgroupEngineHooks = {
-      runHostNode: async (r) => {
+    const requests: WorkgroupTurnHostRequest[] = []
+    const hooks: WorkgroupTurnHostOperations = {
+      runHost: async (r) => {
         requests.push(r)
         // simulate a PUT config landing WHILE the orchestrator runs: a new
         // top-level key must survive the engine's dw persist.
@@ -780,7 +798,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     // registry. The scheduler mechanics bridge consumes the selected engine;
     // it must not regain an inline workgroup/dynamic dispatch truth table.
     expect(orchestrator).toContain('resolveTaskEngineSelection(')
-    expect(orchestrator).toContain('loadWorkgroupTaskState(db, taskId)')
+    expect(orchestrator).toContain('await opts.dynamicWorkflow.persistence.loadTask(taskId)')
     expect(orchestrator).toContain("engine === 'dw-generate'")
     expect(orchestrator).toContain("wgDispatch === 'dw-execute'")
     expect(orchestrator).toContain('runDynamicWorkflowGenerate({')

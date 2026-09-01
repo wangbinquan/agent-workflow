@@ -26,7 +26,10 @@ const VALIDATOR_SOURCE = resolve(
   'packages',
   'backend',
   'src',
-  'services',
+  'modules',
+  'resource-catalog',
+  'infrastructure',
+  'legacy',
   'workflow.validator.ts',
 )
 const LOCAL_SOURCE_ROOTS = [
@@ -280,7 +283,7 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
       sources.map((source) => relative(REPO_ROOT, source.fileName)),
       'A new helper receiving inventory resources needs explicit source-boundary review',
     ).toEqual([
-      'packages/backend/src/services/workflow.validator.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
       'packages/shared/src/nodePorts.ts',
       'packages/shared/src/wrapperFanout.ts',
     ])

@@ -30,6 +30,7 @@
 //      pre-fix the single-track call was a silent no-op for multi-repo rows
 //      whose `preSnapshot` is NULL by design).
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -335,6 +336,7 @@ describe('RFC-098 B1 — S-9: clarify rollback serializes behind the task write 
       const probe: { outcome: { ok: true } | { err: unknown } | null } = { outcome: null }
       const submitP = autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: seeded.clarifyNodeRunId,
         answers: [makeAns('q1')],
         directive: 'continue',
@@ -431,6 +433,7 @@ describe('RFC-098 B1 — ⑥-10: clarify answer rolls back EVERY sub-repo of a m
 
       await autoDispatchClarifyRound({
         db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: seeded.clarifyNodeRunId,
         answers: [makeAns('q1')],
         directive: 'continue',

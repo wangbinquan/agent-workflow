@@ -18,8 +18,8 @@ import {
   decideWorkgroupOutcome,
   deriveWakeSet,
   type WakeInput,
-} from '../src/services/workgroup/wake'
-import { isLeaderWrapUpContinuation } from '../src/services/workgroup/strategies/leaderWorker'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
+import { isLeaderWrapUpContinuation } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/strategies/leaderWorker'
 
 function cfg(overrides: Partial<WorkgroupRuntimeConfig> = {}): WorkgroupRuntimeConfig {
   return {
@@ -200,7 +200,17 @@ describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)'
   const RUNNER = [['engine.ts'], ['strategies', 'leaderWorker.ts']]
     .map((parts) =>
       readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'services', 'workgroup', ...parts),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'resource-catalog',
+          'infrastructure',
+          'legacy',
+          'workgroup',
+          ...parts,
+        ),
         'utf8',
       ),
     )

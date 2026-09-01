@@ -1,9 +1,10 @@
 // RFC-199 production-writer ratchet.
 //
 // Editable workflow bytes (name/description/definition/version) normally have
-// one write authority: services/workflow.ts. The fixed-id fusion seeder is the
-// sole exception: it minimally repairs the merger node's legacy agentId and
-// bumps the workflow version only when that byte changes. Fixed-id host seeds
+// one write authority: Resource Catalog's legacy/workflow.ts implementation.
+// The fixed-id fusion seeder is the sole exception: it minimally repairs the
+// merger node's legacy agentId and bumps the workflow version only when that
+// byte changes. Fixed-id host seeds
 // may INSERT, but they share the canonical definition serializer. Tests and
 // migrations are intentionally outside this production-source inventory.
 
@@ -23,12 +24,15 @@ const EXPECTED_WRITERS = {
     // seed, same builtin FK-anchor shape (lazy idempotent, synthesized
     // single-node snapshot, never user-visible).
     'modules/task-execution/composition/agentActionExecution.ts': 1,
-    'services/workflow.ts': 1,
-    'services/workgroup/launch.ts': 1,
+    'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
+    'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
   },
-  updateEditable: { 'services/fusion.ts': 1, 'services/workflow.ts': 1 },
+  updateEditable: {
+    'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
+    'services/fusion.ts': 1,
+  },
   updateMetadata: {},
-  delete: { 'services/workflow.ts': 1 },
+  delete: { 'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1 },
 } as const
 
 function walkTsFiles(dir: string): string[] {

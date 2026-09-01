@@ -20,6 +20,7 @@
 // argv（参考 scheduler-audit-s05 的 MOCK_OPENCODE_CAPTURE_ARGV_TO 模式：
 // argv[1] 即渲染后的完整 user prompt）。
 
+import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -352,6 +353,7 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
       // 真实入口提交答案（内部自带 RFC-058 clarify_rounds 双表镜像 + rerun 铸行）。
       const res = await autoDispatchClarifyRound({
         db: h.db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: session.intermediaryNodeRunId,
         answers: [CLARIFY_ANSWER],
         directive: 'stop', // RFC-100: finalize round → the rerun's <workflow-output> is accepted

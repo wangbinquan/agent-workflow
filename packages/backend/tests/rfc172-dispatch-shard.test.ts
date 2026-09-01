@@ -278,8 +278,8 @@ describe('RFC-172 S3 — buildFrontierMintPlan shard scoping', () => {
       'shard-A',
     )
     expect(planA.shardKey).toBe('shard-A')
-    expect(planA.values.shardKey).toBe('shard-A')
-    expect(planA.values.retryIndex).toBe(1)
+    expect(planA.input.overrides?.shardKey).toBe('shard-A')
+    expect(planA.input.retryIndex).toBe(1)
 
     // Golden-lock: undefined = shard-blind → inherit the GLOBAL freshest across ALL shards, retry =
     // max(0,5)+1 = 6 (both are top-level, deterministic), shard_key INHERITED (never overwritten),
@@ -296,11 +296,11 @@ describe('RFC-172 S3 — buildFrontierMintPlan shard scoping', () => {
       undefined,
     )
     expect(planGlobal.shardKey).toBeNull()
-    // inherited from a real run, not overwritten/nulled (values.shardKey is string|null|undefined,
+    // inherited from a real run, not overwritten/nulled (the inherited row stays on the input,
     // so a boolean === check keeps this type-safe under tsc — no toContain(string|null) overload).
-    const inheritedShard = planGlobal.values.shardKey
+    const inheritedShard = planGlobal.input.inheritFrom?.shardKey
     expect(inheritedShard === 'shard-A' || inheritedShard === 'shard-B').toBe(true)
-    expect(planGlobal.values.retryIndex).toBe(6)
+    expect(planGlobal.input.retryIndex).toBe(6)
   })
 })
 

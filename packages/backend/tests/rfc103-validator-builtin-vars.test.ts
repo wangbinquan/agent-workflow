@@ -49,7 +49,10 @@ describe('RFC-103 T5 — BUILTIN_VARS 单一事实源含曾被校验器漏掉的
 
 describe('RFC-103 T5 — 源码层断言（校验器复用共享集，无本地副本）', () => {
   const validatorSrc = readFileSync(
-    join(import.meta.dir, '../src/services/workflow.validator.ts'),
+    join(
+      import.meta.dir,
+      '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+    ),
     'utf8',
   )
   test('校验器 import 共享 BUILTIN_VARS 并用它判定', () => {

@@ -10,7 +10,10 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { tasks, workflows, workgroupAssignments, workgroupMemberCursors } from '../src/db/schema'
-import { advanceMemberCursor, casAssignmentStatus } from '../src/services/workgroup/lifecycle'
+import {
+  advanceMemberCursor,
+  casAssignmentStatus,
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
 import {
   CLARIFY_FORMAT_EXAMPLE,
   normalizeWgTaskTitle,
@@ -34,18 +37,18 @@ import {
   renderLeaderLedger,
   renderMessagesBlock,
   renderRosterBlock,
-} from '../src/services/workgroup/context'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/context'
 import {
   assertAssignmentTransition,
   canTransitionAssignment,
   IllegalWorkgroupAssignmentTransition,
   WORKGROUP_ASSIGNMENT_TRANSITIONS,
-} from '../src/services/workgroup/lifecycle'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle'
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
   type WakeInput,
-} from '../src/services/workgroup/wake'
+} from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/wake'
 
 // ---------------------------------------------------------------------------
 // fixtures
