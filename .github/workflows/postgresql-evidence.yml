@@ -1,0 +1,308 @@
+# RFC-349 AC-14 / T10 — real external PostgreSQL evidence.
+#
+# The scale job owns a disposable runner PostgreSQL process outside the
+# compiled agent-workflow binary, migrates RFC-311's full seed, sustains 100
+# HTTP/WS clients, runs PostgreSQL maintenance, and kills/restarts every durable
+# migration checkpoint. The native matrix separately proves each compiled
+# platform artifact without psql/pg_dump/postgres on the application PATH.
+
+name: postgresql-evidence
+
+on:
+  schedule:
+    # Weekly: this gate is intentionally much larger than the nightly browser
+    # matrix. Exact-SHA closeout may also dispatch it manually.
+    - cron: '30 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Exact commit to checkout (empty = workflow SHA)'
+        required: false
+        default: ''
+      scale:
+        description: 'RFC-311 seed scale (full is the acceptance tier)'
+        required: false
+        type: choice
+        options: [full, small]
+        default: full
+      clients:
+        description: 'Concurrent HTTP/WS/status clients'
+        required: false
+        default: '100'
+      duration_seconds:
+        description: 'Seconds per normal-runtime/maintenance phase'
+        required: false
+        default: '180'
+      crash_points:
+        description: 'Comma-separated points or all'
+        required: false
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  crash-large-and-soak:
+    name: PostgreSQL crash matrix + 100-client full seed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Reclaim ephemeral runner disk for source, safety backup, artifacts, and PostgreSQL
+        shell: bash
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+          df -h /
+          available_kib=$(df --output=avail / | tail -1 | tr -d ' ')
+          if [ "$available_kib" -lt 26214400 ]; then
+            echo "RFC-349 full evidence requires at least 25 GiB free" >&2
+            exit 1
+          fi
+
+      - name: Start disposable external PostgreSQL
+        shell: bash
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres'"
+          sudo -u postgres dropdb --if-exists rfc349_evidence
+          sudo -u postgres dropdb --if-exists rfc349_target_faults
+          sudo -u postgres createdb rfc349_evidence
+          sudo -u postgres createdb rfc349_target_faults
+          echo 'RFC349_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_evidence' >> "$GITHUB_ENV"
+          echo 'RFC349_TARGET_FAULTS_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_target_faults' >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run executable T10-C fault and corruption oracles
+        shell: bash
+        run: |
+          bun test \
+            packages/backend/tests/rfc349-database-migration-admission.test.ts \
+            packages/backend/tests/rfc349-database-migration-artifact-reader.test.ts \
+            packages/backend/tests/rfc349-database-migration-runner.test.ts \
+            packages/backend/tests/rfc349-generation-store.test.ts \
+            packages/backend/tests/rfc349-logical-database-restore.test.ts \
+            packages/backend/tests/rfc349-migration-control-plane.test.ts \
+            packages/backend/tests/rfc349-migration-store-lock-recovery.test.ts \
+            packages/backend/tests/rfc349-postgresql-target-faults.integration.test.ts \
+            packages/backend/tests/rfc349-postgresql-hosted-evidence.test.ts
+
+      - name: Build compiled daemon, worker entries, and deterministic runtime
+        run: bun run build:binary:e2e
+
+      - name: Run crash/resume, large migration, and dual-provider soak
+        env:
+          RFC349_TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+          EVIDENCE_SCALE: ${{ github.event_name == 'schedule' && 'full' || inputs.scale }}
+          EVIDENCE_CLIENTS: ${{ github.event_name == 'schedule' && '100' || inputs.clients }}
+          EVIDENCE_DURATION: ${{ github.event_name == 'schedule' && '180' || inputs.duration_seconds }}
+          EVIDENCE_CRASH_POINTS: ${{ github.event_name == 'schedule' && 'all' || inputs.crash_points }}
+        shell: bash
+        run: >-
+          bun run packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts
+          --mode crash-and-soak
+          --scale "$EVIDENCE_SCALE"
+          --clients "$EVIDENCE_CLIENTS"
+          --duration-seconds "$EVIDENCE_DURATION"
+          --crash-points "$EVIDENCE_CRASH_POINTS"
+          --report test-results/rfc349-postgresql-evidence-linux.json
+
+      - name: Upload large evidence report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc349-postgresql-evidence-linux-${{ github.run_id }}
+          path: |
+            test-results/rfc349-postgresql-evidence-linux.json
+            test-results/rfc349-postgresql-evidence-linux.md
+          if-no-files-found: error
+          retention-days: 30
+
+  compiled-external-postgresql:
+    name: Compiled external PostgreSQL (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Start external PostgreSQL (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo systemctl start postgresql.service
+          sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres'"
+          sudo -u postgres createdb rfc349_compiled
+          echo 'RFC349_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_compiled' >> "$GITHUB_ENV"
+
+      - name: Start external PostgreSQL (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install postgresql@17
+          pg_bin="$(brew --prefix postgresql@17)/bin"
+          pg_data="$RUNNER_TEMP/rfc349-pgdata"
+          "$pg_bin/initdb" -D "$pg_data" -U postgres --auth=trust
+          "$pg_bin/pg_ctl" -D "$pg_data" -o "-p 55432 -h 127.0.0.1" -w start
+          "$pg_bin/createdb" -h 127.0.0.1 -p 55432 -U postgres rfc349_compiled
+          echo 'RFC349_DATABASE_URL=postgresql://postgres@127.0.0.1:55432/rfc349_compiled' >> "$GITHUB_ENV"
+
+      - name: Start external PostgreSQL (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $service = Get-Service -Name 'postgresql-x64-*' | Sort-Object Name | Select-Object -Last 1
+          if ($null -eq $service) { throw 'GitHub Windows runner has no PostgreSQL service' }
+          Set-Service -Name $service.Name -StartupType Manual
+          Start-Service -Name $service.Name
+          $pgBin = Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin\createdb.exe' |
+            Sort-Object FullName | Select-Object -Last 1 -ExpandProperty DirectoryName
+          $env:PGPASSWORD = 'root'
+          & "$pgBin\createdb.exe" -h 127.0.0.1 -p 5432 -U postgres rfc349_compiled
+          if ($LASTEXITCODE -ne 0) { throw "createdb exited $LASTEXITCODE" }
+          'RFC349_DATABASE_URL=postgresql://postgres:root@127.0.0.1:5432/rfc349_compiled' |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build native compiled daemon
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Run compiled migration and runtime with PostgreSQL tools hidden
+        env:
+          RFC349_TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+        shell: bash
+        run: >-
+          bun run packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts
+          --mode compiled-smoke
+          --report test-results/rfc349-postgresql-compiled-${{ runner.os }}.json
+
+      - name: Upload native compiled report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc349-postgresql-compiled-${{ runner.os }}-${{ github.run_id }}
+          path: |
+            test-results/rfc349-postgresql-compiled-${{ runner.os }}.json
+            test-results/rfc349-postgresql-compiled-${{ runner.os }}.md
+          if-no-files-found: error
+          retention-days: 30
+
+  # These are the repository's complete regression lanes, not substitutes for
+  # real PostgreSQL evidence. They run only after the external-provider jobs
+  # above pass. Frontend tests are UI-only, and ordinary browser homes remain
+  # provider-neutral/SQLite unless a spec explicitly performs a cutover. The
+  # real provider claim comes solely from the target integration, compiled
+  # smoke, crash matrix and soak jobs.
+  functional-regression:
+    name: Full regression after PostgreSQL evidence (${{ matrix.lane }})
+    needs: [crash-large-and-soak, compiled-external-postgresql]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: backend
+            shard: 0
+          - lane: frontend
+            shard: 0
+          - lane: e2e-1
+            shard: 1
+          - lane: e2e-2
+            shard: 2
+          - lane: e2e-3
+            shard: 3
+          - lane: e2e-4
+            shard: 4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Cache Bun downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Run full backend regression (provider-neutral baseline)
+        if: matrix.lane == 'backend'
+        env:
+          RUN_GIT_NETWORK: '1'
+          RUN_CHAOS: '1'
+        shell: bash
+        run: bun test --isolate --randomize --seed=349001
+
+      - name: Run full frontend regression (UI-only oracle)
+        if: matrix.lane == 'frontend'
+        shell: bash
+        run: bun run --filter @agent-workflow/frontend test
+
+      - name: Build compiled daemon for full E2E
+        if: startsWith(matrix.lane, 'e2e-')
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Install Chromium for full E2E
+        if: startsWith(matrix.lane, 'e2e-')
+        shell: bash
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run full E2E shard (UI/transport oracle)
+        if: startsWith(matrix.lane, 'e2e-')
+        env:
+          CI: 'true'
+        shell: bash
+        run: bun run e2e -- --shard=${{ matrix.shard }}/4 --workers=1

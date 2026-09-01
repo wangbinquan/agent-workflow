@@ -2654,7 +2654,7 @@ export const enUS: Resources = {
         'Instant rollback is available only until the first PostgreSQL business write; afterwards a reverse logical migration is required.',
       urlEnv: 'Connection URL environment variable',
       urlEnvHint:
-        'Enter a variable name such as AGENT_WORKFLOW_DATABASE_URL. The URL and password are never returned by this page.',
+        'Enter a variable name such as AGENT_WORKFLOW_DATABASE_URL. Set that variable on the process that starts the daemon and restart it before testing. The URL and password are never saved or returned by this page.',
       poolMax: 'Pool maximum',
       connectTimeout: 'Connect timeout (ms)',
       statementTimeout: 'Statement timeout (ms)',

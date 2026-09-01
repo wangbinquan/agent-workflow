@@ -3,6 +3,9 @@
 // variable name and bounded non-secret pool settings are observable.
 
 import { z } from 'zod'
+import { canonicalJson } from '../workflow-canonical'
+
+export const DATABASE_MIGRATION_START_IDENTITY_DOMAIN_V1 = 'database-migration-start-identity/v1\n'
 
 export const databaseMigrationTargetSchema = z
   .object({
@@ -15,6 +18,63 @@ export const databaseMigrationTargetSchema = z
   })
   .strict()
 export type DatabaseMigrationTargetView = z.infer<typeof databaseMigrationTargetSchema>
+
+export const databaseMigrationSourceIdentitySchema = z
+  .object({
+    provider: z.literal('sqlite'),
+    generationId: z.string().regex(/^dbg_[A-Za-z0-9_-]{8,128}$/),
+    schemaDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    databaseFingerprint: z.string().min(1).max(256),
+  })
+  .strict()
+export type DatabaseMigrationSourceIdentity = z.infer<typeof databaseMigrationSourceIdentitySchema>
+
+export const databaseMigrationExecutionOptionsSchema = z
+  .object({ mode: z.literal('automatic') })
+  .strict()
+export type DatabaseMigrationExecutionOptions = z.infer<
+  typeof databaseMigrationExecutionOptionsSchema
+>
+
+export const databaseMigrationStartIdentitySchema = z
+  .object({
+    source: databaseMigrationSourceIdentitySchema,
+    target: databaseMigrationTargetSchema,
+    execution: databaseMigrationExecutionOptionsSchema,
+  })
+  .strict()
+export type DatabaseMigrationStartIdentity = z.infer<typeof databaseMigrationStartIdentitySchema>
+
+/**
+ * Domain-separated, surface-neutral projection for one migration operation.
+ * Settings and CLI must hash these exact bytes instead of adding an adapter
+ * prefix. The source identity prevents a later SQLite generation at the same
+ * path from inheriting an earlier operation.
+ */
+export function serializeDatabaseMigrationStartIdentityV1(
+  input: DatabaseMigrationStartIdentity,
+): string {
+  return `${DATABASE_MIGRATION_START_IDENTITY_DOMAIN_V1}${canonicalJson(
+    databaseMigrationStartIdentitySchema.parse(input),
+  )}`
+}
+
+export function databaseMigrationStartIdempotencyKeyFromHash(hash: string): string {
+  const normalized = hash.toLowerCase()
+  if (!/^[a-f0-9]{64}$/.test(normalized)) {
+    throw new Error('database migration identity hash must be a lowercase SHA-256 hex digest')
+  }
+  return `database-migration:v1:${normalized}`
+}
+
+export function databaseMigrationStartIdempotencyKeyWith(
+  input: DatabaseMigrationStartIdentity,
+  sha256Hex: (canonical: string) => string,
+): string {
+  return databaseMigrationStartIdempotencyKeyFromHash(
+    sha256Hex(serializeDatabaseMigrationStartIdentityV1(input)),
+  )
+}
 
 export const databaseMigrationTableCountsSchema = z
   .object({
@@ -73,6 +133,30 @@ export const databaseRuntimeOverviewSchema = z
   })
   .strict()
 export type DatabaseRuntimeOverview = z.infer<typeof databaseRuntimeOverviewSchema>
+
+export function databaseMigrationStartIdentityFromOverview(
+  overview: DatabaseRuntimeOverview,
+  target: DatabaseMigrationTargetView,
+): DatabaseMigrationStartIdentity | null {
+  if (
+    overview.provider !== 'sqlite' ||
+    overview.databaseFingerprint === null ||
+    overview.source === null ||
+    overview.source.databaseFingerprint !== overview.databaseFingerprint
+  ) {
+    return null
+  }
+  return databaseMigrationStartIdentitySchema.parse({
+    source: {
+      provider: 'sqlite',
+      generationId: overview.generationId,
+      schemaDigest: overview.schemaDigest,
+      databaseFingerprint: overview.databaseFingerprint,
+    },
+    target,
+    execution: { mode: 'automatic' },
+  })
+}
 
 export const startDatabaseMigrationInputSchema = z
   .object({

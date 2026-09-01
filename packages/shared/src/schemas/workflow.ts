@@ -120,6 +120,42 @@ export const LOOP_EXIT_CONDITION_KINDS = [
 export const LoopExitConditionKindSchema = z.enum(LOOP_EXIT_CONDITION_KINDS)
 export type LoopExitConditionKind = z.infer<typeof LoopExitConditionKindSchema>
 
+const LoopExitConditionPortSchema = z.object({
+  nodeId: z.string().min(1),
+  portName: z.string().min(1),
+})
+
+/**
+ * Canonical wrapper-loop exit grammar shared by authoring validation and the
+ * TaskExecution runtime. Defaults preserve the historical runtime parser: a
+ * missing/non-string equals value means the empty string and a missing/empty
+ * count separator means a newline.
+ */
+export const LoopExitConditionSchema = z.discriminatedUnion('kind', [
+  LoopExitConditionPortSchema.extend({ kind: z.literal('port-empty') }),
+  LoopExitConditionPortSchema.extend({ kind: z.literal('port-inactive') }),
+  LoopExitConditionPortSchema.extend({ kind: z.literal('port-not-empty') }),
+  LoopExitConditionPortSchema.extend({
+    kind: z.literal('port-equals'),
+    value: z.string().catch(''),
+  }),
+  LoopExitConditionPortSchema.extend({
+    kind: z.literal('port-count-lt'),
+    n: z.number().int().positive(),
+    separator: z.preprocess(
+      (value) => (typeof value === 'string' && value.length > 0 ? value : '\n'),
+      z.string(),
+    ),
+  }),
+])
+export type LoopExitCondition = z.infer<typeof LoopExitConditionSchema>
+
+/** Parse the one canonical loop-exit grammar without throwing at trust boundaries. */
+export function parseLoopExitCondition(raw: unknown): LoopExitCondition | null {
+  const parsed = LoopExitConditionSchema.safeParse(raw)
+  return parsed.success ? parsed.data : null
+}
+
 // RFC-020: 'upload' joins as a sibling of 'files'. `files` picks paths
 // already inside the worktree; `upload` writes user-selected local files
 // into the worktree at a per-input `targetDir`. Packed value is identical

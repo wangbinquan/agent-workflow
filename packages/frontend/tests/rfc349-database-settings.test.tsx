@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import {
   DEFAULT_CONFIG,
+  databaseMigrationStartIdentityFromOverview,
   type DatabaseMigrationStatusView,
   type DatabaseRuntimeOverview,
 } from '@agent-workflow/shared'
@@ -12,6 +13,7 @@ import {
   DatabaseMigrationSection,
   availableDatabaseMigrationArtifacts,
   databaseMigrationFieldErrors,
+  databaseMigrationStartIdempotencyKey,
   databaseMigrationTargetFromDraft,
 } from '../src/components/settings/DatabaseMigrationSection'
 import { SETTINGS_TABS, validateSettingsSearch } from '../src/routes/settings'
@@ -65,11 +67,11 @@ const operation: DatabaseMigrationStatusView = {
   updatedAt: 2,
 }
 
-function renderSection() {
+function renderSection(runtime: DatabaseRuntimeOverview = overview) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } },
   })
-  client.setQueryData(['database-runtime-overview'], overview)
+  client.setQueryData(['database-runtime-overview'], runtime)
   client.setQueryData(['database-migrations'], { operations: [operation] })
   return render(
     <QueryClientProvider client={client}>
@@ -79,6 +81,22 @@ function renderSection() {
 }
 
 describe('RFC-349 database Settings', () => {
+  test('duplicate Settings starts retain the shared canonical migration identity', async () => {
+    const identity = databaseMigrationStartIdentityFromOverview(overview, operation.target)
+    expect(identity).not.toBeNull()
+    const first = await databaseMigrationStartIdempotencyKey(identity!)
+    const duplicate = await databaseMigrationStartIdempotencyKey(identity!)
+    expect(duplicate).toBe(first)
+    expect(first).toMatch(/^database-migration:v1:[a-f0-9]{64}$/)
+
+    const changedOptions = databaseMigrationStartIdentityFromOverview(overview, {
+      ...operation.target,
+      statementTimeoutMs: operation.target.statementTimeoutMs + 1_000,
+    })
+    expect(changedOptions).not.toBeNull()
+    await expect(databaseMigrationStartIdempotencyKey(changedOptions!)).resolves.not.toBe(first)
+  })
+
   test('database is a stable URL-backed reliability section', () => {
     expect(SETTINGS_TABS).toContain('database')
     expect(validateSettingsSearch({ tab: 'database' })).toEqual({ tab: 'database' })
@@ -103,7 +121,22 @@ describe('RFC-349 database Settings', () => {
     expect(section).not.toContain('deadlineMs: Number.POSITIVE_INFINITY')
   })
 
+  test('the verified live provider disables a stale SQLite-config target form after cutover', () => {
+    const view = renderSection({
+      ...overview,
+      provider: 'postgresql',
+      databaseFingerprint: 'pg:fixture',
+      serverVersion: '17.6',
+      operationId: operation.operationId,
+      target: operation.target,
+      source: null,
+    })
+    expect(view.container.querySelector('fieldset')?.disabled).toBe(true)
+    expect(view.container.textContent).toContain('PostgreSQL is already live')
+  })
+
   test('all target constraints are modeled before submission and raw URLs are rejected', () => {
+    expect(renderSection().container.textContent).toContain('restart it before testing')
     expect(
       databaseMigrationTargetFromDraft({
         urlEnv: 'AW_DATABASE_URL',

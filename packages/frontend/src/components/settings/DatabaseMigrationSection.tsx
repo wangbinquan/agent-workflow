@@ -8,12 +8,16 @@ import { useTranslation } from 'react-i18next'
 import {
   databaseMigrationListViewSchema,
   databaseMigrationPreflightViewSchema,
+  databaseMigrationStartIdempotencyKeyFromHash,
+  databaseMigrationStartIdentityFromOverview,
   databaseMigrationStatusViewSchema,
   databaseMigrationTargetSchema,
+  serializeDatabaseMigrationStartIdentityV1,
   databaseRuntimeOverviewSchema,
   type Config,
   type DatabaseMigrationArtifactKind,
   type DatabaseMigrationPreflightView,
+  type DatabaseMigrationStartIdentity,
   type DatabaseMigrationStatusView,
   type DatabaseMigrationTargetView,
 } from '@agent-workflow/shared'
@@ -27,6 +31,7 @@ import { NoticeBanner } from '@/components/NoticeBanner'
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
 import { DOWNLOAD_DEADLINE_MS, saveBlobAs } from '@/lib/download'
+import { sha256Hex } from '@/lib/sha256'
 
 const OVERVIEW_QUERY = ['database-runtime-overview'] as const
 const MIGRATIONS_QUERY = ['database-migrations'] as const
@@ -86,8 +91,13 @@ function targetKey(target: DatabaseMigrationTargetView): string {
   ].join(':')
 }
 
-function startIdempotencyKey(target: DatabaseMigrationTargetView): string {
-  return `settings:${targetKey(target)}`
+export async function databaseMigrationStartIdempotencyKey(
+  identity: DatabaseMigrationStartIdentity,
+): Promise<string> {
+  const digest = await sha256Hex(
+    new TextEncoder().encode(serializeDatabaseMigrationStartIdentityV1(identity)),
+  )
+  return databaseMigrationStartIdempotencyKeyFromHash(digest)
 }
 
 function formatBytes(bytes: number): string {
@@ -144,7 +154,7 @@ export function availableDatabaseMigrationArtifacts(
 }
 
 type Confirmation =
-  | { readonly kind: 'start'; readonly target: DatabaseMigrationTargetView }
+  | { readonly kind: 'start'; readonly identity: DatabaseMigrationStartIdentity }
   | {
       readonly kind: 'cancel' | 'rollback' | 'finalize'
       readonly operationId: string
@@ -172,6 +182,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
       databaseRuntimeOverviewSchema.parse(await api.get('/api/database', undefined, signal)),
     refetchInterval: 15_000,
   })
+  const postgresqlAlreadyLive =
+    overview.data?.provider === 'postgresql' ||
+    (overview.data === undefined && config.database.provider === 'postgresql')
   const migrations = useQuery({
     queryKey: MIGRATIONS_QUERY,
     queryFn: async ({ signal }) =>
@@ -206,14 +219,14 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
     },
   })
   const startMutation = useMutation({
-    mutationFn: async (nextTarget: DatabaseMigrationTargetView) =>
+    mutationFn: async (identity: DatabaseMigrationStartIdentity) =>
       databaseMigrationStatusViewSchema.parse(
         // The daemon returns the durable planned status (202) before copy;
         // this request must retain the ordinary bounded JSON deadline. The
         // two-second query above is the progress/recovery transport.
         await api.post('/api/database/migrations', {
-          idempotencyKey: startIdempotencyKey(nextTarget),
-          target: nextTarget,
+          idempotencyKey: await databaseMigrationStartIdempotencyKey(identity),
+          target: identity.target,
         }),
       ),
     onSuccess: refresh,
@@ -255,7 +268,15 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
       setFormError(t('settings.database.preflightRequired'))
       return
     }
-    setConfirmation({ kind: 'start', target: nextTarget })
+    const identity =
+      overview.data === undefined
+        ? null
+        : databaseMigrationStartIdentityFromOverview(overview.data, nextTarget)
+    if (identity === null) {
+      setFormError(t('settings.database.sourceUnavailable'))
+      return
+    }
+    setConfirmation({ kind: 'start', identity })
   }
 
   const downloadArtifact = async (
@@ -347,9 +368,9 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
         title={t('settings.database.targetTitle')}
         hint={t('settings.database.targetHint')}
         as="fieldset"
-        disabled={config.database.provider === 'postgresql'}
+        disabled={postgresqlAlreadyLive}
       >
-        {config.database.provider === 'postgresql' && (
+        {postgresqlAlreadyLive && (
           <NoticeBanner tone="info" title={t('settings.database.alreadyPostgresql')}>
             {t('settings.database.alreadyPostgresqlHint')}
           </NoticeBanner>
@@ -674,7 +695,7 @@ export function DatabaseMigrationSection({ config }: { readonly config: Config }
           if (current.kind === 'start') {
             // Close after dispatch so the durable operation/status panel stays
             // visible while the long request continues in the background.
-            startMutation.mutate(current.target)
+            startMutation.mutate(current.identity)
             return
           }
           return operationMutation

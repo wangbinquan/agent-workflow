@@ -50,6 +50,23 @@ export type MaintenanceWorkerState = z.infer<typeof MaintenanceWorkerStateSchema
 
 const MaintenanceCountersSchema = z.record(z.string(), z.number().finite())
 
+export const DatabaseRuntimeTelemetrySchema = z.object({
+  version: z.literal(1),
+  provider: z.enum(['sqlite', 'postgresql']),
+  poolWait: z
+    .object({
+      windowMs: z.number().int().positive(),
+      sampleCount: z.number().int().nonnegative(),
+      acquiredCount: z.number().int().nonnegative(),
+      failedCount: z.number().int().nonnegative(),
+      p50Ms: z.number().finite().nonnegative(),
+      p95Ms: z.number().finite().nonnegative(),
+      maxMs: z.number().finite().nonnegative(),
+    })
+    .nullable(),
+})
+export type DatabaseRuntimeTelemetry = z.infer<typeof DatabaseRuntimeTelemetrySchema>
+
 export const MaintenanceStatusSchema = z.object({
   version: z.literal(1),
   worker: z.object({
@@ -66,6 +83,8 @@ export const MaintenanceStatusSchema = z.object({
       maxGapMs: z.number().finite().nonnegative(),
     })
     .optional(),
+  /** Provider mechanism telemetry; optional for older embedded callers. */
+  database: DatabaseRuntimeTelemetrySchema.optional(),
   schedule: MaintenanceScheduleSchema,
   nextRunAt: z.number().int().nonnegative().nullable(),
   active: z

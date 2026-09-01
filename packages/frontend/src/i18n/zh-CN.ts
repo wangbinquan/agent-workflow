@@ -9223,7 +9223,8 @@ export const zhCN: Resources = {
       archiveSix: '6 张 legacy code 表会归档并校验，但不会进入 178 张活动表的 PostgreSQL target。',
       rollbackHorizon: '只有 PostgreSQL 第一笔业务写入前可以即时回滚；之后必须做反向逻辑迁移。',
       urlEnv: '连接 URL 环境变量名',
-      urlEnvHint: '填写 AGENT_WORKFLOW_DATABASE_URL 这类变量名；页面永远不会回显 URL 或密码。',
+      urlEnvHint:
+        '填写 AGENT_WORKFLOW_DATABASE_URL 这类变量名；必须把该变量注入启动 daemon 的进程并重启后再检测。页面不会保存或回显 URL、密码。',
       poolMax: '连接池上限',
       connectTimeout: '连接超时（ms）',
       statementTimeout: '语句超时（ms）',
