@@ -41,8 +41,9 @@ import {
   type MigrationReport,
   type MigrationTargetResource,
 } from '../application/migrationAnalyzer'
-import { createSqliteActionTemplateStore } from './sqliteConfigResourceStore'
+import { createSqliteActionTemplatePersistence } from './sqliteConfigResourceStore'
 import { createAutomationPolicy, createDigitalEmployee } from './sqliteDigitalEmployeeStore'
+import type { DevelopmentMigrationPersistence } from '../application/ports/migrationPersistence'
 
 export const MIGRATION_REPORT_KEY = 'rfc310-migration-report'
 
@@ -149,7 +150,7 @@ export async function materializeMigrationCandidates(
   const now = opts.now ?? (() => Date.now())
   const created: MaterializedCandidate[] = []
   const skipped: SkippedCandidate[] = []
-  const templateStore = createSqliteActionTemplateStore(db)
+  const templateStore = createSqliteActionTemplatePersistence(db)
 
   for (const item of report.items) {
     if (item.disposition === 'blocked') continue
@@ -186,7 +187,7 @@ export async function materializeMigrationCandidates(
       }
       let resourceId: string
       if (target.resource === 'action-template') {
-        const record = createActionTemplate(
+        const record = await createActionTemplate(
           { store: templateStore, now },
           {
             actorUserId: item.ownerUserId,
@@ -254,5 +255,15 @@ export async function readPersistedMigrationRun(
     return JSON.parse(row.value) as PersistedMigrationRun
   } catch {
     return null
+  }
+}
+
+export function createSqliteDevelopmentMigrationPersistence(
+  db: DbClient,
+): DevelopmentMigrationPersistence {
+  return {
+    analyze: (generatedAt) => runMigrationAnalysis(db, generatedAt),
+    materialize: (report) => materializeMigrationCandidates(db, report),
+    readPersisted: () => readPersistedMigrationRun(db),
   }
 }

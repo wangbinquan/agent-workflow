@@ -1,4 +1,3 @@
-import { desc, eq } from 'drizzle-orm'
 import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -8,16 +7,16 @@ import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { EmployeePlatformWorkItemPersistence } from '../application/ports/employeePlatformWorkItemPersistence'
 import {
-  cachedRepos,
-  employeeApprovalSagas,
-  employeeCaseWorkspaces,
-  employeeChangeCandidates,
-  employeeRoundWorkspaceStates,
-} from '@/db/schema'
+  createPostgresqlEmployeePlatformWorkItemPersistence,
+  createSqliteEmployeePlatformWorkItemPersistence,
+} from '../infrastructure/employeePlatformWorkItemPersistence'
 import type {
   ApprovalGatewayPort,
   PipelineEvidencePort,
+  RepoRemotePort,
 } from '../application/ports/reconcilerPorts'
 import { encodeDevelopmentApprovalSubject } from '../domain/approvalSubject'
 import { canonicalDigest } from '../domain/canonicalJson'
@@ -397,8 +396,8 @@ function reviewMarkerToken(marker: string): string {
   return `<!-- aw-self:${marker} -->`
 }
 
-export function composeDevelopmentEmployeePlatformWorkItems(input: {
-  readonly db: DbClient
+export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
+  readonly persistence: EmployeePlatformWorkItemPersistence
   readonly appHome: string
   /** Direct fixture calls may bind a subject; runtime calls pass the frozen Case owner. */
   readonly directPublicationSubject?:
@@ -412,12 +411,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
   readonly reactionRounds: EmployeeReactionRoundQueryPort
   readonly approvalGateway?: ApprovalGatewayPort
   readonly pipelineEvidence?: PipelineEvidencePort
-  readonly repoRemote: {
-    resolve(repositoryId: string): {
-      readonly remoteUrl: string
-      readonly defaultBranch: string | null
-    } | null
-  }
+  readonly repoRemote: RepoRemotePort
   readonly mrEffects: {
     reply(
       repositoryId: string,
@@ -655,7 +649,11 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
     >
   }
   readonly now?: () => number
-}): {
+}
+
+function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
+  input: DevelopmentEmployeePlatformWorkItemsCompositionInput,
+): {
   execute(
     plan: DevelopmentReactionPlan,
     executionContext?: {
@@ -680,21 +678,10 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
   const sceneRoot = (caseId: string) => join(caseDirectory(caseId), 'scene')
   const workspacePath = (caseId: string) => join(sceneRoot(caseId), 'workspace')
 
-  const currentWorkspace = (caseId: string) => {
-    const row = input.db
-      .select()
-      .from(employeeCaseWorkspaces)
-      .where(eq(employeeCaseWorkspaces.caseId, caseId))
-      .get()
-    if (row === undefined) throw new Error(`employee case workspace is missing: ${caseId}`)
-    const repository = input.db
-      .select({ localPath: cachedRepos.localPath })
-      .from(cachedRepos)
-      .where(eq(cachedRepos.id, row.cachedRepoId))
-      .get()
-    if (repository === undefined)
-      throw new Error(`cached repository is missing: ${row.cachedRepoId}`)
-    return { row, repository }
+  const currentWorkspace = async (caseId: string) => {
+    const current = await input.persistence.currentWorkspace(caseId)
+    if (current === null) throw new Error(`employee case workspace is missing: ${caseId}`)
+    return { row: current.row, repository: { localPath: current.repositoryLocalPath } }
   }
 
   return {
@@ -1317,38 +1304,29 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         // plain JSON.stringify depends on insertion order and makes a genuine
         // adapter receipt look unrelated to the frozen platform intent.
         const intentDigest = canonicalDigest(intent)
-        input.db
-          .insert(employeeApprovalSagas)
-          .values({
-            id: `employee-approval:${idempotencyKey}`,
-            caseId: plan.caseRef.id,
-            submitRoundId: plan.roundRef,
-            adapterId: approval.adapterRef.id,
-            adapterRevision: approval.adapterRef.revision,
-            validatedDraftRef: approval.validatedDraftRef,
-            deadlineAt,
-            idempotencyKey,
-            intentDigest,
-            correlationRef: null,
-            externalRequestRef: null,
-            submittedRevision: null,
-            submittedAt: null,
-            latestStatus: 'prepared',
-            observedRevision: null,
-            evidenceRef: null,
-            observedAt: null,
-            createdAt: now(),
-            updatedAt: now(),
-          })
-          .onConflictDoNothing({ target: employeeApprovalSagas.idempotencyKey })
-          .run()
-        const saga = input.db
-          .select()
-          .from(employeeApprovalSagas)
-          .where(eq(employeeApprovalSagas.idempotencyKey, idempotencyKey))
-          .get()
+        const saga = await input.persistence.prepareApprovalSaga({
+          id: `employee-approval:${idempotencyKey}`,
+          caseId: plan.caseRef.id,
+          submitRoundId: plan.roundRef,
+          adapterId: approval.adapterRef.id,
+          adapterRevision: approval.adapterRef.revision,
+          validatedDraftRef: approval.validatedDraftRef,
+          deadlineAt,
+          idempotencyKey,
+          intentDigest,
+          correlationRef: null,
+          externalRequestRef: null,
+          submittedRevision: null,
+          submittedAt: null,
+          latestStatus: 'prepared',
+          observedRevision: null,
+          evidenceRef: null,
+          observedAt: null,
+          createdAt: now(),
+          updatedAt: now(),
+        })
         if (
-          saga === undefined ||
+          saga === null ||
           saga.caseId !== plan.caseRef.id ||
           saga.adapterId !== approval.adapterRef.id ||
           saga.adapterRevision !== approval.adapterRef.revision ||
@@ -1382,18 +1360,14 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         if (receipt.intentDigest !== intentDigest) {
           return output({ status: 'blocked', summary: '外部审批回执不属于冻结提交意图' })
         }
-        input.db
-          .update(employeeApprovalSagas)
-          .set({
-            correlationRef: receipt.correlationRef,
-            externalRequestRef: receipt.externalRequestRef,
-            submittedRevision: receipt.submittedRevision,
-            submittedAt: receipt.submittedAt,
-            latestStatus: 'pending',
-            updatedAt: now(),
-          })
-          .where(eq(employeeApprovalSagas.idempotencyKey, idempotencyKey))
-          .run()
+        await input.persistence.recordApprovalSubmission({
+          idempotencyKey,
+          correlationRef: receipt.correlationRef,
+          externalRequestRef: receipt.externalRequestRef,
+          submittedRevision: receipt.submittedRevision,
+          submittedAt: receipt.submittedAt,
+          updatedAt: now(),
+        })
         const subjectRef = encodeDevelopmentApprovalSubject({
           adapterRef: approval.adapterRef,
           correlationRef: receipt.correlationRef,
@@ -1443,12 +1417,8 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         ) {
           return output({ status: 'blocked', summary: '外部审批上下文缺少提交回执' })
         }
-        const saga = input.db
-          .select()
-          .from(employeeApprovalSagas)
-          .where(eq(employeeApprovalSagas.idempotencyKey, approval.idempotencyKey))
-          .get()
-        if (saga === undefined || saga.caseId !== plan.caseRef.id) {
+        const saga = await input.persistence.approvalSaga(approval.idempotencyKey)
+        if (saga === null || saga.caseId !== plan.caseRef.id) {
           return output({ status: 'blocked', summary: '外部审批持久回执不存在或归属不匹配' })
         }
         const terminal = new Set(['approved', 'rejected', 'expired', 'unavailable'])
@@ -1479,17 +1449,14 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             observedRevision = observed.receipt.observedRevision
             evidenceRef = observed.receipt.evidenceRef
           }
-          input.db
-            .update(employeeApprovalSagas)
-            .set({
-              latestStatus: status,
-              observedRevision,
-              evidenceRef,
-              observedAt: new Date(now()).toISOString(),
-              updatedAt: now(),
-            })
-            .where(eq(employeeApprovalSagas.idempotencyKey, approval.idempotencyKey))
-            .run()
+          await input.persistence.recordApprovalObservation({
+            idempotencyKey: approval.idempotencyKey,
+            latestStatus: status,
+            observedRevision,
+            evidenceRef,
+            observedAt: new Date(now()).toISOString(),
+            updatedAt: now(),
+          })
         }
         const nextApproval = approvalContextSchema.parse({
           ...approval,
@@ -1521,7 +1488,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
 
       if (plan.workItemRef === 'prepare-change') {
         const issue = issueOf(contexts)
-        const { row, repository } = currentWorkspace(plan.caseRef.id)
+        const { row, repository } = await currentWorkspace(plan.caseRef.id)
         if (issue.state.deliveryContent === null) {
           return output({
             status: 'blocked',
@@ -1558,24 +1525,17 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           })
         }
         const timestamp = now()
-        input.db
-          .insert(employeeChangeCandidates)
-          .values({
-            candidateRef: derived.receipt.candidateRef,
-            caseId: plan.caseRef.id,
-            roundId: plan.roundRef,
-            baselineSha: row.baselineSha,
-            treeOid: derived.receipt.treeOid,
-            receiptJson: JSON.stringify({ ...derived.receipt, uploadPlan }),
-            summarySource,
-            state: 'prepared',
-            commitSha: null,
-            pushReceiptJson: null,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          })
-          .onConflictDoNothing()
-          .run()
+        await input.persistence.insertCandidate({
+          candidateRef: derived.receipt.candidateRef,
+          caseId: plan.caseRef.id,
+          roundId: plan.roundRef,
+          baselineSha: row.baselineSha,
+          treeOid: derived.receipt.treeOid,
+          receiptJson: JSON.stringify({ ...derived.receipt, uploadPlan }),
+          summarySource,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
         const current = contexts.find(
           (context) => context.typeId === 'development.change-candidate',
         )
@@ -1614,7 +1574,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           })
         }
         const deliveryContent = issue.state.deliveryContent
-        const { row, repository } = currentWorkspace(plan.caseRef.id)
+        const { row, repository } = await currentWorkspace(plan.caseRef.id)
         const candidateContext = contexts.find(
           (context) => context.typeId === 'development.change-candidate',
         )
@@ -1624,12 +1584,8 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         const candidateState = candidateStateSchema.parse(
           JSON.parse(candidateContext.stateJson) as unknown,
         )
-        const candidate = input.db
-          .select()
-          .from(employeeChangeCandidates)
-          .where(eq(employeeChangeCandidates.candidateRef, candidateState.candidateRef))
-          .get()
-        if (candidate === undefined || candidate.state === 'obsolete') {
+        const candidate = await input.persistence.candidate(candidateState.candidateRef)
+        if (candidate === null || candidate.state === 'obsolete') {
           return output({ status: 'blocked', summary: '修改候选已经失效，请重新形成候选' })
         }
         const receipt = z
@@ -1680,12 +1636,12 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             summary: `平台提交失败：${committed.code} · ${committed.detail}`,
           })
         }
-        input.db
-          .update(employeeChangeCandidates)
-          .set({ state: 'committed', commitSha: committed.commitSha, updatedAt: now() })
-          .where(eq(employeeChangeCandidates.candidateRef, candidate.candidateRef))
-          .run()
-        const remote = input.repoRemote.resolve(issue.state.repositoryRef)
+        await input.persistence.recordCandidateCommit({
+          candidateRef: candidate.candidateRef,
+          commitSha: committed.commitSha,
+          updatedAt: now(),
+        })
+        const remote = await input.repoRemote.resolve(issue.state.repositoryRef)
         if (remote === null) {
           return output({ status: 'blocked', summary: '目标仓库的远端凭据或地址不可用' })
         }
@@ -1745,25 +1701,12 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           checkpointRoot: publishedCheckpoint,
           expectedCheckpointDigest: checkpoint.checkpointDigest,
         })
-        input.db.transaction((tx) => {
-          tx.update(employeeChangeCandidates)
-            .set({
-              state: 'published',
-              commitSha: committed.commitSha,
-              pushReceiptJson: JSON.stringify(pushed.receipt),
-              updatedAt: now(),
-            })
-            .where(eq(employeeChangeCandidates.candidateRef, candidate.candidateRef))
-            .run()
-          tx.update(employeeCaseWorkspaces)
-            .set({
-              baselineSha: committed.commitSha,
-              remoteHeadSha: committed.commitSha,
-              state: 'published',
-              updatedAt: now(),
-            })
-            .where(eq(employeeCaseWorkspaces.caseId, plan.caseRef.id))
-            .run()
+        await input.persistence.publishCandidateAndWorkspace({
+          candidateRef: candidate.candidateRef,
+          caseId: plan.caseRef.id,
+          commitSha: committed.commitSha,
+          pushReceiptJson: JSON.stringify(pushed.receipt),
+          updatedAt: now(),
         })
         const currentMr = contexts.find((context) => context.typeId === 'development.merge-request')
         const currentPipeline = contexts.find(
@@ -1838,28 +1781,23 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
           return output({ status: 'blocked', summary: '缺少需要发布冲突修复的 MR 上下文' })
         }
         const state = mergeRequestStateSchema.parse(JSON.parse(current.stateJson) as unknown)
-        const repairRound = input.reactionRounds.lastSettledRound({
+        const repairRound = await input.reactionRounds.lastSettledRound({
           caseId: plan.caseRef.id,
           workItemRef: 'repair-conflict',
         })
-        const repairState =
+        const repairValidation =
           repairRound === null
-            ? undefined
-            : input.db
-                .select({ validationJson: employeeRoundWorkspaceStates.validationJson })
-                .from(employeeRoundWorkspaceStates)
-                .where(eq(employeeRoundWorkspaceStates.roundId, repairRound.roundRef))
-                .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
-                .get()
-        const validation =
-          repairState?.validationJson === null || repairState?.validationJson === undefined
             ? null
-            : conflictValidationSchema.safeParse(JSON.parse(repairState.validationJson) as unknown)
+            : await input.persistence.latestRoundValidation(repairRound.roundRef)
+        const validation =
+          repairValidation === null
+            ? null
+            : conflictValidationSchema.safeParse(JSON.parse(repairValidation) as unknown)
         if (validation === null || !validation.success) {
           return output({ status: 'blocked', summary: '冲突修复现场尚未通过平台校验' })
         }
         const conflict = validation.data.conflict
-        const { row, repository } = currentWorkspace(plan.caseRef.id)
+        const { row, repository } = await currentWorkspace(plan.caseRef.id)
         if (
           state.status !== 'active' ||
           state.headSha !== conflict.sourceSha ||
@@ -1897,7 +1835,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               summary: '员工工作区头已变化，冲突修复不能覆盖新的提交',
             })
           }
-          const remote = input.repoRemote.resolve(row.repositoryId)
+          const remote = await input.repoRemote.resolve(row.repositoryId)
           if (remote === null) {
             return output({ status: 'blocked', summary: '目标仓库的远端凭据或地址不可用' })
           }
@@ -1928,16 +1866,12 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
             baselineSha: finished.mergeCommitSha,
             currentWorkspacePath: workspacePath(plan.caseRef.id),
           })
-          input.db
-            .update(employeeCaseWorkspaces)
-            .set({
-              baselineSha: finished.mergeCommitSha,
-              remoteHeadSha: finished.mergeCommitSha,
-              state: 'published',
-              updatedAt: now(),
-            })
-            .where(eq(employeeCaseWorkspaces.caseId, plan.caseRef.id))
-            .run()
+          await input.persistence.updateWorkspaceHead({
+            caseId: plan.caseRef.id,
+            baselineSha: finished.mergeCommitSha,
+            remoteHeadSha: finished.mergeCommitSha,
+            updatedAt: now(),
+          })
         }
         const next = mergeRequestStateSchema.parse({
           ...state,
@@ -2008,7 +1942,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         const factsSnapshot = facts?.ok === true ? facts.snapshot : null
         const nextHead = factsSnapshot?.headSha ?? observed.observation.sourceSha ?? state.headSha
         const observedState = factsSnapshot?.state ?? observed.observation.state
-        const workspace = currentWorkspace(plan.caseRef.id)
+        const workspace = await currentWorkspace(plan.caseRef.id)
         if (workspace.row.repositoryId !== repositoryId) {
           return output({ status: 'blocked', summary: 'MR 上下文与员工工作区的仓库不一致' })
         }
@@ -2020,7 +1954,7 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
         const conflictTargetBranch =
           factsSnapshot?.mergeableState === 'conflict' ? factsSnapshot.targetBranch : null
         if (observedState === 'opened' && (sourceHeadChanged || conflictTargetHead !== null)) {
-          const remote = input.repoRemote.resolve(repositoryId)
+          const remote = await input.repoRemote.resolve(repositoryId)
           if (remote === null) {
             return output({ status: 'blocked', summary: '目标仓库的远端凭据或地址不可用' })
           }
@@ -2060,16 +1994,12 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
               baselineSha: nextHead,
               currentWorkspacePath: workspacePath(plan.caseRef.id),
             })
-            input.db
-              .update(employeeCaseWorkspaces)
-              .set({
-                baselineSha: nextHead,
-                remoteHeadSha: nextHead,
-                state: 'published',
-                updatedAt: now(),
-              })
-              .where(eq(employeeCaseWorkspaces.caseId, plan.caseRef.id))
-              .run()
+            await input.persistence.updateWorkspaceHead({
+              caseId: plan.caseRef.id,
+              baselineSha: nextHead,
+              remoteHeadSha: nextHead,
+              updatedAt: now(),
+            })
           }
         }
         const next = mergeRequestStateSchema.parse({
@@ -2257,4 +2187,31 @@ export function composeDevelopmentEmployeePlatformWorkItems(input: {
       })
     },
   }
+}
+
+type DevelopmentEmployeePlatformWorkItemsBootstrapInput = Omit<
+  DevelopmentEmployeePlatformWorkItemsCompositionInput,
+  'persistence'
+>
+
+export function composeSqliteDevelopmentEmployeePlatformWorkItems(
+  input: DevelopmentEmployeePlatformWorkItemsBootstrapInput & { readonly db: DbClient },
+): ReturnType<typeof composeDevelopmentEmployeePlatformWorkItemsFromPersistence> {
+  const { db, ...composition } = input
+  return composeDevelopmentEmployeePlatformWorkItemsFromPersistence({
+    ...composition,
+    persistence: createSqliteEmployeePlatformWorkItemPersistence(db),
+  })
+}
+
+export function composePostgresqlDevelopmentEmployeePlatformWorkItems(
+  input: DevelopmentEmployeePlatformWorkItemsBootstrapInput & {
+    readonly db: PostgresqlDatabaseClient
+  },
+): ReturnType<typeof composeDevelopmentEmployeePlatformWorkItemsFromPersistence> {
+  const { db, ...composition } = input
+  return composeDevelopmentEmployeePlatformWorkItemsFromPersistence({
+    ...composition,
+    persistence: createPostgresqlEmployeePlatformWorkItemPersistence(db),
+  })
 }

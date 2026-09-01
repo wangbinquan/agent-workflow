@@ -35,6 +35,7 @@ import {
   developmentBundleRefs,
   developmentMissions,
 } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { automationPolicyContentSchema } from '../domain/automationPolicy'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -187,6 +188,106 @@ export async function sweepDevelopmentRetention(
     prunedAttempts,
     markedBundleRefs,
     expiredBundleRefsPending: Number(pending),
+  }
+}
+
+/** Same retention oracle over real asynchronous PostgreSQL queries. */
+export async function sweepPostgresqlDevelopmentRetention(
+  db: PostgresqlDatabaseClient,
+  reader: RetentionPolicyReader,
+  now: number,
+  limit: number = RETENTION_SWEEP_MISSION_LIMIT,
+): Promise<RetentionSweepResult> {
+  const missions = await db
+    .select({
+      id: developmentMissions.id,
+      terminalAt: developmentMissions.terminalAt,
+      policyId: developmentMissions.policyId,
+      policyRevision: developmentMissions.policyRevision,
+    })
+    .from(developmentMissions)
+    .where(isNotNull(developmentMissions.terminalAt))
+    .orderBy(developmentMissions.terminalAt)
+    .limit(limit)
+    .all()
+
+  const cache = new Map<string, PolicyRetention | null>()
+  let prunedAttempts = 0
+  let markedBundleRefs = 0
+
+  for (const mission of missions) {
+    if (mission.terminalAt === null) continue
+    const retention = await retentionOf(reader, cache, mission.policyId, mission.policyRevision)
+    if (retention === null) continue
+    const age = now - mission.terminalAt
+
+    if (age > retention.attemptLedgerTtlDays * DAY_MS) {
+      const runIds = (
+        await db
+          .select({ id: developmentActionRuns.id })
+          .from(developmentActionRuns)
+          .where(eq(developmentActionRuns.missionId, mission.id))
+          .all()
+      ).map((row) => row.id)
+      if (runIds.length > 0) {
+        const doomed = (
+          await db
+            .select({ id: developmentAgentAttempts.id })
+            .from(developmentAgentAttempts)
+            .where(
+              and(
+                inArray(developmentAgentAttempts.actionRunId, runIds),
+                isNotNull(developmentAgentAttempts.settledAt),
+              ),
+            )
+            .all()
+        ).map((row) => row.id)
+        if (doomed.length > 0) {
+          await db
+            .delete(developmentAgentAttempts)
+            .where(inArray(developmentAgentAttempts.id, doomed))
+            .run()
+          prunedAttempts += doomed.length
+        }
+      }
+    }
+
+    if (age > retention.requirementBundleTerminalTtlDays * DAY_MS) {
+      const stale = (
+        await db
+          .select({ id: developmentBundleRefs.id })
+          .from(developmentBundleRefs)
+          .where(
+            and(
+              eq(developmentBundleRefs.missionId, mission.id),
+              eq(developmentBundleRefs.retentionState, 'active'),
+            ),
+          )
+          .all()
+      ).map((row) => row.id)
+      if (stale.length > 0) {
+        await db
+          .update(developmentBundleRefs)
+          .set({ retentionState: 'expired' })
+          .where(inArray(developmentBundleRefs.id, stale))
+          .run()
+        markedBundleRefs += stale.length
+      }
+    }
+  }
+
+  const pending = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(developmentBundleRefs)
+    .where(eq(developmentBundleRefs.retentionState, 'expired'))
+    .limit(1)
+    .get()
+
+  return {
+    missionsScanned: missions.length,
+    prunedAttempts,
+    markedBundleRefs,
+    expiredBundleRefsPending: Number(pending?.n ?? 0),
   }
 }
 

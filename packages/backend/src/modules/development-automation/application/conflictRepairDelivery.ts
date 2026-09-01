@@ -90,7 +90,7 @@ export async function publishConflictRepair(
     }
   }
 
-  const remote = ports.repoRemote.resolve(mission.repositoryId)
+  const remote = await ports.repoRemote.resolve(mission.repositoryId)
   if (remote === null) {
     return {
       ok: false,
@@ -100,7 +100,7 @@ export async function publishConflictRepair(
     }
   }
 
-  const claim = claimDeliveryEffect(deps, mission, {
+  const claim = await claimDeliveryEffect(deps, mission, {
     actionRunId: input.actionRunId,
     effectKind: 'conflict-push',
     idempotencyKey: `conflict-push:${mission.id}:${input.sourceSha}:${finished.treeOid}`,
@@ -150,7 +150,7 @@ export async function publishConflictRepair(
   })
   const now = deps.now()
   if (!pushed.ok) {
-    deps.store.failEffect(
+    await deps.store.failEffect(
       claim.effectId,
       JSON.stringify({ code: pushed.code, detail: pushed.detail }),
       now,
@@ -162,7 +162,7 @@ export async function publishConflictRepair(
       detail: pushed.detail,
     }
   }
-  deps.store.confirmEffect(claim.effectId, pushed.receipt.newSha, now)
+  await deps.store.confirmEffect(claim.effectId, pushed.receipt.newSha, now)
   return {
     ok: true,
     mergeCommitSha: finished.mergeCommitSha,

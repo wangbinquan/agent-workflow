@@ -44,6 +44,7 @@ import type {
   EmployeeChannelResultRecord,
   EmployeeInvocationRecord,
   EmployeeOutboxRecord,
+  RuntimeCasePersistence,
   RuntimeCaseStorePort,
 } from '../application/ports/runtimeStore'
 import type {
@@ -1893,4 +1894,62 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
       return updated === undefined ? null : caseRecord(updated)
     },
   }
+}
+
+export function asAsyncRuntimeCasePersistence(store: RuntimeCaseStorePort): RuntimeCasePersistence {
+  return {
+    createCase: async (input) => store.createCase(input),
+    getCase: async (id) => store.getCase(id),
+    listCaseMembers: async (caseId) => store.listCaseMembers(caseId),
+    getCaseMemberRole: async (caseId, userId) => store.getCaseMemberRole(caseId, userId),
+    recordMetering: async (input) => store.recordMetering(input),
+    replaceCaseMembers: async (input) => store.replaceCaseMembers(input),
+    findCaseByEventDelivery: async (eventDeliveryId) =>
+      store.findCaseByEventDelivery(eventDeliveryId),
+    listCases: async (employeeId, state) => store.listCases(employeeId, state),
+    listTerminalOutcomeGroups: async () => store.listTerminalOutcomeGroups(),
+    listCasesPage: async (input) => store.listCasesPage(input),
+    findCaseByExternalSubject: async (subjectType, subjectRef) =>
+      store.findCaseByExternalSubject(subjectType, subjectRef),
+    listContexts: async (caseId) => store.listContexts(caseId),
+    listAttention: async (caseId) => store.listAttention(caseId),
+    listInbox: async (caseId) => store.listInbox(caseId),
+    listRounds: async (caseId) => store.listRounds(caseId),
+    listRunningRounds: async () => store.listRunningRounds(),
+    listInvocationsForRound: async (roundId) => store.listInvocationsForRound(roundId),
+    createInvocation: async (record) => store.createInvocation(record),
+    acceptInvocation: async (input) => store.acceptInvocation(input),
+    getChannelByInvocation: async (invocationId) => store.getChannelByInvocation(invocationId),
+    listChannels: async (caseId) => store.listChannels(caseId),
+    listChannelResults: async (channelId) => store.listChannelResults(channelId),
+    listOpenChannelsWithTerminalChild: async (limit) =>
+      store.listOpenChannelsWithTerminalChild(limit),
+    listExpiredOpenChannels: async (now, limit) => store.listExpiredOpenChannels(now, limit),
+    settleChannelResult: async (input) => store.settleChannelResult(input),
+    detachOpenChannelsForRound: async (roundId, now) =>
+      store.detachOpenChannelsForRound(roundId, now),
+    claimOutbox: async (input) => store.claimOutbox(input),
+    completeOutbox: async (id, workerId, now) => store.completeOutbox(id, workerId, now),
+    retryOutbox: async (input) => store.retryOutbox(input),
+    activateAttention: async (bindingId, subscriptionId, now) =>
+      store.activateAttention(bindingId, subscriptionId, now),
+    cancelAttention: async (bindingId, now) => store.cancelAttention(bindingId, now),
+    acceptDelivery: async (caseId, id, delivery, priority, now) =>
+      store.acceptDelivery(caseId, id, delivery, priority, now),
+    markInbox: async (inboxId, state, now) => store.markInbox(inboxId, state, now),
+    createRound: async (input) => store.createRound(input),
+    markRoundRunning: async (roundId, executionRef, now) =>
+      store.markRoundRunning(roundId, executionRef, now),
+    retryRound: async (input) => store.retryRound(input),
+    settleRound: async (input) => store.settleRound(input),
+    blockCase: async (caseId, reason, now) => store.blockCase(caseId, reason, now),
+    resumeCase: async (caseId, now) => store.resumeCase(caseId, now),
+    terminateCase: async (caseId, terminalKind, now) =>
+      store.terminateCase(caseId, terminalKind, now),
+    upgradePolicy: async (input) => store.upgradePolicy(input),
+  }
+}
+
+export function createSqliteRuntimePersistence(db: DbClient): RuntimeCasePersistence {
+  return asAsyncRuntimeCasePersistence(createSqliteRuntimeStore(db))
 }

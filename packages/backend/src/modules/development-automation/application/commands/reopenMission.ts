@@ -28,11 +28,11 @@ import { ulid } from 'ulid'
 
 import type { FactCellValue } from '../../domain/facts'
 import type { FactCell } from '../../domain/factCell'
-import type { MissionRow, MissionStore } from '../ports/missionStore'
+import type { MissionRow, MissionPersistence } from '../ports/missionStore'
 import type { ReconcilerPorts } from '../ports/reconcilerPorts'
 
 export interface ReopenDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly ports: ReconcilerPorts
   readonly now: () => number
 }
@@ -67,7 +67,7 @@ export async function reopenClosedMission(
   if (mission.mrClaimId === null) return { kind: 'not-reopened' }
 
   const key = reopenIdempotencyKey(mission.id)
-  const existing = deps.store.findByIdempotencyKey(key)
+  const existing = await deps.store.findByIdempotencyKey(key)
   if (existing !== null) return { kind: 'already-linked', missionId: existing.id }
 
   const collector = deps.ports.mergeRequestFacts
@@ -86,7 +86,7 @@ export async function reopenClosedMission(
 
   // MR 身份取自旧 claim 行（终态只把它标 released，行保留），而不是任何 cells
   // 投影——重新 claim 需要的是 exact 三元组，猜不得。
-  const priorClaim = deps.store.getMrClaim(mission.mrClaimId)
+  const priorClaim = await deps.store.getMrClaim(mission.mrClaimId)
   if (priorClaim === null) {
     return {
       kind: 'blocked',
@@ -105,7 +105,7 @@ export async function reopenClosedMission(
 
   const now = deps.now()
   const successorId = ulid()
-  const created = deps.store.createMission({
+  const created = await deps.store.createMission({
     id: successorId,
     revision: 0,
     epoch: 0,
@@ -152,19 +152,19 @@ export async function reopenClosedMission(
   // 并发两条投递同时到达时 unique 撞回既有行——照样只有一条后继。
   if (!created.created) return { kind: 'already-linked', missionId: created.mission.id }
 
-  const sources = deps.store.listMissionSources(mission.id)
+  const sources = await deps.store.listMissionSources(mission.id)
   const generation = sources.reduce((max, row) => Math.max(max, row.generation), 0) + 1
   const latestMaterialized = sources
     .filter((row) => row.state === 'materialized' && row.bundleRef !== null)
     .sort((a, b) => b.generation - a.generation)[0]
   const inheritDirect = mission.sourceKind === 'direct' && latestMaterialized !== undefined
   if (inheritDirect) {
-    deps.ports.requirementMaterialize?.carryOverRequirementEvidence({
+    await deps.ports.requirementMaterialize?.carryOverRequirementEvidence({
       fromMissionId: mission.id,
       toMissionId: successorId,
     })
   }
-  deps.store.insertMissionSource({
+  await deps.store.insertMissionSource({
     id: ulid(),
     missionId: successorId,
     generation,
@@ -189,7 +189,7 @@ export async function reopenClosedMission(
   // 的部分索引，所以这里不会撞车。claim 不上（被第三条 Mission 抢了）不算失败——
   // 后继照常存在，MR care 链会以既有的 typed block 呈现。
   const claimId = ulid()
-  const claim = deps.store.claimMr({
+  const claim = await deps.store.claimMr({
     id: claimId,
     codeHostEndpointRef: priorClaim.codeHostEndpointRef,
     stableProjectRef: priorClaim.stableProjectRef,
@@ -200,9 +200,9 @@ export async function reopenClosedMission(
     now,
   })
   if (claim.ok) {
-    const fresh = deps.store.getMission(successorId)
+    const fresh = await deps.store.getMission(successorId)
     if (fresh !== null) {
-      deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { mrClaimId: claimId })
+      await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { mrClaimId: claimId })
     }
   }
 

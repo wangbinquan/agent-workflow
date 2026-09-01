@@ -31,7 +31,7 @@ type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
   EmployeeTypeCollaborationCodec
 import type {
-  DigitalEmployeeAuthoringStore,
+  DigitalEmployeeAuthoringPersistence,
   DigitalEmployeePlatformToolCatalog,
 } from './ports/authoringStore'
 import { EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG } from './ports/authoringStore'
@@ -39,15 +39,15 @@ import type { ExecutionPolicyRevisionRecord } from './ports/authoringStore'
 import type {
   AttentionBindingRecord,
   EmployeeOutboxRecord,
-  RuntimeCaseStorePort,
+  RuntimeCasePersistence,
 } from './ports/runtimeStore'
+import type { EmployeeInputUploadPersistence } from './ports/inputUploadStore'
 import type {
   EmployeeInputArtifactPort,
   PlatformWorkItemExecutionPort,
   ReactionExecutionMetering,
   ReactionExecutionPort,
 } from '../composition/required-ports'
-import type { EmployeeInputUploadStore } from '../infrastructure/inputUploadStore'
 import {
   employeeCollaborationBindingSchema,
   effectiveReactionPriority,
@@ -328,12 +328,12 @@ function fallbackEmployeeCaseTypeDetail(
 }
 
 export interface DigitalEmployeeRuntimeServiceDependencies {
-  readonly store: RuntimeCaseStorePort
-  readonly authoringStore: DigitalEmployeeAuthoringStore
+  readonly store: RuntimeCasePersistence
+  readonly authoringStore: DigitalEmployeeAuthoringPersistence
   readonly eventCenter: EventCenterParticipant
   readonly execution: ReactionExecutionPort
   readonly platformWorkItems: PlatformWorkItemExecutionPort
-  readonly inputUploads: EmployeeInputUploadStore
+  readonly inputUploads: EmployeeInputUploadPersistence
   readonly inputArtifacts: EmployeeInputArtifactPort
   readonly runtimeCodecs: readonly EmployeeTypeRuntimeCodec[]
   readonly detailProjectionParticipants?: readonly EmployeeCaseDetailProjectionParticipant[]
@@ -341,7 +341,7 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly currentTypeRefs: readonly EmployeeTypeRef[]
   readonly executionContracts: ExecutionContractParticipant
   readonly platformTools?: DigitalEmployeePlatformToolCatalog
-  readonly resolveExecutionPolicy?: () => ExecutionPolicyRevisionRecord
+  readonly resolveExecutionPolicy?: () => Promise<ExecutionPolicyRevisionRecord>
   readonly now?: () => number
   readonly id?: () => string
   readonly workerId?: string
@@ -494,16 +494,16 @@ function taskNameFromEventIntake(input: {
 }
 
 export class DigitalEmployeeRuntimeService {
-  readonly #store: RuntimeCaseStorePort
-  readonly #authoringStore: DigitalEmployeeAuthoringStore
+  readonly #store: RuntimeCasePersistence
+  readonly #authoringStore: DigitalEmployeeAuthoringPersistence
   readonly #eventCenter: EventCenterParticipant
   readonly #execution: ReactionExecutionPort
   readonly #platformWorkItems: PlatformWorkItemExecutionPort
-  readonly #inputUploads: EmployeeInputUploadStore
+  readonly #inputUploads: EmployeeInputUploadPersistence
   readonly #inputArtifacts: EmployeeInputArtifactPort
   readonly #executionContracts: ExecutionContractParticipant
   readonly #platformTools: DigitalEmployeePlatformToolCatalog
-  readonly #resolveExecutionPolicy: () => ExecutionPolicyRevisionRecord
+  readonly #resolveExecutionPolicy: () => Promise<ExecutionPolicyRevisionRecord>
   readonly #codecs = new Map<string, EmployeeTypeRuntimeCodec>()
   readonly #detailProjectionParticipants = new Map<
     string,
@@ -527,8 +527,8 @@ export class DigitalEmployeeRuntimeService {
     this.#platformTools = deps.platformTools ?? EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG
     this.#resolveExecutionPolicy =
       deps.resolveExecutionPolicy ??
-      (() => {
-        const policy = this.#authoringStore.getCurrentExecutionPolicy()
+      (async () => {
+        const policy = await this.#authoringStore.getCurrentExecutionPolicy()
         if (policy === null) throw new Error('global execution policy is not initialized')
         return policy
       })
@@ -577,8 +577,8 @@ export class DigitalEmployeeRuntimeService {
     return codec
   }
 
-  #descriptor(caseRecord: EmployeeCaseRecord): EmployeeTypePackageDescriptor {
-    const record = this.#authoringStore.getTypePackage(caseRecord.typeRef)
+  async #descriptor(caseRecord: EmployeeCaseRecord): Promise<EmployeeTypePackageDescriptor> {
+    const record = await this.#authoringStore.getTypePackage(caseRecord.typeRef)
     if (record === null || record.state !== 'published') {
       throw new NotFoundError(
         'employee-type-not-found',
@@ -588,11 +588,11 @@ export class DigitalEmployeeRuntimeService {
     return record.descriptor
   }
 
-  #projectCaseDetail(
+  async #projectCaseDetail(
     caseRecord: EmployeeCaseRecord,
     contexts: readonly EmployeeContextRecord[],
     rounds: readonly ReactionRoundRecord[],
-  ): EmployeeCaseDetailProjectionV1 {
+  ): Promise<EmployeeCaseDetailProjectionV1> {
     const participant = this.#detailProjectionParticipants.get(caseRecord.typeRef.typeId)
     const request: EmployeeCaseDetailProjectionInputV1 = {
       schemaVersion: 1,
@@ -620,7 +620,7 @@ export class DigitalEmployeeRuntimeService {
       participant === undefined
         ? fallbackEmployeeCaseTypeDetail(caseRecord)
         : employeeCaseTypeDetailProjectionSchema.parse(
-            JSON.parse(participant.projectJson(JSON.stringify(request))) as unknown,
+            JSON.parse(await participant.projectJson(JSON.stringify(request))) as unknown,
           )
     return employeeCaseDetailProjectionSchema.parse({
       ...typeDetail,
@@ -632,8 +632,8 @@ export class DigitalEmployeeRuntimeService {
     })
   }
 
-  #toolRevision(ref: ExactResourceRef) {
-    return this.#platformTools.getRevision(ref) ?? this.#authoringStore.getToolRevision(ref)
+  async #toolRevision(ref: ExactResourceRef) {
+    return this.#platformTools.getRevision(ref) ?? (await this.#authoringStore.getToolRevision(ref))
   }
 
   #selectWorkItemSlot(input: {
@@ -670,7 +670,7 @@ export class DigitalEmployeeRuntimeService {
       ).slotRef
   }
 
-  launchWork(input: {
+  async launchWork(input: {
     readonly employeeId: string
     readonly intake: unknown
     readonly actorUserId: string | null
@@ -678,12 +678,12 @@ export class DigitalEmployeeRuntimeService {
       readonly eventSubscriptionId: string
       readonly eventDeliveryId: string
     }
-  }): EmployeeCaseRecord {
+  }): Promise<EmployeeCaseRecord> {
     if (input.eventOrigin !== undefined) {
-      const existing = this.#store.findCaseByEventDelivery(input.eventOrigin.eventDeliveryId)
+      const existing = await this.#store.findCaseByEventDelivery(input.eventOrigin.eventDeliveryId)
       if (existing !== null) return existing
     }
-    const employee = this.#authoringStore.getEmployeeDefinition(input.employeeId)
+    const employee = await this.#authoringStore.getEmployeeDefinition(input.employeeId)
     if (employee === null || employee.archivedAt !== null || employee.currentRevision === null) {
       throw new NotFoundError(
         'employee-definition-not-found',
@@ -691,7 +691,7 @@ export class DigitalEmployeeRuntimeService {
       )
     }
     const employeeRef = { id: employee.id, revision: employee.currentRevision }
-    const revision = this.#authoringStore.getEmployeeDefinitionRevision(employeeRef)
+    const revision = await this.#authoringStore.getEmployeeDefinitionRevision(employeeRef)
     if (revision === null) {
       throw new ValidationError(
         'employee-definition-unavailable',
@@ -699,14 +699,14 @@ export class DigitalEmployeeRuntimeService {
       )
     }
     this.#assertCurrentLaunchType(revision.content.typeRef)
-    const scope = this.#authoringStore.getWorkScopeRevision(revision.content.workScopeRef)
+    const scope = await this.#authoringStore.getWorkScopeRevision(revision.content.workScopeRef)
     if (scope === null) {
       throw new ValidationError(
         'employee-work-scope-unavailable',
         'the employee work scope revision is unavailable',
       )
     }
-    const admittedType = this.#authoringStore.getTypePackage(revision.content.typeRef)
+    const admittedType = await this.#authoringStore.getTypePackage(revision.content.typeRef)
     if (admittedType === null || admittedType.state !== 'published') {
       throw new ValidationError(
         'employee-type-unavailable',
@@ -795,7 +795,7 @@ export class DigitalEmployeeRuntimeService {
     )
     if (intakeRequirement !== undefined) {
       const binding = exactBinding(intakeRequirement.workItemRef, intakeRequirement.slotRef)
-      const tool = binding === undefined ? null : this.#toolRevision(binding.registrationRef)
+      const tool = binding === undefined ? null : await this.#toolRevision(binding.registrationRef)
       if (tool === null || tool.state !== 'published') {
         throw new ValidationError(
           'employee-intake-kind-unsupported',
@@ -806,7 +806,7 @@ export class DigitalEmployeeRuntimeService {
     for (const option of optionDefinitions) {
       if (!executionOptions[option.optionRef] || option.requiredWorkItemRef === null) continue
       const binding = exactBinding(option.requiredWorkItemRef, option.requiredSlotRef!)
-      const tool = binding === undefined ? null : this.#toolRevision(binding.registrationRef)
+      const tool = binding === undefined ? null : await this.#toolRevision(binding.registrationRef)
       if (
         tool === null ||
         tool.state !== 'published' ||
@@ -821,7 +821,7 @@ export class DigitalEmployeeRuntimeService {
     }
     const caseId = this.#id()
     const now = this.#now()
-    const uploads = this.#inputUploads.resolveForCase({
+    const uploads = await this.#inputUploads.resolveForCase({
       ids: intake.uploads.map((upload) => upload.uploadRef),
       actorUserId: input.actorUserId,
       caseId,
@@ -873,7 +873,7 @@ export class DigitalEmployeeRuntimeService {
         'employee type codec changed the admitted employee revision',
       )
     }
-    return this.launchCase(launch, {
+    return await this.launchCase(launch, {
       caseId,
       now,
       taskName,
@@ -902,7 +902,7 @@ export class DigitalEmployeeRuntimeService {
     })
   }
 
-  launchCase(
+  async launchCase(
     input: unknown,
     admission?: {
       readonly caseId: string
@@ -929,9 +929,9 @@ export class DigitalEmployeeRuntimeService {
         readonly blobRef: string
       }[]
     },
-  ): EmployeeCaseRecord {
+  ): Promise<EmployeeCaseRecord> {
     const launch = employeeCaseLaunchSchema.parse(input)
-    const employee = this.#authoringStore.getEmployeeDefinitionRevision(launch.employeeRef)
+    const employee = await this.#authoringStore.getEmployeeDefinitionRevision(launch.employeeRef)
     if (employee === null) {
       throw new ValidationError(
         'employee-definition-unavailable',
@@ -939,7 +939,7 @@ export class DigitalEmployeeRuntimeService {
       )
     }
     this.#assertCurrentLaunchType(employee.content.typeRef)
-    const typePackage = this.#authoringStore.getTypePackage(employee.content.typeRef)
+    const typePackage = await this.#authoringStore.getTypePackage(employee.content.typeRef)
     if (typePackage === null || typePackage.state !== 'published') {
       throw new ValidationError(
         'employee-type-unavailable',
@@ -969,10 +969,10 @@ export class DigitalEmployeeRuntimeService {
       )
     }
     if (
-      this.#store.findCaseByExternalSubject(
+      (await this.#store.findCaseByExternalSubject(
         launch.workSubject.typeId,
         launch.workSubject.subjectRef,
-      ) !== null
+      )) !== null
     ) {
       throw new ConflictError(
         'employee-case-subject-conflict',
@@ -984,7 +984,7 @@ export class DigitalEmployeeRuntimeService {
       launch.primaryContextTypeId,
       launch.primaryContextJson,
     )
-    const policy = this.#resolveExecutionPolicy()
+    const policy = await this.#resolveExecutionPolicy()
 
     const now = admission?.now ?? this.#now()
     const caseId = admission?.caseId ?? this.#id()
@@ -1025,7 +1025,7 @@ export class DigitalEmployeeRuntimeService {
       createdAt: now,
       updatedAt: now,
     }
-    this.#store.createCase({
+    await this.#store.createCase({
       caseRecord,
       primaryContext: context,
       contextDigest: runtimeDigest({
@@ -1040,8 +1040,8 @@ export class DigitalEmployeeRuntimeService {
     return caseRecord
   }
 
-  getCase(caseId: string): EmployeeCaseRecord {
-    const record = this.#store.getCase(caseId)
+  async getCase(caseId: string): Promise<EmployeeCaseRecord> {
+    const record = await this.#store.getCase(caseId)
     if (record === null) {
       throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
     }
@@ -1052,42 +1052,42 @@ export class DigitalEmployeeRuntimeService {
    * RFC-330 —— 案例归属的窄查询：transport 层据此做可见性 / 操作判据（与任务成员制
    * 同形）。不存在返回 null，让调用方给出与「不可见」同形的 404。
    */
-  getCaseAcl(caseId: string): {
+  async getCaseAcl(caseId: string): Promise<{
     readonly id: string
     readonly ownerUserId: string | null
     readonly employeeId: string
-  } | null {
-    const record = this.#store.getCase(caseId)
+  } | null> {
+    const record = await this.#store.getCase(caseId)
     return record === null
       ? null
       : { id: record.id, ownerUserId: record.ownerUserId, employeeId: record.employeeRef.id }
   }
 
-  listCaseMembers(caseId: string) {
-    this.getCase(caseId)
-    return this.#store.listCaseMembers(caseId)
+  async listCaseMembers(caseId: string) {
+    await this.getCase(caseId)
+    return await this.#store.listCaseMembers(caseId)
   }
 
-  getCaseMemberRole(caseId: string, userId: string) {
-    return this.#store.getCaseMemberRole(caseId, userId)
+  async getCaseMemberRole(caseId: string, userId: string) {
+    return await this.#store.getCaseMemberRole(caseId, userId)
   }
 
-  replaceCaseMembers(input: Parameters<RuntimeCaseStorePort['replaceCaseMembers']>[0]) {
-    return this.#store.replaceCaseMembers(input)
+  async replaceCaseMembers(input: Parameters<RuntimeCasePersistence['replaceCaseMembers']>[0]) {
+    return await this.#store.replaceCaseMembers(input)
   }
 
-  listCases(employeeId?: string, state?: string): EmployeeCaseRecord[] {
+  async listCases(employeeId?: string, state?: string): Promise<EmployeeCaseRecord[]> {
     if (state !== undefined && !['active', 'waiting', 'blocked', 'terminal'].includes(state)) {
       throw new ValidationError('employee-case-state-invalid', `invalid case state: ${state}`)
     }
-    return this.#store.listCases(employeeId, state)
+    return await this.#store.listCases(employeeId, state)
   }
 
-  listTerminalOutcomeGroups() {
-    return this.#store.listTerminalOutcomeGroups()
+  async listTerminalOutcomeGroups() {
+    return await this.#store.listTerminalOutcomeGroups()
   }
 
-  listCasePage(input: {
+  async listCasePage(input: {
     readonly employeeId?: string
     readonly ownerUserId?: string
     readonly membership?: { readonly actorUserId: string; readonly scope: 'mine' | 'shared' }
@@ -1111,7 +1111,7 @@ export class DigitalEmployeeRuntimeService {
         throw new ValidationError('employee-case-cursor-invalid', 'invalid case list cursor')
       }
     }
-    const page = this.#store.listCasesPage({
+    const page = await this.#store.listCasesPage({
       ...(input.employeeId === undefined ? {} : { employeeId: input.employeeId }),
       ...(input.ownerUserId === undefined ? {} : { ownerUserId: input.ownerUserId }),
       ...(input.membership === undefined ? {} : { membership: input.membership }),
@@ -1127,68 +1127,71 @@ export class DigitalEmployeeRuntimeService {
       cursor,
       limit,
     })
-    const items = page.cases.map((caseRecord) => {
-      const descriptor = this.#descriptor(caseRecord)
-      const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
-      const primary = this.#store
-        .listContexts(caseRecord.id)
-        .find((context) => context.id === caseRecord.primaryContextId)
-      const primaryState =
-        primary === undefined ? null : (JSON.parse(primary.stateJson) as Record<string, unknown>)
-      const currentItem =
-        caseRecord.currentWorkItemRef === null
-          ? null
-          : findWorkItem(descriptor, caseRecord.currentWorkItemRef)
-      const activeRound = this.#store
-        .listRounds(caseRecord.id)
-        .find((round) => ['planned', 'running', 'settling'].includes(round.state))
-      const subjectRef =
-        typeof primaryState?.subjectRef === 'string'
-          ? primaryState.subjectRef
-          : typeof primaryState?.title === 'string'
-            ? primaryState.title
-            : caseRecord.id
-      const targetRef =
-        typeof primaryState?.repositoryRef === 'string'
-          ? primaryState.repositoryRef
-          : typeof primaryState?.projectRef === 'string'
-            ? primaryState.projectRef
-            : null
-      return {
-        id: caseRecord.id,
-        revision: caseRecord.revision,
-        state: caseRecord.state,
-        terminalKind: caseRecord.terminalKind,
-        blockReason: caseRecord.blockReason,
-        employeeRef: caseRecord.employeeRef,
-        employeeName: employee?.content.displayName ?? caseRecord.employeeRef.id,
-        typeRef: caseRecord.typeRef,
-        typeName: descriptor.displayName,
-        taskName: caseRecord.name,
-        subjectRef,
-        targetRef,
-        currentWorkItemRef: caseRecord.currentWorkItemRef,
-        currentWorkItemName: currentItem?.label ?? null,
-        activeRound:
-          activeRound === undefined
+    const items = await Promise.all(
+      page.cases.map(async (caseRecord) => {
+        const descriptor = await this.#descriptor(caseRecord)
+        const employee = await this.#authoringStore.getEmployeeDefinitionRevision(
+          caseRecord.employeeRef,
+        )
+        const primary = (await this.#store.listContexts(caseRecord.id)).find(
+          (context) => context.id === caseRecord.primaryContextId,
+        )
+        const primaryState =
+          primary === undefined ? null : (JSON.parse(primary.stateJson) as Record<string, unknown>)
+        const currentItem =
+          caseRecord.currentWorkItemRef === null
             ? null
-            : {
-                id: activeRound.id,
-                state: activeRound.state,
-                workItemRef: activeRound.workItemRef,
-                attemptOrdinal: activeRound.attemptOrdinal,
-              },
-        pendingEventCount: this.#store
-          .listInbox(caseRecord.id)
-          .filter((event) => event.state === 'pending').length,
-        openChannelCount: this.#store
-          .listChannels(caseRecord.id)
-          .filter((channel) => channel.parentCaseId === caseRecord.id && channel.state === 'open')
-          .length,
-        createdAt: caseRecord.createdAt,
-        updatedAt: caseRecord.updatedAt,
-      }
-    })
+            : findWorkItem(descriptor, caseRecord.currentWorkItemRef)
+        const activeRound = (await this.#store.listRounds(caseRecord.id)).find((round) =>
+          ['planned', 'running', 'settling'].includes(round.state),
+        )
+        const subjectRef =
+          typeof primaryState?.subjectRef === 'string'
+            ? primaryState.subjectRef
+            : typeof primaryState?.title === 'string'
+              ? primaryState.title
+              : caseRecord.id
+        const targetRef =
+          typeof primaryState?.repositoryRef === 'string'
+            ? primaryState.repositoryRef
+            : typeof primaryState?.projectRef === 'string'
+              ? primaryState.projectRef
+              : null
+        return {
+          id: caseRecord.id,
+          revision: caseRecord.revision,
+          state: caseRecord.state,
+          terminalKind: caseRecord.terminalKind,
+          blockReason: caseRecord.blockReason,
+          employeeRef: caseRecord.employeeRef,
+          employeeName: employee?.content.displayName ?? caseRecord.employeeRef.id,
+          typeRef: caseRecord.typeRef,
+          typeName: descriptor.displayName,
+          taskName: caseRecord.name,
+          subjectRef,
+          targetRef,
+          currentWorkItemRef: caseRecord.currentWorkItemRef,
+          currentWorkItemName: currentItem?.label ?? null,
+          activeRound:
+            activeRound === undefined
+              ? null
+              : {
+                  id: activeRound.id,
+                  state: activeRound.state,
+                  workItemRef: activeRound.workItemRef,
+                  attemptOrdinal: activeRound.attemptOrdinal,
+                },
+          pendingEventCount: (await this.#store.listInbox(caseRecord.id)).filter(
+            (event) => event.state === 'pending',
+          ).length,
+          openChannelCount: (await this.#store.listChannels(caseRecord.id)).filter(
+            (channel) => channel.parentCaseId === caseRecord.id && channel.state === 'open',
+          ).length,
+          createdAt: caseRecord.createdAt,
+          updatedAt: caseRecord.updatedAt,
+        }
+      }),
+    )
     const last = page.cases.at(-1)
     return {
       items,
@@ -1202,15 +1205,17 @@ export class DigitalEmployeeRuntimeService {
     }
   }
 
-  findCaseByExternalSubject(subjectType: string, subjectRef: string) {
-    return this.#store.findCaseByExternalSubject(subjectType, subjectRef)
+  async findCaseByExternalSubject(subjectType: string, subjectRef: string) {
+    return await this.#store.findCaseByExternalSubject(subjectType, subjectRef)
   }
 
-  project(caseId: string) {
-    const caseRecord = this.getCase(caseId)
-    const descriptor = this.#descriptor(caseRecord)
-    const contexts = this.#store.listContexts(caseId)
-    const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+  async project(caseId: string) {
+    const caseRecord = await this.getCase(caseId)
+    const descriptor = await this.#descriptor(caseRecord)
+    const contexts = await this.#store.listContexts(caseId)
+    const employee = await this.#authoringStore.getEmployeeDefinitionRevision(
+      caseRecord.employeeRef,
+    )
     if (employee === null) throw new Error('pinned employee definition disappeared')
     const primaryContext = contexts.find((context) => context.id === caseRecord.primaryContextId)
     const primaryContextState =
@@ -1230,10 +1235,10 @@ export class DigitalEmployeeRuntimeService {
       exactAdapterBindings: employee.content.exactAdapterBindings,
       exactOrderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
     }
-    const attention = this.#store.listAttention(caseId)
-    const inbox = this.#store.listInbox(caseId)
-    const rounds = this.#store.listRounds(caseId)
-    const detail = this.#projectCaseDetail(caseRecord, contexts, rounds)
+    const attention = await this.#store.listAttention(caseId)
+    const inbox = await this.#store.listInbox(caseId)
+    const rounds = await this.#store.listRounds(caseId)
+    const detail = await this.#projectCaseDetail(caseRecord, contexts, rounds)
     const activeRound = rounds.find((round) =>
       ['planned', 'running', 'settling'].includes(round.state),
     )
@@ -1298,6 +1303,30 @@ export class DigitalEmployeeRuntimeService {
         },
       ]
     })
+    const channels = await Promise.all(
+      (await this.#store.listChannels(caseId))
+        .filter((channel) => channel.parentCaseId === caseId)
+        .map(async (channel) => {
+          const invocation = (
+            await this.#store.listInvocationsForRound(channel.correlationRef)
+          ).find((candidate) => candidate.id === channel.invocationId)
+          if (invocation === undefined) {
+            throw new Error(`employee channel ${channel.id} lost its invocation projection`)
+          }
+          const completion = invocationCompletionSchema.parse(
+            JSON.parse(invocation.completionContractRefJson) as unknown,
+          )
+          return {
+            ...channel,
+            targetEmployeeRef: invocation.targetEmployeeRef,
+            invocationContractId: completion.contractId,
+            results: (await this.#store.listChannelResults(channel.id)).map((result) => ({
+              ...result,
+              envelope: JSON.parse(result.envelopeJson) as unknown,
+            })),
+          }
+        }),
+    )
     return {
       case: caseRecord,
       employeeType: {
@@ -1337,29 +1366,7 @@ export class DigitalEmployeeRuntimeService {
       activeRound,
       rounds,
       reviewGates,
-      channels: this.#store
-        .listChannels(caseId)
-        .filter((channel) => channel.parentCaseId === caseId)
-        .map((channel) => {
-          const invocation = this.#store
-            .listInvocationsForRound(channel.correlationRef)
-            .find((candidate) => candidate.id === channel.invocationId)
-          if (invocation === undefined) {
-            throw new Error(`employee channel ${channel.id} lost its invocation projection`)
-          }
-          const completion = invocationCompletionSchema.parse(
-            JSON.parse(invocation.completionContractRefJson) as unknown,
-          )
-          return {
-            ...channel,
-            targetEmployeeRef: invocation.targetEmployeeRef,
-            invocationContractId: completion.contractId,
-            results: this.#store.listChannelResults(channel.id).map((result) => ({
-              ...result,
-              envelope: JSON.parse(result.envelopeJson) as unknown,
-            })),
-          }
-        }),
+      channels,
       nextAction: projectEmployeeCaseNextAction({
         caseState: caseRecord.state,
         activeRoundExists: activeRound !== undefined,
@@ -1385,10 +1392,10 @@ export class DigitalEmployeeRuntimeService {
     return null
   }
 
-  #recordReactionMetering(
+  async #recordReactionMetering(
     round: ReactionRoundRecord,
     metering: ReactionExecutionMetering,
-  ): string | null {
+  ): Promise<string | null> {
     if (
       !Number.isSafeInteger(metering.durationMs) ||
       metering.durationMs < 0 ||
@@ -1401,25 +1408,29 @@ export class DigitalEmployeeRuntimeService {
       )
     }
     return this.#caseLimitTerminalKind(
-      this.#store.recordMetering({
-        sourceRef: metering.sourceRef,
-        caseId: round.caseId,
-        roundId: round.id,
-        durationMs: metering.durationMs,
-        totalTokens: metering.totalTokens,
-        now: this.#now(),
-      }).caseRecord,
+      (
+        await this.#store.recordMetering({
+          sourceRef: metering.sourceRef,
+          caseId: round.caseId,
+          roundId: round.id,
+          durationMs: metering.durationMs,
+          totalTokens: metering.totalTokens,
+          now: this.#now(),
+        })
+      ).caseRecord,
     )
   }
 
-  #settleCompletedRound(
+  async #settleCompletedRound(
     round: ReactionRoundRecord,
     validatedOutputJson: string,
     limitTerminalKind: string | null = null,
-  ): void {
-    const caseRecord = this.getCase(round.caseId)
-    const descriptor = this.#descriptor(caseRecord)
-    const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+  ): Promise<void> {
+    const caseRecord = await this.getCase(round.caseId)
+    const descriptor = await this.#descriptor(caseRecord)
+    const employee = await this.#authoringStore.getEmployeeDefinitionRevision(
+      caseRecord.employeeRef,
+    )
     if (employee === null) throw new Error('pinned employee definition disappeared')
     const eventCapabilityEnabled = (eventTypeId: string): boolean =>
       isEmployeeReactionEventEnabled({
@@ -1430,7 +1441,7 @@ export class DigitalEmployeeRuntimeService {
     const item = findWorkItem(descriptor, round.workItemRef)
     if (item === null) throw new Error(`reaction work item disappeared: ${round.workItemRef}`)
     const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
-    const beforeContexts = this.#store.listContexts(caseRecord.id)
+    const beforeContexts = await this.#store.listContexts(caseRecord.id)
     const resolvedSettlement = reactionSettlementSchema.parse(
       JSON.parse(
         this.#codec(caseRecord.typeRef.typeId).resolveReactionSettlementJson(
@@ -1603,7 +1614,7 @@ export class DigitalEmployeeRuntimeService {
         contextsAfter.push(mutation.context)
       }
     }
-    const existingAttention = this.#store.listAttention(caseRecord.id)
+    const existingAttention = await this.#store.listAttention(caseRecord.id)
     const cancelAll = settlement.caseState === 'terminal'
     const desiredIdentities = new Set<string>()
     const attentionUpserts: Array<{
@@ -1753,7 +1764,7 @@ export class DigitalEmployeeRuntimeService {
               },
       }))
 
-    this.#store.settleRound({
+    await this.#store.settleRound({
       roundId: round.id,
       state: 'completed',
       outputJson: validatedOutputJson,
@@ -1769,10 +1780,10 @@ export class DigitalEmployeeRuntimeService {
     })
   }
 
-  #validateRoundOutput(round: ReactionRoundRecord, outputJson: string): string {
+  async #validateRoundOutput(round: ReactionRoundRecord, outputJson: string): Promise<string> {
     const plan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
-    const caseRecord = this.getCase(round.caseId)
-    const platformValidatedOutput = this.#executionContracts.validateEnvelope({
+    const caseRecord = await this.getCase(round.caseId)
+    const platformValidatedOutput = await this.#executionContracts.validateEnvelope({
       direction: 'output',
       contractRef: plan.workContractRef,
       roundRef: round.id,
@@ -1822,10 +1833,13 @@ export class DigitalEmployeeRuntimeService {
     return event.success ? event.data : null
   }
 
-  #assertCollaborationAllowed(parentCase: EmployeeCaseRecord, targetEmployeeId: string): void {
-    const outbound = this.#store
-      .listChannels(parentCase.id)
-      .filter((channel) => channel.parentCaseId === parentCase.id)
+  async #assertCollaborationAllowed(
+    parentCase: EmployeeCaseRecord,
+    targetEmployeeId: string,
+  ): Promise<void> {
+    const outbound = (await this.#store.listChannels(parentCase.id)).filter(
+      (channel) => channel.parentCaseId === parentCase.id,
+    )
     const ancestry: Array<{ caseId: string; employeeId: string }> = []
     const visited = new Set<string>()
     let cursor: EmployeeCaseRecord | null = parentCase
@@ -1840,11 +1854,11 @@ export class DigitalEmployeeRuntimeService {
       ancestry.push({ caseId: cursor.id, employeeId: cursor.employeeRef.id })
       if (ancestry.length >= MAX_EMPLOYEE_INVOCATION_DEPTH) break
       const cursorId = cursor.id
-      const inbound = this.#store
-        .listChannels(cursorId)
-        .find((channel) => channel.childCaseId === cursorId)
+      const inbound = (await this.#store.listChannels(cursorId)).find(
+        (channel) => channel.childCaseId === cursorId,
+      )
       if (inbound === undefined) break
-      cursor = this.#store.getCase(inbound.parentCaseId)
+      cursor = await this.#store.getCase(inbound.parentCaseId)
       if (cursor === null) {
         throw new ValidationError(
           'employee-collaboration-ancestry-invalid',
@@ -1860,65 +1874,73 @@ export class DigitalEmployeeRuntimeService {
     if (!guard.ok) throw new ValidationError(guard.code, guard.detail)
   }
 
-  #resolveCompatibleSuccessorBindings(
+  async #resolveCompatibleSuccessorBindings(
     _parentCase: EmployeeCaseRecord,
     frozenBindings: readonly EmployeeCollaborationBinding[],
-  ): EmployeeCollaborationBinding[] {
+  ): Promise<EmployeeCollaborationBinding[]> {
     // The frozen parent binding remains the authority for an in-flight Case.
     // Its employee may be unable to upgrade because of an unrelated tool or
     // scope contract, while the stable target employee has a proven automatic
     // successor. Requiring a current parent revision here deadlocks that
     // historical invocation even though only the target must start new work.
-    return frozenBindings.map((binding) => {
-      const frozenTarget = this.#authoringStore.getEmployeeDefinitionRevision(
-        binding.targetEmployeeRef,
-      )
-      if (frozenTarget === null) return binding
-      const currentTargetTypeRevision = this.#currentTypeRevisions.get(
-        frozenTarget.content.typeRef.typeId,
-      )
-      if (
-        currentTargetTypeRevision === undefined ||
-        frozenTarget.content.typeRef.revision > currentTargetTypeRevision
-      ) {
-        return binding
-      }
-      const currentTarget = this.#authoringStore.getEmployeeDefinition(binding.targetEmployeeRef.id)
-      if (
-        currentTarget === null ||
-        currentTarget.archivedAt !== null ||
-        currentTarget.currentRevision === null ||
-        currentTarget.currentRevision <= binding.targetEmployeeRef.revision
-      ) {
-        return binding
-      }
-      const successorRef = {
-        id: currentTarget.id,
-        revision: currentTarget.currentRevision,
-      }
-      const compatibleTarget = this.#authoringStore.getEmployeeDefinitionRevision(successorRef)
-      if (
-        compatibleTarget === null ||
-        compatibleTarget.createdBy !== null ||
-        compatibleTarget.content.typeRef.typeId !== frozenTarget.content.typeRef.typeId ||
-        compatibleTarget.content.typeRef.revision !== currentTargetTypeRevision
-      ) {
-        return binding
-      }
-      return employeeCollaborationBindingSchema.parse({
-        ...binding,
-        targetEmployeeRef: successorRef,
-      })
-    })
+    return await Promise.all(
+      frozenBindings.map(async (binding) => {
+        const frozenTarget = await this.#authoringStore.getEmployeeDefinitionRevision(
+          binding.targetEmployeeRef,
+        )
+        if (frozenTarget === null) return binding
+        const currentTargetTypeRevision = this.#currentTypeRevisions.get(
+          frozenTarget.content.typeRef.typeId,
+        )
+        if (
+          currentTargetTypeRevision === undefined ||
+          frozenTarget.content.typeRef.revision > currentTargetTypeRevision
+        ) {
+          return binding
+        }
+        const currentTarget = await this.#authoringStore.getEmployeeDefinition(
+          binding.targetEmployeeRef.id,
+        )
+        if (
+          currentTarget === null ||
+          currentTarget.archivedAt !== null ||
+          currentTarget.currentRevision === null ||
+          currentTarget.currentRevision <= binding.targetEmployeeRef.revision
+        ) {
+          return binding
+        }
+        const successorRef = {
+          id: currentTarget.id,
+          revision: currentTarget.currentRevision,
+        }
+        const compatibleTarget =
+          await this.#authoringStore.getEmployeeDefinitionRevision(successorRef)
+        if (
+          compatibleTarget === null ||
+          compatibleTarget.createdBy !== null ||
+          compatibleTarget.content.typeRef.typeId !== frozenTarget.content.typeRef.typeId ||
+          compatibleTarget.content.typeRef.revision !== currentTargetTypeRevision
+        ) {
+          return binding
+        }
+        return employeeCollaborationBindingSchema.parse({
+          ...binding,
+          targetEmployeeRef: successorRef,
+        })
+      }),
+    )
   }
 
-  #resolveCompatibleInvocationBindings(
+  async #resolveCompatibleInvocationBindings(
     parentCase: EmployeeCaseRecord,
     round: ReactionRoundRecord,
     frozenBindings: readonly EmployeeCollaborationBinding[],
-  ): EmployeeCollaborationBinding[] {
-    const compatibleBindings = this.#resolveCompatibleSuccessorBindings(parentCase, frozenBindings)
-    const durableInvocations = this.#store.listInvocationsForRound(round.id)
+  ): Promise<EmployeeCollaborationBinding[]> {
+    const compatibleBindings = await this.#resolveCompatibleSuccessorBindings(
+      parentCase,
+      frozenBindings,
+    )
+    const durableInvocations = await this.#store.listInvocationsForRound(round.id)
     return frozenBindings.map((binding, index) => {
       const invocation = durableInvocations.find(
         (candidate) => candidate.id === `invocation:${round.id}:${binding.memberRef}`,
@@ -1932,7 +1954,9 @@ export class DigitalEmployeeRuntimeService {
     })
   }
 
-  #automaticallyResumeCompatibleInvocationUpgrade(caseRecord: EmployeeCaseRecord): boolean {
+  async #automaticallyResumeCompatibleInvocationUpgrade(
+    caseRecord: EmployeeCaseRecord,
+  ): Promise<boolean> {
     if (
       caseRecord.state !== 'blocked' ||
       caseRecord.activeRoundId !== null ||
@@ -1940,11 +1964,9 @@ export class DigitalEmployeeRuntimeService {
     ) {
       return false
     }
-    const failedRound = this.#store
-      .listRounds(caseRecord.id)
-      .find(
-        (round) => round.state === 'failed' && round.workItemRef === caseRecord.currentWorkItemRef,
-      )
+    const failedRound = (await this.#store.listRounds(caseRecord.id)).find(
+      (round) => round.state === 'failed' && round.workItemRef === caseRecord.currentWorkItemRef,
+    )
     if (failedRound === undefined || failedRound.outputJson === null) return false
     const failure = z
       .object({
@@ -1975,28 +1997,31 @@ export class DigitalEmployeeRuntimeService {
       .min(1)
       .safeParse(parseJsonOrUndefined(plan.data.implementationJson))
     if (!bindings.success) return false
-    const invocations = this.#store.listInvocationsForRound(failedRound.id)
-    if (
-      invocations.length === 0 ||
-      invocations.some(
-        (invocation) =>
-          invocation.state !== 'requested' ||
-          invocation.childCaseId !== null ||
-          this.#store.getChannelByInvocation(invocation.id) !== null,
-      )
-    ) {
+    const invocations = await this.#store.listInvocationsForRound(failedRound.id)
+    let invalidInvocation = invocations.length === 0
+    for (const invocation of invocations) {
+      if (
+        invocation.state !== 'requested' ||
+        invocation.childCaseId !== null ||
+        (await this.#store.getChannelByInvocation(invocation.id)) !== null
+      ) {
+        invalidInvocation = true
+        break
+      }
+    }
+    if (invalidInvocation) {
       return false
     }
-    const compatible = this.#resolveCompatibleSuccessorBindings(caseRecord, bindings.data)
+    const compatible = await this.#resolveCompatibleSuccessorBindings(caseRecord, bindings.data)
     const changed = bindings.data.some(
       (binding, index) => !sameRef(binding.targetEmployeeRef, compatible[index]!.targetEmployeeRef),
     )
     if (!changed) return false
-    this.#store.resumeCase(caseRecord.id, this.#now())
+    await this.#store.resumeCase(caseRecord.id, this.#now())
     return true
   }
 
-  #automaticallyResumeRecoveredToolBinding(caseRecord: EmployeeCaseRecord): boolean {
+  async #automaticallyResumeRecoveredToolBinding(caseRecord: EmployeeCaseRecord): Promise<boolean> {
     const prefix =
       'reaction-planning-failed: employee-tool-binding-unavailable: no exact published tool for '
     if (
@@ -2016,9 +2041,11 @@ export class DigitalEmployeeRuntimeService {
     const workItemRef = identityParts.join('/')
     if (workItemRef.length === 0 || slotRef === undefined || slotRef.length === 0) return false
     if (workItemRef !== caseRecord.currentWorkItemRef) return false
-    const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+    const employee = await this.#authoringStore.getEmployeeDefinitionRevision(
+      caseRecord.employeeRef,
+    )
     if (employee === null) return false
-    const typePackage = this.#authoringStore.getTypePackage(caseRecord.typeRef)
+    const typePackage = await this.#authoringStore.getTypePackage(caseRecord.typeRef)
     if (typePackage === null || typePackage.state !== 'published') return false
     const item = findWorkItem(typePackage.descriptor, workItemRef)
     if (item === null || item.nodeKind !== 'business-tool') return false
@@ -2027,7 +2054,7 @@ export class DigitalEmployeeRuntimeService {
       selectedSlotRef = this.#selectWorkItemSlot({
         caseRecord,
         item,
-        contexts: this.#store.listContexts(caseRecord.id),
+        contexts: await this.#store.listContexts(caseRecord.id),
         orderedDispatchConfigurations: employee.content.exactOrderedDispatchConfigurations,
         preferredSlotRef: undefined,
       })
@@ -2053,22 +2080,27 @@ export class DigitalEmployeeRuntimeService {
     const registrationRef = dispatchBinding?.registrationRef ?? toolBinding?.registrationRef ?? null
     if (
       selectedSlotRef !== PLATFORM_WORK_ITEM_SLOT_REF &&
-      (registrationRef === null || this.#toolRevision(registrationRef)?.state !== 'published')
+      (registrationRef === null ||
+        (await this.#toolRevision(registrationRef))?.state !== 'published')
     ) {
       return false
     }
-    if (
-      employee.content.exactToolBindings
-        .filter((binding) => binding.workItemRef === workItemRef)
-        .some((binding) => this.#toolRevision(binding.registrationRef)?.state !== 'published')
-    ) {
-      return false
+    for (const binding of employee.content.exactToolBindings) {
+      if (
+        binding.workItemRef === workItemRef &&
+        (await this.#toolRevision(binding.registrationRef))?.state !== 'published'
+      ) {
+        return false
+      }
     }
-    this.#store.resumeCase(caseRecord.id, this.#now())
+    await this.#store.resumeCase(caseRecord.id, this.#now())
     return true
   }
 
-  #executeInvocationRound(round: ReactionRoundRecord, plan: ReactionExecutionPlan): void {
+  async #executeInvocationRound(
+    round: ReactionRoundRecord,
+    plan: ReactionExecutionPlan,
+  ): Promise<void> {
     if (plan.implementationJson === null) {
       throw new ValidationError(
         'employee-collaboration-plan-invalid',
@@ -2079,66 +2111,72 @@ export class DigitalEmployeeRuntimeService {
       .array(employeeCollaborationBindingSchema)
       .min(1)
       .parse(JSON.parse(plan.implementationJson) as unknown)
-    const parentCase = this.getCase(round.caseId)
-    const bindings = this.#resolveCompatibleInvocationBindings(parentCase, round, frozenBindings)
-    const contexts = this.#store.listContexts(round.caseId)
+    const parentCase = await this.getCase(round.caseId)
+    const bindings = await this.#resolveCompatibleInvocationBindings(
+      parentCase,
+      round,
+      frozenBindings,
+    )
+    const contexts = await this.#store.listContexts(round.caseId)
     const event = this.#invocationEvent(plan)
     if (event?.subject.typeId === 'employee-invocation') {
-      const channel = this.#store.getChannelByInvocation(event.subject.subjectRef)
+      const channel = await this.#store.getChannelByInvocation(event.subject.subjectRef)
       if (channel === null || channel.parentCaseId !== parentCase.id) {
         throw new ValidationError(
           'employee-channel-result-unmatched',
           'collaboration result does not belong to this parent case',
         )
       }
-      const currentResult = this.#store.listChannelResults(channel.id).at(-1)
+      const currentResult = (await this.#store.listChannelResults(channel.id)).at(-1)
       if (currentResult === undefined) {
         throw new ValidationError(
           'employee-channel-result-missing',
           'collaboration result event arrived before its durable result',
         )
       }
-      const groupInvocations = this.#store.listInvocationsForRound(channel.correlationRef)
+      const groupInvocations = await this.#store.listInvocationsForRound(channel.correlationRef)
       if (groupInvocations.length !== bindings.length) {
         throw new ValidationError(
           'employee-collaboration-group-incomplete',
           'the durable invocation group does not match its frozen collaboration plan',
         )
       }
-      const members = bindings.map((binding) => {
-        const invocation = groupInvocations.find((candidate) =>
-          sameRef(candidate.targetEmployeeRef, binding.targetEmployeeRef),
-        )
-        if (invocation === undefined) {
-          throw new ValidationError(
-            'employee-collaboration-member-unmatched',
-            `no durable invocation exists for member ${binding.memberRef}`,
+      const members = await Promise.all(
+        bindings.map(async (binding) => {
+          const invocation = groupInvocations.find((candidate) =>
+            sameRef(candidate.targetEmployeeRef, binding.targetEmployeeRef),
           )
-        }
-        const memberChannel = this.#store.getChannelByInvocation(invocation.id)
-        const result =
-          memberChannel === null
-            ? undefined
-            : this.#store.listChannelResults(memberChannel.id).at(-1)
-        return {
-          memberRef: binding.memberRef,
-          invocationRef: invocation.id,
-          targetEmployeeRef: binding.targetEmployeeRef,
-          state:
-            result === undefined
-              ? invocation.state === 'detached'
-                ? ('detached' as const)
-                : ('waiting' as const)
-              : result.envelopeJson.length > 0 &&
-                  z
-                    .object({ state: z.enum(['satisfied', 'failed']) })
-                    .passthrough()
-                    .parse(JSON.parse(result.envelopeJson) as unknown).state === 'satisfied'
-                ? ('satisfied' as const)
-                : ('failed' as const),
-          resultEnvelopeJson: result?.envelopeJson ?? null,
-        }
-      })
+          if (invocation === undefined) {
+            throw new ValidationError(
+              'employee-collaboration-member-unmatched',
+              `no durable invocation exists for member ${binding.memberRef}`,
+            )
+          }
+          const memberChannel = await this.#store.getChannelByInvocation(invocation.id)
+          const result =
+            memberChannel === null
+              ? undefined
+              : (await this.#store.listChannelResults(memberChannel.id)).at(-1)
+          return {
+            memberRef: binding.memberRef,
+            invocationRef: invocation.id,
+            targetEmployeeRef: binding.targetEmployeeRef,
+            state:
+              result === undefined
+                ? invocation.state === 'detached'
+                  ? ('detached' as const)
+                  : ('waiting' as const)
+                : result.envelopeJson.length > 0 &&
+                    z
+                      .object({ state: z.enum(['satisfied', 'failed']) })
+                      .passthrough()
+                      .parse(JSON.parse(result.envelopeJson) as unknown).state === 'satisfied'
+                  ? ('satisfied' as const)
+                  : ('failed' as const),
+            resultEnvelopeJson: result?.envelopeJson ?? null,
+          }
+        }),
+      )
       const satisfied = members.filter((member) => member.state === 'satisfied').length
       const failed = members.filter((member) => member.state === 'failed').length
       const joinMode = bindings[0]!.joinMode
@@ -2153,17 +2191,17 @@ export class DigitalEmployeeRuntimeService {
         memberStates: members.map((member) => member.state),
       })
       if (joinState === 'satisfied' && joinMode !== 'all') {
-        this.#store.detachOpenChannelsForRound(channel.correlationRef, this.#now())
+        await this.#store.detachOpenChannelsForRound(channel.correlationRef, this.#now())
       }
       if (joinState !== 'waiting') {
         const memberInvocations = new Set(groupInvocations.map((invocation) => invocation.id))
-        for (const sibling of this.#store.listInbox(parentCase.id)) {
+        for (const sibling of await this.#store.listInbox(parentCase.id)) {
           if (
             sibling.state === 'pending' &&
             sibling.subject.typeId === 'employee-invocation' &&
             memberInvocations.has(sibling.subject.subjectRef)
           ) {
-            this.#store.markInbox(sibling.id, 'obsolete', this.#now())
+            await this.#store.markInbox(sibling.id, 'obsolete', this.#now())
           }
         }
       }
@@ -2219,11 +2257,13 @@ export class DigitalEmployeeRuntimeService {
           joinResultEnvelopeJson: JSON.stringify(aggregate),
         }),
       )
-      this.#settleCompletedRound(round, this.#validateRoundOutput(round, output))
+      await this.#settleCompletedRound(round, await this.#validateRoundOutput(round, output))
       return
     }
-    const descriptor = this.#descriptor(parentCase)
-    const policy = this.#authoringStore.getExecutionPolicyRevision(round.executionPolicyRevision)
+    const descriptor = await this.#descriptor(parentCase)
+    const policy = await this.#authoringStore.getExecutionPolicyRevision(
+      round.executionPolicyRevision,
+    )
     if (policy === null) throw new Error('pinned execution policy disappeared')
     const now = this.#now()
     const invocations: Array<{
@@ -2232,14 +2272,18 @@ export class DigitalEmployeeRuntimeService {
       targetEmployeeRef: ExactResourceRef
     }> = []
     for (const binding of bindings) {
-      const target = this.#authoringStore.getEmployeeDefinitionRevision(binding.targetEmployeeRef)
+      const target = await this.#authoringStore.getEmployeeDefinitionRevision(
+        binding.targetEmployeeRef,
+      )
       if (target === null) {
         throw new ValidationError(
           'employee-collaboration-target-unavailable',
           `the frozen target employee is unavailable: ${binding.memberRef}`,
         )
       }
-      const targetScope = this.#authoringStore.getWorkScopeRevision(target.content.workScopeRef)
+      const targetScope = await this.#authoringStore.getWorkScopeRevision(
+        target.content.workScopeRef,
+      )
       if (targetScope === null) {
         throw new ValidationError(
           'employee-collaboration-scope-unavailable',
@@ -2267,11 +2311,11 @@ export class DigitalEmployeeRuntimeService {
         )
       }
       const invocationId = `invocation:${round.id}:${binding.memberRef}`
-      const existing = this.#store
-        .listInvocationsForRound(round.id)
-        .find((candidate) => candidate.id === invocationId)
+      const existing = (await this.#store.listInvocationsForRound(round.id)).find(
+        (candidate) => candidate.id === invocationId,
+      )
       if (existing === undefined) {
-        this.#assertCollaborationAllowed(parentCase, binding.targetEmployeeRef.id)
+        await this.#assertCollaborationAllowed(parentCase, binding.targetEmployeeRef.id)
       }
       const childCaseId = `employee-child:${runtimeDigest({ invocationId }).slice(0, 32)}`
       const completion = invocationCompletionSchema.parse({
@@ -2280,7 +2324,7 @@ export class DigitalEmployeeRuntimeService {
         eventTypeRef: { id: eventType.eventTypeId, revision: eventType.version },
         sourceRef: eventType.sourceRef,
       })
-      this.#store.createInvocation({
+      await this.#store.createInvocation({
         id: invocationId,
         idempotencyKey: `employee-invocation:${round.id}:${binding.memberRef}`,
         parentCaseId: parentCase.id,
@@ -2296,7 +2340,7 @@ export class DigitalEmployeeRuntimeService {
         createdAt: now,
         updatedAt: now,
       })
-      if (this.#store.getCase(childCaseId) === null) {
+      if ((await this.#store.getCase(childCaseId)) === null) {
         const launch = employeeCaseLaunchSchema.parse(
           JSON.parse(
             this.#codec(target.content.typeRef.typeId).buildInvokedCaseJson(
@@ -2318,7 +2362,7 @@ export class DigitalEmployeeRuntimeService {
             'target type codec changed the frozen target employee revision',
           )
         }
-        this.launchCase(launch, {
+        await this.launchCase(launch, {
           caseId: childCaseId,
           now,
           taskName: boundedCaseTaskName(
@@ -2331,7 +2375,7 @@ export class DigitalEmployeeRuntimeService {
           uploadClaims: [],
         })
       }
-      this.#store.acceptInvocation({
+      await this.#store.acceptInvocation({
         invocationId,
         childCaseId,
         channel: {
@@ -2366,21 +2410,23 @@ export class DigitalEmployeeRuntimeService {
         contextsJson: JSON.stringify(contexts),
       }),
     )
-    this.#settleCompletedRound(round, this.#validateRoundOutput(round, output))
+    await this.#settleCompletedRound(round, await this.#validateRoundOutput(round, output))
   }
 
-  publishOneChannelResult(): 'completed' | 'idle' {
+  async publishOneChannelResult(): Promise<'completed' | 'idle'> {
     const now = this.#now()
-    const terminalCandidate = this.#store.listOpenChannelsWithTerminalChild(1)[0]
+    const terminalCandidate = (await this.#store.listOpenChannelsWithTerminalChild(1))[0]
     const expiredCandidate =
-      terminalCandidate === undefined ? this.#store.listExpiredOpenChannels(now, 1)[0] : undefined
+      terminalCandidate === undefined
+        ? (await this.#store.listExpiredOpenChannels(now, 1))[0]
+        : undefined
     if (terminalCandidate === undefined && expiredCandidate === undefined) return 'idle'
     const candidate = terminalCandidate ?? expiredCandidate!
     const observationOnly = candidate.channel.state === 'detached'
     const completion = invocationCompletionSchema.parse(
       JSON.parse(candidate.channel.resultContractRefJson) as unknown,
     )
-    const childContexts = this.#store.listContexts(candidate.childCase.id)
+    const childContexts = await this.#store.listContexts(candidate.childCase.id)
     const expired = terminalCandidate === undefined
     const terminalKind = expired
       ? 'deadline-exceeded'
@@ -2415,7 +2461,7 @@ export class DigitalEmployeeRuntimeService {
     const envelopeDigest = runtimeDigest(envelope)
     const occurredAt = expired ? now : (candidate.childCase.terminalAt ?? now)
     if (!observationOnly) {
-      this.#eventCenter.observe({
+      await this.#eventCenter.observe({
         sourceRef: completion.sourceRef,
         eventTypeRef: completion.eventTypeRef,
         subject: {
@@ -2427,7 +2473,7 @@ export class DigitalEmployeeRuntimeService {
         summary: envelope.summary,
         payloadArtifactRef: null,
       })
-      this.#eventCenter.observe(
+      await this.#eventCenter.observe(
         employeeInvocationResultObservation({
           invocationRef: candidate.channel.invocationId,
           state: envelope.state,
@@ -2438,7 +2484,7 @@ export class DigitalEmployeeRuntimeService {
         }),
       )
     }
-    this.#store.settleChannelResult({
+    await this.#store.settleChannelResult({
       result: {
         id: this.#id(),
         channelId: candidate.channel.id,
@@ -2456,7 +2502,7 @@ export class DigitalEmployeeRuntimeService {
 
   async runOneOutbox(): Promise<'completed' | 'retried' | 'idle'> {
     const now = this.#now()
-    const outbox = this.#store.claimOutbox({
+    const outbox = await this.#store.claimOutbox({
       workerId: this.#workerId,
       now,
       leaseMs: this.#outboxLeaseMs,
@@ -2464,38 +2510,38 @@ export class DigitalEmployeeRuntimeService {
     if (outbox === null) return 'idle'
     let platformAttempt: { readonly roundId: string; readonly startedAt: number } | null = null
     try {
-      const ownedCase = outbox.caseId === null ? null : this.#store.getCase(outbox.caseId)
+      const ownedCase = outbox.caseId === null ? null : await this.#store.getCase(outbox.caseId)
       if (
         ownedCase?.state === 'terminal' &&
         outbox.kind !== 'event-unsubscribe' &&
         outbox.kind !== 'event-publish'
       ) {
-        this.#store.completeOutbox(outbox.id, this.#workerId, now)
+        await this.#store.completeOutbox(outbox.id, this.#workerId, now)
         return 'completed'
       }
       if (outbox.kind === 'event-subscribe') {
         const payload = subscribePayloadSchema.parse(JSON.parse(outbox.payloadJson) as unknown)
-        const binding = this.#store
-          .listAttention(outbox.caseId ?? '')
-          .find((candidate) => candidate.id === payload.bindingId)
+        const binding = (await this.#store.listAttention(outbox.caseId ?? '')).find(
+          (candidate) => candidate.id === payload.bindingId,
+        )
         if (binding === undefined || ['cancel-requested', 'cancelled'].includes(binding.state)) {
-          this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
+          await this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
           return 'completed'
         }
-        const receipt = this.#eventCenter.subscribe({
+        const receipt = await this.#eventCenter.subscribe({
           eventTypeRef: payload.eventTypeRef,
           subject: payload.subject,
           subscriber: { kind: 'employee-case', subscriberRef: payload.caseId },
           replayLatest: payload.replayLatest,
         })
-        this.#store.activateAttention(payload.bindingId, receipt.subscriptionId, now)
+        await this.#store.activateAttention(payload.bindingId, receipt.subscriptionId, now)
       } else if (outbox.kind === 'event-publish') {
-        this.#eventCenter.observe(JSON.parse(outbox.payloadJson) as EventObservationInput)
+        await this.#eventCenter.observe(JSON.parse(outbox.payloadJson) as EventObservationInput)
       } else if (outbox.kind === 'event-unsubscribe') {
         const payload = unsubscribePayloadSchema.parse(JSON.parse(outbox.payloadJson) as unknown)
-        const binding = this.#store
-          .listAttention(outbox.caseId ?? '')
-          .find((candidate) => candidate.id === payload.bindingId)
+        const binding = (await this.#store.listAttention(outbox.caseId ?? '')).find(
+          (candidate) => candidate.id === payload.bindingId,
+        )
         if (
           binding !== undefined &&
           (binding.state !== 'cancel-requested' ||
@@ -2504,11 +2550,11 @@ export class DigitalEmployeeRuntimeService {
           // Attention state is the current cancellation authority. A delayed
           // effect must not cancel a subscription that has since been retained
           // or replaced by reactivation.
-          this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
+          await this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
           return 'completed'
         }
-        this.#eventCenter.unsubscribe(payload.subscriptionId)
-        this.#store.cancelAttention(payload.bindingId, now)
+        await this.#eventCenter.unsubscribe(payload.subscriptionId)
+        await this.#store.cancelAttention(payload.bindingId, now)
       } else if (outbox.kind === 'execution-launch') {
         const payload = z
           .object({
@@ -2526,15 +2572,15 @@ export class DigitalEmployeeRuntimeService {
           .strict()
           .parse(JSON.parse(outbox.payloadJson) as unknown)
         const receipt = await this.#execution.launch(payload.plan, payload.attempt)
-        this.#store.markRoundRunning(payload.roundId, receipt.executionRef, now)
+        await this.#store.markRoundRunning(payload.roundId, receipt.executionRef, now)
       } else if (outbox.kind === 'platform-work-item-execute') {
         const payload = z
           .object({ roundId: z.string().min(1), plan: reactionExecutionPlanSchema })
           .strict()
           .parse(JSON.parse(outbox.payloadJson) as unknown)
-        const round = this.#store
-          .listRounds(outbox.caseId ?? '')
-          .find((candidate) => candidate.id === payload.roundId)
+        const round = (await this.#store.listRounds(outbox.caseId ?? '')).find(
+          (candidate) => candidate.id === payload.roundId,
+        )
         if (round === undefined)
           throw new Error(`platform work item round missing: ${payload.roundId}`)
         if (ownedCase === null) {
@@ -2547,49 +2593,51 @@ export class DigitalEmployeeRuntimeService {
               ? { kind: 'system' }
               : { kind: 'user', userId: ownedCase.ownerUserId },
         })
-        const limitTerminalKind = this.#recordReactionMetering(round, {
+        const limitTerminalKind = await this.#recordReactionMetering(round, {
           sourceRef: `platform:${outbox.id}:${outbox.attemptCount}`,
           durationMs: Math.max(0, this.#now() - platformAttempt.startedAt),
           totalTokens: 0,
         })
-        const validated = this.#validateRoundOutput(round, output)
-        this.#settleCompletedRound(round, validated, limitTerminalKind)
+        const validated = await this.#validateRoundOutput(round, output)
+        await this.#settleCompletedRound(round, validated, limitTerminalKind)
         platformAttempt = null
       } else if (outbox.kind === 'invocation-create') {
         const payload = z
           .object({ roundId: z.string().min(1), plan: reactionExecutionPlanSchema })
           .strict()
           .parse(JSON.parse(outbox.payloadJson) as unknown)
-        const round = this.#store
-          .listRounds(outbox.caseId ?? '')
-          .find((candidate) => candidate.id === payload.roundId)
+        const round = (await this.#store.listRounds(outbox.caseId ?? '')).find(
+          (candidate) => candidate.id === payload.roundId,
+        )
         if (round === undefined) throw new Error(`invocation round missing: ${payload.roundId}`)
-        this.#executeInvocationRound(round, payload.plan)
+        await this.#executeInvocationRound(round, payload.plan)
       } else {
         throw new Error(`outbox kind not implemented: ${outbox.kind}`)
       }
-      this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
+      await this.#store.completeOutbox(outbox.id, this.#workerId, this.#now())
       return 'completed'
     } catch (error) {
-      const caseRecord = outbox.caseId === null ? null : this.#store.getCase(outbox.caseId)
+      const caseRecord = outbox.caseId === null ? null : await this.#store.getCase(outbox.caseId)
       const platformRound =
         platformAttempt === null || outbox.caseId === null
           ? undefined
-          : this.#store
-              .listRounds(outbox.caseId)
-              .find((round) => round.id === platformAttempt?.roundId)
+          : (await this.#store.listRounds(outbox.caseId)).find(
+              (round) => round.id === platformAttempt?.roundId,
+            )
       const limitTerminalKind =
         platformAttempt === null || platformRound === undefined || caseRecord?.state === 'terminal'
           ? null
-          : this.#recordReactionMetering(platformRound, {
+          : await this.#recordReactionMetering(platformRound, {
               sourceRef: `platform:${outbox.id}:${outbox.attemptCount}`,
               durationMs: Math.max(0, this.#now() - platformAttempt.startedAt),
               totalTokens: 0,
             })
       const policy =
         caseRecord === null
-          ? this.#authoringStore.getCurrentExecutionPolicy()
-          : this.#authoringStore.getExecutionPolicyRevision(caseRecord.executionPolicyRevision)
+          ? await this.#authoringStore.getCurrentExecutionPolicy()
+          : await this.#authoringStore.getExecutionPolicyRevision(
+              caseRecord.executionPolicyRevision,
+            )
       const maxAttempts = retryAttemptCap(
         policy?.content.sameSceneAttempts ?? 1,
         policy?.content.freshSceneAttempts ?? 1,
@@ -2598,7 +2646,7 @@ export class DigitalEmployeeRuntimeService {
       const initial = policy?.content.initialBackoffMs ?? 1_000
       const maximum = policy?.content.maxBackoffMs ?? 60_000
       const backoff = Math.min(maximum, initial * 2 ** Math.max(0, outbox.attemptCount - 1))
-      this.#store.retryOutbox({
+      await this.#store.retryOutbox({
         id: outbox.id,
         workerId: this.#workerId,
         now: this.#now(),
@@ -2613,14 +2661,14 @@ export class DigitalEmployeeRuntimeService {
           .object({ roundId: z.string().min(1) })
           .passthrough()
           .safeParse(JSON.parse(outbox.payloadJson) as unknown)
-        const activeRound = this.#store
-          .listRounds(outbox.caseId)
-          .find((round) => round.id === (parsed.success ? parsed.data.roundId : ''))
+        const activeRound = (await this.#store.listRounds(outbox.caseId)).find(
+          (round) => round.id === (parsed.success ? parsed.data.roundId : ''),
+        )
         if (
           activeRound !== undefined &&
           ['planned', 'running', 'settling'].includes(activeRound.state)
         ) {
-          this.#store.settleRound({
+          await this.#store.settleRound({
             roundId: activeRound.id,
             state: 'failed',
             outputJson: JSON.stringify({
@@ -2643,11 +2691,11 @@ export class DigitalEmployeeRuntimeService {
             now: this.#now(),
           })
         } else if (limitTerminalKind !== null) {
-          this.#store.terminateCase(outbox.caseId, limitTerminalKind, this.#now())
+          await this.#store.terminateCase(outbox.caseId, limitTerminalKind, this.#now())
         } else if (policy?.content.handoffOnExhausted === false) {
-          this.#store.terminateCase(outbox.caseId, 'platform-dispatch-failed', this.#now())
+          await this.#store.terminateCase(outbox.caseId, 'platform-dispatch-failed', this.#now())
         } else {
-          this.#store.blockCase(
+          await this.#store.blockCase(
             outbox.caseId,
             `${outbox.kind}: ${detail}`.slice(0, 2_000),
             this.#now(),
@@ -2658,20 +2706,22 @@ export class DigitalEmployeeRuntimeService {
     }
   }
 
-  pumpOneDelivery(): boolean {
-    for (const caseRecord of this.#store.listCases()) {
-      const deliveries = this.#eventCenter.pendingDeliveries(
+  async pumpOneDelivery(): Promise<boolean> {
+    for (const caseRecord of await this.#store.listCases()) {
+      const deliveries = await this.#eventCenter.pendingDeliveries(
         { kind: 'employee-case', subscriberRef: caseRecord.id },
         100,
       )
       if (deliveries.length === 0) continue
-      const descriptor = this.#descriptor(caseRecord)
-      const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+      const descriptor = await this.#descriptor(caseRecord)
+      const employee = await this.#authoringStore.getEmployeeDefinitionRevision(
+        caseRecord.employeeRef,
+      )
       for (const delivery of deliveries) {
         const rule = descriptor.reactionRules.find(
           (candidate) => candidate.eventTypeId === delivery.eventTypeRef.id,
         )
-        this.#store.acceptDelivery(
+        await this.#store.acceptDelivery(
           caseRecord.id,
           this.#id(),
           delivery,
@@ -2684,34 +2734,34 @@ export class DigitalEmployeeRuntimeService {
               }),
           this.#now(),
         )
-        this.#eventCenter.acceptDelivery(delivery.deliveryId)
+        await this.#eventCenter.acceptDelivery(delivery.deliveryId)
       }
       return true
     }
     return false
   }
 
-  planOneReaction(): ReactionRoundRecord | null {
-    for (const caseRecord of this.#store.listCases()) {
+  async planOneReaction(): Promise<ReactionRoundRecord | null> {
+    for (const caseRecord of await this.#store.listCases()) {
       if (
-        this.#automaticallyResumeRecoveredToolBinding(caseRecord) ||
-        this.#automaticallyResumeCompatibleInvocationUpgrade(caseRecord)
+        (await this.#automaticallyResumeRecoveredToolBinding(caseRecord)) ||
+        (await this.#automaticallyResumeCompatibleInvocationUpgrade(caseRecord))
       ) {
         break
       }
     }
-    for (const caseRecord of this.#store.listCases()) {
+    for (const caseRecord of await this.#store.listCases()) {
       if (!['active', 'waiting'].includes(caseRecord.state) || caseRecord.activeRoundId !== null) {
         continue
       }
       try {
-        const policy = this.#authoringStore.getExecutionPolicyRevision(
+        const policy = await this.#authoringStore.getExecutionPolicyRevision(
           caseRecord.executionPolicyRevision,
         )
         if (policy === null) throw new Error('pinned execution policy disappeared')
         const exhaustedUserLimit = this.#caseLimitTerminalKind(caseRecord)
         if (exhaustedUserLimit !== null) {
-          this.#store.terminateCase(caseRecord.id, exhaustedUserLimit, this.#now())
+          await this.#store.terminateCase(caseRecord.id, exhaustedUserLimit, this.#now())
           continue
         }
         const remainingDurationMs =
@@ -2728,17 +2778,17 @@ export class DigitalEmployeeRuntimeService {
             : Math.min(policy.content.roundBudgetMs, remainingDurationMs)
         if (caseRecord.createdAt + policy.content.caseBudgetMs <= this.#now()) {
           if (policy.content.handoffOnExhausted) {
-            this.#store.blockCase(caseRecord.id, 'case-budget-exhausted', this.#now())
+            await this.#store.blockCase(caseRecord.id, 'case-budget-exhausted', this.#now())
           } else {
-            this.#store.terminateCase(caseRecord.id, 'case-budget-exhausted', this.#now())
+            await this.#store.terminateCase(caseRecord.id, 'case-budget-exhausted', this.#now())
           }
           continue
         }
-        const descriptor = this.#descriptor(caseRecord)
-        const contexts = this.#store.listContexts(caseRecord.id)
-        const pendingInbox = this.#store
-          .listInbox(caseRecord.id)
-          .find((item) => item.state === 'pending')
+        const descriptor = await this.#descriptor(caseRecord)
+        const contexts = await this.#store.listContexts(caseRecord.id)
+        const pendingInbox = (await this.#store.listInbox(caseRecord.id)).find(
+          (item) => item.state === 'pending',
+        )
         const continuationItem =
           caseRecord.currentWorkItemRef === null
             ? null
@@ -2760,7 +2810,7 @@ export class DigitalEmployeeRuntimeService {
           selectedContinuation !== null || inbox === undefined ? null : (pendingRule ?? null)
         if (selectedContinuation === null && inbox === undefined) continue
         if (selectedContinuation === null && rule === null) {
-          this.#store.markInbox(inbox!.id, 'obsolete', this.#now())
+          await this.#store.markInbox(inbox!.id, 'obsolete', this.#now())
           continue
         }
         const requiredContextTypes =
@@ -2776,7 +2826,7 @@ export class DigitalEmployeeRuntimeService {
             (contextType) => !contexts.some((context) => context.typeId === contextType),
           )
         ) {
-          if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+          if (inbox !== undefined) await this.#store.markInbox(inbox.id, 'obsolete', this.#now())
           continue
         }
         const item = selectedContinuation ?? findWorkItem(descriptor, rule!.workItemRef)
@@ -2784,9 +2834,11 @@ export class DigitalEmployeeRuntimeService {
           throw new Error(`reaction points to missing work item: ${rule!.workItemRef}`)
         const contract = findWorkContract(descriptor, item.workContractRef)
         if (contract === null) throw new Error(`work item contract missing: ${item.workItemRef}`)
-        const employee = this.#authoringStore.getEmployeeDefinitionRevision(caseRecord.employeeRef)
+        const employee = await this.#authoringStore.getEmployeeDefinitionRevision(
+          caseRecord.employeeRef,
+        )
         if (employee === null) {
-          if (inbox !== undefined) this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+          if (inbox !== undefined) await this.#store.markInbox(inbox.id, 'obsolete', this.#now())
           continue
         }
         const enabledWorkItemRefs =
@@ -2799,7 +2851,7 @@ export class DigitalEmployeeRuntimeService {
           !enabledWorkItemRefs.includes(capabilityWorkItemRef)
         ) {
           if (inbox !== undefined) {
-            this.#store.markInbox(inbox.id, 'obsolete', this.#now())
+            await this.#store.markInbox(inbox.id, 'obsolete', this.#now())
             continue
           }
           throw new ValidationError(
@@ -2843,7 +2895,9 @@ export class DigitalEmployeeRuntimeService {
         const selectedRegistrationRef =
           selectedDispatchRoute?.registrationRef ?? binding?.registrationRef ?? null
         const tool =
-          selectedRegistrationRef === null ? null : this.#toolRevision(selectedRegistrationRef)
+          selectedRegistrationRef === null
+            ? null
+            : await this.#toolRevision(selectedRegistrationRef)
         if (item.nodeKind === 'business-tool' && !platformSelected && tool === null) {
           throw new ValidationError(
             'employee-tool-binding-unavailable',
@@ -2853,28 +2907,30 @@ export class DigitalEmployeeRuntimeService {
         const exactWorkItemTools =
           item.nodeKind !== 'business-tool'
             ? []
-            : employee.content.exactToolBindings
-                .filter((candidate) => candidate.workItemRef === item.workItemRef)
-                .map((candidate) => {
-                  const revision =
-                    tool !== null &&
-                    candidate.registrationRef.id === tool.ref.id &&
-                    candidate.registrationRef.revision === tool.ref.revision
-                      ? tool
-                      : this.#toolRevision(candidate.registrationRef)
-                  if (revision === null || revision.state !== 'published') {
-                    throw new ValidationError(
-                      'employee-tool-binding-unavailable',
-                      `no exact published tool for ${candidate.workItemRef}/${candidate.slotRef}`,
-                    )
-                  }
-                  return {
-                    slotRef: candidate.slotRef,
-                    registrationRef: revision.ref,
-                    workContractRef: revision.content.workContractRef,
-                    implementation: revision.content.implementation,
-                  }
-                })
+            : await Promise.all(
+                employee.content.exactToolBindings
+                  .filter((candidate) => candidate.workItemRef === item.workItemRef)
+                  .map(async (candidate) => {
+                    const revision =
+                      tool !== null &&
+                      candidate.registrationRef.id === tool.ref.id &&
+                      candidate.registrationRef.revision === tool.ref.revision
+                        ? tool
+                        : await this.#toolRevision(candidate.registrationRef)
+                    if (revision === null || revision.state !== 'published') {
+                      throw new ValidationError(
+                        'employee-tool-binding-unavailable',
+                        `no exact published tool for ${candidate.workItemRef}/${candidate.slotRef}`,
+                      )
+                    }
+                    return {
+                      slotRef: candidate.slotRef,
+                      registrationRef: revision.ref,
+                      workContractRef: revision.content.workContractRef,
+                      implementation: revision.content.implementation,
+                    }
+                  }),
+              )
         const adapterSlot =
           item.responsibilityLaneId === null || contract.requiredConnectionPurpose === null
             ? null
@@ -2967,7 +3023,7 @@ export class DigitalEmployeeRuntimeService {
             toolBindingsJson: JSON.stringify(exactWorkItemTools),
           }),
         )
-        const inputEnvelopeJson = this.#executionContracts.validateEnvelope({
+        const inputEnvelopeJson = await this.#executionContracts.validateEnvelope({
           direction: 'input',
           contractRef: item.workContractRef,
           roundRef: roundId,
@@ -3075,20 +3131,20 @@ export class DigitalEmployeeRuntimeService {
           attemptCount: 0,
         }
         if (
-          !this.#store.createRound({
+          !(await this.#store.createRound({
             expectedCaseRevision: caseRecord.revision,
             inboxId: selectedContinuation === null ? inbox!.id : null,
             round,
             plan,
             launchOutbox,
-          })
+          }))
         ) {
           continue
         }
         return round
       } catch (error) {
         if (!(error instanceof DomainError)) throw error
-        this.#store.blockCase(
+        await this.#store.blockCase(
           caseRecord.id,
           `reaction-planning-failed: ${error.code}: ${error.message}`.slice(0, 2_000),
           this.#now(),
@@ -3098,14 +3154,16 @@ export class DigitalEmployeeRuntimeService {
     return null
   }
 
-  #retryOrFailExecution(
+  async #retryOrFailExecution(
     round: ReactionRoundRecord,
     errorClass: WorkspaceFailureClass,
     errorCode: string,
     errorDetail: string,
-  ): 'retried' | 'failed' {
+  ): Promise<'retried' | 'failed'> {
     if (round.executionRef === null) throw new Error('running round has no execution ref')
-    const policy = this.#authoringStore.getExecutionPolicyRevision(round.executionPolicyRevision)
+    const policy = await this.#authoringStore.getExecutionPolicyRevision(
+      round.executionPolicyRevision,
+    )
     if (policy === null) throw new Error('pinned execution policy disappeared')
     // RFC-317 T31（DE-03）—— 原本是 `errorCode.startsWith('workspace-boundary-')`：
     // 平台级的重试策略由某个业务模块**拼字符串的拼法**决定。现在读端口上的闭合字段。
@@ -3127,7 +3185,7 @@ export class DigitalEmployeeRuntimeService {
     })
     if (nextOrdinal <= retryBudget) {
       const frozenPlan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
-      const caseRecord = this.getCase(round.caseId)
+      const caseRecord = await this.getCase(round.caseId)
       const remainingDurationMs =
         caseRecord.maxDurationMs === null
           ? null
@@ -3150,7 +3208,7 @@ export class DigitalEmployeeRuntimeService {
         policy.content.maxBackoffMs,
         policy.content.initialBackoffMs * 2 ** Math.max(0, nextOrdinal - 1),
       )
-      this.#store.retryRound({
+      await this.#store.retryRound({
         roundId: round.id,
         expectedExecutionRef: round.executionRef,
         attemptOrdinal: nextOrdinal,
@@ -3176,7 +3234,7 @@ export class DigitalEmployeeRuntimeService {
       })
       return 'retried'
     }
-    this.#store.settleRound({
+    await this.#store.settleRound({
       roundId: round.id,
       state: 'failed',
       outputJson: errorJson,
@@ -3188,8 +3246,11 @@ export class DigitalEmployeeRuntimeService {
     return 'failed'
   }
 
-  #failRoundForUserLimit(round: ReactionRoundRecord, terminalKind: string): 'failed' {
-    this.#store.settleRound({
+  async #failRoundForUserLimit(
+    round: ReactionRoundRecord,
+    terminalKind: string,
+  ): Promise<'failed'> {
+    await this.#store.settleRound({
       roundId: round.id,
       state: 'failed',
       outputJson: JSON.stringify({ kind: 'failed', terminalKind }),
@@ -3202,7 +3263,7 @@ export class DigitalEmployeeRuntimeService {
   }
 
   async inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'> {
-    const rounds = this.#store.listRunningRounds()
+    const rounds = await this.#store.listRunningRounds()
     if (rounds.length === 0) return 'idle'
     let hasPendingExecution = false
     for (const round of rounds) {
@@ -3212,12 +3273,12 @@ export class DigitalEmployeeRuntimeService {
         hasPendingExecution = true
         continue
       }
-      const limitTerminalKind = this.#recordReactionMetering(round, snapshot.metering)
+      const limitTerminalKind = await this.#recordReactionMetering(round, snapshot.metering)
       if (snapshot.kind === 'failed') {
         if (limitTerminalKind !== null) {
-          return this.#failRoundForUserLimit(round, limitTerminalKind)
+          return await this.#failRoundForUserLimit(round, limitTerminalKind)
         }
-        return this.#retryOrFailExecution(
+        return await this.#retryOrFailExecution(
           round,
           snapshot.errorClass,
           snapshot.errorCode,
@@ -3225,14 +3286,14 @@ export class DigitalEmployeeRuntimeService {
         )
       }
       try {
-        const validated = this.#validateRoundOutput(round, snapshot.outputJson)
-        this.#settleCompletedRound(round, validated, limitTerminalKind)
+        const validated = await this.#validateRoundOutput(round, snapshot.outputJson)
+        await this.#settleCompletedRound(round, validated, limitTerminalKind)
         return 'completed'
       } catch (error) {
         if (limitTerminalKind !== null) {
-          return this.#failRoundForUserLimit(round, limitTerminalKind)
+          return await this.#failRoundForUserLimit(round, limitTerminalKind)
         }
-        return this.#retryOrFailExecution(
+        return await this.#retryOrFailExecution(
           round,
           // agent 交回来的信封不合契约：与工作区边界无关，按同场景重试（行为同改造前）。
           'semantic',
@@ -3244,26 +3305,26 @@ export class DigitalEmployeeRuntimeService {
     return hasPendingExecution ? 'pending' : 'idle'
   }
 
-  terminate(caseId: string, terminalKind: string): EmployeeCaseRecord {
+  async terminate(caseId: string, terminalKind: string): Promise<EmployeeCaseRecord> {
     if (!/^[a-z][a-z0-9._-]{0,159}$/.test(terminalKind)) {
       throw new ValidationError('employee-terminal-kind-invalid', 'invalid terminal kind')
     }
-    return this.#store.terminateCase(caseId, terminalKind, this.#now())
+    return await this.#store.terminateCase(caseId, terminalKind, this.#now())
   }
 
-  resume(caseId: string): EmployeeCaseRecord {
-    return this.#store.resumeCase(caseId, this.#now())
+  async resume(caseId: string): Promise<EmployeeCaseRecord> {
+    return await this.#store.resumeCase(caseId, this.#now())
   }
 
-  previewPolicyUpgrade(caseId: string, targetPolicyRevision: number): string {
-    const caseRecord = this.getCase(caseId)
+  async previewPolicyUpgrade(caseId: string, targetPolicyRevision: number): Promise<string> {
+    const caseRecord = await this.getCase(caseId)
     if (caseRecord.state === 'terminal' || caseRecord.activeRoundId !== null) {
       throw new ConflictError(
         'employee-policy-upgrade-not-safe',
         'policy upgrade requires a non-terminal case with no active reaction',
       )
     }
-    const policy = this.#authoringStore.getExecutionPolicyRevision(targetPolicyRevision)
+    const policy = await this.#authoringStore.getExecutionPolicyRevision(targetPolicyRevision)
     if (policy === null) {
       throw new NotFoundError(
         'employee-execution-policy-not-found',
@@ -3303,7 +3364,7 @@ export class DigitalEmployeeRuntimeService {
     return parsed.data.caseId
   }
 
-  applyPolicyUpgrade(previewToken: string): EmployeeCaseRecord {
+  async applyPolicyUpgrade(previewToken: string): Promise<EmployeeCaseRecord> {
     let decoded: unknown
     try {
       decoded = JSON.parse(Buffer.from(previewToken, 'base64url').toString('utf8')) as unknown
@@ -3325,14 +3386,16 @@ export class DigitalEmployeeRuntimeService {
     if (runtimeDigest(payload) !== digest) {
       throw new ValidationError('employee-policy-preview-invalid', 'policy preview digest mismatch')
     }
-    const policy = this.#authoringStore.getExecutionPolicyRevision(preview.targetPolicyRevision)
+    const policy = await this.#authoringStore.getExecutionPolicyRevision(
+      preview.targetPolicyRevision,
+    )
     if (policy?.contentDigest !== preview.targetDigest) {
       throw new ConflictError(
         'employee-policy-preview-stale',
         'target policy revision changed or is unavailable',
       )
     }
-    const updated = this.#store.upgradePolicy({
+    const updated = await this.#store.upgradePolicy({
       caseId: preview.caseId,
       expectedRevision: preview.expectedCaseRevision,
       targetPolicyRevision: preview.targetPolicyRevision,

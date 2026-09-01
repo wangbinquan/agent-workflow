@@ -8,7 +8,7 @@ import type {
 
 /** Context-owned maintenance command port, composed once by the Worker bootstrap. */
 export interface DigitalEmployeeMaintenanceCommands {
-  sweepExpiredInputUploads(now: number, limit: number): number
+  sweepExpiredInputUploads(now: number, limit: number): Promise<number>
 }
 
 export type DigitalEmployeeAuthoringCommand =
@@ -71,8 +71,8 @@ export interface DigitalEmployeeCommandPort {
 }
 
 export interface EmployeeCaseCommandPort {
-  launch(input: EmployeeCaseLaunchInput): EmployeeCaseProjectionDocument
-  requestPolicyUpgrade(caseId: string, targetPolicyRevision: number): string
-  applyPolicyUpgrade(previewToken: string): EmployeeCaseProjectionDocument
-  terminate(caseId: string, terminalKind: string): EmployeeCaseProjectionDocument
+  launch(input: EmployeeCaseLaunchInput): Promise<EmployeeCaseProjectionDocument>
+  requestPolicyUpgrade(caseId: string, targetPolicyRevision: number): Promise<string>
+  applyPolicyUpgrade(previewToken: string): Promise<EmployeeCaseProjectionDocument>
+  terminate(caseId: string, terminalKind: string): Promise<EmployeeCaseProjectionDocument>
 }

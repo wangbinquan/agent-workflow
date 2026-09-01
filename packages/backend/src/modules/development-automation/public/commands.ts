@@ -10,6 +10,6 @@ export interface DevelopmentRetentionSweepResult {
 }
 
 export interface DevelopmentAutomationMaintenanceCommands {
-  sweepExpiredUploads(now: number, limit: number): number
+  sweepExpiredUploads(now: number, limit: number): Promise<number>
   sweepRetention(now: number): Promise<DevelopmentRetentionSweepResult>
 }

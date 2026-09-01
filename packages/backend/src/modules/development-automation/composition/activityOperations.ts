@@ -2,10 +2,10 @@ import type { DevelopmentActivityOperations, DevelopmentActivityResult } from '.
 
 export interface DevelopmentActivityWorker {
   runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
-  pumpOneDelivery(): boolean
-  planOneReaction(): string | null
+  pumpOneDelivery(): Promise<boolean>
+  planOneReaction(): Promise<string | null>
   inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'>
-  publishOneChannelResult(): 'completed' | 'idle'
+  publishOneChannelResult(): Promise<'completed' | 'idle'>
 }
 
 export interface DevelopmentActivityWorkerBinding {
@@ -17,12 +17,12 @@ function operationsFor(worker: () => DevelopmentActivityWorker): DevelopmentActi
   return Object.freeze({
     async runOneWorkerCycle(): Promise<DevelopmentActivityResult> {
       const bound = worker()
-      const channel = bound.publishOneChannelResult()
+      const channel = await bound.publishOneChannelResult()
       if (channel !== 'idle') return { activity: 'channel', state: channel }
       const outbox = await bound.runOneOutbox()
       if (outbox !== 'idle') return { activity: 'outbox', state: outbox }
-      if (bound.pumpOneDelivery()) return { activity: 'delivery', state: 'completed' }
-      const roundId = bound.planOneReaction()
+      if (await bound.pumpOneDelivery()) return { activity: 'delivery', state: 'completed' }
+      const roundId = await bound.planOneReaction()
       if (roundId !== null) return { activity: 'reaction', state: roundId }
       return { activity: 'execution', state: await bound.inspectOneExecution() }
     },

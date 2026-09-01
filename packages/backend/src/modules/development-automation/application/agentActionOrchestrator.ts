@@ -49,7 +49,7 @@ import { assembleAgentPrompt } from '../engine/prompt/assembleAgentPrompt'
 import { parseAgentFrame } from '../engine/envelope/parseAgentFrame'
 import { runCapabilitySemanticValidator } from '../engine/envelope/semanticValidators'
 import { publishConflictRepair } from './conflictRepairDelivery'
-import type { MissionRow, MissionStore } from './ports/missionStore'
+import type { MissionRow, MissionPersistence } from './ports/missionStore'
 import type { ReconcileDeps } from './missionReconciler'
 
 /** 预算硬上限（policy 级配置接线归 PR-5；先取保守常量并入 pre-state 冻结）。 */
@@ -249,7 +249,7 @@ export async function launchAgentAttempt(
   }
   const ports = deps.ports
 
-  const rawTemplate = ports.actionTemplates!.content(input.templateId, input.templateRevision)
+  const rawTemplate = await ports.actionTemplates!.content(input.templateId, input.templateRevision)
   if (rawTemplate === null) {
     return {
       ok: false,
@@ -300,21 +300,23 @@ export async function launchAgentAttempt(
   // 的落盘约定）——必须经 plan 行换算，直接拿 uploadPlacementRef 当目录名会
   // 静默空 seed（fork 缝合实测）。
   let seedRef: string | null = input.frozenReplay?.seedRef ?? null
-  let uploadEntries: ReturnType<NonNullable<ReconcileDeps['ports']['uploadPlanReader']>['read']> =
-    null
+  let uploadEntries: Awaited<
+    ReturnType<NonNullable<ReconcileDeps['ports']['uploadPlanReader']>['read']>
+  > = null
   if (
     input.frozenReplay === undefined &&
     mission.uploadPlanRef !== null &&
     mission.uploadPlacementRef !== null
   ) {
-    uploadEntries = ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null
+    uploadEntries = (await ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null
     if (uploadEntries === null) {
       return { ok: false, blockCode: 'upload-plan-unreadable', detail: mission.uploadPlanRef }
     }
     seedRef = uploadEntries.planDigest
   }
 
-  const sources = input.frozenReplay === undefined ? deps.store.listMissionSources(mission.id) : []
+  const sources =
+    input.frozenReplay === undefined ? await deps.store.listMissionSources(mission.id) : []
   const requirementSource = sources
     .filter((s) => s.bundleRef !== null && s.state === 'materialized')
     .sort((a, b) => b.generation - a.generation)[0]
@@ -345,10 +347,10 @@ export async function launchAgentAttempt(
   const requirementManifestMount =
     input.frozenReplay !== undefined || requirementBundle === null
       ? null
-      : (ports.requirementMaterialize?.getRequirementManifestMount(
+      : ((await ports.requirementMaterialize?.getRequirementManifestMount(
           mission.id,
           requirementBundle.manifestDigest,
-        ) ?? null)
+        )) ?? null)
   if (
     input.frozenReplay === undefined &&
     requirementBundle !== null &&
@@ -676,7 +678,7 @@ export async function launchAgentAttempt(
     }
   }
 
-  const claim = deps.store.claimAttempt({
+  const claim = await deps.store.claimAttempt({
     id: ulid(),
     actionRunId: input.actionRunId,
     rerunSeq: input.rerunSeq,
@@ -729,25 +731,29 @@ function parsePreState(json: string | null): AttemptPreState | null {
   }
 }
 
-function releaseFeedbackRows(deps: ReconcileDeps, missionId: string, actionRunId: string): void {
-  const run = deps.store.getActionRun(actionRunId)
+async function releaseFeedbackRows(
+  deps: ReconcileDeps,
+  missionId: string,
+  actionRunId: string,
+): Promise<void> {
+  const run = await deps.store.getActionRun(actionRunId)
   if (run?.capabilityId !== 'mr.feedback.apply') return
   const now = deps.now()
-  for (const row of deps.store.listFeedback(missionId)) {
+  for (const row of await deps.store.listFeedback(missionId)) {
     if (row.state !== 'selected' || row.actionRunId !== actionRunId) continue
-    deps.store.setFeedbackState({ id: row.id, state: 'observed', actionRunId: null, now })
+    await deps.store.setFeedbackState({ id: row.id, state: 'observed', actionRunId: null, now })
   }
 }
 
-function settleRunAndBlock(
+async function settleRunAndBlock(
   deps: ReconcileDeps,
   mission: MissionRow,
   actionRunId: string,
   blockCode: string,
   detail: string | null,
-): void {
-  releaseFeedbackRows(deps, mission.id, actionRunId)
-  deps.store.settleActionRun({
+): Promise<void> {
+  await releaseFeedbackRows(deps, mission.id, actionRunId)
+  await deps.store.settleActionRun({
     id: actionRunId,
     status: 'failed',
     resultRef: null,
@@ -761,63 +767,63 @@ function settleRunAndBlock(
     }),
     now: deps.now(),
   })
-  clearCurrentAction(deps.store, mission)
+  await clearCurrentAction(deps.store, mission)
   // A playbook step owns its failure branch. Blocking the whole Mission here
   // would bypass the employee's onRejected/onExpired/onExhausted rule and turn
   // the Agent into an implicit scheduler. Legacy policy actions keep their
   // historical Mission-level boundary.
   if (
-    deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
-    deps.ports.playbookSaga === undefined
+    deps.ports.playbookSaga === undefined ||
+    (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null
   ) {
-    blockMissionDirect(deps, mission.id, blockCode, detail)
+    await blockMissionDirect(deps, mission.id, blockCode, detail)
   }
 }
 
-function clearCurrentAction(store: MissionStore, mission: MissionRow): void {
-  const fresh = store.getMission(mission.id)
+async function clearCurrentAction(store: MissionPersistence, mission: MissionRow): Promise<void> {
+  const fresh = await store.getMission(mission.id)
   if (fresh !== null && fresh.currentActionRunId !== null) {
-    store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
+    await store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
   }
 }
 
-function blockMissionDirect(
+async function blockMissionDirect(
   deps: ReconcileDeps,
   missionId: string,
   code: string,
   detail: string | null,
-): void {
-  const fresh = deps.store.getMission(missionId)
+): Promise<void> {
+  const fresh = await deps.store.getMission(missionId)
   if (fresh === null) return
   if (fresh.status !== 'blocked') {
-    deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
       status: 'blocked',
       blockCode: code,
       blockDetail: detail,
     })
   } else {
-    deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
       blockCode: code,
       blockDetail: detail,
     })
   }
 }
 
-function persistActionCells(
+async function persistActionCells(
   deps: ReconcileDeps,
   mission: MissionRow,
   cells: Record<string, FactCell<FactCellValue>>,
-): void {
-  const fresh = deps.store.getMission(mission.id)
+): Promise<void> {
+  const fresh = await deps.store.getMission(mission.id)
   if (fresh === null) return
   const base =
     fresh.requirementBundleRef === null
       ? {}
-      : (deps.snapshots.getCells(fresh.requirementBundleRef) ?? {})
+      : ((await deps.snapshots.getCells(fresh.requirementBundleRef)) ?? {})
   const merged = { ...base, ...cells }
   const snapshotId = ulid()
   const now = deps.now()
-  deps.store.insertFactSnapshot({
+  await deps.store.insertFactSnapshot({
     id: snapshotId,
     missionId: fresh.id,
     missionRevision: fresh.revision,
@@ -827,7 +833,7 @@ function persistActionCells(
     digest: canonicalDigest(merged as unknown as CanonicalJsonValue),
     now,
   })
-  deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
     requirementBundleRef: snapshotId,
   })
 }
@@ -844,7 +850,7 @@ export async function collectAgentAttempt(
   const ports = deps.ports
   const actionRunId = mission.currentActionRunId
   if (actionRunId === null) return { kind: 'no-op' }
-  const attempts = deps.store.listAttempts(actionRunId)
+  const attempts = await deps.store.listAttempts(actionRunId)
   const attempt = attempts[attempts.length - 1]
   if (attempt === undefined) return { kind: 'no-op' }
   if (attempt.status !== 'claimed' && attempt.status !== 'running') return { kind: 'no-op' }
@@ -862,7 +868,7 @@ export async function collectAgentAttempt(
     rejection: unknown,
     detailForBlock: string,
   ): Promise<CollectAgentAttemptOutcome> => {
-    deps.store.settleAttempt({
+    await deps.store.settleAttempt({
       id: attempt.id,
       status: failure === 'boundary-violation' ? 'discarded' : 'rejected',
       rejectionJson: JSON.stringify(rejection),
@@ -891,7 +897,7 @@ export async function collectAgentAttempt(
         } catch {
           // GC 兜底。
         }
-        settleRunAndBlock(
+        await settleRunAndBlock(
           deps,
           mission,
           actionRunId,
@@ -931,7 +937,7 @@ export async function collectAgentAttempt(
           ? await ports.agentLauncher!.launch({ ...launchCommon, agentId: preState.agentId! })
           : await ports.scriptLauncher!.launch({ ...launchCommon, scriptRef: preState.scriptRef })
       if (launched.ok) {
-        const claim = deps.store.claimAttempt({
+        const claim = await deps.store.claimAttempt({
           id: ulid(),
           actionRunId,
           rerunSeq: plan.rerunSeq,
@@ -957,7 +963,7 @@ export async function collectAgentAttempt(
       const blockCode = launched.ok
         ? 'attempt-ordinal-taken'
         : `same-scene-launch-failed:${launched.failure.code}`
-      settleRunAndBlock(deps, mission, actionRunId, blockCode, detailForBlock)
+      await settleRunAndBlock(deps, mission, actionRunId, blockCode, detailForBlock)
       return { kind: 'action-failed', actionRunId, blockCode }
     }
     // Fresh retry and every terminal failure discard the complete scene. A
@@ -1012,14 +1018,14 @@ export async function collectAgentAttempt(
         },
       })
       if (relaunched.ok) return { kind: 'action-retry', actionRunId, rerunSeq: plan.rerunSeq }
-      settleRunAndBlock(deps, mission, actionRunId, relaunched.blockCode, relaunched.detail)
+      await settleRunAndBlock(deps, mission, actionRunId, relaunched.blockCode, relaunched.detail)
       return { kind: 'action-failed', actionRunId, blockCode: relaunched.blockCode }
     }
     const blockCode =
       plan.kind === 'exhausted' || plan.kind === 'forbidden'
         ? plan.blockCode
         : `agent-retry-unavailable:${detailForBlock}`
-    settleRunAndBlock(deps, mission, actionRunId, blockCode, detailForBlock)
+    await settleRunAndBlock(deps, mission, actionRunId, blockCode, detailForBlock)
     return { kind: 'action-failed', actionRunId, blockCode }
   }
 
@@ -1033,7 +1039,7 @@ export async function collectAgentAttempt(
 
   // exited —— 先按任务终态分类。
   if (snapshot.taskStatus === 'canceled') {
-    deps.store.settleAttempt({
+    await deps.store.settleAttempt({
       id: attempt.id,
       status: 'discarded',
       rejectionJson: JSON.stringify({ code: 'execution-canceled' }),
@@ -1047,7 +1053,7 @@ export async function collectAgentAttempt(
         // GC 兜底。
       }
     }
-    settleRunAndBlock(deps, mission, actionRunId, 'agent-execution-canceled', null)
+    await settleRunAndBlock(deps, mission, actionRunId, 'agent-execution-canceled', null)
     return { kind: 'action-failed', actionRunId, blockCode: 'agent-execution-canceled' }
   }
   if (snapshot.taskStatus === 'interrupted') {
@@ -1204,7 +1210,7 @@ export async function collectAgentAttempt(
         // 然再撞一次，只会白烧一次预算，最后以 agent-contract-exhausted 这个
         // 完全误导的 code 收场）：整树废弃、facts 判过期，下一轮重采后由规则
         // 重新决定还要不要修。
-        deps.store.settleAttempt({
+        await deps.store.settleAttempt({
           id: attempt.id,
           status: 'discarded',
           rejectionJson: JSON.stringify({ code: published.code, detail: published.detail }),
@@ -1216,10 +1222,10 @@ export async function collectAgentAttempt(
         } catch {
           // GC 兜底。
         }
-        persistActionCells(deps, mission, {
+        await persistActionCells(deps, mission, {
           '__mr.factsCollectedAt': { state: 'known', value: '0', sourceRevision: attempt.id },
         })
-        settleRunAndBlock(deps, mission, actionRunId, published.code, published.detail)
+        await settleRunAndBlock(deps, mission, actionRunId, published.code, published.detail)
         return { kind: 'action-failed', actionRunId, blockCode: published.code }
       }
       return await failAttempt(
@@ -1240,7 +1246,7 @@ export async function collectAgentAttempt(
       uploadsAlreadyPublished: mission.uploadPublicationRef !== null,
       uploadPlan:
         mission.uploadPlanRef !== null
-          ? (ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null)
+          ? ((await ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null)
           : null,
     })
     if (!derived.ok) {
@@ -1266,27 +1272,27 @@ export async function collectAgentAttempt(
   const actionResultRef = candidateRef ?? structuredResultRef
 
   // 结算：attempt validated + run validated + cells + 清 currentActionRunId。
-  deps.store.settleAttempt({
+  await deps.store.settleAttempt({
     id: attempt.id,
     status: 'validated',
     rejectionJson: null,
     outcomeRef: actionResultRef,
     now,
   })
-  deps.store.settleActionRun({
+  await deps.store.settleActionRun({
     id: actionRunId,
     status: 'settled',
     resultRef: actionResultRef,
     failureJson: null,
     now,
   })
-  clearCurrentAction(deps.store, mission)
+  await clearCurrentAction(deps.store, mission)
   const known = (value: FactCellValue): FactCell<FactCellValue> => ({
     state: 'known',
     value,
     sourceRevision: attempt.id,
   })
-  persistActionCells(deps, mission, {
+  await persistActionCells(deps, mission, {
     'action.lastOutcome': known(envelope.outcome),
     'action.lastCapability': known(preState.capabilityId),
     '__action.runId': known(actionRunId),
@@ -1367,17 +1373,17 @@ export async function collectAgentAttempt(
             : ('agent-blocked' as const)
 
   if (preState.capabilityId === 'mr.feedback.apply' && envelope.outcome !== 'changed') {
-    releaseFeedbackRows(deps, mission.id, actionRunId)
+    await releaseFeedbackRows(deps, mission.id, actionRunId)
   }
 
   if (envelope.outcome === 'blocked') {
     // completed（read-only 分析）不 block：scopeDisposition facts 已就位，
     // 下轮规则立即据此路由 implement / no-change gate。
     if (
-      deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
-      deps.ports.playbookSaga === undefined
+      deps.ports.playbookSaga === undefined ||
+      (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null
     ) {
-      blockMissionDirect(
+      await blockMissionDirect(
         deps,
         mission.id,
         // design §8.5：语义上解不掉的冲突就是要人来合——不把它伪装成一次
@@ -1404,10 +1410,10 @@ export async function collectAgentAttempt(
     })
     if (
       (stashed === undefined || !stashed.ok) &&
-      (deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
-        deps.ports.playbookSaga === undefined)
+      (deps.ports.playbookSaga === undefined ||
+        (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null)
     ) {
-      blockMissionDirect(deps, mission.id, 'agent-questions-stash-failed', null)
+      await blockMissionDirect(deps, mission.id, 'agent-questions-stash-failed', null)
     }
   } else if (envelope.outcome === 'no-change') {
     // validated no-change（write 能力跑完零业务改动）：收束判定属 no-change
@@ -1417,10 +1423,10 @@ export async function collectAgentAttempt(
     // 接管 verification → commit/publish → MR。completed（read-only 分析）
     // 也不 block：scopeDisposition facts 就位后规则立即续路由。
     if (
-      deps.ports.playbookSaga?.findStepRunByAction(actionRunId) === null ||
-      deps.ports.playbookSaga === undefined
+      deps.ports.playbookSaga === undefined ||
+      (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null
     ) {
-      blockMissionDirect(deps, mission.id, 'action-stage-complete:no-change', candidateRef)
+      await blockMissionDirect(deps, mission.id, 'action-stage-complete:no-change', candidateRef)
     }
   }
 

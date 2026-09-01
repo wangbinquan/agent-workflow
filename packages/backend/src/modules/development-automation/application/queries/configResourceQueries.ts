@@ -6,7 +6,7 @@
 // 保持 port-only 依赖不触 DB 之外的服务。get 对不可见资源返回 null——调用
 // 方以 404 呈现，与「不存在」同形（防资源存在性探测）。
 
-import type { ConfigResourceRecord, ConfigResourceStore } from '../ports/configResourceStore'
+import type { ConfigResourcePersistence, ConfigResourceRecord } from '../ports/configResourceStore'
 
 export interface ResourceViewAudience {
   readonly actorUserId: string | null
@@ -23,24 +23,23 @@ export function isRecordVisible<TExtra>(
   return record.ownerUserId !== null && record.ownerUserId === audience.actorUserId
 }
 
-export function listConfigResources<TExtra>(
-  store: ConfigResourceStore<TExtra>,
+export async function listConfigResources<TExtra>(
+  store: ConfigResourcePersistence<TExtra>,
   audience: ResourceViewAudience,
   opts: { readonly includeArchived?: boolean } = {},
-): ConfigResourceRecord<TExtra>[] {
-  return store
-    .list()
+): Promise<ConfigResourceRecord<TExtra>[]> {
+  return (await store.list())
     .filter((record) => (opts.includeArchived === true ? true : record.archivedAt === null))
     .filter((record) => isRecordVisible(record, audience))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1))
 }
 
-export function getConfigResource<TExtra>(
-  store: ConfigResourceStore<TExtra>,
+export async function getConfigResource<TExtra>(
+  store: ConfigResourcePersistence<TExtra>,
   audience: ResourceViewAudience,
   id: string,
-): ConfigResourceRecord<TExtra> | null {
-  const record = store.getById(id)
+): Promise<ConfigResourceRecord<TExtra> | null> {
+  const record = await store.getById(id)
   if (record === null) return null
   return isRecordVisible(record, audience) ? record : null
 }

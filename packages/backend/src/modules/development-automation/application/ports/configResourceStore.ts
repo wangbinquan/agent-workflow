@@ -70,3 +70,14 @@ export interface ActionTemplateExtra {
 
 export type ActionTemplateStore = ConfigResourceStore<ActionTemplateExtra>
 export type VerificationProfileStore = ConfigResourceStore<Record<never, never>>
+
+export type ConfigResourcePersistence<TExtra> = {
+  readonly [K in keyof ConfigResourceStore<TExtra>]: ConfigResourceStore<TExtra>[K] extends (
+    ...args: infer Args
+  ) => infer Result
+    ? (...args: Args) => Promise<Awaited<Result>>
+    : never
+}
+
+export type ActionTemplatePersistence = ConfigResourcePersistence<ActionTemplateExtra>
+export type VerificationProfilePersistence = ConfigResourcePersistence<Record<never, never>>

@@ -9,7 +9,7 @@
 import { decideCutoverTransition, type CutoverCommand, type CutoverState } from '../domain/cutover'
 import { terminalStatusForMr } from '../domain/mission'
 import type { CutoverStore } from './ports/cutoverStore'
-import type { MissionStore } from './ports/missionStore'
+import type { MissionPersistence } from './ports/missionStore'
 import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
 export interface CutoverDeps {
@@ -23,18 +23,18 @@ export type CutoverCommandResult =
   | { readonly ok: false; readonly code: string; readonly detail: string }
 
 /** T99 freeze / T101 flip / T102 rollback——读→domain 判→写，typed 拒原样上抛。 */
-export function runCutoverCommand(
+export async function runCutoverCommand(
   deps: CutoverDeps,
   command: CutoverCommand,
-): CutoverCommandResult {
-  const state = deps.cutoverStore.readState()
+): Promise<CutoverCommandResult> {
+  const state = await deps.cutoverStore.readState()
   const now = deps.now()
   const verdict = decideCutoverTransition(state, command, {
     now,
     mintGeneration: deps.mintId,
   })
   if (!verdict.ok) return verdict
-  deps.cutoverStore.writeState(verdict.next, now)
+  await deps.cutoverStore.writeState(verdict.next, now)
   return { ok: true, state: verdict.next }
 }
 
@@ -69,7 +69,7 @@ export type AdoptActiveMrResult =
  */
 export async function adoptActiveMr(
   deps: {
-    readonly store: MissionStore
+    readonly store: MissionPersistence
     readonly cutoverStore: CutoverStore
     readonly ports: Pick<ReconcilerPorts, 'mrEffects'>
     readonly now: () => number
@@ -92,7 +92,7 @@ export async function adoptActiveMr(
         ? ('closed-unmerged' as const)
         : null
 
-  const created = deps.store.createMission({
+  const created = await deps.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -144,7 +144,7 @@ export async function adoptActiveMr(
 
   if (terminal === null) {
     const claimId = deps.mintId()
-    const claimed = deps.store.claimMr({
+    const claimed = await deps.store.claimMr({
       id: claimId,
       codeHostEndpointRef: input.codeHostEndpointRef,
       stableProjectRef: input.stableProjectRef,
@@ -156,7 +156,7 @@ export async function adoptActiveMr(
     })
     let mrClaimId = claimId
     if (!claimed.ok) {
-      const existing = deps.store.findMrClaim({
+      const existing = await deps.store.findMrClaim({
         codeHostEndpointRef: input.codeHostEndpointRef,
         stableProjectRef: input.stableProjectRef,
         mrIid: input.mrIid,
@@ -166,13 +166,13 @@ export async function adoptActiveMr(
       }
       mrClaimId = existing.id
     }
-    const fresh = deps.store.getMission(missionId)
+    const fresh = await deps.store.getMission(missionId)
     if (fresh !== null) {
-      deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { mrClaimId })
+      await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { mrClaimId })
     }
   }
 
-  deps.cutoverStore.insertLegacyLink({
+  await deps.cutoverStore.insertLegacyLink({
     id: deps.mintId(),
     missionId,
     legacyWorkItemId: input.legacyWorkItemId,

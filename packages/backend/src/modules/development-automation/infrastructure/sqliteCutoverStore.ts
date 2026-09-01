@@ -15,7 +15,7 @@ export const CUTOVER_STATE_KEY = 'rfc310-cutover-state'
 
 export function createSqliteCutoverStore(db: DbClient): CutoverStore {
   return {
-    readState(): CutoverState {
+    async readState(): Promise<CutoverState> {
       const row = db
         .select({ value: maintenanceState.value })
         .from(maintenanceState)
@@ -23,7 +23,7 @@ export function createSqliteCutoverStore(db: DbClient): CutoverStore {
         .get()
       return parseCutoverState(row?.value ?? null)
     },
-    writeState(state, now) {
+    async writeState(state, now) {
       db.insert(maintenanceState)
         .values({ key: CUTOVER_STATE_KEY, value: JSON.stringify(state), updatedAt: now })
         .onConflictDoUpdate({
@@ -32,7 +32,7 @@ export function createSqliteCutoverStore(db: DbClient): CutoverStore {
         })
         .run()
     },
-    insertLegacyLink(input) {
+    async insertLegacyLink(input) {
       db.insert(legacyCodeWorkItemLinks)
         .values({
           id: input.id,

@@ -13,7 +13,8 @@
 // intent 与 decision 同事务落库、idempotency key 唯一、崩溃后可重扫，单独的
 // outbox 表只会引入两行漂移的可能。外部执行永远发生在事务之外。
 
-import type { NotPromise } from '@/db/txSync'
+import type { AtomicDecision } from './atomic'
+import type { PersistUploadPlanInput } from '../uploadPlan'
 import type { TransitionFence, MissionStatus } from '../../domain/mission'
 import type { DeferredWakeRow } from '../../domain/deferredWake'
 
@@ -354,5 +355,43 @@ export interface MissionStore {
    * RFC-052 的 approve 半提交事故就是这一类。今天的调用方都是同步的，所以这是**潜伏**
    * 而不是活跃缺陷；加上约束后它连写都写不出来。
    */
-  inTx<T>(fn: () => NotPromise<T>): T
+  inTx<T>(fn: () => AtomicDecision<T>): T
+}
+
+export type MissionFactSnapshotWrite = Parameters<MissionStore['insertFactSnapshot']>[0]
+export type MissionDecisionWrite = Parameters<MissionStore['insertDecision']>[0]
+export type MissionDecisionWriteReceipt = ReturnType<MissionStore['insertDecision']>
+
+export interface MissionLaunchWrite {
+  readonly mission: MissionRow
+  readonly source: MissionSourceRow & { readonly createdAt: number }
+  readonly upload: {
+    readonly actorUserId: string | null
+    readonly uploadRefs: readonly string[]
+    readonly plan: PersistUploadPlanInput
+    readonly now: number
+  } | null
+}
+
+/**
+ * Closed asynchronous persistence used by live provider composition. The
+ * generic transaction callback is deliberately replaced by one named atomic
+ * operation so application code cannot perform network I/O inside a storage
+ * transaction or accidentally use an unbound client.
+ */
+export type MissionPersistence = {
+  readonly [K in Exclude<keyof MissionStore, 'inTx'>]: MissionStore[K] extends (
+    ...args: infer Args
+  ) => infer Result
+    ? (...args: Args) => Promise<Awaited<Result>>
+    : never
+} & {
+  /** Mission, source provenance and optional upload claim/plan commit atomically. */
+  commitMissionLaunch(
+    input: MissionLaunchWrite,
+  ): Promise<{ readonly created: boolean; readonly mission: MissionRow }>
+  commitFactSnapshotAndDecision(input: {
+    readonly snapshot: MissionFactSnapshotWrite
+    readonly decision: MissionDecisionWrite
+  }): Promise<MissionDecisionWriteReceipt>
 }

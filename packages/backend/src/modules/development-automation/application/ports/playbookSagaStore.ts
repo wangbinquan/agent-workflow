@@ -169,3 +169,15 @@ export interface PlaybookSagaStore {
   settleJoin(missionId: string, groupId: string, result: string, now: number): void
   sagaDigest(missionId: string): string
 }
+
+/**
+ * Provider-neutral asynchronous saga persistence. SQLite keeps its synchronous
+ * oracle behind an adapter; live PostgreSQL callers only see this Promise port.
+ */
+export type PlaybookSagaPersistence = {
+  readonly [K in keyof PlaybookSagaStore]: PlaybookSagaStore[K] extends (
+    ...args: infer Args
+  ) => infer Result
+    ? (...args: Args) => Promise<Awaited<Result>>
+    : never
+}

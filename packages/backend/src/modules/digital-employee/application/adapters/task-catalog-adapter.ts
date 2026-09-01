@@ -83,7 +83,7 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
       readonly q?: string
       readonly cursor?: string
       readonly limit?: number
-    }): string
+    }): Promise<string>
   }
 }): TaskCatalogSource {
   return {
@@ -126,7 +126,7 @@ export function composeDigitalEmployeeTaskCatalogSource(runtime: {
       const filter = caseCatalogFilterFromTaskStatuses(statuses)
       const page = DigitalEmployeeTaskPageSchema.parse(
         JSON.parse(
-          runtime.queries.listCasePage({
+          await runtime.queries.listCasePage({
             view: view as 'all' | 'active' | 'attention' | 'finished',
             // RFC-330 缺口 1：mine / shared 走成员制（发起人 ∪ 成员），不再只按 owner；
             // `all` 只有持 tasks:read:all 的人才到得了这里，不加过滤。

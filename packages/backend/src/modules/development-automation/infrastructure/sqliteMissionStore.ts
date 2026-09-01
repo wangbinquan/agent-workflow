@@ -28,10 +28,13 @@ import type {
   EffectRow,
   FeedbackLedgerRow,
   MissionRow,
+  MissionPersistence,
   MissionSourceRow,
   MissionStore,
   OccResult,
 } from '../application/ports/missionStore'
+import { insertUploadPlan } from './sqliteUploadPlanStore'
+import { createSqliteUploadSessionStore } from './sqliteUploadSessionStore'
 
 function isUniqueViolation(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
@@ -688,6 +691,155 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
 
     inTx(fn) {
       return db.transaction(() => fn())
+    },
+  }
+}
+
+/** Async provider adapter that preserves the established synchronous SQLite
+ * store as the behavior oracle while exposing only Promise operations. */
+export function createSqliteMissionPersistence(db: DbClient): MissionPersistence {
+  const store = createSqliteMissionStore(db)
+  const uploads = createSqliteUploadSessionStore(db)
+  return {
+    async commitMissionLaunch(input) {
+      return db.transaction(() => {
+        const created = store.createMission(input.mission)
+        if (!created.created) return created
+        if (input.upload !== null) {
+          uploads.claimUploads({
+            missionId: input.mission.id,
+            actorUserId: input.upload.actorUserId,
+            uploadRefs: input.upload.uploadRefs,
+            now: input.upload.now,
+          })
+          insertUploadPlan(db, input.upload.plan)
+        }
+        store.insertMissionSource(input.source)
+        return created
+      })
+    },
+    async createMission(row) {
+      return store.createMission(row)
+    },
+    async getMission(id) {
+      return store.getMission(id)
+    },
+    async findByIdempotencyKey(key) {
+      return store.findByIdempotencyKey(key)
+    },
+    async occUpdate(missionId, expectedRevision, expectedEpoch, patch) {
+      return store.occUpdate(missionId, expectedRevision, expectedEpoch, patch)
+    },
+    async bumpEpoch(missionId, expectedRevision, patch) {
+      return store.bumpEpoch(missionId, expectedRevision, patch)
+    },
+    async insertMissionSource(row) {
+      store.insertMissionSource(row)
+    },
+    async listMissionSources(missionId) {
+      return store.listMissionSources(missionId)
+    },
+    async claimMr(input) {
+      return store.claimMr(input)
+    },
+    async releaseMr(claimId, now) {
+      store.releaseMr(claimId, now)
+    },
+    async getMrClaim(claimId) {
+      return store.getMrClaim(claimId)
+    },
+    async findMrClaim(input) {
+      return store.findMrClaim(input)
+    },
+    async recordWakeHint(input) {
+      return store.recordWakeHint(input)
+    },
+    async consumeWakeHints(missionId, now) {
+      return store.consumeWakeHints(missionId, now)
+    },
+    async armWake(input) {
+      store.armWake(input)
+    },
+    async getWake(missionId, decisionId) {
+      return store.getWake(missionId, decisionId)
+    },
+    async fireWake(id, now) {
+      return store.fireWake(id, now)
+    },
+    async settleWake(id, now) {
+      store.settleWake(id, now)
+    },
+    async listDueWakes(now) {
+      return store.listDueWakes(now)
+    },
+    async insertFactSnapshot(input) {
+      store.insertFactSnapshot(input)
+    },
+    async insertDecision(input) {
+      return store.insertDecision(input)
+    },
+    async createActionRun(input) {
+      return store.createActionRun(input)
+    },
+    async settleActionRun(input) {
+      store.settleActionRun(input)
+    },
+    async getActionRun(id) {
+      return store.getActionRun(id)
+    },
+    async countActionRuns(missionId, capabilityId) {
+      return store.countActionRuns(missionId, capabilityId)
+    },
+    async claimAttempt(input) {
+      return store.claimAttempt(input)
+    },
+    async settleAttempt(input) {
+      store.settleAttempt(input)
+    },
+    async listAttempts(actionRunId) {
+      return store.listAttempts(actionRunId)
+    },
+    async prepareEffect(input) {
+      return store.prepareEffect(input)
+    },
+    async markEffectDispatched(id, now) {
+      store.markEffectDispatched(id, now)
+    },
+    async confirmEffect(id, receiptRef, now) {
+      store.confirmEffect(id, receiptRef, now)
+    },
+    async invalidateEffect(id, now) {
+      store.invalidateEffect(id, now)
+    },
+    async failEffect(id, failureJson, now) {
+      store.failEffect(id, failureJson, now)
+    },
+    async getEffect(id) {
+      return store.getEffect(id)
+    },
+    async listUnsettledEffects(missionId) {
+      return store.listUnsettledEffects(missionId)
+    },
+    async listPreparedEffects() {
+      return store.listPreparedEffects()
+    },
+    async upsertFeedbackObservation(input) {
+      return store.upsertFeedbackObservation(input)
+    },
+    async listFeedback(missionId) {
+      return store.listFeedback(missionId)
+    },
+    async setFeedbackState(input) {
+      store.setFeedbackState(input)
+    },
+    async obsoleteFeedbackForOtherHeads(missionId, currentHeadSha, now) {
+      return store.obsoleteFeedbackForOtherHeads(missionId, currentHeadSha, now)
+    },
+    async commitFactSnapshotAndDecision(input) {
+      return store.inTx(() => {
+        store.insertFactSnapshot(input.snapshot)
+        return store.insertDecision(input.decision)
+      })
     },
   }
 }

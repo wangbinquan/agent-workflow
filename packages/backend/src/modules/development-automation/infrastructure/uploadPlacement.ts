@@ -20,17 +20,11 @@ import {
   rmSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
-import {
-  developmentRepositoryUploadPlanEntries,
-  developmentRepositoryUploadPlans,
-  developmentRepositoryUploadReceipts,
-} from '@/db/schema'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { UploadPlacementPort } from '../application/ports/reconcilerPorts'
+import type { UploadPlacementPersistence } from '../application/ports/uploadPlacementStore'
 import type { EvidenceStore } from './evidenceStore'
 
 /** seed 树的稳定内容 digest（相对路径排序 + 文件模式 + 每文件 sha256）。 */
@@ -60,7 +54,7 @@ export function seedTreeDigestOf(root: string): string {
 }
 
 export interface PlacementDeps {
-  readonly db: DbClient
+  readonly persistence: UploadPlacementPersistence
   readonly evidence: EvidenceStore
   readonly seedsRoot: string
   readonly now: () => number
@@ -79,18 +73,9 @@ export async function placeUploadSeed(
   deps: PlacementDeps,
   input: { readonly planId: string },
 ): Promise<PlacementResult> {
-  const plan = deps.db
-    .select()
-    .from(developmentRepositoryUploadPlans)
-    .where(eq(developmentRepositoryUploadPlans.id, input.planId))
-    .get()
-  if (plan === undefined) throw new Error(`upload plan not found: ${input.planId}`)
-  const entries = deps.db
-    .select()
-    .from(developmentRepositoryUploadPlanEntries)
-    .where(eq(developmentRepositoryUploadPlanEntries.planId, input.planId))
-    .all()
-    .sort((a, b) => a.ordinal - b.ordinal)
+  const plan = await deps.persistence.load(input.planId)
+  if (plan === null) throw new Error(`upload plan not found: ${input.planId}`)
+  const entries = [...plan.entries].sort((a, b) => a.ordinal - b.ordinal)
 
   const active = entries.filter((e) => e.expectedTargetKind !== 'already-present')
   const dispositions = entries.map((e) => ({
@@ -106,28 +91,17 @@ export async function placeUploadSeed(
   // 全 already-present：null seed + baseline-observed fulfillment（幂等 upsert）。
   if (active.length === 0) {
     const emptyDigest = seedTreeDigestOf(join(deps.seedsRoot, '__nonexistent__'))
-    const existing = deps.db
-      .select()
-      .from(developmentRepositoryUploadReceipts)
-      .where(eq(developmentRepositoryUploadReceipts.planId, input.planId))
-      .all()
-    if (!existing.some((r) => r.receiptKind === 'placement')) {
-      deps.db
-        .insert(developmentRepositoryUploadReceipts)
-        .values({
-          id: ulid(),
-          planId: input.planId,
-          baselineSnapshotRef: plan.baselineSnapshotRef,
-          receiptKind: 'placement',
-          seedChangeRef: null,
-          seedTreeDigest: emptyDigest,
-          fulfillmentKind: 'baseline-observed',
-          commitSha: plan.baselineSha,
-          entriesJson: JSON.stringify(dispositions),
-          createdAt: deps.now(),
-        })
-        .run()
-    }
+    await deps.persistence.record({
+      id: ulid(),
+      planId: input.planId,
+      baselineSnapshotRef: plan.baselineSnapshotRef,
+      seedChangeRef: null,
+      seedTreeDigest: emptyDigest,
+      fulfillmentKind: 'baseline-observed',
+      commitSha: plan.baselineSha,
+      entriesJson: JSON.stringify(dispositions),
+      createdAt: deps.now(),
+    })
     return { seedChangeRef: null, seedTreeDigest: emptyDigest, dispositions }
   }
 
@@ -159,12 +133,7 @@ export async function placeUploadSeed(
   }
 
   // 幂等：已有 seed 且树 digest 与内容一致 ⇒ 复用；否则废弃重建（byte-identical）。
-  const expectedReceipt = deps.db
-    .select()
-    .from(developmentRepositoryUploadReceipts)
-    .where(eq(developmentRepositoryUploadReceipts.planId, input.planId))
-    .all()
-    .find((r) => r.receiptKind === 'placement')
+  const expectedReceipt = plan.placementReceipt ?? undefined
   if (!existsSync(seedRoot)) {
     rebuild()
   } else if (
@@ -180,21 +149,17 @@ export async function placeUploadSeed(
       throw new Error(`seed digest mismatch for plan ${input.planId}`)
     }
   } else {
-    deps.db
-      .insert(developmentRepositoryUploadReceipts)
-      .values({
-        id: ulid(),
-        planId: input.planId,
-        baselineSnapshotRef: plan.baselineSnapshotRef,
-        receiptKind: 'placement',
-        seedChangeRef: plan.planDigest,
-        seedTreeDigest: digest,
-        fulfillmentKind: null,
-        commitSha: null,
-        entriesJson: JSON.stringify(dispositions),
-        createdAt: deps.now(),
-      })
-      .run()
+    await deps.persistence.record({
+      id: ulid(),
+      planId: input.planId,
+      baselineSnapshotRef: plan.baselineSnapshotRef,
+      seedChangeRef: plan.planDigest,
+      seedTreeDigest: digest,
+      fulfillmentKind: null,
+      commitSha: null,
+      entriesJson: JSON.stringify(dispositions),
+      createdAt: deps.now(),
+    })
   }
   return { seedChangeRef: plan.planDigest, seedTreeDigest: digest, dispositions }
 }

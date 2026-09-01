@@ -31,11 +31,11 @@ import {
 } from '../../domain/mission'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { invalidateInFlightAction } from '../actionInvalidation'
-import type { MissionRow, MissionStore } from '../ports/missionStore'
+import type { MissionRow, MissionPersistence } from '../ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from '../ports/reconcilerPorts'
 
 export interface MissionHandoverDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   /** attach 的 observe / handoff 的 agent cancel 走这里；缺席按 typed 409 呈现。 */
   readonly ports?: ReconcilerPorts
@@ -47,8 +47,8 @@ export interface MissionHandoverDeps {
   } | null
 }
 
-function loadMission(deps: MissionHandoverDeps, missionId: string): MissionRow {
-  const mission = deps.store.getMission(missionId)
+async function loadMission(deps: MissionHandoverDeps, missionId: string): Promise<MissionRow> {
+  const mission = await deps.store.getMission(missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   return mission
 }
@@ -68,20 +68,20 @@ function assertAdmissible(
 }
 
 /** 命令层落 cells 的自足通道（confirmNoChange 同款：merge → 新快照 → ref 前移）。 */
-function persistCellsPatch(
+async function persistCellsPatch(
   deps: MissionHandoverDeps,
   mission: MissionRow,
   patch: Record<string, FactCell<FactCellValue>>,
   refs: unknown,
-): void {
+): Promise<void> {
   const base =
     mission.requirementBundleRef === null
       ? {}
-      : (deps.snapshots.getCells(mission.requirementBundleRef) ?? {})
+      : ((await deps.snapshots.getCells(mission.requirementBundleRef)) ?? {})
   const merged = { ...base, ...patch }
   const now = deps.now()
   const snapshotId = ulid()
-  deps.store.insertFactSnapshot({
+  await deps.store.insertFactSnapshot({
     id: snapshotId,
     missionId: mission.id,
     missionRevision: mission.revision,
@@ -91,9 +91,9 @@ function persistCellsPatch(
     digest: canonicalDigest(merged),
     now,
   })
-  const fresh = deps.store.getMission(mission.id)
+  const fresh = await deps.store.getMission(mission.id)
   if (fresh !== null) {
-    deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
       requirementBundleRef: snapshotId,
     })
   }
@@ -120,18 +120,18 @@ export async function handoffMission(
   rawInput: unknown,
 ): Promise<HandoffMissionResult> {
   const input = handoffMissionInputSchema.parse(rawInput)
-  const mission = loadMission(deps, input.missionId)
+  const mission = await loadMission(deps, input.missionId)
   assertAdmissible(mission, 'handoff')
   const now = deps.now()
 
   // fence 先落（bump epoch 使一切在途 continuation 过期）。
-  const fenced = deps.store.bumpEpoch(mission.id, mission.revision, {
+  const fenced = await deps.store.bumpEpoch(mission.id, mission.revision, {
     transitionFence: 'handoff-pending',
   })
   if (!fenced.ok) throw new ConflictError(`mission-occ-${fenced.code}`, fenced.code)
 
   // 在途 Agent action 撤销（cancel 尽力，本地台账权威）。
-  const afterFence = deps.store.getMission(mission.id)
+  const afterFence = await deps.store.getMission(mission.id)
   if (afterFence !== null && afterFence.currentActionRunId !== null) {
     await invalidateInFlightAction(
       {
@@ -142,28 +142,28 @@ export async function handoffMission(
       afterFence,
       'input-invalidated',
     )
-    const cleared = deps.store.getMission(mission.id)
+    const cleared = await deps.store.getMission(mission.id)
     if (cleared !== null && cleared.currentActionRunId !== null) {
-      deps.store.occUpdate(cleared.id, cleared.revision, cleared.epoch, {
+      await deps.store.occUpdate(cleared.id, cleared.revision, cleared.epoch, {
         currentActionRunId: null,
       })
     }
   }
 
   // 未 dispatch 的 intent 作废；已 dispatch 的必须按外部真相结算（settleFence）。
-  for (const effect of deps.store.listUnsettledEffects(mission.id)) {
-    if (effect.state === 'prepared') deps.store.invalidateEffect(effect.id, now)
+  for (const effect of await deps.store.listUnsettledEffects(mission.id)) {
+    if (effect.state === 'prepared') await deps.store.invalidateEffect(effect.id, now)
   }
-  const remaining = deps.store
-    .listUnsettledEffects(mission.id)
-    .filter((e) => e.state === 'dispatched')
+  const remaining = (await deps.store.listUnsettledEffects(mission.id)).filter(
+    (e) => e.state === 'dispatched',
+  )
   if (remaining.length > 0) {
     return { automationMode: mission.automationMode, status: mission.status, pending: true }
   }
 
-  const fresh = deps.store.getMission(mission.id)
+  const fresh = await deps.store.getMission(mission.id)
   if (fresh === null) throw new NotFoundError('mission-not-found', 'mission not found')
-  const settled = deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+  const settled = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
     automationMode: 'tracking-only',
     transitionFence: 'none',
   })
@@ -196,11 +196,11 @@ export async function attachMergeRequest(
   rawInput: unknown,
 ): Promise<AttachMergeRequestResult> {
   const input = attachMergeRequestInputSchema.parse(rawInput)
-  const mission = loadMission(deps, input.missionId)
+  const mission = await loadMission(deps, input.missionId)
   assertAdmissible(mission, 'attach-merge-request')
 
   // effect 结果未知时不许绑定另一个 MR（§4.8）。
-  if (deps.store.listUnsettledEffects(mission.id).length > 0) {
+  if ((await deps.store.listUnsettledEffects(mission.id)).length > 0) {
     throw new ConflictError(
       'mission-effects-unsettled',
       'publish/MR intents must settle before attaching a merge request',
@@ -231,7 +231,7 @@ export async function attachMergeRequest(
 
   const now = deps.now()
   const claimId = ulid()
-  const claimed = deps.store.claimMr({
+  const claimed = await deps.store.claimMr({
     id: claimId,
     codeHostEndpointRef,
     stableProjectRef,
@@ -244,7 +244,7 @@ export async function attachMergeRequest(
   let mrClaimId = claimId
   if (!claimed.ok) {
     // 撞唯一 ≠ 一定是别人（重试重放撞回自己的行）；消歧后异主才拒。
-    const existing = deps.store.findMrClaim({
+    const existing = await deps.store.findMrClaim({
       codeHostEndpointRef,
       stableProjectRef,
       mrIid: input.mrIid,
@@ -255,7 +255,7 @@ export async function attachMergeRequest(
     mrClaimId = existing.id
   }
 
-  const bound = deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  const bound = await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     deliveryKind: 'adopt-merge-request',
     adoptedMrRef: input.mrIid,
     mrClaimId,
@@ -273,20 +273,20 @@ export async function attachMergeRequest(
         : mission.uploadPublicationRef !== null
           ? 'fulfilled'
           : 'unfulfilled'
-    const fresh = deps.store.getMission(mission.id)
+    const fresh = await deps.store.getMission(mission.id)
     if (fresh !== null) {
-      const settled = deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+      const settled = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
         status: to,
         terminalKind,
         terminalAt: now,
         currentActionRunId: null,
         terminalUploadFulfillment: uploadFulfillment,
       })
-      if (settled.ok) deps.store.releaseMr(mrClaimId, now)
+      if (settled.ok) await deps.store.releaseMr(mrClaimId, now)
     }
-    persistCellsPatch(
+    await persistCellsPatch(
       deps,
-      loadMission(deps, mission.id),
+      await loadMission(deps, mission.id),
       {
         '__mr.ref': { state: 'known', value: input.mrIid, sourceRevision: mrClaimId },
         '__mr.state': { state: 'known', value: mr.state, sourceRevision: mrClaimId },
@@ -296,9 +296,9 @@ export async function attachMergeRequest(
     return { status: to, deliveryKind: 'adopt-merge-request', mrClaimId, terminal: terminalKind }
   }
 
-  persistCellsPatch(
+  await persistCellsPatch(
     deps,
-    loadMission(deps, mission.id),
+    await loadMission(deps, mission.id),
     {
       '__mr.ref': { state: 'known', value: input.mrIid, sourceRevision: mrClaimId },
       '__mr.headSha': {
@@ -309,7 +309,7 @@ export async function attachMergeRequest(
     },
     { kind: 'attach-binding', mrIid: input.mrIid },
   )
-  const after = loadMission(deps, mission.id)
+  const after = await loadMission(deps, mission.id)
   return {
     status: after.status,
     deliveryKind: 'adopt-merge-request',
@@ -332,12 +332,12 @@ export async function resumeMission(
   rawInput: unknown,
 ): Promise<ResumeMissionResult> {
   const input = resumeMissionInputSchema.parse(rawInput)
-  const mission = loadMission(deps, input.missionId)
+  const mission = await loadMission(deps, input.missionId)
   assertAdmissible(mission, 'resume-automation')
 
   // 先刷新 facts：MR facts 标记过期（'0' 恒 stale），下轮 care 链强制 recollect
   // 后才会重新选动作——「resume 先刷新全部 facts/budgets 再决策」的实现面。
-  persistCellsPatch(
+  await persistCellsPatch(
     deps,
     mission,
     {
@@ -346,11 +346,11 @@ export async function resumeMission(
     },
     { kind: 'resume-refresh' },
   )
-  const fresh = loadMission(deps, input.missionId)
-  const resumed = deps.store.bumpEpoch(fresh.id, fresh.revision, {
+  const fresh = await loadMission(deps, input.missionId)
+  const resumed = await deps.store.bumpEpoch(fresh.id, fresh.revision, {
     automationMode: 'active',
   })
   if (!resumed.ok) throw new ConflictError(`mission-occ-${resumed.code}`, resumed.code)
-  const after = loadMission(deps, input.missionId)
+  const after = await loadMission(deps, input.missionId)
   return { automationMode: 'active', status: after.status }
 }

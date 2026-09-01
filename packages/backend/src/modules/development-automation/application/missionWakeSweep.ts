@@ -12,7 +12,7 @@ import { driveMission } from './missionDriver'
 import type { ReconcileDeps } from './missionReconciler'
 
 export interface WakeSweepReaders {
-  listUnconsumedWakeHintMissionIds(): string[]
+  listUnconsumedWakeHintMissionIds(): Promise<string[]>
 }
 
 export async function sweepMissionWakes(
@@ -21,13 +21,13 @@ export async function sweepMissionWakes(
 ): Promise<{ reconciled: number }> {
   const now = deps.now()
   let reconciled = 0
-  for (const wake of deps.store.listDueWakes(now)) {
-    if (deps.store.fireWake(wake.id, now)) {
+  for (const wake of await deps.store.listDueWakes(now)) {
+    if (await deps.store.fireWake(wake.id, now)) {
       await driveMission(deps, wake.missionId)
       reconciled += 1
     }
   }
-  for (const missionId of readers.listUnconsumedWakeHintMissionIds()) {
+  for (const missionId of await readers.listUnconsumedWakeHintMissionIds()) {
     const outcome = await driveMission(deps, missionId)
     if (outcome.stop !== 'not-found') reconciled += 1
   }

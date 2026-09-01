@@ -167,7 +167,7 @@ export interface EmployeeCaseDetailProjectionInputV1 {
 
 export interface EmployeeCaseDetailProjectionParticipant {
   readonly typeId: string
-  projectJson(inputJson: string): string
+  projectJson(inputJson: string): Promise<string>
 }
 
 export interface EmployeeCaseRef {
@@ -275,12 +275,18 @@ export {
  *     而不是 `state === 'completed'`；OS 将来把结算态拆成多个值时，改一处即可。
  */
 export interface EmployeeReactionRoundQueryPort {
-  frozenPlan(roundRef: string): {
-    readonly caseId: string
-    readonly planJson: string
-  } | null
+  frozenPlan(roundRef: string):
+    | Promise<{
+        readonly caseId: string
+        readonly planJson: string
+      } | null>
+    | {
+        readonly caseId: string
+        readonly planJson: string
+      }
+    | null
   lastSettledRound(input: {
     readonly caseId: string
     readonly workItemRef: string
-  }): { readonly roundRef: string } | null
+  }): Promise<{ readonly roundRef: string } | null> | { readonly roundRef: string } | null
 }

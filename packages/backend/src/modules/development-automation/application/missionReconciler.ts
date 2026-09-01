@@ -88,7 +88,7 @@ import {
   redispatchPipeline,
 } from './pipelineEvidenceChain'
 import type { AdmissionLookup } from './ports/admissionLookup'
-import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
+import type { EffectRow, MissionRow, MissionPersistence } from './ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from './ports/reconcilerPorts'
 import {
   handleApprovalObserveDecision,
@@ -125,7 +125,7 @@ interface FeedbackPromptSnapshot {
 }
 
 export interface ReconcileDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly lookup: AdmissionLookup
   readonly snapshots: FactSnapshotReader
   readonly ports: ReconcilerPorts
@@ -341,14 +341,14 @@ function projectRowCells(mission: MissionRow): Record<string, FactCell<FactCellV
   }
 }
 
-function mergeCollectedCells(
+async function mergeCollectedCells(
   deps: ReconcileDeps,
   mission: MissionRow,
   cells: Record<string, FactCell<FactCellValue>>,
-): void {
+): Promise<void> {
   for (const ref of [mission.repositoryFactsRef, mission.requirementBundleRef]) {
     if (ref === null) continue
-    const collected = deps.snapshots.getCells(ref)
+    const collected = await deps.snapshots.getCells(ref)
     if (collected !== null) Object.assign(cells, collected)
   }
   // MR facts snapshot 复用 repositoryFactsRef 之外的第二个 ref 位：PR-2 把最近
@@ -447,12 +447,12 @@ function readinessInputFrom(
   }
 }
 
-function projectLiveFeedbackCount(
-  store: Pick<MissionStore, 'listFeedback'>,
+async function projectLiveFeedbackCount(
+  store: Pick<MissionPersistence, 'listFeedback'>,
   mission: MissionRow,
   cells: Record<string, FactCell<FactCellValue>>,
   policy: AutomationPolicyContent | null,
-): void {
+): Promise<void> {
   if (
     policy === null ||
     mission.mrClaimId === null ||
@@ -462,7 +462,7 @@ function projectLiveFeedbackCount(
   }
   cells['mr.unhandledFeedbackCount'] = {
     state: 'known',
-    value: selectableFeedback(store.listFeedback(mission.id), policy.feedback).length,
+    value: selectableFeedback(await store.listFeedback(mission.id), policy.feedback).length,
     sourceRevision: 'ledger-live',
   }
 }
@@ -527,9 +527,9 @@ function parseTemplateRef(ref: string): { readonly id: string; readonly revision
 /** fence settle（cancel/handoff 的收口半边；design §2.3/§4.8）。 */
 async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<ReconcileOutcome> {
   const now = deps.now()
-  for (const effect of deps.store.listUnsettledEffects(mission.id)) {
+  for (const effect of await deps.store.listUnsettledEffects(mission.id)) {
     if (effect.state === 'prepared') {
-      deps.store.invalidateEffect(effect.id, now)
+      await deps.store.invalidateEffect(effect.id, now)
       continue
     }
     // dispatched：必须按外部真相结算——经 executor 查询/重放；无 executor 则保持 pending。
@@ -539,15 +539,15 @@ async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<Re
       effectKind: effect.effectKind,
       intentDigest: effect.intentDigest,
     })
-    if (settled.ok) deps.store.confirmEffect(effect.id, settled.receiptRef, now)
-    else deps.store.failEffect(effect.id, JSON.stringify(settled.failure), now)
+    if (settled.ok) await deps.store.confirmEffect(effect.id, settled.receiptRef, now)
+    else await deps.store.failEffect(effect.id, JSON.stringify(settled.failure), now)
   }
-  const remaining = deps.store
-    .listUnsettledEffects(mission.id)
-    .filter((e) => e.state === 'dispatched')
+  const remaining = (await deps.store.listUnsettledEffects(mission.id)).filter(
+    (e) => e.state === 'dispatched',
+  )
   if (remaining.length > 0) return { kind: 'fence-pending', unsettled: remaining.length }
 
-  const fresh = deps.store.getMission(mission.id)
+  const fresh = await deps.store.getMission(mission.id)
   if (fresh === null) return { kind: 'not-found' }
   if (fresh.transitionFence === 'cancel-pending') {
     const verdict = checkMissionTransition({
@@ -556,18 +556,18 @@ async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<Re
       fence: fresh.transitionFence,
     })
     if (!verdict.ok) return { kind: 'terminal-noop' }
-    const result = deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    const result = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
       status: 'canceled',
       transitionFence: 'none',
       terminalKind: 'canceled',
       terminalAt: now,
       currentActionRunId: null,
     })
-    if (result.ok && fresh.mrClaimId !== null) deps.store.releaseMr(fresh.mrClaimId, now)
+    if (result.ok && fresh.mrClaimId !== null) await deps.store.releaseMr(fresh.mrClaimId, now)
     return { kind: 'fence-settled', result: 'canceled' }
   }
   // handoff-pending
-  deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
     automationMode: 'tracking-only',
     transitionFence: 'none',
   })
@@ -575,19 +575,19 @@ async function settleFence(deps: ReconcileDeps, mission: MissionRow): Promise<Re
 }
 
 async function publishReadiness(deps: ReconcileDeps, missionId: string): Promise<void> {
-  const mission = deps.store.getMission(missionId)
+  const mission = await deps.store.getMission(missionId)
   if (mission === null || TERMINAL_STATUSES.has(mission.status)) return
   const cells = projectRowCells(mission)
-  mergeCollectedCells(deps, mission, cells)
-  projectLiveFeedbackCount(
+  await mergeCollectedCells(deps, mission, cells)
+  await projectLiveFeedbackCount(
     deps.store,
     mission,
     cells,
     await loadPolicyContent(deps.lookup, mission),
   )
-  const unsettled = deps.store.listUnsettledEffects(mission.id)
+  const unsettled = await deps.store.listUnsettledEffects(mission.id)
   const readiness = computeReadiness(
-    readinessInputFrom(mission, unsettled, cells, deps.store.listFeedback(mission.id)),
+    readinessInputFrom(mission, unsettled, cells, await deps.store.listFeedback(mission.id)),
   )
   let projectedStatus: MissionStatus | null = null
   if (
@@ -605,7 +605,7 @@ async function publishReadiness(deps: ReconcileDeps, missionId: string): Promise
       if (verdict.ok) projectedStatus = candidate
     }
   }
-  deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     readinessJson: canonicalStringify(readiness),
     ...(projectedStatus === null ? {} : { status: projectedStatus }),
   })
@@ -615,12 +615,12 @@ export async function runMissionReconcile(
   deps: ReconcileDeps,
   missionId: string,
 ): Promise<ReconcileOutcome> {
-  const mission = deps.store.getMission(missionId)
+  const mission = await deps.store.getMission(missionId)
   if (mission === null) return { kind: 'not-found' }
   const now = deps.now()
 
   if (TERMINAL_STATUSES.has(mission.status)) {
-    const hints = deps.store.consumeWakeHints(mission.id, now)
+    const hints = await deps.store.consumeWakeHints(mission.id, now)
     // T81（design §10.4）：终态**不逆转**，但外部把已关闭的 MR 重新打开时要另建
     // 一条带链接的后继去接管它。只在真的收到投递（wake hint）时探一次——终态
     // Mission 只增不减，每轮 sweep 都对 code host 探一次的话，成本随历史线性增长
@@ -641,7 +641,7 @@ export async function runMissionReconcile(
     return outcome
   }
 
-  const consumedWakeHints = deps.store.consumeWakeHints(mission.id, now)
+  const consumedWakeHints = await deps.store.consumeWakeHints(mission.id, now)
 
   // ---- PR-4：进行中 Agent action 的结果收取（guards 之前——active-action
   // guard 会 wait，收取必须先于它；pending 则落回正常流程）。 ----------------
@@ -649,7 +649,7 @@ export async function runMissionReconcile(
     const collected = await collectAgentAttempt(deps, mission)
     if (collected.kind !== 'no-op' && collected.kind !== 'still-running') {
       if (collected.kind === 'action-collected' || collected.kind === 'action-failed') {
-        settlePlaybookAction(deps, collected.actionRunId, collected)
+        await settlePlaybookAction(deps, collected.actionRunId, collected)
       }
       return { kind: 'action-collect', result: collected }
     }
@@ -657,11 +657,11 @@ export async function runMissionReconcile(
 
   // ---- facts 组装 -----------------------------------------------------------
   const cells = projectRowCells(mission)
-  mergeCollectedCells(deps, mission, cells)
+  await mergeCollectedCells(deps, mission, cells)
   if (deps.ports.playbookSaga !== undefined) {
     cells['__playbook.sagaDigest'] = {
       state: 'known',
-      value: deps.ports.playbookSaga.sagaDigest(mission.id),
+      value: await deps.ports.playbookSaga.sagaDigest(mission.id),
       sourceRevision: 'playbook-saga',
     }
   }
@@ -673,7 +673,7 @@ export async function runMissionReconcile(
   // 耗尽。claim 存在且 MR facts 已采过时按台账现算覆盖（与 collect 投影同一
   // 算法 selectableFeedback，两处必然一致）。必须先于 buildFactSnapshot——
   // snapshot 定格后的覆盖进不了决策输入。
-  projectLiveFeedbackCount(deps.store, mission, cells, policy)
+  await projectLiveFeedbackCount(deps.store, mission, cells, policy)
 
   // Make an external invalidation part of the audited decision input. Merely
   // swapping the selected decision below is insufficient: decisionInputDigest
@@ -687,7 +687,7 @@ export async function runMissionReconcile(
     }
   }
 
-  const unsettled = deps.store.listUnsettledEffects(mission.id)
+  const unsettled = await deps.store.listUnsettledEffects(mission.id)
   const snapshot: MissionFactSnapshot = buildFactSnapshot({
     missionRevision: mission.revision,
     capturedAt: new Date(now).toISOString().replace('Z', '+00:00'),
@@ -759,7 +759,10 @@ export async function runMissionReconcile(
   // the old prompt still names only the previous revisions. Refresh MR facts
   // before launching so Agent input never drifts from the selected ledger rows.
   if (selected.kind === 'run-agent-action' && selected.capabilityId === 'mr.feedback.apply') {
-    const selectedRows = selectableFeedback(deps.store.listFeedback(mission.id), policy.feedback)
+    const selectedRows = selectableFeedback(
+      await deps.store.listFeedback(mission.id),
+      policy.feedback,
+    )
     const promptCell = cells[MR_FEEDBACK_INPUT_CELL]
     const prompt = readFeedbackPromptSnapshot(
       cells,
@@ -806,7 +809,7 @@ export async function runMissionReconcile(
   // 无 MR 时，按 policy 打开 no-change-confirmation human gate；只有 receipt
   // 才能进入 completed-no-change。upload plan 有 created/replaced entry 时
   // 不许以 no-change 跳过 seed（gate 不开，正常链继续把 seed 送发布）。
-  selected = redispatchNoChangeGate(deps, mission, cells, policy, selected)
+  selected = await redispatchNoChangeGate(deps, mission, cells, policy, selected)
 
   // ---- candidate 发布链重派（PR-5 T56/T57/T59）------------------------------
   // candidate 已派生且规则无话可说时，依 `__delivery.*` 进度派 verification →
@@ -817,7 +820,7 @@ export async function runMissionReconcile(
   // facts 新鲜度 → reply 派发 → feedback 规则放行 → readiness 推进；terminal
   // 由 fixed guard 兜。链序 delivery → care → pipeline：care 先保 facts 新鲜
   // （__mr.headSha 是 pipeline stale 判定的锚）。
-  selected = redispatchMrCare(deps, mission, cells, policy, selected, { now })
+  selected = await redispatchMrCare(deps, mission, cells, policy, selected, { now })
 
   // ---- pipeline evidence 链重派（PR-6 T68）---------------------------------
   // MR 建立后接管发布链落下的静止态：collect（两次 head fence）→ trigger/
@@ -838,13 +841,13 @@ export async function runMissionReconcile(
   return await commitAndHandle(deps, mission, snapshot, guards, { ...evaluation, selected })
 }
 
-function redispatchNoChangeGate(
+async function redispatchNoChangeGate(
   deps: ReconcileDeps,
   mission: MissionRow,
   cells: Readonly<Record<string, FactCell<FactCellValue>>>,
   policy: AutomationPolicyContent,
   selected: NextDecision,
-): NextDecision {
+): Promise<NextDecision> {
   if (selected.kind !== 'block') return selected
   if (mission.mrClaimId !== null) return selected
   if (policy.requirement.noChangeConfirmation !== 'human-confirmation') return selected
@@ -857,7 +860,7 @@ function redispatchNoChangeGate(
     return selected
   }
   if (mission.uploadPlanRef !== null) {
-    const plan = deps.ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null
+    const plan = (await deps.ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null
     // plan 不可读 = 保守不开 gate（indeterminate 语义：宁可停在原 block）。
     if (plan === null) return selected
     if (plan.entries.some((entry) => entry.disposition !== 'already-present')) return selected
@@ -992,8 +995,8 @@ async function commitAndHandle(
 
   const snapshotId = ulid()
   const decisionId = ulid()
-  const inserted = deps.store.inTx(() => {
-    deps.store.insertFactSnapshot({
+  const inserted = await deps.store.commitFactSnapshotAndDecision({
+    snapshot: {
       id: snapshotId,
       missionId: mission.id,
       missionRevision: mission.revision,
@@ -1002,8 +1005,8 @@ async function commitAndHandle(
       refsJson: canonicalStringify({}),
       digest: snapshot.digest,
       now,
-    })
-    return deps.store.insertDecision({
+    },
+    decision: {
       id: decisionId,
       missionId: mission.id,
       missionRevision: mission.revision,
@@ -1020,22 +1023,20 @@ async function commitAndHandle(
       canonicalDigest: canonical,
       decisionInputDigest,
       now,
-    })
+    },
   })
   if (!inserted.created) {
     // T83 crash matrix 抓出的恢复缺陷：链自治 effect（commit/push/mr-ensure/
     // trigger/rerun/reply）在 dispatched 悬挂时，cells/guards 都没变 ⇒ 决策被
     // 去重吞 ⇒ handler 永不重放 ⇒ 卡死。悬挂自治 effect 存在时照常执行
     // handler——重放按 idempotencyKey 撞回同一行、intent digest 对拍后幂等。
-    const hangingSelfSettled = deps.store
-      .listUnsettledEffects(mission.id)
-      .some(
-        (e) =>
-          e.state === 'dispatched' &&
-          (DELIVERY_EFFECT_KINDS.has(e.effectKind) ||
-            PIPELINE_EFFECT_KINDS.has(e.effectKind) ||
-            MR_CARE_EFFECT_KINDS.has(e.effectKind)),
-      )
+    const hangingSelfSettled = (await deps.store.listUnsettledEffects(mission.id)).some(
+      (e) =>
+        e.state === 'dispatched' &&
+        (DELIVERY_EFFECT_KINDS.has(e.effectKind) ||
+          PIPELINE_EFFECT_KINDS.has(e.effectKind) ||
+          MR_CARE_EFFECT_KINDS.has(e.effectKind)),
+    )
     if (!hangingSelfSettled) {
       await publishReadiness(deps, mission.id)
       return { kind: 'deduped', decisionId: inserted.decisionId }
@@ -1043,7 +1044,7 @@ async function commitAndHandle(
   }
 
   const handled = await handleDecision(deps, mission, snapshot, selected, inserted.decisionId)
-  settlePlaybookDecision(deps, selected, inserted.decisionId, handled)
+  await settlePlaybookDecision(deps, selected, inserted.decisionId, handled)
   await publishReadiness(deps, mission.id)
   return { kind: 'decided', decisionId: inserted.decisionId, selected, handled }
 }
@@ -1068,11 +1069,11 @@ async function commitAndHandle(
  */
 export const MAX_STEP_FAILURE_DETAIL_CHARS = 2_000
 
-export function stepFailureDetail(
+export async function stepFailureDetail(
   deps: ReconcileDeps,
   missionId: string,
   reason: string,
-): string | null {
+): Promise<string | null> {
   // 用正则而不是 split/join：failureCode 本身可能含 `:`（如 `step-failed:s:a:b`），
   // 而 `.join(':')` 会被 RFC-254 的平台面守卫当成 PATH 列表拼接（Windows 上 `:` 是
   // 盘符分隔符）—— 这里拼的是决策 reason，不是路径，索性不用那个形状。
@@ -1080,12 +1081,15 @@ export function stepFailureDetail(
   if (match === null) return null
   const stepId = match[1]!
   const failureCode = match[2]!
-  const runs = deps.ports.playbookSaga?.listStepRuns(missionId) ?? []
+  const runs =
+    deps.ports.playbookSaga === undefined
+      ? []
+      : await deps.ports.playbookSaga.listStepRuns(missionId)
   const failed = [...runs]
     .reverse()
     .find((run) => run.stepId === stepId && run.failureCode === failureCode)
   if (failed === undefined || failed.actionRunId === null) return null
-  const actionRun = deps.store.getActionRun(failed.actionRunId)
+  const actionRun = await deps.store.getActionRun(failed.actionRunId)
   if (actionRun === null || actionRun.failureJson === null) return null
   let parsed: { remediation?: unknown }
   try {
@@ -1097,13 +1101,13 @@ export function stepFailureDetail(
   return remediation === '' ? null : remediation.slice(0, MAX_STEP_FAILURE_DETAIL_CHARS)
 }
 
-function blockMission(
+async function blockMission(
   deps: ReconcileDeps,
   missionId: string,
   code: string,
   detail: string | null,
-): void {
-  const mission = deps.store.getMission(missionId)
+): Promise<void> {
+  const mission = await deps.store.getMission(missionId)
   if (mission === null) return
   const verdict = checkMissionTransition({
     from: mission.status,
@@ -1111,7 +1115,7 @@ function blockMission(
     fence: mission.transitionFence,
   })
   if (!verdict.ok) return
-  deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     status: 'blocked',
     blockCode: code,
     blockDetail: detail,
@@ -1125,22 +1129,22 @@ function blockMission(
  * attempt ordinal 也走这里——cells 变化 ⇒ decisionInputDigest 变化 ⇒ retry
  * 后不会被去重卡死（facts 不变则去重是设计行为）。
  */
-function persistRequirementCells(
+async function persistRequirementCells(
   deps: ReconcileDeps,
   missionId: string,
   patch: Record<string, FactCell<FactCellValue>>,
   refs: unknown,
-): void {
-  const mission = deps.store.getMission(missionId)
+): Promise<void> {
+  const mission = await deps.store.getMission(missionId)
   if (mission === null) return
   const base =
     mission.requirementBundleRef === null
       ? {}
-      : (deps.snapshots.getCells(mission.requirementBundleRef) ?? {})
+      : ((await deps.snapshots.getCells(mission.requirementBundleRef)) ?? {})
   const merged = { ...base, ...patch }
   const now = deps.now()
   const snapshotId = ulid()
-  deps.store.insertFactSnapshot({
+  await deps.store.insertFactSnapshot({
     id: snapshotId,
     missionId,
     missionRevision: mission.revision,
@@ -1150,7 +1154,7 @@ function persistRequirementCells(
     digest: canonicalDigest(merged),
     now,
   })
-  deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     requirementBundleRef: snapshotId,
   })
 }
@@ -1249,31 +1253,32 @@ async function handleDecision(
           : mission.uploadPublicationRef !== null
             ? 'fulfilled'
             : 'unfulfilled'
-      const fresh = deps.store.getMission(mission.id)
+      const fresh = await deps.store.getMission(mission.id)
       if (fresh === null) return 'blocked'
-      const result = deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+      const result = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
         status: to,
         terminalKind: selected.terminal,
         terminalAt: now,
         currentActionRunId: null,
         terminalUploadFulfillment: uploadFulfillment,
       })
-      if (result.ok && mission.mrClaimId !== null) deps.store.releaseMr(mission.mrClaimId, now)
+      if (result.ok && mission.mrClaimId !== null)
+        await deps.store.releaseMr(mission.mrClaimId, now)
       return 'terminal'
     }
     case 'block': {
-      blockMission(
+      await blockMission(
         deps,
         mission.id,
         selected.reason,
-        stepFailureDetail(deps, mission.id, selected.reason),
+        await stepFailureDetail(deps, mission.id, selected.reason),
       )
       return 'blocked'
     }
     case 'wait': {
-      const existing = deps.store.getWake(mission.id, decisionId)
+      const existing = await deps.store.getWake(mission.id, decisionId)
       if (existing === null) {
-        deps.store.armWake({
+        await deps.store.armWake({
           id: ulid(),
           missionId: mission.id,
           decisionId,
@@ -1289,7 +1294,7 @@ async function handleDecision(
     case 'collect-repository-facts': {
       const collector = deps.ports.repositoryFacts
       if (collector === undefined) {
-        blockMission(deps, mission.id, 'collector-not-wired:repository', null)
+        await blockMission(deps, mission.id, 'collector-not-wired:repository', null)
         return 'blocked'
       }
       const collected = await collector.collect({
@@ -1297,7 +1302,7 @@ async function handleDecision(
         repositoryId: mission.repositoryId,
       })
       const snapshotId = ulid()
-      deps.store.insertFactSnapshot({
+      await deps.store.insertFactSnapshot({
         id: snapshotId,
         missionId: mission.id,
         missionRevision: mission.revision,
@@ -1307,9 +1312,9 @@ async function handleDecision(
         digest: canonicalDigest(collected.cells),
         now,
       })
-      const fresh = deps.store.getMission(mission.id)
+      const fresh = await deps.store.getMission(mission.id)
       if (fresh !== null) {
-        deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+        await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
           repositoryFactsRef: snapshotId,
         })
       }
@@ -1318,7 +1323,7 @@ async function handleDecision(
     case 'collect-mr-facts': {
       const collector = deps.ports.mergeRequestFacts
       if (collector === undefined) {
-        blockMission(deps, mission.id, 'collector-not-wired:merge-request', null)
+        await blockMission(deps, mission.id, 'collector-not-wired:merge-request', null)
         return 'blocked'
       }
       // T109 抓出的健壮性缺陷：policy 规则在 MR 存在之前引用 mr.* fact 时，
@@ -1326,7 +1331,7 @@ async function handleDecision(
       // loud throw 会让 mission 以未分类异常卡死。typed block 是静止态，
       // delivery 链照常接管发布进度；MR ensure 之后规则自然恢复可判。
       if (mission.mrClaimId === null) {
-        blockMission(deps, mission.id, 'mr-facts-unavailable:no-mr-claim', null)
+        await blockMission(deps, mission.id, 'mr-facts-unavailable:no-mr-claim', null)
         return 'blocked'
       }
       const collected = await collector.collect({
@@ -1338,7 +1343,7 @@ async function handleDecision(
       const base =
         mission.repositoryFactsRef === null
           ? {}
-          : (deps.snapshots.getCells(mission.repositoryFactsRef) ?? {})
+          : ((await deps.snapshots.getCells(mission.repositoryFactsRef)) ?? {})
       const merged = { ...base, ...collected.cells }
       if (collected.headSha !== null) {
         merged['__mr.headSha'] = {
@@ -1361,7 +1366,7 @@ async function handleDecision(
       // 逐 thread 幂等 upsert（webhook 重放/重复采集不重复起 action），再按
       // policy 算 selectable 数投影 mr.unhandledFeedbackCount。
       if (collected.threads !== undefined && collected.headSha !== null) {
-        deps.store.obsoleteFeedbackForOtherHeads(mission.id, collected.headSha, now)
+        await deps.store.obsoleteFeedbackForOtherHeads(mission.id, collected.headSha, now)
         merged[MR_UNRESOLVED_FEEDBACK_CELL] = unresolvedFeedbackCell({
           providerSnapshotRef: collected.snapshotRef,
           headSha: collected.headSha,
@@ -1369,7 +1374,7 @@ async function handleDecision(
         })
         for (const thread of collected.threads) {
           if (thread.resolved) continue
-          deps.store.upsertFeedbackObservation({
+          await deps.store.upsertFeedbackObservation({
             id: ulid(),
             missionId: mission.id,
             threadRef: thread.threadRef,
@@ -1388,7 +1393,7 @@ async function handleDecision(
         const policyContent = await loadPolicyContent(deps.lookup, mission)
         if (policyContent !== null) {
           const selectable = selectableFeedback(
-            deps.store.listFeedback(mission.id),
+            await deps.store.listFeedback(mission.id),
             policyContent.feedback,
           )
           merged['mr.unhandledFeedbackCount'] = {
@@ -1416,7 +1421,7 @@ async function handleDecision(
         }
       }
       const snapshotId = ulid()
-      deps.store.insertFactSnapshot({
+      await deps.store.insertFactSnapshot({
         id: snapshotId,
         missionId: mission.id,
         missionRevision: mission.revision,
@@ -1431,9 +1436,9 @@ async function handleDecision(
         digest: canonicalDigest(merged),
         now,
       })
-      const fresh = deps.store.getMission(mission.id)
+      const fresh = await deps.store.getMission(mission.id)
       if (fresh !== null) {
-        deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+        await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
           repositoryFactsRef: snapshotId,
         })
       }
@@ -1442,7 +1447,7 @@ async function handleDecision(
     case 'seed-repository-uploads': {
       const placement = deps.ports.uploadPlacement
       if (placement === undefined) {
-        blockMission(deps, mission.id, 'placement-not-wired', null)
+        await blockMission(deps, mission.id, 'placement-not-wired', null)
         return 'blocked'
       }
       const placed = await placement.place({
@@ -1450,12 +1455,12 @@ async function handleDecision(
         uploadPlanRef: selected.uploadPlanRef,
       })
       if (!placed.ok) {
-        blockMission(deps, mission.id, `placement-failed:${placed.failure.code}`, null)
+        await blockMission(deps, mission.id, `placement-failed:${placed.failure.code}`, null)
         return 'blocked'
       }
-      const fresh = deps.store.getMission(mission.id)
+      const fresh = await deps.store.getMission(mission.id)
       if (fresh !== null) {
-        deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+        await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
           uploadPlacementRef: placed.seedTreeDigest,
         })
       }
@@ -1468,7 +1473,7 @@ async function handleDecision(
         definition.workspaceMode === 'edit-business-files' ||
         definition.workspaceMode === 'edit-conflicts'
       const actionRunId = ulid()
-      const created = deps.store.createActionRun({
+      const created = await deps.store.createActionRun({
         id: actionRunId,
         missionId: mission.id,
         missionRevision: mission.revision,
@@ -1484,13 +1489,13 @@ async function handleDecision(
         now,
       })
       if (!created.ok) {
-        blockMission(deps, mission.id, created.code, null)
+        await blockMission(deps, mission.id, created.code, null)
         return 'blocked'
       }
       {
-        const fresh = deps.store.getMission(mission.id)
+        const fresh = await deps.store.getMission(mission.id)
         if (fresh !== null) {
-          deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+          await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
             currentActionRunId: actionRunId,
           })
         }
@@ -1554,7 +1559,7 @@ async function handleDecision(
           const feedbackPolicy = await loadPolicyContent(deps.lookup, mission)
           if (feedbackPolicy === null) return {}
           const selectable = selectableFeedback(
-            deps.store.listFeedback(mission.id),
+            await deps.store.listFeedback(mission.id),
             feedbackPolicy.feedback,
           )
           const promptSnapshot = readFeedbackPromptSnapshot(snapshot.cells, selectable)
@@ -1563,7 +1568,7 @@ async function handleDecision(
           // feedback-snapshot-content-missing block and a later recollect can
           // repair the input without orphaning the feedback rows.
           if (promptSnapshot === null) return {}
-          const selectedRefs = prepareFeedbackSelection(
+          const selectedRefs = await prepareFeedbackSelection(
             { store: deps.store, now: deps.now },
             mission,
             feedbackPolicy,
@@ -1587,9 +1592,13 @@ async function handleDecision(
       })
       if (!launchOutcome.ok) {
         if (selected.capabilityId === 'mr.feedback.apply') {
-          releaseFeedbackSelection({ store: deps.store, now: deps.now }, mission.id, actionRunId)
+          await releaseFeedbackSelection(
+            { store: deps.store, now: deps.now },
+            mission.id,
+            actionRunId,
+          )
         }
-        deps.store.settleActionRun({
+        await deps.store.settleActionRun({
           id: actionRunId,
           status: 'failed',
           resultRef: null,
@@ -1604,14 +1613,14 @@ async function handleDecision(
           now,
         })
         {
-          const fresh = deps.store.getMission(mission.id)
+          const fresh = await deps.store.getMission(mission.id)
           if (fresh !== null && fresh.currentActionRunId === actionRunId) {
-            deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+            await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
               currentActionRunId: null,
             })
           }
         }
-        blockMission(deps, mission.id, launchOutcome.blockCode, launchOutcome.detail)
+        await blockMission(deps, mission.id, launchOutcome.blockCode, launchOutcome.detail)
         return 'action-launch-failed'
       }
       return 'action-launched'
@@ -1626,12 +1635,12 @@ async function handleDecision(
     case 'collect-external-requirement': {
       const port = deps.ports.requirementMaterialize
       if (port === undefined) {
-        blockMission(deps, mission.id, 'requirement-port-not-wired', null)
+        await blockMission(deps, mission.id, 'requirement-port-not-wired', null)
         return 'blocked'
       }
       const attempts = (knownNumber(snapshot.cells, '__requirement.acquireAttempts') ?? 0) + 1
-      const failed = (code: string, remediation: string): 'blocked' => {
-        persistRequirementCells(
+      const failed = async (code: string, remediation: string): Promise<'blocked'> => {
+        await persistRequirementCells(
           deps,
           mission.id,
           {
@@ -1640,7 +1649,7 @@ async function handleDecision(
           },
           { kind: 'requirement-failure', code },
         )
-        blockMission(deps, mission.id, `requirement-acquire-failed:${code}`, remediation)
+        await blockMission(deps, mission.id, `requirement-acquire-failed:${code}`, remediation)
         return 'blocked'
       }
       let bundle: {
@@ -1656,23 +1665,23 @@ async function handleDecision(
           missionId: mission.id,
           submissionRef: selected.submissionRef,
         })
-        if (!out.ok) return failed(out.failure.code, out.failure.remediation)
+        if (!out.ok) return await failed(out.failure.code, out.failure.remediation)
         bundle = { ...out, complete: true }
       } else {
         if (mission.externalId === null)
-          return failed('external-id-missing', 'mission has no external id')
+          return await failed('external-id-missing', 'mission has no external id')
         const out = await port.acquireExternal({
           missionId: mission.id,
           adapterBindingRef: selected.adapterBindingRef,
           externalId: mission.externalId,
         })
-        if (!out.ok) return failed(out.failure.code, out.failure.remediation)
+        if (!out.ok) return await failed(out.failure.code, out.failure.remediation)
         bundle = out
       }
-      deps.store.insertMissionSource({
+      await deps.store.insertMissionSource({
         id: ulid(),
         missionId: mission.id,
-        generation: deps.store.listMissionSources(mission.id).length + 1,
+        generation: (await deps.store.listMissionSources(mission.id)).length + 1,
         sourceKind:
           selected.kind === 'materialize-direct-requirement' ? 'direct' : 'external-reference',
         externalId: mission.externalId,
@@ -1686,7 +1695,7 @@ async function handleDecision(
         state: 'materialized',
         createdAt: now,
       })
-      persistRequirementCells(
+      await persistRequirementCells(
         deps,
         mission.id,
         {
@@ -1701,12 +1710,12 @@ async function handleDecision(
     case 'publish-requirement-questions': {
       const port = deps.ports.requirementMaterialize
       if (port === undefined) {
-        blockMission(deps, mission.id, 'requirement-port-not-wired', null)
+        await blockMission(deps, mission.id, 'requirement-port-not-wired', null)
         return 'blocked'
       }
       const binding = adapterBindingRefOf(mission)
       if (selected.channel === 'requirement-source' && binding === null) {
-        blockMission(deps, mission.id, 'requirement-adapter-unresolved', null)
+        await blockMission(deps, mission.id, 'requirement-adapter-unresolved', null)
         return 'blocked'
       }
       const out = await port.publishQuestions({
@@ -1717,13 +1726,13 @@ async function handleDecision(
       })
       if (!out.ok) {
         const attempts = (knownNumber(snapshot.cells, '__requirement.publishAttempts') ?? 0) + 1
-        persistRequirementCells(
+        await persistRequirementCells(
           deps,
           mission.id,
           { '__requirement.publishAttempts': knownCell(attempts) },
           { kind: 'requirement-questions-failure', code: out.failure.code },
         )
-        blockMission(
+        await blockMission(
           deps,
           mission.id,
           `requirement-questions-failed:${out.failure.code}`,
@@ -1731,7 +1740,7 @@ async function handleDecision(
         )
         return 'blocked'
       }
-      persistRequirementCells(
+      await persistRequirementCells(
         deps,
         mission.id,
         {
@@ -1745,7 +1754,7 @@ async function handleDecision(
         },
       )
       if (selected.channel === 'platform') {
-        const fresh = deps.store.getMission(mission.id)
+        const fresh = await deps.store.getMission(mission.id)
         if (fresh !== null && fresh.status !== 'awaiting-information') {
           const verdict = checkMissionTransition({
             from: fresh.status,
@@ -1753,7 +1762,7 @@ async function handleDecision(
             fence: fresh.transitionFence,
           })
           if (verdict.ok) {
-            deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+            await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
               status: 'awaiting-information',
             })
           }
@@ -1764,12 +1773,12 @@ async function handleDecision(
     case 'collect-requirement-answers': {
       const port = deps.ports.requirementMaterialize
       if (port === undefined) {
-        blockMission(deps, mission.id, 'requirement-port-not-wired', null)
+        await blockMission(deps, mission.id, 'requirement-port-not-wired', null)
         return 'blocked'
       }
       const correlationRef = knownString(snapshot.cells, '__requirement.questionCorrelationRef')
       if (correlationRef === null) {
-        blockMission(deps, mission.id, 'question-correlation-missing', null)
+        await blockMission(deps, mission.id, 'question-correlation-missing', null)
         return 'blocked'
       }
       const out = await port.collectAnswers({
@@ -1780,13 +1789,13 @@ async function handleDecision(
       })
       if (!out.ok) {
         const attempts = (knownNumber(snapshot.cells, '__requirement.answerPolls') ?? 0) + 1
-        persistRequirementCells(
+        await persistRequirementCells(
           deps,
           mission.id,
           { '__requirement.answerPolls': knownCell(attempts) },
           { kind: 'requirement-answers-failure', code: out.failure.code },
         )
-        blockMission(
+        await blockMission(
           deps,
           mission.id,
           `requirement-answers-failed:${out.failure.code}`,
@@ -1798,14 +1807,14 @@ async function handleDecision(
         // 常态轮询未齐：poll ordinal 落 cells（新 digest ⇒ 下轮新 decision 再收），
         // durable wake 兜底 timer 唤醒；early 唤醒不清零 ordinal（deferredWake 语义）。
         const polls = (knownNumber(snapshot.cells, '__requirement.answerPolls') ?? 0) + 1
-        persistRequirementCells(
+        await persistRequirementCells(
           deps,
           mission.id,
           { '__requirement.answerPolls': knownCell(polls) },
           { kind: 'requirement-answers-pending', poll: polls },
         )
-        if (deps.store.getWake(mission.id, decisionId) === null) {
-          deps.store.armWake({
+        if ((await deps.store.getWake(mission.id, decisionId)) === null) {
+          await deps.store.armWake({
             id: ulid(),
             missionId: mission.id,
             decisionId,
@@ -1824,7 +1833,7 @@ async function handleDecision(
       // PR-5 T55：原渠道答案收齐 = 新 answer revision——in-flight 动作输入
       // 过期，先失效（cancel 尽力 + discarded + run failed）再落 cells。
       await invalidateInFlightAction(deps, mission, 'input-invalidated')
-      persistRequirementCells(
+      await persistRequirementCells(
         deps,
         mission.id,
         {
@@ -1846,13 +1855,13 @@ async function handleDecision(
       // 现阶段唯一 gate 形态：no-change-confirmation（decision schema 钉死）。
       // mission → awaiting-information（等人），gate 标记入 cells；确认走
       // confirmNoChange 命令（唯一能进入 completed-no-change 的通道）。
-      persistRequirementCells(
+      await persistRequirementCells(
         deps,
         mission.id,
         { '__gate.pendingHumanDecision': knownCell('no-change-confirmation') },
         { kind: 'human-gate', gate: selected.gate },
       )
-      const fresh = deps.store.getMission(mission.id)
+      const fresh = await deps.store.getMission(mission.id)
       if (fresh !== null && fresh.status !== 'awaiting-information') {
         const verdict = checkMissionTransition({
           from: fresh.status,
@@ -1860,7 +1869,7 @@ async function handleDecision(
           fence: fresh.transitionFence,
         })
         if (verdict.ok) {
-          deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+          await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
             status: 'awaiting-information',
             blockCode: null,
             blockDetail: 'no-change-confirmation pending',
@@ -1873,7 +1882,7 @@ async function handleDecision(
     case 'run-verification': {
       const policy = await loadPolicyContent(deps.lookup, mission)
       if (policy === null) {
-        blockMission(deps, mission.id, 'policy-content-missing', null)
+        await blockMission(deps, mission.id, 'policy-content-missing', null)
         return 'blocked'
       }
       return await handleRunVerification(
@@ -1887,7 +1896,7 @@ async function handleDecision(
     case 'commit-and-publish-candidate': {
       const policy = await loadPolicyContent(deps.lookup, mission)
       if (policy === null) {
-        blockMission(deps, mission.id, 'policy-content-missing', null)
+        await blockMission(deps, mission.id, 'policy-content-missing', null)
         return 'blocked'
       }
       return await handleCommitAndPublish(
@@ -1929,21 +1938,21 @@ async function handleDecision(
     // ---- published employee collaboration / approval saga (PR-12) ----------
     case 'invoke-child-mission': {
       if (deps.ports.playbookSaga === undefined || deps.ports.childMissions === undefined) {
-        blockMission(deps, mission.id, 'child-mission-port-not-wired', null)
+        await blockMission(deps, mission.id, 'child-mission-port-not-wired', null)
         return 'blocked'
       }
       return await handleChildMissionDecision(deps, mission, selected, decisionId)
     }
     case 'submit-approval': {
       if (deps.ports.playbookSaga === undefined || deps.ports.approvalGateway === undefined) {
-        blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
+        await blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
         return 'blocked'
       }
       return await handleApprovalSubmitDecision(deps, mission, selected, decisionId)
     }
     case 'observe-approval': {
       if (deps.ports.playbookSaga === undefined || deps.ports.approvalGateway === undefined) {
-        blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
+        await blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
         return 'blocked'
       }
       return await handleApprovalObserveDecision(deps, mission, selected, decisionId)
@@ -1961,7 +1970,7 @@ async function handleDecision(
     case 'prepare-change-candidate':
     case 'handoff':
     case 'mark-ready-to-merge': {
-      blockMission(deps, mission.id, `arm-not-wired:${selected.kind}`, null)
+      await blockMission(deps, mission.id, `arm-not-wired:${selected.kind}`, null)
       return 'blocked'
     }
     default: {

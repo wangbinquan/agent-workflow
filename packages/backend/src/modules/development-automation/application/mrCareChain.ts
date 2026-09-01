@@ -70,14 +70,14 @@ function pendingDispositions(cells: Cells): PendingDisposition[] {
 
 // ------------------------------------------------------------------ redispatch
 
-export function redispatchMrCare(
+export async function redispatchMrCare(
   deps: Pick<DeliveryChainDeps, 'store'>,
   mission: MissionRow,
   cells: Cells,
   policy: AutomationPolicyContent,
   selected: NextDecision,
   context: { readonly now: number },
-): NextDecision {
+): Promise<NextDecision> {
   if (mission.mrClaimId === null) return selected
 
   const collectedAtRaw = knownString(cells, '__mr.factsCollectedAt')
@@ -101,7 +101,8 @@ export function redispatchMrCare(
     factsFresh &&
     policy.conflict.mode === 'repair' &&
     mission.currentActionRunId === null &&
-    deps.store.countActionRuns(mission.id, 'conflict.repair') >= policy.conflict.maxRepairAttempts
+    (await deps.store.countActionRuns(mission.id, 'conflict.repair')) >=
+      policy.conflict.maxRepairAttempts
   ) {
     return { kind: 'block', reason: 'conflict-needs-committer' }
   }
@@ -144,7 +145,7 @@ export function redispatchMrCare(
   // ---- 2) apply 结算后的 dispositions：还有未回复的 addressed thread → reply。
   const dispositions = pendingDispositions(cells)
   if (dispositions.length > 0) {
-    const rows = deps.store.listFeedback(mission.id)
+    const rows = await deps.store.listFeedback(mission.id)
     for (const d of dispositions) {
       const row = rows.find((r) => r.threadRef === d.threadRef && r.revision === d.revision)
       if (row === undefined) continue
@@ -207,17 +208,19 @@ export async function handleReplyFeedback(
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (ports.mrEffects === undefined) {
-    deps.block(mission.id, 'mr-care-port-missing:mrEffects', null)
+    await deps.block(mission.id, 'mr-care-port-missing:mrEffects', null)
     return 'blocked'
   }
-  const row = deps.store.listFeedback(mission.id).find((r) => r.id === feedbackReceiptRef)
+  const row = (await deps.store.listFeedback(mission.id)).find(
+    (candidate) => candidate.id === feedbackReceiptRef,
+  )
   if (row === undefined) {
-    deps.block(mission.id, 'feedback-receipt-missing', feedbackReceiptRef)
+    await deps.block(mission.id, 'feedback-receipt-missing', feedbackReceiptRef)
     return 'blocked'
   }
   const mrRef = knownString(cells, '__mr.ref')
   if (mrRef === null) {
-    deps.block(mission.id, 'pipeline-mr-ref-missing', null)
+    await deps.block(mission.id, 'pipeline-mr-ref-missing', null)
     return 'blocked'
   }
   const dispositions = pendingDispositions(cells)
@@ -226,7 +229,7 @@ export async function handleReplyFeedback(
       ?.disposition ?? 'addressed'
 
   const idempotencyKey = `reply:${mission.id}:${row.threadRef}:${row.revision}`
-  const claim = claimDeliveryEffect(deps, mission, {
+  const claim = await claimDeliveryEffect(deps, mission, {
     actionRunId: row.actionRunId,
     effectKind: 'mr-reply',
     idempotencyKey,
@@ -239,7 +242,7 @@ export async function handleReplyFeedback(
     },
   })
   if (claim.disposition === 'refused') {
-    deps.block(mission.id, claim.code, null)
+    await deps.block(mission.id, claim.code, null)
     return 'blocked'
   }
   let replyEffectId: string | null = null
@@ -257,18 +260,18 @@ export async function handleReplyFeedback(
     })
     const now = deps.now()
     if (!out.ok) {
-      deps.store.failEffect(
+      await deps.store.failEffect(
         claim.effectId,
         JSON.stringify({ code: out.code, detail: out.detail }),
         now,
       )
-      deps.block(mission.id, out.code, out.detail)
+      await deps.block(mission.id, out.code, out.detail)
       return 'blocked'
     }
-    deps.store.confirmEffect(claim.effectId, out.noteRef, now)
+    await deps.store.confirmEffect(claim.effectId, out.noteRef, now)
     replyEffectId = claim.effectId
   }
-  deps.store.setFeedbackState({
+  await deps.store.setFeedbackState({
     id: row.id,
     state: disposition === 'addressed' ? 'addressed' : 'needs-human',
     replyEffectId,
@@ -278,16 +281,16 @@ export async function handleReplyFeedback(
 }
 
 /** mr.feedback.apply 的 launch 前置：selectable 行标 selected + snapshot 素材。 */
-export function prepareFeedbackSelection(
+export async function prepareFeedbackSelection(
   deps: Pick<DeliveryChainDeps, 'store' | 'now'>,
   mission: MissionRow,
   policy: AutomationPolicyContent,
   actionRunId: string,
-): readonly { readonly threadRef: string; readonly revision: string }[] {
-  const rows = selectableFeedback(deps.store.listFeedback(mission.id), policy.feedback)
+): Promise<readonly { readonly threadRef: string; readonly revision: string }[]> {
+  const rows = selectableFeedback(await deps.store.listFeedback(mission.id), policy.feedback)
   const now = deps.now()
   for (const row of rows) {
-    deps.store.setFeedbackState({ id: row.id, state: 'selected', actionRunId, now })
+    await deps.store.setFeedbackState({ id: row.id, state: 'selected', actionRunId, now })
   }
   return rows.map((row) => ({ threadRef: row.threadRef, revision: row.revision }))
 }
@@ -298,17 +301,17 @@ export function prepareFeedbackSelection(
  * return its rows to observed so retry/reconfiguration can process the same
  * exact revisions instead of leaving them permanently invisible.
  */
-export function releaseFeedbackSelection(
+export async function releaseFeedbackSelection(
   deps: Pick<DeliveryChainDeps, 'store' | 'now'>,
   missionId: string,
   actionRunId: string,
-): number {
-  const rows = deps.store
-    .listFeedback(missionId)
-    .filter((row) => row.state === 'selected' && row.actionRunId === actionRunId)
+): Promise<number> {
+  const rows = (await deps.store.listFeedback(missionId)).filter(
+    (row) => row.state === 'selected' && row.actionRunId === actionRunId,
+  )
   const now = deps.now()
   for (const row of rows) {
-    deps.store.setFeedbackState({
+    await deps.store.setFeedbackState({
       id: row.id,
       state: 'observed',
       actionRunId: null,

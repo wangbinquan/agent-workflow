@@ -1,11 +1,10 @@
 import { join } from 'node:path'
-import { and, eq } from 'drizzle-orm'
-
 import type { DbClient } from '@/db/client'
-import { employeeDefinitionRevisions, employeeDefinitions, employeeTypePackages } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { DbTxSync } from '@/db/txSync'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
+import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import {
   DigitalEmployeeAuthoringService,
   type AutomaticTypeUpgradeIssue,
@@ -14,7 +13,6 @@ import { DigitalEmployeeRuntimeService } from './application/runtimeService'
 import type {
   EmployeeInputArtifactPort,
   EmployeeRetryLimitsPort,
-  LegacyMissionDrainPort,
   ProgramArtifactPort,
   PlatformWorkItemExecutionPort,
   ReactionExecutionPort,
@@ -23,17 +21,37 @@ import type {
 } from './composition/required-ports'
 import { createProgramArtifactStore } from './infrastructure/programArtifactStore'
 import { createSqliteReactionRoundQueries } from './infrastructure/sqliteReactionRoundQueries'
+import { createPostgresqlReactionRoundQueries } from './infrastructure/postgresqlReactionRoundQueries'
 import type { EmployeeReactionRoundQueryPort } from './public/types'
 import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
+import { createSqliteEmployeeInputUploadPersistence } from './infrastructure/inputUploadStore'
+import type {
+  EmployeeInputUploadPersistence,
+  EmployeeInputUploadRecord,
+} from './application/ports/inputUploadStore'
 import {
-  createEmployeeInputUploadStore,
-  type EmployeeInputUploadRecord,
-} from './infrastructure/inputUploadStore'
-import { createSqliteDigitalEmployeeAuthoringStore } from './infrastructure/sqliteAuthoringStore'
-import type { DigitalEmployeeAuthoringStore } from './application/ports/authoringStore'
+  asAsyncDigitalEmployeeAuthoringPersistence,
+  createSqliteDigitalEmployeeAuthoringStore,
+} from './infrastructure/sqliteAuthoringStore'
+import { createPostgresqlDigitalEmployeeAuthoringPersistence } from './infrastructure/postgresqlAuthoringStore'
+import type {
+  DigitalEmployeeAuthoringPersistence,
+  DigitalEmployeeAuthoringStore,
+} from './application/ports/authoringStore'
 import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
-import { createSqliteRuntimeStore } from './infrastructure/sqliteRuntimeStore'
-import { analyzeDigitalEmployeeMigration } from './composition/writerCutover'
+import { createSqliteRuntimePersistence } from './infrastructure/sqliteRuntimeStore'
+import { createPostgresqlRuntimePersistence } from './infrastructure/postgresqlRuntimeStore'
+import type { RuntimeCasePersistence } from './application/ports/runtimeStore'
+import { createPostgresqlEmployeeInputUploadPersistence } from './infrastructure/postgresqlInputUploadStore'
+import {
+  createDigitalEmployeeWriterCutoverOperations,
+  type DigitalEmployeeMigrationStatus,
+  type DigitalEmployeeWriterCutoverOperations,
+} from './composition/writerCutover'
+import {
+  createPostgresqlDigitalEmployeeWriterCutoverPersistence,
+  createSqliteDigitalEmployeeWriterCutoverPersistence,
+} from './infrastructure/writerCutoverPersistence'
 import { z } from 'zod'
 import {
   contractValidationCheckSchema,
@@ -73,16 +91,25 @@ import type {
 import type { DigitalEmployeePlatformToolCatalogParticipant } from './public/types'
 import type { DigitalEmployeePlatformToolCatalog } from './application/ports/authoringStore'
 import type { DigitalEmployeeMaintenanceCommands } from './public/commands'
-import { createDigitalEmployeeResourceCatalogAclAdapters } from './application/adapters/resource-catalog-acl-adapter'
-import { createDigitalEmployeeIntegrationTriggerParticipant } from './application/adapters/integration-trigger-resource-adapter'
+import type {
+  DigitalEmployeePlatformInventoryParticipant,
+  DigitalEmployeePlatformInventoryResourceType,
+  DigitalEmployeePlatformInventoryRow,
+} from './public/participants'
+import {
+  createSqliteDigitalEmployeeIntegrationTriggerParticipant,
+  createSqliteDigitalEmployeeIntegrationTriggerParticipantSync,
+} from './infrastructure/sqliteIntegrationTriggerParticipant'
+
+export { createPostgresqlDigitalEmployeeIntegrationTriggerParticipant } from './infrastructure/postgresqlIntegrationTriggerParticipant'
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
 export { startDigitalEmployeeOsWorker } from './application/osWorker'
-export {
-  activateDigitalEmployeeOsWriter,
-  readDigitalEmployeeWriterState,
-  refreshDigitalEmployeeWriterState,
+export type {
+  DigitalEmployeeMigrationStatus,
+  DigitalEmployeeWriterCutoverOperations,
+  DigitalEmployeeWriterState,
 } from './composition/writerCutover'
 export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 
@@ -90,10 +117,35 @@ export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifact
 export function composeDigitalEmployeeMaintenanceCommands(
   db: DbClient,
 ): DigitalEmployeeMaintenanceCommands {
-  const uploads = createEmployeeInputUploadStore(db)
+  const uploads = createSqliteEmployeeInputUploadPersistence(db)
   return {
     sweepExpiredInputUploads: (now, limit) => uploads.sweepExpired(now, limit),
   }
+}
+
+export function composePostgresqlDigitalEmployeeMaintenanceCommands(
+  db: PostgresqlDatabaseClient,
+): DigitalEmployeeMaintenanceCommands {
+  const uploads = createPostgresqlEmployeeInputUploadPersistence(db)
+  return {
+    sweepExpiredInputUploads: (now, limit) => uploads.sweepExpired(now, limit),
+  }
+}
+
+export function composeSqliteDigitalEmployeeWriterCutover(
+  db: DbClient,
+): DigitalEmployeeWriterCutoverOperations {
+  return createDigitalEmployeeWriterCutoverOperations(
+    createSqliteDigitalEmployeeWriterCutoverPersistence(db),
+  )
+}
+
+export function composePostgresqlDigitalEmployeeWriterCutover(
+  db: PostgresqlDatabaseClient,
+): DigitalEmployeeWriterCutoverOperations {
+  return createDigitalEmployeeWriterCutoverOperations(
+    createPostgresqlDigitalEmployeeWriterCutoverPersistence(db),
+  )
 }
 
 /** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
@@ -101,6 +153,31 @@ export function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
   db: DbClient,
 ): readonly string[] {
   return createSqliteDigitalEmployeeAuthoringStore(db).listTypePackageDescriptorJsons()
+}
+
+/** Bootstrap consumes this provider-neutral async projection, never a database handle. */
+export interface DigitalEmployeeBootstrapReads {
+  listTypePackageDescriptorJsons(): Promise<readonly string[]>
+}
+
+export function composeSqliteDigitalEmployeeBootstrapReads(
+  db: DbClient,
+): DigitalEmployeeBootstrapReads {
+  const authoring = asAsyncDigitalEmployeeAuthoringPersistence(
+    createSqliteDigitalEmployeeAuthoringStore(db),
+  )
+  return Object.freeze({
+    listTypePackageDescriptorJsons: () => authoring.listTypePackageDescriptorJsons(),
+  })
+}
+
+export function composePostgresqlDigitalEmployeeBootstrapReads(
+  db: PostgresqlDatabaseClient,
+): DigitalEmployeeBootstrapReads {
+  const authoring = createPostgresqlDigitalEmployeeAuthoringPersistence(db)
+  return Object.freeze({
+    listTypePackageDescriptorJsons: () => authoring.listTypePackageDescriptorJsons(),
+  })
 }
 
 /**
@@ -111,56 +188,11 @@ export function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
  * employee tables, authoring stores, or schema-shaped rows.
  */
 export function composeDigitalEmployeeIntegrationTriggerParticipant(tx: DbTxSync) {
-  return createDigitalEmployeeIntegrationTriggerParticipant({
-    loadIdentity(employeeDefinitionId) {
-      return (
-        tx
-          .select({
-            id: employeeDefinitions.id,
-            ownerUserId: employeeDefinitions.ownerUserId,
-            visibility: employeeDefinitions.visibility,
-            archivedAt: employeeDefinitions.archivedAt,
-            currentRevision: employeeDefinitions.currentRevision,
-            typeId: employeeDefinitions.typeId,
-            typeRevision: employeeDefinitions.typeRevision,
-          })
-          .from(employeeDefinitions)
-          .where(eq(employeeDefinitions.id, employeeDefinitionId))
-          .get() ?? null
-      )
-    },
-    loadDefinitionRevisionJson(employeeDefinitionId, revision) {
-      return (
-        tx
-          .select({ contentJson: employeeDefinitionRevisions.contentJson })
-          .from(employeeDefinitionRevisions)
-          .where(
-            and(
-              eq(employeeDefinitionRevisions.employeeId, employeeDefinitionId),
-              eq(employeeDefinitionRevisions.revision, revision),
-            ),
-          )
-          .get()?.contentJson ?? null
-      )
-    },
-    loadTypePackage({ typeId, typeRevision }) {
-      return (
-        tx
-          .select({
-            state: employeeTypePackages.state,
-            descriptorJson: employeeTypePackages.descriptorJson,
-          })
-          .from(employeeTypePackages)
-          .where(
-            and(
-              eq(employeeTypePackages.typeId, typeId),
-              eq(employeeTypePackages.revision, typeRevision),
-            ),
-          )
-          .get() ?? null
-      )
-    },
-  })
+  return createSqliteDigitalEmployeeIntegrationTriggerParticipantSync(tx)
+}
+
+export function composeAsyncDigitalEmployeeIntegrationTriggerParticipant(tx: DbTxSync) {
+  return createSqliteDigitalEmployeeIntegrationTriggerParticipant(tx)
 }
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
@@ -252,45 +284,45 @@ export interface DigitalEmployeeCommands {
   publishTool(
     input: Parameters<DigitalEmployeeAuthoringService['publishTool']>[0],
   ): Promise<ExactResourceRef>
-  retireTool(input: Parameters<DigitalEmployeeAuthoringService['retireTool']>[0]): void
+  retireTool(input: Parameters<DigitalEmployeeAuthoringService['retireTool']>[0]): Promise<void>
   createJobTemplate(input: {
     readonly typeRef: EmployeeTypeRef
     readonly body: unknown
     readonly actorUserId: string | null
     readonly adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
-  }): JobTemplateView
+  }): Promise<JobTemplateView>
   updateJobTemplate(
     input: Parameters<DigitalEmployeeAuthoringService['updateJobTemplate']>[0],
-  ): JobTemplateView
+  ): Promise<JobTemplateView>
   publishJobTemplate(
     input: Parameters<DigitalEmployeeAuthoringService['publishJobTemplate']>[0],
-  ): ExactResourceRef
+  ): Promise<ExactResourceRef>
   createEmployee(input: {
     readonly typeRef: EmployeeTypeRef
     readonly body: unknown
     readonly actorUserId: string | null
     readonly adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
-  }): EmployeeDefinitionView
+  }): Promise<EmployeeDefinitionView>
   updateEmployee(input: {
     readonly id: string
     readonly body: unknown
     readonly actorUserId: string | null
     readonly adapterVisibilitySubject?: ToolConnectionVisibilitySubject | null
-  }): EmployeeDefinitionView
+  }): Promise<EmployeeDefinitionView>
 }
 
 export interface DigitalEmployeeQueries {
-  listTypes(): EmployeeTypePackageDescriptor[]
-  getType(ref: EmployeeTypeRef): EmployeeTypePackageDescriptor
-  getAuthoringManifest(ref: EmployeeTypeRef): EmployeeAuthoringManifest
-  listTools(ref: EmployeeTypeRef, workItemRef: string): ToolRegistrationView[]
+  listTypes(): Promise<EmployeeTypePackageDescriptor[]>
+  getType(ref: EmployeeTypeRef): Promise<EmployeeTypePackageDescriptor>
+  getAuthoringManifest(ref: EmployeeTypeRef): Promise<EmployeeAuthoringManifest>
+  listTools(ref: EmployeeTypeRef, workItemRef: string): Promise<ToolRegistrationView[]>
   getToolAuthoring(
     input: Parameters<DigitalEmployeeAuthoringService['getToolAuthoring']>[0],
   ): Promise<ToolAuthoringView>
-  listJobTemplates(ref: EmployeeTypeRef): JobTemplateView[]
-  listEmployees(ref?: EmployeeTypeRef): EmployeeDefinitionView[]
-  listLaunchableEmployees(): EmployeeDefinitionView[]
-  getEmployee(id: string): EmployeeDefinitionView
+  listJobTemplates(ref: EmployeeTypeRef): Promise<JobTemplateView[]>
+  listEmployees(ref?: EmployeeTypeRef): Promise<EmployeeDefinitionView[]>
+  listLaunchableEmployees(): Promise<EmployeeDefinitionView[]>
+  getEmployee(id: string): Promise<EmployeeDefinitionView>
   /**
    * RFC-317 T8 —— 只读 ACL 三元组的**窄查询**。
    *
@@ -299,39 +331,38 @@ export interface DigitalEmployeeQueries {
    * 作答（否则半成品行会变成「谁都改得动」）。也不让 transport 直接查
    * `employee_definitions` 表——那是跨界读模块私表，正是 RFC-317 R5 要禁的形态。
    */
-  getEmployeeAcl(id: string): {
+  getEmployeeAcl(id: string): Promise<{
     readonly id: string
     /** RFC-324 —— 供改名围栏比对；仍是同一条窄查询，不物化 revision。 */
     readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
-  } | null
+  } | null>
   /**
    * RFC-330 —— 工具的只读 ACL 窄查询。平台目录工具没有 DB 行：投影为
    * `builtin: true` / public / 无 owner（D9），transport 据此让 `/acl` 404、写 403。
    * retired 行仍返回（retiredAt 非空），由调用方决定是否视为消失。
    */
-  getToolAcl(id: string): {
+  getToolAcl(id: string): Promise<{
     readonly id: string
     readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
     readonly builtin: boolean
     readonly retiredAt: number | null
-  } | null
+  } | null>
   /** RFC-330 —— 岗位模版的只读 ACL 窄查询；archived 视为消失（返回 null）。 */
-  getJobTemplateAcl(id: string): {
+  getJobTemplateAcl(id: string): Promise<{
     readonly id: string
     readonly name: string
     readonly ownerUserId: string | null
     readonly visibility: 'private' | 'public'
-  } | null
-  getExecutionPolicy(): ExecutionPolicyView
-  getMigrationStatus(): ReturnType<typeof analyzeDigitalEmployeeMigration>
+  } | null>
+  getExecutionPolicy(): Promise<ExecutionPolicyView>
+  getMigrationStatus(): Promise<DigitalEmployeeMigrationStatus>
 }
 
 export interface DigitalEmployeeModule {
-  readonly resourceAclIdentities: ReturnType<typeof createDigitalEmployeeResourceCatalogAclAdapters>
   readonly commands: DigitalEmployeeCommands
   readonly queries: DigitalEmployeeQueries
   readonly maintenance: {
@@ -345,12 +376,12 @@ export interface DigitalEmployeeModule {
       readonly actorUserId: string | null
       readonly idempotencyKey: string | null
     }): Promise<EmployeeInputUploadRecord>
-    delete(uploadRef: string, actorUserId: string | null): void
-    sweepExpired(): number
+    delete(uploadRef: string, actorUserId: string | null): Promise<void>
+    sweepExpired(): Promise<number>
   }
   readonly runtime: {
     readonly commands: {
-      launch(input: EmployeeCaseLaunchInput): EmployeeCaseProjectionDocument
+      launch(input: EmployeeCaseLaunchInput): Promise<EmployeeCaseProjectionDocument>
       launchWork(input: {
         readonly employeeId: string
         readonly intake: unknown
@@ -359,18 +390,18 @@ export interface DigitalEmployeeModule {
           readonly eventSubscriptionId: string
           readonly eventDeliveryId: string
         }
-      }): EmployeeCaseProjectionDocument
-      previewPolicyUpgrade(caseId: string, targetPolicyRevision: number): string
-      applyPolicyUpgrade(previewToken: string): EmployeeCaseProjectionDocument
-      terminate(caseId: string, terminalKind: string): EmployeeCaseProjectionDocument
-      resume(caseId: string): EmployeeCaseProjectionDocument
+      }): Promise<EmployeeCaseProjectionDocument>
+      previewPolicyUpgrade(caseId: string, targetPolicyRevision: number): Promise<string>
+      applyPolicyUpgrade(previewToken: string): Promise<EmployeeCaseProjectionDocument>
+      terminate(caseId: string, terminalKind: string): Promise<EmployeeCaseProjectionDocument>
+      resume(caseId: string): Promise<EmployeeCaseProjectionDocument>
       /** RFC-330 D19/D20 —— 同一事务内改 owner + 全量替换成员；输入已由调用方规范化。 */
       replaceCaseMembers(
         input: Parameters<DigitalEmployeeRuntimeService['replaceCaseMembers']>[0],
       ): ReturnType<DigitalEmployeeRuntimeService['replaceCaseMembers']>
     }
     readonly queries: {
-      getCase(caseId: string): EmployeeCaseProjectionDocument
+      getCase(caseId: string): Promise<EmployeeCaseProjectionDocument>
       /** RFC-330 —— 案例归属窄查询；不存在 ⇒ null（transport 给出与不可见同形的 404）。 */
       getCaseAcl(caseId: string): ReturnType<DigitalEmployeeRuntimeService['getCaseAcl']>
       /** RFC-330 —— apply 前解出 preview token 指向的案例 id（完整校验仍在 apply）。 */
@@ -380,30 +411,30 @@ export interface DigitalEmployeeModule {
         caseId: string,
         userId: string,
       ): ReturnType<DigitalEmployeeRuntimeService['getCaseMemberRole']>
-      listCases(employeeId?: string, state?: string): string
-      listTerminalOutcomeGroups(): string
-      listCasePage(input: Parameters<DigitalEmployeeRuntimeService['listCasePage']>[0]): string
+      listCases(employeeId?: string, state?: string): Promise<string>
+      listTerminalOutcomeGroups(): Promise<string>
+      listCasePage(
+        input: Parameters<DigitalEmployeeRuntimeService['listCasePage']>[0],
+      ): Promise<string>
       findByExternalSubject(
         subjectType: string,
         subjectRef: string,
-      ): EmployeeCaseProjectionDocument | null
+      ): Promise<EmployeeCaseProjectionDocument | null>
     }
     readonly worker: {
       runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
-      pumpOneDelivery(): boolean
-      planOneReaction(): string | null
+      pumpOneDelivery(): Promise<boolean>
+      planOneReaction(): Promise<string | null>
       inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'>
-      publishOneChannelResult(): 'completed' | 'idle'
+      publishOneChannelResult(): Promise<'completed' | 'idle'>
     }
   } | null
 }
 
-export interface ComposeDigitalEmployeeOptions {
-  readonly db: DbClient
+export interface DigitalEmployeeCompositionOptions {
   readonly appHome: string
   readonly typePackages: readonly EmployeeTypePackageRegistration[]
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
-  readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
   readonly connectionCatalog?: ToolConnectionCatalogPort
   readonly programArtifacts?: ProgramArtifactPort
   readonly inputArtifacts?: EmployeeInputArtifactPort
@@ -417,7 +448,6 @@ export interface ComposeDigitalEmployeeOptions {
    * 没接线时报告说「零条待排空」而不是去猜 development 的表长什么样。
    * 装配方（cli/start.ts）传入 development-automation 的实现。
    */
-  readonly legacyMissionDrain?: LegacyMissionDrainPort
   readonly runtime?: {
     readonly eventCenter: EventCenterParticipant
     readonly execution: ReactionExecutionPort
@@ -428,6 +458,23 @@ export interface ComposeDigitalEmployeeOptions {
   }
   readonly now?: () => number
   readonly id?: () => string
+}
+
+export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
+  readonly db: DbClient
+  /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
+  readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
+}
+
+export interface ComposePostgresqlDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
+  readonly db: PostgresqlDatabaseClient
+}
+
+interface DigitalEmployeePersistenceBundle {
+  readonly authoring: DigitalEmployeeAuthoringPersistence
+  readonly runtime: RuntimeCasePersistence
+  readonly inputUploads: EmployeeInputUploadPersistence
+  readonly migrationStatus: () => Promise<DigitalEmployeeMigrationStatus>
 }
 
 /**
@@ -441,6 +488,12 @@ export function createEmployeeReactionRoundQueries(db: DbClient): EmployeeReacti
   return createSqliteReactionRoundQueries(db)
 }
 
+export function createPostgresqlEmployeeReactionRoundQueries(
+  db: PostgresqlDatabaseClient,
+): EmployeeReactionRoundQueryPort {
+  return createPostgresqlReactionRoundQueries(db)
+}
+
 /**
  * RFC-348 —— intent 平台库存（`services/intent/platformInventory.ts`）列出真实数字人行时读的
  * 授权面切片：类型包 / 工具 / 岗位模板 / 员工定义的只读 list。
@@ -450,7 +503,7 @@ export function createEmployeeReactionRoundQueries(db: DbClient): EmployeeReacti
  * 正解仍是 bootstrap 装配 `IntentPlatformInventory` 后注入，见 commons-debt.json 对应条目。
  */
 export type DigitalEmployeeAuthoringReads = Pick<
-  DigitalEmployeeAuthoringStore,
+  DigitalEmployeeAuthoringPersistence,
   | 'listTypePackages'
   | 'listTypePackageDescriptorJsons'
   | 'listTools'
@@ -458,21 +511,136 @@ export type DigitalEmployeeAuthoringReads = Pick<
   | 'listEmployeeDefinitions'
 >
 
-export function createDigitalEmployeeAuthoringReads(db: DbClient): DigitalEmployeeAuthoringReads {
+/** @deprecated Bootstrap should inject createSqliteDigitalEmployeeAuthoringReads. */
+export function createDigitalEmployeeAuthoringReads(
+  db: DbClient,
+): Pick<
+  DigitalEmployeeAuthoringStore,
+  | 'listTypePackages'
+  | 'listTypePackageDescriptorJsons'
+  | 'listTools'
+  | 'listJobTemplates'
+  | 'listEmployeeDefinitions'
+> {
   return createSqliteDigitalEmployeeAuthoringStore(db)
 }
 
+export function createSqliteDigitalEmployeeAuthoringReads(
+  db: DbClient,
+): DigitalEmployeeAuthoringReads {
+  return asAsyncDigitalEmployeeAuthoringPersistence(createSqliteDigitalEmployeeAuthoringStore(db))
+}
+
+export function createPostgresqlDigitalEmployeeAuthoringReads(
+  db: PostgresqlDatabaseClient,
+): DigitalEmployeeAuthoringReads {
+  return createPostgresqlDigitalEmployeeAuthoringPersistence(db)
+}
+
+interface DigitalEmployeePlatformInventoryAclRow {
+  readonly id: string
+  readonly ownerUserId: string | null
+  readonly visibility: 'private' | 'public'
+}
+
+/** Selected-provider Resource Catalog authorization face used by this owner adapter. */
+export interface DigitalEmployeePlatformInventoryAccess {
+  filterVisibleRows<T extends DigitalEmployeePlatformInventoryAclRow>(
+    authority: DirectAuthenticatedAuthority,
+    type: DigitalEmployeePlatformInventoryResourceType,
+    rows: readonly T[],
+  ): Promise<T[]>
+}
+
+function inventoryText(value: unknown): string | null {
+  if (typeof value === 'string') return value.length === 0 ? null : value
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  for (const key of ['en', 'en-US', 'zh', 'zh-CN', ...Object.keys(record)]) {
+    const candidate = record[key]
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate
+  }
+  return null
+}
+
+function sortInventoryRows(
+  rows: readonly DigitalEmployeePlatformInventoryRow[],
+): DigitalEmployeePlatformInventoryRow[] {
+  return [...rows].sort(
+    (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
+  )
+}
+
 /**
- * 未接线时的排空视图：**零条**。
- *
- * 刻意不是「抛错」也不是「去查 development 的表」——通用 OS 必须能在没有
- * development-automation 的部署里装配起来（这正是 DE-01 要解决的问题）。
- * 报告里 `drainingTotal` 仍取 writer 行上记录的计数，所以「有没有接排空实现」
- * 与「切换状态机记了多少」两件事不会互相掩盖。
+ * Owner adapter for Intent's three Digital Employee inventory kinds. The
+ * selected SQLite/PostgreSQL module supplies the rows and the selected
+ * Resource Catalog authorization application filters them before projection.
  */
-const EMPTY_LEGACY_MISSION_DRAIN: LegacyMissionDrainPort = {
-  openMissionCount: () => 0,
-  drainReport: () => ({ truncated: false, entries: [] }),
+export function composeDigitalEmployeePlatformInventoryParticipant(input: {
+  readonly queries: Pick<
+    DigitalEmployeeQueries,
+    'listTypes' | 'listTools' | 'listJobTemplates' | 'listEmployees'
+  >
+  readonly access: DigitalEmployeePlatformInventoryAccess
+}): DigitalEmployeePlatformInventoryParticipant {
+  const visible = async <T extends DigitalEmployeePlatformInventoryAclRow>(
+    type: DigitalEmployeePlatformInventoryResourceType,
+    authority: DirectAuthenticatedAuthority,
+    rows: readonly T[],
+    project: (row: T) => DigitalEmployeePlatformInventoryRow,
+  ): Promise<readonly DigitalEmployeePlatformInventoryRow[]> =>
+    sortInventoryRows((await input.access.filterVisibleRows(authority, type, rows)).map(project))
+
+  return Object.freeze({
+    async listVisibleRows(
+      type: DigitalEmployeePlatformInventoryResourceType,
+      authority: DirectAuthenticatedAuthority,
+    ) {
+      if (type === 'employee_definition') {
+        return await visible(type, authority, await input.queries.listEmployees(), (row) => {
+          return {
+            id: row.id,
+            name: row.name,
+            description: `type ${row.typeRef.typeId}@${row.typeRef.revision}`,
+          }
+        })
+      }
+
+      const packages = await input.queries.listTypes()
+      if (type === 'employee_job_template') {
+        const rows = (
+          await Promise.all(packages.map((item) => input.queries.listJobTemplates(item.typeRef)))
+        ).flat()
+        return await visible(type, authority, rows, (row) => {
+          return {
+            id: row.id,
+            name: row.name,
+            description:
+              inventoryText(row.draft.description) ??
+              `type ${row.typeRef.typeId}@${row.typeRef.revision}`,
+          }
+        })
+      }
+
+      const rows = new Map<string, ToolRegistrationView>()
+      await Promise.all(
+        packages.flatMap((item) =>
+          item.authoringManifest.workItems.map(async (workItem) => {
+            for (const tool of await input.queries.listTools(item.typeRef, workItem.workItemRef)) {
+              rows.set(tool.id, tool)
+            }
+          }),
+        ),
+      )
+      return await visible(type, authority, [...rows.values()], (row) => {
+        return {
+          id: row.id,
+          name: inventoryText(row.content.displayName) ?? row.id,
+          description: `${inventoryText(row.content.description) ?? (row.origin === 'platform' ? 'platform tool' : 'custom tool')} (${row.workItemRef})`,
+        }
+      })
+    },
+  })
 }
 
 function runtimePackageOf(
@@ -522,7 +690,7 @@ function runtimePackageOf(
 }
 
 function toolView(
-  record: ReturnType<DigitalEmployeeAuthoringService['listTools']>[number],
+  record: Awaited<ReturnType<DigitalEmployeeAuthoringService['listTools']>>[number],
 ): ToolRegistrationView {
   return {
     id: record.id,
@@ -616,7 +784,7 @@ function platformToolCatalogOf(
 }
 
 function jobView(
-  record: ReturnType<DigitalEmployeeAuthoringService['listJobTemplates']>[number],
+  record: Awaited<ReturnType<DigitalEmployeeAuthoringService['listJobTemplates']>>[number],
 ): JobTemplateView {
   return {
     id: record.id,
@@ -631,16 +799,12 @@ function jobView(
   }
 }
 
-export function composeDigitalEmployee(
-  options: ComposeDigitalEmployeeOptions,
+function composeDigitalEmployeeFromPersistence(
+  options: DigitalEmployeeCompositionOptions,
+  persistence: DigitalEmployeePersistenceBundle,
 ): DigitalEmployeeModule {
-  const persistedStore = createSqliteDigitalEmployeeAuthoringStore(options.db)
-  const store =
-    options.typePackageDriftPolicy === 'draft-overlay'
-      ? withTypePackageDraftOverlay(persistedStore)
-      : persistedStore
-  const resourceAclIdentities = createDigitalEmployeeResourceCatalogAclAdapters(store)
-  const inputUploadStore = createEmployeeInputUploadStore(options.db)
+  const store = persistence.authoring
+  const inputUploadStore = persistence.inputUploads
   const inputArtifacts =
     options.inputArtifacts ??
     createEmployeeInputArtifactStore(join(options.appHome, 'artifacts', 'employee-inputs'))
@@ -650,7 +814,7 @@ export function composeDigitalEmployee(
     store,
     typePackages: runtimePackages,
     connectionCatalog: options.connectionCatalog ?? {
-      resolve() {
+      async resolve() {
         return null
       },
     },
@@ -664,20 +828,20 @@ export function composeDigitalEmployee(
     ...(options.id === undefined ? {} : { id: options.id }),
   })
 
-  const employeeView = (
-    record: ReturnType<DigitalEmployeeAuthoringService['getEmployeeDefinition']>,
-  ): EmployeeDefinitionView => {
+  const employeeView = async (
+    record: Awaited<ReturnType<DigitalEmployeeAuthoringService['getEmployeeDefinition']>>,
+  ): Promise<EmployeeDefinitionView> => {
     if (record.currentRevision === null) {
       throw new Error(`employee has no current revision: ${record.id}`)
     }
-    const revision = store.getEmployeeDefinitionRevision({
+    const revision = await store.getEmployeeDefinitionRevision({
       id: record.id,
       revision: record.currentRevision,
     })
     if (revision === null) throw new Error(`employee revision is missing: ${record.id}`)
-    const workScope = store.getWorkScopeRevision(revision.content.workScopeRef)
+    const workScope = await store.getWorkScopeRevision(revision.content.workScopeRef)
     if (workScope === null) throw new Error(`employee work scope is missing: ${record.id}`)
-    const jobRevision = store.getJobTemplateRevision(record.configuration.jobTemplateRef)
+    const jobRevision = await store.getJobTemplateRevision(record.configuration.jobTemplateRef)
     if (jobRevision === null) throw new Error(`employee job revision is missing: ${record.id}`)
     const overrideKeys = new Set(
       record.configuration.adapterOverrides.map(
@@ -706,11 +870,11 @@ export function composeDigitalEmployee(
     }
   }
 
-  const policyView = (): ExecutionPolicyView => {
+  const policyView = async (): Promise<ExecutionPolicyView> => {
     const policy =
       options.retryLimits === undefined
-        ? service.getExecutionPolicy()
-        : service.ensureExecutionPolicyFromLimits(options.retryLimits.current())
+        ? await service.getExecutionPolicy()
+        : await service.ensureExecutionPolicyFromLimits(options.retryLimits.current())
     return {
       revision: policy.revision,
       content: policy.content,
@@ -723,7 +887,7 @@ export function composeDigitalEmployee(
     options.runtime === undefined
       ? null
       : new DigitalEmployeeRuntimeService({
-          store: createSqliteRuntimeStore(options.db),
+          store: persistence.runtime,
           authoringStore: store,
           eventCenter: options.runtime.eventCenter,
           execution: options.runtime.execution,
@@ -757,9 +921,9 @@ export function composeDigitalEmployee(
           ...(options.runtime.workerId === undefined ? {} : { workerId: options.runtime.workerId }),
         })
 
-  const runtimeDocument = (caseId: string): EmployeeCaseProjectionDocument => {
+  const runtimeDocument = async (caseId: string): Promise<EmployeeCaseProjectionDocument> => {
     if (runtimeService === null) throw new Error('digital employee runtime is not composed')
-    const projection = runtimeService.project(caseId)
+    const projection = await runtimeService.project(caseId)
     return {
       caseRef: { id: projection.case.id, revision: projection.case.revision },
       state: projection.case.state,
@@ -770,14 +934,13 @@ export function composeDigitalEmployee(
   }
 
   return {
-    resourceAclIdentities,
     maintenance: {
       settleAutomaticUpgrades: () => service.settleAutomaticUpgrades(),
     },
     inputUploads: {
       async create(input) {
         const artifact = await inputArtifacts.putFile(input.absolutePath)
-        return inputUploadStore.create({
+        return await inputUploadStore.create({
           actorUserId: input.actorUserId,
           originalName: input.originalName,
           bytes: artifact.bytes,
@@ -787,23 +950,27 @@ export function composeDigitalEmployee(
           now: options.now?.() ?? Date.now(),
         })
       },
-      delete: (uploadRef, actorUserId) => inputUploadStore.delete(uploadRef, actorUserId),
-      sweepExpired: () => inputUploadStore.sweepExpired(options.now?.() ?? Date.now()),
+      delete: async (uploadRef, actorUserId) =>
+        await inputUploadStore.delete(uploadRef, actorUserId),
+      sweepExpired: async () => await inputUploadStore.sweepExpired(options.now?.() ?? Date.now()),
     },
     queries: {
       listTypes: () => service.listTypes(),
       getType: (ref) => service.getType(ref),
       getAuthoringManifest: (ref) => service.getAuthoringManifest(ref),
-      listTools: (ref, workItemRef) => service.listTools(ref, workItemRef).map(toolView),
+      listTools: async (ref, workItemRef) =>
+        (await service.listTools(ref, workItemRef)).map(toolView),
       getToolAuthoring: async (input) => {
         const authoring = await service.getToolAuthoring(input)
         return { ...toolView(authoring.record), body: authoring.body }
       },
-      listJobTemplates: (ref) => service.listJobTemplates(ref).map(jobView),
-      listEmployees: (ref) => service.listEmployeeDefinitions(ref).map(employeeView),
-      listLaunchableEmployees: () => service.listLaunchableEmployeeDefinitions().map(employeeView),
-      getEmployee: (id) => employeeView(service.getEmployeeDefinition(id)),
-      getEmployeeAcl: (id) => {
+      listJobTemplates: async (ref) => (await service.listJobTemplates(ref)).map(jobView),
+      listEmployees: async (ref) =>
+        await Promise.all((await service.listEmployeeDefinitions(ref)).map(employeeView)),
+      listLaunchableEmployees: async () =>
+        await Promise.all((await service.listLaunchableEmployeeDefinitions()).map(employeeView)),
+      getEmployee: async (id) => await employeeView(await service.getEmployeeDefinition(id)),
+      getEmployeeAcl: async (id) => {
         // 走 store 的**窄查询**（只选三列，不解析配置内容）：
         //   - service.getEmployeeDefinition 对 currentRevision === null 的半成品行抛
         //     not-found；
@@ -811,7 +978,7 @@ export function composeDigitalEmployee(
         //     schema 时抛。
         // 授权判据必须对**任何存在的行**可答，否则那些行会从「谁都改不动」退化成
         // 500 甚至绕过判据。archived 仍按「已消失」处理，与详情面 404 同形。
-        const record = store.getEmployeeDefinitionAcl(id)
+        const record = await store.getEmployeeDefinitionAcl(id)
         if (record === null || record.archivedAt !== null) return null
         return {
           id: record.id,
@@ -820,7 +987,7 @@ export function composeDigitalEmployee(
           visibility: record.visibility,
         }
       },
-      getToolAcl: (id) => {
+      getToolAcl: async (id) => {
         if (platformTools.isPlatformTool(id)) {
           return {
             id,
@@ -831,11 +998,11 @@ export function composeDigitalEmployee(
             retiredAt: null,
           }
         }
-        const record = store.getToolAcl(id)
+        const record = await store.getToolAcl(id)
         return record === null ? null : { ...record, builtin: false }
       },
-      getJobTemplateAcl: (id) => {
-        const record = store.getJobTemplateAcl(id)
+      getJobTemplateAcl: async (id) => {
+        const record = await store.getJobTemplateAcl(id)
         if (record === null || record.archivedAt !== null) return null
         return {
           id: record.id,
@@ -845,11 +1012,7 @@ export function composeDigitalEmployee(
         }
       },
       getExecutionPolicy: policyView,
-      getMigrationStatus: () =>
-        analyzeDigitalEmployeeMigration(
-          options.db,
-          options.legacyMissionDrain ?? EMPTY_LEGACY_MISSION_DRAIN,
-        ),
+      getMigrationStatus: () => persistence.migrationStatus(),
     },
     commands: {
       createTool: async (input) =>
@@ -865,54 +1028,55 @@ export function composeDigitalEmployee(
       validateTool: async (input) => toolView(await service.validateTool(input)),
       publishTool: async (input) => (await service.publishTool(input)).ref,
       retireTool: (input) => service.retireTool(input),
-      createJobTemplate: (input) =>
+      createJobTemplate: async (input) =>
         jobView(
-          service.createJobTemplate({
+          await service.createJobTemplate({
             typeRef: input.typeRef,
             body: input.body,
             ownerUserId: input.actorUserId,
             adapterVisibilitySubject: input.adapterVisibilitySubject,
           }),
         ),
-      updateJobTemplate: (input) => jobView(service.updateJobTemplate(input)),
+      updateJobTemplate: async (input) => jobView(await service.updateJobTemplate(input)),
       publishJobTemplate: (input) => service.publishJobTemplate(input),
-      createEmployee: (input) =>
-        employeeView(
-          service.createEmployeeDefinition({
+      createEmployee: async (input) =>
+        await employeeView(
+          await service.createEmployeeDefinition({
             typeRef: input.typeRef,
             body: input.body,
             ownerUserId: input.actorUserId,
             adapterVisibilitySubject: input.adapterVisibilitySubject,
           }),
         ),
-      updateEmployee: (input) => employeeView(service.updateEmployeeDefinition(input)),
+      updateEmployee: async (input) =>
+        await employeeView(await service.updateEmployeeDefinition(input)),
     },
     runtime:
       runtimeService === null
         ? null
         : {
             commands: {
-              launch: (input) => {
-                const record = runtimeService.launchCase(input)
-                return runtimeDocument(record.id)
+              launch: async (input) => {
+                const record = await runtimeService.launchCase(input)
+                return await runtimeDocument(record.id)
               },
-              launchWork: (input) => {
-                const record = runtimeService.launchWork(input)
-                return runtimeDocument(record.id)
+              launchWork: async (input) => {
+                const record = await runtimeService.launchWork(input)
+                return await runtimeDocument(record.id)
               },
               previewPolicyUpgrade: (caseId, targetPolicyRevision) =>
                 runtimeService.previewPolicyUpgrade(caseId, targetPolicyRevision),
-              applyPolicyUpgrade: (previewToken) => {
-                const record = runtimeService.applyPolicyUpgrade(previewToken)
-                return runtimeDocument(record.id)
+              applyPolicyUpgrade: async (previewToken) => {
+                const record = await runtimeService.applyPolicyUpgrade(previewToken)
+                return await runtimeDocument(record.id)
               },
-              terminate: (caseId, terminalKind) => {
-                const record = runtimeService.terminate(caseId, terminalKind)
-                return runtimeDocument(record.id)
+              terminate: async (caseId, terminalKind) => {
+                const record = await runtimeService.terminate(caseId, terminalKind)
+                return await runtimeDocument(record.id)
               },
-              resume: (caseId) => {
-                const record = runtimeService.resume(caseId)
-                return runtimeDocument(record.id)
+              resume: async (caseId) => {
+                const record = await runtimeService.resume(caseId)
+                return await runtimeDocument(record.id)
               },
               replaceCaseMembers: (input) => runtimeService.replaceCaseMembers(input),
             },
@@ -924,23 +1088,56 @@ export function composeDigitalEmployee(
               listCaseMembers: (caseId) => runtimeService.listCaseMembers(caseId),
               getCaseMemberRole: (caseId, userId) =>
                 runtimeService.getCaseMemberRole(caseId, userId),
-              listCases: (employeeId, state) =>
-                JSON.stringify(runtimeService.listCases(employeeId, state)),
-              listTerminalOutcomeGroups: () =>
-                JSON.stringify(runtimeService.listTerminalOutcomeGroups()),
-              listCasePage: (input) => JSON.stringify(runtimeService.listCasePage(input)),
-              findByExternalSubject: (subjectType, subjectRef) => {
-                const record = runtimeService.findCaseByExternalSubject(subjectType, subjectRef)
-                return record === null ? null : runtimeDocument(record.id)
+              listCases: async (employeeId, state) =>
+                JSON.stringify(await runtimeService.listCases(employeeId, state)),
+              listTerminalOutcomeGroups: async () =>
+                JSON.stringify(await runtimeService.listTerminalOutcomeGroups()),
+              listCasePage: async (input) =>
+                JSON.stringify(await runtimeService.listCasePage(input)),
+              findByExternalSubject: async (subjectType, subjectRef) => {
+                const record = await runtimeService.findCaseByExternalSubject(
+                  subjectType,
+                  subjectRef,
+                )
+                return record === null ? null : await runtimeDocument(record.id)
               },
             },
             worker: {
               runOneOutbox: () => runtimeService.runOneOutbox(),
               pumpOneDelivery: () => runtimeService.pumpOneDelivery(),
-              planOneReaction: () => runtimeService.planOneReaction()?.id ?? null,
+              planOneReaction: async () => (await runtimeService.planOneReaction())?.id ?? null,
               inspectOneExecution: () => runtimeService.inspectOneExecution(),
               publishOneChannelResult: () => runtimeService.publishOneChannelResult(),
             },
           },
   }
+}
+
+/** SQLite compatibility composition and behavior oracle. */
+export function composeDigitalEmployee(
+  options: ComposeDigitalEmployeeOptions,
+): DigitalEmployeeModule {
+  const persistedStore = createSqliteDigitalEmployeeAuthoringStore(options.db)
+  const synchronousStore =
+    options.typePackageDriftPolicy === 'draft-overlay'
+      ? withTypePackageDraftOverlay(persistedStore)
+      : persistedStore
+  return composeDigitalEmployeeFromPersistence(options, {
+    authoring: asAsyncDigitalEmployeeAuthoringPersistence(synchronousStore),
+    runtime: createSqliteRuntimePersistence(options.db),
+    inputUploads: createSqliteEmployeeInputUploadPersistence(options.db),
+    migrationStatus: () => composeSqliteDigitalEmployeeWriterCutover(options.db).analyze(),
+  })
+}
+
+/** Real PostgreSQL composition; all durable Digital Employee behavior shares one provider. */
+export function composePostgresqlDigitalEmployee(
+  options: ComposePostgresqlDigitalEmployeeOptions,
+): DigitalEmployeeModule {
+  return composeDigitalEmployeeFromPersistence(options, {
+    authoring: createPostgresqlDigitalEmployeeAuthoringPersistence(options.db),
+    runtime: createPostgresqlRuntimePersistence(options.db),
+    inputUploads: createPostgresqlEmployeeInputUploadPersistence(options.db),
+    migrationStatus: () => composePostgresqlDigitalEmployeeWriterCutover(options.db).analyze(),
+  })
 }

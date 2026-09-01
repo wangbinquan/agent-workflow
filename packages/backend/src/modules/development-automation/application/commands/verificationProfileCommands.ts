@@ -13,21 +13,24 @@ import {
   verificationProfileContentSchema,
 } from '../../domain/verificationProfile'
 import { ValidationError } from '@/util/errors'
-import type { ConfigResourceRecord, VerificationProfileStore } from '../ports/configResourceStore'
+import type {
+  ConfigResourceRecord,
+  VerificationProfilePersistence,
+} from '../ports/configResourceStore'
 
 export interface VerificationProfileCommandDeps {
-  readonly store: VerificationProfileStore
+  readonly store: VerificationProfilePersistence
   readonly now: () => number
 }
 
-export function createVerificationProfile(
+export async function createVerificationProfile(
   deps: VerificationProfileCommandDeps,
   input: { readonly actorUserId: string | null; readonly name: string; readonly draft: unknown },
-): ConfigResourceRecord<Record<never, never>> {
+): Promise<ConfigResourceRecord<Record<never, never>>> {
   if (input.name.trim().length === 0) {
     throw new ValidationError('verification-profile-name-empty', 'name must not be empty')
   }
-  return deps.store.create({
+  return await deps.store.create({
     id: ulid(),
     name: input.name.trim(),
     draftJson: JSON.stringify(input.draft ?? {}),
@@ -37,11 +40,11 @@ export function createVerificationProfile(
   })
 }
 
-export function reviseVerificationProfileDraft(
+export async function reviseVerificationProfileDraft(
   deps: VerificationProfileCommandDeps,
   input: { readonly id: string; readonly draft: unknown; readonly name?: string },
-): void {
-  deps.store.updateDraft({
+): Promise<void> {
+  await deps.store.updateDraft({
     id: input.id,
     draftJson: JSON.stringify(input.draft ?? {}),
     ...(input.name === undefined ? {} : { name: input.name.trim() }),
@@ -49,11 +52,11 @@ export function reviseVerificationProfileDraft(
   })
 }
 
-export function publishVerificationProfile(
+export async function publishVerificationProfile(
   deps: VerificationProfileCommandDeps,
   input: { readonly id: string; readonly actorUserId: string | null },
-): { readonly revision: number; readonly contentDigest: string } {
-  const identity = deps.store.getById(input.id)
+): Promise<{ readonly revision: number; readonly contentDigest: string }> {
+  const identity = await deps.store.getById(input.id)
   if (identity === null) {
     throw new ValidationError(
       'verification-profile-not-found',
@@ -91,7 +94,7 @@ export function publishVerificationProfile(
   }
   const revision = (identity.publishedRevision ?? 0) + 1
   const digest = verificationProfileContentDigest(parsed.data)
-  deps.store.publishRevision({
+  await deps.store.publishRevision({
     resourceId: input.id,
     revision,
     contentJson: canonicalStringify(parsed.data),
@@ -102,9 +105,9 @@ export function publishVerificationProfile(
   return { revision, contentDigest: digest }
 }
 
-export function archiveVerificationProfile(
+export async function archiveVerificationProfile(
   deps: VerificationProfileCommandDeps,
   input: { readonly id: string },
-): void {
-  deps.store.archive(input.id, deps.now())
+): Promise<void> {
+  await deps.store.archive(input.id, deps.now())
 }

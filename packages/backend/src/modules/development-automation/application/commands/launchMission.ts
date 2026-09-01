@@ -7,7 +7,6 @@
 // binding（§3.8：反向依赖会成启动死锁）。upload 的 claim/plan 生成归 PR-3，
 // 此处冻结每项的目标路径形状与唯一性并入 contentDigest。
 
-import type { NotPromise } from '@/db/txSync'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
@@ -24,8 +23,9 @@ import {
 } from '../../engine/policy/workSelection'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { AdmissionLookup } from '../ports/admissionLookup'
-import type { MissionRow, MissionStore } from '../ports/missionStore'
-import type { UploadSessionRow, UploadSessionStore } from '../ports/uploadSessionStore'
+import type { MissionRow, MissionPersistence } from '../ports/missionStore'
+import type { MissionInputUploadPersistence } from '../missionInputUploadOperations'
+import type { UploadSessionRow } from '../ports/uploadSessionStore'
 import {
   defaultUploadPolicyOf,
   previewUploadDispositions,
@@ -141,25 +141,12 @@ export interface UploadBaselineContext {
 
 /** upload admission 接线：缺席时带 uploads 的 direct launch 老实 blocked。 */
 export interface UploadAdmissionDeps {
-  readonly sessions: UploadSessionStore
-  /** launch 事务边界（生产 = drizzle db.transaction 嵌套安全；测试可传直调）。 */
-  /**
-   * RFC-317 T37（CC-04）—— 回调的返回类型套 `NotPromise`。
-   *
-   * 这是一个**可复用的事务端口**：不加约束时 `T = Promise<X>` 完全通得过类型检查，
-   * 而它的实现直接调 drizzle 的 `db.transaction`，于是 `dbTxSync` 那两道防线
-   * （类型层塌成 never + 运行期 thenable 抛错）一道都不生效。bun:sqlite 下 async 回调
-   * 在第一个 await 处就 COMMIT，后续语句全在 autocommit，之后再抛什么都回滚不了——
-   * RFC-052 的 approve 半提交事故就是这一类。今天的调用方都是同步的，所以这是**潜伏**
-   * 而不是活跃缺陷；加上约束后它连写都写不出来。
-   */
-  readonly transact: <T>(fn: () => NotPromise<T>) => T
+  readonly uploads: Pick<MissionInputUploadPersistence, 'get'>
   readonly resolveBaseline: (repositoryId: string) => Promise<UploadBaselineContext | null>
-  readonly persistPlan: (plan: PersistUploadPlanInput) => void
 }
 
 export interface LaunchDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly lookup: AdmissionLookup
   readonly now: () => number
   readonly uploadAdmission?: UploadAdmissionDeps
@@ -196,36 +183,39 @@ function directContentDigest(
   })
 }
 
-/** 事务内 createMission 撞 idempotency 赢家时用于整体回滚 + 重放返回。 */
-class IdempotentReplay {
-  constructor(readonly mission: MissionRow) {}
-}
-
 type DirectUploadRequest = z.infer<typeof directUploadSchema>
 
 /**
  * 预读上传行：存在/归属/可用的快速失败（他人 ref 与不存在同形，§12.3）。
  * 原子判定仍由 launch 事务内的 claim 兜底；preview 走同一校验。
  */
-function readPendingUploadRows(
+async function readPendingUploadRows(
   ua: UploadAdmissionDeps,
   uploads: readonly DirectUploadRequest[],
   actorUserId: string | null,
   now: number,
-): UploadSessionRow[] {
-  return uploads.map((u) => {
-    const row = ua.sessions.getUpload(u.uploadRef)
-    if (row === null || row.actorUserId !== actorUserId) {
-      throw new NotFoundError('upload-not-found', `upload not found: ${u.uploadRef}`)
-    }
-    if (row.state === 'claimed') {
-      throw new ConflictError('upload-already-claimed', `upload claimed elsewhere: ${u.uploadRef}`)
-    }
-    if (row.state !== 'pending' || row.expiresAt <= now) {
-      throw new ConflictError('upload-not-claimable', `upload expired or unusable: ${u.uploadRef}`)
-    }
-    return row
-  })
+): Promise<UploadSessionRow[]> {
+  return await Promise.all(
+    uploads.map(async (u) => {
+      const row = await ua.uploads.get(u.uploadRef)
+      if (row === null || row.actorUserId !== actorUserId) {
+        throw new NotFoundError('upload-not-found', `upload not found: ${u.uploadRef}`)
+      }
+      if (row.state === 'claimed') {
+        throw new ConflictError(
+          'upload-already-claimed',
+          `upload claimed elsewhere: ${u.uploadRef}`,
+        )
+      }
+      if (row.state !== 'pending' || row.expiresAt <= now) {
+        throw new ConflictError(
+          'upload-not-claimable',
+          `upload expired or unusable: ${u.uploadRef}`,
+        )
+      }
+      return row
+    }),
+  )
 }
 
 function toPlanRequests(
@@ -494,7 +484,7 @@ function parseOr422<T>(
 
 export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promise<LaunchResult> {
   const input = parseOr422(launchMissionInputSchema, rawInput)
-  const existing = deps.store.findByIdempotencyKey(input.idempotencyKey)
+  const existing = await deps.store.findByIdempotencyKey(input.idempotencyKey)
   if (existing !== null) {
     return {
       missionId: existing.id,
@@ -512,7 +502,7 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
     input.submission.uploads.length > 0 &&
     deps.uploadAdmission !== undefined
   ) {
-    uploadRows = readPendingUploadRows(
+    uploadRows = await readPendingUploadRows(
       deps.uploadAdmission,
       input.submission.uploads,
       input.actorUserId,
@@ -661,60 +651,41 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
   }
 
   const row: MissionRow = { ...base, status }
-  // launch 事务：mission 行 → claim → plan 落库 → source 行，任何失败整体回滚
-  // （零 mission、零 upload 消费）。撞 idempotency 赢家用哨兵回滚后重放返回。
-  const ua = deps.uploadAdmission
-  // 直调分支：`NotPromise<T>` 与 `T` 在同步回调上等价，这里的断言只是把泛型
-  // 参数的位置对齐，不放宽任何约束（异步回调在调用点就已经塌成 never）。
-  const runTx: <T>(fn: () => NotPromise<T>) => T =
-    ua !== undefined ? ua.transact : <T>(fn: () => NotPromise<T>): T => fn() as T
-  try {
-    const mission = runTx(() => {
-      const result = deps.store.createMission(row)
-      if (!result.created) throw new IdempotentReplay(result.mission)
-      if (pendingPlan !== null) {
-        ua!.sessions.claimUploads({
-          missionId: row.id,
-          actorUserId: input.actorUserId,
-          uploadRefs: pendingPlan.entries.map((e) => e.fileId),
-          now,
-        })
-        ua!.persistPlan(pendingPlan)
-      }
-      deps.store.insertMissionSource({
-        id: ulid(),
-        missionId: row.id,
-        generation: 1,
-        sourceKind: row.sourceKind,
-        externalId: row.externalId,
-        adapterId: row.resolvedAdapterId,
-        adapterRevision: row.resolvedAdapterRevision,
-        sourceRevision: null,
-        bundleRef: null,
-        manifestDigest: row.sourceContentDigest,
-        fileCount: input.submission.kind === 'direct' ? input.submission.uploads.length : null,
-        totalBytes: uploadRows === null ? null : uploadRows.reduce((sum, r) => sum + r.bytes, 0),
-        state: 'active',
-        createdAt: now,
-      })
-      return result.mission
-    })
-    return {
-      missionId: mission.id,
-      status: mission.status,
-      created: true,
-      blockCode: mission.blockCode,
-    }
-  } catch (error) {
-    if (error instanceof IdempotentReplay) {
-      return {
-        missionId: error.mission.id,
-        status: error.mission.status,
-        created: false,
-        blockCode: error.mission.blockCode,
-      }
-    }
-    throw error
+  // Provider adapter owns this named atomic use case: mission + provenance +
+  // optional upload claims and immutable placement plan commit together.
+  const result = await deps.store.commitMissionLaunch({
+    mission: row,
+    source: {
+      id: ulid(),
+      missionId: row.id,
+      generation: 1,
+      sourceKind: row.sourceKind,
+      externalId: row.externalId,
+      adapterId: row.resolvedAdapterId,
+      adapterRevision: row.resolvedAdapterRevision,
+      sourceRevision: null,
+      bundleRef: null,
+      manifestDigest: row.sourceContentDigest,
+      fileCount: input.submission.kind === 'direct' ? input.submission.uploads.length : null,
+      totalBytes: uploadRows === null ? null : uploadRows.reduce((sum, r) => sum + r.bytes, 0),
+      state: 'active',
+      createdAt: now,
+    },
+    upload:
+      pendingPlan === null
+        ? null
+        : {
+            actorUserId: input.actorUserId,
+            uploadRefs: pendingPlan.entries.map((entry) => entry.fileId),
+            plan: pendingPlan,
+            now,
+          },
+  })
+  return {
+    missionId: result.mission.id,
+    status: result.mission.status,
+    created: result.created,
+    blockCode: result.mission.blockCode,
   }
 }
 
@@ -861,7 +832,7 @@ export async function previewDirectInput(
     throw new ValidationError('upload-admission-not-wired', 'upload admission deps are not wired')
   }
   const now = deps.now()
-  const rows = readPendingUploadRows(ua, input.uploads, input.actorUserId, now)
+  const rows = await readPendingUploadRows(ua, input.uploads, input.actorUserId, now)
   const { outcome } = await resolveEmployeeAndPolicy(deps, {
     repositoryId: input.repositoryId,
     repositoryGroupId: input.repositoryGroupId,
@@ -904,7 +875,7 @@ export async function selectMissionRequirementSource(
   deps: LaunchDeps,
   input: { readonly missionId: string; readonly sourceKey: string },
 ): Promise<{ readonly status: MissionStatus }> {
-  const mission = deps.store.getMission(input.missionId)
+  const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({
     command: 'select-requirement-source',
@@ -935,7 +906,7 @@ export async function selectMissionRequirementSource(
       `source key '${input.sourceKey}' is not offered by the pinned employee`,
     )
   }
-  const result = deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  const result = await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     status: 'working',
     resolvedSourceKey: candidate.sourceKey,
     resolvedAdapterId: candidate.adapterRef.id,
@@ -950,7 +921,7 @@ export async function retryBlockedMission(
   deps: LaunchDeps,
   input: { readonly missionId: string },
 ): Promise<{ readonly status: MissionStatus }> {
-  const mission = deps.store.getMission(input.missionId)
+  const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({
     command: 'retry-blocked',
@@ -960,7 +931,7 @@ export async function retryBlockedMission(
     hasMergeRequest: mission.mrClaimId !== null,
   })
   if (!admissible.ok) throw new ConflictError(`mission-command-${admissible.code}`, admissible.code)
-  const result = deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  const result = await deps.store.occUpdate(mission.id, mission.revision, mission.epoch, {
     status: 'working',
     blockCode: null,
     blockDetail: null,
@@ -973,7 +944,7 @@ export async function cancelMission(
   deps: LaunchDeps,
   input: { readonly missionId: string },
 ): Promise<{ readonly status: MissionStatus; readonly pending: boolean }> {
-  const mission = deps.store.getMission(input.missionId)
+  const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({
     command: 'cancel',
@@ -986,23 +957,23 @@ export async function cancelMission(
   const now = deps.now()
 
   // fence 先落（bump epoch 使一切在途 continuation 过期），未 dispatch intent 作废。
-  const fenced = deps.store.bumpEpoch(mission.id, mission.revision, {
+  const fenced = await deps.store.bumpEpoch(mission.id, mission.revision, {
     transitionFence: 'cancel-pending',
   })
   if (!fenced.ok) throw new ConflictError(`mission-occ-${fenced.code}`, fenced.code)
-  const unsettled = deps.store.listUnsettledEffects(mission.id)
+  const unsettled = await deps.store.listUnsettledEffects(mission.id)
   for (const effect of unsettled) {
-    if (effect.state === 'prepared') deps.store.invalidateEffect(effect.id, now)
+    if (effect.state === 'prepared') await deps.store.invalidateEffect(effect.id, now)
   }
-  const remaining = deps.store
-    .listUnsettledEffects(mission.id)
-    .filter((e) => e.state === 'dispatched')
+  const remaining = (await deps.store.listUnsettledEffects(mission.id)).filter(
+    (e) => e.state === 'dispatched',
+  )
   if (remaining.length > 0) {
     // 已 dispatch/结果未知的外部 effect 必须先按外部真相 reconcile（T26/T28 的
     // reconciler 负责查询并 settle 后收口到 canceled）；此处保持 cancel-pending。
     return { status: mission.status, pending: true }
   }
-  const settled = deps.store.occUpdate(mission.id, fenced.revision, mission.epoch + 1, {
+  const settled = await deps.store.occUpdate(mission.id, fenced.revision, mission.epoch + 1, {
     status: 'canceled',
     transitionFence: 'none',
     terminalKind: 'canceled',

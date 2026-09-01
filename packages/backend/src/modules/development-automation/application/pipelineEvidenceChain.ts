@@ -230,21 +230,21 @@ export async function handleCollectPipelineEvidence(
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (ports.pipelineEvidence === undefined || ports.pipelineImport === undefined) {
-    deps.block(mission.id, 'pipeline-port-missing:evidence', null)
+    await deps.block(mission.id, 'pipeline-port-missing:evidence', null)
     return 'blocked'
   }
   if (ports.mrEffects === undefined) {
-    deps.block(mission.id, 'pipeline-port-missing:mrEffects', null)
+    await deps.block(mission.id, 'pipeline-port-missing:mrEffects', null)
     return 'blocked'
   }
   const mrRef = knownString(cells, '__mr.ref')
   if (mrRef === null) {
-    deps.block(mission.id, 'pipeline-mr-ref-missing', null)
+    await deps.block(mission.id, 'pipeline-mr-ref-missing', null)
     return 'blocked'
   }
   const adapterBindingRef = await pipelineAdapterBindingRef(deps, lookup, mission)
   if (adapterBindingRef === null) {
-    deps.block(mission.id, 'pipeline-adapter-unbound', null)
+    await deps.block(mission.id, 'pipeline-adapter-unbound', null)
     return 'blocked'
   }
 
@@ -252,13 +252,13 @@ export async function handleCollectPipelineEvidence(
   // 对拍「target 引用未变」（PR-7 T72 的 MR facts collector 落地后升级为 sha）。
   const before = await ports.mrEffects.observe(mission.repositoryId, mrRef)
   if (!before.ok) {
-    deps.block(mission.id, before.code, before.detail)
+    await deps.block(mission.id, before.code, before.detail)
     return 'blocked'
   }
   const h1 = before.observation.sourceSha
   const t1 = before.observation.targetBranch ?? ''
   if (h1 === null) {
-    deps.block(mission.id, 'pipeline-mr-head-unknown', mrRef)
+    await deps.block(mission.id, 'pipeline-mr-head-unknown', mrRef)
     return 'blocked'
   }
 
@@ -269,7 +269,7 @@ export async function handleCollectPipelineEvidence(
     gateKeys,
   })
   if (!collected.ok) {
-    deps.block(mission.id, collected.failure.code, collected.failure.remediation)
+    await deps.block(mission.id, collected.failure.code, collected.failure.remediation)
     return 'blocked'
   }
 
@@ -277,7 +277,7 @@ export async function handleCollectPipelineEvidence(
     // fence 后读（H2/T2）+ 判定：漂移 ⇒ 丢弃快照 + backoff 重采（§6.2）。
     const after = await ports.mrEffects.observe(mission.repositoryId, mrRef)
     if (!after.ok) {
-      deps.block(mission.id, after.code, after.detail)
+      await deps.block(mission.id, after.code, after.detail)
       return 'blocked'
     }
     // provider 无 head 绑定（null）⇒ completeness 视为 partial：fence 跳过
@@ -295,7 +295,7 @@ export async function handleCollectPipelineEvidence(
     })
     const now = deps.now()
     if (!fence.ok) {
-      deps.persistCells(
+      await deps.persistCells(
         mission.id,
         { '__pipeline.fenceRetryAt': knownCell(String(now + FENCE_RETRY_BACKOFF_MS), 'fence') },
         { kind: 'pipeline-fence-discard', code: fence.code },
@@ -314,13 +314,13 @@ export async function handleCollectPipelineEvidence(
       expectedTargetSha: targetShaFallback,
     })
     if (!imported.ok) {
-      deps.block(mission.id, imported.code, imported.detail)
+      await deps.block(mission.id, imported.code, imported.detail)
       return 'blocked'
     }
     const manifest = pipelineEvidenceManifestV1Schema.parse(JSON.parse(imported.manifestJson))
     const requiredKeys = gateKeys
     const projected = projectPipelineCells(manifest, requiredKeys, manifest.bundleId)
-    deps.persistCells(
+    await deps.persistCells(
       mission.id,
       {
         ...projected,
@@ -348,29 +348,29 @@ export async function handleTriggerPipeline(
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (ports.pipelineEvidence === undefined) {
-    deps.block(mission.id, 'pipeline-port-missing:evidence', null)
+    await deps.block(mission.id, 'pipeline-port-missing:evidence', null)
     return 'blocked'
   }
   const adapterBindingRef = await pipelineAdapterBindingRef(deps, lookup, mission)
   if (adapterBindingRef === null) {
-    deps.block(mission.id, 'pipeline-adapter-unbound', null)
+    await deps.block(mission.id, 'pipeline-adapter-unbound', null)
     return 'blocked'
   }
   const headSha = knownString(cells, '__pipeline.headSha') ?? knownString(cells, '__mr.headSha')
   if (headSha === null) {
-    deps.block(mission.id, 'pipeline-mr-head-unknown', null)
+    await deps.block(mission.id, 'pipeline-mr-head-unknown', null)
     return 'blocked'
   }
   const sortedKeys = [...gateKeys].sort()
   const idempotencyKey = `ptrig:${mission.id}:${headSha}:${sortedKeys.join(',')}`
-  const claim = claimDeliveryEffect(deps, mission, {
+  const claim = await claimDeliveryEffect(deps, mission, {
     actionRunId: null,
     effectKind: 'pipeline-trigger',
     idempotencyKey,
     intent: { kind: 'pipeline-trigger', missionId: mission.id, headSha, gateKeys: sortedKeys },
   })
   if (claim.disposition === 'refused') {
-    deps.block(mission.id, claim.code, null)
+    await deps.block(mission.id, claim.code, null)
     return 'blocked'
   }
   if (claim.disposition === 'execute') {
@@ -382,19 +382,19 @@ export async function handleTriggerPipeline(
     })
     const now = deps.now()
     if (!out.ok) {
-      deps.store.failEffect(
+      await deps.store.failEffect(
         claim.effectId,
         JSON.stringify({ code: out.failure.code, detail: out.failure.remediation }),
         now,
       )
-      deps.block(mission.id, out.failure.code, out.failure.remediation)
+      await deps.block(mission.id, out.failure.code, out.failure.remediation)
       return 'blocked'
     }
-    deps.store.confirmEffect(claim.effectId, out.runRef, now)
+    await deps.store.confirmEffect(claim.effectId, out.runRef, now)
   }
   const counts = countsOf(cells, '__pipeline.triggerCounts')
   for (const key of sortedKeys) counts[key] = (counts[key] ?? 0) + 1
-  deps.persistCells(
+  await deps.persistCells(
     mission.id,
     {
       '__pipeline.triggerCounts': knownCell(JSON.stringify(counts), idempotencyKey),
@@ -418,21 +418,21 @@ export async function handleRerunPipeline(
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (ports.pipelineEvidence === undefined) {
-    deps.block(mission.id, 'pipeline-port-missing:evidence', null)
+    await deps.block(mission.id, 'pipeline-port-missing:evidence', null)
     return 'blocked'
   }
   const adapterBindingRef = await pipelineAdapterBindingRef(deps, lookup, mission)
   if (adapterBindingRef === null) {
-    deps.block(mission.id, 'pipeline-adapter-unbound', null)
+    await deps.block(mission.id, 'pipeline-adapter-unbound', null)
     return 'blocked'
   }
   const headSha = knownString(cells, '__pipeline.headSha')
   if (headSha === null) {
-    deps.block(mission.id, 'pipeline-mr-head-unknown', null)
+    await deps.block(mission.id, 'pipeline-mr-head-unknown', null)
     return 'blocked'
   }
   const idempotencyKey = `prerun:${mission.id}:${input.runRef}:${input.gateKey}`
-  const claim = claimDeliveryEffect(deps, mission, {
+  const claim = await claimDeliveryEffect(deps, mission, {
     actionRunId: null,
     effectKind: 'pipeline-rerun',
     idempotencyKey,
@@ -445,7 +445,7 @@ export async function handleRerunPipeline(
     },
   })
   if (claim.disposition === 'refused') {
-    deps.block(mission.id, claim.code, null)
+    await deps.block(mission.id, claim.code, null)
     return 'blocked'
   }
   if (claim.disposition === 'execute') {
@@ -458,19 +458,19 @@ export async function handleRerunPipeline(
     })
     const now = deps.now()
     if (!out.ok) {
-      deps.store.failEffect(
+      await deps.store.failEffect(
         claim.effectId,
         JSON.stringify({ code: out.failure.code, detail: out.failure.remediation }),
         now,
       )
-      deps.block(mission.id, out.failure.code, out.failure.remediation)
+      await deps.block(mission.id, out.failure.code, out.failure.remediation)
       return 'blocked'
     }
-    deps.store.confirmEffect(claim.effectId, out.runRef, now)
+    await deps.store.confirmEffect(claim.effectId, out.runRef, now)
   }
   const counts = countsOf(cells, '__pipeline.rerunCounts')
   counts[input.gateKey] = (counts[input.gateKey] ?? 0) + 1
-  deps.persistCells(
+  await deps.persistCells(
     mission.id,
     {
       '__pipeline.rerunCounts': knownCell(JSON.stringify(counts), idempotencyKey),

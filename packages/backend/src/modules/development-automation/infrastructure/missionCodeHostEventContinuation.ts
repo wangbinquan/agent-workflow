@@ -1,25 +1,30 @@
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
+import type { CodeHostEventContinuationPort } from '@/modules/integration/application/ports/codeHostEventResponse'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { shouldWakeForWebhook } from '../domain/webhookWake'
-import { createSqliteMissionStore } from './sqliteMissionStore'
+import type { MissionPersistence } from '../application/ports/missionStore'
+import { createPostgresqlMissionPersistence } from './postgresqlMissionStore'
+import { createSqliteMissionPersistence } from './sqliteMissionStore'
 
 /**
  * Development Automation's narrow Event Center participant. It translates an
  * already-normalized code-host MR identity into a durable Mission wake hint;
  * no Webhook route or integration adapter reaches Mission tables directly.
  */
-export function createSqliteMissionCodeHostEventContinuation(db: DbClient) {
-  const store = createSqliteMissionStore(db)
+function continuationFrom(
+  store: Pick<MissionPersistence, 'findMrClaim' | 'getMission' | 'recordWakeHint'>,
+): CodeHostEventContinuationPort {
   return {
-    match(input: { readonly provider: string; readonly repoPath: string; readonly mrIid: string }) {
-      const claim = store.findMrClaim({
+    async match(input) {
+      const claim = await store.findMrClaim({
         codeHostEndpointRef: input.provider,
         stableProjectRef: input.repoPath,
         mrIid: input.mrIid,
       })
       if (claim === null) return null
-      const mission = store.getMission(claim.missionId)
+      const mission = await store.getMission(claim.missionId)
       if (mission === null) return null
       if (
         !shouldWakeForWebhook({
@@ -38,12 +43,8 @@ export function createSqliteMissionCodeHostEventContinuation(db: DbClient) {
         },
       }
     },
-    consume(input: {
-      readonly continuationRef: string
-      readonly eventDeliveryId: string
-      readonly occurredAt: number
-    }) {
-      store.recordWakeHint({
+    async consume(input) {
+      await store.recordWakeHint({
         id: ulid(),
         missionId: input.continuationRef,
         source: 'webhook',
@@ -52,4 +53,16 @@ export function createSqliteMissionCodeHostEventContinuation(db: DbClient) {
       })
     },
   }
+}
+
+export function createSqliteMissionCodeHostEventContinuation(
+  db: DbClient,
+): CodeHostEventContinuationPort {
+  return continuationFrom(createSqliteMissionPersistence(db))
+}
+
+export function createPostgresqlMissionCodeHostEventContinuation(
+  db: PostgresqlDatabaseClient,
+): CodeHostEventContinuationPort {
+  return continuationFrom(createPostgresqlMissionPersistence(db))
 }

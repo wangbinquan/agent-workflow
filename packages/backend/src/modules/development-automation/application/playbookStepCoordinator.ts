@@ -61,7 +61,7 @@ function knownStrings(snapshot: MissionFactSnapshot, factId: string): readonly s
 }
 
 /** Root-to-current lineage reconstructed from durable parent links. */
-function missionAncestry(deps: ReconcileDeps, missionId: string): string[] | null {
+async function missionAncestry(deps: ReconcileDeps, missionId: string): Promise<string[] | null> {
   const store = deps.ports.playbookSaga
   if (store === undefined) return null
   const seen = new Set<string>()
@@ -71,17 +71,17 @@ function missionAncestry(deps: ReconcileDeps, missionId: string): string[] | nul
     if (seen.has(cursor) || ancestry.length >= MAX_CHILD_DEPTH) return null
     seen.add(cursor)
     ancestry.unshift(cursor)
-    cursor = store.findParentMissionLink(cursor)?.parentMissionId ?? null
+    cursor = (await store.findParentMissionLink(cursor))?.parentMissionId ?? null
   }
   return ancestry
 }
 
-function stepInput(
+async function stepInput(
   deps: ReconcileDeps,
   mission: MissionRow,
   snapshot: MissionFactSnapshot,
   input: NonNullable<DigitalEmployeeContent['steps']>[number]['input'],
-): { ref: string; digest: string } | null {
+): Promise<{ ref: string; digest: string } | null> {
   const store = deps.ports.playbookSaga
   if (store === undefined) return null
   if (input.kind === 'mission-requirement') {
@@ -91,8 +91,7 @@ function stepInput(
     // 重新拉起 Agent，永远推进不到下一步（T140 旅程实测：同一步骤 110 次
     // succeeded、110 次 Agent 执行，links/approvals 全为 0）。
     // 需求换代（refresh / 重新取件）会给出新的 bundleRef，那时重跑才是对的。
-    const source = deps.store
-      .listMissionSources(mission.id)
+    const source = (await deps.store.listMissionSources(mission.id))
       .filter((row) => row.state === 'materialized' && row.bundleRef !== null)
       .sort((a, b) => b.generation - a.generation)[0]
     if (source === undefined) return null
@@ -112,7 +111,7 @@ function stepInput(
       ? null
       : { ref, digest: canonicalDigest({ kind: input.kind, ref, evidenceDigest }) }
   }
-  const runs = store.listStepRuns(mission.id)
+  const runs = await store.listStepRuns(mission.id)
   if (input.kind === 'step-output') {
     const source = [...runs]
       .reverse()
@@ -152,13 +151,13 @@ function predicateFactIds(predicate: FactPredicate): string[] {
   return [predicate.fact]
 }
 
-function stepExecutionInput(
+async function stepExecutionInput(
   deps: ReconcileDeps,
   mission: MissionRow,
   snapshot: MissionFactSnapshot,
   step: EmployeeStep,
-): { ref: string; digest: string } | null {
-  const input = stepInput(deps, mission, snapshot, step.input)
+): Promise<{ ref: string; digest: string } | null> {
+  const input = await stepInput(deps, mission, snapshot, step.input)
   if (input === null || step.when.length === 0) return input
   const factIds = [...new Set(step.when.flatMap(predicateFactIds))].sort()
   const trigger = factIds.map((factId) => [factId, snapshot.cells[factId] ?? null] as const)
@@ -230,32 +229,34 @@ function actionOwnsRetryBudget(step: EmployeeStep): boolean {
   )
 }
 
-function claimRun(
+async function claimRun(
   deps: ReconcileDeps,
   mission: MissionRow,
   step: NonNullable<DigitalEmployeeContent['steps']>[number],
   inputDigest: string,
   attempt: number,
-): StepRunRow {
+): Promise<StepRunRow> {
   const deadlineMs =
     step.producer.kind === 'digital-employee' || step.producer.kind === 'approval-observe'
       ? step.producer.deadlineMs
       : step.join?.deadlineMs
-  return deps.ports.playbookSaga!.claimStepRun({
-    id: ulid(),
-    missionId: mission.id,
-    employeeId: mission.employeeId!,
-    employeeRevision: mission.employeeRevision!,
-    stepId: step.stepId,
-    attempt,
-    inputDigest,
-    producerKind: step.producer.kind,
-    deadlineAt: deadlineMs === undefined ? null : deps.now() + deadlineMs,
-    now: deps.now(),
-  }).row
+  return (
+    await deps.ports.playbookSaga!.claimStepRun({
+      id: ulid(),
+      missionId: mission.id,
+      employeeId: mission.employeeId!,
+      employeeRevision: mission.employeeRevision!,
+      stepId: step.stepId,
+      attempt,
+      inputDigest,
+      producerKind: step.producer.kind,
+      deadlineAt: deadlineMs === undefined ? null : deps.now() + deadlineMs,
+      now: deps.now(),
+    })
+  ).row
 }
 
-function templateDecision(
+async function templateDecision(
   deps: ReconcileDeps,
   run: StepRunRow,
   implementationRef: { id: string; revision: number },
@@ -265,8 +266,11 @@ function templateDecision(
     'problemInput' | 'approvalInput'
   > = {},
   retryBudget?: { readonly sameScene: number; readonly freshScene: number },
-): NextDecision {
-  const raw = deps.ports.actionTemplates?.content(implementationRef.id, implementationRef.revision)
+): Promise<NextDecision> {
+  const raw = await deps.ports.actionTemplates?.content(
+    implementationRef.id,
+    implementationRef.revision,
+  )
   if (raw === null || raw === undefined) {
     return {
       kind: 'block',
@@ -324,26 +328,28 @@ function passivePlatformOutput(
   return null
 }
 
-function claimNamedRun(
+async function claimNamedRun(
   deps: ReconcileDeps,
   mission: MissionRow,
   stepId: string,
   producerKind: string,
   inputDigest: string,
   attempt: number,
-): StepRunRow {
-  return deps.ports.playbookSaga!.claimStepRun({
-    id: ulid(),
-    missionId: mission.id,
-    employeeId: mission.employeeId!,
-    employeeRevision: mission.employeeRevision!,
-    stepId,
-    attempt,
-    inputDigest,
-    producerKind,
-    deadlineAt: null,
-    now: deps.now(),
-  }).row
+): Promise<StepRunRow> {
+  return (
+    await deps.ports.playbookSaga!.claimStepRun({
+      id: ulid(),
+      missionId: mission.id,
+      employeeId: mission.employeeId!,
+      employeeRevision: mission.employeeRevision!,
+      stepId,
+      attempt,
+      inputDigest,
+      producerKind,
+      deadlineAt: null,
+      now: deps.now(),
+    })
+  ).row
 }
 
 function problemEvidence(
@@ -418,16 +424,16 @@ function problemEvidence(
   return null
 }
 
-function syntheticRun(
+async function syntheticRun(
   deps: ReconcileDeps,
   mission: MissionRow,
   stepId: string,
   kind: string,
   inputDigest: string,
-): StepRunRow {
+): Promise<StepRunRow> {
   return (
-    latestRun(deps.ports.playbookSaga!.listStepRuns(mission.id), stepId, inputDigest) ??
-    claimNamedRun(deps, mission, stepId, kind, inputDigest, 0)
+    latestRun(await deps.ports.playbookSaga!.listStepRuns(mission.id), stepId, inputDigest) ??
+    (await claimNamedRun(deps, mission, stepId, kind, inputDigest, 0))
   )
 }
 
@@ -436,12 +442,12 @@ type ProblemProducerSelection =
   | { readonly kind: 'settled' }
   | { readonly kind: 'none' }
 
-function problemProducerDecision(
+async function problemProducerDecision(
   deps: ReconcileDeps,
   mission: MissionRow,
   snapshot: MissionFactSnapshot,
   employee: DigitalEmployeeContent,
-): ProblemProducerSelection {
+): Promise<ProblemProducerSelection> {
   const producers = employee.problemProducers ?? []
   const byId = new Map(producers.map((producer) => [producer.producerId, producer]))
   const fallbackIds = new Set(
@@ -457,7 +463,10 @@ function problemProducerDecision(
     }
   }
 
-  const decide = (producer: ProblemProducer, visited: Set<string>): ProblemProducerSelection => {
+  const decide = async (
+    producer: ProblemProducer,
+    visited: Set<string>,
+  ): Promise<ProblemProducerSelection> => {
     if (visited.has(producer.producerId)) {
       return {
         kind: 'decision',
@@ -471,7 +480,7 @@ function problemProducerDecision(
     const evidence = problemEvidence(snapshot, producer)
     if (evidence === null) return { kind: 'none' }
     const inputDigest = canonicalDigest(evidence)
-    const run = syntheticRun(
+    const run = await syntheticRun(
       deps,
       mission,
       `problem-producer:${producer.producerId}`,
@@ -495,11 +504,11 @@ function problemProducerDecision(
           },
         }
       }
-      return decide(fallback, new Set([...visited, producer.producerId]))
+      return await decide(fallback, new Set([...visited, producer.producerId]))
     }
     return {
       kind: 'decision',
-      decision: templateDecision(
+      decision: await templateDecision(
         deps,
         run,
         producer.implementationRef,
@@ -511,7 +520,7 @@ function problemProducerDecision(
   }
 
   for (const producer of roots) {
-    const selected = decide(producer, new Set())
+    const selected = await decide(producer, new Set())
     if (selected.kind !== 'none') return selected
   }
   return { kind: 'none' }
@@ -546,7 +555,7 @@ async function problemHandlerDecision(
     }
     if (!matches(snapshot, handler.when)) return null
     const inputDigest = canonicalDigest({ setRef, evidenceDigest, ruleId: handler.ruleId })
-    const run = syntheticRun(
+    const run = await syntheticRun(
       deps,
       mission,
       `problem-handler:${handler.ruleId}`,
@@ -565,7 +574,7 @@ async function problemHandlerDecision(
       return await decideHandler(fallback, new Set([...visited, handler.ruleId]))
     }
     if (run.state !== 'succeeded' && run.state !== 'observation-only') {
-      return templateDecision(
+      return await templateDecision(
         deps,
         run,
         handler.handler.implementationRef,
@@ -653,10 +662,13 @@ function requirementAcquisitionDecision(mission: MissionRow, stepRunRef?: string
 }
 
 /** 需求是否已经物化成 bundle（orchestrator 挂载 requirement mount 的同一判据）。 */
-function hasMaterializedRequirement(deps: ReconcileDeps, missionId: string): boolean {
-  return deps.store
-    .listMissionSources(missionId)
-    .some((source) => source.state === 'materialized' && source.bundleRef !== null)
+async function hasMaterializedRequirement(
+  deps: ReconcileDeps,
+  missionId: string,
+): Promise<boolean> {
+  return (await deps.store.listMissionSources(missionId)).some(
+    (source) => source.state === 'materialized' && source.bundleRef !== null,
+  )
 }
 
 function platformDecision(
@@ -717,7 +729,7 @@ async function decisionForStep(
     return platformDecision(mission, snapshot, run, producer.capabilityId)
   }
   if (producer.kind === 'agent' || producer.kind === 'script') {
-    return templateDecision(
+    return await templateDecision(
       deps,
       run,
       producer.implementationRef,
@@ -727,7 +739,7 @@ async function decisionForStep(
     )
   }
   if (producer.kind === 'approval-prepare') {
-    return templateDecision(
+    return await templateDecision(
       deps,
       run,
       producer.implementationRef,
@@ -750,26 +762,31 @@ async function decisionForStep(
         : knownString(snapshot, producer.repository.factId)
     if (targetRepositoryRef === null)
       return { kind: 'block', reason: 'child-target-repository-unresolved' }
-    const ancestry = missionAncestry(deps, mission.id)
+    const ancestry = await missionAncestry(deps, mission.id)
     if (ancestry === null) return { kind: 'block', reason: 'child-mission-ancestry-invalid' }
     if (ancestry.length >= MAX_CHILD_DEPTH) {
       return { kind: 'block', reason: 'child-mission-depth-exhausted' }
     }
-    const repeatsEmployee = ancestry.some((ancestorId) => {
-      const ancestor = deps.store.getMission(ancestorId)
+    let repeatsEmployee = false
+    for (const ancestorId of ancestry) {
+      const ancestor = await deps.store.getMission(ancestorId)
       // Revisions are immutable execution pins, not distinct employee
       // identities. A@1 → B@1 → A@2 is still a recursive call graph.
-      return ancestor?.employeeId === producer.employeeRef.id
-    })
+      if (ancestor?.employeeId === producer.employeeRef.id) {
+        repeatsEmployee = true
+        break
+      }
+    }
     if (repeatsEmployee) return { kind: 'block', reason: 'child-mission-cycle' }
-    const existingLink = deps.ports.playbookSaga!.getMissionLinkByStepRun(run.id)
+    const existingLink = await deps.ports.playbookSaga!.getMissionLinkByStepRun(run.id)
     if (
       existingLink === null &&
-      deps.ports.playbookSaga!.listMissionLinks(mission.id).length >= MAX_CHILDREN_PER_MISSION
+      (await deps.ports.playbookSaga!.listMissionLinks(mission.id)).length >=
+        MAX_CHILDREN_PER_MISSION
     ) {
       return { kind: 'block', reason: 'child-mission-budget-exhausted' }
     }
-    const root = deps.store.getMission(ancestry[0]!)
+    const root = await deps.store.getMission(ancestry[0]!)
     const wallDeadline = (root?.createdAt ?? mission.createdAt) + MAX_CHILD_WALL_MS
     if (deps.now() >= wallDeadline) {
       return { kind: 'block', reason: 'child-mission-wall-time-exhausted' }
@@ -851,10 +868,13 @@ async function inspectStep(
   // （不能要求作者额外插一个 requirement.acquire 步骤）。少了这一道，Agent 会
   // 在**没有任何需求上下文**的工作区里被拉起——严格的实现直接失败、宽松的实现
   // 会照着空需求交付，两种都是静默错误。
-  if (step.input.kind === 'mission-requirement' && !hasMaterializedRequirement(deps, mission.id)) {
+  if (
+    step.input.kind === 'mission-requirement' &&
+    !(await hasMaterializedRequirement(deps, mission.id))
+  ) {
     return { kind: 'decision', decision: requirementAcquisitionDecision(mission) }
   }
-  const input = stepExecutionInput(deps, mission, snapshot, step)
+  const input = await stepExecutionInput(deps, mission, snapshot, step)
   if (input === null) return { kind: 'unavailable' }
 
   if (
@@ -867,10 +887,10 @@ async function inspectStep(
     const observed = passivePlatformOutput(snapshot, step.producer.capabilityId)
     if (observed === null) return { kind: 'defer' }
     const passive =
-      latestRun(store.listStepRuns(mission.id), step.stepId, input.digest) ??
-      claimNamedRun(deps, mission, step.stepId, step.producer.kind, input.digest, 0)
+      latestRun(await store.listStepRuns(mission.id), step.stepId, input.digest) ??
+      (await claimNamedRun(deps, mission, step.stepId, step.producer.kind, input.digest, 0))
     if (passive.state !== 'succeeded' && passive.state !== 'observation-only') {
-      store.updateStepRun({
+      await store.updateStepRun({
         id: passive.id,
         from: ['claimed', 'running', 'waiting'],
         state: 'succeeded',
@@ -881,11 +901,11 @@ async function inspectStep(
     }
     return {
       kind: 'succeeded',
-      run: store.getStepRun(passive.id) ?? { ...passive, state: 'succeeded' },
+      run: (await store.getStepRun(passive.id)) ?? { ...passive, state: 'succeeded' },
     }
   }
 
-  let run = latestRun(store.listStepRuns(mission.id), step.stepId, input.digest)
+  let run = latestRun(await store.listStepRuns(mission.id), step.stepId, input.digest)
   if (
     run?.state === 'succeeded' ||
     (run?.state === 'observation-only' && run.failureCode === null)
@@ -899,12 +919,12 @@ async function inspectStep(
       /rejected|denied|expired|deadline|timeout/.test(run.failureCode ?? '')
     const retryLimit = step.onFailure.retry.sameScene + step.onFailure.retry.freshScene
     if (!categoricalFailure && !actionOwnsRetryBudget(step) && run.attempt < retryLimit) {
-      run = claimRun(deps, mission, step, input.digest, run.attempt + 1)
+      run = await claimRun(deps, mission, step, input.digest, run.attempt + 1)
     } else {
       return { kind: 'failed', run }
     }
   }
-  if (run === undefined) run = claimRun(deps, mission, step, input.digest, 0)
+  if (run === undefined) run = await claimRun(deps, mission, step, input.digest, 0)
   const decision = await decisionForStep(deps, mission, snapshot, step, run, input.ref)
   return decision === null ? { kind: 'defer' } : { kind: 'decision', decision }
 }
@@ -932,7 +952,7 @@ async function decisionAfterSucceededStep(
   }
 
   const store = deps.ports.playbookSaga!
-  const previous = store.listJoinMembers(mission.id, join.groupId)
+  const previous = await store.listJoinMembers(mission.id, join.groupId)
   const settledResult =
     previous.find((member) => member.settledResult !== null)?.settledResult ?? null
   if (settledResult !== null) {
@@ -959,11 +979,13 @@ async function decisionAfterSucceededStep(
   for (const memberStepId of join.memberStepIds) {
     const memberStep = stepsById.get(memberStepId)
     const input =
-      memberStep === undefined ? null : stepExecutionInput(deps, mission, snapshot, memberStep)
+      memberStep === undefined
+        ? null
+        : await stepExecutionInput(deps, mission, snapshot, memberStep)
     const memberRun =
       input === null
         ? undefined
-        : latestRun(store.listStepRuns(mission.id), memberStepId, input.digest)
+        : latestRun(await store.listStepRuns(mission.id), memberStepId, input.digest)
     memberRuns.set(memberStepId, memberRun)
     const memberState: JoinMemberState =
       memberRun === undefined ||
@@ -977,7 +999,7 @@ async function decisionAfterSucceededStep(
             ? 'expired'
             : 'failed'
     memberStates.push(memberState)
-    store.upsertJoinMember({
+    await store.upsertJoinMember({
       missionId: mission.id,
       groupId: join.groupId,
       memberStepId,
@@ -999,12 +1021,12 @@ async function decisionAfterSucceededStep(
     members: memberStates,
   })
   if (verdict.kind !== 'pending') {
-    store.settleJoin(mission.id, join.groupId, verdict.kind, deps.now())
+    await store.settleJoin(mission.id, join.groupId, verdict.kind, deps.now())
     if (verdict.kind === 'satisfied') {
       for (const memberStepId of join.memberStepIds) {
         const member = memberRuns.get(memberStepId)
         if (member?.state !== 'waiting') continue
-        store.updateStepRun({
+        await store.updateStepRun({
           id: member.id,
           from: ['waiting'],
           state: 'observation-only',
@@ -1114,7 +1136,7 @@ export async function selectPlaybookStepDecision(
   const steps = employee?.steps ?? []
   if (employee === null) return null
   const stepsById = new Map(steps.map((step) => [step.stepId, step]))
-  const producerSelection = problemProducerDecision(deps, mission, snapshot, employee)
+  const producerSelection = await problemProducerDecision(deps, mission, snapshot, employee)
   if (producerSelection.kind === 'decision') return producerSelection.decision
   const handlerDecision = await problemHandlerDecision(deps, mission, snapshot, employee, stepsById)
   if (handlerDecision !== null) return handlerDecision
@@ -1201,7 +1223,7 @@ export async function handleChildMissionDecision(
     idempotencyKey: selected.idempotencyKey,
     ancestry: selected.ancestry,
   })
-  const claimed = store.claimMissionLink({
+  const claimed = await store.claimMissionLink({
     id: ulid(),
     parentMissionId: mission.id,
     parentStepRunId: selected.stepRunRef,
@@ -1226,7 +1248,7 @@ export async function handleChildMissionDecision(
           })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'child-mission-port-failed'
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'failed',
@@ -1244,7 +1266,7 @@ export async function handleChildMissionDecision(
     receipt.intentDigest !== expectedIntentDigest ||
     (claimed.row.childMissionId !== null && receipt.childMissionRef !== claimed.row.childMissionId)
   ) {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'failed',
@@ -1260,7 +1282,7 @@ export async function handleChildMissionDecision(
     })
     return 'collected'
   }
-  store.observeMissionLink({
+  await store.observeMissionLink({
     id: claimed.row.id,
     childMissionId: receipt.childMissionRef,
     childRevision: receipt.childRevision,
@@ -1270,7 +1292,7 @@ export async function handleChildMissionDecision(
     observedAt: Date.parse(receipt.observedAt),
   })
   if (receipt.completionSatisfied) {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'succeeded',
@@ -1285,7 +1307,7 @@ export async function handleChildMissionDecision(
     receipt.observedStatus,
   )
   if (terminalFailure || deps.now() >= Date.parse(selected.deadlineAt)) {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'failed',
@@ -1296,7 +1318,7 @@ export async function handleChildMissionDecision(
     })
     return 'collected'
   }
-  store.updateStepRun({
+  await store.updateStepRun({
     id: selected.stepRunRef,
     from: ['claimed', 'running', 'waiting'],
     state: 'waiting',
@@ -1304,7 +1326,7 @@ export async function handleChildMissionDecision(
     outputRevision: String(receipt.childRevision),
     now: deps.now(),
   })
-  deps.store.armWake({
+  await deps.store.armWake({
     id: ulid(),
     missionId: mission.id,
     decisionId,
@@ -1338,7 +1360,7 @@ export async function handleApprovalSubmitDecision(
     idempotencyKey: selected.idempotencyKey,
   }
   const submitIntentDigest = canonicalDigest(submitIntent)
-  const claimed = store.claimApprovalSaga({
+  const claimed = await store.claimApprovalSaga({
     id: ulid(),
     missionId: mission.id,
     stepRunId: selected.stepRunRef,
@@ -1374,7 +1396,7 @@ export async function handleApprovalSubmitDecision(
       })
       if (receipt?.intentDigest !== submitIntentDigest) receipt = null
       if (receipt === null) {
-        store.updateStepRun({
+        await store.updateStepRun({
           id: selected.stepRunRef,
           from: ['claimed', 'running', 'waiting'],
           state: 'failed',
@@ -1386,7 +1408,7 @@ export async function handleApprovalSubmitDecision(
         return 'collected'
       }
     }
-    store.recordApprovalSubmitted({
+    await store.recordApprovalSubmitted({
       id: claimed.row.id,
       correlationRef: receipt.correlationRef,
       externalRequestRef: receipt.externalRequestRef,
@@ -1394,7 +1416,7 @@ export async function handleApprovalSubmitDecision(
       now: deps.now(),
     })
   }
-  store.updateStepRun({
+  await store.updateStepRun({
     id: selected.stepRunRef,
     from: ['claimed', 'running', 'waiting'],
     state: 'succeeded',
@@ -1414,7 +1436,7 @@ export async function handleApprovalObserveDecision(
 ): Promise<Handled> {
   const store = deps.ports.playbookSaga
   const gateway = deps.ports.approvalGateway
-  const saga = store?.getApprovalSaga(selected.approvalSagaRef) ?? null
+  const saga = store === undefined ? null : await store.getApprovalSaga(selected.approvalSagaRef)
   if (
     store === undefined ||
     gateway === undefined ||
@@ -1428,7 +1450,7 @@ export async function handleApprovalObserveDecision(
     correlationRef: saga.correlationRef,
   })
   if (!observed.ok) {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'failed',
@@ -1441,7 +1463,7 @@ export async function handleApprovalObserveDecision(
   }
   const receipt = observed.receipt
   if (receipt.correlationRef !== saga.correlationRef) {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'failed',
@@ -1454,7 +1476,7 @@ export async function handleApprovalObserveDecision(
   }
   const pending = receipt.status === 'pending' && deps.now() < saga.deadlineAt
   const effectiveStatus = receipt.status === 'pending' && !pending ? 'expired' : receipt.status
-  store.recordApprovalObservation({
+  await store.recordApprovalObservation({
     id: saga.id,
     status: effectiveStatus,
     observedRevision: receipt.observedRevision,
@@ -1463,7 +1485,7 @@ export async function handleApprovalObserveDecision(
     now: deps.now(),
   })
   if (pending) {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'waiting',
@@ -1471,7 +1493,7 @@ export async function handleApprovalObserveDecision(
       outputRevision: receipt.observedRevision,
       now: deps.now(),
     })
-    deps.store.armWake({
+    await deps.store.armWake({
       id: ulid(),
       missionId: mission.id,
       decisionId,
@@ -1484,7 +1506,7 @@ export async function handleApprovalObserveDecision(
     return 'wake-armed'
   }
   const approved = effectiveStatus === 'approved'
-  store.updateStepRun({
+  await store.updateStepRun({
     id: selected.stepRunRef,
     from: ['claimed', 'running', 'waiting'],
     state: approved ? 'succeeded' : 'failed',
@@ -1499,12 +1521,12 @@ export async function handleApprovalObserveDecision(
   return 'collected'
 }
 
-export function settlePlaybookDecision(
+export async function settlePlaybookDecision(
   deps: ReconcileDeps,
   selected: NextDecision,
   decisionId: string,
   handled: Handled,
-): void {
+): Promise<void> {
   const store = deps.ports.playbookSaga
   if (store === undefined || !('stepRunRef' in selected) || selected.stepRunRef === undefined)
     return
@@ -1516,9 +1538,9 @@ export function settlePlaybookDecision(
     return
   }
   if (selected.kind === 'run-agent-action' && handled === 'action-launched') {
-    const mission = store.getStepRun(selected.stepRunRef)
-    const current = mission === null ? null : deps.store.getMission(mission.missionId)
-    store.updateStepRun({
+    const mission = await store.getStepRun(selected.stepRunRef)
+    const current = mission === null ? null : await deps.store.getMission(mission.missionId)
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running'],
       state: 'running',
@@ -1529,7 +1551,7 @@ export function settlePlaybookDecision(
     return
   }
   if (handled === 'blocked' || handled === 'action-launch-failed') {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'failed',
@@ -1541,7 +1563,7 @@ export function settlePlaybookDecision(
     return
   }
   if (handled === 'wake-armed') {
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'waiting',
@@ -1555,8 +1577,8 @@ export function settlePlaybookDecision(
     handled === 'placement-done' ||
     handled === 'readiness-published'
   ) {
-    const row = store.getStepRun(selected.stepRunRef)
-    const mission = row === null ? null : deps.store.getMission(row.missionId)
+    const row = await store.getStepRun(selected.stepRunRef)
+    const mission = row === null ? null : await deps.store.getMission(row.missionId)
     const outputRef =
       mission === null
         ? `decision:${decisionId}`
@@ -1572,7 +1594,7 @@ export function settlePlaybookDecision(
               : selected.kind === 'publish-readiness'
                 ? `readiness:${canonicalDigest(mission.readinessJson ?? 'unavailable')}`
                 : `decision:${decisionId}`
-    store.updateStepRun({
+    await store.updateStepRun({
       id: selected.stepRunRef,
       from: ['claimed', 'running', 'waiting'],
       state: 'succeeded',
@@ -1584,23 +1606,23 @@ export function settlePlaybookDecision(
   }
 }
 
-export function settlePlaybookAction(
+export async function settlePlaybookAction(
   deps: ReconcileDeps,
   actionRunId: string,
   result:
     | { readonly kind: 'action-collected'; readonly disposition: string }
     | { readonly kind: 'action-failed'; readonly blockCode: string },
-): void {
+): Promise<void> {
   const store = deps.ports.playbookSaga
-  const step = store?.findStepRunByAction(actionRunId) ?? null
+  const step = store === undefined ? null : await store.findStepRunByAction(actionRunId)
   if (store === undefined || step === null) return
-  const action = deps.store.getActionRun(actionRunId)
+  const action = await deps.store.getActionRun(actionRunId)
   const waiting = result.kind === 'action-collected' && result.disposition === 'needs-information'
   const successful =
     result.kind === 'action-collected' &&
     result.disposition !== 'agent-blocked' &&
     result.disposition !== 'needs-information'
-  store.updateStepRun({
+  await store.updateStepRun({
     id: step.id,
     from: ['claimed', 'running', 'waiting'],
     state: waiting ? 'waiting' : successful ? 'succeeded' : 'failed',

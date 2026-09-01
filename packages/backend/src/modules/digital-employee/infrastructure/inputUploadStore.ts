@@ -4,22 +4,15 @@ import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import { employeeInputUploads } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
+import type {
+  EmployeeInputUploadPersistence,
+  EmployeeInputUploadRecord,
+} from '../application/ports/inputUploadStore'
 
 export const EMPLOYEE_INPUT_UPLOAD_TTL_MS = 2 * 60 * 60 * 1_000
 export const EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT = 1_000
 
-export interface EmployeeInputUploadRecord {
-  readonly id: string
-  readonly actorUserId: string | null
-  readonly originalName: string
-  readonly bytes: number
-  readonly sha256: string
-  readonly blobRef: string
-  readonly state: 'pending' | 'claimed'
-  readonly claimedByCaseId: string | null
-  readonly expiresAt: number
-  readonly createdAt: number
-}
+export type { EmployeeInputUploadRecord } from '../application/ports/inputUploadStore'
 
 function recordOf(row: typeof employeeInputUploads.$inferSelect): EmployeeInputUploadRecord {
   return {
@@ -156,5 +149,17 @@ export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploa
       }
       return expired.length
     },
+  }
+}
+
+export function createSqliteEmployeeInputUploadPersistence(
+  db: DbClient,
+): EmployeeInputUploadPersistence {
+  const store = createEmployeeInputUploadStore(db)
+  return {
+    create: async (input) => store.create(input),
+    resolveForCase: async (input) => store.resolveForCase(input),
+    delete: async (id, actorUserId) => store.delete(id, actorUserId),
+    sweepExpired: async (now, limit) => store.sweepExpired(now, limit),
   }
 }

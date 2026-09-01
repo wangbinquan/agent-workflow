@@ -17,13 +17,13 @@ import { canonicalStringify } from '../../domain/canonicalJson'
 import { agentCapabilityIdSchema } from '../../domain/capabilityDefinition'
 import { ValidationError } from '@/util/errors'
 import type {
-  ActionTemplateStore,
+  ActionTemplatePersistence,
   ConfigResourceRecord,
   ActionTemplateExtra,
 } from '../ports/configResourceStore'
 
 export interface ActionTemplateCommandDeps {
-  readonly store: ActionTemplateStore
+  readonly store: ActionTemplatePersistence
   readonly now: () => number
 }
 
@@ -34,10 +34,10 @@ export interface CreateActionTemplateInput {
   readonly draft: unknown
 }
 
-export function createActionTemplate(
+export async function createActionTemplate(
   deps: ActionTemplateCommandDeps,
   input: CreateActionTemplateInput,
-): ConfigResourceRecord<ActionTemplateExtra> {
+): Promise<ConfigResourceRecord<ActionTemplateExtra>> {
   const capability = agentCapabilityIdSchema.safeParse(input.capabilityId)
   if (!capability.success) {
     throw new ValidationError(
@@ -48,7 +48,7 @@ export function createActionTemplate(
   if (input.name.trim().length === 0) {
     throw new ValidationError('action-template-name-empty', 'name must not be empty')
   }
-  return deps.store.create({
+  return await deps.store.create({
     id: ulid(),
     name: input.name.trim(),
     draftJson: JSON.stringify(input.draft ?? {}),
@@ -58,11 +58,11 @@ export function createActionTemplate(
   })
 }
 
-export function reviseActionTemplateDraft(
+export async function reviseActionTemplateDraft(
   deps: ActionTemplateCommandDeps,
   input: { readonly id: string; readonly draft: unknown; readonly name?: string },
-): void {
-  deps.store.updateDraft({
+): Promise<void> {
+  await deps.store.updateDraft({
     id: input.id,
     draftJson: JSON.stringify(input.draft ?? {}),
     ...(input.name === undefined ? {} : { name: input.name.trim() }),
@@ -75,11 +75,11 @@ export interface PublishActionTemplateResult {
   readonly contentDigest: string
 }
 
-export function publishActionTemplate(
+export async function publishActionTemplate(
   deps: ActionTemplateCommandDeps,
   input: { readonly id: string; readonly actorUserId: string | null },
-): PublishActionTemplateResult {
-  const identity = deps.store.getById(input.id)
+): Promise<PublishActionTemplateResult> {
+  const identity = await deps.store.getById(input.id)
   if (identity === null) {
     throw new ValidationError('action-template-not-found', `action template not found: ${input.id}`)
   }
@@ -115,7 +115,7 @@ export function publishActionTemplate(
     })
   }
   const revision = (identity.publishedRevision ?? 0) + 1
-  deps.store.publishRevision({
+  await deps.store.publishRevision({
     resourceId: input.id,
     revision,
     contentJson: canonicalStringify(parsed.data),
@@ -126,9 +126,9 @@ export function publishActionTemplate(
   return { revision, contentDigest: actionTemplateContentDigest(parsed.data) }
 }
 
-export function archiveActionTemplate(
+export async function archiveActionTemplate(
   deps: ActionTemplateCommandDeps,
   input: { readonly id: string },
-): void {
-  deps.store.archive(input.id, deps.now())
+): Promise<void> {
+  await deps.store.archive(input.id, deps.now())
 }

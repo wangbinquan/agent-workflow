@@ -36,7 +36,7 @@ export async function confirmNoChange(
   rawInput: unknown,
 ): Promise<ConfirmNoChangeResult> {
   const input = confirmNoChangeInputSchema.parse(rawInput)
-  const mission = deps.store.getMission(input.missionId)
+  const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({
     command: 'confirm-no-change',
@@ -50,7 +50,7 @@ export async function confirmNoChange(
   const cells =
     mission.requirementBundleRef === null
       ? null
-      : deps.snapshots.getCells(mission.requirementBundleRef)
+      : await deps.snapshots.getCells(mission.requirementBundleRef)
   const gateCell = cells?.['__gate.pendingHumanDecision']
   const gatePending =
     gateCell !== undefined &&
@@ -66,7 +66,7 @@ export async function confirmNoChange(
   // 防御复检（重派已挡，人为改库/竞态兜底）：非 already-present 上传必须进
   // 发布链，不许 no-change 收束。
   if (mission.uploadPlanRef !== null) {
-    const plan = deps.ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null
+    const plan = (await deps.ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null
     if (plan === null || plan.entries.some((entry) => entry.disposition !== 'already-present')) {
       throw new ValidationError(
         'no-change-uploads-pending',
@@ -97,7 +97,7 @@ export async function confirmNoChange(
     },
   }
   const snapshotId = ulid()
-  deps.store.insertFactSnapshot({
+  await deps.store.insertFactSnapshot({
     id: snapshotId,
     missionId: mission.id,
     missionRevision: mission.revision,
@@ -111,7 +111,7 @@ export async function confirmNoChange(
   // 两步合法转移：awaiting-information → working → completed-no-change
   // （TRANSITIONS 里 completed-no-change 只从 working 可达）。
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const fresh = deps.store.getMission(mission.id)
+    const fresh = await deps.store.getMission(mission.id)
     if (fresh === null) throw new NotFoundError('mission-not-found', 'mission not found')
     const first = checkMissionTransition({
       from: fresh.status,
@@ -123,13 +123,13 @@ export async function confirmNoChange(
     }
     const step1 =
       fresh.status === 'awaiting-information'
-        ? deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+        ? await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
             status: 'working',
             requirementBundleRef: snapshotId,
           })
         : ({ ok: true } as const)
     if (!step1.ok) continue
-    const mid = deps.store.getMission(mission.id)
+    const mid = await deps.store.getMission(mission.id)
     if (mid === null) throw new NotFoundError('mission-not-found', 'mission not found')
     const second = checkMissionTransition({
       from: mid.status,
@@ -137,7 +137,7 @@ export async function confirmNoChange(
       fence: mid.transitionFence,
     })
     if (!second.ok) throw new ConflictError('no-change-transition-refused', second.code)
-    const step2 = deps.store.occUpdate(mid.id, mid.revision, mid.epoch, {
+    const step2 = await deps.store.occUpdate(mid.id, mid.revision, mid.epoch, {
       status: 'completed-no-change',
       terminalKind: 'no-change-confirmed',
       terminalAt: now,

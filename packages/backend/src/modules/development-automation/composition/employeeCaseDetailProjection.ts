@@ -157,12 +157,12 @@ export function composeDevelopmentEmployeeCaseDetailProjection(
 ): EmployeeCaseDetailProjectionParticipant {
   return {
     typeId: 'development',
-    projectJson(inputJson) {
+    async projectJson(inputJson) {
       const snapshot = JSON.parse(inputJson) as EmployeeCaseDetailProjectionInputV1
       return JSON.stringify(
         projectDevelopmentEmployeeCaseDetail({
           snapshot,
-          workspace: workspaces.getByCaseId(snapshot.case.id),
+          workspace: await workspaces.getByCaseId(snapshot.case.id),
         }),
       )
     },

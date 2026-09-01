@@ -2,35 +2,65 @@
 
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { MissionPersistence } from '../application/ports/missionStore'
+import { postgresqlMissionIdOfExecutionRef } from '../infrastructure/postgresqlReconcilerReaders'
 import { missionIdOfExecutionRef } from '../infrastructure/sqliteReconcilerReaders'
-import { createSqliteMissionStore } from '../infrastructure/sqliteMissionStore'
+import { createPostgresqlMissionPersistence } from '../infrastructure/postgresqlMissionStore'
+import { createSqliteMissionPersistence } from '../infrastructure/sqliteMissionStore'
 
 export interface DevelopmentMissionExecutionTerminalObserver {
-  agent(executionRef: string): void
-  script(executionRef: string): void
+  agent(executionRef: string): Promise<void>
+  script(executionRef: string): Promise<void>
 }
 
-export function createDevelopmentMissionExecutionTerminalObserver(deps: {
-  readonly db: DbClient
+function observer(deps: {
+  readonly store: Pick<MissionPersistence, 'recordWakeHint'>
+  readonly missionIdOfExecutionRef: (executionRef: string) => Promise<string | null>
   readonly drive: (missionId: string) => Promise<unknown>
 }): DevelopmentMissionExecutionTerminalObserver {
-  const store = createSqliteMissionStore(deps.db)
   const notify =
     (deliveryPrefix: 'agent-exec' | 'script-exec') =>
-    (executionRef: string): void => {
-      const missionId = missionIdOfExecutionRef(deps.db, executionRef)
+    async (executionRef: string): Promise<void> => {
+      const missionId = await deps.missionIdOfExecutionRef(executionRef)
       if (missionId === null) return
-      store.recordWakeHint({
+      await deps.store.recordWakeHint({
         id: ulid(),
         missionId,
         source: 'agent-execution',
         deliveryKey: `${deliveryPrefix}:${executionRef}`,
         now: Date.now(),
       })
-      void deps.drive(missionId).catch(() => undefined)
+      await deps.drive(missionId).then(
+        () => undefined,
+        () => undefined,
+      )
     }
   return Object.freeze({
     agent: notify('agent-exec'),
     script: notify('script-exec'),
+  })
+}
+
+export function createSqliteDevelopmentMissionExecutionTerminalObserver(deps: {
+  readonly db: DbClient
+  readonly drive: (missionId: string) => Promise<unknown>
+}): DevelopmentMissionExecutionTerminalObserver {
+  return observer({
+    store: createSqliteMissionPersistence(deps.db),
+    missionIdOfExecutionRef: async (executionRef) => missionIdOfExecutionRef(deps.db, executionRef),
+    drive: deps.drive,
+  })
+}
+
+export function createPostgresqlDevelopmentMissionExecutionTerminalObserver(deps: {
+  readonly db: PostgresqlDatabaseClient
+  readonly drive: (missionId: string) => Promise<unknown>
+}): DevelopmentMissionExecutionTerminalObserver {
+  return observer({
+    store: createPostgresqlMissionPersistence(deps.db),
+    missionIdOfExecutionRef: (executionRef) =>
+      postgresqlMissionIdOfExecutionRef(deps.db, executionRef),
+    drive: deps.drive,
   })
 }

@@ -13,12 +13,12 @@ import {
   type ConfigUpgradePlan,
   type PinnedClosure,
 } from '../../engine/policy/configUpgradePlanner'
-import type { MissionStore } from '../ports/missionStore'
+import type { MissionPersistence } from '../ports/missionStore'
 import type { AdmissionLookup } from '../ports/admissionLookup'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 export interface UpgradeDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly lookup: AdmissionLookup
   readonly now: () => number
 }
@@ -54,14 +54,14 @@ export async function previewConfigurationUpgrade(
   deps: UpgradeDeps,
   request: UpgradeRequest,
 ): Promise<ConfigUpgradePlan> {
-  const mission = deps.store.getMission(request.missionId)
+  const mission = await deps.store.getMission(request.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const next: PinnedClosure = {
     ...currentClosure(mission),
     employee: request.nextEmployee ?? currentClosure(mission).employee,
     policy: request.nextPolicy ?? currentClosure(mission).policy,
   }
-  const unsettled = deps.store.listUnsettledEffects(request.missionId)
+  const unsettled = await deps.store.listUnsettledEffects(request.missionId)
   return planConfigurationUpgrade({
     current: currentClosure(mission),
     next,
@@ -79,7 +79,7 @@ export async function applyConfigurationUpgrade(
   deps: UpgradeDeps,
   request: UpgradeRequest,
 ): Promise<{ readonly epoch: number; readonly noop: boolean }> {
-  const mission = deps.store.getMission(request.missionId)
+  const mission = await deps.store.getMission(request.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({
     command: 'configuration-upgrade',
@@ -123,13 +123,13 @@ export async function applyConfigurationUpgrade(
   }
 
   // 作废未 dispatch 的 intent；dispatched 的由 reconciler 按外部真相 settle。
-  for (const effect of deps.store.listUnsettledEffects(request.missionId)) {
+  for (const effect of await deps.store.listUnsettledEffects(request.missionId)) {
     if (effect.state === 'prepared') {
-      deps.store.invalidateEffect(effect.id, deps.now())
+      await deps.store.invalidateEffect(effect.id, deps.now())
     }
   }
   // bumpEpoch 原子完成 repin：epoch+1 让所有旧 worker receipt 过期。
-  const result = deps.store.bumpEpoch(request.missionId, mission.revision, {
+  const result = await deps.store.bumpEpoch(request.missionId, mission.revision, {
     ...(request.nextEmployee === null
       ? {}
       : { employeeId: request.nextEmployee.id, employeeRevision: request.nextEmployee.revision }),
@@ -140,6 +140,6 @@ export async function applyConfigurationUpgrade(
   if (!result.ok) {
     throw new ConflictError(`configuration-upgrade-${result.code}`, 'concurrent mission write')
   }
-  const upgraded = deps.store.getMission(request.missionId)
+  const upgraded = await deps.store.getMission(request.missionId)
   return { epoch: upgraded?.epoch ?? mission.epoch + 1, noop: false }
 }

@@ -10,6 +10,7 @@ import {
 import type {
   ApprovalSagaRow,
   MissionLinkRow,
+  PlaybookSagaPersistence,
   PlaybookSagaStore,
   StepJoinRow,
   StepRunRow,
@@ -419,6 +420,74 @@ export function createSqlitePlaybookSagaStore(db: DbClient): PlaybookSagaStore {
         .orderBy(asc(developmentApprovalSagas.id))
         .all()
       return canonicalDigest({ steps, links, approvals })
+    },
+  }
+}
+
+/** Promise adapter used by provider-selected composition; the legacy factory
+ * remains synchronous so the established SQLite behavior oracle is unchanged. */
+export function createSqlitePlaybookSagaPersistence(db: DbClient): PlaybookSagaPersistence {
+  const store = createSqlitePlaybookSagaStore(db)
+  return {
+    async claimStepRun(input) {
+      return store.claimStepRun(input)
+    },
+    async getStepRun(id) {
+      return store.getStepRun(id)
+    },
+    async listStepRuns(missionId) {
+      return store.listStepRuns(missionId)
+    },
+    async findStepRunByAction(actionRunId) {
+      return store.findStepRunByAction(actionRunId)
+    },
+    async updateStepRun(input) {
+      return store.updateStepRun(input)
+    },
+    async claimMissionLink(input) {
+      return store.claimMissionLink(input)
+    },
+    async getMissionLinkByStepRun(stepRunId) {
+      return store.getMissionLinkByStepRun(stepRunId)
+    },
+    async findParentMissionLink(childMissionId) {
+      return store.findParentMissionLink(childMissionId)
+    },
+    async listMissionLinks(missionId) {
+      return store.listMissionLinks(missionId)
+    },
+    async observeMissionLink(input) {
+      store.observeMissionLink(input)
+    },
+    async claimApprovalSaga(input) {
+      return store.claimApprovalSaga(input)
+    },
+    async getApprovalSaga(id) {
+      return store.getApprovalSaga(id)
+    },
+    async getApprovalSagaByStepRun(stepRunId) {
+      return store.getApprovalSagaByStepRun(stepRunId)
+    },
+    async listApprovalSagas(missionId) {
+      return store.listApprovalSagas(missionId)
+    },
+    async recordApprovalSubmitted(input) {
+      store.recordApprovalSubmitted(input)
+    },
+    async recordApprovalObservation(input) {
+      store.recordApprovalObservation(input)
+    },
+    async upsertJoinMember(input) {
+      store.upsertJoinMember(input)
+    },
+    async listJoinMembers(missionId, groupId) {
+      return store.listJoinMembers(missionId, groupId)
+    },
+    async settleJoin(missionId, groupId, result, now) {
+      store.settleJoin(missionId, groupId, result, now)
+    },
+    async sagaDigest(missionId) {
+      return store.sagaDigest(missionId)
     },
   }
 }

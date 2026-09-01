@@ -304,3 +304,12 @@ export interface RuntimeCaseStorePort {
     readonly now: number
   }): EmployeeCaseRecord | null
 }
+
+/** Live provider contract; all application-visible persistence is awaitable. */
+export type RuntimeCasePersistence = {
+  readonly [K in keyof RuntimeCaseStorePort]: RuntimeCaseStorePort[K] extends (
+    ...args: infer Args
+  ) => infer Result
+    ? (...args: Args) => Promise<Awaited<Result>>
+    : never
+}

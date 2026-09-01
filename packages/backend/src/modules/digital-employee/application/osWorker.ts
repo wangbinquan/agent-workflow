@@ -10,10 +10,10 @@
 export interface DigitalEmployeeOsWorkerDependencies {
   readonly runtime: {
     runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
-    pumpOneDelivery(): boolean
-    planOneReaction(): string | null
+    pumpOneDelivery(): Promise<boolean>
+    planOneReaction(): Promise<string | null>
     inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'>
-    publishOneChannelResult(): 'completed' | 'idle'
+    publishOneChannelResult(): Promise<'completed' | 'idle'>
   }
 }
 
@@ -42,17 +42,17 @@ export async function runDigitalEmployeeOsCycle(
   let steps = 0
   for (; steps < maxSteps; steps += 1) {
     let progressed = false
-    if (deps.runtime.publishOneChannelResult() === 'completed') {
+    if ((await deps.runtime.publishOneChannelResult()) === 'completed') {
       channelResults += 1
       progressed = true
     }
 
-    if (deps.runtime.pumpOneDelivery()) {
+    if (await deps.runtime.pumpOneDelivery()) {
       deliveries += 1
       progressed = true
     }
 
-    if (deps.runtime.planOneReaction() !== null) {
+    if ((await deps.runtime.planOneReaction()) !== null) {
       plannedRounds += 1
       progressed = true
     }

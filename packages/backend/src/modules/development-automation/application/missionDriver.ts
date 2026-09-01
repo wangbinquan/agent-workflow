@@ -88,9 +88,9 @@ export async function driveMission(
     if (!continuationOf(last)) return { steps, stop: stopOf(last), last }
   }
 
-  const mission = deps.store.getMission(missionId)
+  const mission = await deps.store.getMission(missionId)
   if (mission !== null) {
-    deps.store.recordWakeHint({
+    await deps.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'mission-driver-budget',

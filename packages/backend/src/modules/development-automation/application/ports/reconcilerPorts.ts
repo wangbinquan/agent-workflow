@@ -17,7 +17,7 @@ import type {
   ChildMissionIntent,
   ChildMissionReceipt,
 } from '../../domain/stepSaga'
-import type { PlaybookSagaStore } from './playbookSagaStore'
+import type { PlaybookSagaPersistence } from './playbookSagaStore'
 import type { RepositoryPublicationReceipt } from '@agent-workflow/shared'
 
 export interface RepositoryFactsCollectorPort {
@@ -156,7 +156,7 @@ export interface UploadPlacementPort {
 
 /** fact snapshot 的读侧（store port 只有 insert；读回合并归本接口）。 */
 export interface FactSnapshotReader {
-  getCells(snapshotId: string): Record<string, FactCell<FactCellValue>> | null
+  getCells(snapshotId: string): Promise<Record<string, FactCell<FactCellValue>> | null>
 }
 
 /**
@@ -192,15 +192,15 @@ export interface RequirementMaterializePort {
     }>
   >
   /** PR-4：attempt 编排读 requirement index（coverage 闭集）——同步读侧。 */
-  getRequirementManifest(missionId: string): {
+  getRequirementManifest(missionId: string): Promise<{
     readonly title: string
     readonly files: readonly { readonly fileId: string }[]
-  } | null
+  } | null>
   /** Exact platform-generated manifest document to mount beside requirement files. */
   getRequirementManifestMount(
     missionId: string,
     manifestDigest: string,
-  ): { readonly bundleId: string; readonly fileIds: readonly string[] } | null
+  ): Promise<{ readonly bundleId: string; readonly fileIds: readonly string[] } | null>
   /**
    * PR-7b T81 —— reopen 派生的新 Mission 继承原 Mission 的需求证据。复制的是
    * **指针行**（direct-submission / requirement-bundle / requirement-manifest），
@@ -209,7 +209,7 @@ export interface RequirementMaterializePort {
   carryOverRequirementEvidence(input: {
     readonly fromMissionId: string
     readonly toMissionId: string
-  }): number
+  }): Promise<number>
   /** PR-4：Agent needs-information 的问题集入台账（origin 'agent'）。 */
   stashQuestionSet(input: {
     readonly missionId: string
@@ -279,7 +279,7 @@ export interface ActionWorkspacePort {
 
 /** PR-4 —— upload plan 读侧（seed 定位用 planDigest、validator/candidate 用 entries）。 */
 export interface UploadPlanReaderPort {
-  read(planId: string): {
+  read(planId: string): Promise<{
     readonly planDigest: string
     readonly entries: readonly {
       readonly ordinal: number
@@ -290,12 +290,12 @@ export interface UploadPlanReaderPort {
       readonly disposition: 'create' | 'replace' | 'already-present'
       readonly uploadSha256: string
     }[]
-  } | null
+  } | null>
 }
 
 /** PR-4 —— action template 发布内容读侧（executor/prompt supplement/重试默认）。 */
 export interface ActionTemplateContentPort {
-  content(id: string, revision: number): unknown | null
+  content(id: string, revision: number): Promise<unknown | null>
 }
 
 /** PR-4 T48 —— source-control 的 candidate 派生（结构同形注入，跨模块零内部 import）。 */
@@ -381,10 +381,16 @@ export interface WorkspaceValidationPort {
 
 /** PR-5 —— repo remote 定位（push 目标与默认 target 分支；URL 解封在装配点）。 */
 export interface RepoRemotePort {
-  resolve(repositoryId: string): {
-    readonly remoteUrl: string
-    readonly defaultBranch: string | null
-  } | null
+  resolve(repositoryId: string):
+    | Promise<{
+        readonly remoteUrl: string
+        readonly defaultBranch: string | null
+      } | null>
+    | {
+        readonly remoteUrl: string
+        readonly defaultBranch: string | null
+      }
+    | null
 }
 
 /** PR-5 T59 —— source-control 发布链（stage/commit/push 结构同形注入）。 */
@@ -455,7 +461,7 @@ export interface CandidateDeliveryPort {
 
 /** PR-5 T57 —— verification profile 内容读侧 + 程序执行（runner 结构同形）。 */
 export interface VerificationProfileContentPort {
-  content(id: string, revision: number): unknown | null
+  content(id: string, revision: number): Promise<unknown | null>
 }
 export interface VerificationExecutionPort {
   run(input: { readonly workspacePath: string; readonly profile: unknown }): Promise<{
@@ -575,7 +581,7 @@ export interface UploadPublicationPort {
     readonly commitSha: string
     readonly entries: readonly { readonly targetPath: string; readonly sha256: string }[]
     readonly now: number
-  }): { readonly created: boolean; readonly receiptId: string }
+  }): Promise<{ readonly created: boolean; readonly receiptId: string }>
 }
 
 /** PR-5 T60 —— code-host MR effects（integration 组装的结构同形）。 */
@@ -671,7 +677,7 @@ export interface ReconcilerPorts {
   readonly effectExecutor?: MissionEffectExecutorPort
   readonly agentLauncher?: AgentActionLauncherPort
   readonly scriptLauncher?: ScriptActionLauncherPort
-  readonly playbookSaga?: PlaybookSagaStore
+  readonly playbookSaga?: PlaybookSagaPersistence
   readonly childMissions?: ChildMissionPort
   readonly approvalGateway?: ApprovalGatewayPort
   readonly uploadPlacement?: UploadPlacementPort

@@ -22,6 +22,7 @@ import {
   developmentMissions,
   developmentMrClaims,
 } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 /**
  * 审批 saga 的**已了结**状态。这份词表属于 development-automation——它此前被抄在
@@ -44,7 +45,7 @@ const SETTLED_APPROVAL_STATUSES = ['approved', 'rejected', 'expired', 'unavailab
  * （`composeDevelopmentEmployeeWorkspace` / `composeDevelopmentEmployeePlatformWorkItems`
  * 也都是这个形态，无一 import 端口类型。）
  */
-interface LegacyMissionDrainEntry {
+export interface LegacyMissionDrainEntry {
   readonly missionId: string
   readonly status: string
   readonly activeMrClaimCount: number
@@ -52,21 +53,45 @@ interface LegacyMissionDrainEntry {
   readonly pendingApprovalCount: number
 }
 
-interface LegacyMissionDrainReport {
+export interface LegacyMissionDrainReport {
   readonly truncated: boolean
   readonly entries: ReadonlyArray<LegacyMissionDrainEntry>
 }
 
-interface LegacyMissionDrainPort {
-  openMissionCount(reader: Pick<DbClient, 'select'>): number
-  drainReport(limit: number): LegacyMissionDrainReport
+export interface LegacyMissionDrainPort {
+  openMissionCount(): Promise<number>
+  drainReport(limit: number): Promise<LegacyMissionDrainReport>
 }
 
-export function createLegacyMissionDrainPort(db: DbClient): LegacyMissionDrainPort {
+function reportFrom(
+  sampled: readonly { readonly id: string; readonly status: string }[],
+  limit: number,
+  activeMrClaims: readonly { readonly missionId: string; readonly value: number }[],
+  childLinks: readonly { readonly missionId: string; readonly value: number }[],
+  approvals: readonly { readonly missionId: string; readonly value: number }[],
+): LegacyMissionDrainReport {
+  const counts = (rows: readonly { readonly missionId: string; readonly value: number }[]) =>
+    new Map(rows.map((row) => [row.missionId, row.value]))
+  const mrClaimCounts = counts(activeMrClaims)
+  const childLinkCounts = counts(childLinks)
+  const pendingApprovalCounts = counts(approvals)
   return {
-    openMissionCount(reader) {
+    truncated: sampled.length > limit,
+    entries: sampled.slice(0, limit).map((mission) => ({
+      missionId: mission.id,
+      status: mission.status,
+      activeMrClaimCount: mrClaimCounts.get(mission.id) ?? 0,
+      childLinkCount: childLinkCounts.get(mission.id) ?? 0,
+      pendingApprovalCount: pendingApprovalCounts.get(mission.id) ?? 0,
+    })),
+  }
+}
+
+export function createSqliteLegacyMissionDrainPort(db: DbClient): LegacyMissionDrainPort {
+  return {
+    async openMissionCount() {
       return (
-        reader
+        db
           .select({ value: count() })
           .from(developmentMissions)
           .where(isNull(developmentMissions.terminalAt))
@@ -74,7 +99,7 @@ export function createLegacyMissionDrainPort(db: DbClient): LegacyMissionDrainPo
       )
     },
 
-    drainReport(limit): LegacyMissionDrainReport {
+    async drainReport(limit) {
       // 多取一条用来判断「是否被截断」——报告必须如实说自己不完整，
       // 否则 `draining` 列表看起来就是全部，运维会以为排空快结束了。
       const sampled = db
@@ -123,21 +148,72 @@ export function createLegacyMissionDrainPort(db: DbClient): LegacyMissionDrainPo
               )
               .groupBy(developmentApprovalSagas.missionId)
               .all()
-      const counts = (rows: readonly { readonly missionId: string; readonly value: number }[]) =>
-        new Map(rows.map((row) => [row.missionId, row.value]))
-      const mrClaimCounts = counts(activeMrClaims)
-      const childLinkCounts = counts(childLinks)
-      const pendingApprovalCounts = counts(approvals)
-      return {
-        truncated: sampled.length > limit,
-        entries: openMissions.map((mission) => ({
-          missionId: mission.id,
-          status: mission.status,
-          activeMrClaimCount: mrClaimCounts.get(mission.id) ?? 0,
-          childLinkCount: childLinkCounts.get(mission.id) ?? 0,
-          pendingApprovalCount: pendingApprovalCounts.get(mission.id) ?? 0,
-        })),
-      }
+      return reportFrom(sampled, limit, activeMrClaims, childLinks, approvals)
+    },
+  }
+}
+
+export function createPostgresqlLegacyMissionDrainPort(
+  db: PostgresqlDatabaseClient,
+): LegacyMissionDrainPort {
+  return {
+    async openMissionCount() {
+      const row = await db
+        .select({ value: count() })
+        .from(developmentMissions)
+        .where(isNull(developmentMissions.terminalAt))
+        .limit(1)
+        .get()
+      return row?.value ?? 0
+    },
+
+    async drainReport(limit) {
+      const sampled = await db
+        .select({ id: developmentMissions.id, status: developmentMissions.status })
+        .from(developmentMissions)
+        .where(isNull(developmentMissions.terminalAt))
+        .orderBy(asc(developmentMissions.createdAt), asc(developmentMissions.id))
+        .limit(limit + 1)
+        .all()
+      const missionIds = sampled.slice(0, limit).map((mission) => mission.id)
+      const activeMrClaims =
+        missionIds.length === 0
+          ? []
+          : await db
+              .select({ missionId: developmentMrClaims.missionId, value: count() })
+              .from(developmentMrClaims)
+              .where(
+                and(
+                  eq(developmentMrClaims.state, 'active'),
+                  inArray(developmentMrClaims.missionId, missionIds),
+                ),
+              )
+              .groupBy(developmentMrClaims.missionId)
+              .all()
+      const childLinks =
+        missionIds.length === 0
+          ? []
+          : await db
+              .select({ missionId: developmentMissionLinks.parentMissionId, value: count() })
+              .from(developmentMissionLinks)
+              .where(inArray(developmentMissionLinks.parentMissionId, missionIds))
+              .groupBy(developmentMissionLinks.parentMissionId)
+              .all()
+      const approvals =
+        missionIds.length === 0
+          ? []
+          : await db
+              .select({ missionId: developmentApprovalSagas.missionId, value: count() })
+              .from(developmentApprovalSagas)
+              .where(
+                and(
+                  inArray(developmentApprovalSagas.missionId, missionIds),
+                  notInArray(developmentApprovalSagas.latestStatus, SETTLED_APPROVAL_STATUSES),
+                ),
+              )
+              .groupBy(developmentApprovalSagas.missionId)
+              .all()
+      return reportFrom(sampled, limit, activeMrClaims, childLinks, approvals)
     },
   }
 }

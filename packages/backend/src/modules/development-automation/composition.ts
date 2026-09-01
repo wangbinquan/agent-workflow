@@ -14,6 +14,10 @@ import { join } from 'node:path'
 
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+export {
+  createPostgresqlDevelopmentDeliveryProvider,
+  createSqliteDevelopmentDeliveryProvider,
+} from './infrastructure/developmentDeliveryProvider'
 import { runMissionReconcile, type ReconcileOutcome } from './application/missionReconciler'
 import {
   createDeferredMissionDrive,
@@ -44,8 +48,24 @@ import type {
   ReconcilerPorts,
   RepoRemotePort,
   ScriptActionLauncherPort,
+  FactSnapshotReader,
+  RepositoryFactsCollectorPort,
+  UploadPlanReaderPort,
+  UploadPublicationPort,
 } from './application/ports/reconcilerPorts'
 import type { AdmissionLookup } from './application/ports/admissionLookup'
+import type { MissionPersistence } from './application/ports/missionStore'
+import type { PlaybookSagaPersistence } from './application/ports/playbookSagaStore'
+import type {
+  ActionTemplatePersistence,
+  VerificationProfilePersistence,
+} from './application/ports/configResourceStore'
+import type { RequirementBundleRefPersistence } from './application/ports/requirementBundleRefStore'
+import type { RepositoryLocationRead } from './application/ports/repositoryLocationRead'
+import type { UploadMaintenancePersistence } from './application/ports/uploadMaintenance'
+import type { UploadPlacementPersistence } from './application/ports/uploadPlacementStore'
+import type { RecoveryReaders } from './application/missionRecovery'
+import type { WakeSweepReaders } from './application/missionWakeSweep'
 import {
   createAttemptContextStore,
   createWorkspaceValidationAdapter,
@@ -56,7 +76,11 @@ import {
   materializeActionWorkspace,
 } from './infrastructure/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
-import { resolveActionBaseline } from './infrastructure/gitBaselineReader'
+import {
+  createActionBaselineResolver,
+  createPostgresqlRepositoryLocationRead,
+  createSqliteRepositoryLocationRead,
+} from './infrastructure/gitBaselineReader'
 import {
   createRequirementMaterializer,
   type RequirementMaterializer,
@@ -71,35 +95,67 @@ import {
   listUnconsumedWakeHintMissionIds,
   missionEpochsOf,
 } from './infrastructure/sqliteReconcilerReaders'
-import { createSqliteMissionStore } from './infrastructure/sqliteMissionStore'
+import { createSqliteMissionPersistence } from './infrastructure/sqliteMissionStore'
+import { createPostgresqlMissionPersistence } from './infrastructure/postgresqlMissionStore'
+import { createSqliteRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
+import { createPostgresqlRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
 import {
   sweepDevelopmentRetention,
+  sweepPostgresqlDevelopmentRetention,
   type RetentionSweepResult,
 } from './infrastructure/retentionSweeper'
 import type { DevelopmentAutomationMaintenanceCommands } from './public/commands'
-import { createSqlitePlaybookSagaStore } from './infrastructure/sqlitePlaybookSagaStore'
+import { createSqlitePlaybookSagaPersistence } from './infrastructure/sqlitePlaybookSagaStore'
+import { createPostgresqlPlaybookSagaPersistence } from './infrastructure/postgresqlPlaybookSagaStore'
 import { createChildMissionParticipant } from './infrastructure/childMissionParticipant'
 import {
-  createSqliteActionTemplateStore,
-  createSqliteVerificationProfileStore,
+  createSqliteActionTemplatePersistence,
+  createSqliteVerificationProfilePersistence,
 } from './infrastructure/sqliteConfigResourceStore'
-import { createRepositoryFactsCollector } from './infrastructure/repositoryFactsCollector'
-import { recordUploadPublicationReceipt } from './infrastructure/uploadPublicationReceipt'
+import {
+  createPostgresqlActionTemplatePersistence,
+  createPostgresqlVerificationProfilePersistence,
+} from './infrastructure/postgresqlConfigResourceStore'
+import {
+  createPostgresqlRepositoryFactsCollector,
+  createRepositoryFactsCollector,
+} from './infrastructure/repositoryFactsCollector'
+import {
+  recordPostgresqlUploadPublicationReceipt,
+  recordUploadPublicationReceipt,
+} from './infrastructure/uploadPublicationReceipt'
 import {
   createRepoScriptResolver,
   runVerificationProfile,
 } from './infrastructure/verificationRunner'
 import { verificationProfileContentSchema } from './domain/verificationProfile'
 import { readUploadPlan } from './infrastructure/sqliteUploadPlanStore'
-import { createSqliteUploadSessionStore } from './infrastructure/sqliteUploadSessionStore'
+import { readPostgresqlUploadPlan } from './infrastructure/postgresqlUploadPlanStore'
+import {
+  createPostgresqlUploadMaintenancePersistence,
+  createSqliteUploadMaintenancePersistence,
+} from './infrastructure/missionInputUploadPersistence'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
+import {
+  createPostgresqlUploadPlacementPersistence,
+  createSqliteUploadPlacementPersistence,
+} from './infrastructure/uploadPlacementPersistence'
 import { createPipelineImportAdapter } from './infrastructure/pipelineEvidenceImport'
-import { createSqliteMissionCodeHostEventContinuation } from './infrastructure/missionCodeHostEventContinuation'
-
-export const createDevelopmentMissionCodeHostEventContinuation =
-  createSqliteMissionCodeHostEventContinuation
 export {
-  createDevelopmentMissionExecutionTerminalObserver,
+  createPostgresqlMissionCodeHostEventContinuation,
+  createSqliteMissionCodeHostEventContinuation,
+} from './infrastructure/missionCodeHostEventContinuation'
+import {
+  createPostgresqlFactSnapshotReader,
+  listPostgresqlFencedMissionIds,
+  listPostgresqlPreparedEffectRows,
+  listPostgresqlUnconsumedWakeHintMissionIds,
+  postgresqlMissionEpochsOf,
+} from './infrastructure/postgresqlReconcilerReaders'
+
+export {
+  createPostgresqlDevelopmentMissionExecutionTerminalObserver,
+  createSqliteDevelopmentMissionExecutionTerminalObserver,
   type DevelopmentMissionExecutionTerminalObserver,
 } from './composition/executionTerminalObserver'
 
@@ -122,11 +178,14 @@ export function composePostgresqlDevelopmentAdmissionLookup(
   return createPostgresqlAdmissionLookup(db)
 }
 
+export const composeSqlitePlaybookSaga = createSqlitePlaybookSagaPersistence
+export const composePostgresqlPlaybookSaga = createPostgresqlPlaybookSagaPersistence
+
 /** Worker-bootstrap composition for the context-owned maintenance slice. */
 export function composeDevelopmentAutomationMaintenanceCommands(
   db: DbClient,
 ): DevelopmentAutomationMaintenanceCommands {
-  const uploads = createSqliteUploadSessionStore(db)
+  const uploads = createSqliteUploadMaintenancePersistence(db)
   const lookup = composeSqliteDevelopmentAdmissionLookup(db)
   return {
     sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
@@ -141,11 +200,29 @@ export function composeDevelopmentAutomationMaintenanceCommands(
   }
 }
 
+export function composePostgresqlDevelopmentAutomationMaintenanceCommands(
+  db: PostgresqlDatabaseClient,
+): DevelopmentAutomationMaintenanceCommands {
+  const uploads = createPostgresqlUploadMaintenancePersistence(db)
+  const lookup = composePostgresqlDevelopmentAdmissionLookup(db)
+  return {
+    sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
+    sweepRetention: (now) =>
+      sweepPostgresqlDevelopmentRetention(
+        db,
+        {
+          getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
+        },
+        now,
+      ),
+  }
+}
+
 export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
   readonly evidence: EvidenceStore
   /** Business-safe child/approval receipts for Mission detail and journey projection. */
-  collaboration(missionId: string): {
+  collaboration(missionId: string): Promise<{
     readonly children: readonly {
       readonly stepRunId: string
       readonly childMissionId: string | null
@@ -162,7 +239,7 @@ export interface DevelopmentAutomationModule {
       readonly deadlineAt: number
       readonly updatedAt: number
     }[]
-  }
+  }>
   reconcile(missionId: string): Promise<ReconcileOutcome>
   /** Advance settled platform steps until the next real asynchronous boundary. */
   drive(missionId: string): Promise<MissionDriveOutcome>
@@ -177,7 +254,7 @@ export interface DevelopmentAutomationModule {
   /** 30s 级 sweep：到期 durable wake（fireWake CAS 认领）+ 未消费 wake hint。 */
   sweepWakes(): Promise<{ reconciled: number }>
   /** hourly：未 claim 上传的 TTL 回收。 */
-  sweepUploads(): { swept: number }
+  sweepUploads(): Promise<{ swept: number }>
   /**
    * RFC-310 T71 —— hourly retention 执行：终态 Mission 的已结算 attempt 台账按
    * `attemptLedgerTtlDays` 清理、证据指针按 `requirementBundleTerminalTtlDays`
@@ -188,8 +265,7 @@ export interface DevelopmentAutomationModule {
   recover(): Promise<{ settledFences: number; invalidatedEffects: number; firedWakes: number }>
 }
 
-export function composeDevelopmentAutomation(deps: {
-  readonly db: DbClient
+export interface DevelopmentAutomationCompositionOptions {
   readonly appHome: string
   /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
   readonly admissionLookup?: AdmissionLookup
@@ -215,14 +291,38 @@ export function composeDevelopmentAutomation(deps: {
   readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
   /** source-control 组装的 conflict merge（prepare/finish）；Agent 面接线前端口先备。 */
   readonly conflictMerge?: ConflictMergePort
-}): DevelopmentAutomationModule {
+}
+
+interface DevelopmentAutomationPersistenceBundle {
+  readonly store: MissionPersistence
+  readonly admissionLookup: AdmissionLookup
+  readonly snapshots: FactSnapshotReader
+  readonly bundleRefs: RequirementBundleRefPersistence
+  readonly uploadPlacement: UploadPlacementPersistence
+  readonly uploadPlanReader: UploadPlanReaderPort
+  readonly actionTemplates: ActionTemplatePersistence
+  readonly verificationProfiles: VerificationProfilePersistence
+  readonly playbookSaga: PlaybookSagaPersistence
+  readonly repositoryLocations: RepositoryLocationRead
+  readonly repositoryFacts: RepositoryFactsCollectorPort
+  readonly uploadPublication: UploadPublicationPort
+  readonly uploads: UploadMaintenancePersistence
+  readonly wakeReaders: WakeSweepReaders
+  readonly recoveryReaders: RecoveryReaders
+  sweepRetention(reader: AdmissionLookup, now: number): Promise<RetentionSweepResult>
+}
+
+function composeDevelopmentAutomationFromPersistence(
+  deps: DevelopmentAutomationCompositionOptions,
+  persistence: DevelopmentAutomationPersistenceBundle,
+): DevelopmentAutomationModule {
   const now = (): number => Date.now()
-  const store = createSqliteMissionStore(deps.db)
-  const lookup = deps.admissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db)
-  const snapshots = createSqliteFactSnapshotReader(deps.db)
+  const store = persistence.store
+  const lookup = deps.admissionLookup ?? persistence.admissionLookup
+  const snapshots = persistence.snapshots
   const evidence = new EvidenceStore(join(deps.appHome, 'evidence'))
   const materializer = createRequirementMaterializer({
-    db: deps.db,
+    bundleRefs: persistence.bundleRefs,
     store,
     snapshots,
     evidence,
@@ -230,11 +330,10 @@ export function composeDevelopmentAutomation(deps: {
     ...(deps.requirementSource === undefined ? {} : { source: deps.requirementSource }),
     now,
   })
-  const uploads = createSqliteUploadSessionStore(deps.db)
   const seedsRoot = join(deps.appHome, 'evidence', 'seeds')
-  const templates = createSqliteActionTemplateStore(deps.db)
-  const verificationProfiles = createSqliteVerificationProfileStore(deps.db)
-  const playbookSaga = createSqlitePlaybookSagaStore(deps.db)
+  const templates = persistence.actionTemplates
+  const verificationProfiles = persistence.verificationProfiles
+  const playbookSaga = persistence.playbookSaga
   // Child Mission 的 drive 回调与本模块互相引用，但不会在装配期间执行；先
   // 声明完整依赖，再由标准 admission/materialization 路径创建或接续子任务。
   const missionDrive = createDeferredMissionDrive()
@@ -248,7 +347,7 @@ export function composeDevelopmentAutomation(deps: {
   const ports: ReconcilerPorts = {
     requirementMaterialize: materializer,
     uploadPlacement: createUploadPlacementProvider({
-      db: deps.db,
+      persistence: persistence.uploadPlacement,
       evidence,
       seedsRoot,
       now,
@@ -259,7 +358,7 @@ export function composeDevelopmentAutomation(deps: {
     playbookSaga,
     childMissions,
     ...(deps.changeCandidate === undefined ? {} : { changeCandidate: deps.changeCandidate }),
-    actionBaseline: { resolve: resolveActionBaseline(deps.db) },
+    actionBaseline: { resolve: createActionBaselineResolver(persistence.repositoryLocations) },
     actionWorkspace: {
       materialize: (input) =>
         materializeActionWorkspace(
@@ -269,22 +368,22 @@ export function composeDevelopmentAutomation(deps: {
       adopt: (input) => adoptActionWorkspace({ evidence }, input),
       discard: discardWorkspace,
     },
-    uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
+    uploadPlanReader: persistence.uploadPlanReader,
     attemptContext: createAttemptContextStore(evidence),
     actionTemplates: {
-      content: (id, revision) => {
-        const row = templates.getRevision(id, revision)
+      content: async (id, revision) => {
+        const row = await templates.getRevision(id, revision)
         return row === null ? null : (JSON.parse(row.contentJson) as unknown)
       },
     },
     workspaceValidation: createWorkspaceValidationAdapter(),
-    repositoryFacts: createRepositoryFactsCollector(deps.db),
+    repositoryFacts: persistence.repositoryFacts,
     ...(deps.candidateDelivery === undefined ? {} : { candidateDelivery: deps.candidateDelivery }),
     ...(deps.repoRemote === undefined ? {} : { repoRemote: deps.repoRemote }),
     ...(deps.mrEffects === undefined ? {} : { mrEffects: deps.mrEffects }),
     verificationProfiles: {
-      content: (id, revision) => {
-        const row = verificationProfiles.getRevision(id, revision)
+      content: async (id, revision) => {
+        const row = await verificationProfiles.getRevision(id, revision)
         return row === null ? null : (JSON.parse(row.contentJson) as unknown)
       },
     },
@@ -298,9 +397,7 @@ export function composeDevelopmentAutomation(deps: {
           },
         ),
     },
-    uploadPublication: {
-      record: (input) => recordUploadPublicationReceipt(deps.db, input),
-    },
+    uploadPublication: persistence.uploadPublication,
     ...(deps.pipelineEvidence === undefined ? {} : { pipelineEvidence: deps.pipelineEvidence }),
     ...(deps.mergeRequestFacts === undefined ? {} : { mergeRequestFacts: deps.mergeRequestFacts }),
     // conflict workspace 的宿主根同样必须落 appHome 之下（RFC-308 owner 门；
@@ -326,24 +423,28 @@ export function composeDevelopmentAutomation(deps: {
   return {
     materializer,
     evidence,
-    collaboration: (missionId) => ({
-      children: playbookSaga.listMissionLinks(missionId).map((link) => ({
-        stepRunId: link.parentStepRunId,
-        childMissionId: link.childMissionId,
-        status: link.latestStatus,
-        completionSatisfied: link.completionSatisfied,
-        observedAt: link.observedAt,
-        deadlineAt: playbookSaga.getStepRun(link.parentStepRunId)?.deadlineAt ?? null,
-      })),
-      approvals: playbookSaga.listApprovalSagas(missionId).map((approval) => ({
+    async collaboration(missionId) {
+      const links = await playbookSaga.listMissionLinks(missionId)
+      const children = await Promise.all(
+        links.map(async (link) => ({
+          stepRunId: link.parentStepRunId,
+          childMissionId: link.childMissionId,
+          status: link.latestStatus,
+          completionSatisfied: link.completionSatisfied,
+          observedAt: link.observedAt,
+          deadlineAt: (await playbookSaga.getStepRun(link.parentStepRunId))?.deadlineAt ?? null,
+        })),
+      )
+      const approvals = (await playbookSaga.listApprovalSagas(missionId)).map((approval) => ({
         stepRunId: approval.stepRunId,
         externalRequestRef: approval.externalRequestRef,
         status: approval.latestStatus,
         nextObserveAt: approval.nextObserveAt,
         deadlineAt: approval.deadlineAt,
         updatedAt: approval.updatedAt,
-      })),
-    }),
+      }))
+      return { children, approvals }
+    },
     reconcile: (missionId) => runMissionReconcile(reconcileDeps, missionId),
     drive: (missionId) => driveMission(reconcileDeps, missionId),
     confirmNoChange: (rawInput) => confirmNoChange(reconcileDeps, rawInput),
@@ -352,22 +453,89 @@ export function composeDevelopmentAutomation(deps: {
     resume: (rawInput) => resumeMission(reconcileDeps, rawInput),
     submitAnswers: (rawInput) =>
       submitMissionAnswers({ store, snapshots, requirement: materializer, ports, now }, rawInput),
-    sweepWakes: () =>
-      sweepMissionWakes(reconcileDeps, {
-        listUnconsumedWakeHintMissionIds: () => listUnconsumedWakeHintMissionIds(deps.db),
-      }),
-    sweepUploads: () => ({ swept: uploads.sweepExpired(now()) }),
-    sweepRetention: () =>
+    sweepWakes: () => sweepMissionWakes(reconcileDeps, persistence.wakeReaders),
+    sweepUploads: async () => ({ swept: await persistence.uploads.sweepExpired(now(), 1_000) }),
+    sweepRetention: () => persistence.sweepRetention(lookup, now()),
+    recover: () => recoverMissions(reconcileDeps, persistence.recoveryReaders),
+  }
+}
+
+/** SQLite behavior oracle retained behind the same asynchronous application ports. */
+export function composeDevelopmentAutomation(
+  deps: DevelopmentAutomationCompositionOptions & { readonly db: DbClient },
+): DevelopmentAutomationModule {
+  const repositories = createSqliteRepositoryLocationRead(deps.db)
+  return composeDevelopmentAutomationFromPersistence(deps, {
+    store: createSqliteMissionPersistence(deps.db),
+    admissionLookup: createSqliteAdmissionLookup(deps.db),
+    snapshots: createSqliteFactSnapshotReader(deps.db),
+    bundleRefs: createSqliteRequirementBundleRefPersistence(deps.db),
+    uploadPlacement: createSqliteUploadPlacementPersistence(deps.db),
+    uploadPlanReader: { read: async (planId) => readUploadPlan(deps.db, planId) },
+    actionTemplates: createSqliteActionTemplatePersistence(deps.db),
+    verificationProfiles: createSqliteVerificationProfilePersistence(deps.db),
+    playbookSaga: createSqlitePlaybookSagaPersistence(deps.db),
+    repositoryLocations: repositories,
+    repositoryFacts: createRepositoryFactsCollector(deps.db),
+    uploadPublication: {
+      record: async (input) => recordUploadPublicationReceipt(deps.db, input),
+    },
+    uploads: createSqliteUploadMaintenancePersistence(deps.db),
+    wakeReaders: {
+      listUnconsumedWakeHintMissionIds: async () => listUnconsumedWakeHintMissionIds(deps.db),
+    },
+    recoveryReaders: {
+      listFencedMissionIds: async () => listFencedMissionIds(deps.db),
+      listPreparedEffectRows: async () => listPreparedEffectRows(deps.db),
+      missionEpochsOf: async (ids) => missionEpochsOf(deps.db, ids),
+    },
+    sweepRetention: (lookup, now) =>
       sweepDevelopmentRetention(
         deps.db,
-        { getPolicyRevisionContent: (id, rev) => lookup.getPolicyRevisionContent(id, rev) },
-        now(),
+        {
+          getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
+        },
+        now,
       ),
-    recover: () =>
-      recoverMissions(reconcileDeps, {
-        listFencedMissionIds: () => listFencedMissionIds(deps.db),
-        listPreparedEffectRows: () => listPreparedEffectRows(deps.db),
-        missionEpochsOf: (ids) => missionEpochsOf(deps.db, ids),
-      }),
-  }
+  })
+}
+
+/** Real PostgreSQL composition. No SQLite client, shadow store or sync bridge is involved. */
+export function composePostgresqlDevelopmentAutomation(
+  deps: DevelopmentAutomationCompositionOptions & { readonly db: PostgresqlDatabaseClient },
+): DevelopmentAutomationModule {
+  const repositories = createPostgresqlRepositoryLocationRead(deps.db)
+  return composeDevelopmentAutomationFromPersistence(deps, {
+    store: createPostgresqlMissionPersistence(deps.db),
+    admissionLookup: createPostgresqlAdmissionLookup(deps.db),
+    snapshots: createPostgresqlFactSnapshotReader(deps.db),
+    bundleRefs: createPostgresqlRequirementBundleRefPersistence(deps.db),
+    uploadPlacement: createPostgresqlUploadPlacementPersistence(deps.db),
+    uploadPlanReader: { read: (planId) => readPostgresqlUploadPlan(deps.db, planId) },
+    actionTemplates: createPostgresqlActionTemplatePersistence(deps.db),
+    verificationProfiles: createPostgresqlVerificationProfilePersistence(deps.db),
+    playbookSaga: createPostgresqlPlaybookSagaPersistence(deps.db),
+    repositoryLocations: repositories,
+    repositoryFacts: createPostgresqlRepositoryFactsCollector(deps.db),
+    uploadPublication: {
+      record: (input) => recordPostgresqlUploadPublicationReceipt(deps.db, input),
+    },
+    uploads: createPostgresqlUploadMaintenancePersistence(deps.db),
+    wakeReaders: {
+      listUnconsumedWakeHintMissionIds: () => listPostgresqlUnconsumedWakeHintMissionIds(deps.db),
+    },
+    recoveryReaders: {
+      listFencedMissionIds: () => listPostgresqlFencedMissionIds(deps.db),
+      listPreparedEffectRows: () => listPostgresqlPreparedEffectRows(deps.db),
+      missionEpochsOf: (ids) => postgresqlMissionEpochsOf(deps.db, ids),
+    },
+    sweepRetention: (lookup, now) =>
+      sweepPostgresqlDevelopmentRetention(
+        deps.db,
+        {
+          getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
+        },
+        now,
+      ),
+  })
 }

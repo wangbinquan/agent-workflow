@@ -19,9 +19,13 @@ import {
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   ActionTemplateStore,
+  ActionTemplatePersistence,
+  ConfigResourcePersistence,
   ConfigResourceRecord,
+  ConfigResourceStore,
   ConfigRevisionRecord,
   VerificationProfileStore,
+  VerificationProfilePersistence,
 } from '../application/ports/configResourceStore'
 
 function isUniqueViolation(error: unknown): boolean {
@@ -338,4 +342,29 @@ function toRevisionRecord(resourceId: string, row: RevisionRow): ConfigRevisionR
     publishedAt: row.publishedAt,
     publishedBy: row.publishedBy,
   }
+}
+
+function asyncPersistence<TExtra>(
+  store: ConfigResourceStore<TExtra>,
+): ConfigResourcePersistence<TExtra> {
+  return {
+    create: async (input) => store.create(input),
+    getById: async (id) => store.getById(id),
+    list: async () => store.list(),
+    updateDraft: async (input) => store.updateDraft(input),
+    publishRevision: async (input) => store.publishRevision(input),
+    getRevision: async (resourceId, revision) => store.getRevision(resourceId, revision),
+    listRevisions: async (resourceId) => store.listRevisions(resourceId),
+    archive: async (id, now) => store.archive(id, now),
+  }
+}
+
+export function createSqliteActionTemplatePersistence(db: DbClient): ActionTemplatePersistence {
+  return asyncPersistence(createSqliteActionTemplateStore(db))
+}
+
+export function createSqliteVerificationProfilePersistence(
+  db: DbClient,
+): VerificationProfilePersistence {
+  return asyncPersistence(createSqliteVerificationProfileStore(db))
 }

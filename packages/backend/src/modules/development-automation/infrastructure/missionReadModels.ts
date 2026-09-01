@@ -23,6 +23,7 @@ import {
   developmentMissions,
   developmentMrClaims,
 } from '@/db/schema'
+import type { MissionReadModelQueries } from '../application/ports/missionReadModelQueries'
 
 export interface MissionSummaryView {
   id: string
@@ -422,4 +423,30 @@ export function getDecisionTrace(db: DbClient, missionId: string): unknown[] {
       canonicalDigest: d.canonicalDigest,
       decidedAt: d.decidedAt,
     }))
+}
+
+export function createSqliteMissionReadModelQueries(db: DbClient): MissionReadModelQueries {
+  return {
+    async list() {
+      return listMissionSummaries(db)
+    },
+    async listPage(input) {
+      return listMissionSummariesPage(db, input)
+    },
+    async terminalOutcomeGroups() {
+      return listMissionTerminalOutcomeGroups(db)
+    },
+    async detail(missionId) {
+      return getMissionDetail(db, missionId)
+    },
+    async mergeRequest(missionId, repositoryId) {
+      return getMissionMergeRequestView(db, missionId, repositoryId)
+    },
+    async effects(missionId) {
+      return listMissionEffects(db, missionId)
+    },
+    async decisionTrace(missionId) {
+      return getDecisionTrace(db, missionId)
+    },
+  }
 }

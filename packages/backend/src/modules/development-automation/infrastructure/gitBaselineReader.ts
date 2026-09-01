@@ -14,10 +14,12 @@ import { eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { runGit, nonInteractiveGitEnv } from '@/util/git'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import type { BaselineFileReader, BaselineStat } from '../application/uploadPlan'
 import type { UploadBaselineContext } from '../application/commands/launchMission'
+import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
 
 async function sha256OfFile(absPath: string): Promise<string> {
   const hash = createHash('sha256')
@@ -36,35 +38,27 @@ async function sha256OfFile(absPath: string): Promise<string> {
  * 老实 blocked('baseline-reader-not-wired')，不猜默认分支）。
  */
 /** PR-4 —— attempt 编排的 baseline 定位（repoPath + exact head；无 reader）。 */
-export function resolveActionBaseline(
-  db: DbClient,
+export function createActionBaselineResolver(
+  repositories: RepositoryLocationRead,
 ): (repositoryId: string) => Promise<{ repoPath: string; headSha: string } | null> {
   return async (repositoryId) => {
-    const row = db
-      .select({ localPath: cachedRepos.localPath })
-      .from(cachedRepos)
-      .where(eq(cachedRepos.id, repositoryId))
-      .get()
-    if (row === undefined) return null
-    const head = await runGit(row.localPath, ['rev-parse', 'HEAD'])
+    const localPath = await repositories.localPath(repositoryId)
+    if (localPath === null) return null
+    const head = await runGit(localPath, ['rev-parse', 'HEAD'])
     if (head.exitCode !== 0) return null
     const sha = head.stdout.trim()
     if (!/^[0-9a-f]{40}$/.test(sha)) return null
-    return { repoPath: row.localPath, headSha: sha }
+    return { repoPath: localPath, headSha: sha }
   }
 }
 
-export function createRepositoryBaselineResolver(
-  db: DbClient,
+export function createRepositoryBaselineResolverFromLocations(
+  repositories: RepositoryLocationRead,
 ): (repositoryId: string) => Promise<UploadBaselineContext | null> {
   return async (repositoryId) => {
-    const row = db
-      .select({ localPath: cachedRepos.localPath })
-      .from(cachedRepos)
-      .where(eq(cachedRepos.id, repositoryId))
-      .get()
-    if (row === undefined) return null
-    const head = await runGit(row.localPath, ['rev-parse', 'HEAD'])
+    const localPath = await repositories.localPath(repositoryId)
+    if (localPath === null) return null
+    const head = await runGit(localPath, ['rev-parse', 'HEAD'])
     if (head.exitCode !== 0) return null
     const sha = head.stdout.trim()
     if (!/^[0-9a-f]{40}$/.test(sha)) return null
@@ -72,9 +66,47 @@ export function createRepositoryBaselineResolver(
       repositoryRef: repositoryId,
       baselineSnapshotRef: `git:${sha}`,
       baselineSha: sha,
-      reader: createGitBaselineReader(row.localPath, sha),
+      reader: createGitBaselineReader(localPath, sha),
     }
   }
+}
+
+export function createSqliteRepositoryLocationRead(db: DbClient): RepositoryLocationRead {
+  return {
+    async localPath(repositoryId) {
+      const row = db
+        .select({ localPath: cachedRepos.localPath })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, repositoryId))
+        .get()
+      return row?.localPath ?? null
+    },
+  }
+}
+
+export function createPostgresqlRepositoryLocationRead(
+  db: PostgresqlDatabaseClient,
+): RepositoryLocationRead {
+  return {
+    async localPath(repositoryId) {
+      const row = await db
+        .select({ localPath: cachedRepos.localPath })
+        .from(cachedRepos)
+        .where(eq(cachedRepos.id, repositoryId))
+        .limit(1)
+        .get()
+      return row?.localPath ?? null
+    },
+  }
+}
+
+/** SQLite compatibility factories retained for existing focused callers. */
+export function resolveActionBaseline(db: DbClient) {
+  return createActionBaselineResolver(createSqliteRepositoryLocationRead(db))
+}
+
+export function createRepositoryBaselineResolver(db: DbClient) {
+  return createRepositoryBaselineResolverFromLocations(createSqliteRepositoryLocationRead(db))
 }
 
 export function createGitBaselineReader(repoPath: string, headSha: string): BaselineFileReader {

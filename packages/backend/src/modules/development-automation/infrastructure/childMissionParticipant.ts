@@ -6,7 +6,7 @@ import {
   type ChildMissionReceipt,
 } from '../domain/stepSaga'
 import { launchMission, type LaunchDeps } from '../application/commands/launchMission'
-import type { MissionStore } from '../application/ports/missionStore'
+import type { MissionPersistence } from '../application/ports/missionStore'
 import type { RequirementMaterializer } from './requirementMaterializer'
 
 type ObservedChildStatus = ChildMissionReceipt['observedStatus']
@@ -20,14 +20,14 @@ function observedAt(now: number): string {
   return new Date(now).toISOString().replace('Z', '+00:00')
 }
 
-function receipt(
-  store: MissionStore,
+async function receipt(
+  store: MissionPersistence,
   missionId: string,
   completion: ChildMissionIntent['completion'],
   intentDigest: string,
   now: number,
-): ChildMissionReceipt {
-  const row = store.getMission(missionId)
+): Promise<ChildMissionReceipt> {
+  const row = await store.getMission(missionId)
   if (row === null) throw new Error(`child mission disappeared: ${missionId}`)
   const status = observedStatus(row.status)
   return {
@@ -49,7 +49,7 @@ function receipt(
 /** Same bounded-context participant: standard admission + materialization, no row insertion shortcut. */
 export function createChildMissionParticipant(deps: {
   readonly launch: LaunchDeps
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly materializer: RequirementMaterializer
   readonly drive: (missionId: string) => Promise<unknown>
   readonly now: () => number
@@ -72,7 +72,7 @@ export function createChildMissionParticipant(deps: {
         throw new Error('child-mission-ancestry-parent-mismatch')
       }
       for (const ancestorId of input.ancestry) {
-        const ancestor = deps.store.getMission(ancestorId)
+        const ancestor = await deps.store.getMission(ancestorId)
         if (ancestor?.employeeId === input.targetEmployeeRef.id) {
           throw new Error('child-mission-employee-cycle')
         }
@@ -105,11 +105,17 @@ export function createChildMissionParticipant(deps: {
       // Return after admission so the parent link can persist the child id
       // before that child is allowed to invoke another employee. The normal
       // mission worker (and subsequent observe calls) drives it from here.
-      return receipt(deps.store, launched.missionId, input.completion, intentDigest, deps.now())
+      return await receipt(
+        deps.store,
+        launched.missionId,
+        input.completion,
+        intentDigest,
+        deps.now(),
+      )
     },
     async observe(input) {
       await deps.drive(input.childMissionRef)
-      return receipt(
+      return await receipt(
         deps.store,
         input.childMissionRef,
         input.completion,

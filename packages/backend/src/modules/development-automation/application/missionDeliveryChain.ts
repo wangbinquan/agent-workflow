@@ -26,7 +26,7 @@ import type { FactCell } from '../domain/factCell'
 import { checkMissionTransition } from '../domain/mission'
 import { verificationProfileContentSchema } from '../domain/verificationProfile'
 import { projectVerificationCells } from '../domain/verificationFacts'
-import type { EffectRow, MissionRow, MissionStore } from './ports/missionStore'
+import type { EffectRow, MissionRow, MissionPersistence } from './ports/missionStore'
 import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
 /** 发布链自治的 effect kinds：不进 effect-unsettled guard（链自身是结算者）。 */
@@ -40,7 +40,7 @@ export const DELIVERY_EFFECT_KINDS: ReadonlySet<string> = new Set([
 ])
 
 export interface DeliveryChainDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly ports: ReconcilerPorts
   readonly now: () => number
   /** reconciler 的 requirement cells 落盘通道（同一 bundle 快照链）。 */
@@ -48,8 +48,8 @@ export interface DeliveryChainDeps {
     missionId: string,
     patch: Record<string, FactCell<FactCellValue>>,
     refs: unknown,
-  ): void
-  block(missionId: string, code: string, detail: string | null): void
+  ): Promise<void>
+  block(missionId: string, code: string, detail: string | null): Promise<void>
 }
 
 type Cells = Readonly<Record<string, FactCell<FactCellValue>>>
@@ -182,11 +182,11 @@ interface CandidateContext {
  * candidate 上下文。pre-state 是 launch 时冻结的内容寻址 JSON（Agent 不可达），
  * 其 workspacePath 即 candidate overlay 的真身。
  */
-function loadCandidateContext(
+async function loadCandidateContext(
   deps: DeliveryChainDeps,
   mission: MissionRow,
   cells: Cells,
-): CandidateContext | { readonly failCode: string } {
+): Promise<CandidateContext | { readonly failCode: string }> {
   const treeOid = knownString(cells, '__action.candidateTreeOid')
   // candidate 的现场绑定在**产出它的那个 run** 上；`__action.runId` 只是"最近一次
   // 动作"，read-only 动作会覆盖它而不产 candidate。旧行没有 candidateRunId，退回
@@ -197,7 +197,7 @@ function loadCandidateContext(
   if (deps.ports.attemptContext === undefined) {
     return { failCode: 'delivery-port-missing:attemptContext' }
   }
-  const attempts = deps.store.listAttempts(runId)
+  const attempts = await deps.store.listAttempts(runId)
   const validated = [...attempts].reverse().find((a) => a.status === 'validated')
   if (validated === undefined || validated.preSnapshotRef === null) {
     return { failCode: 'candidate-context-missing:attempt' }
@@ -219,7 +219,7 @@ function loadCandidateContext(
   }
   const uploadPlan =
     mission.uploadPlanRef !== null
-      ? (deps.ports.uploadPlanReader?.read(mission.uploadPlanRef) ?? null)
+      ? ((await deps.ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null)
       : null
   return {
     treeOid,
@@ -244,7 +244,7 @@ type EffectClaim =
  * 面不自动复活；prepared/dispatched 校验 intent digest（载荷不落表，重建后
  * 对拍——漂移即 fail）后（重）执行。
  */
-export function claimDeliveryEffect(
+export async function claimDeliveryEffect(
   deps: DeliveryChainDeps,
   mission: MissionRow,
   input: {
@@ -253,10 +253,10 @@ export function claimDeliveryEffect(
     readonly idempotencyKey: string
     readonly intent: unknown
   },
-): EffectClaim {
+): Promise<EffectClaim> {
   const now = deps.now()
   const intentDigest = canonicalDigest(input.intent)
-  const prepared = deps.store.prepareEffect({
+  const prepared = await deps.store.prepareEffect({
     id: ulid(),
     missionId: mission.id,
     actionRunId: input.actionRunId,
@@ -274,33 +274,33 @@ export function claimDeliveryEffect(
     return { disposition: 'refused', code: `delivery-effect-${effect.state}:${input.effectKind}` }
   }
   if (effect.intentDigest !== intentDigest) {
-    deps.store.failEffect(
+    await deps.store.failEffect(
       effect.id,
       JSON.stringify({ code: 'intent-drift', expected: effect.intentDigest, got: intentDigest }),
       now,
     )
     return { disposition: 'refused', code: `delivery-intent-drift:${input.effectKind}` }
   }
-  if (effect.state === 'prepared') deps.store.markEffectDispatched(effect.id, now)
+  if (effect.state === 'prepared') await deps.store.markEffectDispatched(effect.id, now)
   return { disposition: 'execute', effectId: effect.id }
 }
 
-function occPatch(
+async function occPatch(
   deps: DeliveryChainDeps,
   missionId: string,
-  patch: Parameters<MissionStore['occUpdate']>[3],
-): void {
-  const fresh = deps.store.getMission(missionId)
+  patch: Parameters<MissionPersistence['occUpdate']>[3],
+): Promise<void> {
+  const fresh = await deps.store.getMission(missionId)
   if (fresh === null) return
-  deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, patch)
+  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, patch)
 }
 
-function tryStatus(
+async function tryStatus(
   deps: DeliveryChainDeps,
   missionId: string,
   to: 'publishing' | 'watching',
-): void {
-  const fresh = deps.store.getMission(missionId)
+): Promise<void> {
+  const fresh = await deps.store.getMission(missionId)
   if (fresh === null || fresh.status === to) return
   const verdict = checkMissionTransition({
     from: fresh.status,
@@ -308,7 +308,7 @@ function tryStatus(
     fence: fresh.transitionFence,
   })
   if (!verdict.ok) return
-  deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { status: to })
+  await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { status: to })
 }
 
 // ----------------------------------------------------------------- arm 1/3：
@@ -331,25 +331,25 @@ export async function handleRunVerification(
     ports.verificationProfiles === undefined ||
     ports.verificationExecution === undefined
   ) {
-    deps.block(mission.id, 'delivery-port-missing:verification', null)
+    await deps.block(mission.id, 'delivery-port-missing:verification', null)
     return 'blocked'
   }
-  const ctx = loadCandidateContext(deps, mission, cells)
+  const ctx = await loadCandidateContext(deps, mission, cells)
   if ('failCode' in ctx) {
-    deps.block(mission.id, ctx.failCode, null)
+    await deps.block(mission.id, ctx.failCode, null)
     return 'blocked'
   }
   const at = profileRef.lastIndexOf('@')
   const profileId = at > 0 ? profileRef.slice(0, at) : profileRef
   const revision = at > 0 ? Number.parseInt(profileRef.slice(at + 1), 10) : Number.NaN
   if (!Number.isInteger(revision) || revision < 1) {
-    deps.block(mission.id, `verification-profile-ref-invalid:${profileRef}`, null)
+    await deps.block(mission.id, `verification-profile-ref-invalid:${profileRef}`, null)
     return 'blocked'
   }
-  const content = ports.verificationProfiles.content(profileId, revision)
+  const content = await ports.verificationProfiles.content(profileId, revision)
   const parsed = verificationProfileContentSchema.safeParse(content)
   if (content === null || !parsed.success) {
-    deps.block(
+    await deps.block(
       mission.id,
       content === null
         ? `verification-profile-missing:${profileRef}`
@@ -366,13 +366,13 @@ export async function handleRunVerification(
     uploadPlan: ctx.uploadPlan,
   })
   if (!staged.ok) {
-    deps.block(mission.id, staged.code, staged.detail)
+    await deps.block(mission.id, staged.code, staged.detail)
     return 'blocked'
   }
   let receipt: Awaited<ReturnType<NonNullable<ReconcilerPorts['verificationExecution']>['run']>>
   try {
     if (staged.treeOid !== ctx.treeOid) {
-      deps.block(
+      await deps.block(
         mission.id,
         'candidate-tree-drift',
         `staged ${staged.treeOid} != recorded ${ctx.treeOid}`,
@@ -389,7 +389,7 @@ export async function handleRunVerification(
 
   const verified = verifiedProfilesOf(cells, ctx.treeOid)
   verified[profileRef] = receipt.ok ? 'passed' : 'failed'
-  deps.persistCells(
+  await deps.persistCells(
     mission.id,
     {
       '__delivery.verifiedTreeOid': knownCell(ctx.treeOid, receipt.receiptDigest),
@@ -407,7 +407,7 @@ export async function handleRunVerification(
       .filter((s) => !s.ok)
       .map((s) => `${s.stepId}(exit=${s.exitCode ?? 'none'}${s.timedOut ? ',timeout' : ''})`)
       .join(', ')
-    deps.block(mission.id, `verification-failed:${profileRef}`, failedSteps)
+    await deps.block(mission.id, `verification-failed:${profileRef}`, failedSteps)
     return 'blocked'
   }
   return 'collected'
@@ -426,23 +426,23 @@ export async function handleCommitAndPublish(
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (ports.candidateDelivery === undefined) {
-    deps.block(mission.id, 'delivery-port-missing:candidateDelivery', null)
+    await deps.block(mission.id, 'delivery-port-missing:candidateDelivery', null)
     return 'blocked'
   }
-  const ctx = loadCandidateContext(deps, mission, cells)
+  const ctx = await loadCandidateContext(deps, mission, cells)
   if ('failCode' in ctx) {
-    deps.block(mission.id, ctx.failCode, null)
+    await deps.block(mission.id, ctx.failCode, null)
     return 'blocked'
   }
   const summarySource =
-    ports.requirementMaterialize?.getRequirementManifest(mission.id)?.title ?? mission.id
+    (await ports.requirementMaterialize?.getRequirementManifest(mission.id))?.title ?? mission.id
 
   const committedSha = knownString(cells, '__delivery.commitSha')
   const committedTree = knownString(cells, '__delivery.publishedTreeOid')
 
   // ---- 阶段 A：commit（cells 尚无当前树的 commitSha）。
   if (committedTree !== ctx.treeOid || committedSha === null) {
-    const claim = claimDeliveryEffect(deps, mission, {
+    const claim = await claimDeliveryEffect(deps, mission, {
       actionRunId: ctx.runId,
       effectKind: 'candidate-commit',
       idempotencyKey: `commit:${mission.id}:${ctx.treeOid}`,
@@ -455,13 +455,13 @@ export async function handleCommitAndPublish(
       },
     })
     if (claim.disposition === 'refused') {
-      deps.block(mission.id, claim.code, null)
+      await deps.block(mission.id, claim.code, null)
       return 'blocked'
     }
     let commitSha: string
     if (claim.disposition === 'already-confirmed') {
       if (claim.receiptRef === null) {
-        deps.block(mission.id, 'delivery-effect-receipt-missing:candidate-commit', null)
+        await deps.block(mission.id, 'delivery-effect-receipt-missing:candidate-commit', null)
         return 'blocked'
       }
       commitSha = claim.receiptRef
@@ -477,18 +477,18 @@ export async function handleCommitAndPublish(
       })
       const now = deps.now()
       if (!out.ok) {
-        deps.store.failEffect(
+        await deps.store.failEffect(
           claim.effectId,
           JSON.stringify({ code: out.code, detail: out.detail }),
           now,
         )
-        deps.block(mission.id, out.code, out.detail)
+        await deps.block(mission.id, out.code, out.detail)
         return 'blocked'
       }
-      deps.store.confirmEffect(claim.effectId, out.commitSha, now)
+      await deps.store.confirmEffect(claim.effectId, out.commitSha, now)
       commitSha = out.commitSha
     }
-    deps.persistCells(
+    await deps.persistCells(
       mission.id,
       {
         '__delivery.commitSha': knownCell(commitSha, commitSha),
@@ -497,29 +497,33 @@ export async function handleCommitAndPublish(
       },
       { kind: 'delivery-commit', treeOid: ctx.treeOid, commitSha },
     )
-    tryStatus(deps, mission.id, 'publishing')
+    await tryStatus(deps, mission.id, 'publishing')
     return 'collected' // push 下一轮（单轮一 effect）
   }
 
   // ---- 阶段 B：push（committed → pushed）。
   if (ports.repoRemote === undefined) {
-    deps.block(mission.id, 'delivery-port-missing:repoRemote', null)
+    await deps.block(mission.id, 'delivery-port-missing:repoRemote', null)
     return 'blocked'
   }
-  const remote = ports.repoRemote.resolve(mission.repositoryId)
+  const remote = await ports.repoRemote.resolve(mission.repositoryId)
   if (remote === null) {
-    deps.block(mission.id, 'repo-remote-unresolved', mission.repositoryId)
+    await deps.block(mission.id, 'repo-remote-unresolved', mission.repositoryId)
     return 'blocked'
   }
   const branch =
     mission.deliverySourceBranch ?? `${policy.delivery.sourceBranchPrefix}/${mission.id}`
   const priorPushedSha = knownString(cells, '__delivery.pushedSha')
   if (publicationMode === 'fast-forward' && priorPushedSha === null) {
-    deps.block(mission.id, 'publish-state-inconsistent', 'fast-forward without prior push sha')
+    await deps.block(
+      mission.id,
+      'publish-state-inconsistent',
+      'fast-forward without prior push sha',
+    )
     return 'blocked'
   }
   const expectedRemoteSha = publicationMode === 'fast-forward' ? priorPushedSha : null
-  const claim = claimDeliveryEffect(deps, mission, {
+  const claim = await claimDeliveryEffect(deps, mission, {
     actionRunId: ctx.runId,
     effectKind: 'candidate-push',
     idempotencyKey: `push:${mission.id}:${ctx.treeOid}`,
@@ -533,13 +537,13 @@ export async function handleCommitAndPublish(
     },
   })
   if (claim.disposition === 'refused') {
-    deps.block(mission.id, claim.code, null)
+    await deps.block(mission.id, claim.code, null)
     return 'blocked'
   }
   let pushedSha: string
   if (claim.disposition === 'already-confirmed') {
     if (claim.receiptRef === null) {
-      deps.block(mission.id, 'delivery-effect-receipt-missing:candidate-push', null)
+      await deps.block(mission.id, 'delivery-effect-receipt-missing:candidate-push', null)
       return 'blocked'
     }
     pushedSha = claim.receiptRef
@@ -556,19 +560,19 @@ export async function handleCommitAndPublish(
     })
     const now = deps.now()
     if (!out.ok) {
-      deps.store.failEffect(
+      await deps.store.failEffect(
         claim.effectId,
         JSON.stringify({ code: out.code, detail: out.detail }),
         now,
       )
-      deps.block(mission.id, out.code, out.detail)
+      await deps.block(mission.id, out.code, out.detail)
       return 'blocked'
     }
-    deps.store.confirmEffect(claim.effectId, out.receipt.newSha, now)
+    await deps.store.confirmEffect(claim.effectId, out.receipt.newSha, now)
     pushedSha = out.receipt.newSha
   }
-  occPatch(deps, mission.id, { deliverySourceBranch: branch })
-  deps.persistCells(
+  await occPatch(deps, mission.id, { deliverySourceBranch: branch })
+  await deps.persistCells(
     mission.id,
     {
       '__delivery.publishState': knownCell('pushed', pushedSha),
@@ -591,7 +595,7 @@ export async function handleCommitAndPublish(
           }[]
         }
         if (Array.isArray(lineage.finalDigests)) {
-          const receipt = ports.uploadPublication.record({
+          const receipt = await ports.uploadPublication.record({
             planId: mission.uploadPlanRef,
             baselineSnapshotRef: ctx.baselineSha,
             seedChangeRef: null,
@@ -600,7 +604,7 @@ export async function handleCommitAndPublish(
             entries: lineage.finalDigests,
             now: deps.now(),
           })
-          occPatch(deps, mission.id, { uploadPublicationRef: receipt.receiptId })
+          await occPatch(deps, mission.id, { uploadPublicationRef: receipt.receiptId })
         }
       } catch {
         // lineage cells 损坏不阻断 push 成功事实；receipt 缺席由 uploadSeed
@@ -620,32 +624,32 @@ export async function handleEnsureMergeRequest(
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
   if (ports.mrEffects === undefined || ports.repoRemote === undefined) {
-    deps.block(mission.id, 'delivery-port-missing:mrEffects', null)
+    await deps.block(mission.id, 'delivery-port-missing:mrEffects', null)
     return 'blocked'
   }
   const branch = mission.deliverySourceBranch
   if (branch === null) {
-    deps.block(mission.id, 'publish-state-inconsistent', 'ensure-mr without source branch')
+    await deps.block(mission.id, 'publish-state-inconsistent', 'ensure-mr without source branch')
     return 'blocked'
   }
-  const remote = ports.repoRemote.resolve(mission.repositoryId)
+  const remote = await ports.repoRemote.resolve(mission.repositoryId)
   if (remote === null) {
-    deps.block(mission.id, 'repo-remote-unresolved', mission.repositoryId)
+    await deps.block(mission.id, 'repo-remote-unresolved', mission.repositoryId)
     return 'blocked'
   }
   const targetBranch = mission.deliveryTargetRef ?? remote.defaultBranch ?? 'main'
   const title =
-    ports.requirementMaterialize?.getRequirementManifest(mission.id)?.title ??
+    (await ports.requirementMaterialize?.getRequirementManifest(mission.id))?.title ??
     `AW mission ${mission.id}`
 
-  const claim = claimDeliveryEffect(deps, mission, {
+  const claim = await claimDeliveryEffect(deps, mission, {
     actionRunId: null,
     effectKind: 'mr-ensure',
     idempotencyKey: `mr:${mission.id}:${branch}`,
     intent: { kind: 'mr-ensure', missionId: mission.id, branch, targetBranch },
   })
   if (claim.disposition === 'refused') {
-    deps.block(mission.id, claim.code, null)
+    await deps.block(mission.id, claim.code, null)
     return 'blocked'
   }
   let mr: {
@@ -664,7 +668,7 @@ export async function handleEnsureMergeRequest(
       title,
     })
     if (!out.ok) {
-      deps.block(mission.id, out.code, out.detail)
+      await deps.block(mission.id, out.code, out.detail)
       return 'blocked'
     }
     mr = out.mr
@@ -677,15 +681,15 @@ export async function handleEnsureMergeRequest(
     })
     const now = deps.now()
     if (!out.ok) {
-      deps.store.failEffect(
+      await deps.store.failEffect(
         claim.effectId,
         JSON.stringify({ code: out.code, detail: out.detail }),
         now,
       )
-      deps.block(mission.id, out.code, out.detail)
+      await deps.block(mission.id, out.code, out.detail)
       return 'blocked'
     }
-    deps.store.confirmEffect(claim.effectId, out.mr.providerCorrelationRef, now)
+    await deps.store.confirmEffect(claim.effectId, out.mr.providerCorrelationRef, now)
     mr = out.mr
   }
 
@@ -700,7 +704,7 @@ export async function handleEnsureMergeRequest(
     mrIid: mr.mrRef,
   }
   const claimId = ulid()
-  const claimed = deps.store.claimMr({
+  const claimed = await deps.store.claimMr({
     id: claimId,
     ...claimKey,
     missionId: mission.id,
@@ -711,15 +715,15 @@ export async function handleEnsureMergeRequest(
   let mrClaimId = claimId
   if (!claimed.ok) {
     // 撞唯一 ≠ 一定是别人：confirm→claim 之间 crash 的重放会撞回自己的行。
-    const existing = deps.store.findMrClaim(claimKey)
+    const existing = await deps.store.findMrClaim(claimKey)
     if (existing === null || existing.missionId !== mission.id) {
-      deps.block(mission.id, claimed.code, corr)
+      await deps.block(mission.id, claimed.code, corr)
       return 'blocked'
     }
     mrClaimId = existing.id
   }
-  occPatch(deps, mission.id, { mrClaimId })
-  deps.persistCells(
+  await occPatch(deps, mission.id, { mrClaimId })
+  await deps.persistCells(
     mission.id,
     {
       '__mr.ref': knownCell(mr.mrRef, corr),
@@ -729,6 +733,6 @@ export async function handleEnsureMergeRequest(
     },
     { kind: 'delivery-mr-ensure', mrRef: mr.mrRef, correlationRef: corr },
   )
-  tryStatus(deps, mission.id, 'watching')
+  await tryStatus(deps, mission.id, 'watching')
   return 'collected'
 }

@@ -14,14 +14,17 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
-
 import type { DbClient } from '@/db/client'
-import { cachedRepos } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { runGit } from '@/util/git'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
 import type { RepositoryFactsCollectorPort } from '../application/ports/reconcilerPorts'
+import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
+import {
+  createPostgresqlRepositoryLocationRead,
+  createSqliteRepositoryLocationRead,
+} from './gitBaselineReader'
 
 const EXTENSION_LANGUAGES: Readonly<Record<string, string>> = {
   '.java': 'java',
@@ -150,32 +153,30 @@ function mavenModules(root: string): string[] {
   }
 }
 
-export function createRepositoryFactsCollector(db: DbClient): RepositoryFactsCollectorPort {
+export function createRepositoryFactsCollectorFromLocations(
+  repositories: RepositoryLocationRead,
+): RepositoryFactsCollectorPort {
   return {
     async collect(input) {
-      const row = db
-        .select({ localPath: cachedRepos.localPath })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, input.repositoryId))
-        .get()
-      if (row === undefined) {
+      const localPath = await repositories.localPath(input.repositoryId)
+      if (localPath === null) {
         throw new Error(`repository not cached: ${input.repositoryId}`)
       }
-      const head = await runGit(row.localPath, ['rev-parse', 'HEAD'])
+      const head = await runGit(localPath, ['rev-parse', 'HEAD'])
       if (head.exitCode !== 0 || !/^[0-9a-f]{40}$/.test(head.stdout.trim())) {
         throw new Error(`repository HEAD unresolvable: ${input.repositoryId}`)
       }
       const headSha = head.stdout.trim()
 
-      const scan = scanRepo(row.localPath)
-      const fromMaven = mavenModules(row.localPath)
+      const scan = scanRepo(localPath)
+      const fromMaven = mavenModules(localPath)
       const moduleIds =
         fromMaven.length > 0
           ? fromMaven
           : [...scan.moduleBuildDirs].map((dir) => (dir === '' ? 'root' : dir))
       const contributorDocs = CONTRIBUTOR_DOCS.filter((rel) => {
         try {
-          return statSync(join(row.localPath, rel)).isFile()
+          return statSync(join(localPath, rel)).isFile()
         } catch {
           return false
         }
@@ -202,4 +203,14 @@ export function createRepositoryFactsCollector(db: DbClient): RepositoryFactsCol
       return { cells, factsRef: `repo:${headSha}` }
     },
   }
+}
+
+export function createRepositoryFactsCollector(db: DbClient): RepositoryFactsCollectorPort {
+  return createRepositoryFactsCollectorFromLocations(createSqliteRepositoryLocationRead(db))
+}
+
+export function createPostgresqlRepositoryFactsCollector(
+  db: PostgresqlDatabaseClient,
+): RepositoryFactsCollectorPort {
+  return createRepositoryFactsCollectorFromLocations(createPostgresqlRepositoryLocationRead(db))
 }

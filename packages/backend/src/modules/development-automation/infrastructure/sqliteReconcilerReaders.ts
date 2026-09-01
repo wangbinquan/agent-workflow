@@ -21,7 +21,7 @@ import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
 
 export function createSqliteFactSnapshotReader(db: DbClient): FactSnapshotReader {
   return {
-    getCells(snapshotId) {
+    async getCells(snapshotId) {
       const row = db
         .select()
         .from(developmentFactSnapshots)

@@ -3,7 +3,6 @@
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import type { SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import {
   cancelMission,
@@ -22,27 +21,35 @@ import { readEvidenceFileRange, EVIDENCE_READ_MAX_BYTES } from '../application/p
 import { projectMissionJourney } from '../domain/journeyProjection'
 import type { OperationFailureReceipt } from '../domain/operationFailure'
 import { pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
-import { createRepositoryBaselineResolver } from '../infrastructure/gitBaselineReader'
 import {
-  materializeMigrationCandidates,
-  readPersistedMigrationRun,
-  runMigrationAnalysis,
-} from '../infrastructure/migrationAssets'
-import {
-  getDecisionTrace,
-  getMissionDetail,
-  getMissionMergeRequestView,
-  listMissionEffects,
-  listMissionSummaries,
-  listMissionSummariesPage,
-  listMissionTerminalOutcomeGroups,
-  type MissionPageCursor,
-} from '../infrastructure/missionReadModels'
+  createPostgresqlRepositoryLocationRead,
+  createRepositoryBaselineResolverFromLocations,
+  createSqliteRepositoryLocationRead,
+} from '../infrastructure/gitBaselineReader'
+import { createSqliteDevelopmentMigrationPersistence } from '../infrastructure/migrationAssets'
+import { createPostgresqlDevelopmentMigrationPersistence } from '../infrastructure/postgresqlMigrationAssets'
+import { createSqliteMissionReadModelQueries } from '../infrastructure/missionReadModels'
 import { createSqliteFactSnapshotReader } from '../infrastructure/sqliteReconcilerReaders'
 import { createSqliteCutoverStore } from '../infrastructure/sqliteCutoverStore'
-import { createSqliteMissionStore } from '../infrastructure/sqliteMissionStore'
-import { insertUploadPlan } from '../infrastructure/sqliteUploadPlanStore'
-import { createSqliteUploadSessionStore } from '../infrastructure/sqliteUploadSessionStore'
+import { createPostgresqlCutoverStore } from '../infrastructure/postgresqlCutoverStore'
+import {
+  createPostgresqlMissionInputUploadPersistence,
+  createSqliteMissionInputUploadPersistence,
+} from '../infrastructure/missionInputUploadPersistence'
+import { createSqliteMissionPersistence } from '../infrastructure/sqliteMissionStore'
+import { createPostgresqlMissionPersistence } from '../infrastructure/postgresqlMissionStore'
+import { createPostgresqlFactSnapshotReader } from '../infrastructure/postgresqlReconcilerReaders'
+import { createPostgresqlMissionReadModelQueries } from '../infrastructure/postgresqlMissionReadModels'
+import type { MissionInputUploadPersistence } from '../application/missionInputUploadOperations'
+import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
+import type { MissionPersistence } from '../application/ports/missionStore'
+import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
+import type {
+  MissionPageCursor,
+  MissionReadModelQueries,
+} from '../application/ports/missionReadModelQueries'
+import type { CutoverStore } from '../application/ports/cutoverStore'
+import type { DevelopmentMigrationPersistence } from '../application/ports/migrationPersistence'
 import type {
   DevelopmentMissionListInput,
   DevelopmentMissionOperations,
@@ -50,11 +57,13 @@ import type {
 import {
   buildDevelopmentDeliveryDeps,
   resolveRepoClaimKey,
+  type DevelopmentDeliveryProvider,
 } from '@/services/developmentDeliveryDeps'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { DIGITAL_EMPLOYEE_MISSION_STATUSES } from '@agent-workflow/shared'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 const log = createLogger('development-missions')
 
@@ -101,21 +110,39 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
   }
 }
 
-export interface DevelopmentMissionOperationCompositionDeps {
-  readonly db: DbClient
-  readonly secretBox?: SecretBox
+export interface DevelopmentMissionOperationCompositionOptions {
+  readonly deliveryProvider: DevelopmentDeliveryProvider
   readonly admissionLookup: AdmissionLookup
   /** Bootstrap-owned daemon participant shared by REST, MCP and recovery. */
   readonly automation: DevelopmentAutomationModule
-  readonly legacyAdmissionsEnabled: () => boolean
+  readonly legacyAdmissionsEnabled: () => Promise<boolean>
 }
 
-export function composeDevelopmentMissionOperations(
-  deps: DevelopmentMissionOperationCompositionDeps,
+/** Selected-provider writer state projected to the one admission fact this owner needs. */
+export function createLegacyMissionAdmissionsEnabledQuery(writer: {
+  read(): Promise<{ readonly legacyAdmissionsEnabled: boolean }>
+}): () => Promise<boolean> {
+  return async () => (await writer.read()).legacyAdmissionsEnabled
+}
+
+interface DevelopmentMissionOperationPersistence {
+  readonly uploads: MissionInputUploadPersistence
+  readonly snapshots: FactSnapshotReader
+  readonly missions: MissionPersistence
+  readonly repositories: RepositoryLocationRead
+  readonly readModels: MissionReadModelQueries
+  readonly cutover: CutoverStore
+  readonly migration: DevelopmentMigrationPersistence
+}
+
+function composeDevelopmentMissionOperationsFromPersistence(
+  deps: DevelopmentMissionOperationCompositionOptions,
+  persistence: DevelopmentMissionOperationPersistence,
 ): DevelopmentMissionOperations {
-  const uploadSessions = createSqliteUploadSessionStore(deps.db)
-  const snapshots = createSqliteFactSnapshotReader(deps.db)
-  const missionStore = createSqliteMissionStore(deps.db)
+  const uploadSessions = persistence.uploads
+  const snapshots = persistence.snapshots
+  const missionStore = persistence.missions
+  const readModels = persistence.readModels
   let fireReconcile: (missionId: string) => void = () => undefined
   const automation = deps.automation
   const launchDeps: LaunchDeps = {
@@ -123,10 +150,8 @@ export function composeDevelopmentMissionOperations(
     lookup: deps.admissionLookup,
     now: () => Date.now(),
     uploadAdmission: {
-      sessions: uploadSessions,
-      transact: (fn) => deps.db.transaction(() => fn()),
-      resolveBaseline: createRepositoryBaselineResolver(deps.db),
-      persistPlan: (plan) => insertUploadPlan(deps.db, plan),
+      uploads: uploadSessions,
+      resolveBaseline: createRepositoryBaselineResolverFromLocations(persistence.repositories),
     },
   }
 
@@ -158,18 +183,20 @@ export function composeDevelopmentMissionOperations(
       submission: {
         title: submission.title,
         body: submission.body,
-        uploads: submission.uploads.map((upload, ordinal) => {
-          const row = uploadSessions.getUpload(upload.uploadRef)
-          return {
-            ordinal,
-            fileName: row?.originalName ?? '',
-            sha256: row?.sha256 ?? null,
-            targetPath: upload.repositoryTargetPath,
-            collisionMode: upload.collisionMode ?? 'create-only',
-            contentPolicy: upload.contentPolicy ?? 'preserve-upload',
-            fileMode: upload.fileMode ?? 'regular',
-          }
-        }),
+        uploads: await Promise.all(
+          submission.uploads.map(async (upload, ordinal) => {
+            const row = await uploadSessions.get(upload.uploadRef)
+            return {
+              ordinal,
+              fileName: row?.originalName ?? '',
+              sha256: row?.sha256 ?? null,
+              targetPath: upload.repositoryTargetPath,
+              collisionMode: upload.collisionMode ?? 'create-only',
+              contentPolicy: upload.contentPolicy ?? 'preserve-upload',
+              fileMode: upload.fileMode ?? 'regular',
+            }
+          }),
+        ),
       },
     })
     if (!stashed.ok) {
@@ -181,26 +208,26 @@ export function composeDevelopmentMissionOperations(
     return true
   }
 
-  const requireMission = (missionId: string) => {
-    const detail = getMissionDetail(deps.db, missionId)
+  const requireMission = async (missionId: string) => {
+    const detail = await readModels.detail(missionId)
     if (detail === null) throw new NotFoundError('mission-not-found', 'mission not found')
     return detail
   }
 
-  const cutoverStore = createSqliteCutoverStore(deps.db)
+  const cutoverStore = persistence.cutover
   const cutoverDeps = {
     cutoverStore,
     now: () => Date.now(),
     mintId: () => ulid(),
   }
   const adoptPorts = {
-    mrEffects: buildDevelopmentDeliveryDeps(deps.db, deps.secretBox).mrEffects,
+    mrEffects: buildDevelopmentDeliveryDeps(deps.deliveryProvider).mrEffects,
   }
 
   const operations: DevelopmentMissionOperations = {
     maxPipelineEvidenceReadBytes: EVIDENCE_READ_MAX_BYTES,
     async launch(actor, body) {
-      if (!deps.legacyAdmissionsEnabled()) {
+      if (!(await deps.legacyAdmissionsEnabled())) {
         throw new ConflictError(
           'legacy-mission-admission-retired',
           'new work must be launched through a published Digital Employee; existing Missions remain available until they reach terminal state',
@@ -210,7 +237,7 @@ export function composeDevelopmentMissionOperations(
       const result = await launchMission(launchDeps, input)
       const directStashed = await stashDirectAfterLaunch(input, result.missionId)
       if (!result.created && directStashed) {
-        const mission = missionStore.getMission(result.missionId)
+        const mission = await missionStore.getMission(result.missionId)
         if (
           mission?.status === 'blocked' &&
           mission.blockCode === 'requirement-acquire-failed:direct-submission-not-staged'
@@ -237,7 +264,7 @@ export function composeDevelopmentMissionOperations(
     },
     async list(input: DevelopmentMissionListInput) {
       const paged = Object.values(input).some((value) => value !== undefined)
-      if (!paged) return { items: listMissionSummaries(deps.db) }
+      if (!paged) return { items: await readModels.list() }
       const view = MissionViewSchema.safeParse(input.view ?? 'all')
       if (!view.success) {
         throw new ValidationError('mission-view-invalid', `'${String(input.view)}' is not a view`)
@@ -277,7 +304,7 @@ export function composeDevelopmentMissionOperations(
         }
         cursor = parsed
       }
-      const page = listMissionSummariesPage(deps.db, {
+      const page = await readModels.listPage({
         limit,
         view: view.data,
         statuses: statuses.data,
@@ -297,15 +324,15 @@ export function composeDevelopmentMissionOperations(
       }
     },
     async listOutcomeSummaries() {
-      return listMissionTerminalOutcomeGroups(deps.db)
+      return await readModels.terminalOutcomeGroups()
     },
     async get(actor, missionId) {
-      const detail = requireMission(missionId)
-      const mission = missionStore.getMission(missionId)
+      const detail = await requireMission(missionId)
+      const mission = await missionStore.getMission(missionId)
       const cells =
         mission?.requirementBundleRef == null
           ? null
-          : snapshots.getCells(mission.requirementBundleRef)
+          : await snapshots.getCells(mission.requirementBundleRef)
       const knownString = (id: string): string | null => {
         const cell = cells?.[id]
         return cell !== undefined && cell.state === 'known' && typeof cell.value === 'string'
@@ -316,9 +343,9 @@ export function composeDevelopmentMissionOperations(
       const questions =
         pendingQuestionSetRef === null
           ? null
-          : automation.materializer.loadQuestionSet(pendingQuestionSetRef)
-      const mergeRequest = getMissionMergeRequestView(deps.db, missionId, detail.repositoryId)
-      const collaborationReceipts = automation.collaboration(missionId)
+          : await automation.materializer.loadQuestionSet(pendingQuestionSetRef)
+      const mergeRequest = await readModels.mergeRequest(missionId, detail.repositoryId)
+      const collaborationReceipts = await automation.collaboration(missionId)
       const activeChild = [...collaborationReceipts.children]
         .reverse()
         .find(
@@ -402,7 +429,7 @@ export function composeDevelopmentMissionOperations(
           candidateRef: knownString('__action.candidateRef'),
           clarificationState: knownString('requirement.clarificationState'),
         },
-        effects: listMissionEffects(deps.db, missionId),
+        effects: await readModels.effects(missionId),
         collaboration: collaborationReceipts,
         mergeRequest,
         journey: projectMissionJourney({
@@ -424,8 +451,8 @@ export function composeDevelopmentMissionOperations(
       }
     },
     async getRequirementManifest(missionId) {
-      requireMission(missionId)
-      const manifest = automation.materializer.getRequirementManifest(missionId)
+      await requireMission(missionId)
+      const manifest = await automation.materializer.getRequirementManifest(missionId)
       if (manifest === null) {
         throw new NotFoundError(
           'requirement-manifest-not-found',
@@ -435,8 +462,8 @@ export function composeDevelopmentMissionOperations(
       return { missionId, manifest }
     },
     async getRequirementFile(missionId, sha256) {
-      requireMission(missionId)
-      const manifest = automation.materializer.getRequirementManifest(missionId)
+      await requireMission(missionId)
+      const manifest = await automation.materializer.getRequirementManifest(missionId)
       if (manifest === null) {
         throw new NotFoundError(
           'requirement-manifest-not-found',
@@ -481,7 +508,7 @@ export function composeDevelopmentMissionOperations(
       return { missionId, ...result }
     },
     async previewSourceRefresh(missionId) {
-      requireMission(missionId)
+      await requireMission(missionId)
       const out = await automation.materializer.previewExternalRefresh(missionId)
       if (!out.ok) throw refreshFailureError(out.failure)
       return {
@@ -495,7 +522,7 @@ export function composeDevelopmentMissionOperations(
       }
     },
     async applySourceRefresh(missionId) {
-      requireMission(missionId)
+      await requireMission(missionId)
       const out = await automation.materializer.applyExternalRefresh(missionId)
       if (!out.ok) throw refreshFailureError(out.failure)
       fireReconcile(missionId)
@@ -512,16 +539,16 @@ export function composeDevelopmentMissionOperations(
       return { missionId, ...result }
     },
     async decisionTrace(missionId) {
-      requireMission(missionId)
-      return getDecisionTrace(deps.db, missionId)
+      await requireMission(missionId)
+      return await readModels.decisionTrace(missionId)
     },
     async readPipelineEvidence(missionId, sha256, offset, limit) {
-      requireMission(missionId)
-      const mission = missionStore.getMission(missionId)
+      await requireMission(missionId)
+      const mission = await missionStore.getMission(missionId)
       const cells =
         mission?.requirementBundleRef == null
           ? null
-          : snapshots.getCells(mission.requirementBundleRef)
+          : await snapshots.getCells(mission.requirementBundleRef)
       const manifestRefCell = cells?.['__pipeline.manifestRef']
       const manifestRef =
         manifestRefCell !== undefined &&
@@ -598,14 +625,14 @@ export function composeDevelopmentMissionOperations(
     },
     async readCutover() {
       return {
-        state: cutoverStore.readState(),
-        preflight: await runMigrationAnalysis(deps.db, Date.now()),
-        persisted: await readPersistedMigrationRun(deps.db),
+        state: await cutoverStore.readState(),
+        preflight: await persistence.migration.analyze(Date.now()),
+        persisted: await persistence.migration.readPersisted(),
       }
     },
     async materializeCutover(actor) {
-      const report = await runMigrationAnalysis(deps.db, Date.now())
-      const result = await materializeMigrationCandidates(deps.db, report)
+      const report = await persistence.migration.analyze(Date.now())
+      const result = await persistence.migration.materialize(report)
       log.info('cutover materialize', {
         userId: actor.userId,
         created: result.created.length,
@@ -614,7 +641,7 @@ export function composeDevelopmentMissionOperations(
       return { report, ...result }
     },
     async commandCutover(actor, command) {
-      const result = runCutoverCommand(cutoverDeps, command)
+      const result = await runCutoverCommand(cutoverDeps, command)
       if (!result.ok) {
         throw new ConflictError(
           result.code === 'cutover-rollback-after-flip'
@@ -638,7 +665,7 @@ export function composeDevelopmentMissionOperations(
         })
         .strict()
         .parse(raw)
-      const claimKey = resolveRepoClaimKey(deps.db, deps.secretBox, body.repositoryId)
+      const claimKey = await resolveRepoClaimKey(deps.deliveryProvider, body.repositoryId)
       if (claimKey === null) {
         throw new ValidationError(
           'cutover-repo-binding-missing',
@@ -672,4 +699,38 @@ export function composeDevelopmentMissionOperations(
     },
   }
   return Object.freeze(operations)
+}
+
+export interface DevelopmentMissionOperationCompositionDeps extends DevelopmentMissionOperationCompositionOptions {
+  readonly db: DbClient
+}
+
+export function composeDevelopmentMissionOperations(
+  deps: DevelopmentMissionOperationCompositionDeps,
+): DevelopmentMissionOperations {
+  return composeDevelopmentMissionOperationsFromPersistence(deps, {
+    uploads: createSqliteMissionInputUploadPersistence(deps.db),
+    snapshots: createSqliteFactSnapshotReader(deps.db),
+    missions: createSqliteMissionPersistence(deps.db),
+    repositories: createSqliteRepositoryLocationRead(deps.db),
+    readModels: createSqliteMissionReadModelQueries(deps.db),
+    cutover: createSqliteCutoverStore(deps.db),
+    migration: createSqliteDevelopmentMigrationPersistence(deps.db),
+  })
+}
+
+export function composePostgresqlDevelopmentMissionOperations(
+  deps: DevelopmentMissionOperationCompositionOptions & {
+    readonly db: PostgresqlDatabaseClient
+  },
+): DevelopmentMissionOperations {
+  return composeDevelopmentMissionOperationsFromPersistence(deps, {
+    uploads: createPostgresqlMissionInputUploadPersistence(deps.db),
+    snapshots: createPostgresqlFactSnapshotReader(deps.db),
+    missions: createPostgresqlMissionPersistence(deps.db),
+    repositories: createPostgresqlRepositoryLocationRead(deps.db),
+    readModels: createPostgresqlMissionReadModelQueries(deps.db),
+    cutover: createPostgresqlCutoverStore(deps.db),
+    migration: createPostgresqlDevelopmentMigrationPersistence(deps.db),
+  })
 }

@@ -10,11 +10,11 @@
 //
 // 幂等：无 in-flight attempt 时是 no-op（返回 false）。
 
-import type { MissionRow, MissionStore } from './ports/missionStore'
+import type { MissionRow, MissionPersistence } from './ports/missionStore'
 import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
 export interface InvalidateActionDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly ports?: ReconcilerPorts
   readonly now: () => number
 }
@@ -26,7 +26,7 @@ export async function invalidateInFlightAction(
 ): Promise<boolean> {
   const actionRunId = mission.currentActionRunId
   if (actionRunId === null) return false
-  const attempts = deps.store.listAttempts(actionRunId)
+  const attempts = await deps.store.listAttempts(actionRunId)
   const attempt = attempts[attempts.length - 1]
   const now = deps.now()
   if (attempt !== undefined && (attempt.status === 'claimed' || attempt.status === 'running')) {
@@ -37,7 +37,7 @@ export async function invalidateInFlightAction(
         // cancel 是尽力而为：进程侧由 task-execution 的孤儿收敛兜底。
       }
     }
-    deps.store.settleAttempt({
+    await deps.store.settleAttempt({
       id: attempt.id,
       status: 'discarded',
       rejectionJson: JSON.stringify({ code: reason }),
@@ -45,7 +45,7 @@ export async function invalidateInFlightAction(
       now,
     })
   }
-  deps.store.settleActionRun({
+  await deps.store.settleActionRun({
     id: actionRunId,
     status: 'failed',
     resultRef: null,
@@ -59,9 +59,9 @@ export async function invalidateInFlightAction(
     }),
     now,
   })
-  const fresh = deps.store.getMission(mission.id)
+  const fresh = await deps.store.getMission(mission.id)
   if (fresh !== null && fresh.currentActionRunId === actionRunId) {
-    deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
+    await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { currentActionRunId: null })
   }
   return true
 }

@@ -14,13 +14,10 @@
 // 调用；stash 的 canonical digest 必须与 mission.sourceContentDigest 对上，
 // 对不上 = contract-violation，杜绝「stash 什么就物化什么」的偷换）。
 
-import { and, desc, eq } from 'drizzle-orm'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
-import { developmentBundleRefs } from '@/db/schema'
 import { canonicalDigest, canonicalStringify } from '../domain/canonicalJson'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
@@ -36,7 +33,11 @@ import {
   questionSetV1Schema,
   type QuestionSetV1,
 } from '../domain/questionSet'
-import type { MissionStore } from '../application/ports/missionStore'
+import type { MissionPersistence } from '../application/ports/missionStore'
+import type {
+  RequirementBundleRefPersistence,
+  RequirementBundleRefPurpose,
+} from '../application/ports/requirementBundleRefStore'
 import type {
   FactSnapshotReader,
   PortOutcome,
@@ -128,8 +129,8 @@ export interface RequirementSourceRunnerDep {
 }
 
 export interface RequirementMaterializerDeps {
-  readonly db: DbClient
-  readonly store: MissionStore
+  readonly bundleRefs: RequirementBundleRefPersistence
+  readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly evidence: EvidenceStore
   /** one-shot sink 的宿主根（每次操作一个 ulid 子目录，用完即删）。 */
@@ -137,13 +138,6 @@ export interface RequirementMaterializerDeps {
   readonly source?: RequirementSourceRunnerDep
   readonly now: () => number
 }
-
-export type BundleRefPurpose =
-  | 'direct-submission'
-  | 'requirement-bundle'
-  | 'requirement-manifest'
-  | 'question-set'
-  | 'answer-set'
 
 export interface RequirementMaterializer extends RequirementMaterializePort {
   /** launch 后的路由装配步骤：把 direct 正文存为 evidence（digest 必须与 mission 一致）。 */
@@ -158,9 +152,9 @@ export interface RequirementMaterializer extends RequirementMaterializePort {
     readonly channel: 'platform' | 'requirement-source'
     readonly questions: QuestionSetV1['questions']
   }): Promise<PortOutcome<{ readonly questionSetRef: string }>>
-  loadQuestionSet(questionSetRef: string): QuestionSetV1 | null
+  loadQuestionSet(questionSetRef: string): Promise<QuestionSetV1 | null>
   /** T35 台账读侧：mission 最新 requirement manifest（无则 null）。 */
-  getRequirementManifest(missionId: string): RequirementBundleManifestV1 | null
+  getRequirementManifest(missionId: string): Promise<RequirementBundleManifestV1 | null>
   /** T38 预览：重取外部源，与最新 generation 比对 sourceRevision；不落 mission 状态。 */
   previewExternalRefresh(missionId: string): Promise<
     PortOutcome<{
@@ -201,50 +195,36 @@ function mediaTypeOf(relativePath: string): string {
 export function createRequirementMaterializer(
   deps: RequirementMaterializerDeps,
 ): RequirementMaterializer {
-  const { db, store, snapshots, evidence, stagingRoot } = deps
+  const { bundleRefs, store, snapshots, evidence, stagingRoot } = deps
   mkdirSync(stagingRoot, { recursive: true })
 
-  const insertBundleRef = (input: {
+  const insertBundleRef = async (input: {
     missionId: string
-    purpose: BundleRefPurpose
+    purpose: RequirementBundleRefPurpose
     evidenceRef: string
     manifestDigest: string
     fileCount: number
     totalBytes: number
-  }): string => {
+  }): Promise<string> => {
     const id = ulid()
-    db.insert(developmentBundleRefs)
-      .values({
-        id,
-        missionId: input.missionId,
-        purpose: input.purpose,
-        evidenceRef: input.evidenceRef,
-        manifestDigest: input.manifestDigest,
-        fileCount: input.fileCount,
-        totalBytes: input.totalBytes,
-        retentionState: 'active',
-        createdAt: deps.now(),
-      })
-      .run()
+    await bundleRefs.insert({
+      id,
+      missionId: input.missionId,
+      purpose: input.purpose,
+      evidenceRef: input.evidenceRef,
+      manifestDigest: input.manifestDigest,
+      fileCount: input.fileCount,
+      totalBytes: input.totalBytes,
+      retentionState: 'active',
+      createdAt: deps.now(),
+    })
     return id
   }
 
-  const latestBundleRef = (missionId: string, purpose: BundleRefPurpose) =>
-    db
-      .select()
-      .from(developmentBundleRefs)
-      .where(
-        and(
-          eq(developmentBundleRefs.missionId, missionId),
-          eq(developmentBundleRefs.purpose, purpose),
-        ),
-      )
-      .orderBy(desc(developmentBundleRefs.createdAt), desc(developmentBundleRefs.id))
-      .limit(1)
-      .get() ?? null
+  const latestBundleRef = (missionId: string, purpose: RequirementBundleRefPurpose) =>
+    bundleRefs.latest(missionId, purpose)
 
-  const bundleRefById = (id: string) =>
-    db.select().from(developmentBundleRefs).where(eq(developmentBundleRefs.id, id)).get() ?? null
+  const bundleRefById = (id: string) => bundleRefs.get(id)
 
   /** 单 JSON 文档 → evidence bundle（staged 一次性目录，导入即删）。 */
   const importJsonDoc = async (
@@ -270,22 +250,22 @@ export function createRequirementMaterializer(
   }
 
   /** requirement cells 落新快照 + requirementBundleRef 指过去（OCC 冲突重试 3 次）。 */
-  const persistCells = (
+  const persistCells = async (
     missionId: string,
     patch: Record<string, FactCell<FactCellValue>>,
     refs: unknown,
-  ): boolean => {
+  ): Promise<boolean> => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const mission = store.getMission(missionId)
+      const mission = await store.getMission(missionId)
       if (mission === null) return false
       const base =
         mission.requirementBundleRef === null
           ? {}
-          : (snapshots.getCells(mission.requirementBundleRef) ?? {})
+          : ((await snapshots.getCells(mission.requirementBundleRef)) ?? {})
       const merged = { ...base, ...patch }
       const now = deps.now()
       const snapshotId = ulid()
-      store.insertFactSnapshot({
+      await store.insertFactSnapshot({
         id: snapshotId,
         missionId,
         missionRevision: mission.revision,
@@ -295,7 +275,7 @@ export function createRequirementMaterializer(
         digest: canonicalDigest(merged),
         now,
       })
-      const result = store.occUpdate(mission.id, mission.revision, mission.epoch, {
+      const result = await store.occUpdate(mission.id, mission.revision, mission.epoch, {
         requirementBundleRef: snapshotId,
       })
       if (result.ok) return true
@@ -331,7 +311,7 @@ export function createRequirementMaterializer(
         'inject RequirementSourceRunnerDep at composition',
       )
     }
-    const mission = store.getMission(input.missionId)
+    const mission = await store.getMission(input.missionId)
     if (mission === null) {
       return fail('configuration', 'mission-not-found', 'never', 'mission row disappeared')
     }
@@ -397,7 +377,7 @@ export function createRequirementMaterializer(
       const manifestDigest = canonicalDigest(core)
       const manifest = requirementBundleManifestV1Schema.parse({ ...core, manifestDigest })
       const manifestDoc = await importJsonDoc('requirement-manifest.json', manifest)
-      insertBundleRef({
+      await insertBundleRef({
         missionId: input.missionId,
         purpose: 'requirement-bundle',
         evidenceRef: imported.bundleId,
@@ -405,7 +385,7 @@ export function createRequirementMaterializer(
         fileCount: imported.entries.length,
         totalBytes: imported.totalBytes,
       })
-      insertBundleRef({
+      await insertBundleRef({
         missionId: input.missionId,
         purpose: 'requirement-manifest',
         evidenceRef: manifestDoc.bundleId,
@@ -427,8 +407,8 @@ export function createRequirementMaterializer(
     }
   }
 
-  const loadQuestionSet = (questionSetRef: string): QuestionSetV1 | null => {
-    const row = bundleRefById(questionSetRef)
+  const loadQuestionSet = async (questionSetRef: string): Promise<QuestionSetV1 | null> => {
+    const row = await bundleRefById(questionSetRef)
     if (row === null || row.purpose !== 'question-set') return null
     const doc = readJsonDoc(row.evidenceRef, 'question-set.json')
     if (doc === null) return null
@@ -453,7 +433,7 @@ export function createRequirementMaterializer(
       complete: input.complete,
     })
     const doc = await importJsonDoc('answer-set.json', answerSet)
-    return insertBundleRef({
+    return await insertBundleRef({
       missionId: input.missionId,
       purpose: 'answer-set',
       evidenceRef: doc.bundleId,
@@ -467,30 +447,20 @@ export function createRequirementMaterializer(
     // RFC-310 T81 —— reopen 的新 Mission 继承原 Mission 的需求证据。只复制
     // `development_bundle_refs` 的指针行：evidence blob 内容寻址，两条 Mission
     // 指向同一份，既不复制字节也不需要重新下载外部来源。
-    carryOverRequirementEvidence(input) {
-      const purposes: BundleRefPurpose[] = [
-        'direct-submission',
-        'requirement-bundle',
-        'requirement-manifest',
-      ]
-      let copied = 0
-      for (const purpose of purposes) {
-        const row = latestBundleRef(input.fromMissionId, purpose)
-        if (row === null) continue
-        insertBundleRef({
-          missionId: input.toMissionId,
-          purpose,
-          evidenceRef: row.evidenceRef,
-          manifestDigest: row.manifestDigest,
-          fileCount: row.fileCount,
-          totalBytes: row.totalBytes,
-        })
-        copied += 1
-      }
-      return copied
+    async carryOverRequirementEvidence(input) {
+      return await bundleRefs.copyLatestRequirements({
+        fromMissionId: input.fromMissionId,
+        toMissionId: input.toMissionId,
+        copies: [
+          { purpose: 'direct-submission', id: ulid() },
+          { purpose: 'requirement-bundle', id: ulid() },
+          { purpose: 'requirement-manifest', id: ulid() },
+        ],
+        createdAt: deps.now(),
+      })
     },
     async stashDirectSubmission(input) {
-      const mission = store.getMission(input.missionId)
+      const mission = await store.getMission(input.missionId)
       if (mission === null) {
         return fail('configuration', 'mission-not-found', 'never', 'mission row disappeared')
       }
@@ -511,7 +481,7 @@ export function createRequirementMaterializer(
           'stashed submission does not match the digest frozen at launch',
         )
       }
-      const existing = latestBundleRef(input.missionId, 'direct-submission')
+      const existing = await latestBundleRef(input.missionId, 'direct-submission')
       if (existing?.manifestDigest === digest) {
         const raw = readJsonDoc(existing.evidenceRef, 'submission.json')
         if (raw !== null && directSubmissionDigest(raw as DirectSubmissionDoc) === digest) {
@@ -519,7 +489,7 @@ export function createRequirementMaterializer(
         }
       }
       const doc = await importJsonDoc('submission.json', input.submission)
-      insertBundleRef({
+      await insertBundleRef({
         missionId: input.missionId,
         purpose: 'direct-submission',
         evidenceRef: doc.bundleId,
@@ -531,7 +501,7 @@ export function createRequirementMaterializer(
     },
 
     async materializeDirect(input) {
-      const stash = latestBundleRef(input.missionId, 'direct-submission')
+      const stash = await latestBundleRef(input.missionId, 'direct-submission')
       if (stash === null) {
         return fail(
           'configuration',
@@ -597,7 +567,7 @@ export function createRequirementMaterializer(
       const manifestDigest = canonicalDigest(core)
       const manifest = requirementBundleManifestV1Schema.parse({ ...core, manifestDigest })
       const manifestDoc = await importJsonDoc('requirement-manifest.json', manifest)
-      insertBundleRef({
+      await insertBundleRef({
         missionId: input.missionId,
         purpose: 'requirement-bundle',
         evidenceRef: imported.bundleId,
@@ -605,7 +575,7 @@ export function createRequirementMaterializer(
         fileCount: imported.entries.length,
         totalBytes: imported.totalBytes,
       })
-      insertBundleRef({
+      await insertBundleRef({
         missionId: input.missionId,
         purpose: 'requirement-manifest',
         evidenceRef: manifestDoc.bundleId,
@@ -628,7 +598,7 @@ export function createRequirementMaterializer(
     },
 
     async publishQuestions(input) {
-      const questionSet = loadQuestionSet(input.questionSetRef)
+      const questionSet = await loadQuestionSet(input.questionSetRef)
       if (questionSet === null) {
         return fail(
           'configuration',
@@ -649,7 +619,7 @@ export function createRequirementMaterializer(
           'requirement-source channel needs the adapter runner wired',
         )
       }
-      const mission = store.getMission(input.missionId)
+      const mission = await store.getMission(input.missionId)
       if (mission === null || mission.externalId === null) {
         return fail('configuration', 'external-id-missing', 'never', 'mission has no external id')
       }
@@ -675,7 +645,7 @@ export function createRequirementMaterializer(
     },
 
     async collectAnswers(input) {
-      const questionSet = loadQuestionSet(input.questionSetRef)
+      const questionSet = await loadQuestionSet(input.questionSetRef)
       if (questionSet === null) {
         return fail(
           'configuration',
@@ -692,7 +662,7 @@ export function createRequirementMaterializer(
           'inject RequirementSourceRunnerDep at composition',
         )
       }
-      const mission = store.getMission(input.missionId)
+      const mission = await store.getMission(input.missionId)
       if (mission === null || mission.externalId === null) {
         return fail('configuration', 'external-id-missing', 'never', 'mission has no external id')
       }
@@ -736,7 +706,7 @@ export function createRequirementMaterializer(
     },
 
     async stashAnswerSet(input) {
-      const questionSet = loadQuestionSet(input.questionSetRef)
+      const questionSet = await loadQuestionSet(input.questionSetRef)
       if (questionSet === null) {
         return fail(
           'configuration',
@@ -783,7 +753,7 @@ export function createRequirementMaterializer(
         questions: [...input.questions],
       })
       const doc = await importJsonDoc('question-set.json', questionSet)
-      const questionSetRef = insertBundleRef({
+      const questionSetRef = await insertBundleRef({
         missionId: input.missionId,
         purpose: 'question-set',
         evidenceRef: doc.bundleId,
@@ -791,7 +761,7 @@ export function createRequirementMaterializer(
         fileCount: 1,
         totalBytes: doc.totalBytes,
       })
-      const persisted = persistCells(
+      const persisted = await persistCells(
         input.missionId,
         {
           '__requirement.pendingQuestionSetRef': {
@@ -815,8 +785,8 @@ export function createRequirementMaterializer(
 
     loadQuestionSet,
 
-    getRequirementManifest(missionId) {
-      const row = latestBundleRef(missionId, 'requirement-manifest')
+    async getRequirementManifest(missionId) {
+      const row = await latestBundleRef(missionId, 'requirement-manifest')
       if (row === null) return null
       const doc = readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
       if (doc === null) return null
@@ -824,21 +794,8 @@ export function createRequirementMaterializer(
       return parsed.success ? parsed.data : null
     },
 
-    getRequirementManifestMount(missionId, manifestDigest) {
-      const row =
-        db
-          .select()
-          .from(developmentBundleRefs)
-          .where(
-            and(
-              eq(developmentBundleRefs.missionId, missionId),
-              eq(developmentBundleRefs.purpose, 'requirement-manifest'),
-              eq(developmentBundleRefs.manifestDigest, manifestDigest),
-            ),
-          )
-          .orderBy(desc(developmentBundleRefs.createdAt), desc(developmentBundleRefs.id))
-          .limit(1)
-          .get() ?? null
+    async getRequirementManifestMount(missionId, manifestDigest) {
+      const row = await bundleRefs.findManifest(missionId, manifestDigest)
       if (row === null) return null
       const doc = readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
       if (doc === null) return null
@@ -851,7 +808,7 @@ export function createRequirementMaterializer(
     },
 
     async previewExternalRefresh(missionId) {
-      const mission = store.getMission(missionId)
+      const mission = await store.getMission(missionId)
       if (mission === null) {
         return fail('configuration', 'mission-not-found', 'never', 'mission row disappeared')
       }
@@ -872,7 +829,7 @@ export function createRequirementMaterializer(
         externalId: mission.externalId,
       })
       if (!acquired.ok) return acquired
-      const sources = store.listMissionSources(missionId)
+      const sources = await store.listMissionSources(missionId)
       const current = sources
         .filter((s) => s.sourceRevision !== null)
         .sort((a, b) => b.generation - a.generation)[0]
@@ -894,14 +851,14 @@ export function createRequirementMaterializer(
       if (!preview.ok) return preview
       if (!preview.changed)
         return { ok: true, changed: false, sourceRevision: preview.newSourceRevision }
-      const mission = store.getMission(missionId)
+      const mission = await store.getMission(missionId)
       if (mission === null) {
         return fail('configuration', 'mission-not-found', 'never', 'mission row disappeared')
       }
-      store.insertMissionSource({
+      await store.insertMissionSource({
         id: ulid(),
         missionId,
-        generation: store.listMissionSources(missionId).length + 1,
+        generation: (await store.listMissionSources(missionId)).length + 1,
         sourceKind: 'external-reference',
         externalId: mission.externalId,
         adapterId: mission.resolvedAdapterId,
@@ -917,7 +874,7 @@ export function createRequirementMaterializer(
       // 新 revision ⇒ 下游认知失效：bundleComplete 重置为 true（新 bundle），
       // 澄清状态清零（旧问答对旧 revision 成立）。invalidation 的动作/候选
       // 半边随 PR-5 T55 接入 action ledger。
-      persistCells(
+      await persistCells(
         missionId,
         {
           'requirement.bundleComplete': { state: 'known', value: true, sourceRevision: 'refresh' },

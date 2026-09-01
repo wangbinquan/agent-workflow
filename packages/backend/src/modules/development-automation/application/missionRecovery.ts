@@ -13,13 +13,15 @@ import { runMissionReconcile, type ReconcileDeps } from './missionReconciler'
 import { driveMission } from './missionDriver'
 
 export interface RecoveryReaders {
-  listFencedMissionIds(): string[]
-  listPreparedEffectRows(): {
-    readonly id: string
-    readonly missionId: string
-    readonly epoch: number
-  }[]
-  missionEpochsOf(missionIds: readonly string[]): Map<string, number>
+  listFencedMissionIds(): Promise<string[]>
+  listPreparedEffectRows(): Promise<
+    {
+      readonly id: string
+      readonly missionId: string
+      readonly epoch: number
+    }[]
+  >
+  missionEpochsOf(missionIds: readonly string[]): Promise<Map<string, number>>
 }
 
 export interface RecoveryReport {
@@ -40,18 +42,18 @@ export async function recoverMissions(
   let firedWakes = 0
 
   // 1) epoch 过期的 prepared effects（先于 fence settle——settle 会重扫剩余行）。
-  const prepared = readers.listPreparedEffectRows()
-  const epochs = readers.missionEpochsOf(prepared.map((row) => row.missionId))
+  const prepared = await readers.listPreparedEffectRows()
+  const epochs = await readers.missionEpochsOf(prepared.map((row) => row.missionId))
   for (const row of prepared) {
     const currentEpoch = epochs.get(row.missionId)
     if (currentEpoch !== undefined && row.epoch < currentEpoch) {
-      deps.store.invalidateEffect(row.id, now)
+      await deps.store.invalidateEffect(row.id, now)
       invalidatedEffects += 1
     }
   }
 
   // 2) fence 悬挂：同一 reconcile settle 路径收束。
-  for (const missionId of readers.listFencedMissionIds()) {
+  for (const missionId of await readers.listFencedMissionIds()) {
     const outcome = await runMissionReconcile(deps, missionId)
     if (outcome.kind === 'fence-settled') {
       settledFences += 1
@@ -60,8 +62,8 @@ export async function recoverMissions(
   }
 
   // 3) 到期 wake：fire（ordinal 不清零）后走正常 reconcile。
-  for (const wake of deps.store.listDueWakes(now)) {
-    if (deps.store.fireWake(wake.id, now)) {
+  for (const wake of await deps.store.listDueWakes(now)) {
+    if (await deps.store.fireWake(wake.id, now)) {
       firedWakes += 1
       await driveMission(deps, wake.missionId)
     }

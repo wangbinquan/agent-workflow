@@ -11,6 +11,7 @@ import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
 import { developmentRepositoryUploadReceipts } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 export interface RecordUploadPublicationInput {
   readonly planId: string
@@ -71,4 +72,58 @@ export function hasUploadPublicationReceipt(db: DbClient, planId: string): boole
       )
       .get() !== undefined
   )
+}
+
+export async function recordPostgresqlUploadPublicationReceipt(
+  db: PostgresqlDatabaseClient,
+  input: RecordUploadPublicationInput,
+): Promise<{ readonly created: boolean; readonly receiptId: string }> {
+  return await db.transaction(async (tx) => {
+    const existing = await tx
+      .select({ id: developmentRepositoryUploadReceipts.id })
+      .from(developmentRepositoryUploadReceipts)
+      .where(
+        and(
+          eq(developmentRepositoryUploadReceipts.planId, input.planId),
+          eq(developmentRepositoryUploadReceipts.baselineSnapshotRef, input.baselineSnapshotRef),
+          eq(developmentRepositoryUploadReceipts.receiptKind, 'publication'),
+        ),
+      )
+      .limit(1)
+      .get()
+    if (existing !== undefined) return { created: false, receiptId: existing.id }
+    const id = ulid()
+    const inserted = await tx
+      .insert(developmentRepositoryUploadReceipts)
+      .values({
+        id,
+        planId: input.planId,
+        baselineSnapshotRef: input.baselineSnapshotRef,
+        receiptKind: 'publication',
+        seedChangeRef: input.seedChangeRef,
+        seedTreeDigest: input.seedTreeDigest,
+        fulfillmentKind: 'published',
+        commitSha: input.commitSha,
+        entriesJson: JSON.stringify(input.entries),
+        createdAt: input.now,
+      })
+      .onConflictDoNothing()
+      .returning({ id: developmentRepositoryUploadReceipts.id })
+      .all()
+    if (inserted[0] !== undefined) return { created: true, receiptId: inserted[0].id }
+    const winner = await tx
+      .select({ id: developmentRepositoryUploadReceipts.id })
+      .from(developmentRepositoryUploadReceipts)
+      .where(
+        and(
+          eq(developmentRepositoryUploadReceipts.planId, input.planId),
+          eq(developmentRepositoryUploadReceipts.baselineSnapshotRef, input.baselineSnapshotRef),
+          eq(developmentRepositoryUploadReceipts.receiptKind, 'publication'),
+        ),
+      )
+      .limit(1)
+      .get()
+    if (winner === undefined) throw new Error('upload publication receipt winner unavailable')
+    return { created: false, receiptId: winner.id }
+  })
 }

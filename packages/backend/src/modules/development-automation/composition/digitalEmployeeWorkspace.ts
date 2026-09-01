@@ -1,4 +1,3 @@
-import { and, desc, eq } from 'drizzle-orm'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import {
@@ -18,8 +17,11 @@ import { z } from 'zod'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
-import { cachedRepos, employeeCaseWorkspaces, employeeRoundWorkspaceStates } from '@/db/schema'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
+import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
+import { createPostgresqlEmployeeWorkspacePersistence } from '../infrastructure/postgresqlEmployeeWorkspacePersistence'
+import { createSqliteEmployeeWorkspacePersistence } from '../infrastructure/sqliteEmployeeWorkspacePersistence'
 import { PLATFORM_OWNED_GIT_METADATA_PREFIXES } from '../infrastructure/attemptSupport'
 import {
   protectedRootSnapshotDigest,
@@ -504,7 +506,7 @@ export interface DevelopmentEmployeeCaseWorkspaceDetailRow {
 }
 
 export interface DevelopmentEmployeeCaseWorkspaceDetailReader {
-  getByCaseId(caseId: string): DevelopmentEmployeeCaseWorkspaceDetailRow | null
+  getByCaseId(caseId: string): Promise<DevelopmentEmployeeCaseWorkspaceDetailRow | null>
 }
 
 /**
@@ -512,32 +514,40 @@ export interface DevelopmentEmployeeCaseWorkspaceDetailReader {
  * read beside the existing workspace owner avoids teaching a second
  * development-automation file the Digital Employee persistence layout.
  */
-export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
-  db: DbClient,
+function detailReader(
+  persistence: Pick<EmployeeWorkspacePersistence, 'workspace'>,
 ): DevelopmentEmployeeCaseWorkspaceDetailReader {
   return {
-    getByCaseId(caseId) {
-      return (
-        db
-          .select({
-            repositoryId: employeeCaseWorkspaces.repositoryId,
-            cachedRepoId: employeeCaseWorkspaces.cachedRepoId,
-            baselineSha: employeeCaseWorkspaces.baselineSha,
-            targetBranch: employeeCaseWorkspaces.targetBranch,
-            sourceBranch: employeeCaseWorkspaces.sourceBranch,
-            remoteHeadSha: employeeCaseWorkspaces.remoteHeadSha,
-            state: employeeCaseWorkspaces.state,
-          })
-          .from(employeeCaseWorkspaces)
-          .where(eq(employeeCaseWorkspaces.caseId, caseId))
-          .get() ?? null
-      )
+    async getByCaseId(caseId) {
+      const row = await persistence.workspace(caseId)
+      if (row === null) return null
+      return {
+        repositoryId: row.repositoryId,
+        cachedRepoId: row.cachedRepoId,
+        baselineSha: row.baselineSha,
+        targetBranch: row.targetBranch,
+        sourceBranch: row.sourceBranch,
+        remoteHeadSha: row.remoteHeadSha,
+        state: row.state,
+      }
     },
   }
 }
 
-export function composeDevelopmentEmployeeWorkspace(input: {
-  readonly db: DbClient
+export function createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(
+  db: DbClient,
+): DevelopmentEmployeeCaseWorkspaceDetailReader {
+  return detailReader(createSqliteEmployeeWorkspacePersistence(db))
+}
+
+export function createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader(
+  db: PostgresqlDatabaseClient,
+): DevelopmentEmployeeCaseWorkspaceDetailReader {
+  return detailReader(createPostgresqlEmployeeWorkspacePersistence(db))
+}
+
+export interface DevelopmentEmployeeWorkspaceCompositionInput {
+  readonly persistence: EmployeeWorkspacePersistence
   readonly appHome: string
   /**
    * RFC-317 T41（DE-02）—— 反应轮次的只读查询面。此前这里直接查
@@ -608,7 +618,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     >
   }
   readonly now?: () => number
-}): DevelopmentEmployeeWorkspaceParticipant {
+}
+
+function composeDevelopmentEmployeeWorkspaceFromPersistence(
+  input: DevelopmentEmployeeWorkspaceCompositionInput,
+): DevelopmentEmployeeWorkspaceParticipant {
   const sourceControl = input.sourceControl
   const now = input.now ?? Date.now
   const caseDirectory = (caseId: string) =>
@@ -631,21 +645,21 @@ export function composeDevelopmentEmployeeWorkspace(input: {
    * paths. Any extra, missing, published, or policy-incompatible delta fails
    * closed and keeps the normal semantic retry behavior.
    */
-  const carriedValidatedChange = (request: {
+  const carriedValidatedChange = async (request: {
     readonly plan: z.infer<typeof planSchema>
     readonly stateBaselineSha: string
     readonly currentPreBusiness: ReadonlyMap<string, string>
-  }): {
+  }): Promise<{
     readonly ok: true
     readonly kind: 'changed'
     readonly changedPaths: readonly string[]
-  } | null => {
-    const priorRound = input.reactionRounds.lastSettledRound({
+  } | null> => {
+    const priorRound = await input.reactionRounds.lastSettledRound({
       caseId: request.plan.caseRef.id,
       workItemRef: request.plan.workItemRef,
     })
     if (priorRound === null || priorRound.roundRef === request.plan.roundRef) return null
-    const priorFrozen = input.reactionRounds.frozenPlan(priorRound.roundRef)
+    const priorFrozen = await input.reactionRounds.frozenPlan(priorRound.roundRef)
     if (priorFrozen === null) return null
     const priorPlan = planSchema.safeParse(JSON.parse(priorFrozen.planJson) as unknown)
     if (
@@ -655,20 +669,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     ) {
       return null
     }
-    const workspace = input.db
-      .select({ baselineSha: employeeCaseWorkspaces.baselineSha })
-      .from(employeeCaseWorkspaces)
-      .where(eq(employeeCaseWorkspaces.caseId, request.plan.caseRef.id))
-      .get()
+    const workspace = await input.persistence.workspace(request.plan.caseRef.id)
     if (workspace?.baselineSha !== request.stateBaselineSha) return null
-    const priorState = input.db
-      .select()
-      .from(employeeRoundWorkspaceStates)
-      .where(eq(employeeRoundWorkspaceStates.roundId, priorRound.roundRef))
-      .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
-      .get()
+    const priorState = await input.persistence.latestRoundState(priorRound.roundRef)
     if (
-      priorState === undefined ||
+      priorState === null ||
       priorState.baselineSha !== request.stateBaselineSha ||
       priorState.validationJson === null
     ) {
@@ -717,12 +722,8 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           ...artifacts.map((artifact) => artifact.path),
         ]),
       ]
-      let row = input.db
-        .select()
-        .from(employeeCaseWorkspaces)
-        .where(eq(employeeCaseWorkspaces.caseId, plan.caseRef.id))
-        .get()
-      if (row === undefined) {
+      let row = await input.persistence.workspace(plan.caseRef.id)
+      if (row === null) {
         const repository = await input.repositoryPreparation.prepare({
           repositoryId: issue.repositoryRef,
         })
@@ -794,14 +795,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           createdAt: timestamp,
           updatedAt: timestamp,
         }
-        input.db.insert(employeeCaseWorkspaces).values(row).run()
+        await input.persistence.insertWorkspace(row)
       }
-      const repository = input.db
-        .select({ localPath: cachedRepos.localPath })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, row.cachedRepoId))
-        .get()
-      if (repository === undefined) throw new Error('employee case cached repository disappeared')
+      const repositoryLocalPath = await input.persistence.repositoryLocalPath(row.cachedRepoId)
+      if (repositoryLocalPath === null) {
+        throw new Error('employee case cached repository disappeared')
+      }
 
       if (plan.workItemRef === 'repair-conflict') {
         const mergeRequest = resolveMergeRequest(plan)
@@ -820,31 +819,17 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         }
         const existingState =
           attempt.mode === 'same-scene'
-            ? input.db
-                .select()
-                .from(employeeRoundWorkspaceStates)
-                .where(eq(employeeRoundWorkspaceStates.roundId, plan.roundRef))
-                .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
-                .get()
-            : input.db
-                .select()
-                .from(employeeRoundWorkspaceStates)
-                .where(
-                  and(
-                    eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-                    eq(employeeRoundWorkspaceStates.attemptOrdinal, attempt.ordinal),
-                  ),
-                )
-                .get()
+            ? await input.persistence.latestRoundState(plan.roundRef)
+            : await input.persistence.roundState(plan.roundRef, attempt.ordinal)
         let state = existingState
         let pre =
-          state === undefined ? undefined : (JSON.parse(state.preStateJson) as SerializedPreState)
+          state === null ? undefined : (JSON.parse(state.preStateJson) as SerializedPreState)
         if (pre?.conflict === undefined || !existsSync(pre.conflict.workspacePath)) {
-          if (state !== undefined && attempt.mode !== 'fresh-scene') {
+          if (state !== null && attempt.mode !== 'fresh-scene') {
             throw new Error('conflict scene is missing; a fresh-scene retry is required')
           }
           const prepared = await input.conflictMerge.prepare({
-            baselineRepoPath: repository.localPath,
+            baselineRepoPath: repositoryLocalPath,
             sourceSha: mergeRequest.headSha,
             targetSha: mergeRequest.targetSha,
             workspacesRoot: join(
@@ -924,24 +909,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             createdAt: timestamp,
             updatedAt: timestamp,
           }
-          input.db
-            .insert(employeeRoundWorkspaceStates)
-            .values(replacement)
-            .onConflictDoUpdate({
-              target: [
-                employeeRoundWorkspaceStates.roundId,
-                employeeRoundWorkspaceStates.attemptOrdinal,
-              ],
-              set: {
-                caseId: replacement.caseId,
-                baselineSha: replacement.baselineSha,
-                preStateJson: replacement.preStateJson,
-                checkpointDigest: replacement.checkpointDigest,
-                validationJson: null,
-                updatedAt: replacement.updatedAt,
-              },
-            })
-            .run()
+          await input.persistence.upsertRoundState(replacement)
           state = replacement
         }
         const conflict = pre?.conflict
@@ -959,16 +927,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             preStateJson: JSON.stringify(expandedPre),
             updatedAt: now(),
           }
-          input.db
-            .update(employeeRoundWorkspaceStates)
-            .set({ preStateJson: state.preStateJson, updatedAt: state.updatedAt })
-            .where(
-              and(
-                eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-                eq(employeeRoundWorkspaceStates.attemptOrdinal, state.attemptOrdinal),
-              ),
-            )
-            .run()
+          await input.persistence.updateRoundState({
+            roundId: plan.roundRef,
+            attemptOrdinal: state.attemptOrdinal,
+            patch: { preStateJson: state.preStateJson, updatedAt: state.updatedAt },
+          })
           pre = expandedPre
         }
         if (attempt.ordinal !== state!.attemptOrdinal) {
@@ -978,7 +941,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             validationJson: null,
             updatedAt: now(),
           }
-          input.db.insert(employeeRoundWorkspaceStates).values(state).onConflictDoNothing().run()
+          await input.persistence.insertRoundState(state, 'ignore')
         }
         return {
           kind: 'repository',
@@ -989,21 +952,12 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         }
       }
 
-      const initialState = input.db
-        .select()
-        .from(employeeRoundWorkspaceStates)
-        .where(
-          and(
-            eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-            eq(employeeRoundWorkspaceStates.attemptOrdinal, 0),
-          ),
-        )
-        .get()
+      const initialState = await input.persistence.roundState(plan.roundRef, 0)
       if (attempt.mode === 'fresh-scene') {
-        if (initialState === undefined) throw new Error('fresh scene has no frozen checkpoint')
+        if (initialState === null) throw new Error('fresh scene has no frozen checkpoint')
         await sourceControl.restore({
           caseRoot: sceneRoot(plan.caseRef.id),
-          baselineRepoPath: repository.localPath,
+          baselineRepoPath: repositoryLocalPath,
           baselineSha: initialState.baselineSha,
           checkpointRoot: checkpointRoot(plan.caseRef.id, plan.roundRef),
           expectedCheckpointDigest: initialState.checkpointDigest,
@@ -1014,7 +968,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
 
       const artifacts = hydrateArtifacts(workspacePath(plan.caseRef.id))
       let state = initialState
-      if (state === undefined) {
+      if (state === null) {
         const checkpoint = sourceControl.checkpoint({
           workspacePath: workspacePath(plan.caseRef.id),
           checkpointRoot: checkpointRoot(plan.caseRef.id, plan.roundRef),
@@ -1043,7 +997,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
           createdAt: timestamp,
           updatedAt: timestamp,
         }
-        input.db.insert(employeeRoundWorkspaceStates).values(state).run()
+        await input.persistence.insertRoundState(state, 'error')
       } else {
         const expandedPre = preStateWithFrozenPlatformArtifacts({
           pre: JSON.parse(state.preStateJson) as SerializedPreState,
@@ -1057,34 +1011,20 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             preStateJson: JSON.stringify(expandedPre),
             updatedAt: now(),
           }
-          input.db
-            .update(employeeRoundWorkspaceStates)
-            .set({ preStateJson: state.preStateJson, updatedAt: state.updatedAt })
-            .where(
-              and(
-                eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-                eq(employeeRoundWorkspaceStates.attemptOrdinal, 0),
-              ),
-            )
-            .run()
+          await input.persistence.updateRoundState({
+            roundId: plan.roundRef,
+            attemptOrdinal: 0,
+            patch: { preStateJson: state.preStateJson, updatedAt: state.updatedAt },
+          })
         }
       }
       if (attempt.ordinal !== 0) {
-        const existingAttempt = input.db
-          .select()
-          .from(employeeRoundWorkspaceStates)
-          .where(
-            and(
-              eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-              eq(employeeRoundWorkspaceStates.attemptOrdinal, attempt.ordinal),
-            ),
+        const existingAttempt = await input.persistence.roundState(plan.roundRef, attempt.ordinal)
+        if (existingAttempt === null) {
+          await input.persistence.insertRoundState(
+            { ...state, attemptOrdinal: attempt.ordinal, updatedAt: now() },
+            'error',
           )
-          .get()
-        if (existingAttempt === undefined) {
-          input.db
-            .insert(employeeRoundWorkspaceStates)
-            .values({ ...state, attemptOrdinal: attempt.ordinal, updatedAt: now() })
-            .run()
         } else {
           const expandedPre = preStateWithFrozenPlatformArtifacts({
             pre: JSON.parse(existingAttempt.preStateJson) as SerializedPreState,
@@ -1093,16 +1033,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
             artifacts,
           })
           if (JSON.stringify(expandedPre) !== existingAttempt.preStateJson) {
-            input.db
-              .update(employeeRoundWorkspaceStates)
-              .set({ preStateJson: JSON.stringify(expandedPre), updatedAt: now() })
-              .where(
-                and(
-                  eq(employeeRoundWorkspaceStates.roundId, plan.roundRef),
-                  eq(employeeRoundWorkspaceStates.attemptOrdinal, attempt.ordinal),
-                ),
-              )
-              .run()
+            await input.persistence.updateRoundState({
+              roundId: plan.roundRef,
+              attemptOrdinal: attempt.ordinal,
+              patch: { preStateJson: JSON.stringify(expandedPre), updatedAt: now() },
+            })
           }
         }
       }
@@ -1115,7 +1050,7 @@ export function composeDevelopmentEmployeeWorkspace(input: {
     },
 
     async validate(request) {
-      const round = input.reactionRounds.frozenPlan(request.roundRef)
+      const round = await input.reactionRounds.frozenPlan(request.roundRef)
       if (round === null) {
         return {
           ok: false,
@@ -1128,13 +1063,8 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       }
       const plan = planSchema.parse(JSON.parse(round.planJson) as unknown)
       if (plan.workspacePolicy.mode === 'none') return { ok: true }
-      const state = input.db
-        .select()
-        .from(employeeRoundWorkspaceStates)
-        .where(eq(employeeRoundWorkspaceStates.roundId, request.roundRef))
-        .orderBy(desc(employeeRoundWorkspaceStates.attemptOrdinal))
-        .get()
-      if (state === undefined) {
+      const state = await input.persistence.latestRoundState(request.roundRef)
+      if (state === null) {
         return {
           ok: false,
           // 同上：平台侧的前置状态缺失，换场景也补不回来。
@@ -1233,11 +1163,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
         !businessDelta(beforeBusiness, afterBusiness)
       ) {
         verdict =
-          carriedValidatedChange({
+          (await carriedValidatedChange({
             plan,
             stateBaselineSha: state.baselineSha,
             currentPreBusiness: beforeBusiness,
-          }) ?? verdict
+          })) ?? verdict
       }
       if (
         verdict.ok &&
@@ -1283,16 +1213,11 @@ export function composeDevelopmentEmployeeWorkspace(input: {
               inspection: conflictInspection,
             }),
       }
-      input.db
-        .update(employeeRoundWorkspaceStates)
-        .set({ validationJson: JSON.stringify(validation), updatedAt: now() })
-        .where(
-          and(
-            eq(employeeRoundWorkspaceStates.roundId, request.roundRef),
-            eq(employeeRoundWorkspaceStates.attemptOrdinal, state.attemptOrdinal),
-          ),
-        )
-        .run()
+      await input.persistence.updateRoundState({
+        roundId: request.roundRef,
+        attemptOrdinal: state.attemptOrdinal,
+        patch: { validationJson: JSON.stringify(validation), updatedAt: now() },
+      })
       if (verdict.ok && conflictInspection !== null && !conflictInspection.ok) {
         return {
           ok: false,
@@ -1307,26 +1232,15 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       }
       if (verdict.ok) return { ok: true }
       if (verdict.kind === 'boundary') {
-        const workspace = input.db
-          .select({
-            cachedRepoId: employeeCaseWorkspaces.cachedRepoId,
-            baselineSha: employeeCaseWorkspaces.baselineSha,
-          })
-          .from(employeeCaseWorkspaces)
-          .where(eq(employeeCaseWorkspaces.caseId, round.caseId))
-          .get()
-        const repository =
-          workspace === undefined
-            ? undefined
-            : input.db
-                .select({ localPath: cachedRepos.localPath })
-                .from(cachedRepos)
-                .where(eq(cachedRepos.id, workspace.cachedRepoId))
-                .get()
-        if (pre.conflict === undefined && workspace !== undefined && repository !== undefined) {
+        const workspace = await input.persistence.workspace(round.caseId)
+        const repositoryLocalPath =
+          workspace === null
+            ? null
+            : await input.persistence.repositoryLocalPath(workspace.cachedRepoId)
+        if (pre.conflict === undefined && workspace !== null && repositoryLocalPath !== null) {
           await sourceControl.restore({
             caseRoot: sceneRoot(round.caseId),
-            baselineRepoPath: repository.localPath,
+            baselineRepoPath: repositoryLocalPath,
             baselineSha: state.baselineSha,
             checkpointRoot: checkpointRoot(round.caseId, request.roundRef),
             expectedCheckpointDigest: state.checkpointDigest,
@@ -1343,4 +1257,31 @@ export function composeDevelopmentEmployeeWorkspace(input: {
       }
     },
   }
+}
+
+type DevelopmentEmployeeWorkspaceBootstrapInput = Omit<
+  DevelopmentEmployeeWorkspaceCompositionInput,
+  'persistence'
+>
+
+export function composeSqliteDevelopmentEmployeeWorkspace(
+  input: DevelopmentEmployeeWorkspaceBootstrapInput & { readonly db: DbClient },
+): DevelopmentEmployeeWorkspaceParticipant {
+  const { db, ...composition } = input
+  return composeDevelopmentEmployeeWorkspaceFromPersistence({
+    ...composition,
+    persistence: createSqliteEmployeeWorkspacePersistence(db),
+  })
+}
+
+export function composePostgresqlDevelopmentEmployeeWorkspace(
+  input: DevelopmentEmployeeWorkspaceBootstrapInput & {
+    readonly db: PostgresqlDatabaseClient
+  },
+): DevelopmentEmployeeWorkspaceParticipant {
+  const { db, ...composition } = input
+  return composeDevelopmentEmployeeWorkspaceFromPersistence({
+    ...composition,
+    persistence: createPostgresqlEmployeeWorkspacePersistence(db),
+  })
 }

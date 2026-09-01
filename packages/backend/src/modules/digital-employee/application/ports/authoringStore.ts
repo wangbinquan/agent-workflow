@@ -276,3 +276,13 @@ export interface DigitalEmployeeAuthoringStore {
     input: Omit<ExecutionPolicyRevisionRecord, 'revision'>,
   ): ExecutionPolicyRevisionRecord
 }
+
+/** Live provider contract. SQLite keeps the synchronous store only as an oracle. */
+export type DigitalEmployeeAuthoringPersistence = {
+  readonly [K in Exclude<
+    keyof DigitalEmployeeAuthoringStore,
+    'resourceAclIdentities'
+  >]: DigitalEmployeeAuthoringStore[K] extends (...args: infer Args) => infer Result
+    ? (...args: Args) => Promise<Awaited<Result>>
+    : never
+}

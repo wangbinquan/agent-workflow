@@ -28,6 +28,7 @@ import {
 } from '../domain/model'
 import type {
   DigitalEmployeeAuthoringStore,
+  DigitalEmployeeAuthoringPersistence,
   DigitalEmployeeAclIdentityPersistence,
   EmployeeDefinitionRecord,
   EmployeeDefinitionRevisionRecord,
@@ -1007,4 +1008,49 @@ export function createSqliteDigitalEmployeeAuthoringStore(
       })
     },
   }
+}
+
+export function asAsyncDigitalEmployeeAuthoringPersistence(
+  store: DigitalEmployeeAuthoringStore,
+): DigitalEmployeeAuthoringPersistence {
+  return {
+    ensureTypePackage: async (input) => store.ensureTypePackage(input),
+    listTypePackageRegistrations: async () => store.listTypePackageRegistrations(),
+    listTypePackageDescriptorJsons: async () => store.listTypePackageDescriptorJsons(),
+    listTypePackages: async () => store.listTypePackages(),
+    getTypePackage: async (ref) => store.getTypePackage(ref),
+    createTool: async (input) => store.createTool(input),
+    updateToolValidation: async (id, content, receipt, updatedAt) =>
+      store.updateToolValidation(id, content, receipt, updatedAt),
+    getTool: async (id) => store.getTool(id),
+    getToolAcl: async (id) => store.getToolAcl(id),
+    listTools: async (typeRef, workItemRef) => store.listTools(typeRef, workItemRef),
+    publishTool: async (input) => store.publishTool(input),
+    getToolRevision: async (ref) => store.getToolRevision(ref),
+    retireTool: async (id, retiredAt) => store.retireTool(id, retiredAt),
+    createJobTemplate: async (input) => store.createJobTemplate(input),
+    updateJobTemplate: async (id, name, draft, now) =>
+      store.updateJobTemplate(id, name, draft, now),
+    getJobTemplate: async (id) => store.getJobTemplate(id),
+    getJobTemplateAcl: async (id) => store.getJobTemplateAcl(id),
+    listJobTemplates: async (typeRef) => store.listJobTemplates(typeRef),
+    listJobTemplatesByTypeId: async (typeId) => store.listJobTemplatesByTypeId(typeId),
+    publishJobTemplate: async (input) => store.publishJobTemplate(input),
+    getJobTemplateRevision: async (ref) => store.getJobTemplateRevision(ref),
+    getEmployeeDefinition: async (id) => store.getEmployeeDefinition(id),
+    getEmployeeDefinitionAcl: async (id) => store.getEmployeeDefinitionAcl(id),
+    listEmployeeDefinitions: async (typeRef) => store.listEmployeeDefinitions(typeRef),
+    saveEmployeeDefinition: async (input) => store.saveEmployeeDefinition(input),
+    getEmployeeDefinitionRevision: async (ref) => store.getEmployeeDefinitionRevision(ref),
+    getWorkScopeRevision: async (ref) => store.getWorkScopeRevision(ref),
+    getCurrentExecutionPolicy: async () => store.getCurrentExecutionPolicy(),
+    getExecutionPolicyRevision: async (revision) => store.getExecutionPolicyRevision(revision),
+    ensureExecutionPolicy: async (input) => store.ensureExecutionPolicy(input),
+  }
+}
+
+export function createSqliteDigitalEmployeeAuthoringPersistence(
+  db: DbClient,
+): DigitalEmployeeAuthoringPersistence {
+  return asAsyncDigitalEmployeeAuthoringPersistence(createSqliteDigitalEmployeeAuthoringStore(db))
 }

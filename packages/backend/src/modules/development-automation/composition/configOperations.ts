@@ -1,8 +1,12 @@
-// RFC-344 — bootstrap composition for development configuration operations.
+// RFC-344/RFC-349 — provider-neutral development configuration composition.
 
-import type { ResourceAccess } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
+import type { AclResourceType, ResourceAccess } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
+
 import type { DbClient } from '@/db/client'
+import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import {
   archiveActionTemplate,
   createActionTemplate,
@@ -15,57 +19,80 @@ import {
   publishVerificationProfile,
   reviseVerificationProfileDraft,
 } from '../application/commands/verificationProfileCommands'
+import { loadEmployeePublishLookup } from '../application/employeePublishLookup'
+import type {
+  ActionTemplatePersistence,
+  VerificationProfilePersistence,
+} from '../application/ports/configResourceStore'
+import type { DevelopmentConfigPersistence } from '../application/ports/developmentConfigPersistence'
 import {
-  archiveAutomationPolicy,
-  archiveDigitalEmployee,
-  createAutomationPolicy,
-  createDigitalEmployee,
-  getAutomationPolicy,
-  getDigitalEmployee,
-  listAutomationPolicies,
-  listDigitalEmployees,
-  publishAutomationPolicy,
-  publishDigitalEmployee,
-  reviseAutomationPolicyDraft,
-  reviseDigitalEmployeeDraft,
-} from '../infrastructure/sqliteDigitalEmployeeStore'
-import {
-  deleteAssignment,
-  listAssignments,
-  upsertAssignment,
-} from '../infrastructure/sqliteAssignmentStore'
-import {
-  createSqliteActionTemplateStore,
-  createSqliteVerificationProfileStore,
-} from '../infrastructure/sqliteConfigResourceStore'
-import { createEmployeePublishLookup } from '../infrastructure/publishLookup'
-import { evaluatePolicy } from '../engine/policy/evaluatePolicy'
-import { resolveEmployeeSelection } from '../engine/policy/workSelection'
-import { buildFactSnapshot } from '../domain/facts'
+  automationPolicyContentSchema,
+  policyContentDigest,
+  validatePolicyForPublish,
+} from '../domain/automationPolicy'
+import { canonicalDigest, canonicalStringify } from '../domain/canonicalJson'
 import {
   compileEmployeePlaybook,
   digitalEmployeeContentSchema,
   validateDigitalEmployeeForPublish,
 } from '../domain/digitalEmployee'
+import { buildFactSnapshot } from '../domain/facts'
 import { projectEmployeeSetupJourney } from '../domain/journeyProjection'
+import { evaluatePolicy } from '../engine/policy/evaluatePolicy'
+import { resolveEmployeeSelection } from '../engine/policy/workSelection'
+import {
+  createPostgresqlDevelopmentConfigPersistence,
+  createSqliteDevelopmentConfigPersistence,
+} from '../infrastructure/developmentConfigPersistence'
+import {
+  createPostgresqlActionTemplatePersistence,
+  createPostgresqlVerificationProfilePersistence,
+} from '../infrastructure/postgresqlConfigResourceStore'
+import {
+  createSqliteActionTemplatePersistence,
+  createSqliteVerificationProfilePersistence,
+} from '../infrastructure/sqliteConfigResourceStore'
 import type {
   DevelopmentConfigAclRow,
   DevelopmentConfigIdentityView,
   DevelopmentConfigOperations,
   DevelopmentConfigResourceOperations,
 } from '../public/operations'
-import {
-  assertNameUnchangedForEditor,
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import type { AclResourceType } from '@agent-workflow/shared'
-import { NotFoundError, ValidationError } from '@/util/errors'
 
-interface AclVisibleRow extends DevelopmentConfigAclRow {
+type Actor = DirectAuthenticatedAuthority
+
+export interface DevelopmentConfigAccessRow extends DevelopmentConfigAclRow {
   readonly name?: string
+}
+
+/** Resource Catalog binds this closed participant at bootstrap. */
+export interface DevelopmentConfigResourceAccess {
+  filterVisible<T extends DevelopmentConfigAccessRow>(
+    actor: Actor,
+    type: AclResourceType,
+    rows: readonly T[],
+  ): Promise<T[]>
+  canView(actor: Actor, type: AclResourceType, row: DevelopmentConfigAccessRow): Promise<boolean>
+  requireEdit(
+    actor: Actor,
+    type: AclResourceType,
+    row: DevelopmentConfigAccessRow,
+  ): Promise<ResourceAccess>
+  requireGovern(actor: Actor, type: AclResourceType, row: DevelopmentConfigAccessRow): Promise<void>
+  assertNameUnchangedForEditor(
+    access: ResourceAccess,
+    currentName: string,
+    submittedName: string | null | undefined,
+  ): void
+}
+
+export interface DevelopmentConfigCompositionDependencies {
+  readonly actionTemplates: ActionTemplatePersistence
+  readonly verificationProfiles: VerificationProfilePersistence
+  readonly persistence: DevelopmentConfigPersistence
+  readonly access: DevelopmentConfigResourceAccess
+  readonly developmentAdapter: DevelopmentConfigResourceOperations
+  readonly now?: () => number
 }
 
 function identityView(row: {
@@ -90,80 +117,96 @@ function identityView(row: {
   }
 }
 
-async function requireVisible<T extends AclVisibleRow>(
-  db: DbClient,
+async function requireVisible<T extends DevelopmentConfigAccessRow>(
+  access: DevelopmentConfigResourceAccess,
   actor: Actor,
   type: AclResourceType,
   row: T | null,
 ): Promise<T> {
-  if (row === null || !(await canViewResource(db, actor, type, row))) {
+  if (row === null || !(await access.canView(actor, type, row))) {
     throw new NotFoundError('resource-not-found', 'not found')
   }
   return row
 }
 
-async function requireEditable<T extends AclVisibleRow & { readonly name: string }>(
-  db: DbClient,
+async function requireEditable<T extends DevelopmentConfigAccessRow & { readonly name: string }>(
+  access: DevelopmentConfigResourceAccess,
   actor: Actor,
   type: AclResourceType,
   row: T | null,
-): Promise<{ readonly row: T; readonly access: ResourceAccess }> {
+): Promise<{ readonly row: T; readonly resourceAccess: ResourceAccess }> {
   if (row === null) throw new NotFoundError('resource-not-found', 'not found')
-  const access = await requireResourceEdit(db, actor, type, row)
-  return { row, access }
+  return { row, resourceAccess: await access.requireEdit(actor, type, row) }
 }
 
-async function requireGovernable<T extends AclVisibleRow>(
-  db: DbClient,
+async function requireGovernable<T extends DevelopmentConfigAccessRow>(
+  access: DevelopmentConfigResourceAccess,
   actor: Actor,
   type: AclResourceType,
   row: T | null,
 ): Promise<T> {
   if (row === null) throw new NotFoundError('resource-not-found', 'not found')
-  await requireResourceGovern(db, actor, type, row)
+  await access.requireGovern(actor, type, row)
   return row
 }
 
-export function composeDevelopmentConfigOperations(
-  db: DbClient,
-  developmentAdapter: DevelopmentConfigResourceOperations,
+function invalidDraft(
+  code: string,
+  issues: readonly { readonly message: string }[],
+): ValidationError {
+  return new ValidationError(code, issues[0]?.message ?? 'invalid draft', {
+    issues: issues.slice(0, 10),
+  })
+}
+
+export function composeDevelopmentConfigOperationsFromPersistence(
+  deps: DevelopmentConfigCompositionDependencies,
 ): DevelopmentConfigOperations {
-  const templateStore = createSqliteActionTemplateStore(db)
-  const profileStore = createSqliteVerificationProfileStore(db)
-  const now = () => Date.now()
+  const templateStore = deps.actionTemplates
+  const profileStore = deps.verificationProfiles
+  const config = deps.persistence
+  const access = deps.access
+  const now = deps.now ?? (() => Date.now())
 
   const actionTemplate: DevelopmentConfigResourceOperations = {
     kind: 'action-template',
     async list(actor) {
-      return (await filterVisibleRows(db, actor, 'action_template', templateStore.list())).map(
-        (row) => {
-          const published =
-            row.publishedRevision === null
-              ? null
-              : templateStore.getRevision(row.id, row.publishedRevision)
-          let executorKind: 'agent' | 'workgroup' | 'script' | null = null
-          if (published !== null) {
-            const content = JSON.parse(published.contentJson) as {
-              readonly executor?: { readonly kind?: unknown }
+      return await Promise.all(
+        (await access.filterVisible(actor, 'action_template', await templateStore.list())).map(
+          async (row) => {
+            const published =
+              row.publishedRevision === null
+                ? null
+                : await templateStore.getRevision(row.id, row.publishedRevision)
+            let executorKind: 'agent' | 'workgroup' | 'script' | null = null
+            if (published !== null) {
+              const content = JSON.parse(published.contentJson) as {
+                readonly executor?: { readonly kind?: unknown }
+              }
+              if (
+                content.executor?.kind === 'agent' ||
+                content.executor?.kind === 'workgroup' ||
+                content.executor?.kind === 'script'
+              ) {
+                executorKind = content.executor.kind
+              }
             }
-            if (
-              content.executor?.kind === 'agent' ||
-              content.executor?.kind === 'workgroup' ||
-              content.executor?.kind === 'script'
-            ) {
-              executorKind = content.executor.kind
+            return {
+              ...identityView(row),
+              capabilityId: row.extra.capabilityId,
+              executorKind,
             }
-          }
-          return {
-            ...identityView(row),
-            capabilityId: row.extra.capabilityId,
-            executorKind,
-          }
-        },
+          },
+        ),
       )
     },
     async get(actor, id) {
-      const row = await requireVisible(db, actor, 'action_template', templateStore.getById(id))
+      const row = await requireVisible(
+        access,
+        actor,
+        'action_template',
+        await templateStore.getById(id),
+      )
       return {
         ...identityView(row),
         capabilityId: row.extra.capabilityId,
@@ -175,7 +218,7 @@ export function composeDevelopmentConfigOperations(
         throw new ValidationError('action-template-capability-required', 'capabilityId is required')
       }
       return identityView(
-        createActionTemplate(
+        await createActionTemplate(
           { store: templateStore, now },
           {
             actorUserId: actor.userId,
@@ -187,14 +230,14 @@ export function composeDevelopmentConfigOperations(
       )
     },
     async revise(actor, id, input) {
-      const { row, access } = await requireEditable(
-        db,
+      const { row, resourceAccess } = await requireEditable(
+        access,
         actor,
         'action_template',
-        templateStore.getById(id),
+        await templateStore.getById(id),
       )
-      assertNameUnchangedForEditor(access, row.name, input.name)
-      reviseActionTemplateDraft(
+      access.assertNameUnchangedForEditor(resourceAccess, row.name, input.name)
+      await reviseActionTemplateDraft(
         { store: templateStore, now },
         {
           id,
@@ -204,46 +247,54 @@ export function composeDevelopmentConfigOperations(
       )
     },
     async publish(actor, id) {
-      await requireEditable(db, actor, 'action_template', templateStore.getById(id))
-      return publishActionTemplate({ store: templateStore, now }, { id, actorUserId: actor.userId })
+      await requireEditable(access, actor, 'action_template', await templateStore.getById(id))
+      return await publishActionTemplate(
+        { store: templateStore, now },
+        { id, actorUserId: actor.userId },
+      )
     },
     async archive(actor, id) {
-      await requireGovernable(db, actor, 'action_template', templateStore.getById(id))
-      archiveActionTemplate({ store: templateStore, now }, { id })
+      await requireGovernable(access, actor, 'action_template', await templateStore.getById(id))
+      await archiveActionTemplate({ store: templateStore, now }, { id })
     },
     async loadAclRow(id) {
-      return templateStore.getById(id)
+      return await templateStore.getById(id)
     },
   }
 
   const verificationProfile: DevelopmentConfigResourceOperations = {
     kind: 'verification-profile',
     async list(actor) {
-      return (await filterVisibleRows(db, actor, 'verification_profile', profileStore.list())).map(
-        identityView,
-      )
+      return (
+        await access.filterVisible(actor, 'verification_profile', await profileStore.list())
+      ).map(identityView)
     },
     async get(actor, id) {
-      const row = await requireVisible(db, actor, 'verification_profile', profileStore.getById(id))
+      const row = await requireVisible(
+        access,
+        actor,
+        'verification_profile',
+        await profileStore.getById(id),
+      )
       return { ...identityView(row), draft: JSON.parse(row.draftJson) as unknown }
     },
     async create(actor, input) {
       return identityView(
-        createVerificationProfile(
+        await createVerificationProfile(
           { store: profileStore, now },
           { actorUserId: actor.userId, name: input.name, draft: input.draft ?? {} },
         ),
       )
     },
     async revise(actor, id, input) {
-      const { row, access } = await requireEditable(
-        db,
+      const { row, resourceAccess } = await requireEditable(
+        access,
         actor,
         'verification_profile',
-        profileStore.getById(id),
+        await profileStore.getById(id),
       )
-      assertNameUnchangedForEditor(access, row.name, input.name)
-      reviseVerificationProfileDraft(
+      access.assertNameUnchangedForEditor(resourceAccess, row.name, input.name)
+      await reviseVerificationProfileDraft(
         { store: profileStore, now },
         {
           id,
@@ -253,18 +304,18 @@ export function composeDevelopmentConfigOperations(
       )
     },
     async publish(actor, id) {
-      await requireEditable(db, actor, 'verification_profile', profileStore.getById(id))
-      return publishVerificationProfile(
+      await requireEditable(access, actor, 'verification_profile', await profileStore.getById(id))
+      return await publishVerificationProfile(
         { store: profileStore, now },
         { id, actorUserId: actor.userId },
       )
     },
     async archive(actor, id) {
-      await requireGovernable(db, actor, 'verification_profile', profileStore.getById(id))
-      archiveVerificationProfile({ store: profileStore, now }, { id })
+      await requireGovernable(access, actor, 'verification_profile', await profileStore.getById(id))
+      await archiveVerificationProfile({ store: profileStore, now }, { id })
     },
     async loadAclRow(id) {
-      return profileStore.getById(id)
+      return await profileStore.getById(id)
     },
   }
 
@@ -272,7 +323,7 @@ export function composeDevelopmentConfigOperations(
     kind: 'digital-employee',
     async list(actor) {
       return (
-        await filterVisibleRows(db, actor, 'digital_employee', await listDigitalEmployees(db))
+        await access.filterVisible(actor, 'digital_employee', await config.employees.listActive())
       ).map((row) => {
         const draft = JSON.parse(row.draftJson) as {
           readonly description?: unknown
@@ -289,50 +340,76 @@ export function composeDevelopmentConfigOperations(
     },
     async get(actor, id) {
       const row = await requireVisible(
-        db,
+        access,
         actor,
         'digital_employee',
-        await getDigitalEmployee(db, id),
+        await config.employees.get(id),
       )
       return { ...identityView(row), draft: JSON.parse(row.draftJson) as unknown }
     },
     async create(actor, input) {
       return identityView(
-        await createDigitalEmployee(db, {
+        await config.employees.create({
+          id: ulid(),
           name: input.name,
           ownerUserId: actor.userId,
-          draft: input.draft ?? {},
+          draftJson: JSON.stringify(input.draft ?? {}),
+          now: now(),
         }),
       )
     },
     async revise(actor, id, input) {
-      const { row, access } = await requireEditable(
-        db,
+      const { row, resourceAccess } = await requireEditable(
+        access,
         actor,
         'digital_employee',
-        await getDigitalEmployee(db, id),
+        await config.employees.get(id),
       )
-      assertNameUnchangedForEditor(access, row.name, input.name)
-      await reviseDigitalEmployeeDraft(db, {
+      access.assertNameUnchangedForEditor(resourceAccess, row.name, input.name)
+      await config.employees.revise({
         id,
-        draft: input.draft ?? {},
+        draftJson: JSON.stringify(input.draft ?? {}),
         ...(input.name === undefined ? {} : { name: input.name }),
+        now: now(),
       })
     },
     async publish(actor, id) {
-      await requireEditable(db, actor, 'digital_employee', await getDigitalEmployee(db, id))
-      return publishDigitalEmployee(db, {
+      const { row } = await requireEditable(
+        access,
+        actor,
+        'digital_employee',
+        await config.employees.get(id),
+      )
+      const parsed = digitalEmployeeContentSchema.safeParse(JSON.parse(row.draftJson))
+      if (!parsed.success) {
+        throw invalidDraft('digital-employee-draft-invalid', parsed.error.issues)
+      }
+      const lookup = await loadEmployeePublishLookup(parsed.data, config.publishLookup)
+      const violations = validateDigitalEmployeeForPublish(parsed.data, lookup)
+      if (violations.length > 0) {
+        throw new ValidationError(
+          'digital-employee-publish-blocked',
+          'publish closure check failed',
+          { violations },
+        )
+      }
+      const contentJson = canonicalStringify(parsed.data)
+      const contentDigest = canonicalDigest(parsed.data)
+      return await config.employees.publish({
         id,
+        expectedDraftJson: row.draftJson,
+        contentJson,
+        contentDigest,
         publishedBy: actor.userId,
-        lookup: createEmployeePublishLookup(db),
+        now: now(),
       })
     },
     async archive(actor, id) {
-      await requireGovernable(db, actor, 'digital_employee', await getDigitalEmployee(db, id))
-      await archiveDigitalEmployee(db, id)
+      await requireGovernable(access, actor, 'digital_employee', await config.employees.get(id))
+      await config.employees.archive(id, now())
     },
     async loadAclRow(id) {
-      return getDigitalEmployee(db, id)
+      return await config.employees.get(id)
     },
   }
 
@@ -340,51 +417,80 @@ export function composeDevelopmentConfigOperations(
     kind: 'automation-policy',
     async list(actor) {
       return (
-        await filterVisibleRows(db, actor, 'automation_policy', await listAutomationPolicies(db))
+        await access.filterVisible(actor, 'automation_policy', await config.policies.listActive())
       ).map(identityView)
     },
     async get(actor, id) {
       const row = await requireVisible(
-        db,
+        access,
         actor,
         'automation_policy',
-        await getAutomationPolicy(db, id),
+        await config.policies.get(id),
       )
       return { ...identityView(row), draft: JSON.parse(row.draftJson) as unknown }
     },
     async create(actor, input) {
       return identityView(
-        await createAutomationPolicy(db, {
+        await config.policies.create({
+          id: ulid(),
           name: input.name,
           ownerUserId: actor.userId,
-          draft: input.draft ?? {},
+          draftJson: JSON.stringify(input.draft ?? {}),
+          now: now(),
         }),
       )
     },
     async revise(actor, id, input) {
-      const { row, access } = await requireEditable(
-        db,
+      const { row, resourceAccess } = await requireEditable(
+        access,
         actor,
         'automation_policy',
-        await getAutomationPolicy(db, id),
+        await config.policies.get(id),
       )
-      assertNameUnchangedForEditor(access, row.name, input.name)
-      await reviseAutomationPolicyDraft(db, {
+      access.assertNameUnchangedForEditor(resourceAccess, row.name, input.name)
+      await config.policies.revise({
         id,
-        draft: input.draft ?? {},
+        draftJson: JSON.stringify(input.draft ?? {}),
         ...(input.name === undefined ? {} : { name: input.name }),
+        now: now(),
       })
     },
     async publish(actor, id) {
-      await requireEditable(db, actor, 'automation_policy', await getAutomationPolicy(db, id))
-      return publishAutomationPolicy(db, { id, publishedBy: actor.userId })
+      const { row } = await requireEditable(
+        access,
+        actor,
+        'automation_policy',
+        await config.policies.get(id),
+      )
+      const parsed = automationPolicyContentSchema.safeParse(JSON.parse(row.draftJson))
+      if (!parsed.success) {
+        throw invalidDraft('automation-policy-draft-invalid', parsed.error.issues)
+      }
+      const violations = validatePolicyForPublish(parsed.data)
+      if (violations.length > 0) {
+        throw new ValidationError(
+          'automation-policy-publish-blocked',
+          'policy publish checks failed',
+          { violations },
+        )
+      }
+      const contentJson = canonicalStringify(parsed.data)
+      const contentDigest = policyContentDigest(parsed.data)
+      return await config.policies.publish({
+        id,
+        expectedDraftJson: row.draftJson,
+        contentJson,
+        contentDigest,
+        publishedBy: actor.userId,
+        now: now(),
+      })
     },
     async archive(actor, id) {
-      await requireGovernable(db, actor, 'automation_policy', await getAutomationPolicy(db, id))
-      await archiveAutomationPolicy(db, id)
+      await requireGovernable(access, actor, 'automation_policy', await config.policies.get(id))
+      await config.policies.archive(id, now())
     },
     async loadAclRow(id) {
-      return getAutomationPolicy(db, id)
+      return await config.policies.get(id)
     },
   }
 
@@ -393,25 +499,28 @@ export function composeDevelopmentConfigOperations(
     'verification-profile': verificationProfile,
     'digital-employee': digitalEmployee,
     'automation-policy': automationPolicy,
-    'development-adapter': developmentAdapter,
+    'development-adapter': deps.developmentAdapter,
   })
 
   const playbookProjection = async (actor: Actor, id: string): Promise<Record<string, unknown>> => {
     const row = await requireVisible(
-      db,
+      access,
       actor,
       'digital_employee',
-      await getDigitalEmployee(db, id),
+      await config.employees.get(id),
     )
     const parsed = digitalEmployeeContentSchema.safeParse(JSON.parse(row.draftJson))
     const violations = parsed.success
-      ? validateDigitalEmployeeForPublish(parsed.data, createEmployeePublishLookup(db))
+      ? validateDigitalEmployeeForPublish(
+          parsed.data,
+          await loadEmployeePublishLookup(parsed.data, config.publishLookup),
+        )
       : parsed.error.issues.map((issue) => ({
           code: 'playbook-schema-invalid',
           where: issue.path.join('/'),
           detail: issue.message,
         }))
-    const assignments = await listAssignments(db)
+    const assignments = await config.assignments.list()
     const hasAssignment = assignments.some((assignment) => assignment.employeeId === id)
     return {
       ...identityView(row),
@@ -440,18 +549,19 @@ export function composeDevelopmentConfigOperations(
     resources,
     readEmployeePlaybook: playbookProjection,
     async reviseEmployeePlaybook(actor, id, input) {
-      const { row, access } = await requireEditable(
-        db,
+      const { row, resourceAccess } = await requireEditable(
+        access,
         actor,
         'digital_employee',
-        await getDigitalEmployee(db, id),
+        await config.employees.get(id),
       )
-      assertNameUnchangedForEditor(access, row.name, input.name)
+      access.assertNameUnchangedForEditor(resourceAccess, row.name, input.name)
       digitalEmployeeContentSchema.parse(input.playbook)
-      await reviseDigitalEmployeeDraft(db, {
+      await config.employees.revise({
         id,
-        draft: input.playbook,
+        draftJson: JSON.stringify(input.playbook),
         ...(input.name === undefined ? {} : { name: input.name }),
+        now: now(),
       })
       return { ok: true, nextLocation: `/code/config/employees/${encodeURIComponent(id)}` }
     },
@@ -465,13 +575,12 @@ export function composeDevelopmentConfigOperations(
       }
     },
     async readSetupJourney(actor, employeeId) {
-      const visible = await filterVisibleRows(
-        db,
+      const visible = await access.filterVisible(
         actor,
         'digital_employee',
-        await listDigitalEmployees(db),
+        await config.employees.listActive(),
       )
-      const assignments = await listAssignments(db)
+      const assignments = await config.assignments.list()
       const hasAssignment = (id: string): boolean =>
         assignments.some((assignment) => assignment.employeeId === id)
       const selected =
@@ -496,7 +605,10 @@ export function composeDevelopmentConfigOperations(
           : digitalEmployeeContentSchema.safeParse(JSON.parse(selected.draftJson))
       const ready =
         parsed?.success === true &&
-        validateDigitalEmployeeForPublish(parsed.data, createEmployeePublishLookup(db)).length === 0
+        validateDigitalEmployeeForPublish(
+          parsed.data,
+          await loadEmployeePublishLookup(parsed.data, config.publishLookup),
+        ).length === 0
       return projectEmployeeSetupJourney({
         employee:
           selected === null
@@ -515,13 +627,13 @@ export function composeDevelopmentConfigOperations(
       })
     },
     async listAssignments() {
-      return listAssignments(db)
+      return await config.assignments.list()
     },
     async upsertAssignment(actor, input) {
-      return upsertAssignment(db, { ...input, updatedBy: actor.userId })
+      return await config.assignments.upsert({ ...input, updatedBy: actor.userId, now: now() })
     },
     async deleteAssignment(scopeKind, scopeRef) {
-      await deleteAssignment(db, scopeKind, scopeRef)
+      await config.assignments.delete(scopeKind, scopeRef)
     },
     async previewPolicy(input) {
       const snapshot = buildFactSnapshot({
@@ -546,4 +658,36 @@ export function composeDevelopmentConfigOperations(
     },
   }
   return Object.freeze(operations)
+}
+
+/** Existing SQLite bootstrap factory retained as the behavioral oracle. */
+export function composeDevelopmentConfigOperations(
+  db: DbClient,
+  developmentAdapter: DevelopmentConfigResourceOperations,
+  access: DevelopmentConfigResourceAccess,
+): DevelopmentConfigOperations {
+  return composeDevelopmentConfigOperationsFromPersistence({
+    actionTemplates: createSqliteActionTemplatePersistence(db),
+    verificationProfiles: createSqliteVerificationProfilePersistence(db),
+    persistence: createSqliteDevelopmentConfigPersistence(db),
+    developmentAdapter,
+    access,
+  })
+}
+
+/** PostgreSQL bootstrap factory; Resource Catalog supplies the bound ACL participant. */
+export function composePostgresqlDevelopmentConfigOperations(input: {
+  readonly db: PostgresqlDatabaseClient
+  readonly developmentAdapter: DevelopmentConfigResourceOperations
+  readonly access: DevelopmentConfigResourceAccess
+  readonly now?: () => number
+}): DevelopmentConfigOperations {
+  return composeDevelopmentConfigOperationsFromPersistence({
+    actionTemplates: createPostgresqlActionTemplatePersistence(input.db),
+    verificationProfiles: createPostgresqlVerificationProfilePersistence(input.db),
+    persistence: createPostgresqlDevelopmentConfigPersistence(input.db),
+    developmentAdapter: input.developmentAdapter,
+    access: input.access,
+    ...(input.now === undefined ? {} : { now: input.now }),
+  })
 }

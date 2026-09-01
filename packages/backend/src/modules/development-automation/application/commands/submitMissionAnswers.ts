@@ -17,7 +17,7 @@ import {
   type MissionStatus,
 } from '../../domain/mission'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import type { MissionStore } from '../ports/missionStore'
+import type { MissionPersistence } from '../ports/missionStore'
 import type {
   FactSnapshotReader,
   ReconcilerPorts,
@@ -39,7 +39,7 @@ export const submitMissionAnswersInputSchema = z
   .strict()
 
 export interface SubmitAnswersDeps {
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly requirement: RequirementMaterializePort
   /** PR-5 T55：新 answer revision 使 in-flight action 失效（cancel 走 launcher）。 */
@@ -58,7 +58,7 @@ export async function submitMissionAnswers(
   rawInput: unknown,
 ): Promise<SubmitAnswersResult> {
   const input = submitMissionAnswersInputSchema.parse(rawInput)
-  const mission = deps.store.getMission(input.missionId)
+  const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({
     command: 'submit-answers',
@@ -73,7 +73,7 @@ export async function submitMissionAnswers(
   const cells =
     mission.requirementBundleRef === null
       ? null
-      : deps.snapshots.getCells(mission.requirementBundleRef)
+      : await deps.snapshots.getCells(mission.requirementBundleRef)
   const pendingCell = cells?.['__requirement.pendingQuestionSetRef']
   const pendingRef =
     pendingCell !== undefined && pendingCell.state === 'known' ? String(pendingCell.value) : null
@@ -101,12 +101,12 @@ export async function submitMissionAnswers(
   // cells：answers-committed + exact revision；status：awaiting-information → working。
   const now = deps.now()
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const fresh = deps.store.getMission(mission.id)
+    const fresh = await deps.store.getMission(mission.id)
     if (fresh === null) throw new NotFoundError('mission-not-found', 'mission not found')
     const base =
       fresh.requirementBundleRef === null
         ? {}
-        : (deps.snapshots.getCells(fresh.requirementBundleRef) ?? {})
+        : ((await deps.snapshots.getCells(fresh.requirementBundleRef)) ?? {})
     const merged = {
       ...base,
       'requirement.clarificationState': {
@@ -126,7 +126,7 @@ export async function submitMissionAnswers(
       },
     }
     const snapshotId = ulid()
-    deps.store.insertFactSnapshot({
+    await deps.store.insertFactSnapshot({
       id: snapshotId,
       missionId: fresh.id,
       missionRevision: fresh.revision,
@@ -144,7 +144,7 @@ export async function submitMissionAnswers(
     const toWorking =
       fresh.status === 'awaiting-information' &&
       checkMissionTransition({ from: fresh.status, to: 'working', fence: fresh.transitionFence }).ok
-    const result = deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    const result = await deps.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
       requirementBundleRef: snapshotId,
       ...(toWorking ? { status: 'working' as const } : {}),
     })

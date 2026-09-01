@@ -4,8 +4,8 @@ import type { CutoverState } from '../../domain/cutover'
 
 export interface CutoverStore {
   /** 读 durable cutover 状态（缺行/坏行回 INITIAL——domain.parseCutoverState 语义）。 */
-  readState(): CutoverState
-  writeState(state: CutoverState, now: number): void
+  readState(): Promise<CutoverState>
+  writeState(state: CutoverState, now: number): Promise<void>
   /** cutover runbook 的 legacy link 台账（adopt 一次一行；receipt=观察到的外部状态）。 */
   insertLegacyLink(input: {
     readonly id: string
@@ -14,5 +14,5 @@ export interface CutoverStore {
     readonly legacyRoundId: string | null
     readonly cutoverReceiptJson: string
     readonly now: number
-  }): void
+  }): Promise<void>
 }
