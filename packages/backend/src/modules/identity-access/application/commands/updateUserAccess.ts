@@ -84,171 +84,181 @@ export class UpdateUserAccess {
     const contextMeta = trustedContextMetadata(context)
     let committed: TransactionResult
     try {
-      committed = this.deps.transactions.run((transaction) => {
-        const actorUserId = subjectRefOf(context.authority).userId
-        const actor = transaction.findUser(actorUserId)
-        const admissionSubject = admissionSubjectOf(
-          actor,
-          actor === null ? [] : transaction.listGrants(actor.id).map((grant) => grant.permission),
-        )
-        if (command.access !== undefined || command.legacyRole !== undefined) {
-          admitUserAccessMutation(admissionSubject, contextMeta)
-        } else {
-          admitUserDirectoryAccess(admissionSubject, contextMeta)
-        }
-        const current = transaction.findUser(command.targetUserId)
-        if (current === null) {
-          throw new UserAccessError('not-found', 'user-not-found', 'user not found')
-        }
-        if (current.id === this.deps.systemUserId) {
-          throw new UserAccessError(
-            'validation',
-            'system-user-immutable',
-            'cannot modify the system user',
+      const actorUserId = subjectRefOf(context.authority).userId
+      committed = await this.deps.transactions.run(
+        {
+          operation: 'update-user-access',
+          userIds: [actorUserId, command.targetUserId],
+          grantUserIds: [actorUserId, command.targetUserId],
+          activeAccessAdministrators: true,
+        },
+        (transaction) => {
+          const actor = transaction.findUser(actorUserId)
+          const admissionSubject = admissionSubjectOf(
+            actor,
+            actor === null ? [] : transaction.listGrants(actor.id).map((grant) => grant.permission),
           )
-        }
-        const currentGrants = transaction.listGrants(current.id)
-        if (
-          command.access !== undefined &&
-          command.access.expectedRevision !== current.accessRevision
-        ) {
-          throw new UserAccessError('conflict', 'user-access-stale', 'user access changed', {
-            currentRevision: current.accessRevision,
-          })
-        }
+          if (command.access !== undefined || command.legacyRole !== undefined) {
+            admitUserAccessMutation(admissionSubject, contextMeta)
+          } else {
+            admitUserDirectoryAccess(admissionSubject, contextMeta)
+          }
+          const current = transaction.findUser(command.targetUserId)
+          if (current === null) {
+            throw new UserAccessError('not-found', 'user-not-found', 'user not found')
+          }
+          if (current.id === this.deps.systemUserId) {
+            throw new UserAccessError(
+              'validation',
+              'system-user-immutable',
+              'cannot modify the system user',
+            )
+          }
+          const currentGrants = transaction.listGrants(current.id)
+          if (
+            command.access !== undefined &&
+            command.access.expectedRevision !== current.accessRevision
+          ) {
+            throw new UserAccessError('conflict', 'user-access-stale', 'user access changed', {
+              currentRevision: current.accessRevision,
+            })
+          }
 
-        const transition = this.planTransition(current, currentGrants, command)
-        const currentPermissions = resolveEffectiveAccountPermissions({
-          role: current.role,
-          additionalPermissions: canonicalStoredAccess({
+          const transition = this.planTransition(current, currentGrants, command)
+          const currentPermissions = resolveEffectiveAccountPermissions({
             role: current.role,
-            storedPermissions: currentGrants.map((grant) => grant.permission),
-          }).additionalPermissions,
-        })
-        const nextPermissions = resolveEffectiveAccountPermissions({
-          role: transition.role,
-          additionalPermissions: transition.additionalPermissions,
-        })
-        const nextStatus = command.status ?? current.status
-        if (
-          actorUserId === current.id &&
-          nextStatus === 'disabled' &&
-          current.status !== 'disabled'
-        ) {
-          throw new UserAccessError(
-            'validation',
-            'self-disable-forbidden',
-            'cannot disable your own account',
-          )
-        }
-        const invariant = accessInvariantFailure({
-          targetUserId: current.id,
-          actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
-          currentStatus: current.status,
-          nextStatus,
-          accessChanged: transition.changed,
-          currentCanManageUserAccess: currentPermissions.has('users:write'),
-          nextCanManageUserAccess: nextPermissions.has('users:write'),
-          otherActiveAccessAdministratorCount: transaction.countOtherActiveAccessAdministrators(
-            current.id,
-            this.deps.systemUserId,
-          ),
-          systemUserId: this.deps.systemUserId,
-        })
-        if (invariant !== null) {
-          throw new UserAccessError('validation', invariant, invariantMessage(invariant))
-        }
-
-        const profileValues = changedProfileValues(current, command, nextStatus)
-        const profileChanged = Object.keys(profileValues).length > 0
-        if (!transition.changed && !profileChanged) {
-          return {
-            user: materializeUserAccessView(current, currentGrants),
-            changed: false,
-            accessChanged: false,
-            becameDisabled: false,
-            revision: current.accessRevision,
-            addedPermissions: [],
-            removedPermissions: [],
-          }
-        }
-
-        const nextRevision = current.accessRevision + (transition.changed ? 1 : 0)
-        const updatedAt = context.now
-        const updated = transaction.updateUserConditional({
-          id: current.id,
-          expectedAccessRevision: current.accessRevision,
-          accessChanged: transition.changed,
-          values: {
-            ...profileValues,
-            ...(transition.changed ? { role: transition.role, accessRevision: nextRevision } : {}),
-            updatedAt,
-          },
-        })
-        if (!updated) {
-          throw new UserAccessError('conflict', 'user-access-stale', 'user access changed')
-        }
-
-        if (transition.changed) {
-          const next = new Set(transition.additionalPermissions)
-          for (const grant of currentGrants) {
-            if (!next.has(grant.permission as Permission)) {
-              transaction.deleteGrantValue(current.id, grant.permission)
-            }
-          }
-          const currentCanonical = new Set(
-            canonicalStoredAccess({
+            additionalPermissions: canonicalStoredAccess({
               role: current.role,
               storedPermissions: currentGrants.map((grant) => grant.permission),
             }).additionalPermissions,
-          )
-          for (const permission of transition.additionalPermissions) {
-            if (currentCanonical.has(permission)) continue
-            transaction.insertGrant({
-              userId: current.id,
-              permission,
-              grantedByUserId: contextMeta.source === 'cli' ? null : actorUserId,
-              grantedAt: context.now,
-            })
+          })
+          const nextPermissions = resolveEffectiveAccountPermissions({
+            role: transition.role,
+            additionalPermissions: transition.additionalPermissions,
+          })
+          const nextStatus = command.status ?? current.status
+          if (
+            actorUserId === current.id &&
+            nextStatus === 'disabled' &&
+            current.status !== 'disabled'
+          ) {
+            throw new UserAccessError(
+              'validation',
+              'self-disable-forbidden',
+              'cannot disable your own account',
+            )
           }
-        }
-        // The access audit is also the append-only account mutation audit.
-        // Profile-only writes carry a zero permission delta and the unchanged
-        // revision; this records who changed the account without persisting
-        // the old/new email values in an audit table.
-        transaction.appendAudit({
-          id: this.deps.auditId(),
-          targetUserId: current.id,
-          actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
-          actorKind: userAccessAuditKind(contextMeta.source),
-          operationId: context.operationId,
-          correlationId: context.correlationId,
-          beforeRole: current.role,
-          afterRole: transition.role,
-          addedPermissions: transition.addedPermissions,
-          removedPermissions: transition.removedPermissions,
-          accessRevision: nextRevision,
-          createdAt: context.now,
-        })
-        const becameDisabled = current.status !== 'disabled' && nextStatus === 'disabled'
-        if (becameDisabled) transaction.transitionDisabledOwner(current.id, context.now)
-        const nextRecord: UserAccessRecord = {
-          ...current,
-          ...profileValues,
-          role: transition.role,
-          updatedAt,
-          accessRevision: nextRevision,
-        }
-        return {
-          user: materializeUserAccessView(nextRecord, transition.additionalPermissions),
-          changed: true,
-          accessChanged: transition.changed,
-          becameDisabled,
-          revision: nextRevision,
-          addedPermissions: transition.addedPermissions,
-          removedPermissions: transition.removedPermissions,
-        }
-      })
+          const invariant = accessInvariantFailure({
+            targetUserId: current.id,
+            actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
+            currentStatus: current.status,
+            nextStatus,
+            accessChanged: transition.changed,
+            currentCanManageUserAccess: currentPermissions.has('users:write'),
+            nextCanManageUserAccess: nextPermissions.has('users:write'),
+            otherActiveAccessAdministratorCount: transaction.countOtherActiveAccessAdministrators(
+              current.id,
+              this.deps.systemUserId,
+            ),
+            systemUserId: this.deps.systemUserId,
+          })
+          if (invariant !== null) {
+            throw new UserAccessError('validation', invariant, invariantMessage(invariant))
+          }
+
+          const profileValues = changedProfileValues(current, command, nextStatus)
+          const profileChanged = Object.keys(profileValues).length > 0
+          if (!transition.changed && !profileChanged) {
+            return {
+              user: materializeUserAccessView(current, currentGrants),
+              changed: false,
+              accessChanged: false,
+              becameDisabled: false,
+              revision: current.accessRevision,
+              addedPermissions: [],
+              removedPermissions: [],
+            }
+          }
+
+          const nextRevision = current.accessRevision + (transition.changed ? 1 : 0)
+          const updatedAt = context.now
+          const updated = transaction.updateUserConditional({
+            id: current.id,
+            expectedAccessRevision: current.accessRevision,
+            accessChanged: transition.changed,
+            values: {
+              ...profileValues,
+              ...(transition.changed
+                ? { role: transition.role, accessRevision: nextRevision }
+                : {}),
+              updatedAt,
+            },
+          })
+          if (!updated) {
+            throw new UserAccessError('conflict', 'user-access-stale', 'user access changed')
+          }
+
+          if (transition.changed) {
+            const next = new Set(transition.additionalPermissions)
+            for (const grant of currentGrants) {
+              if (!next.has(grant.permission as Permission)) {
+                transaction.deleteGrantValue(current.id, grant.permission)
+              }
+            }
+            const currentCanonical = new Set(
+              canonicalStoredAccess({
+                role: current.role,
+                storedPermissions: currentGrants.map((grant) => grant.permission),
+              }).additionalPermissions,
+            )
+            for (const permission of transition.additionalPermissions) {
+              if (currentCanonical.has(permission)) continue
+              transaction.insertGrant({
+                userId: current.id,
+                permission,
+                grantedByUserId: contextMeta.source === 'cli' ? null : actorUserId,
+                grantedAt: context.now,
+              })
+            }
+          }
+          // The access audit is also the append-only account mutation audit.
+          // Profile-only writes carry a zero permission delta and the unchanged
+          // revision; this records who changed the account without persisting
+          // the old/new email values in an audit table.
+          transaction.appendAudit({
+            id: this.deps.auditId(),
+            targetUserId: current.id,
+            actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
+            actorKind: userAccessAuditKind(contextMeta.source),
+            operationId: context.operationId,
+            correlationId: context.correlationId,
+            beforeRole: current.role,
+            afterRole: transition.role,
+            addedPermissions: transition.addedPermissions,
+            removedPermissions: transition.removedPermissions,
+            accessRevision: nextRevision,
+            createdAt: context.now,
+          })
+          const becameDisabled = current.status !== 'disabled' && nextStatus === 'disabled'
+          if (becameDisabled) transaction.transitionDisabledOwner(current.id, context.now)
+          const nextRecord: UserAccessRecord = {
+            ...current,
+            ...profileValues,
+            role: transition.role,
+            updatedAt,
+            accessRevision: nextRevision,
+          }
+          return {
+            user: materializeUserAccessView(nextRecord, transition.additionalPermissions),
+            changed: true,
+            accessChanged: transition.changed,
+            becameDisabled,
+            revision: nextRevision,
+            addedPermissions: transition.addedPermissions,
+            removedPermissions: transition.removedPermissions,
+          }
+        },
+      )
     } catch (error) {
       if (command.access !== undefined || command.legacyRole !== undefined) {
         this.deps.observer?.accessUpdate({

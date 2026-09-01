@@ -38,16 +38,27 @@ export class SyncOidcProfile {
     },
   ) {}
 
-  execute(command: SyncOidcProfileCommand): SyncOidcProfileResult {
+  async execute(command: SyncOidcProfileCommand): Promise<SyncOidcProfileResult> {
     try {
       const now = this.deps.now()
       const operationId = this.deps.operationId()
-      return this.deps.transactions.run((transaction) =>
-        syncOidcProfileTransaction(transaction, command, {
-          now,
-          operationId,
-          auditId: this.deps.auditId,
-        }),
+      return await this.deps.transactions.run(
+        {
+          operation: 'sync-oidc-profile',
+          userIds: [command.userId],
+          emails: command.email === null ? [] : [command.email],
+          oidcProfileIdentity: {
+            providerId: command.providerId,
+            subject: command.subject,
+          },
+          oidcProfileSelectorsProviderId: command.providerId,
+        },
+        (transaction) =>
+          syncOidcProfileTransaction(transaction, command, {
+            now,
+            operationId,
+            auditId: this.deps.auditId,
+          }),
       )
     } catch (error) {
       throw mapOidcEmailConstraint(error)

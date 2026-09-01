@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   normalizeStoredAdditionalPermissions,
@@ -6,6 +6,7 @@ import {
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
+import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { initialGrantsForRole } from '../domain/initialGrants'
 import { oidcProviders, userIdentities, users } from '@/db/schema'
@@ -18,6 +19,8 @@ import type {
   ConditionalUserUpdate,
   InsertManagedUserRecord,
   OidcProfileIdentityUpdate,
+  PublicUserRecord,
+  PublicUserSearch,
   UserAccessFenceReader,
   UserAccessReadRepository,
   UserAccessRecord,
@@ -26,6 +29,7 @@ import type {
 } from '../application/ports/userAccessRepository'
 import type {
   UserAccessTransaction,
+  UserAccessTransactionReadSet,
   UserAccessTransactionRunner,
 } from '../application/ports/userAccessTransaction'
 import type { UserAccessAuditRecord } from '../application/ports/userAccessAuditRepository'
@@ -115,6 +119,78 @@ export class SQLiteUserAccessRepository implements UserAccessReadRepository, Use
     return { status: row.status as ManagedUserStatus, accessRevision: row.access_revision }
   }
 
+  async findByUsername(username: string): Promise<PublicUserRecord | null> {
+    const row = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        role: users.role,
+        status: users.status,
+      })
+      .from(users)
+      .where(and(ne(users.id, SYSTEM_USER_ID), eq(users.username, username)))
+      .limit(1)
+      .get()
+    return row === undefined ? null : mapPublicUser(row)
+  }
+
+  async search(input: PublicUserSearch): Promise<ReadonlyArray<PublicUserRecord>> {
+    const q = (input.q ?? '').trim().toLowerCase()
+    const excluded = new Set(input.excludeIds)
+    const rows = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        role: users.role,
+        status: users.status,
+      })
+      .from(users)
+      .where(
+        and(
+          ne(users.id, SYSTEM_USER_ID),
+          q.length === 0
+            ? undefined
+            : or(
+                sql`lower(${users.username}) LIKE ${`${q}%`}`,
+                sql`lower(${users.displayName}) LIKE ${`${q}%`}`,
+              ),
+          input.status === undefined ? undefined : eq(users.status, input.status),
+          input.status === undefined && excluded.size > 0
+            ? ne(users.status, 'disabled')
+            : undefined,
+        ),
+      )
+      .orderBy(asc(users.createdAt), asc(users.id))
+      .all()
+    return rows
+      .filter((row) => !excluded.has(row.id))
+      .slice(0, input.limit)
+      .map(mapPublicUser)
+  }
+
+  async lookup(ids: ReadonlyArray<string>): Promise<ReadonlyArray<PublicUserRecord>> {
+    const wanted = [...new Set(ids)].filter((id) => id !== SYSTEM_USER_ID)
+    if (wanted.length === 0) return []
+    const rows = await this.db
+      .select({
+        id: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        role: users.role,
+        status: users.status,
+      })
+      .from(users)
+      .where(inArray(users.id, wanted))
+      .all()
+    const byId = new Map(rows.map((row) => [row.id, mapPublicUser(row)]))
+    return wanted.flatMap((id) => {
+      const row = byId.get(id)
+      return row === undefined ? [] : [row]
+    })
+  }
+
   async findAccessSnapshot(id: string): Promise<UserAccessSnapshot | null> {
     const rows = (await this.db.all(sql`
       ${ACCESS_SNAPSHOT_SELECT}
@@ -139,10 +215,29 @@ export class SQLiteUserAccessRepository implements UserAccessReadRepository, Use
   }
 }
 
+function mapPublicUser(row: {
+  readonly id: string
+  readonly username: string
+  readonly displayName: string
+  readonly role: string
+  readonly status: string
+}): PublicUserRecord {
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.displayName,
+    role: row.role as Role,
+    status: row.status as ManagedUserStatus,
+  }
+}
+
 export class SQLiteUserAccessTransactionRunner implements UserAccessTransactionRunner {
   constructor(private readonly db: DbClient) {}
 
-  run<T>(body: (transaction: UserAccessTransaction) => NotPromise<T>): T {
+  async run<T>(
+    _readSet: UserAccessTransactionReadSet,
+    body: (transaction: UserAccessTransaction) => NotPromise<T>,
+  ): Promise<T> {
     return dbTxSync(this.db, (transaction) => body(new SQLiteUserAccessTransaction(transaction)))
   }
 }

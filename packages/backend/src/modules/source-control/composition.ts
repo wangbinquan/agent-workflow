@@ -1,8 +1,10 @@
 import type {
+  RepositoryBackupPreparationParticipant,
   RepositoryCommitCandidateParticipant,
   RepositoryCommitPublicationParticipant,
   WorkspaceExcludeParticipant,
 } from './public/participants'
+import type { RepositoryOverviewQueries } from './public/queries'
 import type { RepositoryPublicationTransport, RepositoryPublishMode } from './public/types'
 import { ensureWorkspaceExcludeProfile } from './infrastructure/workspaceExcludeManager'
 import {
@@ -25,22 +27,15 @@ import {
   prepareConflictMerge,
 } from './application/conflictMerge'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
-import {
-  canonicalRepositoryTransportBinding,
-  normalizeGitLabRepositoryUrlPrefix,
-  normalizeRepositoryTransportMappings,
-  RepositoryTransportMappingV1Schema,
-  type CodeHostProvider,
-  type RepositoryTransportMappingV1,
-} from '@agent-workflow/shared'
+import { type CodeHostProvider } from '@agent-workflow/shared'
 import { readFileSync } from 'node:fs'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { codeHostConnections } from '@/db/schema'
-import { sha256Hex } from '@/util/hash'
 import { RepositoryTransportCredentials } from './application/repositoryTransportCredentials'
-import { SQLiteRepositoryTransportCredentialRepository } from './infrastructure/sqliteRepositoryTransportCredentialRepository'
-import type { RepositoryTransportConnectionProjectionInput } from './ports/repositoryTransportCredentialRepository'
+import type {
+  RepositoryTransportConnectionProjectionInput,
+  RepositoryTransportCredentialRepository,
+} from './ports/repositoryTransportCredentialRepository'
+import { buildRepositoryTransportConnectionProjection } from './application/repositoryTransportConnectionProjection'
 import {
   checkpointEmployeeCaseWorkspace,
   discardEmployeeCaseWorkspace,
@@ -51,11 +46,45 @@ import {
   resolveEmployeeWorkspaceBaseline,
   restoreEmployeeCaseWorkspace,
 } from './application/employeeCaseWorkspace'
+import type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
+import { ensureCredentialsSealed } from '@/services/repoCredentials'
 
 export {
   createRepositoryPublicationTransport,
   resolveRepositoryPublicationTransportFromKeyFile,
 } from './composition/repositoryPublicationTransport'
+export {
+  composePostgresqlWorkspaceMaintenanceCommand,
+  composeSqliteWorkspaceMaintenanceCommand,
+} from './composition/workspaceMaintenance'
+export { buildRepositoryTransportConnectionProjection } from './application/repositoryTransportConnectionProjection'
+export { composeSqliteRepositoryWorkspaceStore } from './infrastructure/sqliteRepositoryWorkspaceStore'
+export { composePostgresqlRepositoryWorkspaceStore } from './infrastructure/postgresqlRepositoryWorkspaceStore'
+export { SQLiteRepositoryTransportCredentialRepository } from './infrastructure/sqliteRepositoryTransportCredentialRepository'
+export { PostgresqlRepositoryTransportCredentialRepository } from './infrastructure/postgresqlRepositoryTransportCredentialRepository'
+
+export type { RepositoryTransportCredentialRepository } from './ports/repositoryTransportCredentialRepository'
+export type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
+
+export interface RepositoryWorkspaceOperations {
+  readonly backupPreparation: RepositoryBackupPreparationParticipant
+  readonly overviewQueries: RepositoryOverviewQueries
+}
+
+/** Closed application surface shared by SQLite and PostgreSQL composition. */
+export function composeRepositoryWorkspaceOperations(
+  store: RepositoryWorkspaceStore,
+  secretBox: SecretBox | undefined,
+): RepositoryWorkspaceOperations {
+  return Object.freeze({
+    backupPreparation: Object.freeze({
+      prepare: (input = {}) => ensureCredentialsSealed(store, secretBox, input),
+    }),
+    overviewQueries: Object.freeze({
+      countCachedRepositories: () => store.countCachedRepos(),
+    }),
+  })
+}
 
 export type {
   OpenRepositoryPublicationSessionResult,
@@ -85,20 +114,17 @@ const repositoryTransportModules = new WeakMap<
 
 /** Bootstrap-owned RFC-321 source-control transport composition. */
 export function composeRepositoryTransportCredentials(
-  db: DbClient,
+  repository: RepositoryTransportCredentialRepository,
   secretBox: SecretBox,
 ): RepositoryTransportCredentialModule {
-  let bySecretBox = repositoryTransportModules.get(db)
+  let bySecretBox = repositoryTransportModules.get(repository)
   if (bySecretBox === undefined) {
     bySecretBox = new WeakMap<object, RepositoryTransportCredentialModule>()
-    repositoryTransportModules.set(db, bySecretBox)
+    repositoryTransportModules.set(repository, bySecretBox)
   }
   const cached = bySecretBox.get(secretBox)
   if (cached !== undefined) return cached
-  const service = new RepositoryTransportCredentials(
-    new SQLiteRepositoryTransportCredentialRepository(db),
-    secretBox,
-  )
+  const service = new RepositoryTransportCredentials(repository, secretBox)
   const module = Object.freeze({
     ownCredentials: service,
     adminConnections: service,
@@ -112,129 +138,35 @@ export function composeRepositoryTransportCredentials(
 /** Scheduler/background composition. Missing or unreadable key material is a
  * fail-closed unavailable supply; this helper never creates a replacement key. */
 export function resolveRepositoryTransportCredentialsFromKeyFile(
-  db: DbClient,
+  repository: RepositoryTransportCredentialRepository,
   keyFile: string,
 ): RepositoryTransportCredentials | null {
   try {
-    return composeRepositoryTransportCredentials(db, createSecretBoxFromKey(readFileSync(keyFile)))
-      .credentialSupply
+    return composeRepositoryTransportCredentials(
+      repository,
+      createSecretBoxFromKey(readFileSync(keyFile)),
+    ).credentialSupply
   } catch {
     return null
   }
 }
 
-function parseTransportMappings(raw: string): RepositoryTransportMappingV1[] {
-  let value: unknown
-  try {
-    value = JSON.parse(raw)
-  } catch {
-    return []
-  }
-  const parsed = RepositoryTransportMappingV1Schema.array().max(32).safeParse(value)
-  if (!parsed.success) return []
-  const normalized = normalizeRepositoryTransportMappings(parsed.data)
-  if (!normalized.ok) return []
-  return normalized.value.map((mapping) => ({
-    sshHost: mapping.sshHost,
-    sshPort: mapping.sshPort,
-    ...(mapping.sshPathPrefix === '' ? {} : { sshPathPrefix: mapping.sshPathPrefix }),
-    httpBaseUrl: mapping.httpBaseUrl,
-  }))
-}
-
-function parseAllowedBases(raw: string): string[] {
-  let value: unknown
-  try {
-    value = JSON.parse(raw)
-  } catch {
-    return []
-  }
-  if (!Array.isArray(value)) return []
-  const out: string[] = []
-  for (const item of value) {
-    if (typeof item !== 'string') return []
-    const normalized = normalizeGitLabRepositoryUrlPrefix(item)
-    if (!normalized.ok) return []
-    if (!out.includes(normalized.value)) out.push(normalized.value)
-  }
-  return out
-}
-
-function providerWebBase(provider: CodeHostProvider, apiBaseUrl: string): string | null {
-  if (provider === 'gitlab') {
-    return apiBaseUrl.endsWith('/api/v4') ? apiBaseUrl.slice(0, -'/api/v4'.length) : null
-  }
-  if (apiBaseUrl === 'https://api.github.com') return 'https://github.com'
-  return apiBaseUrl.endsWith('/api/v3') ? apiBaseUrl.slice(0, -'/api/v3'.length) : null
-}
-
-/** Bootstrap coordinator: derive the source-control projection without plaintext. */
-export function buildRepositoryTransportConnectionProjection(input: {
-  readonly provider: CodeHostProvider
-  readonly connectionGeneration: string
-  readonly baseUrl: string
-  readonly rejectUnauthorized: boolean
-  readonly repositoryUrlPrefixesJson: string
-  readonly transportMappingsJson: string
-  readonly tokenEnc: string
-  readonly tokenHint: string
-  readonly updatedAt: number
-  readonly updatedBy: string | null
-}): RepositoryTransportConnectionProjectionInput {
-  const transportMappings = parseTransportMappings(input.transportMappingsJson)
-  const allowedHttpBaseUrls = parseAllowedBases(input.repositoryUrlPrefixesJson)
-  const webBase = providerWebBase(input.provider, input.baseUrl)
-  if (webBase !== null && !allowedHttpBaseUrls.includes(webBase)) allowedHttpBaseUrls.push(webBase)
-  for (const mapping of transportMappings) {
-    const normalized = normalizeGitLabRepositoryUrlPrefix(mapping.httpBaseUrl)
-    if (normalized.ok && !allowedHttpBaseUrls.includes(normalized.value)) {
-      allowedHttpBaseUrls.push(normalized.value)
-    }
-  }
-  allowedHttpBaseUrls.sort()
-  const canonical = canonicalRepositoryTransportBinding({
-    version: 1,
-    provider: input.provider,
-    connectionGeneration: input.connectionGeneration,
-    apiBaseUrl: input.baseUrl,
-    rejectUnauthorized: input.rejectUnauthorized,
-    transportMappings,
-    allowedHttpBaseUrls,
-  })
-  if (canonical === null) {
-    throw new Error(`invalid repository transport binding for ${input.provider}`)
-  }
-  return {
-    provider: input.provider,
-    connectionGeneration: input.connectionGeneration,
-    endpointBindingDigest: sha256Hex(canonical),
-    apiBaseUrl: input.baseUrl,
-    rejectUnauthorized: input.rejectUnauthorized,
-    transportMappings,
-    allowedHttpBaseUrls,
-    globalTokenEnc: input.tokenEnc,
-    globalTokenHint: input.tokenHint,
-    updatedAt: input.updatedAt,
-    updatedBy: input.updatedBy,
-  }
-}
-
 /** Upgrade/boot convergence for the migration's ciphertext-only initial projection. */
-export function reconcileRepositoryTransportConnectionProjections(
-  db: DbClient,
+export async function reconcileRepositoryTransportConnectionProjections(
+  repository: RepositoryTransportCredentialRepository,
   participant: {
-    synchronize(input: RepositoryTransportConnectionProjectionInput): void
-    removeConnection(provider: CodeHostProvider): boolean
+    synchronize(input: RepositoryTransportConnectionProjectionInput): Promise<void>
+    removeConnection(provider: CodeHostProvider): Promise<boolean>
   },
-): void {
-  const rows = db.select().from(codeHostConnections).all()
+): Promise<void> {
+  const rows = await repository.listConfiguredConnections()
   const present = new Set<CodeHostProvider>()
   for (const row of rows) {
     present.add(row.provider)
-    participant.synchronize(buildRepositoryTransportConnectionProjection(row))
+    await participant.synchronize(buildRepositoryTransportConnectionProjection(row))
   }
   for (const provider of ['gitlab', 'github'] as const) {
-    if (!present.has(provider)) participant.removeConnection(provider)
+    if (!present.has(provider)) await participant.removeConnection(provider)
   }
 }
 

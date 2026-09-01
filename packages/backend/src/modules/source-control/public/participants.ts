@@ -15,7 +15,7 @@ export interface RepositoryTransportCredentialSelectionParticipant {
       | { readonly kind: 'user'; readonly userId: string }
       | { readonly kind: 'system' }
     readonly provider: CodeHostProvider
-  }): RepositoryTransportCredentialSelection
+  }): Promise<RepositoryTransportCredentialSelection>
 }
 
 /** Secret-free provider metadata query used by repository endpoint resolution. */
@@ -25,6 +25,20 @@ export interface RepositoryEndpointDiscoveryParticipant {
     readonly project: string
     readonly connectionGeneration: string
   }): Promise<RepositoryEndpointCandidate | null>
+}
+
+export interface RepositoryCredentialSealingReceipt {
+  readonly sealed: number
+  readonly linked: number
+  readonly scrubbed: number
+}
+
+/** Backup-facing credential gate. Persistence and SecretBox ownership remain
+ * inside source-control composition; callers receive only the closed action. */
+export interface RepositoryBackupPreparationParticipant {
+  prepare(input?: {
+    readonly blockOnCredentialedPath?: boolean
+  }): Promise<RepositoryCredentialSealingReceipt>
 }
 
 /** A worktree-bound participant; absolute paths never cross this interface. */

@@ -25,6 +25,19 @@ import type {
   VersionedExactCodec,
 } from '@/platform/operations/contracts'
 
+export type {
+  OidcIdentityOperations,
+  OidcIdentityProfileAccess,
+} from '../application/ports/oidcIdentityCrossContext'
+export type { OidcProviderRepository } from '../application/ports/oidcProviderPersistence'
+export { SqliteOidcProviderRepository } from '../infrastructure/sqliteOidcProviderRepository'
+export { PostgresqlOidcProviderRepository } from '../infrastructure/postgresqlOidcProviderRepository'
+export {
+  OWNER_IDENTITY_SQL_BATCH_SIZE,
+  type OwnerIdentityQueries,
+} from '../application/ports/ownerIdentityQueries'
+export { isOwnerScopedNameConflict } from '../application/ownerScopedName'
+
 const PUBLIC_ERRORS = Object.freeze([
   'not-found',
   'forbidden',

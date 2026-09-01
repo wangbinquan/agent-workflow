@@ -1,5 +1,6 @@
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
 import { GetUserPresence } from './application/queries/getUserPresence'
@@ -30,6 +31,11 @@ import {
   insertInitialUserAccessInTransaction,
   syncOidcProfileInTransaction,
 } from './infrastructure/sqliteUserAccessRepository'
+import {
+  PostgresqlAuthorityFenceCache,
+  PostgresqlUserAccessRepository,
+  PostgresqlUserAccessTransactionRunner,
+} from './infrastructure/postgresqlUserAccessRepository'
 import { mapOidcEmailConstraint } from './application/commands/syncOidcProfile'
 import type {
   SyncOidcProfileCommand,
@@ -52,7 +58,12 @@ import type {
   PresenceLease,
   PresenceQuery,
 } from './public/participants'
-import type { UserAccessFenceReader } from './application/ports/userAccessRepository'
+import type {
+  PublicUserDirectory,
+  UserAccessFenceReader,
+  UserAccessReadRepository,
+} from './application/ports/userAccessRepository'
+import type { UserAccessTransactionRunner } from './application/ports/userAccessTransaction'
 
 const SYSTEM_USER_ID = '__system__'
 
@@ -117,6 +128,7 @@ export interface IdentityAccessRuntime {
   readonly getUserProfile: GetUserProfile
   readonly getUserGitCommitIdentity: GetUserGitCommitIdentity
   readonly updateOwnProfile: UpdateOwnProfile
+  readonly userDirectory: PublicUserDirectory
   readonly initialUserAccess: InitialUserAccessTransactionBinding
   readonly syncOidcProfile: SyncOidcProfile
   readonly syncOidcProfileInTransaction: (
@@ -149,29 +161,76 @@ export interface CreateIdentityAccessRuntimeInput {
   readonly now?: () => number
 }
 
+/**
+ * PostgreSQL account bootstrap/OIDC linking must join the caller's surrounding
+ * async transaction.  The platform composition root supplies these opaque-
+ * scope bridges; identity-access never receives a raw PostgreSQL transaction.
+ */
+export interface PostgresqlIdentityAccessCrossContextBindings {
+  readonly initialUserAccess: InitialUserAccessTransactionBinding
+  readonly syncOidcProfileInTransaction: IdentityAccessRuntime['syncOidcProfileInTransaction']
+}
+
+export interface CreatePostgresqlIdentityAccessRuntimeInput {
+  readonly db: PostgresqlDatabaseClient
+  /** Required: account bootstrap and OIDC linking must join their owning PG transaction. */
+  readonly crossContextTransactions: PostgresqlIdentityAccessCrossContextBindings
+  readonly events?: RuntimeIdentityAccessEventSink
+  readonly presenceProjection?: RuntimePresenceProjectionSink
+  readonly id?: () => string
+  readonly now?: () => number
+}
+
+interface IdentityAccessPersistence {
+  readonly repository: UserAccessReadRepository & UserAccessFenceReader
+  readonly transactions: UserAccessTransactionRunner
+  readonly initialUserAccess: InitialUserAccessTransactionBinding
+  readonly syncOidcProfileInTransaction: IdentityAccessRuntime['syncOidcProfileInTransaction']
+}
+
 /** Pure composition factory.  Runtime lifetime belongs to the caller; there is
  * deliberately no DB-keyed cache and no WS import in this module. */
 export function createIdentityAccessRuntime(
   input: CreateIdentityAccessRuntimeInput,
 ): IdentityAccessRuntime {
-  return buildIdentityAccessRuntime(input, false)
+  return buildIdentityAccessRuntime(input, sqlitePersistence(input.db), false)
+}
+
+/** PostgreSQL composition root. Provider mechanics remain below composition;
+ * callers receive the same IdentityAccessRuntime Promise surface. */
+export function createPostgresqlIdentityAccessRuntime(
+  input: CreatePostgresqlIdentityAccessRuntimeInput,
+): IdentityAccessRuntime {
+  const fenceCache = new PostgresqlAuthorityFenceCache()
+  const repository = new PostgresqlUserAccessRepository(input.db, fenceCache)
+  return buildIdentityAccessRuntime(
+    input,
+    {
+      repository,
+      transactions: new PostgresqlUserAccessTransactionRunner(input.db, fenceCache),
+      initialUserAccess: input.crossContextTransactions.initialUserAccess,
+      syncOidcProfileInTransaction: input.crossContextTransactions.syncOidcProfileInTransaction,
+    },
+    false,
+  )
 }
 
 function buildIdentityAccessRuntime(
-  input: CreateIdentityAccessRuntimeInput,
+  input: Omit<CreateIdentityAccessRuntimeInput, 'db'>,
+  persistence: IdentityAccessPersistence,
   exposeFixtures: false,
 ): IdentityAccessRuntime
 function buildIdentityAccessRuntime(
-  input: CreateIdentityAccessRuntimeInput,
+  input: Omit<CreateIdentityAccessRuntimeInput, 'db'>,
+  persistence: IdentityAccessPersistence,
   exposeFixtures: true,
 ): IdentityAccessFixtureRuntime
 function buildIdentityAccessRuntime(
-  input: CreateIdentityAccessRuntimeInput,
+  input: Omit<CreateIdentityAccessRuntimeInput, 'db'>,
+  persistence: IdentityAccessPersistence,
   exposeFixtures: boolean,
 ): IdentityAccessRuntime | IdentityAccessFixtureRuntime {
-  const { db } = input
-  const repository = new SQLiteUserAccessRepository(db)
-  const transactions = new SQLiteUserAccessTransactionRunner(db)
+  const { repository, transactions } = persistence
   const observability = new IdentityAccessObservability()
   const resolveAuthority = new ResolveAuthority({ repository, observer: observability })
   const factoryDeps = { id: input.id ?? ulid, now: input.now ?? Date.now }
@@ -253,8 +312,13 @@ function buildIdentityAccessRuntime(
       systemUserId: SYSTEM_USER_ID,
       auditId: factoryDeps.id,
     }),
+    userDirectory: Object.freeze({
+      findByUsername: repository.findByUsername.bind(repository),
+      search: repository.search.bind(repository),
+      lookup: repository.lookup.bind(repository),
+    }),
     initialUserAccess: Object.freeze({
-      forTransaction: bindInitialUserAccessProvisioner,
+      forTransaction: persistence.initialUserAccess.forTransaction,
     }),
     syncOidcProfile: new SyncOidcProfile({
       transactions,
@@ -262,7 +326,7 @@ function buildIdentityAccessRuntime(
       operationId: factoryDeps.id,
       now: factoryDeps.now,
     }),
-    syncOidcProfileInTransaction,
+    syncOidcProfileInTransaction: persistence.syncOidcProfileInTransaction,
     mapOidcEmailConstraint,
     presenceConnections,
     presenceQuery: Object.freeze({ snapshot: () => getUserPresence.snapshot() }),
@@ -297,5 +361,15 @@ function bindInitialUserAccessProvisioner(
 /** Explicit local/test fixture factory. Production daemon/server code receives
  * one createIdentityAccessRuntime result from its bootstrap root. */
 export function composeIdentityAccess(db: DbClient): IdentityAccessFixtureRuntime {
-  return buildIdentityAccessRuntime({ db }, true)
+  return buildIdentityAccessRuntime({}, sqlitePersistence(db), true)
+}
+
+function sqlitePersistence(db: DbClient): IdentityAccessPersistence {
+  const repository = new SQLiteUserAccessRepository(db)
+  return {
+    repository,
+    transactions: new SQLiteUserAccessTransactionRunner(db),
+    initialUserAccess: Object.freeze({ forTransaction: bindInitialUserAccessProvisioner }),
+    syncOidcProfileInTransaction,
+  }
 }

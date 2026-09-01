@@ -1,5 +1,6 @@
 import type {
   CodeHostProvider,
+  CodeHostTestResult,
   OwnCodeHostPushCredentialList,
   OwnCodeHostPushCredentialSummary,
   PutOwnCodeHostPushCredentialRequest,
@@ -10,6 +11,8 @@ import type { SecretBox } from '@/auth/secretBox'
 import { selectRepositoryTransportCredential } from '../domain/repositoryTransportCredential'
 import type {
   RepositoryTransportConnectionProjectionInput,
+  RepositoryTransportConnectionMutationFence,
+  RepositoryTransportConnectionProjectionSource,
   RepositoryTransportCredentialRepository,
   StoredRepositoryTransportConnection,
 } from '../ports/repositoryTransportCredentialRepository'
@@ -21,6 +24,7 @@ import {
   type OwnRepositoryCredentialSubject,
   type RepositoryTransportCredentialSelection,
 } from '../public/types'
+import { buildRepositoryTransportConnectionProjection } from './repositoryTransportConnectionProjection'
 
 export interface ManagedCodeHostCredential {
   readonly provider: CodeHostProvider
@@ -65,31 +69,33 @@ export class RepositoryTransportCredentials
     private readonly secretBox: SecretBox,
   ) {}
 
-  list(subject: OwnRepositoryCredentialSubject): OwnCodeHostPushCredentialList {
+  async list(subject: OwnRepositoryCredentialSubject): Promise<OwnCodeHostPushCredentialList> {
     const personal = new Map(
-      this.repository.listPersonal(subject.userId).map((row) => [row.provider, row] as const),
+      (await this.repository.listPersonal(subject.userId)).map(
+        (row) => [row.provider, row] as const,
+      ),
     )
     return {
-      items: [...this.repository.listConnections()]
+      items: [...(await this.repository.listConnections())]
         .sort((left, right) => left.provider.localeCompare(right.provider))
         .map((connection) =>
-          this.repository.ownSummary(connection, personal.get(connection.provider) ?? null),
+          this.ownSummary(connection, personal.get(connection.provider) ?? null),
         ),
     }
   }
 
   /** Secret-free matching view used before a provider is known. */
-  listExecutionConnections(): readonly ManagedCodeHostConnection[] {
-    return this.repository
-      .listConnections()
-      .map((connection) => this.executionConnection(connection))
+  async listExecutionConnections(): Promise<readonly ManagedCodeHostConnection[]> {
+    return (await this.repository.listConnections()).map((connection) =>
+      this.executionConnection(connection),
+    )
   }
 
-  put(
+  async put(
     subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: PutOwnCodeHostPushCredentialRequest,
-  ): OwnCodeHostPushCredentialSummary {
+  ): Promise<OwnCodeHostPushCredentialSummary> {
     if (request.token.length < 8 || request.token.length > 4096) {
       throw new RepositoryTransportCredentialError(
         'validation',
@@ -97,7 +103,7 @@ export class RepositoryTransportCredentials
         'code-host push credential does not satisfy the input contract',
       )
     }
-    const connection = this.repository.findConnection(provider)
+    const connection = await this.repository.findConnection(provider)
     if (connection === null) {
       throw new RepositoryTransportCredentialError(
         'conflict',
@@ -115,7 +121,7 @@ export class RepositoryTransportCredentials
         'the code-host connection changed; refresh before saving the credential',
       )
     }
-    const personal = this.repository.putPersonal({
+    const personal = await this.repository.putPersonal({
       userId: subject.userId,
       provider,
       connectionGeneration: connection.connectionGeneration,
@@ -124,14 +130,14 @@ export class RepositoryTransportCredentials
       tokenHint: hintOf(request.token),
       now: Date.now(),
     })
-    return this.repository.ownSummary(connection, personal)
+    return this.ownSummary(connection, personal)
   }
 
-  remove(
+  async remove(
     subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
-  ): { readonly removed: boolean } {
-    return { removed: this.repository.removePersonal(subject.userId, provider) }
+  ): Promise<{ readonly removed: boolean }> {
+    return { removed: await this.repository.removePersonal(subject.userId, provider) }
   }
 
   /**
@@ -141,16 +147,16 @@ export class RepositoryTransportCredentials
    * the administrator-managed global connection instead. A selected personal
    * credential never falls through to the global token when stale or corrupt.
    */
-  resolveExecution(
+  async resolveExecution(
     subject: RepositoryCredentialSubject,
     provider: CodeHostProvider,
-  ): ManagedCodeHostCredentialResolution {
-    const connection = this.repository.findConnection(provider)
+  ): Promise<ManagedCodeHostCredentialResolution> {
+    const connection = await this.repository.findConnection(provider)
     if (connection === null) {
       return { ok: false, code: 'code-host-push-credential-connection-missing' }
     }
     const personal =
-      subject.kind === 'user' ? this.repository.findPersonal(subject.userId, provider) : null
+      subject.kind === 'user' ? await this.repository.findPersonal(subject.userId, provider) : null
     const selected = selectRepositoryTransportCredential({
       subjectKind: subject.kind,
       binding: connection,
@@ -186,12 +192,12 @@ export class RepositoryTransportCredentials
   }
 
   /** Stored-personal or one-shot draft resolution for the account identity probe. */
-  resolvePersonalForTest(
+  async resolvePersonalForTest(
     subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: TestOwnCodeHostPushCredentialRequest,
-  ): ManagedCodeHostCredentialResolution {
-    const connection = this.repository.findConnection(provider)
+  ): Promise<ManagedCodeHostCredentialResolution> {
+    const connection = await this.repository.findConnection(provider)
     if (connection === null) {
       return { ok: false, code: 'code-host-push-credential-connection-missing' }
     }
@@ -207,7 +213,7 @@ export class RepositoryTransportCredentials
         credential: this.executionCredential(connection, request.token, 'personal', null),
       }
     }
-    const personal = this.repository.findPersonal(subject.userId, provider)
+    const personal = await this.repository.findPersonal(subject.userId, provider)
     if (personal === null) {
       return { ok: false, code: 'code-host-push-credential-unavailable' }
     }
@@ -264,33 +270,99 @@ export class RepositoryTransportCredentials
     }
   }
 
-  inspect(provider: CodeHostProvider) {
-    const current = this.repository.findConnection(provider)
+  private ownSummary(
+    connection: StoredRepositoryTransportConnection,
+    personal: Awaited<ReturnType<RepositoryTransportCredentialRepository['findPersonal']>>,
+  ): OwnCodeHostPushCredentialSummary {
     return {
-      personalCredentialCount: this.repository.personalCount(provider),
+      provider: connection.provider,
+      displayBaseUrl: connection.apiBaseUrl,
+      connectionGeneration: connection.connectionGeneration,
+      endpointBindingDigest: connection.endpointBindingDigest,
+      configured: personal !== null,
+      tokenHint: personal?.tokenHint ?? null,
+      updatedAt: personal?.updatedAt ?? null,
+      stale:
+        personal !== null &&
+        (personal.connectionGeneration !== connection.connectionGeneration ||
+          personal.endpointBindingDigest !== connection.endpointBindingDigest),
+      fallback: 'platform-global',
+    }
+  }
+
+  async listAdminConnections(): Promise<readonly RepositoryTransportConnectionProjectionSource[]> {
+    return await this.repository.listConfiguredConnections()
+  }
+
+  async findAdminConnection(
+    provider: CodeHostProvider,
+  ): Promise<RepositoryTransportConnectionProjectionSource | null> {
+    return await this.repository.findConfiguredConnection(provider)
+  }
+
+  async inspectAdminConnection(provider: CodeHostProvider) {
+    return await this.inspect(provider)
+  }
+
+  projectAdminConnection(input: RepositoryTransportConnectionProjectionSource) {
+    return buildRepositoryTransportConnectionProjection(input)
+  }
+
+  async synchronizeAdminConnection(
+    input: RepositoryTransportConnectionProjectionSource,
+    expected: RepositoryTransportConnectionMutationFence,
+  ): Promise<boolean> {
+    return await this.repository.synchronizeConfiguredConnection(
+      input,
+      buildRepositoryTransportConnectionProjection(input),
+      expected,
+    )
+  }
+
+  async removeAdminConnection(
+    provider: CodeHostProvider,
+    expected: RepositoryTransportConnectionMutationFence,
+  ): Promise<'removed' | 'missing' | 'stale'> {
+    return await this.repository.removeConfiguredConnection(provider, expected)
+  }
+
+  async recordAdminConnectionTest(
+    provider: CodeHostProvider,
+    result: CodeHostTestResult,
+  ): Promise<void> {
+    await this.repository.recordConfiguredConnectionTest(provider, JSON.stringify(result))
+  }
+
+  async inspect(provider: CodeHostProvider) {
+    const [current, personalCredentialCount] = await Promise.all([
+      this.repository.findConnection(provider),
+      this.repository.personalCount(provider),
+    ])
+    return {
+      personalCredentialCount,
       currentConnectionGeneration: current?.connectionGeneration ?? null,
       currentEndpointBindingDigest: current?.endpointBindingDigest ?? null,
     }
   }
 
-  synchronize(input: RepositoryTransportConnectionProjectionInput): void {
-    this.repository.synchronizeConnection(input)
+  async synchronize(input: RepositoryTransportConnectionProjectionInput): Promise<void> {
+    await this.repository.synchronizeConnection(input)
   }
 
-  removeConnection(provider: CodeHostProvider): boolean {
-    return this.repository.removeConnection(provider)
+  async removeConnection(provider: CodeHostProvider): Promise<boolean> {
+    return await this.repository.removeConnection(provider)
   }
 
-  select(input: {
+  async select(input: {
     readonly subject:
       | { readonly kind: 'user'; readonly userId: string }
       | { readonly kind: 'system' }
     readonly provider: CodeHostProvider
-  }): RepositoryTransportCredentialSelection {
-    const connection = this.repository.findConnection(input.provider)
+  }): Promise<RepositoryTransportCredentialSelection> {
+    const connection = await this.repository.findConnection(input.provider)
     const personal =
       input.subject.kind === 'user'
-        ? this.repository.findPersonal(input.subject.userId, input.provider)
+        ? await this.repository.findPersonal(input.subject.userId, input.provider)
         : null
     return selectRepositoryTransportCredential({
       subjectKind: input.subject.kind,

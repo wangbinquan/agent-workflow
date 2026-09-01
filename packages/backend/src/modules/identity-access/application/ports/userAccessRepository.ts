@@ -26,6 +26,30 @@ export interface UserPermissionGrantRecord {
   readonly grantedAt: number
 }
 
+export interface PublicUserRecord {
+  readonly id: string
+  readonly username: string
+  readonly displayName: string
+  readonly role: Role
+  readonly status: ManagedUserStatus
+}
+
+export interface PublicUserSearch {
+  readonly q?: string
+  readonly limit: number
+  readonly excludeIds: ReadonlyArray<string>
+  readonly status?: ManagedUserStatus
+}
+
+/** Public-field-only directory used by user pickers and attribution chips.
+ * Implementations must apply status/exclusion filters before the limit so a
+ * disabled row cannot starve an active-only query. */
+export interface PublicUserDirectory {
+  findByUsername(username: string): Promise<PublicUserRecord | null>
+  search(input: PublicUserSearch): Promise<ReadonlyArray<PublicUserRecord>>
+  lookup(ids: ReadonlyArray<string>): Promise<ReadonlyArray<PublicUserRecord>>
+}
+
 /** RFC-320 — identity-side profile snapshot owned by identity-access. Subject
  * remains the immutable login key; these fields only drive account profile
  * refresh after the callback has established that subject. */
@@ -80,7 +104,7 @@ export interface ConditionalUserUpdate {
   >
 }
 
-export interface UserAccessReadRepository {
+export interface UserAccessReadRepository extends PublicUserDirectory {
   findAccessSnapshot(id: string): Promise<UserAccessSnapshot | null>
   listAccessSnapshots(): Promise<ReadonlyArray<UserAccessSnapshot>>
 }

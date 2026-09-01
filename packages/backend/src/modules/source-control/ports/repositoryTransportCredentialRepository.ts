@@ -1,8 +1,4 @@
-import type {
-  CodeHostProvider,
-  OwnCodeHostPushCredentialSummary,
-  RepositoryTransportMappingV1,
-} from '@agent-workflow/shared'
+import type { CodeHostProvider, RepositoryTransportMappingV1 } from '@agent-workflow/shared'
 import type {
   RepositoryTransportBinding,
   RepositoryTransportCredentialCandidate,
@@ -43,14 +39,39 @@ export interface RepositoryTransportConnectionProjectionInput {
   readonly updatedBy: string | null
 }
 
+/**
+ * Ciphertext-only administrator connection row used to converge the
+ * source-control-owned publication projection at boot. Infrastructure owns
+ * the physical table lookup; composition only sees this closed record.
+ */
+export interface RepositoryTransportConnectionProjectionSource {
+  readonly provider: CodeHostProvider
+  readonly connectionGeneration: string
+  readonly baseUrl: string
+  readonly rejectUnauthorized: boolean
+  readonly repositoryUrlPrefixesJson: string
+  readonly transportMappingsJson: string
+  readonly tokenEnc: string
+  readonly tokenHint: string
+  readonly lastTestJson: string | null
+  readonly updatedAt: number
+  readonly updatedBy: string | null
+}
+
+export interface RepositoryTransportConnectionMutationFence {
+  readonly personalCredentialCount: number
+  readonly currentConnectionGeneration: string | null
+  readonly currentEndpointBindingDigest: string | null
+}
+
 export interface RepositoryTransportCredentialRepository {
-  listConnections(): readonly StoredRepositoryTransportConnection[]
-  findConnection(provider: CodeHostProvider): StoredRepositoryTransportConnection | null
+  listConnections(): Promise<readonly StoredRepositoryTransportConnection[]>
+  findConnection(provider: CodeHostProvider): Promise<StoredRepositoryTransportConnection | null>
   findPersonal(
     userId: string,
     provider: CodeHostProvider,
-  ): StoredPersonalRepositoryTransportCredential | null
-  listPersonal(userId: string): readonly StoredPersonalRepositoryTransportCredential[]
+  ): Promise<StoredPersonalRepositoryTransportCredential | null>
+  listPersonal(userId: string): Promise<readonly StoredPersonalRepositoryTransportCredential[]>
   putPersonal(input: {
     readonly userId: string
     readonly provider: CodeHostProvider
@@ -59,13 +80,23 @@ export interface RepositoryTransportCredentialRepository {
     readonly tokenEnc: string
     readonly tokenHint: string
     readonly now: number
-  }): StoredPersonalRepositoryTransportCredential
-  removePersonal(userId: string, provider: CodeHostProvider): boolean
-  personalCount(provider: CodeHostProvider): number
-  synchronizeConnection(input: RepositoryTransportConnectionProjectionInput): void
-  removeConnection(provider: CodeHostProvider): boolean
-  ownSummary(
-    connection: StoredRepositoryTransportConnection,
-    personal: StoredPersonalRepositoryTransportCredential | null,
-  ): OwnCodeHostPushCredentialSummary
+  }): Promise<StoredPersonalRepositoryTransportCredential>
+  removePersonal(userId: string, provider: CodeHostProvider): Promise<boolean>
+  personalCount(provider: CodeHostProvider): Promise<number>
+  listConfiguredConnections(): Promise<readonly RepositoryTransportConnectionProjectionSource[]>
+  findConfiguredConnection(
+    provider: CodeHostProvider,
+  ): Promise<RepositoryTransportConnectionProjectionSource | null>
+  synchronizeConfiguredConnection(
+    connection: RepositoryTransportConnectionProjectionSource,
+    projection: RepositoryTransportConnectionProjectionInput,
+    expected: RepositoryTransportConnectionMutationFence,
+  ): Promise<boolean>
+  removeConfiguredConnection(
+    provider: CodeHostProvider,
+    expected: RepositoryTransportConnectionMutationFence,
+  ): Promise<'removed' | 'missing' | 'stale'>
+  recordConfiguredConnectionTest(provider: CodeHostProvider, lastTestJson: string): Promise<void>
+  synchronizeConnection(input: RepositoryTransportConnectionProjectionInput): Promise<void>
+  removeConnection(provider: CodeHostProvider): Promise<boolean>
 }

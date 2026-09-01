@@ -14,7 +14,6 @@ import {
 } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { runGit as defaultRunGit } from '@/util/git'
@@ -26,8 +25,10 @@ import {
   leaseTargetBoundGitCredential,
   type GitCredentialLease,
 } from '@/util/gitCredentialLease'
-import { SQLiteRepositoryTransportCredentialRepository } from '../infrastructure/sqliteRepositoryTransportCredentialRepository'
-import type { StoredRepositoryTransportConnection } from '../ports/repositoryTransportCredentialRepository'
+import type {
+  RepositoryTransportCredentialRepository,
+  StoredRepositoryTransportConnection,
+} from '../ports/repositoryTransportCredentialRepository'
 import type { RepositoryPublicationSession, RepositoryPublicationTransport } from '../public/types'
 import type { RepositoryEndpointDiscoveryParticipant } from '../public/participants'
 
@@ -146,13 +147,13 @@ async function discoverEndpointCandidate(input: {
 }
 
 export function createRepositoryPublicationTransport(input: {
-  readonly db: DbClient
+  readonly repository: RepositoryTransportCredentialRepository
   readonly secretBox?: SecretBox
   readonly appHome: string
   readonly runGit?: RepositoryGit
   readonly endpointDiscovery?: RepositoryEndpointDiscoveryParticipant
 }): RepositoryPublicationTransport {
-  const repository = new SQLiteRepositoryTransportCredentialRepository(input.db)
+  const repository = input.repository
   const runGit = input.runGit ?? defaultRunGit
   const secretBox = input.secretBox
   const credentialSupply =
@@ -173,7 +174,7 @@ export function createRepositoryPublicationTransport(input: {
       if (described.value.transport === 'file') {
         return { ok: true, session: legacySession(request.remoteUrl, input.appHome, runGit) }
       }
-      const connections = repository.listConnections()
+      const connections = await repository.listConnections()
       const candidates = connections.filter((connection) =>
         connectionMayOwnRemote(connection, request.remoteUrl),
       )
@@ -262,7 +263,7 @@ export function createRepositoryPublicationTransport(input: {
           detail: 'the repository credential seal key is unavailable',
         }
       }
-      const selected = credentialSupply.resolveExecution(request.subject, connection.provider)
+      const selected = await credentialSupply.resolveExecution(request.subject, connection.provider)
       if (!selected.ok) {
         return {
           ok: false,
@@ -295,7 +296,7 @@ export function createRepositoryPublicationTransport(input: {
         })
       }
 
-      const current = repository.findConnection(connection.provider)
+      const current = await repository.findConnection(connection.provider)
       if (
         current === null ||
         current.connectionGeneration !== connection.connectionGeneration ||
@@ -357,7 +358,7 @@ export function createRepositoryPublicationTransport(input: {
  * credential material from a background task.
  */
 export function resolveRepositoryPublicationTransportFromKeyFile(input: {
-  readonly db: DbClient
+  readonly repository: RepositoryTransportCredentialRepository
   readonly appHome: string
   readonly endpointDiscovery?: RepositoryEndpointDiscoveryParticipant
 }): RepositoryPublicationTransport {
@@ -368,7 +369,7 @@ export function resolveRepositoryPublicationTransportFromKeyFile(input: {
     secretBox = undefined
   }
   return createRepositoryPublicationTransport({
-    db: input.db,
+    repository: input.repository,
     appHome: input.appHome,
     ...(secretBox === undefined ? {} : { secretBox }),
     ...(input.endpointDiscovery === undefined

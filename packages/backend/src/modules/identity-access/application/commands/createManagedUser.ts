@@ -64,59 +64,72 @@ export class CreateManagedUser {
           ),
         ],
       })
-      const view = this.deps.transactions.run((transaction) => {
-        const actorUserId = subjectRefOf(context.authority).userId
-        const actor = transaction.findUser(actorUserId)
-        admitUserAccessMutation(
-          admissionSubjectOf(
-            actor,
-            actor === null ? [] : transaction.listGrants(actor.id).map((grant) => grant.permission),
-          ),
-          contextMeta,
-        )
-        if (command.id === this.deps.systemUserId || command.username === this.deps.systemUserId) {
-          throw new AccessError('conflict', 'username-reserved', 'system username is reserved')
-        }
-        if (transaction.findUserByUsername(command.username) !== null) {
-          throw new AccessError('conflict', 'username-taken', 'username already exists')
-        }
-        transaction.insertUser({
-          ...command,
-          gitName: command.displayName,
-          accessRevision: 0,
-          createdAt: context.now,
-          updatedAt: context.now,
-          lastLoginAt: null,
-        })
-        for (const permission of additionalPermissions) {
-          transaction.insertGrant({
-            userId: command.id,
-            permission,
-            // 系统默认授予 ⇒ NULL（与 0188 backfill 一致）；操作者显式勾选 ⇒ 操作者。
-            grantedByUserId: systemDefaults.has(permission)
-              ? null
-              : contextMeta.source === 'cli'
-                ? null
-                : actorUserId,
-            grantedAt: context.now,
+      const actorUserId = subjectRefOf(context.authority).userId
+      const view = await this.deps.transactions.run(
+        {
+          operation: 'create-managed-user',
+          userIds: [actorUserId],
+          usernames: [command.username],
+          grantUserIds: [actorUserId],
+        },
+        (transaction) => {
+          const actor = transaction.findUser(actorUserId)
+          admitUserAccessMutation(
+            admissionSubjectOf(
+              actor,
+              actor === null
+                ? []
+                : transaction.listGrants(actor.id).map((grant) => grant.permission),
+            ),
+            contextMeta,
+          )
+          if (
+            command.id === this.deps.systemUserId ||
+            command.username === this.deps.systemUserId
+          ) {
+            throw new AccessError('conflict', 'username-reserved', 'system username is reserved')
+          }
+          if (transaction.findUserByUsername(command.username) !== null) {
+            throw new AccessError('conflict', 'username-taken', 'username already exists')
+          }
+          transaction.insertUser({
+            ...command,
+            gitName: command.displayName,
+            accessRevision: 0,
+            createdAt: context.now,
+            updatedAt: context.now,
+            lastLoginAt: null,
           })
-        }
-        transaction.appendAudit({
-          id: this.deps.auditId(),
-          targetUserId: command.id,
-          actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
-          actorKind: userAccessAuditKind(contextMeta.source),
-          operationId: context.operationId,
-          correlationId: context.correlationId,
-          beforeRole: command.role,
-          afterRole: command.role,
-          addedPermissions: additionalPermissions,
-          removedPermissions: [],
-          accessRevision: 0,
-          createdAt: context.now,
-        })
-        return toView(command, additionalPermissions, context.now)
-      })
+          for (const permission of additionalPermissions) {
+            transaction.insertGrant({
+              userId: command.id,
+              permission,
+              // 系统默认授予 ⇒ NULL（与 0188 backfill 一致）；操作者显式勾选 ⇒ 操作者。
+              grantedByUserId: systemDefaults.has(permission)
+                ? null
+                : contextMeta.source === 'cli'
+                  ? null
+                  : actorUserId,
+              grantedAt: context.now,
+            })
+          }
+          transaction.appendAudit({
+            id: this.deps.auditId(),
+            targetUserId: command.id,
+            actorUserId: contextMeta.source === 'cli' ? null : actorUserId,
+            actorKind: userAccessAuditKind(contextMeta.source),
+            operationId: context.operationId,
+            correlationId: context.correlationId,
+            beforeRole: command.role,
+            afterRole: command.role,
+            addedPermissions: additionalPermissions,
+            removedPermissions: [],
+            accessRevision: 0,
+            createdAt: context.now,
+          })
+          return toView(command, additionalPermissions, context.now)
+        },
+      )
       this.deps.observer?.managedUserCreate({
         operationId: context.operationId,
         targetUserId: command.id,
