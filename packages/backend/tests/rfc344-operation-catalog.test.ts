@@ -684,10 +684,10 @@ describe('RFC-344 bootstrap-owned development activity participant', () => {
     )
 
     binding.bind({
-      publishOneChannelResult: () => 'idle',
+      publishOneChannelResult: async () => 'idle',
       runOneOutbox: async () => 'idle',
-      pumpOneDelivery: () => false,
-      planOneReaction: () => null,
+      pumpOneDelivery: async () => false,
+      planOneReaction: async () => null,
       inspectOneExecution: async () => 'completed',
     })
 
@@ -697,10 +697,10 @@ describe('RFC-344 bootstrap-owned development activity participant', () => {
     })
     expect(() =>
       binding.bind({
-        publishOneChannelResult: () => 'idle',
+        publishOneChannelResult: async () => 'idle',
         runOneOutbox: async () => 'idle',
-        pumpOneDelivery: () => false,
-        planOneReaction: () => null,
+        pumpOneDelivery: async () => false,
+        planOneReaction: async () => null,
         inspectOneExecution: async () => 'idle',
       }),
     ).toThrow('development-activity-worker-already-bound')

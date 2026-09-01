@@ -15,17 +15,26 @@
 // the signals DISAGREE, since those are the ones a single rate destroys.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { resolve } from 'node:path'
+import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import { codeFindings, codeWorkItems, codeWorkRounds } from '../src/db/schema'
 import {
-  createCodeMetricsQuery,
+  createCodeMetricsQuery as createCodeMetricsQueryFromPort,
   DEFAULT_METRICS_WINDOW_MS,
 } from '../src/modules/code-capability/application/codeMetricsQuery'
+import { composeSqliteCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
+import { createSqliteCodeMetricsRead } from '../src/modules/code-capability/infrastructure/sqliteCodeMetricsRead'
+import { mountCodeRoutes } from '../src/routes/code'
+import { resetRouteMetaRegistry } from '../src/routes/registry'
+import { errorHandler } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
+
+const createCodeMetricsQuery = (db: DbClient) =>
+  createCodeMetricsQueryFromPort(createSqliteCodeMetricsRead(db))
 
 describe('RFC-304 T58 — adoption buckets', () => {
   let db: DbClient
@@ -223,20 +232,38 @@ describe('RFC-304 T58 — run counts', () => {
 // every code to be NAMED by some test; naming it in a tautology would satisfy
 // that guard while proving nothing, which is worse than the gap it closes.
 describe('RFC-304 T58 — the metrics route', () => {
-  const TOKEN = 'a'.repeat(64)
+  const appWith = (db: DbClient) => {
+    const app = new Hono()
+    const actor = buildActor({
+      user: {
+        id: 'rfc304-code-metrics-user',
+        username: 'rfc304-code-metrics-user',
+        displayName: 'RFC-304 Code Metrics User',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'daemon',
+    })
+    const injectActor: MiddlewareHandler = async (context, next) => {
+      context.set('actor', actor)
+      await next()
+    }
+    app.use('*', injectActor)
+    app.onError(errorHandler)
+    mountCodeRoutes(app, composeSqliteCodeHistoryQueries(db))
+    return app
+  }
 
-  const appWith = (db: DbClient) =>
-    createApp({ token: TOKEN, configPath: '', opencodeVersion: '1.14.25', dbVersion: 1, db })
-
-  const get = async (db: DbClient, path: string) =>
-    await appWith(db).request(path, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const get = async (db: DbClient, path: string) => await appWith(db).request(path)
 
   let db: DbClient
   beforeEach(() => {
+    resetRouteMetaRegistry()
     db = createInMemoryDb(MIGRATIONS)
   })
   afterEach(() => {
     db.$client.close()
+    resetRouteMetaRegistry()
   })
 
   test('a non-numeric window is refused with `code-window-invalid`', async () => {

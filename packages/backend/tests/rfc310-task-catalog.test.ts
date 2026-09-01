@@ -207,7 +207,7 @@ describe('RFC-310 unified task catalog', () => {
     const calls: Array<Record<string, unknown>> = []
     const employeeSource = composeDigitalEmployeeTaskCatalogSource({
       queries: {
-        listCasePage(input) {
+        async listCasePage(input) {
           calls.push(input)
           return JSON.stringify({
             items: [],
@@ -247,7 +247,7 @@ describe('RFC-310 unified task catalog', () => {
   test('digital-employee source accepts the zero-based first execution round', async () => {
     const employeeSource = composeDigitalEmployeeTaskCatalogSource({
       queries: {
-        listCasePage() {
+        async listCasePage() {
           return JSON.stringify({
             items: [
               {
@@ -308,7 +308,7 @@ describe('RFC-310 unified task catalog', () => {
   test('waiting for an automatic event remains active instead of asking the user to answer', async () => {
     const employeeSource = composeDigitalEmployeeTaskCatalogSource({
       queries: {
-        listCasePage() {
+        async listCasePage() {
           return JSON.stringify({
             items: [
               digitalEmployeeCase({
@@ -343,7 +343,7 @@ describe('RFC-310 unified task catalog', () => {
     const calls: Array<Record<string, unknown>> = []
     const employeeSource = composeDigitalEmployeeTaskCatalogSource({
       queries: {
-        listCasePage(input) {
+        async listCasePage(input) {
           calls.push(input)
           return JSON.stringify({
             items: [],

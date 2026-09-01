@@ -23,7 +23,7 @@ import type { MergeRequestFactsCollectorPort } from '../src/modules/development-
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { shouldWakeForWebhook } from '../src/modules/development-automation/domain/webhookWake'
-import { createDevelopmentMissionCodeHostEventContinuation } from '../src/modules/development-automation/composition'
+import { createSqliteMissionCodeHostEventContinuation } from '../src/modules/development-automation/composition'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -208,17 +208,17 @@ describe('rfc310 pr7b T81 — the reopen signal actually reaches the probe', () 
     const fx = await buildPr3Fixture()
     const missionId = 'm-event-center-reopen-wake'
     await seedClosedMission(fx, missionId)
-    const continuation = createDevelopmentMissionCodeHostEventContinuation(fx.db)
+    const continuation = createSqliteMissionCodeHostEventContinuation(fx.db)
 
     expect(
-      continuation.match({ provider: 'endpoint-1', repoPath: 'project-1', mrIid: '77' }),
+      await continuation.match({ provider: 'endpoint-1', repoPath: 'project-1', mrIid: '77' }),
     ).toMatchObject({ continuationRef: missionId })
-    continuation.consume({
+    await continuation.consume({
       continuationRef: missionId,
       eventDeliveryId: 'event-delivery-reopen-1',
       occurredAt: 30_000_001,
     })
-    continuation.consume({
+    await continuation.consume({
       continuationRef: missionId,
       eventDeliveryId: 'event-delivery-reopen-1',
       occurredAt: 30_000_002,

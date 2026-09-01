@@ -26,6 +26,7 @@ import {
 } from '@/modules/collaboration/infrastructure/collaborationCommittedEventParticipant'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
 import {
   assertCommittedEventRegistry,
   combineCommittedEventCodecRegistries,
@@ -150,7 +151,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
   test('consumer registry has durable coverage for the complete collaboration union', () => {
     const definitions = createCollaborationDurableConsumerDefinitions({
       events: {
-        observe(input) {
+        async observe(input) {
           return { eventId: input.dedupeKey, duplicate: false, deliveryCount: 0, deliveryIds: [] }
         },
       },
@@ -166,7 +167,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
     )
   })
 
-  test('domain write, operation and event all roll back when event insertion fails', () => {
+  test('domain write, operation and event all roll back when event insertion fails', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     dispatchCollaboration(db)
     db.insert(tasks)
@@ -190,7 +191,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       BEGIN SELECT RAISE(ABORT, 'rfc341-collaboration-event-fault'); END
     `)
 
-    expect(() =>
+    await expect(
       createManualQuestionOpen(createCollaborationCommandContext({ db }), {
         taskId: 'task-question-rollback',
         title: 'Question',
@@ -199,7 +200,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
         actorUserId: 'user-rfc341',
         now: NOW + 1,
       }),
-    ).toThrow()
+    ).rejects.toThrow()
     expect(db.select().from(taskQuestions).all()).toEqual([])
     expect(db.select().from(collaborationGateOperations).all()).toEqual([])
     expect(db.select().from(committedEvents).all()).toEqual([])
@@ -256,7 +257,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       },
     }
     const pump = createAfterCommitEventPump({
-      db,
+      persistence: createSqliteCommittedEventDeliveryPersistence(db),
       codecs: collaborationCommittedEventCodec,
       projectors: [projector],
       projectionLedger,
@@ -267,8 +268,8 @@ describe('RFC-341 collaboration committed-event contracts', () => {
       // ignore it: only the exact durable human-gate decision consumer owns continuation wakes.
       ...legacyContinuationWake,
     })
-    pump.publishNow([second, first])
-    pump.publishNow([first, second])
+    await pump.publishNow([second, first])
+    await pump.publishNow([first, second])
     expect(projected).toEqual([
       '0:collaboration.human-gate-opened.v1',
       '1:collaboration.review-selection-changed.v1',
@@ -278,7 +279,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
 
     const durable = createCollaborationDurableConsumerDefinitions({
       events: {
-        observe(input) {
+        async observe(input) {
           return { eventId: input.dedupeKey, duplicate: false, deliveryCount: 0, deliveryIds: [] }
         },
       },
@@ -318,7 +319,7 @@ describe('RFC-341 collaboration committed-event contracts', () => {
     expect(continuationNudges).toBe(1)
 
     const dispatcher = createCommittedEventDispatcher({
-      db,
+      persistence: createSqliteCommittedEventDeliveryPersistence(db),
       workerId: 'rfc341-dispatcher',
       codecs: collaborationCommittedEventCodec,
       consumers: [...durable, projector],

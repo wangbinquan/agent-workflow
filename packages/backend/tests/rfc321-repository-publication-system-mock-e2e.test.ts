@@ -25,6 +25,7 @@ import {
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
 } from '../src/modules/source-control/composition'
+import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
 import { pushCandidate } from '../src/modules/source-control/application/deliverCandidate'
 import { createUser } from '../src/services/users'
 import { runGit } from '../src/util/git'
@@ -69,6 +70,10 @@ function checkedGit(cwd: string, ...args: string[]): string {
 
 function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
+}
+
+function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
+  return new SQLiteRepositoryTransportCredentialRepository(db)
 }
 
 function commitProof(worktree: string, label: string): string {
@@ -117,7 +122,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
   expect(cloned.exitCode, cloned.stderr).toBe(0)
   const db = createInMemoryDb(MIGRATIONS)
   const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 41))
-  const credentials = composeRepositoryTransportCredentials(db, secretBox)
+  const credentials = composeRepositoryTransportCredentials(repositoryOf(db), secretBox)
   const [alice, bob] = await Promise.all([
     createUser(db, {
       username: 'rfc321-smart-http-alice',
@@ -132,7 +137,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
       password: 'longEnoughPassword',
     }),
   ])
-  credentials.adminConnections.synchronize({
+  await credentials.adminConnections.synchronize({
     provider: 'gitlab',
     connectionGeneration: 'rfc321-system-mock-generation',
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,
@@ -153,7 +158,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     updatedAt: 1,
     updatedBy: null,
   })
-  credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
+  await credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
     token: SYSTEM_MOCK_GIT_PERSONAL_TOKEN,
     connectionGeneration: 'rfc321-system-mock-generation',
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,
@@ -171,7 +176,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
     },
   })
   const transport = createRepositoryPublicationTransport({
-    db,
+    repository: repositoryOf(db),
     secretBox,
     appHome,
     endpointDiscovery,
@@ -242,7 +247,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
   expect(globalRemote.exitCode, globalRemote.stderr).toBe(0)
   expect(globalRemote.stdout).toContain(globalSha)
 
-  credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
+  await credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
     token: INVALID_PERSONAL_TOKEN,
     connectionGeneration: 'rfc321-system-mock-generation',
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,
@@ -271,7 +276,7 @@ test('SSH metadata resolves to real smart HTTP; personal wins, absence uses glob
   expect(invalidRequests.map((request) => request.credentialIdentity)).toContain('invalid')
   expect(invalidRequests.map((request) => request.credentialIdentity)).not.toContain('global')
 
-  credentials.adminConnections.synchronize({
+  await credentials.adminConnections.synchronize({
     provider: 'gitlab',
     connectionGeneration: 'rfc321-system-mock-generation',
     endpointBindingDigest: ENDPOINT_BINDING_DIGEST,

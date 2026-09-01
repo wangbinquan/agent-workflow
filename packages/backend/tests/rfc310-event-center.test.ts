@@ -35,7 +35,7 @@ describe('RFC-310 shared Event Center', () => {
       targetRefId: string
       triggerContext: unknown
     }> = []
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [
         codeHostEventCatalogJson,
@@ -44,7 +44,7 @@ describe('RFC-310 shared Event Center', () => {
         taskLifecycleEventCatalogJson,
       ],
       routingSubscriptions: {
-        list: () =>
+        list: async () =>
           ['webhook-rule-a', 'webhook-rule-b'].map((id, index) => ({
             id,
             definitionRevision: '1',
@@ -58,7 +58,7 @@ describe('RFC-310 shared Event Center', () => {
             createdAt: index + 1,
             updatedAt: index + 1,
           })),
-        match: () => [],
+        match: async () => [],
       },
       now: () => 31_000,
       id: () => `response-resource-${++ordinal}`,
@@ -74,7 +74,7 @@ describe('RFC-310 shared Event Center', () => {
       },
     })
 
-    const catalog = JSON.parse(eventCenter.queries.catalog.catalogJson()) as {
+    const catalog = JSON.parse(await eventCenter.queries.catalog.catalogJson()) as {
       sources: Array<{
         sourceRef: { id: string; revision: number }
         subscriptionCount: number
@@ -133,7 +133,7 @@ describe('RFC-310 shared Event Center', () => {
       ['流水线修复一', 'workflow-repair-a'],
       ['流水线修复二', 'workflow-repair-b'],
     ] as const) {
-      eventCenter.responseRules.commands.create(
+      await eventCenter.responseRules.commands.create(
         {
           name,
           enabled: true,
@@ -151,7 +151,7 @@ describe('RFC-310 shared Event Center', () => {
       )
     }
 
-    eventCenter.participant.subscribe({
+    await eventCenter.participant.subscribe({
       eventTypeRef: { id: 'code-host.pipeline.failed', revision: 1 },
       subject: {
         typeId: 'code-host.pipeline',
@@ -159,17 +159,18 @@ describe('RFC-310 shared Event Center', () => {
       },
       subscriber: { kind: 'system', subscriberRef: 'exact-audit-subscriber' },
     })
-    const subscriptionPages = [1, 2, 3].flatMap((page) => {
+    const subscriptionPages: Array<{ id: string; mode: string }> = []
+    for (const page of [1, 2, 3]) {
       const document = JSON.parse(
-        eventCenter.queries.catalog.subscriptionPageJson({
+        await eventCenter.queries.catalog.subscriptionPageJson({
           page,
           limit: 2,
           subscriberRef: null,
         }),
       ) as { items: Array<{ id: string; mode: string }>; total: number }
       expect(document.total).toBe(5)
-      return document.items
-    })
+      subscriptionPages.push(...document.items)
+    }
     expect(subscriptionPages).toHaveLength(5)
     expect(new Set(subscriptionPages.map((subscription) => subscription.id)).size).toBe(5)
     expect(subscriptionPages.map((subscription) => subscription.mode).sort()).toEqual([
@@ -180,7 +181,7 @@ describe('RFC-310 shared Event Center', () => {
       'filtered',
     ])
 
-    const receipt = eventCenter.participant.observe(
+    const receipt = await eventCenter.participant.observe(
       codeHostBusinessEventObservation({
         endpointId: 'endpoint-public',
         deliveryId: 'delivery-public',
@@ -214,7 +215,7 @@ describe('RFC-310 shared Event Center', () => {
       },
     })
 
-    eventCenter.participant.observe(
+    await eventCenter.participant.observe(
       codeHostEventObservation({
         endpointId: 'endpoint-1',
         deliveryId: 'delivery-compatibility-1',
@@ -235,13 +236,13 @@ describe('RFC-310 shared Event Center', () => {
       }),
     )
     expect(
-      eventCenter.queries.operations.eventRecordPage({ page: 1, limit: 20, sourceId: null }),
+      await eventCenter.queries.operations.eventRecordPage({ page: 1, limit: 20, sourceId: null }),
     ).toMatchObject({
       total: 1,
       items: [{ eventTypeRef: { id: 'code-host.pipeline.failed', revision: 1 } }],
     })
 
-    expect(() =>
+    await expect(
       eventCenter.responseRules.commands.create(
         {
           name: '不能选择兼容入站事件',
@@ -258,14 +259,14 @@ describe('RFC-310 shared Event Center', () => {
         },
         OWNER_PRINCIPAL,
       ),
-    ).toThrow('non-public event facts cannot be selected')
+    ).rejects.toThrow('non-public event facts cannot be selected')
   })
 
   test('a queued response delivery never executes a target edited after the event matched', async () => {
     const now = 41_000
     let ordinal = 0
     const launches: string[] = []
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [
         codeHostEventCatalogJson,
@@ -280,7 +281,7 @@ describe('RFC-310 shared Event Center', () => {
         },
       },
     })
-    const original = eventCenter.responseRules.commands.create(
+    const original = await eventCenter.responseRules.commands.create(
       {
         name: '流水线修复',
         enabled: true,
@@ -296,7 +297,7 @@ describe('RFC-310 shared Event Center', () => {
       },
       OWNER_PRINCIPAL,
     )
-    const receipt = eventCenter.participant.observe(
+    const receipt = await eventCenter.participant.observe(
       codeHostBusinessEventObservation({
         endpointId: 'endpoint-stale',
         deliveryId: 'delivery-stale',
@@ -317,7 +318,7 @@ describe('RFC-310 shared Event Center', () => {
         },
       }),
     )
-    eventCenter.responseRules.commands.update(
+    await eventCenter.responseRules.commands.update(
       original.id,
       {
         name: '流水线修复（新定义）',
@@ -337,12 +338,12 @@ describe('RFC-310 shared Event Center', () => {
 
     expect(await eventCenter.worker.runOneNotification()).toBe('completed')
     expect(launches).toEqual([])
-    expect(eventCenter.queries.operations.deliveryStatuses()).toMatchObject([
+    expect(await eventCenter.queries.operations.deliveryStatuses()).toMatchObject([
       { deliveryId: receipt.deliveryIds[0], state: 'accepted' },
     ])
   })
 
-  test('an upgrade preserves immutable employee-private revisions while publishing new business facts', () => {
+  test('an upgrade preserves immutable employee-private revisions while publishing new business facts', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const employeePackage = JSON.parse(developmentEmployeeTypePackage.descriptorJson) as {
       typeRef: { typeId: string }
@@ -389,7 +390,7 @@ describe('RFC-310 shared Event Center', () => {
         .run()
     }
 
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
@@ -398,7 +399,7 @@ describe('RFC-310 shared Event Center', () => {
       now: () => 2,
       id: () => 'upgrade-resource',
     })
-    const catalog = JSON.parse(eventCenter.queries.catalog.catalogJson()) as {
+    const catalog = JSON.parse(await eventCenter.queries.catalog.catalogJson()) as {
       eventTypes: Array<{ eventTypeRef: { id: string } }>
     }
     expect(catalog.eventTypes.map((event) => event.eventTypeRef.id)).toEqual(
@@ -746,7 +747,7 @@ describe('RFC-310 shared Event Center', () => {
     const now = 10_000
     let ordinal = 0
     const calls: Array<{ cursorJson: string | null; subjects: readonly string[] }> = []
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => now,
@@ -779,7 +780,7 @@ describe('RFC-310 shared Event Center', () => {
 
     const subscriber = { kind: 'employee-case' as const, subscriberRef: 'case-1' }
     const subject = { typeId: 'merge-request', subjectRef: 'mr-1' }
-    const pipelineSubscription = eventCenter.participant.subscribe({
+    const pipelineSubscription = await eventCenter.participant.subscribe({
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject,
       subscriber,
@@ -787,26 +788,26 @@ describe('RFC-310 shared Event Center', () => {
     expect(pipelineSubscription.created).toBe(true)
     expect(pipelineSubscription.observerTransition).toBe('started')
     expect(
-      eventCenter.participant.subscribe({
+      await eventCenter.participant.subscribe({
         eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
         subject,
         subscriber,
       }),
     ).toEqual({ ...pipelineSubscription, created: false, observerTransition: 'none' })
-    expect(eventCenter.queries.operations.observerHealth()).toMatchObject([
+    expect(await eventCenter.queries.operations.observerHealth()).toMatchObject([
       { subscriberCount: 1, state: 'active', nextScanAt: now },
     ])
 
     expect(await eventCenter.worker.runOneDueObserver()).toBe('completed')
     expect(calls).toEqual([{ cursorJson: null, subjects: ['mr-1'] }])
-    const delivery = eventCenter.participant.pendingDeliveries(subscriber, 10)
+    const delivery = await eventCenter.participant.pendingDeliveries(subscriber, 10)
     expect(delivery).toHaveLength(1)
     expect(delivery[0]).toMatchObject({
       deliveryClass: 'pipeline',
       payloadArtifactRef: '.agent-workflow/pipeline/bundle-42/manifest.json',
     })
 
-    const duplicate = eventCenter.participant.observe({
+    const duplicate = await eventCenter.participant.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject,
@@ -816,15 +817,15 @@ describe('RFC-310 shared Event Center', () => {
       payloadArtifactRef: null,
     })
     expect(duplicate.duplicate).toBe(true)
-    expect(eventCenter.participant.pendingDeliveries(subscriber, 10)).toHaveLength(1)
-    eventCenter.participant.acceptDelivery(delivery[0]!.deliveryId)
-    expect(eventCenter.participant.pendingDeliveries(subscriber, 10)).toEqual([])
+    expect(await eventCenter.participant.pendingDeliveries(subscriber, 10)).toHaveLength(1)
+    await eventCenter.participant.acceptDelivery(delivery[0]!.deliveryId)
+    expect(await eventCenter.participant.pendingDeliveries(subscriber, 10)).toEqual([])
 
-    expect(eventCenter.participant.unsubscribe(pipelineSubscription.subscriptionId)).toMatchObject({
-      observerTransition: 'stopped',
-    })
+    expect(
+      await eventCenter.participant.unsubscribe(pipelineSubscription.subscriptionId),
+    ).toMatchObject({ observerTransition: 'stopped' })
     expect(await eventCenter.worker.runOneDueObserver()).toBe('idle')
-    expect(eventCenter.queries.operations.observerHealth()).toMatchObject([
+    expect(await eventCenter.queries.operations.observerHealth()).toMatchObject([
       { subscriberCount: 0, state: 'idle', nextScanAt: null },
     ])
   })
@@ -841,7 +842,7 @@ describe('RFC-310 shared Event Center', () => {
     const firstRelease = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => now,
@@ -858,7 +859,7 @@ describe('RFC-310 shared Event Center', () => {
         },
       },
     })
-    const subscription = eventCenter.participant.subscribe({
+    const subscription = await eventCenter.participant.subscribe({
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-1!42' },
       subscriber: { kind: 'employee-case', subscriberRef: 'case-1' },
@@ -868,20 +869,20 @@ describe('RFC-310 shared Event Center', () => {
     await firstStarted
     now += 25
     expect(
-      eventCenter.observerControl.nudgeSource({
+      await eventCenter.observerControl.nudgeSource({
         id: 'code-host.activity',
         revision: 1,
       }),
     ).toBe(true)
     releaseFirst()
     expect(await firstRun).toBe('completed')
-    expect(eventCenter.queries.operations.observerHealth()[0]?.nextScanAt).toBe(now)
+    expect((await eventCenter.queries.operations.observerHealth())[0]?.nextScanAt).toBe(now)
     expect(await eventCenter.worker.runOneDueObserver()).toBe('completed')
     expect(runs).toBe(2)
 
-    eventCenter.participant.unsubscribe(subscription.subscriptionId)
+    await eventCenter.participant.unsubscribe(subscription.subscriptionId)
     expect(
-      eventCenter.observerControl.nudgeSource({
+      await eventCenter.observerControl.nudgeSource({
         id: 'code-host.activity',
         revision: 1,
       }),
@@ -892,7 +893,7 @@ describe('RFC-310 shared Event Center', () => {
     let now = 20_000
     let ordinal = 0
     const batches: string[][] = []
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => now,
@@ -910,7 +911,7 @@ describe('RFC-310 shared Event Center', () => {
       },
     })
     for (let index = 0; index < 101; index += 1) {
-      eventCenter.participant.subscribe({
+      await eventCenter.participant.subscribe({
         eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
         subject: { typeId: 'merge-request', subjectRef: `repo!${index}` },
         subscriber: { kind: 'employee-case', subscriberRef: `case-${index}` },
@@ -924,16 +925,16 @@ describe('RFC-310 shared Event Center', () => {
     expect(new Set(batches.flat()).size).toBe(101)
   })
 
-  test('a late subscriber receives the latest durable event by default and may start fresh', () => {
+  test('a late subscriber receives the latest durable event by default and may start fresh', async () => {
     let ordinal = 0
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 30_000,
       id: () => `replay-resource-${++ordinal}`,
     })
     const subject = { typeId: 'employee-invocation', subjectRef: 'invocation-1' }
-    eventCenter.participant.observe({
+    await eventCenter.participant.observe({
       sourceRef: { id: 'employee.channel', revision: 1 },
       eventTypeRef: { id: 'development.employee-result', revision: 1 },
       subject,
@@ -943,12 +944,12 @@ describe('RFC-310 shared Event Center', () => {
       payloadArtifactRef: null,
     })
     const subscriber = { kind: 'employee-case' as const, subscriberRef: 'parent-case' }
-    eventCenter.participant.subscribe({
+    await eventCenter.participant.subscribe({
       eventTypeRef: { id: 'development.employee-result', revision: 1 },
       subject,
       subscriber,
     })
-    expect(eventCenter.participant.pendingDeliveries(subscriber, 10)).toMatchObject([
+    expect(await eventCenter.participant.pendingDeliveries(subscriber, 10)).toMatchObject([
       {
         eventTypeRef: { id: 'development.employee-result', revision: 1 },
         subject,
@@ -959,18 +960,18 @@ describe('RFC-310 shared Event Center', () => {
       kind: 'employee-case' as const,
       subscriberRef: 'reactivated-parent-case',
     }
-    eventCenter.participant.subscribe({
+    await eventCenter.participant.subscribe({
       eventTypeRef: { id: 'development.employee-result', revision: 1 },
       subject,
       subscriber: freshSubscriber,
       replayLatest: false,
     })
-    expect(eventCenter.participant.pendingDeliveries(freshSubscriber, 10)).toEqual([])
+    expect(await eventCenter.participant.pendingDeliveries(freshSubscriber, 10)).toEqual([])
   })
 
-  test('Event Center preserves neutral event order and leaves business priority to subscribers', () => {
+  test('Event Center preserves neutral event order and leaves business priority to subscribers', async () => {
     let ordinal = 0
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 20_000,
@@ -979,7 +980,7 @@ describe('RFC-310 shared Event Center', () => {
     const subscriber = { kind: 'employee-case' as const, subscriberRef: 'case-2' }
     const subject = { typeId: 'merge-request', subjectRef: 'mr-2' }
     for (const eventTypeId of ['development.pipeline-check-due', 'development.lifecycle-updated']) {
-      eventCenter.participant.subscribe({
+      await eventCenter.participant.subscribe({
         eventTypeRef: {
           id: eventTypeId,
           revision: eventTypeId === 'development.pipeline-check-due' ? 1 : 2,
@@ -988,7 +989,7 @@ describe('RFC-310 shared Event Center', () => {
         subscriber,
       })
     }
-    eventCenter.participant.observe({
+    await eventCenter.participant.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject,
@@ -997,7 +998,7 @@ describe('RFC-310 shared Event Center', () => {
       summary: '流水线失败',
       payloadArtifactRef: null,
     })
-    eventCenter.participant.observe({
+    await eventCenter.participant.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject,
@@ -1008,15 +1009,15 @@ describe('RFC-310 shared Event Center', () => {
     })
 
     expect(
-      eventCenter.participant
-        .pendingDeliveries(subscriber, 10)
-        .map((delivery) => delivery.eventTypeRef.id),
+      (await eventCenter.participant.pendingDeliveries(subscriber, 10)).map(
+        (delivery) => delivery.eventTypeRef.id,
+      ),
     ).toEqual(['development.pipeline-check-due', 'development.lifecycle-updated'])
   })
 
-  test('one immutable event fans out to independent deliveries for every subscriber', () => {
+  test('one immutable event fans out to independent deliveries for every subscriber', async () => {
     let ordinal = 0
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 25_000,
@@ -1026,14 +1027,14 @@ describe('RFC-310 shared Event Center', () => {
     const first = { kind: 'employee-case' as const, subscriberRef: 'case-first' }
     const second = { kind: 'employee-case' as const, subscriberRef: 'case-second' }
     for (const subscriber of [first, second]) {
-      eventCenter.participant.subscribe({
+      await eventCenter.participant.subscribe({
         eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
         subject,
         subscriber,
       })
     }
 
-    const receipt = eventCenter.participant.observe({
+    const receipt = await eventCenter.participant.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject,
@@ -1045,18 +1046,18 @@ describe('RFC-310 shared Event Center', () => {
 
     expect(receipt.deliveryCount).toBe(2)
     expect(new Set(receipt.deliveryIds).size).toBe(2)
-    const firstDelivery = eventCenter.participant.pendingDeliveries(first, 10)
-    const secondDelivery = eventCenter.participant.pendingDeliveries(second, 10)
+    const firstDelivery = await eventCenter.participant.pendingDeliveries(first, 10)
+    const secondDelivery = await eventCenter.participant.pendingDeliveries(second, 10)
     expect(firstDelivery).toHaveLength(1)
     expect(secondDelivery).toHaveLength(1)
     expect(firstDelivery[0]!.eventId).toBe(secondDelivery[0]!.eventId)
     expect(firstDelivery[0]!.deliveryId).not.toBe(secondDelivery[0]!.deliveryId)
 
-    eventCenter.participant.acceptDelivery(firstDelivery[0]!.deliveryId)
-    expect(eventCenter.participant.pendingDeliveries(first, 10)).toEqual([])
-    expect(eventCenter.participant.pendingDeliveries(second, 10)).toHaveLength(1)
+    await eventCenter.participant.acceptDelivery(firstDelivery[0]!.deliveryId)
+    expect(await eventCenter.participant.pendingDeliveries(first, 10)).toEqual([])
+    expect(await eventCenter.participant.pendingDeliveries(second, 10)).toHaveLength(1)
 
-    const duplicate = eventCenter.participant.observe({
+    const duplicate = await eventCenter.participant.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject,
@@ -1070,7 +1071,7 @@ describe('RFC-310 shared Event Center', () => {
       eventId: firstDelivery[0]!.eventId,
       deliveryCount: 2,
     })
-    expect(eventCenter.participant.pendingDeliveries(second, 10)).toHaveLength(1)
+    expect(await eventCenter.participant.pendingDeliveries(second, 10)).toHaveLength(1)
   })
 
   test('one automation failure cannot consume or dead-letter another subscription delivery', async () => {
@@ -1090,14 +1091,14 @@ describe('RFC-310 shared Event Center', () => {
       updatedAt: 1,
     })
     const definitions = [definition('automation-fails'), definition('automation-succeeds')]
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
       now: () => 27_000,
       id: () => `automation-fanout-${++ordinal}`,
       routingSubscriptions: {
-        list: () => definitions,
-        match: (observation) =>
+        list: async () => definitions,
+        match: async (observation) =>
           definitions.map((item) => ({
             definition: item,
             eventTypeRef: observation.eventTypeRef,
@@ -1107,7 +1108,7 @@ describe('RFC-310 shared Event Center', () => {
       deliveryConsumers: [
         {
           subscriberKind: 'automation',
-          canConsume: () => true,
+          canConsume: async () => true,
           async consume(delivery) {
             consumed.push(delivery.subscriber.subscriberRef)
             if (delivery.subscriber.subscriberRef === 'automation-fails') {
@@ -1121,7 +1122,7 @@ describe('RFC-310 shared Event Center', () => {
       },
     })
 
-    const receipt = eventCenter.participant.observe({
+    const receipt = await eventCenter.participant.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo!88' },
@@ -1134,7 +1135,7 @@ describe('RFC-310 shared Event Center', () => {
     expect(await eventCenter.worker.runOneNotification()).toBe('dead-letter')
     expect(await eventCenter.worker.runOneNotification()).toBe('completed')
     expect(consumed).toEqual(['automation-fails', 'automation-succeeds'])
-    expect(eventCenter.queries.operations.deliveryStatuses()).toEqual(
+    expect(await eventCenter.queries.operations.deliveryStatuses()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           eventId: receipt.eventId,
@@ -1153,7 +1154,7 @@ describe('RFC-310 shared Event Center', () => {
   test('a global custom source validates its real script, publishes exact events, polls on subscription, and dedupes storage', async () => {
     let now = Date.parse('2026-08-21T08:00:00.000Z')
     let ordinal = 0
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db: createInMemoryDb(MIGRATIONS),
       // The source is global: no digital-employee type package is required.
       typePackageDescriptorJsons: [],
@@ -1208,20 +1209,20 @@ console.log(JSON.stringify({
         cursorJson: null,
       },
     }
-    const created = eventCenter.customSources.commands.create(
+    const created = (await eventCenter.customSources.commands.create(
       { ...draft, fixture: { ...draft.fixture, subjects: [] } },
       'author-1',
-    ) as {
+    )) as {
       id: string
     }
     expect(created.id).toBe('global-event-1')
-    expect(eventCenter.customSources.queries.get(created.id).draft.program.templateManaged).toBe(
-      true,
-    )
+    expect(
+      (await eventCenter.customSources.queries.get(created.id)).draft.program.templateManaged,
+    ).toBe(true)
     await expect(eventCenter.customSources.commands.validate(created.id)).rejects.toThrow(
       'validation needs at least one real test object',
     )
-    eventCenter.customSources.commands.update(created.id, draft)
+    await eventCenter.customSources.commands.update(created.id, draft)
     await expect(eventCenter.customSources.commands.validate(created.id)).resolves.toMatchObject({
       observationCount: 1,
     })
@@ -1230,27 +1231,27 @@ console.log(JSON.stringify({
       'author-1',
     )) as { sourceRef: { id: string; revision: number } }
     expect(published.sourceRef).toEqual({ id: created.id, revision: 1 })
-    expect(eventCenter.customSources.queries.list()).toMatchObject([
+    expect(await eventCenter.customSources.queries.list()).toMatchObject([
       { id: created.id, state: 'published', publishedRevision: 1 },
     ])
     const eventTypeRef = {
       id: `custom.${created.id}.issue.changed`,
       revision: 1,
     }
-    expect(JSON.parse(eventCenter.queries.catalog.catalogJson())).toMatchObject({
+    expect(JSON.parse(await eventCenter.queries.catalog.catalogJson())).toMatchObject({
       sources: [{ sourceRef: published.sourceRef, ownerTypeId: 'event-center.custom' }],
       eventTypes: [{ eventTypeRef, sourceRef: published.sourceRef }],
     })
 
     const subscriber = { kind: 'system' as const, subscriberRef: 'workflow-runtime-1' }
-    const subscription = eventCenter.participant.subscribe({
+    const subscription = await eventCenter.participant.subscribe({
       eventTypeRef,
       subject: { typeId: 'issue', subjectRef: 'ISSUE-7' },
       subscriber,
     })
     expect(subscription.observerTransition).toBe('started')
     expect(await eventCenter.worker.runOneDueObserver()).toBe('completed')
-    expect(eventCenter.participant.pendingDeliveries(subscriber, 10)).toMatchObject([
+    expect(await eventCenter.participant.pendingDeliveries(subscriber, 10)).toMatchObject([
       {
         eventTypeRef,
         deliveryClass: 'issue.change',
@@ -1262,18 +1263,18 @@ console.log(JSON.stringify({
     // the script, owns the final dedupe identity, so no second delivery exists.
     now += 1_000
     expect(await eventCenter.worker.runOneDueObserver()).toBe('completed')
-    expect(eventCenter.participant.pendingDeliveries(subscriber, 10)).toHaveLength(1)
+    expect(await eventCenter.participant.pendingDeliveries(subscriber, 10)).toHaveLength(1)
 
-    eventCenter.customSources.commands.retire(created.id)
-    expect(eventCenter.customSources.queries.list()).toMatchObject([
+    await eventCenter.customSources.commands.retire(created.id)
+    expect(await eventCenter.customSources.queries.list()).toMatchObject([
       { id: created.id, state: 'retired' },
     ])
-    expect(() =>
+    await expect(
       eventCenter.participant.subscribe({
         eventTypeRef,
         subject: { typeId: 'issue', subjectRef: 'ISSUE-8' },
         subscriber: { kind: 'system', subscriberRef: 'workflow-runtime-2' },
       }),
-    ).toThrow('event source is retired')
+    ).rejects.toThrow('event source is retired')
   })
 })

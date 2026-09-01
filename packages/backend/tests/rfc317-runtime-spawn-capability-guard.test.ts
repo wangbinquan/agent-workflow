@@ -30,6 +30,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { loadConfig } from '../src/config'
 import { createApp, type RuntimeDiagnosticTestDependencies } from '../src/server'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import type { SmokeOptions, SmokeResult } from '../src/services/runtimeSmoke'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -58,7 +59,7 @@ async function buildHarness(): Promise<Harness> {
   const configPath = join(tmp, 'config.json')
   loadConfig(configPath)
   const db = createInMemoryDb(MIGRATIONS)
-  await seedBuiltinRuntimes(db)
+  await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
   const spawns: SmokeOptions[] = []
   const runtimeDiagnosticTestDependencies: RuntimeDiagnosticTestDependencies = {
     smokeRuntime: (options: SmokeOptions) => {

@@ -18,7 +18,10 @@ import {
   handleChildMissionDecision,
   selectPlaybookStepDecision,
 } from '../src/modules/development-automation/application/playbookStepCoordinator'
-import { createSqlitePlaybookSagaStore } from '../src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore'
+import {
+  createSqlitePlaybookSagaPersistence,
+  createSqlitePlaybookSagaStore,
+} from '../src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore'
 import type { PlaybookSagaStore } from '../src/modules/development-automation/application/ports/playbookSagaStore'
 import type { ReconcilerPorts } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { ReconcileDeps } from '../src/modules/development-automation/application/missionReconciler'
@@ -111,11 +114,14 @@ async function setup(
   options: { requirementMaterialized?: boolean } = {},
 ): Promise<{
   deps: ReconcileDeps
-  mission: NonNullable<ReturnType<ReconcileDeps['store']['getMission']>>
+  mission: NonNullable<Awaited<ReturnType<ReconcileDeps['store']['getMission']>>>
   saga: PlaybookSagaStore
   snapshot: ReturnType<typeof buildFactSnapshot>
   launchSibling(idempotencyKey: string): Promise<string>
-  reopenSaga(): PlaybookSagaStore
+  reopenSaga(): {
+    readonly store: PlaybookSagaStore
+    readonly persistence: ReturnType<typeof createSqlitePlaybookSagaPersistence>
+  }
 }> {
   const fx = await buildPr3Fixture()
   const missionId = await fx.launchDirect(`playbook-${crypto.randomUUID()}`)
@@ -165,9 +171,9 @@ async function setup(
   const saga = createSqlitePlaybookSagaStore(fx.db)
   const base = fx.deps({
     ...extraPorts,
-    playbookSaga: saga,
+    playbookSaga: createSqlitePlaybookSagaPersistence(fx.db),
     actionTemplates: {
-      content(id) {
+      async content(id) {
         if (id === 'tpl-classifier') return actionTemplate('problem.classify')
         if (id === 'tpl-handler') return actionTemplate('change.implement')
         if (id === 'tpl-action') return actionTemplate('change.implement')
@@ -195,7 +201,10 @@ async function setup(
       cells,
     }),
     launchSibling: (idempotencyKey) => fx.launchDirect(idempotencyKey),
-    reopenSaga: () => createSqlitePlaybookSagaStore(fx.db),
+    reopenSaga: () => ({
+      store: createSqlitePlaybookSagaStore(fx.db),
+      persistence: createSqlitePlaybookSagaPersistence(fx.db),
+    }),
   }
 }
 
@@ -248,7 +257,7 @@ describe('employee step routing', () => {
     // 物化属于平台，不占任何业务步骤的 run —— 说明书里那一步还没开始。
     expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(0)
 
-    env.deps.store.insertMissionSource({
+    await env.deps.store.insertMissionSource({
       id: `src-late-${env.mission.id}`,
       missionId: env.mission.id,
       generation: 1,
@@ -297,7 +306,7 @@ describe('employee step routing', () => {
     expect(recovery).toMatchObject({ kind: 'collect-repository-facts' })
     if (recovery?.kind !== 'collect-repository-facts') return
     expect(env.saga.getStepRun(recovery.stepRunRef!)?.stepId).toBe('recover')
-    expect(env.deps.store.getMission(env.mission.id)?.status).not.toBe('blocked')
+    expect((await env.deps.store.getMission(env.mission.id))?.status).not.toBe('blocked')
   })
 
   test('any join settles durably and leaves the unfinished member observation-only', async () => {
@@ -554,16 +563,21 @@ describe('cross-repository employee and approval saga', () => {
       now: now + 3,
     })
 
-    const handedOff = env.deps.store.bumpEpoch(env.mission.id, env.mission.revision, {
+    const handedOff = await env.deps.store.bumpEpoch(env.mission.id, env.mission.revision, {
       automationMode: 'tracking-only',
     })
     expect(handedOff.ok).toBe(true)
-    const tracking = env.deps.store.getMission(env.mission.id)!
-    const terminal = env.deps.store.occUpdate(tracking.id, tracking.revision, tracking.epoch, {
-      status: 'merged',
-      terminalKind: 'merged',
-      terminalAt: now + 4,
-    })
+    const tracking = (await env.deps.store.getMission(env.mission.id))!
+    const terminal = await env.deps.store.occUpdate(
+      tracking.id,
+      tracking.revision,
+      tracking.epoch,
+      {
+        status: 'merged',
+        terminalKind: 'merged',
+        terminalAt: now + 4,
+      },
+    )
     expect(terminal.ok).toBe(true)
 
     expect(env.saga.listMissionLinks(env.mission.id)).toMatchObject([
@@ -796,9 +810,9 @@ describe('cross-repository employee and approval saga', () => {
     const restartedSaga = env.reopenSaga()
     const restartedDeps: ReconcileDeps = {
       ...env.deps,
-      ports: { ...env.deps.ports, playbookSaga: restartedSaga },
+      ports: { ...env.deps.ports, playbookSaga: restartedSaga.persistence },
     }
-    expect(restartedSaga.listApprovalSagas(env.mission.id)).toMatchObject([
+    expect(restartedSaga.store.listApprovalSagas(env.mission.id)).toMatchObject([
       {
         externalRequestRef: 'APP-1',
         latestStatus: 'pending',
@@ -825,7 +839,7 @@ describe('cross-repository employee and approval saga', () => {
     const resumed = await selectPlaybookStepDecision(restartedDeps, env.mission, env.snapshot)
     expect(resumed).toMatchObject({ kind: 'collect-repository-facts' })
     if (resumed?.kind !== 'collect-repository-facts') return
-    settle(restartedSaga, resumed.stepRunRef!, 'succeeded')
+    settle(restartedSaga.store, resumed.stepRunRef!, 'succeeded')
     expect(await selectPlaybookStepDecision(restartedDeps, env.mission, env.snapshot)).toBeNull()
 
     expect({ childCreates, childObserves, approvalSubmits, approvalObserves }).toEqual({

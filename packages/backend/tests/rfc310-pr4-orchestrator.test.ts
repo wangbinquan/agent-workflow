@@ -130,8 +130,8 @@ function changedEnvelope(
   return `runtime log\n<agent-result nonce="${nonce}">\n${json}\n</agent-result>\n`
 }
 
-function requirementItemRefsOf(fx: Pr3Fixture, missionId: string): string[] {
-  const manifest = fx.materializer.getRequirementManifest(missionId)
+async function requirementItemRefsOf(fx: Pr3Fixture, missionId: string): Promise<string[]> {
+  const manifest = await fx.materializer.getRequirementManifest(missionId)
   if (manifest === null) throw new Error('requirement manifest missing')
   return manifest.files.map((f) => f.fileId)
 }
@@ -234,7 +234,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
       'exec-1',
       doneWithFrame(
         'exec-1',
-        changedEnvelope(scripted.prompts[0]!, requirementItemRefsOf(fx, missionId)),
+        changedEnvelope(scripted.prompts[0]!, await requirementItemRefsOf(fx, missionId)),
       ),
     )
     const collected = await runMissionReconcile(deps, missionId)
@@ -255,7 +255,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     // PR-5 起 changed 不再打 stage block：candidateState='derived' 落 cells，
     // mission 保持 working，发布链（missionDeliveryChain）下轮接管。
     expect(mission.status).toBe('working')
-    const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['action.lastOutcome']).toMatchObject({ state: 'known', value: 'changed' })
     expect(cells['__action.candidateState']).toMatchObject({ state: 'known', value: 'derived' })
     expect(cells['__action.candidateRef']).toMatchObject({ state: 'known', value: 'c'.repeat(64) })
@@ -469,7 +469,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
       'exec-1',
       doneWithFrame(
         'exec-1',
-        changedEnvelope(scripted.prompts[0]!, requirementItemRefsOf(fx, missionId)),
+        changedEnvelope(scripted.prompts[0]!, await requirementItemRefsOf(fx, missionId)),
       ),
     )
     const outcome = await runMissionReconcile(deps, missionId)

@@ -47,10 +47,17 @@ import {
   runCutoverCommand,
 } from '../src/modules/development-automation/application/cutover'
 import { createSqliteCutoverStore } from '../src/modules/development-automation/infrastructure/sqliteCutoverStore'
-import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import {
+  createSqliteMissionPersistence,
+  createSqliteMissionStore,
+} from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
@@ -130,19 +137,19 @@ describe('RFC-310 PR-9 — cutover commands persist through the sqlite store', (
   })
   afterEach(() => db.$client.close())
 
-  test('freeze → flip survive a re-read; rollback after flip is refused durably', () => {
+  test('freeze → flip survive a re-read; rollback after flip is refused durably', async () => {
     const deps = freshDeps(db)
-    expect(runCutoverCommand(deps, 'flip').ok).toBe(false)
-    expect(runCutoverCommand(deps, 'freeze').ok).toBe(true)
+    expect((await runCutoverCommand(deps, 'flip')).ok).toBe(false)
+    expect((await runCutoverCommand(deps, 'freeze')).ok).toBe(true)
     // 重读面（新 store 实例=重启模拟）：frozen 落盘。
-    expect(freshDeps(db).cutoverStore.readState().phase).toBe('frozen')
-    const flipped = runCutoverCommand(freshDeps(db), 'flip')
+    expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('frozen')
+    const flipped = await runCutoverCommand(freshDeps(db), 'flip')
     expect(flipped.ok).toBe(true)
     if (flipped.ok) expect(flipped.state.generation).not.toBeNull()
-    const refused = runCutoverCommand(freshDeps(db), 'rollback')
+    const refused = await runCutoverCommand(freshDeps(db), 'rollback')
     expect(refused.ok).toBe(false)
     if (!refused.ok) expect(refused.code).toBe('cutover-rollback-after-flip')
-    expect(freshDeps(db).cutoverStore.readState().phase).toBe('live')
+    expect((await freshDeps(db).cutoverStore.readState()).phase).toBe('live')
   })
 })
 
@@ -179,7 +186,7 @@ describe('RFC-310 PR-9 — the rounds API refuses new legacy work once frozen', 
     // PR-9 曾以 409 legacy-admission-frozen 冻结该入口；T104 把路由整个删除
     // ——404 是比 gate 更强的收缩证明，且与 cutover phase 无关（pre 也 404）。
     expect((await post()).status).toBe(404)
-    expect(runCutoverCommand(freshDeps(db), 'freeze').ok).toBe(true)
+    expect((await runCutoverCommand(freshDeps(db), 'freeze')).ok).toBe(true)
     expect((await post()).status).toBe(404)
   })
 })
@@ -247,11 +254,13 @@ describe('RFC-310 PR-9 — a frozen cutover skips webhook code-round fires', () 
       repoPath: event.repoPath,
     })
     const dispatcher = createWebhookDispatcher({
-      db,
+      ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
       ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-      configPath: '',
-      secretBox: box,
       getDefaultRuntime: async () => null,
+      launch: async () => {
+        throw new Error('code-round tombstone must not launch')
+      },
+      cancel: async () => undefined,
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })
     return triggerId
@@ -319,7 +328,11 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
 
   test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
     const store = createSqliteMissionStore(db)
-    const deps = { store, ports: { mrEffects: mrEffectsObserving('opened') }, ...freshDeps(db) }
+    const deps = {
+      store: createSqliteMissionPersistence(db),
+      ports: { mrEffects: mrEffectsObserving('opened') },
+      ...freshDeps(db),
+    }
     const result = await adoptActiveMr(deps, input)
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -353,7 +366,11 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
 
   test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
     const store = createSqliteMissionStore(db)
-    const deps = { store, ports: { mrEffects: mrEffectsObserving('merged') }, ...freshDeps(db) }
+    const deps = {
+      store: createSqliteMissionPersistence(db),
+      ports: { mrEffects: mrEffectsObserving('merged') },
+      ...freshDeps(db),
+    }
     const result = await adoptActiveMr(deps, input)
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -374,7 +391,11 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
 
   test('a closed MR maps to closed-unmerged', async () => {
     const store = createSqliteMissionStore(db)
-    const deps = { store, ports: { mrEffects: mrEffectsObserving('closed') }, ...freshDeps(db) }
+    const deps = {
+      store: createSqliteMissionPersistence(db),
+      ports: { mrEffects: mrEffectsObserving('closed') },
+      ...freshDeps(db),
+    }
     const result = await adoptActiveMr(deps, input)
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -384,11 +405,18 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
   })
 
   test('re-running the same adopt is idempotent (runbook is re-runnable)', async () => {
-    const store = createSqliteMissionStore(db)
-    const deps = { store, ports: { mrEffects: mrEffectsObserving('opened') }, ...freshDeps(db) }
+    const deps = {
+      store: createSqliteMissionPersistence(db),
+      ports: { mrEffects: mrEffectsObserving('opened') },
+      ...freshDeps(db),
+    }
     const first = await adoptActiveMr(deps, input)
     const second = await adoptActiveMr(
-      { store, ports: { mrEffects: mrEffectsObserving('opened') }, ...freshDeps(db) },
+      {
+        store: createSqliteMissionPersistence(db),
+        ports: { mrEffects: mrEffectsObserving('opened') },
+        ...freshDeps(db),
+      },
       input,
     )
     expect(first.ok && second.ok).toBe(true)
@@ -459,7 +487,11 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
       }).ok,
     ).toBe(true)
     const clashing = await adoptActiveMr(
-      { store, ports: { mrEffects: mrEffectsObserving('opened') }, ...freshDeps(db) },
+      {
+        store: createSqliteMissionPersistence(db),
+        ports: { mrEffects: mrEffectsObserving('opened') },
+        ...freshDeps(db),
+      },
       input,
     )
     expect(clashing.ok).toBe(false)
@@ -469,13 +501,16 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
   })
 
   test('observe failure propagates its typed code (the "MR does not exist" sample)', async () => {
-    const store = createSqliteMissionStore(db)
     const failing: MrEffectsPort = {
       ...mrEffectsObserving('opened'),
       observe: () => Promise.resolve({ ok: false as const, code: 'mr-not-found', detail: '42' }),
     }
     const result = await adoptActiveMr(
-      { store, ports: { mrEffects: failing }, ...freshDeps(db) },
+      {
+        store: createSqliteMissionPersistence(db),
+        ports: { mrEffects: failing },
+        ...freshDeps(db),
+      },
       input,
     )
     expect(result.ok).toBe(false)
@@ -520,8 +555,8 @@ describe('RFC-310 PR-9 — cutover route error codes are named', () => {
   })
 
   test('rollback after flip is a 409 cutover-rollback-after-flip', async () => {
-    expect(runCutoverCommand(freshDeps(db), 'freeze').ok).toBe(true)
-    expect(runCutoverCommand(freshDeps(db), 'flip').ok).toBe(true)
+    expect((await runCutoverCommand(freshDeps(db), 'freeze')).ok).toBe(true)
+    expect((await runCutoverCommand(freshDeps(db), 'flip')).ok).toBe(true)
     const res = await app.request('/api/code/cutover/rollback', {
       method: 'POST',
       headers,

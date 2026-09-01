@@ -28,8 +28,8 @@ import {
   resourceGrants,
   users,
 } from '../src/db/schema'
+import { projectVisibleRowsWithAccess } from '../src/modules/resource-catalog/composition/resourceAcl'
 import { createApp } from '../src/server'
-import { projectVisibleRowsWithAccess } from '../src/services/resourceAcl'
 import { createUser } from '../src/services/users'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

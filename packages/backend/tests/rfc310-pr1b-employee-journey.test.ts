@@ -16,7 +16,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplateStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
@@ -79,13 +79,13 @@ describe('rfc310 pr1b employee journey', () => {
   test('define templates/policy/adapter/employees, then deterministic selection end-to-end', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = () => Date.now()
-    const templates = createSqliteActionTemplateStore(db)
+    const templates = createSqliteActionTemplatePersistence(db)
     const adapters = createSqliteDevelopmentAdapterStore(db)
 
     // 1) 三份 change.implement 模板（java/cpp/polyglot）各 publish 一版。
     const templateIds: Record<string, string> = {}
     for (const flavor of ['java', 'cpp', 'polyglot']) {
-      const created = createActionTemplate(
+      const created = await createActionTemplate(
         { store: templates, now },
         {
           actorUserId: 'u-admin',
@@ -95,7 +95,7 @@ describe('rfc310 pr1b employee journey', () => {
         },
       )
       templateIds[flavor] = created.id
-      const receipt = publishActionTemplate(
+      const receipt = await publishActionTemplate(
         { store: templates, now },
         { id: created.id, actorUserId: 'u-admin' },
       )

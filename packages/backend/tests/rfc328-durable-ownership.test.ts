@@ -31,7 +31,7 @@ import {
 import {
   finalizeTaskExecutionRecovery,
   prepareTaskExecutionRecovery,
-} from '@/modules/task-execution/application/recoverTaskExecutions'
+} from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery'
 import {
   aggregateEffectOutcome,
   canonicalResourceKeySet,
@@ -46,8 +46,8 @@ import {
 } from '@/modules/task-execution/domain/executionIntent'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { archiveTaskTree } from '@/services/taskArchive'
-import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
-import { createLocalEffectAttemptObserver } from '@/modules/task-execution/application/localEffectObserver'
+import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/infrastructure/sqliteLocalEffectObserver'
 import { buildCodeHostRecoveryDescriptor } from '@/modules/task-execution/domain/codeHostRecovery'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -302,6 +302,43 @@ describe('RFC-328 exact-token runtime registry', () => {
     )
     expect(module.runtimeRegistry.release({ token: claim.token, controller })).toBe(true)
     expect((await module.runtimeRegistry.awaitStopped(tickets[0]!)).kind).toBe('released')
+  })
+
+  test('provider-session pause is reversible while terminal disposal stays sealed', async () => {
+    const database = db()
+    seedTask(database, 'task-module-pause')
+    const module = createTaskExecutionTestModule('daemon-module-pause')
+    const intent = module.intents.submit({
+      db: database,
+      request: continuation('task-module-pause'),
+      intentId: 'intent-module-pause',
+    })
+    const claim = module.claim({ db: database, intentId: intent.intentId })
+    const controller = new AbortController()
+    expect(
+      module.runtimeRegistry.tryAttach({
+        token: claim.token,
+        intentId: claim.intentId,
+        permit: claim.permit,
+        controller,
+      }),
+    ).toBe('attached')
+    module.claimGate.leave(claim.permit)
+
+    const tickets = await module.pause('provider-session-paused')
+    expect(tickets).toHaveLength(1)
+    expect(controller.signal.aborted).toBe(true)
+    expect(module.claimGate.isPaused).toBe(true)
+    expect(() => module.claimGate.enter()).toThrow(
+      expect.objectContaining({ code: 'task-execution-shutting-down' }),
+    )
+
+    expect(module.runtimeRegistry.release({ token: claim.token, controller })).toBe(true)
+    await module.runtimeRegistry.awaitStopped(tickets[0]!)
+    module.resume()
+    expect(module.claimGate.isPaused).toBe(false)
+    const reopened = module.claimGate.enter()
+    module.claimGate.leave(reopened)
   })
 })
 

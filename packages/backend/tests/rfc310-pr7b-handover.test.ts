@@ -113,7 +113,7 @@ async function expectCode(p: Promise<unknown>, code: string): Promise<void> {
 
 function handoverDeps(fx: Pr3Fixture, mrEffects?: MrEffectsPort) {
   return {
-    store: fx.store,
+    store: fx.deps().store,
     snapshots: fx.snapshots,
     ...(mrEffects === undefined ? {} : { ports: { mrEffects } }),
     now: () => Date.now(),
@@ -298,7 +298,7 @@ describe('rfc310 pr7b — attach command', () => {
     expect(attachRow.deliveryKind).toBe('adopt-merge-request')
     expect(attachRow.adoptedMrRef).toBe('11')
     expect(attachRow.mrClaimId).toBe(bound.mrClaimId)
-    const cells = fx.snapshots.getCells(attachRow.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(attachRow.requirementBundleRef!))!
     expect(cells['__mr.ref']).toMatchObject({ value: '11' })
 
     // 成：merged → 同一命令内 authoritative terminal + fulfillment 如实定格。
@@ -333,7 +333,7 @@ describe('rfc310 pr7b — resume command', () => {
     const row = fx.store.getMission(tracked)!
     expect(row.automationMode).toBe('active')
     expect(row.epoch).toBe(1)
-    const cells = fx.snapshots.getCells(row.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(row.requirementBundleRef!))!
     expect(cells['__mr.factsCollectedAt']).toMatchObject({ value: '0' })
     expect(cells['__pipeline.collectedAt']).toMatchObject({ value: '0' })
 

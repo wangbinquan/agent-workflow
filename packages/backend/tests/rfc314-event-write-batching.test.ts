@@ -26,7 +26,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { pump } from '../src/services/execution/managedProcess'
-import { runNode } from '../src/services/runner'
+import { runNode } from './helpers/runner'
 import { recordStatements } from './helpers/statementRecorder'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

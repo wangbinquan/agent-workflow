@@ -35,6 +35,7 @@ import { createInMemoryDb, openDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startEventsArchiver } from '../src/services/eventsArchive'
 import { startTaskArchiveSweeper } from '../src/services/taskArchive'
+import { createSqliteTaskArchiveMaintenanceCommand } from '../src/modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand'
 import { startWalCheckpointLoop } from '../src/services/backupScheduler'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -149,7 +150,7 @@ describe('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', () => {
     // enabled:false ⇒ runTaskArchiveSweep 在碰任何目录之前就 return（taskArchive.ts:495），
     // 所以这条用例只观察「首拍有没有发生」，不产生任何文件系统副作用。
     const ticker = startTaskArchiveSweeper(
-      db,
+      createSqliteTaskArchiveMaintenanceCommand(db),
       () => {
         reads += 1
         return { enabled: false, retentionDays: 90 }
@@ -166,7 +167,7 @@ describe('RFC-311 余项 ① —— 维护循环必须有 boot 首拍', () => {
     const db = createInMemoryDb(MIGRATIONS)
     let reads = 0
     const ticker = startTaskArchiveSweeper(
-      db,
+      createSqliteTaskArchiveMaintenanceCommand(db),
       () => {
         reads += 1
         return { enabled: false, retentionDays: 90 }

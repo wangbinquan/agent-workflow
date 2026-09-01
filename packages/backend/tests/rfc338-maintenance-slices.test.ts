@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createInMemoryDb, openDb } from '@/db/client'
+import { createInMemoryDb, openDb, type DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import {
   employeeInputUploads,
@@ -24,15 +24,26 @@ import {
 import { createEmployeeInputUploadStore } from '@/modules/digital-employee/infrastructure/inputUploadStore'
 import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
 import { createSqliteActionTemplateStore } from '@/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence'
+import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
+import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { createSqliteTokenCallAudit } from '@/auth/composition'
+import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
+import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
 import { runRetentionSweepSlice } from '@/services/maintenanceRetention'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { gcDeliveriesSlice } from '@/services/webhook/deliveryStore'
 import { MIGRATIONS } from './migration-freeze'
 
-const UNUSED_OWNER_COMMANDS = {
+const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/application-home') => ({
+  workspace: {
+    runGcPhase: async () => ({ scanned: 0, removed: 0, skipped: 0 }),
+    recover: async () => ({ completed: 0, failed: 0, skipped: 0 }),
+  },
   developmentAutomation: {
-    sweepExpiredUploads: () => 0,
+    sweepExpiredUploads: async () => 0,
     sweepRetention: async () => ({
       missionsScanned: 0,
       prunedAttempts: 0,
@@ -40,10 +51,67 @@ const UNUSED_OWNER_COMMANDS = {
       expiredBundleRefsPending: 0,
     }),
   },
-  digitalEmployee: { sweepExpiredInputUploads: () => 0 },
-} as const
+  digitalEmployee: { sweepExpiredInputUploads: async () => 0 },
+  intent: {
+    scratch: { sweep: async () => ({ removed: 0 }) },
+    recovery: {
+      bootTurnIds: async () => [],
+      recover: async () => ({
+        failed: 0,
+        rolledForward: 0,
+        queuedWorkingSets: 0,
+        orphanedTurns: 0,
+        queuedSessionIds: [],
+      }),
+    },
+  },
+  pluginGenerationGc: {
+    command: { run: async () => ({ removedGenerationPaths: [] }) },
+    executionFence: async () => 'clear' as const,
+  },
+  integration: composeIntegrationMaintenanceCommands(createSqliteWebhookDeliveryPersistence(db)),
+  taskRecovery: createSqliteTaskExecutionPersistence(db).recoveryAdministration,
+  taskArchive: createSqliteTaskArchiveMaintenanceCommand(db),
+  tokenAudit: createSqliteTokenCallAudit(db),
+  system: {
+    eventsArchive: createEventsArchiveMaintenanceCommand({
+      store: createSqliteEventsArchiveStore(db),
+      logsDir: join(appHome, 'logs'),
+    }),
+    retention: {
+      runSlice: async () => ({ counters: {}, delta: { kind: 'none' as const } }),
+    },
+    storage: { run: async () => ({}) },
+  },
+})
 
 describe('RFC-338 bounded maintenance owner slices', () => {
+  test('plugin generation GC receives the selected command and active-node fence', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const received: Array<{ readonly executionFence: 'clear' | 'busy' }> = []
+    const ownerCommands = unusedOwnerCommands(db)
+    const result = await runMaintenanceJob({
+      appHome: '/provider-owned/application-home',
+      ownerCommands: {
+        ...ownerCommands,
+        pluginGenerationGc: {
+          executionFence: async () => 'busy',
+          command: {
+            async run(input) {
+              received.push({ executionFence: input.executionFence })
+              return { removedGenerationPaths: [] }
+            },
+          },
+        },
+      },
+      job: 'pluginGenerationGc',
+      payload: {},
+    })
+
+    expect(received).toEqual([{ executionFence: 'busy' }])
+    expect(result).toEqual({ counters: { removed: 0 }, delta: { kind: 'none' } })
+  })
+
   test('event archive counts a large id space in durable primary-key windows', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc338-event-count-'))
@@ -93,9 +161,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       }
 
       const first = await runMaintenanceJob({
-        db,
         appHome,
-        ownerCommands: UNUSED_OWNER_COMMANDS,
+        ownerCommands: unusedOwnerCommands(db, appHome),
         job: 'eventsArchive',
         payload,
       })
@@ -113,9 +180,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       })
 
       const second = await runMaintenanceJob({
-        db,
         appHome,
-        ownerCommands: UNUSED_OWNER_COMMANDS,
+        ownerCommands: unusedOwnerCommands(db, appHome),
         job: 'eventsArchive',
         payload,
         cursor: first.continuation!.cursor,
@@ -268,24 +334,25 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       })),
     )
     const retention = { bodyRetentionMs: 10, rowRetentionMs: 20 }
-    const first = await gcDeliveriesSlice(db, 100, retention, null, 2)
+    const persistence = createSqliteWebhookDeliveryPersistence(db)
+    const first = await gcDeliveriesSlice(persistence, 100, retention, null, 2)
     expect(first).toMatchObject({
       done: false,
       cursor: { version: 1, phase: 'bodies', bodyCutoff: 90, rowCutoff: 80 },
       counters: { bodiesCleared: 2, rowsDeleted: 0 },
     })
-    const second = await gcDeliveriesSlice(db, 100, retention, first.cursor, 2)
+    const second = await gcDeliveriesSlice(persistence, 100, retention, first.cursor, 2)
     expect(second).toMatchObject({
       done: false,
       cursor: { version: 1, phase: 'rows' },
       counters: { bodiesCleared: 1, rowsDeleted: 0 },
     })
-    const third = await gcDeliveriesSlice(db, 100, retention, second.cursor, 2)
+    const third = await gcDeliveriesSlice(persistence, 100, retention, second.cursor, 2)
     expect(third).toMatchObject({
       done: false,
       counters: { bodiesCleared: 0, rowsDeleted: 2 },
     })
-    const fourth = await gcDeliveriesSlice(db, 100, retention, third.cursor, 2)
+    const fourth = await gcDeliveriesSlice(persistence, 100, retention, third.cursor, 2)
     expect(fourth).toMatchObject({
       done: true,
       counters: { bodiesCleared: 0, rowsDeleted: 1 },

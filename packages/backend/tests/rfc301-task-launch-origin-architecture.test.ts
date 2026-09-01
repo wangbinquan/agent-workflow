@@ -107,7 +107,7 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
       'services/execution/executor.ts': 1,
       'services/fusion.ts': 2,
       'services/task.ts': 1,
-      'services/workgroup/launch.ts': 2,
+      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 2,
     })
   })
 

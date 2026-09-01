@@ -20,6 +20,7 @@ import {
   taskLifecycleEventCatalogJson,
 } from '@/modules/task-execution/public/events'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
 import { setTaskStatus } from '@/services/lifecycle'
 import { MIGRATIONS } from './migration-freeze'
 
@@ -28,7 +29,7 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
     const db = createInMemoryDb(MIGRATIONS)
     let now = 10_000
     let ordinal = 0
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db,
       typePackageDescriptorJsons: [taskLifecycleEventCatalogJson],
       now: () => now,
@@ -64,7 +65,7 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
       subscriberRef,
     }))
     for (const subscriber of subscribers) {
-      eventCenter.participant.subscribe({
+      await eventCenter.participant.subscribe({
         eventTypeRef: TASK_STATUS_CHANGED_EVENT_REF,
         subject: { typeId: 'platform.task', subjectRef: 'task-1' },
         subscriber,
@@ -112,22 +113,22 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
     )
 
     const dispatcher = createCommittedEventDispatcher({
-      db,
+      persistence: createSqliteCommittedEventDeliveryPersistence(db),
       workerId: 'task-lifecycle-test',
       codecs: taskLifecycleCommittedEventCodec,
       consumers: createTaskLifecycleDurableConsumerDefinitions({
         events: eventCenter.commands,
-        closeTerminalGates() {},
-        notifyChildBudget() {},
-        notifyExecutionWatch() {},
-        nudgeWorkspacePrune() {},
+        async closeTerminalGates() {},
+        async notifyChildBudget() {},
+        async notifyExecutionWatch() {},
+        async nudgeWorkspacePrune() {},
       }),
       now: () => now,
     })
     expect((await dispatcher.drain()).madeProgress).toBeTrue()
 
-    const parentDelivery = eventCenter.participant.pendingDeliveries(subscribers[0]!, 10)
-    const auditDelivery = eventCenter.participant.pendingDeliveries(subscribers[1]!, 10)
+    const parentDelivery = await eventCenter.participant.pendingDeliveries(subscribers[0]!, 10)
+    const auditDelivery = await eventCenter.participant.pendingDeliveries(subscribers[1]!, 10)
     expect(parentDelivery).toHaveLength(1)
     expect(auditDelivery).toHaveLength(1)
     expect(parentDelivery[0]).toMatchObject({
@@ -148,8 +149,8 @@ describe('RFC-310 task lifecycle publication through RFC-341', () => {
     })
     expect(parentDelivery[0]!.eventId).toBe(auditDelivery[0]!.eventId)
     expect(parentDelivery[0]!.deliveryId).not.toBe(auditDelivery[0]!.deliveryId)
-    eventCenter.participant.acceptDelivery(parentDelivery[0]!.deliveryId)
-    expect(eventCenter.participant.pendingDeliveries(subscribers[0]!, 10)).toEqual([])
-    expect(eventCenter.participant.pendingDeliveries(subscribers[1]!, 10)).toHaveLength(1)
+    await eventCenter.participant.acceptDelivery(parentDelivery[0]!.deliveryId)
+    expect(await eventCenter.participant.pendingDeliveries(subscribers[0]!, 10)).toEqual([])
+    expect(await eventCenter.participant.pendingDeliveries(subscribers[1]!, 10)).toHaveLength(1)
   })
 })

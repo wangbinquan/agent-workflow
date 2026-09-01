@@ -25,6 +25,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { developmentMissions, developmentRepositoryUploadReceipts } from '../src/db/schema'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
 import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
+import { createSqliteUploadPlacementPersistence } from '../src/modules/development-automation/infrastructure/uploadPlacementPersistence'
 import {
   createUploadPlacementProvider,
   placeUploadSeed,
@@ -42,7 +43,12 @@ interface Rig {
   root: string
   putBlob: (content: string) => Promise<string>
   plant: (planId: string, entries: ResolvedPlanEntry[]) => void
-  deps: { db: DbClient; evidence: EvidenceStore; seedsRoot: string; now: () => number }
+  deps: {
+    persistence: ReturnType<typeof createSqliteUploadPlacementPersistence>
+    evidence: EvidenceStore
+    seedsRoot: string
+    now: () => number
+  }
 }
 
 function rig(): Rig {
@@ -87,7 +93,12 @@ function rig(): Rig {
         entries,
       })
     },
-    deps: { db, evidence, seedsRoot, now: () => T0 },
+    deps: {
+      persistence: createSqliteUploadPlacementPersistence(db),
+      evidence,
+      seedsRoot,
+      now: () => T0,
+    },
   }
 }
 

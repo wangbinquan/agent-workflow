@@ -39,7 +39,7 @@ import {
   createVerificationProfile,
   publishVerificationProfile,
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
-import { createSqliteVerificationProfileStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -124,8 +124,8 @@ beforeAll(async () => {
     .run()
 
   // verification profile：仓内 verify.sh（由 Agent 随改动写入）。
-  const vStore = createSqliteVerificationProfileStore(fx.db)
-  const profile = createVerificationProfile(
+  const vStore = createSqliteVerificationProfilePersistence(fx.db)
+  const profile = await createVerificationProfile(
     { store: vStore, now: () => Date.now() },
     {
       actorUserId: 'admin',
@@ -148,7 +148,7 @@ beforeAll(async () => {
       },
     },
   )
-  publishVerificationProfile(
+  await publishVerificationProfile(
     { store: vStore, now: () => Date.now() },
     { id: profile.id, actorUserId: 'admin' },
   )
@@ -213,11 +213,11 @@ afterAll(async () => {
   await suite.close()
 })
 
-function envelopeFor(prompt: string, missionId: string): string {
+async function envelopeFor(prompt: string, missionId: string): Promise<string> {
   const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
   const actionRunRef = /"actionRunRef": "([^"]+)"/.exec(prompt)![1]!
   const inputDigest = /"inputDigest": "([^"]+)"/.exec(prompt)![1]!
-  const manifest = automation.materializer.getRequirementManifest(missionId)!
+  const manifest = (await automation.materializer.getRequirementManifest(missionId))!
   const json = JSON.stringify({
     protocolVersion: 1,
     nonce,
@@ -282,7 +282,7 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
       kind: 'exited',
       executionRef: last.executionRef,
       taskStatus: 'done',
-      resultText: envelopeFor(last.prompt, missionId),
+      resultText: await envelopeFor(last.prompt, missionId),
       errorSummary: null,
       errorMessage: null,
     })
@@ -300,7 +300,9 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect(verified).toMatchObject({ kind: 'decided', handled: 'collected' })
     expect((verified as { selected: { kind: string } }).selected.kind).toBe('run-verification')
     {
-      const cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
+      const cells = (await fx.snapshots.getCells(
+        fx.store.getMission(missionId)!.requirementBundleRef!,
+      ))!
       expect(cells['__delivery.verifiedProfiles']).toMatchObject({ state: 'known' })
       expect(String((cells['__delivery.verifiedProfiles'] as { value: unknown }).value)).toContain(
         '"passed"',

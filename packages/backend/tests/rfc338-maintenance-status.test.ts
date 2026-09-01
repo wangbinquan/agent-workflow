@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   DEFAULT_CONFIG,
   MaintenanceStatusSchema,
+  type DatabaseRuntimeTelemetry,
   type MaintenanceStatus,
 } from '@agent-workflow/shared'
 
@@ -60,6 +61,19 @@ describe('RFC-338 maintenance status API', () => {
       },
       backlog: [{ runId: 'queued', job: 'eventsArchive', state: 'deferred', since: 175 }],
     }
+    const database: DatabaseRuntimeTelemetry = {
+      version: 1,
+      provider: 'postgresql',
+      poolWait: {
+        windowMs: 600_000,
+        sampleCount: 3,
+        acquiredCount: 2,
+        failedCount: 1,
+        p50Ms: 5,
+        p95Ms: 25,
+        maxMs: 25,
+      },
+    }
     const app = createApp({
       token: 'a'.repeat(64),
       configPath,
@@ -67,13 +81,14 @@ describe('RFC-338 maintenance status API', () => {
       dbVersion: 1,
       db,
       maintenanceStatus: () => status,
+      databaseTelemetry: () => database,
     })
 
     const response = await app.request('/api/maintenance/status', {
       headers: { authorization: `Bearer ${token}` },
     })
     expect(response.status).toBe(200)
-    expect(MaintenanceStatusSchema.parse(await response.json())).toEqual(status)
+    expect(MaintenanceStatusSchema.parse(await response.json())).toEqual({ ...status, database })
   })
 
   test('reports an explicit degraded fallback when an embedding omits the service', async () => {

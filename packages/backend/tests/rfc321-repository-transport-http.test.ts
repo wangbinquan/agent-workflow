@@ -22,6 +22,7 @@ import { createApp } from '../src/server'
 import type { AppDeps } from '../src/server'
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
+import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
 import { createUser } from '../src/services/users'
 import { errorHandler } from '../src/util/errors'
 
@@ -67,6 +68,10 @@ async function fixture() {
     createSession({ db, userId: alice.id }),
     createSession({ db, userId: bob.id }),
   ])
+  const repositoryTransport = composeRepositoryTransportCredentials(
+    new SQLiteRepositoryTransportCredentialRepository(db),
+    box,
+  )
   const app = createApp({
     token: DAEMON_TOKEN,
     configPath: '',
@@ -74,6 +79,7 @@ async function fixture() {
     dbVersion: 1,
     db,
     secretBox: box,
+    repositoryTransport,
     codeHostFetch: async (_url, init) => {
       const token = new Headers(init?.headers).get('private-token') ?? ''
       probedTokens.push(token)
@@ -250,7 +256,10 @@ describe('RFC-321 personal code-host push credential HTTP surface', () => {
     app.use('*', injectActor)
     app.onError(errorHandler)
     mountAccountRepositoryTransportCredentialRoutes(app, { db: h.db, secretBox: box } as AppDeps, {
-      credentials: composeRepositoryTransportCredentials(h.db, box).ownCredentials,
+      credentials: composeRepositoryTransportCredentials(
+        new SQLiteRepositoryTransportCredentialRepository(h.db),
+        box,
+      ).ownCredentials,
       currentSubjects: {
         async resolveCurrentSubject() {
           return null

@@ -19,6 +19,7 @@ import { runMissionReconcile } from '../src/modules/development-automation/appli
 import { retryBlockedMission } from '../src/modules/development-automation/application/commands/launchMission'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { directSubmissionDigest } from '../src/modules/development-automation/infrastructure/requirementMaterializer'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
@@ -95,7 +96,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(materialized.sourceRevision).toBe(afterMaterialize.sourceContentDigest!)
 
     // 平台 manifest：schema 全量校验过、digest 可复算、正文进了 evidence。
-    const manifest = fx.materializer.getRequirementManifest(missionId)!
+    const manifest = (await fx.materializer.getRequirementManifest(missionId))!
     expect(manifest.title).toBe('Add feature')
     expect(manifest.source.kind).toBe('direct')
     expect(manifest.files).toHaveLength(1)
@@ -103,16 +104,16 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(manifest.files[0]!.role).toBe('body')
     const { manifestDigest: _omit, ...core } = manifest
     expect(canonicalDigest(core)).toBe(manifest.manifestDigest)
-    const manifestMount = fx.materializer.getRequirementManifestMount(
+    const manifestMount = (await fx.materializer.getRequirementManifestMount(
       missionId,
       manifest.manifestDigest,
-    )!
+    ))!
     expect(manifestMount.fileIds).toEqual(manifest.files.map((file) => file.fileId))
     const manifestBundle = fx.evidence.getBundle(manifestMount.bundleId)!
     expect(manifestBundle.entries.map((entry) => entry.relativePath)).toEqual([
       'requirement-manifest.json',
     ])
-    expect(fx.materializer.getRequirementManifestMount(missionId, '0'.repeat(64))).toBeNull()
+    expect(await fx.materializer.getRequirementManifestMount(missionId, '0'.repeat(64))).toBeNull()
     const bundle = fx.evidence.getBundle(materialized.bundleRef!)!
     expect(bundle.entries).toHaveLength(1)
     expect(readFileSync(fx.evidence.blobPath(bundle.entries[0]!.sha256), 'utf8')).toBe(
@@ -133,7 +134,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     const missionId = await fx.launchDirect('rfc310-pr3-nowire-1')
     const outcome = await runMissionReconcile(
       {
-        store: fx.store,
+        store: createSqliteMissionPersistence(fx.db),
         lookup: fx.lookup,
         snapshots: fx.snapshots,
         ports: {},
@@ -165,7 +166,11 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     // stash + retry：attempt cells 改变了 decision 输入，去重不会吞掉重跑。
     await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
     await retryBlockedMission(
-      { store: fx.store, lookup: fx.lookup, now: () => Date.now() },
+      {
+        store: createSqliteMissionPersistence(fx.db),
+        lookup: fx.lookup,
+        now: () => Date.now(),
+      },
       { missionId },
     )
     const round2 = await runMissionReconcile(deps, missionId)
@@ -193,7 +198,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(done.ok).toBe(true)
     if (done.ok) {
       expect(done.fileCount).toBe(1)
-      const manifest = fx.materializer.getRequirementManifest(missionId)!
+      const manifest = (await fx.materializer.getRequirementManifest(missionId))!
       expect(manifest.totals.files).toBe(1)
     }
   })

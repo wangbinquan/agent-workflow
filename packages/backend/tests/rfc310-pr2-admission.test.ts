@@ -23,7 +23,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplateStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
@@ -37,9 +37,9 @@ import {
   upsertAssignment,
 } from '../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
 import { createEmployeePublishLookup } from '../src/modules/development-automation/infrastructure/publishLookup'
-import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
 import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
 import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 import {
   createDevelopmentAdapter,
@@ -100,10 +100,10 @@ function lookupOf(db: DbClient): AdmissionLookup {
 async function buildFixture(): Promise<Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
-  const templates = createSqliteActionTemplateStore(db)
+  const templates = createSqliteActionTemplatePersistence(db)
   const adapters = createSqliteDevelopmentAdapterStore(db)
 
-  const template = createActionTemplate(
+  const template = await createActionTemplate(
     { store: templates, now },
     {
       actorUserId: 'admin',
@@ -129,7 +129,7 @@ async function buildFixture(): Promise<Fixture> {
       },
     },
   )
-  publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
+  await publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
 
   const policy = await createAutomationPolicy(db, {
     name: 'pol',
@@ -211,7 +211,7 @@ async function buildFixture(): Promise<Fixture> {
   ])
   const none = await mkEmployee('emp-none', [])
 
-  const store = createSqliteMissionStore(db)
+  const store = createSqliteMissionPersistence(db)
   const uploads = createSqliteUploadSessionStore(db)
   return {
     db,
@@ -220,8 +220,7 @@ async function buildFixture(): Promise<Fixture> {
       lookup: lookupOf(db),
       now,
       uploadAdmission: {
-        sessions: uploads,
-        transact: (fn) => db.transaction(() => fn()),
+        uploads: createSqliteMissionInputUploadPersistence(db),
         // PR-2 admission 测试只关心 admission 链；baseline 一律「文件缺席」。
         resolveBaseline: async () => ({
           repositoryRef: 'repo-1',
@@ -229,7 +228,6 @@ async function buildFixture(): Promise<Fixture> {
           baselineSha: 'f'.repeat(40),
           reader: { stat: async () => 'missing' as const },
         }),
-        persistPlan: (plan) => insertUploadPlan(db, plan),
       },
     },
     employees: { single, multi, none },
@@ -297,7 +295,7 @@ describe('rfc310 pr2 admission', () => {
     )
     expect(replay).toMatchObject({ missionId: bodyOnly.missionId, created: false })
 
-    const mission = f.deps.store.getMission(bodyOnly.missionId)!
+    const mission = (await f.deps.store.getMission(bodyOnly.missionId))!
     expect(mission.employeeId).toBe(f.employees.single)
     expect(mission.policyId).toBe(f.policyId)
     expect(mission.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
@@ -316,7 +314,7 @@ describe('rfc310 pr2 admission', () => {
     const claimed = f.uploads.getUpload(ref)!
     expect(claimed.state).toBe('claimed')
     expect(claimed.claimedByMissionId).toBe(result.missionId)
-    const mission = f.deps.store.getMission(result.missionId)!
+    const mission = (await f.deps.store.getMission(result.missionId))!
     expect(mission.uploadPlanRef).not.toBeNull()
     const plan = f.db
       .select()
@@ -372,7 +370,7 @@ describe('rfc310 pr2 admission', () => {
       expect((error as { code?: string }).code).toBe('upload-already-claimed')
     }
     // 整体回滚：零 mission、零 plan、ok 行零消费、stolen 归属不变。
-    expect(f.deps.store.findByIdempotencyKey('idem-atomic-1')).toBeNull()
+    expect(await f.deps.store.findByIdempotencyKey('idem-atomic-1')).toBeNull()
     expect(f.db.select().from(developmentRepositoryUploadPlans).all()).toHaveLength(0)
     expect(f.uploads.getUpload(ok)!.state).toBe('pending')
     expect(f.uploads.getUpload(stolen)!.claimedByMissionId).toBe('m-thief')
@@ -388,7 +386,7 @@ describe('rfc310 pr2 admission', () => {
       ]),
     )
     expect(result).toMatchObject({ status: 'blocked', blockCode: 'upload-admission-not-wired' })
-    const mission = f.deps.store.getMission(result.missionId)!
+    const mission = (await f.deps.store.getMission(result.missionId))!
     expect(mission.sourceContentDigest).toBeNull()
   })
 
@@ -436,7 +434,7 @@ describe('rfc310 pr2 admission', () => {
       requestedEmployee: null,
     })
     expect(result.status).toBe('working')
-    const mission = f.deps.store.getMission(result.missionId)!
+    const mission = (await f.deps.store.getMission(result.missionId))!
     expect(mission.employeeId).toBe(f.employees.single)
   })
 
@@ -459,7 +457,7 @@ describe('rfc310 pr2 admission', () => {
 
     const auto = await launchMission(f.deps, externalInput('idem-ext-auto-1', f.employees.single))
     expect(auto.status).toBe('working')
-    expect(f.deps.store.getMission(auto.missionId)!.resolvedSourceKey).toBe('inhouse')
+    expect((await f.deps.store.getMission(auto.missionId))!.resolvedSourceKey).toBe('inhouse')
 
     const zero = await launchMission(f.deps, externalInput('idem-ext-zero-1', f.employees.none))
     expect(zero).toMatchObject({ status: 'blocked', blockCode: 'requirement-source-unresolved' })
@@ -487,7 +485,7 @@ describe('rfc310 pr2 admission', () => {
       externalInput('idem-ext-req-1', f.employees.multi, 'sys-a'),
     )
     expect(requested.status).toBe('working')
-    expect(f.deps.store.getMission(requested.missionId)!.resolvedAdapterId).not.toBeNull()
+    expect((await f.deps.store.getMission(requested.missionId))!.resolvedAdapterId).not.toBeNull()
 
     const badKey = await launchMission(
       f.deps,
@@ -561,7 +559,7 @@ describe('rfc310 pr2 admission', () => {
       delivery: { kind: 'adopt-merge-request', mergeRequestRef: 'ep-1/proj-1!42' },
     })
     expect(result.status).toBe('working')
-    expect(f.deps.store.getMission(result.missionId)!.adoptedMrRef).toBe('ep-1/proj-1!42')
+    expect((await f.deps.store.getMission(result.missionId))!.adoptedMrRef).toBe('ep-1/proj-1!42')
   })
 
   test('cancel with no external effects lands terminal canceled and bumps epoch', async () => {
@@ -570,10 +568,10 @@ describe('rfc310 pr2 admission', () => {
       f.deps,
       directInput('idem-cancel-1', f.employees.single, 'x'),
     )
-    const before = f.deps.store.getMission(launched.missionId)!
+    const before = (await f.deps.store.getMission(launched.missionId))!
     const result = await cancelMission(f.deps, { missionId: launched.missionId })
     expect(result).toEqual({ status: 'canceled', pending: false })
-    const after = f.deps.store.getMission(launched.missionId)!
+    const after = (await f.deps.store.getMission(launched.missionId))!
     expect(after.status).toBe('canceled')
     expect(after.epoch).toBe(before.epoch + 1)
     expect(after.transitionFence).toBe('none')
@@ -588,7 +586,7 @@ describe('rfc310 pr2 admission', () => {
       f.deps,
       directInput('idem-cancel-2', f.employees.single, 'x'),
     )
-    const prepared = f.deps.store.prepareEffect({
+    const prepared = await f.deps.store.prepareEffect({
       id: 'ef-d1',
       missionId: launched.missionId,
       actionRunId: null,
@@ -598,10 +596,10 @@ describe('rfc310 pr2 admission', () => {
       epoch: 0,
       now: Date.now(),
     })
-    f.deps.store.markEffectDispatched(prepared.effect.id, Date.now())
+    await f.deps.store.markEffectDispatched(prepared.effect.id, Date.now())
     const result = await cancelMission(f.deps, { missionId: launched.missionId })
     expect(result.pending).toBe(true)
-    const after = f.deps.store.getMission(launched.missionId)!
+    const after = (await f.deps.store.getMission(launched.missionId))!
     expect(after.transitionFence).toBe('cancel-pending')
     expect(after.status).not.toBe('canceled')
   })

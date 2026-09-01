@@ -14,6 +14,7 @@ import {
   reviseAutomationPolicyDraft,
 } from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr2Fixture } from './helpers/rfc310Pr2Fixture'
 
 const now = () => Date.now()
@@ -25,6 +26,7 @@ function codeOf(err: unknown): string {
 describe('rfc310 pr2 configuration upgrade', () => {
   test('noop preview/apply; real apply repins policy and bumps epoch; prepared effects die', async () => {
     const f = await buildPr2Fixture()
+    const persistence = createSqliteMissionPersistence(f.db)
     const missionId = await f.launch('t31a-main')
     const mission = f.store.getMission(missionId)!
 
@@ -37,7 +39,7 @@ describe('rfc310 pr2 configuration upgrade', () => {
     expect(receipt2.revision).toBe(2)
 
     const noop = await applyConfigurationUpgrade(
-      { store: f.store, lookup: f.lookup, now },
+      { store: persistence, lookup: f.lookup, now },
       { missionId: mission.id, nextEmployee: null, nextPolicy: null },
     )
     expect(noop.noop).toBe(true)
@@ -55,7 +57,7 @@ describe('rfc310 pr2 configuration upgrade', () => {
     })
 
     const plan = await previewConfigurationUpgrade(
-      { store: f.store, lookup: f.lookup, now },
+      { store: persistence, lookup: f.lookup, now },
       { missionId: mission.id, nextEmployee: null, nextPolicy: { id: f.policyId, revision: 2 } },
     )
     expect(plan.noop).toBe(false)
@@ -63,7 +65,7 @@ describe('rfc310 pr2 configuration upgrade', () => {
     expect(plan.invalidates.pendingDecisionRefs).toContain(prepared.effect.id)
 
     const applied = await applyConfigurationUpgrade(
-      { store: f.store, lookup: f.lookup, now },
+      { store: persistence, lookup: f.lookup, now },
       { missionId: mission.id, nextEmployee: null, nextPolicy: { id: f.policyId, revision: 2 } },
     )
     expect(applied.noop).toBe(false)
@@ -76,13 +78,14 @@ describe('rfc310 pr2 configuration upgrade', () => {
 
   test('rejects missing revision, active writable action, and fenced missions', async () => {
     const f = await buildPr2Fixture()
+    const persistence = createSqliteMissionPersistence(f.db)
     const missionId = await f.launch('t31a-neg')
     const mission = f.store.getMission(missionId)!
 
     let missingCode = ''
     try {
       await applyConfigurationUpgrade(
-        { store: f.store, lookup: f.lookup, now },
+        { store: persistence, lookup: f.lookup, now },
         { missionId: mission.id, nextEmployee: null, nextPolicy: { id: f.policyId, revision: 99 } },
       )
     } catch (e) {
@@ -96,7 +99,7 @@ describe('rfc310 pr2 configuration upgrade', () => {
     let fencedCode = ''
     try {
       await applyConfigurationUpgrade(
-        { store: f.store, lookup: f.lookup, now },
+        { store: persistence, lookup: f.lookup, now },
         { missionId: mission.id, nextEmployee: null, nextPolicy: { id: f.policyId, revision: 2 } },
       )
     } catch (e) {

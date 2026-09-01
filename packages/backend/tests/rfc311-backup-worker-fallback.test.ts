@@ -31,11 +31,21 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
     expect(src.match(/await buildDaemonBinary\(\{/g)).toHaveLength(2)
 
     const backup = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'backup.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'platform',
+        'persistence',
+        'sqlite',
+        'systemProviderBackup.ts',
+      ),
       'utf8',
     )
     expect(backup).toContain("? './services/backupVacuumWorker.ts'")
-    expect(backup).toContain(": new URL('./backupVacuumWorker.ts', import.meta.url).href")
+    expect(backup).toContain(
+      ": new URL('../../../services/backupVacuumWorker.ts', import.meta.url).href",
+    )
     expect(backup).toContain('new Worker(BACKUP_VACUUM_WORKER_ENTRY)')
   })
 

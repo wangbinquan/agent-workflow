@@ -16,11 +16,17 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { capabilityTemplates, repoCapabilityConfig } from '../src/db/schema'
-import { resolveCellParams } from '../src/services/codeCapabilityParams'
+import { resolveCellParams as resolveCellParamsWithPort } from '../src/services/codeCapabilityParams'
+import { createSqliteCapabilityParamRead } from '../src/modules/code-capability/infrastructure/sqliteCapabilityParamRead'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const REPO = 'repo-1'
 const NOW = 1_700_000_000_000
+
+const resolveCellParams = (
+  db: DbClient,
+  input: { readonly repoId: string; readonly capability: string },
+) => resolveCellParamsWithPort(createSqliteCapabilityParamRead(db), input)
 
 const TABLE = JSON.stringify([
   { name: 'triggerLabel', kind: 'string', required: true },

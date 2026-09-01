@@ -22,6 +22,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { findStalledRunningChildren } from '../src/services/autoKill'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_000_000_000
@@ -81,7 +82,7 @@ describe('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', () => {
       events: [{ ts: NOW - 1_000 }, ...staleEvents(50, startedAt)],
     })
 
-    const found = await findStalledRunningChildren(db, STALL_MS, NOW)
+    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
     expect(found).toHaveLength(0)
   })
 
@@ -91,7 +92,7 @@ describe('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', () => {
     const quietTs = NOW - 5 * STALL_MS
     const id = await seedRun(db, { startedAt, events: staleEvents(10, quietTs) })
 
-    const found = await findStalledRunningChildren(db, STALL_MS, NOW)
+    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
     expect(found.map((r) => r.id)).toEqual([id])
     expect(found[0]!.lastTs).toBe(quietTs)
   })
@@ -100,7 +101,7 @@ describe('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const id = await seedRun(db, { startedAt: NOW - 10 * STALL_MS, events: [] })
 
-    const found = await findStalledRunningChildren(db, STALL_MS, NOW)
+    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
     expect(found.map((r) => r.id)).toEqual([id])
     expect(found[0]!.lastTs).toBeNull()
   })
@@ -116,7 +117,7 @@ describe('RFC-314 D1 —— 窗口外的乱序会被低估（proposal §4 B1 明
       events: [{ ts: NOW - 1_000 }, ...staleEvents(WINDOW + 50, startedAt)],
     })
 
-    const found = await findStalledRunningChildren(db, STALL_MS, NOW)
+    const found = await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
     // 全表 max(ts) 会返回空数组（那条新 ts 让它不算僵死）；窗口法看不到它。
     // 判据在这里被钉住：改回全表 max 会让这条转红，改小窗口也会。
     expect(found).toHaveLength(1)
@@ -139,7 +140,7 @@ describe('RFC-314 D1 —— 结构判据', () => {
     const raw = (db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client
     const rec = recordStatements(raw)
     try {
-      await findStalledRunningChildren(db, STALL_MS, NOW)
+      await findStalledRunningChildren(taskRecoveryOperations(db), STALL_MS, NOW)
     } finally {
       rec.stop()
     }

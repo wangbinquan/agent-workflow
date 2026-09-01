@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { refreshCachedRepo, resolveCachedRepo } from '../src/services/gitRepoCache'
 import { refreshDueRepos } from '../src/services/submoduleRefresh'
 import { runGit } from '../src/util/git'
@@ -60,7 +61,10 @@ async function authenticatedFixture() {
   await runGit(root, ['clone', '--bare', working, bare])
   const url = credentialedRemoteUrlFor(bare, 'refresh-bot', 'refresh-secret')
   const db = createInMemoryDb(MIGRATIONS)
-  const cached = await resolveCachedRepo({ db, appHome, secretBox: box }, { url })
+  const cached = await resolveCachedRepo(
+    { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+    { url },
+  )
   return { appHome, cached, db, url }
 }
 
@@ -80,7 +84,10 @@ describe('private cached-repo refresh credential lease', () => {
   test('manual refresh unseals the URL for one fetch and keeps origin credential-free', async () => {
     const { appHome, cached, db } = await authenticatedFixture()
 
-    const refreshed = await refreshCachedRepo({ db, appHome, secretBox: box }, cached.cached.id)
+    const refreshed = await refreshCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+      cached.cached.id,
+    )
     expect(refreshed.fetchOk).toBe(true)
 
     const origin = await runGit(cached.cached.localPath, ['remote', 'get-url', 'origin'])
@@ -93,7 +100,7 @@ describe('private cached-repo refresh credential lease', () => {
     const { appHome, cached, db } = await authenticatedFixture()
     const now = Date.now()
     const result = await refreshDueRepos(
-      db,
+      composeSqliteRepositoryWorkspaceStore(db),
       { submoduleAutoRefresh: { enabled: true, intervalMs: 1, onlyRecentDays: 30 } },
       { appHome, secretBox: box, now: () => now },
     )

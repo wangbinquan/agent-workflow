@@ -11,6 +11,7 @@ import {
 } from '@/db/schema'
 import { dbTxSync } from '@/db/txSync'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
 import {
   acceptCommittedEventDelivery,
   appendCommittedEventTx,
@@ -203,7 +204,7 @@ describe('RFC-341 committed-event store', () => {
       appendCommittedEventTx(tx, eventInput({ operation: 'poison' })),
     )
     const dispatcher = createCommittedEventDispatcher({
-      db,
+      persistence: createSqliteCommittedEventDeliveryPersistence(db),
       workerId: 'dispatcher',
       codecs: {
         eventTypes: ['fixture.changed.v1'],

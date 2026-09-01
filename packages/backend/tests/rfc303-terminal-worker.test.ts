@@ -9,6 +9,7 @@ import { createInMemoryDb } from '@/db/client'
 import { webhookMrControlEffects, webhookMrControlTargets } from '@/db/schema'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
+import { createSqliteMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/sqliteMrTerminalControlPersistence'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 
@@ -40,7 +41,7 @@ async function fixture(participant: TaskSourceTerminationParticipant) {
     updatedAt: now,
   })
   const worker = new MrTerminalControlWorker(
-    db,
+    createSqliteMrTerminalEffectPersistence(db),
     guards(),
     participant,
     mintSourceTerminationEffectCapability,
@@ -150,7 +151,7 @@ describe('RFC-303 terminal control worker', () => {
       return []
     }
     const worker = new MrTerminalControlWorker(
-      db,
+      createSqliteMrTerminalEffectPersistence(db),
       launchGuards,
       {
         async apply() {

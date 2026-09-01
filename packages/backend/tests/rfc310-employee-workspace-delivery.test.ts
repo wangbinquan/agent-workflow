@@ -17,9 +17,9 @@ import {
   employeeReactionRounds,
   employeeRoundWorkspaceStates,
 } from '@/db/schema'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { developmentEmployeeRuntimeCodec } from '@/modules/development-automation/composition/employeeTypePackage'
-import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -324,7 +324,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
       })
       .run()
 
-    const workspace = composeDevelopmentEmployeeWorkspace({
+    const workspace = composeSqliteDevelopmentEmployeeWorkspace({
       db,
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -643,7 +643,7 @@ describe('RFC-310 Digital Employee OS shared workspace and platform delivery', (
     let observedMergeableState: 'mergeable' | 'conflict' = 'mergeable'
     let observedState: 'opened' | 'merged' | 'closed' = 'opened'
     let observedMergedCommitSha: string | null = null
-    const platform = composeDevelopmentEmployeePlatformWorkItems({
+    const platform = composeSqliteDevelopmentEmployeePlatformWorkItems({
       reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
       appHome,

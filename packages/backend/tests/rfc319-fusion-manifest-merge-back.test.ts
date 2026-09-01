@@ -37,16 +37,30 @@ import { fusions, memories, skills, tasks } from '../src/db/schema'
 import { createFusion as createFusionWithAuthority, type FusionDeps } from '../src/services/fusion'
 import { forcedPortPathsForTask } from '../src/services/portArtifacts'
 import { createRuntime } from '../src/services/runtimeRegistry'
-import { createManagedSkill, type SkillFsOptions } from '../src/services/skill'
+import { composeIdentityAccess } from '../src/modules/identity-access/composition'
+import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
+import { composeSqliteFusionOperations } from '../src/modules/memory/composition/fusion'
+import {
+  createManagedSkill,
+  type SkillFsOptions,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { createSqliteTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
+import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import {
+  resourceScopeAuthority,
+  TEST_RESOURCE_SCOPE_AUTHORIZATION,
+} from './helpers/resourceScopeAuthority'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc319-test-opencode'
 
+type TestFusionDeps = FusionDeps & { readonly db: DbClient }
+
 function createFusion(
   input: Parameters<typeof createFusionWithAuthority>[0],
-  deps: Parameters<typeof createFusionWithAuthority>[1],
+  deps: TestFusionDeps,
   actor: Actor,
   launchInitiator: Parameters<typeof createFusionWithAuthority>[3],
 ) {
@@ -95,7 +109,7 @@ process.exit(1)
 interface Harness {
   db: DbClient
   appHome: string
-  deps: FusionDeps
+  deps: TestFusionDeps
   cleanup: () => void
 }
 
@@ -103,18 +117,29 @@ async function build(): Promise<Harness> {
   const tmp = mkdtempSync(pjoin(tmpdir(), 'aw-rfc319-fusion-manifest-'))
   const appHome = pjoin(tmp, 'home')
   const db = createInMemoryDb(MIGRATIONS)
-  await createRuntime(db, {
+  await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
     model: 'openai/gpt-5.6',
+  })
+  const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
+  const memoryCatalog = composeSqliteMemoryCatalogOperations({
+    db,
+    contexts: composeIdentityAccess(db).contexts,
+    authorization: TEST_RESOURCE_SCOPE_AUTHORIZATION,
   })
   return {
     db,
     appHome,
     deps: {
       db,
+      operations: composeSqliteFusionOperations({
+        db,
+        appHome,
+        memories: memoryCatalog,
+        tasks: createSqliteFusionEngineTaskOperations({ db, appHome, schedulerDriver }),
+      }),
       appHome,
-      schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       binaryOverride: makeClarifyStub(tmp),
       awaitScheduler: true,
       defaultRuntime: VALID_OPENCODE_RUNTIME,
@@ -188,7 +213,10 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     ).toContain(PLATFORM_FUSION_MANIFEST)
 
     expect(
-      await forcedPortPathsForTask(h.db, taskId!),
+      await forcedPortPathsForTask(
+        createSqliteTaskExecutionPersistence(h.db).artifactPaths,
+        taskId!,
+      ),
       '名册的消费端（createNodeIso / snapshotNodeIsoFinal 的 force-include 清单）' +
         '必须真的看到这条路径——只写进任务行而消费端读不到，等于没登记',
     ).toContain(PLATFORM_FUSION_MANIFEST)

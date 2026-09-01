@@ -362,7 +362,9 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const cli = read('packages/backend/src/cli/start.ts')
     const taskRoutes = read('packages/backend/src/routes/tasks.ts')
     const scheduleLaunch = read('packages/backend/src/services/scheduleLaunch.ts')
-    const webhookDispatch = read('packages/backend/src/services/webhook/webhookDispatch.ts')
+    const webhookDispatch = read(
+      'packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime.ts',
+    )
 
     expect(startTaskDeps).toContain('schedulerDriver: SchedulerDriverPort')
     expect(startTaskDeps).not.toContain('createLegacyTaskExecutionTopology')
@@ -376,7 +378,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(taskRoutes).toContain('requireSchedulerDriver(deps.schedulerDriver)')
     expect(scheduleLaunch).toContain('schedulerDriver: SchedulerDriverPort')
     expect(scheduleLaunch).not.toContain('TaskRepositoryPublicationTransport')
-    expect(webhookDispatch).toContain('schedulerDriver?: SchedulerDriverPort')
+    expect(webhookDispatch).toContain('schedulerDriver: SchedulerDriverPort')
     expect(webhookDispatch).not.toContain('TaskRepositoryPublicationTransport')
     expect(startTaskDeps).not.toContain("from '@/modules/source-control/public/types'")
     expect(cli).toMatch(

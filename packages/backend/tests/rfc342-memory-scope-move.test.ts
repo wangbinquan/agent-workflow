@@ -30,6 +30,7 @@ import {
   promoteCandidate,
 } from '../src/services/memory'
 import { loadInjectableMemories } from '../src/services/memoryInject'
+import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 import { createUser } from '../src/services/users'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
@@ -541,13 +542,13 @@ describe('RFC-342 memory scope move correctness', () => {
     })
     await promoteCandidate(db, moved.memory.id, { action: 'approve' }, ownerId)
 
-    const oldAudience = await loadInjectableMemories(db, {
+    const oldAudience = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [agentId],
       workflowId: null,
       repoIds: [],
       repoGroupId: null,
     })
-    const newAudience = await loadInjectableMemories(db, {
+    const newAudience = await loadInjectableMemories(sqliteMemoryInjectionStore(db), {
       agentIds: [],
       workflowId,
       repoIds: [],

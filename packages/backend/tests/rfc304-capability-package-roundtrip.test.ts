@@ -29,9 +29,9 @@ import { agents, capabilityTemplates, users } from '../src/db/schema'
 import { lowerBundlePayloads } from '../src/services/bundle/lower'
 import { opSlug, resourceTypeOfOp, type BundleApplyProvider } from '../src/services/bundle/provider'
 import { translateDecisions } from '../src/services/resourcePackage/commit'
-import { exportResourcePackage } from '../src/services/resourcePackage/export'
 import { parseResourcePackage } from '../src/services/resourcePackage/parse'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { exportResourcePackage } from './helpers/resourcePackageProvider'
 import { eq } from 'drizzle-orm'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

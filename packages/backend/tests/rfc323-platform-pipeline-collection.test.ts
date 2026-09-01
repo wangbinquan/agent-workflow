@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { mergeRequestContextSchema } from '@/modules/development-automation/composition/employeeTypePackage'
 
 const migrations = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -26,9 +26,9 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-type PlatformDeps = Parameters<typeof composeDevelopmentEmployeePlatformWorkItems>[0]
+type PlatformDeps = Parameters<typeof composeSqliteDevelopmentEmployeePlatformWorkItems>[0]
 type PlatformPlan = Parameters<
-  ReturnType<typeof composeDevelopmentEmployeePlatformWorkItems>['execute']
+  ReturnType<typeof composeSqliteDevelopmentEmployeePlatformWorkItems>['execute']
 >[0]
 type CollectEnvelope = Extract<
   Awaited<ReturnType<PipelineEvidencePort['collect']>>,
@@ -182,7 +182,7 @@ function harness(input: {
     },
   } satisfies PlatformDeps
   return {
-    platform: composeDevelopmentEmployeePlatformWorkItems(deps),
+    platform: composeSqliteDevelopmentEmployeePlatformWorkItems(deps),
     appHome,
     collectedInputs,
     cleanupCount: () => cleanupCount,

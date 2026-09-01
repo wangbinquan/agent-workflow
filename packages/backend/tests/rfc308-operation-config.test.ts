@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { applyConfigPatch, saveConfigRaw } from '../src/config'
-import { readCommitExcludePatterns, type RunTaskOptions } from '../src/services/scheduler'
+import { readCommitExcludePatterns } from '../src/services/scheduler'
 
 const roots: string[] = []
 afterEach(() => {
@@ -19,7 +19,6 @@ describe('RFC-308 operation config projection', () => {
     saveConfigRaw(configPath, { ...DEFAULT_CONFIG, taskCommitExcludePatterns: ['first/**'] })
     const opts = {
       taskId: 'task',
-      db: {} as RunTaskOptions['db'],
       appHome: root,
       configPath,
       commitPushExcludePatterns: ['launch-fallback/**'],

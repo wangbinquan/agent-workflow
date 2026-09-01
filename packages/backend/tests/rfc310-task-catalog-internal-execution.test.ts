@@ -10,7 +10,7 @@ import type { TaskCatalogVisibility } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows } from '../src/db/schema'
-import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/application/adapters/task-catalog-adapter'
+import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/sqliteTaskCatalogSources'
 import { listTaskItems, listTasks } from '../src/services/task'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

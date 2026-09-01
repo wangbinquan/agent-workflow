@@ -543,7 +543,9 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     expect((r1 as { selected: NextDecision }).selected).toMatchObject({
       kind: 'collect-pipeline-evidence',
     })
-    let cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
+    let cells = (await fx.snapshots.getCells(
+      fx.store.getMission(missionId)!.requirementBundleRef!,
+    ))!
     expect(cells['pipeline.missingRequiredGateKeys']).toMatchObject({ value: ['unit'] })
     expect(cells['__pipeline.manifestRef']).toMatchObject({ state: 'known' })
 
@@ -555,7 +557,7 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     })
     expect(triggers).toHaveLength(1)
     expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
-    cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
+    cells = (await fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!))!
     expect(cells['__pipeline.triggerCounts']).toMatchObject({ value: '{"unit":1}' })
 
     // 轮 3：recollect → 全过。
@@ -563,7 +565,7 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     expect((r3 as { selected: NextDecision }).selected).toMatchObject({
       kind: 'collect-pipeline-evidence',
     })
-    cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
+    cells = (await fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!))!
     expect(cells['pipeline.requiredGatesAllPass']).toMatchObject({ value: true })
 
     // 轮 4：全过 → PR-7 care 链推进 readiness（machine holds 清零）。
@@ -616,7 +618,7 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     expect(r).toMatchObject({ kind: 'decided', handled: 'collected' })
     const mission = fx.store.getMission(missionId)!
     expect(mission.status).toBe('watching') // 不 block
-    const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__pipeline.manifestRef']).toBeUndefined()
     expect(
       Number(String((cells['__pipeline.fenceRetryAt'] as { value: unknown }).value)),

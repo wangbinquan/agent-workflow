@@ -8,7 +8,10 @@
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
   existsSync,
@@ -34,9 +37,9 @@ import {
 import { createInMemoryDb } from '@/db/client'
 import { cachedRepos, employeeOsOutbox, webhookDeliveries, webhookEndpoints } from '@/db/schema'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
-import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -47,7 +50,7 @@ import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
 } from '@/modules/integration/application/developmentAdapterCommands'
-import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
 import { createPipelineEvidenceAdapter } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { AdapterFailureReceipt } from '@/modules/integration/infrastructure/developmentAdapterRunner'
@@ -57,6 +60,9 @@ import { staticCachedRepositoryPreparation } from './helpers/staticCachedReposit
 import { createSqliteDevelopmentAdapterStore } from '@/modules/integration/infrastructure/sqliteDevelopmentAdapterStore'
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
+import { composeSqliteWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
+import { composeSqliteWebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
+import { createSqliteWebhookExecutionRuntime } from '@/modules/integration/infrastructure/sqliteWebhookDispatchRuntime'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
@@ -69,7 +75,6 @@ import {
   bindEmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/composition'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
-import type { AppDeps } from '@/server'
 import { createUser } from '@/services/users'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 
@@ -250,7 +255,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     const inputArtifacts = createEmployeeInputArtifactStore(
       join(appHome, 'artifacts', 'employee-inputs'),
     )
-    const workspace = composeDevelopmentEmployeeWorkspace({
+    const workspace = composeSqliteDevelopmentEmployeeWorkspace({
       db,
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -284,15 +289,29 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         return workStartDelegate(input)
       },
     }
-    const webhookDispatcher = createWebhookDispatcher({
+    const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
       db,
-      ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-      configPath: join(appHome, 'config.json'),
-      secretBox: webhookSecretBox,
+      createIdentityAccessRuntime({ db }),
+    )
+    const webhookDispatcher = createWebhookDispatcher({
+      ...composeSqliteWebhookDispatchCore(
+        db,
+        webhookSecretBox,
+        scheduledTaskRuntime(db).operations,
+      ),
+      ...createSqliteWebhookExecutionRuntime({
+        taskExecutions: {
+          launch: async () => {
+            throw new Error('digital employee system mock must use its dedicated WorkStart port')
+          },
+          cancel: async () => undefined,
+        },
+        digitalEmployeeWorkStart,
+      }),
+      ...identityDependencies,
       getDefaultRuntime: async () => null,
-      digitalEmployeeWorkStart,
     })
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
@@ -305,12 +324,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     const webhookApp = new Hono()
     mountWebhookIngressRoutes(webhookApp, {
-      db,
-      configPath: join(appHome, 'config.json'),
+      webhookIngressPersistence: composeSqliteWebhookIngressPersistence(db),
       secretBox: webhookSecretBox,
       webhookDispatcher,
       digitalEmployeeEventCenter: eventCenter,
-    } as unknown as AppDeps)
+    })
     const adapterStore = createSqliteDevelopmentAdapterStore(db)
     const adapterIdentity = createDevelopmentAdapter(
       adapterStore,
@@ -382,7 +400,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       'pipeline-gate': pipelineConnectionRef,
       'approval-gateway': approvalAdapterRef,
     } as const
-    const approvalGateway = composeApprovalGatewayRunner(db, {
+    const approvalGateway = composeSqliteApprovalGatewayRunner(db, {
       approvalMockUrl: suite.endpoints.developmentApprovalBaseUrl,
     })
     const pipelineRunner = createPipelineEvidenceAdapter({
@@ -720,7 +738,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       binding: (repositoryId) =>
         repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
     })
-    const platform = composeDevelopmentEmployeePlatformWorkItems({
+    const platform = composeSqliteDevelopmentEmployeePlatformWorkItems({
       reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
       appHome,
@@ -880,7 +898,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       inputArtifacts,
       id: () => `os-${String(++idOrdinal).padStart(5, '0')}`,
       connectionCatalog: {
-        resolve(ref) {
+        async resolve(ref) {
           const match = Object.entries(connectionByPurpose).find(
             ([, candidate]) => candidate.id === ref.id && candidate.revision === ref.revision,
           )
@@ -911,7 +929,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         readonly typeRef: { readonly typeId: string; readonly revision: number }
       }
     ).typeRef
-    const typePackage = employeeOs.queries.getType(typeRef)
+    const typePackage = await employeeOs.queries.getType(typeRef)
     const pipelineProblemDefinitions = [
       {
         routeRef: 'external-dependency',
@@ -1028,7 +1046,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         adapterRef: approvalAdapterRef,
       },
     ]
-    const dependencyJob = employeeOs.commands.createJobTemplate({
+    const dependencyJob = await employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -1061,11 +1079,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         ],
       },
     })
-    const dependencyJobRef = employeeOs.commands.publishJobTemplate({
+    const dependencyJobRef = await employeeOs.commands.publishJobTemplate({
       id: dependencyJob.id,
       actorUserId: 'system-mock-author',
     })
-    const dependencyEmployee = employeeOs.commands.createEmployee({
+    const dependencyEmployee = await employeeOs.commands.createEmployee({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -1079,7 +1097,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       id: dependencyEmployee.id,
       revision: dependencyEmployee.revision,
     }
-    const job = employeeOs.commands.createJobTemplate({
+    const job = await employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -1122,11 +1140,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         ],
       },
     })
-    const jobRef = employeeOs.commands.publishJobTemplate({
+    const jobRef = await employeeOs.commands.publishJobTemplate({
       id: job.id,
       actorUserId: 'system-mock-author',
     })
-    const employee = employeeOs.commands.createEmployee({
+    const employee = await employeeOs.commands.createEmployee({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -1152,8 +1170,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       coreWorkItemRefs.includes(binding.workItemRef),
     )
     const runtime = employeeOs.runtime!
-    workStartDelegate = (input) => {
-      const launched = runtime.commands.launchWork({
+    workStartDelegate = async (input) => {
+      const launched = await runtime.commands.launchWork({
         employeeId: input.employeeId,
         actorUserId: input.actorUserId,
         intake: input.intake,
@@ -1161,7 +1179,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       })
       return { caseId: launched.caseRef.id }
     }
-    const issueRule = eventCenter.responseRules.commands.create(
+    const issueRule = await eventCenter.responseRules.commands.create(
       {
         name: 'ISSUE 交给研发数字员工',
         enabled: true,
@@ -1224,31 +1242,32 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     expect(issueReceipt.status).toBe('received')
     for (let attempt = 0; attempt < 100; attempt += 1) {
       await eventCenter.worker.runOneNotification()
-      const accepted = eventCenter.queries.operations
-        .deliveryStatuses()
-        .some(
-          (delivery) =>
-            delivery.subscriber.subscriberRef === `event-response-rule:${issueRule.id}` &&
-            delivery.state === 'accepted',
-        )
-      if ((JSON.parse(runtime.queries.listCases()) as unknown[]).length > 0 && accepted) break
+      const accepted = (await eventCenter.queries.operations.deliveryStatuses()).some(
+        (delivery) =>
+          delivery.subscriber.subscriberRef === `event-response-rule:${issueRule.id}` &&
+          delivery.state === 'accepted',
+      )
+      if ((JSON.parse(await runtime.queries.listCases()) as unknown[]).length > 0 && accepted) break
       await Bun.sleep(1)
     }
-    const ingressCases = JSON.parse(runtime.queries.listCases()) as Array<{ id: string }>
+    const ingressCases = JSON.parse(await runtime.queries.listCases()) as Array<{ id: string }>
     expect(ingressCases).toHaveLength(1)
     const caseId = ingressCases[0]!.id
     expect(
-      eventCenter.queries.operations
-        .eventRecordPage({ page: 1, limit: 100, sourceId: 'code-host.activity' })
-        .items.filter((event) => event.eventTypeRef.id === 'code-host.issue.labeled')
+      (
+        await eventCenter.queries.operations.eventRecordPage({
+          page: 1,
+          limit: 100,
+          sourceId: 'code-host.activity',
+        })
+      ).items
+        .filter((event) => event.eventTypeRef.id === 'code-host.issue.labeled')
         .map((event) => event.eventTypeRef.id),
     ).toEqual(['code-host.issue.labeled'])
     expect(
-      eventCenter.queries.operations
-        .deliveryStatuses()
-        .find(
-          (delivery) => delivery.subscriber.subscriberRef === `event-response-rule:${issueRule.id}`,
-        ),
+      (await eventCenter.queries.operations.deliveryStatuses()).find(
+        (delivery) => delivery.subscriber.subscriberRef === `event-response-rule:${issueRule.id}`,
+      ),
     ).toMatchObject({ state: 'accepted' })
     expect(
       db
@@ -1261,8 +1280,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     const driveUntilIdle = async (budget = 300): Promise<void> => {
       for (let step = 0; step < budget; step += 1) {
         let progress = false
-        if (runtime.worker.pumpOneDelivery()) progress = true
-        if (runtime.worker.planOneReaction() !== null) progress = true
+        if (await runtime.worker.pumpOneDelivery()) progress = true
+        if ((await runtime.worker.planOneReaction()) !== null) progress = true
         // Keep the same owner order as the production OS worker: a round
         // planned in this turn must be able to dispatch its durable outbox in
         // the same turn. Otherwise a sub-millisecond test turn can observe the
@@ -1272,12 +1291,12 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         if (outbox !== 'idle') progress = true
         const inspected = await runtime.worker.inspectOneExecution()
         if (inspected !== 'idle' && inspected !== 'pending') progress = true
-        if (runtime.worker.publishOneChannelResult() !== 'idle') progress = true
+        if ((await runtime.worker.publishOneChannelResult()) !== 'idle') progress = true
         if (!progress) {
           // The durable outbox uses a millisecond retry timestamp. A fully
           // deterministic adapter can finish inside that same millisecond, so
           // one idle probe is not proof that an active round is quiescent.
-          const liveCases = JSON.parse(runtime.queries.listCases()) as Array<{
+          const liveCases = JSON.parse(await runtime.queries.listCases()) as Array<{
             activeRoundId: string | null
           }>
           if (liveCases.some((candidate) => candidate.activeRoundId !== null)) {
@@ -1287,37 +1306,41 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           return
         }
       }
-      const cases = JSON.parse(runtime.queries.listCases()) as Array<{
+      const cases = JSON.parse(await runtime.queries.listCases()) as Array<{
         id: string
         state: string
         currentWorkItemRef: string | null
         activeRoundId: string | null
       }>
-      const caseDiagnostics = cases.map((candidate) => {
-        const candidateProjection = JSON.parse(
-          runtime.queries.getCase(candidate.id).projectionJson,
-        ) as { rounds?: Array<Record<string, unknown>> }
-        const summarizeRound = (round: Record<string, unknown> | undefined) =>
-          round === undefined
-            ? null
-            : {
-                id: round.id,
-                workItemRef: round.workItemRef,
-                state: round.state,
-                executionRef: round.executionRef,
-                attemptOrdinal: round.attemptOrdinal,
-                outputJson:
-                  typeof round.outputJson === 'string'
-                    ? round.outputJson.slice(0, 2_000)
-                    : round.outputJson,
-              }
-        const rounds = candidateProjection.rounds ?? []
-        return {
-          ...candidate,
-          activeRound: summarizeRound(rounds.find((round) => round.id === candidate.activeRoundId)),
-          recentRounds: rounds.slice(-3).map(summarizeRound),
-        }
-      })
+      const caseDiagnostics = await Promise.all(
+        cases.map(async (candidate) => {
+          const candidateProjection = JSON.parse(
+            (await runtime.queries.getCase(candidate.id)).projectionJson,
+          ) as { rounds?: Array<Record<string, unknown>> }
+          const summarizeRound = (round: Record<string, unknown> | undefined) =>
+            round === undefined
+              ? null
+              : {
+                  id: round.id,
+                  workItemRef: round.workItemRef,
+                  state: round.state,
+                  executionRef: round.executionRef,
+                  attemptOrdinal: round.attemptOrdinal,
+                  outputJson:
+                    typeof round.outputJson === 'string'
+                      ? round.outputJson.slice(0, 2_000)
+                      : round.outputJson,
+                }
+          const rounds = candidateProjection.rounds ?? []
+          return {
+            ...candidate,
+            activeRound: summarizeRound(
+              rounds.find((round) => round.id === candidate.activeRoundId),
+            ),
+            recentRounds: rounds.slice(-3).map(summarizeRound),
+          }
+        }),
+      )
       const pendingOutbox = db
         .select()
         .from(employeeOsOutbox)
@@ -1339,7 +1362,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     }
 
     await driveUntilIdle()
-    let projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as {
+    let projection = JSON.parse((await runtime.queries.getCase(caseId)).projectionJson) as {
       case: {
         state: string
         currentWorkItemRef: string | null
@@ -1420,7 +1443,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     expect(mrDescriptions.get('repo-system-mock')).toContain(`Agent-Workflow-Case: ${caseId}`)
     expect(
       JSON.parse(
-        runtime.queries.findByExternalSubject('merge-request', 'repo-system-mock!42')!
+        (await runtime.queries.findByExternalSubject('merge-request', 'repo-system-mock!42'))!
           .projectionJson,
       ).case.id,
     ).toBe(caseId)
@@ -1462,7 +1485,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     emitParentPipelineWake('partial', 'provider omitted the head binding', Date.now())
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
     ).toMatchObject({ status: 'pending', headSha: parentMrHead, failureTypes: [] })
@@ -1484,7 +1509,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       Date.now() + 1,
     )
     await driveUntilIdle(2_000)
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(projection.case).toMatchObject({ state: 'waiting', blockReason: null })
     expect(
       projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
@@ -1519,7 +1546,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       Date.now() + 2,
     )
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
     ).toMatchObject({ status: 'pending', headSha: parentMrHead, failureTypes: [] })
@@ -1550,7 +1579,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       Date.now() + 3,
     )
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
     ).toMatchObject({
@@ -1602,7 +1633,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(projection.case).toMatchObject({ state: 'waiting', currentWorkItemRef: null })
     const failedCompileEvidenceRef = (
       projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state
@@ -1641,7 +1674,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     ])
     const dependencyCaseId = projection.channels[0]!.childCaseId
     let dependencyProjection = JSON.parse(
-      runtime.queries.getCase(dependencyCaseId).projectionJson,
+      (await runtime.queries.getCase(dependencyCaseId)).projectionJson,
     ) as typeof projection
     expect(dependencyProjection.case).toMatchObject({
       state: 'waiting',
@@ -1705,7 +1738,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     await driveUntilIdle()
     dependencyProjection = JSON.parse(
-      runtime.queries.getCase(dependencyCaseId).projectionJson,
+      (await runtime.queries.getCase(dependencyCaseId)).projectionJson,
     ) as typeof projection
     expect(
       dependencyProjection.contexts.find(
@@ -1728,11 +1761,13 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     await driveUntilIdle()
     dependencyProjection = JSON.parse(
-      runtime.queries.getCase(dependencyCaseId).projectionJson,
+      (await runtime.queries.getCase(dependencyCaseId)).projectionJson,
     ) as typeof projection
     expect(dependencyProjection.case.state).toBe('terminal')
 
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.delegation')?.state,
     ).toMatchObject({ status: 'satisfied' })
@@ -1774,7 +1809,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     const repairedParentMrHead = mrHeads.get('repo-system-mock')!
     expect(repairedParentMrHead).not.toBe(parentMrHead)
     expect(git(remoteRepo, 'show', `${repairedParentMrHead}:src/Main.java`)).toContain(
@@ -1813,7 +1850,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     const pendingApproval = projection.contexts.find(
       (context) => context.typeId === 'development.approval',
     )!
@@ -1851,7 +1890,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.approval')?.state,
     ).toMatchObject({
@@ -1910,7 +1951,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.merge-request')?.state,
     ).toMatchObject({
@@ -1949,7 +1992,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       Date.now() + 7,
     )
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(
       projection.contexts.find((context) => context.typeId === 'development.pipeline')?.state,
     ).toMatchObject({
@@ -1973,7 +2018,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    projection = JSON.parse(runtime.queries.getCase(caseId).projectionJson) as typeof projection
+    projection = JSON.parse(
+      (await runtime.queries.getCase(caseId)).projectionJson,
+    ) as typeof projection
     expect(projection.case.state).toBe('terminal')
     expect(
       projection.contexts.find((context) => context.typeId === 'development.merge-request')?.state,
@@ -2030,7 +2077,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       mrStates.set(terminalRepositoryId, 'opened')
       approvalRequiredRepositoryIds.add(terminalRepositoryId)
 
-      const terminalEmployee = employeeOs.commands.createEmployee({
+      const terminalEmployee = await employeeOs.commands.createEmployee({
         typeRef,
         actorUserId: 'system-mock-author',
         body: {
@@ -2040,7 +2087,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           toolOverrides: [],
         },
       })
-      const terminalLaunch = runtime.commands.launchWork({
+      const terminalLaunch = await runtime.commands.launchWork({
         employeeId: terminalEmployee.id,
         actorUserId: 'approval-requester',
         intake: {
@@ -2055,7 +2102,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       })
       await driveUntilIdle()
       let terminalProjection = JSON.parse(
-        runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+        (await runtime.queries.getCase(terminalLaunch.caseRef.id)).projectionJson,
       ) as typeof projection
       const terminalMrHead = mrHeads.get(terminalRepositoryId)!
       await suite.client.seedDevelopmentPipeline({
@@ -2088,7 +2135,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       })
       await driveUntilIdle()
       terminalProjection = JSON.parse(
-        runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+        (await runtime.queries.getCase(terminalLaunch.caseRef.id)).projectionJson,
       ) as typeof projection
       let terminalApproval = terminalProjection.contexts.find(
         (context) => context.typeId === 'development.approval',
@@ -2122,7 +2169,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         })
         await driveUntilIdle()
         terminalProjection = JSON.parse(
-          runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+          (await runtime.queries.getCase(terminalLaunch.caseRef.id)).projectionJson,
         ) as typeof projection
         terminalApproval = terminalProjection.contexts.find(
           (context) => context.typeId === 'development.approval',
@@ -2149,7 +2196,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       })
       await driveUntilIdle()
       terminalProjection = JSON.parse(
-        runtime.queries.getCase(terminalLaunch.caseRef.id).projectionJson,
+        (await runtime.queries.getCase(terminalLaunch.caseRef.id)).projectionJson,
       ) as typeof projection
       terminalApproval = terminalProjection.contexts.find(
         (context) => context.typeId === 'development.approval',
@@ -2169,7 +2216,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     // conflict, collaboration, or approval lanes configured. It must still
     // publish, create an MR, subscribe only to capabilities it owns, and track
     // the MR lifecycle until a committer merges it.
-    const deliveryOnlyJob = employeeOs.commands.createJobTemplate({
+    const deliveryOnlyJob = await employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -2178,11 +2225,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         defaultToolBindings: coreBindings,
       },
     })
-    const deliveryOnlyJobRef = employeeOs.commands.publishJobTemplate({
+    const deliveryOnlyJobRef = await employeeOs.commands.publishJobTemplate({
       id: deliveryOnlyJob.id,
       actorUserId: 'system-mock-author',
     })
-    const deliveryOnlyEmployee = employeeOs.commands.createEmployee({
+    const deliveryOnlyEmployee = await employeeOs.commands.createEmployee({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -2197,10 +2244,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       revision: deliveryOnlyEmployee.revision,
     }
     expect(
-      employeeOs.queries.getEmployee(deliveryOnlyEmployee.id).definition.enabledWorkItemRefs,
+      (await employeeOs.queries.getEmployee(deliveryOnlyEmployee.id)).definition
+        .enabledWorkItemRefs,
     ).toEqual(coreWorkItemRefs)
 
-    const deliveryOnlyLaunch = runtime.commands.launchWork({
+    const deliveryOnlyLaunch = await runtime.commands.launchWork({
       employeeId: deliveryOnlyEmployeeRef.id,
       actorUserId: 'requester',
       intake: {
@@ -2215,7 +2263,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     await driveUntilIdle()
     const deliveryOnlyProjection = JSON.parse(
-      runtime.queries.getCase(deliveryOnlyLaunch.caseRef.id).projectionJson,
+      (await runtime.queries.getCase(deliveryOnlyLaunch.caseRef.id)).projectionJson,
     ) as {
       case: { state: string; currentWorkItemRef: string | null }
       contexts: Array<{ typeId: string; state: Record<string, unknown> }>
@@ -2254,7 +2302,8 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     })
     await driveUntilIdle()
     expect(
-      JSON.parse(runtime.queries.getCase(deliveryOnlyLaunch.caseRef.id).projectionJson).case,
+      JSON.parse((await runtime.queries.getCase(deliveryOnlyLaunch.caseRef.id)).projectionJson)
+        .case,
     ).toMatchObject({ state: 'terminal', terminalKind: 'merged' })
 
     // The review lane uses the real stateful GitLab system mock. A review event
@@ -2262,7 +2311,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     // facts, freezes the root plus every reply, acknowledges the thread, lets
     // the Agent repair it, publishes a new commit, and replies with that commit.
     // The platform's own two replies must not create another repair round.
-    const reviewJob = employeeOs.commands.createJobTemplate({
+    const reviewJob = await employeeOs.commands.createJobTemplate({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -2275,11 +2324,11 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         ),
       },
     })
-    const reviewJobRef = employeeOs.commands.publishJobTemplate({
+    const reviewJobRef = await employeeOs.commands.publishJobTemplate({
       id: reviewJob.id,
       actorUserId: 'system-mock-author',
     })
-    const reviewEmployee = employeeOs.commands.createEmployee({
+    const reviewEmployee = await employeeOs.commands.createEmployee({
       typeRef,
       actorUserId: 'system-mock-author',
       body: {
@@ -2290,7 +2339,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       },
     })
     const reviewEmployeeRef = { id: reviewEmployee.id, revision: reviewEmployee.revision }
-    const reviewLaunch = runtime.commands.launchWork({
+    const reviewLaunch = await runtime.commands.launchWork({
       employeeId: reviewEmployeeRef.id,
       actorUserId: 'requester',
       intake: {
@@ -2422,7 +2471,9 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       payloadArtifactRef: null,
     })
     await driveUntilIdle()
-    expect(JSON.parse(runtime.queries.getCase(reviewCaseId).projectionJson).case).toMatchObject({
+    expect(
+      JSON.parse((await runtime.queries.getCase(reviewCaseId)).projectionJson).case,
+    ).toMatchObject({
       state: 'terminal',
       terminalKind: 'merged',
     })

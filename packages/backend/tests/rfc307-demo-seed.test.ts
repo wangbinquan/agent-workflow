@@ -35,6 +35,8 @@ import {
   seedDemoContent,
 } from '../src/services/demoSeed'
 import { lookupStageContract } from '../src/modules/code-capability/domain/capabilityRegistry'
+import { composeSqliteCodeCapabilityDemoSeedParticipant } from '../src/modules/code-capability/composition/demoSeed'
+import { composeSqliteDemoResourceCatalogSeedParticipant } from '../src/modules/resource-catalog/composition/demoResourceCatalogSeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -42,6 +44,12 @@ describe('RFC-307 — demo content', () => {
   let db: DbClient
   let home: string
   let priorHome: string | undefined
+
+  const seed = () =>
+    seedDemoContent({
+      resourceCatalog: composeSqliteDemoResourceCatalogSeedParticipant(db),
+      codeCapability: composeSqliteCodeCapabilityDemoSeedParticipant(db),
+    })
 
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
@@ -57,7 +65,7 @@ describe('RFC-307 — demo content', () => {
   })
 
   test('a fresh install gets a framework, a binding, an agent, a round and workflows', async () => {
-    const result = await seedDemoContent(db)
+    const result = await seed()
     expect(result.seeded).toBe(true)
 
     expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
@@ -68,8 +76,8 @@ describe('RFC-307 — demo content', () => {
   })
 
   test('seeding twice produces ONE of each, not two', async () => {
-    await seedDemoContent(db)
-    const second = await seedDemoContent(db)
+    await seed()
+    const second = await seed()
     expect(second).toEqual({ seeded: false, reason: 'already-offered' })
     expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
     expect(await db.select().from(workflows)).toHaveLength(2)
@@ -79,11 +87,11 @@ describe('RFC-307 — demo content', () => {
     // The rule that makes this feature tolerable. The gate is a marker for "we
     // have offered these once", NOT a check for whether the rows are there; a
     // user who deletes them means it.
-    await seedDemoContent(db)
+    await seed()
     await db.delete(capabilityTemplates)
     await db.delete(capabilityTemplates)
 
-    const restart = await seedDemoContent(db)
+    const restart = await seed()
     expect(restart.seeded).toBe(false)
     expect(await db.select().from(capabilityTemplates)).toEqual([])
     expect(await db.select().from(capabilityTemplates)).toEqual([])
@@ -110,7 +118,7 @@ describe('RFC-307 — demo content', () => {
       updatedAt: 1,
     })
 
-    const result = await seedDemoContent(db)
+    const result = await seed()
     expect(result.seeded).toBe(false)
     expect(result.reason).toBe('error')
     // The marker is the whole point: absent means "try again next start".
@@ -128,7 +136,7 @@ describe('RFC-307 — demo content', () => {
     })
     // No rejection. "This install has no samples" is exactly the state every
     // install before this RFC was in; it is not a reason to refuse to boot.
-    expect((await seedDemoContent(db)).seeded).toBe(false)
+    expect((await seed()).seeded).toBe(false)
   })
 
   test('a demo id occupied by someone else is skipped, and the rest still seeds', async () => {
@@ -143,7 +151,7 @@ describe('RFC-307 — demo content', () => {
       updatedAt: 1,
     })
 
-    expect((await seedDemoContent(db)).seeded).toBe(true)
+    expect((await seed()).seeded).toBe(true)
     const rows = await db.select().from(workflows)
     // Theirs untouched, and the other sample still arrived.
     expect(rows.find((r) => r.id === DEMO_WORKFLOW_REVIEW_ID)?.name).toBe('not ours')
@@ -152,7 +160,7 @@ describe('RFC-307 — demo content', () => {
   })
 
   test('every seeded row says it is a sample and is safe to delete', async () => {
-    await seedDemoContent(db)
+    await seed()
     const framework = (await db.select().from(capabilityTemplates))[0]
     const binding = (await db.select().from(capabilityTemplates))[0]
     const agent = (await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)
@@ -173,7 +181,7 @@ describe('RFC-307 — demo content', () => {
   test('the demo round has one stage row per contract stage, generated from the contract', async () => {
     // Hand-listing them would drift the first time a stage was added, and drift
     // in the sample is what teaches people the picture cannot be trusted.
-    await seedDemoContent(db)
+    await seed()
     const contract = lookupStageContract('mr-review')
     const stages = await db.select().from(codeRoundStages)
     expect(stages).toHaveLength(contract?.stages.length ?? 0)
@@ -190,7 +198,7 @@ describe('RFC-307 — demo content', () => {
     // This is what makes the sample worth opening: clicking either AI stage in
     // the flow view shows the shared-slot warning, which is the single most
     // surprising thing about slot-shaped configuration.
-    await seedDemoContent(db)
+    await seed()
     const [binding] = await db.select().from(capabilityTemplates)
     const agentBySlot = JSON.parse(binding?.agentBySlotJson ?? '{}') as Record<string, string>
     const aiSlots = new Set(
@@ -204,7 +212,7 @@ describe('RFC-307 — demo content', () => {
   })
 
   test('the demo framework ships a script AND a hook, so both layers are visible', async () => {
-    await seedDemoContent(db)
+    await seed()
     const [framework] = await db.select().from(capabilityTemplates)
     const scripts = JSON.parse(framework?.scriptsJson ?? '{}') as Record<string, unknown>
     const hooks = JSON.parse(framework?.hooksJson ?? '[]') as Array<{ stage: string }>
@@ -226,7 +234,7 @@ describe('RFC-307 — demo content', () => {
       return Promise.reject(new Error('demo seed must not use the network'))
     }) as typeof fetch
     try {
-      expect((await seedDemoContent(db)).seeded).toBe(true)
+      expect((await seed()).seeded).toBe(true)
     } finally {
       globalThis.fetch = realFetch
     }
@@ -240,14 +248,14 @@ describe('RFC-307 — demo content', () => {
 
   test('an existing marker means the seed does not even look at the database', async () => {
     writeFileSync(join(home, '.demo-seeded'), 'already\n')
-    expect(await seedDemoContent(db)).toEqual({ seeded: false, reason: 'already-offered' })
+    expect(await seed()).toEqual({ seeded: false, reason: 'already-offered' })
     expect(await db.select().from(workflows)).toEqual([])
     expect(await db.select().from(capabilityTemplates)).toEqual([])
   })
 
   test('the seeded round is settled and published — a finished example, not a stuck one', async () => {
     // A sample that shows a round mid-flight would look like the platform hung.
-    await seedDemoContent(db)
+    await seed()
     const [item] = await db.select().from(codeWorkItems)
     const [round] = await db.select().from(codeWorkRounds)
     expect(item?.status).toBe('settled')
@@ -266,7 +274,7 @@ describe('RFC-307 — demo content', () => {
     // broke at once — the demo agent never reached the agent picker, the demo
     // binding answered `capability-template-builtin` to the exact prompt edit
     // this RFC exists to enable, and "safe to delete" was simply false.
-    await seedDemoContent(db)
+    await seed()
     for (const row of await db.select().from(workflows)) expect(row.builtin).toBe(false)
     for (const row of await db.select().from(capabilityTemplates)) expect(row.builtin).toBe(false)
     for (const row of await db.select().from(capabilityTemplates)) expect(row.builtin).toBe(false)
@@ -277,7 +285,7 @@ describe('RFC-307 — demo content', () => {
   test('the samples are public, so they are visible without being infrastructure', async () => {
     // The other half of the same decision: not builtin, but not private either
     // — a sample nobody can see is not a sample.
-    await seedDemoContent(db)
+    await seed()
     for (const row of await db.select().from(capabilityTemplates)) {
       expect(row.visibility).toBe('public')
     }
@@ -297,7 +305,7 @@ describe('RFC-307 — demo content', () => {
     // `review-shard` declares `extraContext`, so the runner would have refused
     // it. A first example that does not work teaches the wrong thing twice —
     // once about hooks, once about whether the samples can be trusted.
-    await seedDemoContent(db)
+    await seed()
     const [framework] = await db.select().from(capabilityTemplates)
     const hooks = JSON.parse(framework?.hooksJson ?? '[]') as Array<{
       stage: string
@@ -328,7 +336,7 @@ describe('RFC-307 — demo content', () => {
     //
     // It is also unnecessary: the column carries no foreign key and no read
     // path joins the endpoint table, because the id is opaque there.
-    await seedDemoContent(db)
+    await seed()
     expect(await db.select().from(webhookEndpoints)).toEqual([])
     // The work item still names its (opaque) host identity, so the row is not
     // half-populated.
@@ -337,7 +345,7 @@ describe('RFC-307 — demo content', () => {
   })
 
   test('ids are stable and readable, so a user can find every trace of the demo', async () => {
-    await seedDemoContent(db)
+    await seed()
     for (const id of [DEMO_AGENT_ID, DEMO_TEMPLATE_ID, DEMO_TEMPLATE_ID, DEMO_ROUND_ID]) {
       expect(id.startsWith('aw-demo-')).toBe(true)
     }

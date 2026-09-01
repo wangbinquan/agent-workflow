@@ -31,6 +31,7 @@ import { runGit } from '../src/util/git'
 import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -264,7 +265,10 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
     // AC-12: the relaxed T3 invariant accepts a skipped output node on a done
     // task. Before RFC-306 relaxed it, `out_ok` (skipped, no done row) would
     // have been reported as a violated invariant on a perfectly correct run.
-    const inv = await runLifecycleInvariants({ db: h.db, scope: { taskId } })
+    const inv = await runLifecycleInvariants({
+      operations: taskRecoveryOperations(h.db),
+      scope: { taskId },
+    })
     expect(inv.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
   })
 

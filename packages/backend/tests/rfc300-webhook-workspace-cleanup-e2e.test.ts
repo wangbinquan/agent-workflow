@@ -29,9 +29,15 @@ import {
   webhookTriggers,
 } from '../src/db/schema'
 import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { createSqliteWebhookOrchestrationRuntime } from '../src/modules/integration/infrastructure/sqliteWebhookDispatchRuntime'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import { integrationTriggerWebhookAuthorityDependencies } from './helpers/integrationTriggerResourceBinding'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
+import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createApp } from '../src/server'
 import { cancelExecution } from '../src/services/execution/executor'
 import { finishClaimedWebhookWorkspacePrune } from '../src/services/gc'
@@ -39,7 +45,7 @@ import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/serv
 import { getTask, isTaskActive } from '../src/services/task'
 import { createUser } from '../src/services/users'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { createWebhookTerminalWorkspacePrunePolicy } from '../src/services/webhook/terminalWorkspaceCleanup'
+import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { createWorkflow } from '../src/services/workflow'
 import { sha1Hex } from '../src/util/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
@@ -251,7 +257,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   )[0]!
 
   registerTerminalWorkspacePrunePolicy(
-    createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+    composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
@@ -260,13 +266,24 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     },
   })
 
-  const dispatcher = createWebhookDispatcher({
+  const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
     db,
-    ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-    configPath,
-    secretBox: box,
+    createIdentityAccessRuntime({ db }),
+  )
+  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+  const dispatcher = createWebhookDispatcher({
+    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...createSqliteWebhookOrchestrationRuntime({
+      taskExecutions: createSqliteWebhookTaskExecutionParticipant({
+        db,
+        configPath,
+        secretBox: box,
+        schedulerDriver: taskExecutionRuntime.schedulerDriver,
+        identityAccess: identityDependencies.identityAccess,
+      }),
+    }),
+    ...identityDependencies,
     getDefaultRuntime: async () => null,
-    schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
   })
 
   for (const [index, one] of (
@@ -493,7 +510,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
   })
 
   registerTerminalWorkspacePrunePolicy(
-    createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+    composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
   )
   uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onWorkspacePrune(effectDb, taskId) {
@@ -504,13 +521,24 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
 
   const terminalControl = composeMrTerminalControl(db)
   await terminalControl.reconcileOnBoot()
-  const dispatcher = createWebhookDispatcher({
+  const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
     db,
-    ...integrationTriggerWebhookAuthorityDependencies(db, createIdentityAccessRuntime({ db })),
-    configPath,
-    secretBox: box,
+    createIdentityAccessRuntime({ db }),
+  )
+  const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+  const dispatcher = createWebhookDispatcher({
+    ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
+    ...createSqliteWebhookOrchestrationRuntime({
+      taskExecutions: createSqliteWebhookTaskExecutionParticipant({
+        db,
+        configPath,
+        secretBox: box,
+        schedulerDriver: taskExecutionRuntime.schedulerDriver,
+        identityAccess: identityDependencies.identityAccess,
+      }),
+    }),
+    ...identityDependencies,
     getDefaultRuntime: async () => null,
-    schedulerDriver: composeTaskExecutionTestRuntime(db).schedulerDriver,
     terminalControl,
   })
   const app = createApp({

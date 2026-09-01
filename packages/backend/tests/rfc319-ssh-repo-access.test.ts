@@ -26,6 +26,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { cachedRepos } from '../src/db/schema'
 import { resolveCachedRepo } from '../src/services/gitRepoCache'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -114,7 +115,10 @@ describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
     process.env.GIT_SSH_COMMAND = stub.path
     const url = `ssh://git@${FIXTURE_HOST}${bare}`
 
-    const r = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url })
+    const r = await resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      { url },
+    )
 
     expect(r.cold).toBe(true)
     expect(existsSync(r.cached.localPath)).toBe(true)
@@ -141,7 +145,7 @@ describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
     process.env.GIT_SSH_COMMAND = `${stub.path} -i ${keyPath}`
 
     const r = await resolveCachedRepo(
-      { db, appHome, fetchOnReuse: false },
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
       { url: `ssh://git@${FIXTURE_HOST}${bare}` },
     )
     expect(r.cold).toBe(true)
@@ -165,8 +169,14 @@ describe('RFC-319 REPO-42 —— ssh 传输的仓库接入', () => {
     const uri = `ssh://git@${FIXTURE_HOST}${bare}`
     const scp = `git@${FIXTURE_HOST}:${bare.replace(/^\//, '')}`
 
-    const a = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: uri })
-    const b = await resolveCachedRepo({ db, appHome, fetchOnReuse: false }, { url: scp })
+    const a = await resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      { url: uri },
+    )
+    const b = await resolveCachedRepo(
+      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      { url: scp },
+    )
 
     expect(a.cold).toBe(true)
     expect(b.cold, 'scp 式写法又冷克隆了一次 ⇒ 两种写法没有归一到同一个 cache key').toBe(false)

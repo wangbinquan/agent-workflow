@@ -44,10 +44,12 @@ describe('RFC-338 maintenance architecture', () => {
     expect(start.match(/startMaintenanceService\(\{/g)).toHaveLength(1)
     expect(start).toContain('maintenanceStatus: maintenanceService.status')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
-    expect(start).toContain('await maintenanceService.stop()')
+    expect(start).toContain('maintenanceRuntimeBindings.runtimeFactory')
+    expect(start).toContain('activeProviderRuntimeHandles[index]!.stop()')
+    expect(start).toContain('activeProviderRuntimeHandles[index]!.drain()')
     expect(start).toContain('startBatchImportGc(')
     expect(start).toMatch(
-      /const developmentWakeTimer = setInterval\(\(\) => \{[\s\S]*?try \{[\s\S]*?refreshDigitalEmployeeWriterState\([\s\S]*?catch \(err\) \{[\s\S]*?development writer refresh failed[\s\S]*?return/u,
+      /const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory\(\{[\s\S]*?employeeWriterCutover\.refresh\(\)[\s\S]*?onError\(err\) \{[\s\S]*?development writer refresh failed/u,
     )
 
     for (const forbidden of [
@@ -82,10 +84,18 @@ describe('RFC-338 maintenance architecture', () => {
     expect(worker).toContain('observeTransactionMs: (ms) => recordTiming(transactionTimings, ms)')
     expect(worker).toContain('sqliteBusyDeferrals: 1')
     expect(service).not.toContain('runMaintenanceJob(')
-    expect(service).toContain('listIntentTurnIdsForBootRecovery(admissionDb)')
+    expect(service).toContain('payloadSources = options.payloadSources')
+    expect(service).not.toContain('@/modules/intent/infrastructure/')
     expect(service).toContain("journalMode: 'preserve'")
     expect(service).toContain('recoverTurnIds: bootIntentTurnIds')
     expect(service).not.toContain('recoverTurns: true')
+    expect(worker).toContain("if ('database' in parsed)")
+    expect(worker).toContain('poolMax: Math.min(2, parsed.database.poolMax)')
+    expect(worker).toContain('createPostgresqlMaintenanceRunStore(')
+    expect(worker).toContain('composePostgresqlWorkspaceMaintenanceCommand({')
+    expect(worker).toContain('composePostgresqlIntentMaintenanceCommandsForAppHome({')
+    expect(worker).toContain('composePostgresqlResourcePackageApplyMaintenance({')
+    expect(worker).not.toContain('postgresql-maintenance-owner-command-unavailable')
     expect(supervisor).not.toContain('runMaintenanceJob(')
     expect(supervisor).toContain("? './platform/background/maintenanceWorker.ts'")
     expect(supervisor).toContain(": new URL('./maintenanceWorker.ts', import.meta.url).href")

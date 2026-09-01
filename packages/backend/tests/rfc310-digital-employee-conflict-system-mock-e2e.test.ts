@@ -20,8 +20,8 @@ import {
 
 import { createInMemoryDb } from '@/db/client'
 import { cachedRepos, employeeOsOutbox } from '@/db/schema'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -43,6 +43,7 @@ import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
   createRepositoryPublicationTransport,
+  SQLiteRepositoryTransportCredentialRepository,
 } from '@/modules/source-control/composition'
 
 setDefaultTimeout(180_000)
@@ -110,7 +111,10 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       git(baselineRepo, 'checkout', '-q', 'main')
       const baseSha = git(baselineRepo, 'rev-parse', 'HEAD')
       const db = createInMemoryDb(MIGRATIONS)
-      const publicationTransport = createRepositoryPublicationTransport({ db, appHome })
+      const publicationTransport = createRepositoryPublicationTransport({
+        repository: new SQLiteRepositoryTransportCredentialRepository(db),
+        appHome,
+      })
       db.insert(cachedRepos)
         .values({
           id: repositoryId,
@@ -127,7 +131,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       const inputArtifacts = createEmployeeInputArtifactStore(
         join(appHome, 'artifacts', 'employee-inputs'),
       )
-      const workspace = composeDevelopmentEmployeeWorkspace({
+      const workspace = composeSqliteDevelopmentEmployeeWorkspace({
         db,
         appHome,
         reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -136,7 +140,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         sourceControl: bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
         conflictMerge: bindConflictMergeParticipant(),
       })
-      const eventCenter = composeEventCenter({
+      const eventCenter = await composeEventCenter({
         db,
         typePackageDescriptorJsons: [
           developmentEmployeeTypePackage.descriptorJson,
@@ -168,7 +172,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         ...bindCandidateDeliveryParticipant({ publicationTransport }),
         ...bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
       }
-      const platform = composeDevelopmentEmployeePlatformWorkItems({
+      const platform = composeSqliteDevelopmentEmployeePlatformWorkItems({
         db,
         appHome,
         reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -336,7 +340,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
           readonly typeRef: { readonly typeId: string; readonly revision: number }
         }
       ).typeRef
-      const typePackage = employeeOs.queries.getType(typeRef)
+      const typePackage = await employeeOs.queries.getType(typeRef)
       const configuredWorkItems = new Set(['analyze-implement', 'repair-conflict'])
       const bindings: Array<{
         workItemRef: string
@@ -379,7 +383,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         'analyze-implement',
         'repair-conflict',
       ])
-      const job = employeeOs.commands.createJobTemplate({
+      const job = await employeeOs.commands.createJobTemplate({
         typeRef,
         actorUserId: 'conflict-system-mock-author',
         body: {
@@ -388,11 +392,11 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
           defaultToolBindings: bindings,
         },
       })
-      const jobRef = employeeOs.commands.publishJobTemplate({
+      const jobRef = await employeeOs.commands.publishJobTemplate({
         id: job.id,
         actorUserId: 'conflict-system-mock-author',
       })
-      const employee = employeeOs.commands.createEmployee({
+      const employee = await employeeOs.commands.createEmployee({
         typeRef,
         actorUserId: 'conflict-system-mock-author',
         body: {
@@ -406,7 +410,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         expect.arrayContaining(['repair-conflict', 'publish-conflict']),
       )
       const runtime = employeeOs.runtime!
-      const launched = runtime.commands.launchWork({
+      const launched = await runtime.commands.launchWork({
         employeeId: employee.id,
         actorUserId: 'conflict-requester',
         intake: {
@@ -423,14 +427,14 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       const driveUntilIdle = async (budget = 300): Promise<void> => {
         for (let step = 0; step < budget; step += 1) {
           let progress = false
-          if (runtime.worker.pumpOneDelivery()) progress = true
-          if (runtime.worker.planOneReaction() !== null) progress = true
+          if (await runtime.worker.pumpOneDelivery()) progress = true
+          if ((await runtime.worker.planOneReaction()) !== null) progress = true
           if ((await runtime.worker.runOneOutbox()) !== 'idle') progress = true
           const inspected = await runtime.worker.inspectOneExecution()
           if (inspected !== 'idle' && inspected !== 'pending') progress = true
-          if (runtime.worker.publishOneChannelResult() !== 'idle') progress = true
+          if ((await runtime.worker.publishOneChannelResult()) !== 'idle') progress = true
           if (!progress) {
-            const liveCases = JSON.parse(runtime.queries.listCases()) as Array<{
+            const liveCases = JSON.parse(await runtime.queries.listCases()) as Array<{
               activeRoundId: string | null
             }>
             if (liveCases.some((candidate) => candidate.activeRoundId !== null)) {
@@ -447,14 +451,18 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
           .filter((row) => row.state !== 'completed')
         throw new Error(
           `conflict E2E exceeded deterministic budget: ${JSON.stringify({
-            projection: JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson),
+            projection: JSON.parse(
+              (await runtime.queries.getCase(launched.caseRef.id)).projectionJson,
+            ),
             pendingOutbox,
           })}`,
         )
       }
 
       await driveUntilIdle()
-      let projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson) as {
+      let projection = JSON.parse(
+        (await runtime.queries.getCase(launched.caseRef.id)).projectionJson,
+      ) as {
         case: { state: string; currentWorkItemRef: string | null }
         contexts: Array<{ typeId: string; state: Record<string, unknown> }>
         rounds: Array<{
@@ -530,7 +538,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       await driveUntilIdle()
 
       projection = JSON.parse(
-        runtime.queries.getCase(launched.caseRef.id).projectionJson,
+        (await runtime.queries.getCase(launched.caseRef.id)).projectionJson,
       ) as typeof projection
       const repairedMr = projection.contexts.find(
         (context) => context.typeId === 'development.merge-request',

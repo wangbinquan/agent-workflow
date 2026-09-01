@@ -18,9 +18,24 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import type { Actor } from '../src/auth/actor'
-import { copyTemplate, createTemplate, templateDigest } from '../src/services/capabilityTemplates'
+import {
+  copyTemplate as copyTemplateWithPersistence,
+  createTemplate as createTemplateWithPersistence,
+  templateDigest,
+} from '../src/services/capabilityTemplates'
+import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
+import { createSqliteCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/sqliteCapabilityTemplatePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
+function bindTemplatePersistence<Args extends unknown[], Result>(
+  operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
+): (db: DbClient, ...args: Args) => Result {
+  return (db, ...args) => operation(createSqliteCapabilityTemplatePersistence(db), ...args)
+}
+
+const copyTemplate = bindTemplatePersistence(copyTemplateWithPersistence)
+const createTemplate = bindTemplatePersistence(createTemplateWithPersistence)
 import {
   judgeUpstream,
   mergeUnoverridden,

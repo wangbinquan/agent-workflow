@@ -6,6 +6,7 @@ import { taskExecutionIntents, tasks } from '@/db/schema'
 import { createHumanGateContinuationWorkerDefinition } from '@/modules/collaboration/application/humanGateContinuationWorker'
 import { startManagedWorkerDefinition } from '@/platform/events/committed/workerDefinitions'
 import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
+import { createSqliteHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_789_488_200_000
@@ -87,7 +88,8 @@ describe('RFC-341 human-gate continuation worker', () => {
     seedLegacyTaskGate(db)
     const driven: Array<{ taskId: string; continuationRef: string }> = []
     const worker = createHumanGateContinuationWorkerDefinition({
-      listPending: () => listPendingHumanGateContinuations(db),
+      listPending: () =>
+        listPendingHumanGateContinuations(createSqliteHumanGateContinuationRecoveryQueries(db)),
       drive: async (continuation) => {
         driven.push(continuation)
         db.update(taskExecutionIntents)
@@ -124,7 +126,7 @@ describe('RFC-341 human-gate continuation worker', () => {
     })
     let scans = 0
     const worker = createHumanGateContinuationWorkerDefinition({
-      listPending() {
+      async listPending() {
         scans += 1
         if (scans === 1) markInitialScan()
         return visible
@@ -160,7 +162,7 @@ describe('RFC-341 human-gate continuation worker', () => {
     })
     let scans = 0
     const worker = createHumanGateContinuationWorkerDefinition({
-      listPending() {
+      async listPending() {
         scans += 1
         return [pending]
       },

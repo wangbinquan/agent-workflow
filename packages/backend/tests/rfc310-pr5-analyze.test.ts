@@ -259,7 +259,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
     const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
     const actionRunRef = /"actionRunRef": "([^"]+)"/.exec(prompt)![1]!
     const inputDigest = /"inputDigest": "([^"]+)"/.exec(prompt)![1]!
-    const manifest = fx.materializer.getRequirementManifest(missionId)!
+    const manifest = (await fx.materializer.getRequirementManifest(missionId))!
     const json = JSON.stringify({
       protocolVersion: 1,
       nonce,
@@ -298,7 +298,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
     // completed 不打 stage block：mission 保持可推进。
     const mission = fx.store.getMission(missionId)!
     expect(mission.status).toBe('working')
-    const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['requirement.scopeDisposition']).toMatchObject({ state: 'known', value: 'ready' })
     expect(cells['requirement.affectedModuleIds']).toMatchObject({
       state: 'known',
@@ -345,7 +345,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
     const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
     const actionRunRef = /"actionRunRef": "([^"]+)"/.exec(prompt)![1]!
     const inputDigest = /"inputDigest": "([^"]+)"/.exec(prompt)![1]!
-    const manifest = fx.materializer.getRequirementManifest(missionId)!
+    const manifest = (await fx.materializer.getRequirementManifest(missionId))!
     const json = JSON.stringify({
       protocolVersion: 1,
       nonce,

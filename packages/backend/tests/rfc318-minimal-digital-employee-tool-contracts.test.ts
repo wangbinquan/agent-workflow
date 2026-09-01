@@ -29,7 +29,9 @@ import {
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,
 } from '@/modules/development-automation/public/participants'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   digitalEmployeeAgentToolPresentation,
   ensureDigitalEmployeeAgentTemplates,
@@ -646,16 +648,20 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
   // tests/digital-employee-agent-template-reconcile.test.ts.
   test('v2 built-in IDs are create-or-converge and repair a drifted definition', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    await ensureDigitalEmployeeAgentTemplates(db)
-    await ensureDigitalEmployeeAgentTemplates(db)
-    expect(await listDigitalEmployeeAgentTemplates(db)).toHaveLength(8)
+    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      db,
+      composeDigitalEmployeeAgentTemplateCatalogParticipant,
+    )
+    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+    expect(await listDigitalEmployeeAgentTemplates(agentTemplates)).toHaveLength(8)
 
     db.update(agentRows)
       .set({ description: 'changed occupied definition' })
       .where(eq(agentRows.id, DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[0]))
       .run()
-    await ensureDigitalEmployeeAgentTemplates(db)
-    expect((await listDigitalEmployeeAgentTemplates(db))[0]?.description).toBe(
+    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+    expect((await listDigitalEmployeeAgentTemplates(agentTemplates))[0]?.description).toBe(
       DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2[0]?.definition.description,
     )
   })

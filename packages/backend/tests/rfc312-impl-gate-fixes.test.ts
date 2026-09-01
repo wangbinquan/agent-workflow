@@ -40,6 +40,7 @@ import {
 } from './helpers/identityAccessWs'
 import type { IdentityAccessWsBinding } from '../src/ws/registry'
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
+import { composeTestSqliteRealtimeRuntime, STUB_REALTIME_RUNTIME } from './helpers/realtimeRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -77,6 +78,8 @@ function fakeWs(
     channel: { kind: 'presence' },
     actor,
     ...identity,
+    channels: STUB_REALTIME_RUNTIME.channels,
+    credentials: STUB_REALTIME_RUNTIME.credentials,
     credential: { kind: 'session', hash: 'h', expiresAt: null },
     closing: false,
     revalidating: false,
@@ -106,7 +109,8 @@ describe('RFC-312 实现门 —— presence 计数不得因关闭时序泄漏', 
     seedUser(db, 'ghost')
     const identityAccess = composeIdentityAccess(db)
     const { getUserPresence } = identityAccess
-    const adapter = buildWebSocketAdapter({ daemonToken: 'dt', db, identityAccess })
+    const realtime = composeTestSqliteRealtimeRuntime({ db, identityAccess })
+    const adapter = buildWebSocketAdapter({ daemonToken: 'dt', realtime, identityAccess })
     const identity = await admitWsIdentity(identityAccess, 'ghost')
     const { ws } = fakeWs(identity.actor, undefined, identity)
 
@@ -141,7 +145,7 @@ describe('RFC-312 实现门 —— presence 通道声明了重同步（累积流
     const resync = WS_CHANNELS.presence.resync
     expect(typeof resync).toBe('function')
 
-    resync?.(ws, db)
+    resync?.(ws)
     expect(sent).toHaveLength(1)
     expect((sent[0] as { type: string }).type).toBe('presence.snapshot')
   })
@@ -263,12 +267,15 @@ describe('RFC-312 实现门 —— 撤权拒绝链必须有行为锁', () => {
 
     const identityAccess = composeIdentityAccess(db)
     const identity = await admitWsIdentity(identityAccess, user.id)
+    const realtime = composeTestSqliteRealtimeRuntime({ db, identityAccess })
     const closes: Array<{ code: number; reason: string }> = []
     const data: WsConnectionData = {
       channel: { kind: 'presence' },
       actor: identity.actor,
       authority: identity.authority,
       identityAccess: identity.identityAccess,
+      channels: realtime.channels,
+      credentials: realtime.credentials,
       credential,
       closing: false,
       revalidating: false,
@@ -284,7 +291,7 @@ describe('RFC-312 实现门 —— 撤权拒绝链必须有行为锁', () => {
     trackConnection(ws)
 
     // 正向对照：持有该权限时，复核**不得**关掉它。
-    const before = await revalidateAllConnections({ db, log }, 'user-patched')
+    const before = await revalidateAllConnections({ log }, 'user-patched')
     expect(closes).toEqual([])
     expect(before.closedGate).toBe(0)
 
@@ -292,7 +299,7 @@ describe('RFC-312 实现门 —— 撤权拒绝链必须有行为锁', () => {
     db.$client
       .query(`DELETE FROM user_permission_grants WHERE user_id = ? AND permission = ?`)
       .run(user.id, 'users:presence')
-    const after = await revalidateAllConnections({ db, log }, 'user-patched')
+    const after = await revalidateAllConnections({ log }, 'user-patched')
     expect(after.closedGate).toBe(1)
     expect(closes).toEqual([{ code: WS_CLOSE_NOT_VISIBLE, reason: 'permission-required' }])
   })

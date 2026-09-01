@@ -21,6 +21,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { countAgentTextEvents } from '../src/modules/task-execution/composition/nodeMechanics'
+import { SqliteNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/sqliteNodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
@@ -30,6 +31,8 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const RESTART_NOTICE_MARK = 'Note on an earlier attempt'
 const PROMPT_TEMPLATE = 'RFC313-TEMPLATE-MARKER: do the work'
+
+const nodePersistence = (db: DbClient) => new SqliteNodeExecutionPersistence(db)
 
 interface Harness {
   db: DbClient
@@ -350,11 +353,11 @@ describe('RFC-313 会话升级', () => {
     await h.db.insert(nodeRunEvents).values(ev('[rfc313/session-restart] {"rfc":"RFC-313"}'))
     await h.db.insert(nodeRunEvents).values(ev('[rfc042/envelope-followup] {"rfc":"RFC-042"}'))
     await h.db.insert(nodeRunEvents).values(ev('[rfc049/port-validation-followup] {"port":"x"}'))
-    expect(await countAgentTextEvents(h.db, runId)).toBe(0)
+    expect(await countAgentTextEvents(nodePersistence(h.db), runId)).toBe(0)
 
     // 模型真说了话就必须算上（防止过滤写成把所有 text 都吃掉）
     await h.db.insert(nodeRunEvents).values(ev('I finished the audit but forgot the envelope.'))
-    expect(await countAgentTextEvents(h.db, runId)).toBe(1)
+    expect(await countAgentTextEvents(nodePersistence(h.db), runId)).toBe(1)
   })
 
   test('attempt 天花板严格低于装配骨架的 spec-bug 保险丝', () => {

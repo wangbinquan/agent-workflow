@@ -13,6 +13,7 @@ import {
 } from '../src/db/schema'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { selectRepositoryTransportCredential } from '../src/modules/source-control/domain/repositoryTransportCredential'
+import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
 import { createUser } from '../src/services/users'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -22,6 +23,10 @@ const GLOBAL_TOKEN = 'aw-global-fixture-token-1111'
 
 function subject(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
+}
+
+function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
+  return new SQLiteRepositoryTransportCredentialRepository(db)
 }
 
 describe('RFC-321 credential selector truth table', () => {
@@ -89,14 +94,14 @@ describe('RFC-321 personal credential repository', () => {
   test('one runtime supply owns personal-first Git selection without selected-personal fallback', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 20))
-    const module = composeRepositoryTransportCredentials(db, box)
+    const module = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
       username: 'rfc321-runtime-alice',
       displayName: 'Alice',
       role: 'user',
       password: 'longEnoughPassword',
     })
-    module.adminConnections.synchronize({
+    await module.adminConnections.synchronize({
       provider: 'gitlab',
       connectionGeneration: 'generation',
       endpointBindingDigest: DIGEST,
@@ -111,28 +116,30 @@ describe('RFC-321 personal credential repository', () => {
     })
 
     expect(
-      module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
+      await module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
     ).toMatchObject({
       ok: true,
       credential: { credentialSource: 'global', token: GLOBAL_TOKEN },
     })
-    module.ownCredentials.put(subject(alice), 'gitlab', {
+    await module.ownCredentials.put(subject(alice), 'gitlab', {
       token: PERSONAL_TOKEN,
       connectionGeneration: 'generation',
       endpointBindingDigest: DIGEST,
     })
     expect(
-      module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
+      await module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
     ).toMatchObject({
       ok: true,
       credential: { credentialSource: 'personal', token: PERSONAL_TOKEN },
     })
-    expect(module.credentialSupply.resolveExecution({ kind: 'system' }, 'gitlab')).toMatchObject({
+    expect(
+      await module.credentialSupply.resolveExecution({ kind: 'system' }, 'gitlab'),
+    ).toMatchObject({
       ok: true,
       credential: { credentialSource: 'global', token: GLOBAL_TOKEN },
     })
     expect(
-      module.ownCredentials.resolvePersonalForTest(subject(alice), 'gitlab', {
+      await module.ownCredentials.resolvePersonalForTest(subject(alice), 'gitlab', {
         connectionGeneration: 'generation',
         endpointBindingDigest: DIGEST,
       }),
@@ -146,7 +153,7 @@ describe('RFC-321 personal credential repository', () => {
       .where(eq(userRepositoryTransportCredentials.userId, alice.id))
       .run()
     expect(
-      module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
+      await module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
     ).toEqual({ ok: false, code: 'code-host-push-credential-stale' })
 
     db.update(userRepositoryTransportCredentials)
@@ -154,10 +161,10 @@ describe('RFC-321 personal credential repository', () => {
       .where(eq(userRepositoryTransportCredentials.userId, alice.id))
       .run()
     expect(
-      module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
+      await module.credentialSupply.resolveExecution({ kind: 'user', userId: alice.id }, 'gitlab'),
     ).toEqual({ ok: false, code: 'code-host-push-credential-unavailable' })
     expect(
-      module.ownCredentials.resolvePersonalForTest(subject(alice), 'gitlab', {
+      await module.ownCredentials.resolvePersonalForTest(subject(alice), 'gitlab', {
         connectionGeneration: 'generation',
         endpointBindingDigest: DIGEST,
       }),
@@ -167,7 +174,7 @@ describe('RFC-321 personal credential repository', () => {
   test('seals, replaces, isolates, and deletes each user credential', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
-    const module = composeRepositoryTransportCredentials(db, box)
+    const module = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
       username: 'rfc321-alice',
       displayName: 'Alice',
@@ -180,7 +187,7 @@ describe('RFC-321 personal credential repository', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    module.adminConnections.synchronize({
+    await module.adminConnections.synchronize({
       provider: 'gitlab',
       connectionGeneration: 'generation',
       endpointBindingDigest: DIGEST,
@@ -194,19 +201,21 @@ describe('RFC-321 personal credential repository', () => {
       updatedBy: null,
     })
 
-    expect(module.ownCredentials.list(subject(alice)).items[0]).toMatchObject({
+    expect((await module.ownCredentials.list(subject(alice))).items[0]).toMatchObject({
       provider: 'gitlab',
       configured: false,
       tokenHint: null,
       fallback: 'platform-global',
     })
-    const saved = module.ownCredentials.put(subject(alice), 'gitlab', {
+    const saved = await module.ownCredentials.put(subject(alice), 'gitlab', {
       token: PERSONAL_TOKEN,
       connectionGeneration: 'generation',
       endpointBindingDigest: DIGEST,
     })
     expect(saved).toMatchObject({ configured: true, tokenHint: '9999', stale: false })
-    expect(module.ownCredentials.list(subject(bob)).items[0]).toMatchObject({ configured: false })
+    expect((await module.ownCredentials.list(subject(bob))).items[0]).toMatchObject({
+      configured: false,
+    })
 
     const row = db
       .select()
@@ -217,7 +226,7 @@ describe('RFC-321 personal credential repository', () => {
     expect(box.unseal(row.tokenEnc)).toBe(PERSONAL_TOKEN)
     expect(row.credentialRevision).toBe(1)
 
-    module.ownCredentials.put(subject(alice), 'gitlab', {
+    await module.ownCredentials.put(subject(alice), 'gitlab', {
       token: 'aw-personal-replacement-8888',
       connectionGeneration: 'generation',
       endpointBindingDigest: DIGEST,
@@ -229,14 +238,14 @@ describe('RFC-321 personal credential repository', () => {
         .where(eq(userRepositoryTransportCredentials.userId, alice.id))
         .get(),
     ).toEqual({ revision: 2 })
-    expect(module.ownCredentials.remove(subject(alice), 'gitlab')).toEqual({ removed: true })
-    expect(module.ownCredentials.remove(subject(alice), 'gitlab')).toEqual({ removed: false })
+    expect(await module.ownCredentials.remove(subject(alice), 'gitlab')).toEqual({ removed: true })
+    expect(await module.ownCredentials.remove(subject(alice), 'gitlab')).toEqual({ removed: false })
   })
 
   test('generation/digest mismatch is a conflict and projection rebind revokes personal rows', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 22))
-    const module = composeRepositoryTransportCredentials(db, box)
+    const module = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
       username: 'rfc321-stale',
       displayName: 'Alice',
@@ -257,20 +266,20 @@ describe('RFC-321 personal credential repository', () => {
       updatedAt: 1,
       updatedBy: null,
     }
-    module.adminConnections.synchronize(projection)
-    expect(() =>
+    await module.adminConnections.synchronize(projection)
+    await expect(
       module.ownCredentials.put(subject(alice), 'github', {
         token: PERSONAL_TOKEN,
         connectionGeneration: 'generation',
         endpointBindingDigest: 'b'.repeat(64),
       }),
-    ).toThrow('connection changed')
-    module.ownCredentials.put(subject(alice), 'github', {
+    ).rejects.toThrow('connection changed')
+    await module.ownCredentials.put(subject(alice), 'github', {
       token: PERSONAL_TOKEN,
       connectionGeneration: 'generation',
       endpointBindingDigest: DIGEST,
     })
-    module.adminConnections.synchronize({
+    await module.adminConnections.synchronize({
       ...projection,
       endpointBindingDigest: 'c'.repeat(64),
       updatedAt: 2,

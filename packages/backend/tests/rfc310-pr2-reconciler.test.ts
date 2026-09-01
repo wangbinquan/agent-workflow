@@ -272,7 +272,7 @@ describe('rfc310 step-failed block detail', () => {
       ports: { playbookSaga: { listStepRuns: () => stepRuns } },
     }) as unknown as ReconcileDeps
 
-  test('lifts the attempt receipt remediation onto the blocked mission', () => {
+  test('lifts the attempt receipt remediation onto the blocked mission', async () => {
     const deps = depsWith(
       [
         { stepId: 'implement', failureCode: 'other', actionRunId: 'run-old' },
@@ -292,15 +292,15 @@ describe('rfc310 step-failed block detail', () => {
         },
       },
     )
-    expect(stepFailureDetail(deps, 'm-1', 'step-failed:implement:agent-contract-exhausted')).toBe(
-      'opencode exited with code 2',
-    )
+    expect(
+      await stepFailureDetail(deps, 'm-1', 'step-failed:implement:agent-contract-exhausted'),
+    ).toBe('opencode exited with code 2')
   })
 
   // 2026-08-20 windows 实撞：上一条只证明「remediation 上浮了」，没证明**上浮的那截
   // 够用**。当时的 500 字上限刚好把 `opencode exited with code 1; stderr tail: ` 前缀
   // 加一小段压缩源码碎片塞满，真正的 `error: <message>` 落在窗口外——CI 白跑一轮。
-  test('keeps enough of a runtime crash receipt that the cause survives (2026-08-20 regression)', () => {
+  test('keeps enough of a runtime crash receipt that the cause survives (2026-08-20 regression)', async () => {
     const crash = [
       'opencode exited with code 1; stderr tail:',
       `var J=1;${'q'.repeat(360)}…(+39640 chars)`,
@@ -310,20 +310,20 @@ describe('rfc310 step-failed block detail', () => {
     const deps = depsWith([{ stepId: 'implement', failureCode: 'x', actionRunId: 'run-1' }], {
       'run-1': { failureJson: JSON.stringify({ code: 'x', remediation: crash }) },
     })
-    const detail = stepFailureDetail(deps, 'm-1', 'step-failed:implement:x')
+    const detail = await stepFailureDetail(deps, 'm-1', 'step-failed:implement:x')
     expect(detail).toContain('error: Cannot find module "node:foo"')
     expect(detail!.length).toBeLessThanOrEqual(MAX_STEP_FAILURE_DETAIL_CHARS)
   })
 
-  test('stays null instead of inventing text when there is nothing to say', () => {
+  test('stays null instead of inventing text when there is nothing to say', async () => {
     const noRemediation = depsWith(
       [{ stepId: 'implement', failureCode: 'x', actionRunId: 'run-1' }],
       { 'run-1': { failureJson: JSON.stringify({ code: 'x' }) } },
     )
-    expect(stepFailureDetail(noRemediation, 'm-1', 'step-failed:implement:x')).toBeNull()
+    expect(await stepFailureDetail(noRemediation, 'm-1', 'step-failed:implement:x')).toBeNull()
     // 非 step-failed 的 block（配置缺失、端口未接线等）不走这条路径。
-    expect(stepFailureDetail(noRemediation, 'm-1', 'requirement-port-not-wired')).toBeNull()
+    expect(await stepFailureDetail(noRemediation, 'm-1', 'requirement-port-not-wired')).toBeNull()
     // 台账里没有对应的失败步骤 ⇒ 不猜。
-    expect(stepFailureDetail(noRemediation, 'm-1', 'step-failed:other:x')).toBeNull()
+    expect(await stepFailureDetail(noRemediation, 'm-1', 'step-failed:other:x')).toBeNull()
   })
 })

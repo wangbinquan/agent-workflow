@@ -27,6 +27,7 @@ import {
 } from '../src/modules/development-automation/domain/questionSet'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 
 setDefaultTimeout(120_000)
 
@@ -136,7 +137,9 @@ describe('rfc310 pr3 — requirement-source clarification loop', () => {
       'collect-requirement-answers',
     )
     expect(commitRound.kind === 'decided' && commitRound.handled).toBe('collected')
-    const cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(
+      fx.store.getMission(missionId)!.requirementBundleRef!,
+    ))!
     expect(cells['requirement.clarificationState']).toMatchObject({
       state: 'known',
       value: 'answers-committed',
@@ -188,7 +191,7 @@ describe('rfc310 pr3 — platform clarification channel', () => {
     expect(waitRound.kind === 'decided' && waitRound.handled).toBe('wake-armed')
 
     const commandDeps = {
-      store: fx.store,
+      store: createSqliteMissionPersistence(fx.db),
       snapshots: fx.snapshots,
       requirement: fx.materializer,
       now: () => Date.now(),
@@ -236,7 +239,9 @@ describe('rfc310 pr3 — platform clarification channel', () => {
         { questionId: 'q2', answer: 'friday' },
       ]),
     )
-    const cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(
+      fx.store.getMission(missionId)!.requirementBundleRef!,
+    ))!
     expect(cells['requirement.clarificationState']).toMatchObject({
       value: 'answers-committed',
     })

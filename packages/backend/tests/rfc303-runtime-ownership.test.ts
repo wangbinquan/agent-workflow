@@ -8,7 +8,8 @@ import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { nodeRuns, tasks, webhookMrLaunchGuards, webhookMrStreamStates } from '@/db/schema'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
-import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/application/applySourceTerminationEffect'
+import { createSqliteMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/sqliteMrTerminalControlPersistence'
+import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { sourceTerminationCapabilityMatches } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { TaskClaimGate } from '@/modules/task-execution/application/taskClaimGate'
@@ -235,8 +236,8 @@ describe('RFC-303 protected launch guard', () => {
       lastDeliveryId: 'delivery-open',
       updatedAt: 1,
     })
-    const coordinator = new MrLaunchGuardCoordinator(db)
-    const guard = coordinator.reserve({
+    const coordinator = new MrLaunchGuardCoordinator(createSqliteMrLaunchGuardPersistence(db))
+    const guard = await coordinator.reserve({
       endpointId: 'endpoint-1',
       streamKey: 'gitlab:77:9',
       binding: 'binding-1',
@@ -247,6 +248,7 @@ describe('RFC-303 protected launch guard', () => {
       triggerName: 'review',
     })
     expect(() => guard.assertCanCommit()).not.toThrow()
+    await expect(guard.verifyCanCommit()).resolves.toBeUndefined()
 
     await db
       .update(webhookMrStreamStates)
@@ -256,12 +258,12 @@ describe('RFC-303 protected launch guard', () => {
       .update(webhookMrLaunchGuards)
       .set({ status: 'revoking-terminal' })
       .where(eq(webhookMrLaunchGuards.id, guard.id))
-    expect(coordinator.abortRevoked()).toBe(1)
+    expect(await coordinator.abortRevoked()).toBe(1)
     expect(guard.signal.aborted).toBe(true)
     expect(() => guard.assertCanCommit()).toThrow(
       expect.objectContaining({ code: 'webhook-mr-launch-terminal' }),
     )
-    guard.failed('webhook-mr-launch-terminal')
+    await guard.failed('webhook-mr-launch-terminal')
     guard.release()
     expect(
       (
@@ -286,8 +288,8 @@ describe('RFC-303 protected launch guard', () => {
       lastDeliveryId: 'delivery-merge',
       updatedAt: 2,
     })
-    const coordinator = new MrLaunchGuardCoordinator(db)
-    expect(() =>
+    const coordinator = new MrLaunchGuardCoordinator(createSqliteMrLaunchGuardPersistence(db))
+    await expect(
       coordinator.reserve({
         endpointId: 'endpoint-1',
         streamKey: 'gitlab:77:9',
@@ -298,6 +300,6 @@ describe('RFC-303 protected launch guard', () => {
         triggerId: 'trigger-1',
         triggerName: 'review',
       }),
-    ).toThrow(expect.objectContaining({ code: 'webhook-mr-launch-terminal' }))
+    ).rejects.toThrow(expect.objectContaining({ code: 'webhook-mr-launch-terminal' }))
   })
 })

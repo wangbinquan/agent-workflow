@@ -109,7 +109,7 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
     expect(materialized.adapterId).toBe(fx.adapterId!)
 
     // 平台 manifest：role 来自 envelope、byte 事实来自我们自己的 safe import。
-    const manifest = fx.materializer.getRequirementManifest(missionId)!
+    const manifest = (await fx.materializer.getRequirementManifest(missionId))!
     expect(manifest.source).toEqual({
       kind: 'external',
       sourceKey: 'sys-a',
@@ -263,7 +263,7 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
       const sources = fx.store.listMissionSources(missionId)
       expect(sources).toHaveLength(3)
       expect(sources.find((s) => s.generation === 3)!.sourceRevision).toBe('r2')
-      const manifest = fx.materializer.getRequirementManifest(missionId)!
+      const manifest = (await fx.materializer.getRequirementManifest(missionId))!
       expect(manifest.source.kind === 'external' && manifest.source.sourceRevision).toBe('r2')
     } finally {
       seedReq1('r1')

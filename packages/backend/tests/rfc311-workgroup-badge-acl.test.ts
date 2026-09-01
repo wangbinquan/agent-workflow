@@ -13,7 +13,7 @@ import { resolve } from 'node:path'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows, workgroupTaskState } from '../src/db/schema'
-import { buildRoomReads } from '../src/services/workgroup/room'
+import { buildRoomReads } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/room'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_278_400_000

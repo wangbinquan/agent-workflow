@@ -41,6 +41,7 @@ import type { NextDecision } from '../src/modules/development-automation/domain/
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -93,9 +94,12 @@ function persistCellsSnapshot(
   fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: id })
 }
 
-function currentCells(fx: Pr3Fixture, missionId: string): Record<string, FactCell<FactCellValue>> {
+async function currentCells(
+  fx: Pr3Fixture,
+  missionId: string,
+): Promise<Record<string, FactCell<FactCellValue>>> {
   const mission = fx.store.getMission(missionId)!
-  return { ...(fx.snapshots.getCells(mission.requirementBundleRef!) ?? {}) }
+  return { ...((await fx.snapshots.getCells(mission.requirementBundleRef!)) ?? {}) }
 }
 
 /** working mission + settled writable run + validated attempt + pre-state blob。 */
@@ -438,7 +442,7 @@ describe('rfc310 pr5 — verification arm', () => {
           }
         },
       }),
-      verificationProfiles: { content: () => PROFILE },
+      verificationProfiles: { content: async () => PROFILE },
       verificationExecution: {
         async run() {
           return {
@@ -458,13 +462,13 @@ describe('rfc310 pr5 — verification arm', () => {
       },
     }
     const chainDeps: DeliveryChainDeps = {
-      store: fx.store,
+      store: createSqliteMissionPersistence(fx.db),
       ports,
       now: () => Date.now(),
-      persistCells: (id, patch) => {
-        persistCellsSnapshot(fx, id, { ...currentCells(fx, id), ...patch })
+      persistCells: async (id, patch) => {
+        persistCellsSnapshot(fx, id, { ...(await currentCells(fx, id)), ...patch })
       },
-      block: (id, code, detail) => {
+      block: async (id, code, detail) => {
         blocks.push({ code, detail })
         const mission = fx.store.getMission(id)!
         fx.store.occUpdate(id, mission.revision, mission.epoch, {
@@ -478,7 +482,7 @@ describe('rfc310 pr5 — verification arm', () => {
     const outcome = await handleRunVerification(
       chainDeps,
       mission,
-      currentCells(fx, missionId),
+      await currentCells(fx, missionId),
       opts.profileRef ?? 'unit@1',
       [opts.profileRef ?? 'unit@1'],
     )
@@ -493,7 +497,7 @@ describe('rfc310 pr5 — verification arm', () => {
     const passed = await runArm(fx, a.missionId, { verifyOk: true })
     expect(passed.outcome).toBe('collected')
     expect(passed.blocks).toEqual([])
-    const cellsA = currentCells(fx, a.missionId)
+    const cellsA = await currentCells(fx, a.missionId)
     expect(cellsA['__delivery.verifiedTreeOid']).toMatchObject({ value: TREE })
     expect(
       JSON.parse(
@@ -514,7 +518,7 @@ describe('rfc310 pr5 — verification arm', () => {
     expect(fx.store.getMission(b.missionId)!.status).toBe('blocked')
     // 失败同样升 fact——这正是「失败就派 verification.repair」那条规则的读面。
     // block 仍然存在：它是**没有规则接手时**的兜底，不是唯一出口（同 pipeline 形态）。
-    const cellsB = currentCells(fx, b.missionId)
+    const cellsB = await currentCells(fx, b.missionId)
     expect(cellsB['verification.lastOutcome']).toMatchObject({ value: 'failed' })
     expect(cellsB['verification.allRequiredPassed']).toMatchObject({ value: false })
     expect(cellsB['verification.failedProfileRefs']).toMatchObject({ value: ['unit@1'] })
@@ -540,7 +544,7 @@ describe('rfc310 pr5 — verification arm', () => {
     const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     persistCellsSnapshot(fx, seeded.missionId, {
-      ...currentCells(fx, seeded.missionId),
+      ...(await currentCells(fx, seeded.missionId)),
       // 审批准备动作跑完：runId 换人，candidate 三件套仍指向 implement 那一轮。
       '__action.runId': cell(`run-approval-${seeded.missionId}`),
       '__action.candidateRunId': cell(seeded.runId),
@@ -549,7 +553,7 @@ describe('rfc310 pr5 — verification arm', () => {
     const passed = await runArm(fx, seeded.missionId, { verifyOk: true })
     expect(passed.blocks).toEqual([])
     expect(passed.outcome).toBe('collected')
-    expect(currentCells(fx, seeded.missionId)['__delivery.verifiedTreeOid']).toMatchObject({
+    expect((await currentCells(fx, seeded.missionId))['__delivery.verifiedTreeOid']).toMatchObject({
       value: TREE,
     })
   })
@@ -590,7 +594,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
       kind: 'commit-and-publish-candidate',
       publicationMode: 'new-branch',
     })
-    let cells = currentCells(fx, seeded.missionId)
+    let cells = await currentCells(fx, seeded.missionId)
     expect(cells['__delivery.commitSha']).toMatchObject({ value: COMMIT })
     expect(cells['__delivery.publishState']).toMatchObject({ value: 'committed' })
     expect(fx.store.getMission(seeded.missionId)!.status).toBe('publishing')
@@ -598,7 +602,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     // 轮 2：push（CAS null=分支必须缺席；deliverySourceBranch 落行）。
     const r2 = await runMissionReconcile(deps, seeded.missionId)
     expect(r2).toMatchObject({ kind: 'decided', handled: 'collected' })
-    cells = currentCells(fx, seeded.missionId)
+    cells = await currentCells(fx, seeded.missionId)
     expect(cells['__delivery.publishState']).toMatchObject({ value: 'pushed' })
     const mission2 = fx.store.getMission(seeded.missionId)!
     expect(mission2.deliverySourceBranch).toBe(`aw/mission/${seeded.missionId}`)
@@ -610,7 +614,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     const mission3 = fx.store.getMission(seeded.missionId)!
     expect(mission3.mrClaimId).not.toBeNull()
     expect(mission3.status).toBe('watching')
-    cells = currentCells(fx, seeded.missionId)
+    cells = await currentCells(fx, seeded.missionId)
     expect(cells['__mr.ref']).toMatchObject({ value: '7' })
 
     // 轮 4：发布链使命完成 → PR-7 care 链接管（MR facts 尚未采集 → 派
@@ -671,7 +675,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     expect(r).toMatchObject({ kind: 'decided', handled: 'collected' })
     expect(commits).toHaveLength(1)
     expect(fx.store.getEffect(prepared.effect.id)!.state).toBe('confirmed')
-    expect(currentCells(fx, seeded.missionId)['__delivery.publishState']).toMatchObject({
+    expect((await currentCells(fx, seeded.missionId))['__delivery.publishState']).toMatchObject({
       value: 'committed',
     })
   })

@@ -11,11 +11,13 @@ import {
   taskExecutionEffectAttempts,
   taskExecutionEffects,
   taskExecutionLineageOperationRecords,
+  nodeRuns,
   tasks,
 } from '@/db/schema'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
-import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createCodeHostEffectAttemptObserver } from '@/modules/task-execution/application/codeHostEffectObserver'
+import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import { canonicalJson, type LineageSlot } from '@/modules/task-execution/domain/executionIntent'
 import { executeCodeHostCall } from '@/services/codeHost/call'
@@ -32,7 +34,7 @@ import {
   validateCodeHostRecoveryBindingManifest,
 } from '@/modules/task-execution/domain/codeHostRecovery'
 import { createVerifiedOutcomeUnknownClosure } from '@/modules/task-execution/domain/ownership'
-import { submitTaskContinuationTx } from '@/modules/task-execution/application/submitTaskContinuation'
+import { submitTaskContinuationTx } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionIntentAdmission'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -42,6 +44,7 @@ function fixture(
   provider: CodeHostProvider = 'gitlab',
 ) {
   const db = createInMemoryDb(MIGRATIONS)
+  const nodeRunId = `${taskId}-code-host-node`
   const slotPath: readonly LineageSlot[] = [
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ]
@@ -62,6 +65,9 @@ function fixture(
       executionLineageId: taskId,
       lineageSlotPathJson: canonicalJson(slotPath),
     })
+    .run()
+  db.insert(nodeRuns)
+    .values({ id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
     .run()
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
   const intent = module.intents.submit({
@@ -106,12 +112,44 @@ function fixture(
     resourceKeys: [`code-host:${provider}:${taskId}`],
   } as const
   const observer = createCodeHostEffectAttemptObserver({
-    db,
+    persistence: createSqliteTaskExecutionPersistence(db).effects,
     context,
     action,
+    nodeRunId,
     identity,
   })
-  return { db, observer, module, taskId, family, slotPath, identity, context, provider, action }
+  return {
+    db,
+    observer,
+    module,
+    taskId,
+    nodeRunId,
+    family,
+    slotPath,
+    identity,
+    context,
+    provider,
+    action,
+  }
+}
+
+function settleTerminal(
+  observer: ReturnType<typeof createCodeHostEffectAttemptObserver>,
+  nodeRunId: string,
+  patch: Readonly<{
+    status?: 'done' | 'failed'
+    errorMessage?: string
+    failureCode?: string
+  }> = {},
+): Promise<boolean> {
+  return observer.settleTerminal({
+    nodeRunId,
+    status: patch.status ?? 'done',
+    reason: 'rfc328-code-host-attempt-test',
+    finishedAt: 30,
+    ...(patch.errorMessage === undefined ? {} : { errorMessage: patch.errorMessage }),
+    ...(patch.failureCode === undefined ? {} : { failureCode: patch.failureCode }),
+  })
 }
 
 function deps(
@@ -198,7 +236,7 @@ async function approveResponseLossDriftFixture(input: {
   // cannot prove whether that exact old request applied.
   input.drift(state)
   expect(h.observer.outcomeUnknown()).toBe(true)
-  expect(h.observer.settleTerminal(() => {})).toBe(true)
+  expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
   const unresolved = h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).get()!
   const owner = h.module.ownership.read(h.db, h.taskId)!
@@ -380,7 +418,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(ambiguous.ok).toBe(false)
     expect(ambiguousSends).toBe(1) // POST keeps the existing no-network-retry contract.
     expect(h.observer.outcomeUnknown()).toBe(true)
-    expect(h.observer.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
     const unresolved = h.db
       .select({ id: taskExecutionEffects.id })
@@ -424,14 +462,20 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     )
     const claim = h.module.claim({ db: h.db, intentId: manualIntentId })
     h.module.claimGate.leave(claim.permit)
+    const nextNodeRunId = `${h.taskId}-code-host-node-generation-1`
+    h.db
+      .insert(nodeRuns)
+      .values({ id: nextNodeRunId, taskId: h.taskId, nodeId: 'code-host', status: 'running' })
+      .run()
     const nextObserver = createCodeHostEffectAttemptObserver({
-      db: h.db,
+      persistence: createSqliteTaskExecutionPersistence(h.db).effects,
       context: createTaskExecutionContext({
         db: h.db,
         intentId: manualIntentId,
         token: claim.token,
       }),
       action: 'mr.approve',
+      nodeRunId: nextNodeRunId,
       identity: { ...h.identity, operationGeneration: 1 },
     })
     let manualSends = 0
@@ -452,7 +496,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     )
     expect(applied.ok).toBe(true)
     expect(manualSends).toBe(1)
-    expect(nextObserver.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(nextObserver, nextNodeRunId)).toBe(true)
     expect(
       h.db
         .select({ state: taskExecutionLineageOperationRecords.decisionState })
@@ -530,7 +574,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     )
     expect(outcome.ok).toBe(true)
     expect(sends).toBe(2)
-    expect(h.observer.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
   })
 
   test('a response-lost pipeline cancel is adopted after one read-only state probe', async () => {
@@ -563,7 +607,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     let probeReads = 0
     const probe = await probeCodeHostMutation({
       descriptor: descriptor!,
-      resolveConnection: () => callDeps.connection,
+      resolveConnection: async () => callDeps.connection,
       fetchImpl: async (url, init) => {
         expect(init?.method).toBe('GET')
         expect(url).toBe('https://gitlab.example/api/v4/projects/group%2Frepo/pipelines/31')
@@ -575,17 +619,17 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       },
     })
     expect(probe).toMatchObject({ kind: 'applied', proofCode: 'pipeline-canceled' })
-    expect(h.observer.resolveTerminalProbe(probe)).toBe('applied')
+    expect(await h.observer.resolveTerminalProbe(probe)).toBe('applied')
     expect(
-      h.observer.settleTerminal((tx) => {
-        tx.update(tasks)
-          .set({ errorSummary: 'pipeline-cancel-projected' })
-          .where(eq(tasks.id, h.taskId))
-          .run()
+      await settleTerminal(h.observer, h.nodeRunId, {
+        errorMessage: 'pipeline-cancel-projected',
       }),
     ).toBe(true)
     expect(probeReads).toBe(1)
     expect(h.db.select().from(taskExecutionEffects).get()?.state).toBe('succeeded')
+    expect(
+      h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).get()?.errorMessage,
+    ).toBe('pipeline-cancel-projected')
     expect(h.db.select().from(taskExecutionEffectAttempts).all()).toMatchObject([
       { state: 'succeeded', applicationEvidence: 'applied' },
     ])
@@ -619,7 +663,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(descriptor?.probe.kind).toBe('draft-existence-partial')
     const probe = await probeCodeHostMutation({
       descriptor: descriptor!,
-      resolveConnection: () => firstDeps.connection,
+      resolveConnection: async () => firstDeps.connection,
       fetchImpl: async (_url, init) => {
         expect(init?.method).toBe('GET')
         return new Response(draftExists ? '{"id":73}' : '{}', {
@@ -632,7 +676,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       kind: 'definitely-not-applied',
       proofCode: 'exact-draft-still-exists',
     })
-    expect(h.observer.resolveTerminalProbe(probe)).toBe('retry-authorized')
+    expect(await h.observer.resolveTerminalProbe(probe)).toBe('retry-authorized')
 
     const retried = await executeCodeHostCall(
       {
@@ -652,7 +696,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       ),
     )
     expect(retried.ok).toBe(true)
-    expect(h.observer.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
     expect(mutationSends).toBe(4)
     expect(draftExists).toBe(false)
     expect(
@@ -699,10 +743,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       )
       expect(outcome.ok, method).toBe(true)
       expect(sends, method).toBe(3)
-      expect(
-        h.observer.settleTerminal(() => {}),
-        method,
-      ).toBe(method !== 'GET')
+      expect(await settleTerminal(h.observer, h.nodeRunId), method).toBe(method !== 'GET')
     }
 
     for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const) {
@@ -723,10 +764,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
       )
       expect(outcome.ok, method).toBe(true)
       expect(sends, method).toBe(2)
-      expect(
-        h.observer.settleTerminal(() => {}),
-        method,
-      ).toBe(method !== 'GET')
+      expect(await settleTerminal(h.observer, h.nodeRunId), method).toBe(method !== 'GET')
     }
   })
 
@@ -749,11 +787,10 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(outcome.ok).toBe(true)
     expect(sends).toBe(2)
     expect(h.observer.outcomeUnknown()).toBe(false)
+    expect(await settleTerminal(h.observer, h.nodeRunId, { errorMessage: 'projected' })).toBe(true)
     expect(
-      h.observer.settleTerminal((tx) => {
-        tx.update(tasks).set({ errorSummary: 'projected' }).where(eq(tasks.id, h.taskId)).run()
-      }),
-    ).toBe(true)
+      h.db.select({ errorMessage: nodeRuns.errorMessage }).from(nodeRuns).get()?.errorMessage,
+    ).toBe('projected')
 
     const attempts = h.db
       .select({ state: taskExecutionEffectAttempts.state })
@@ -791,7 +828,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(outcome.ok).toBe(false)
     expect(sends).toBe(2)
     expect(h.observer.outcomeUnknown()).toBe(true)
-    expect(h.observer.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(h.observer, h.nodeRunId, { status: 'failed' })).toBe(true)
     expect(
       h.db
         .select({ state: taskExecutionEffectAttempts.state })
@@ -821,7 +858,7 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     )
     expect(outcome.ok).toBe(true)
     expect(sends).toBe(2)
-    expect(h.observer.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
     expect(h.db.select().from(taskExecutionEffectAttempts).all()).toHaveLength(2)
 
     const network = fixture('task-codehost-post-network')
@@ -841,6 +878,8 @@ describe('RFC-328 code-host per-send attempt ledger', () => {
     expect(failed.ok).toBe(false)
     expect(networkSends).toBe(1)
     expect(network.observer.outcomeUnknown()).toBe(true)
-    expect(network.observer.settleTerminal(() => {})).toBe(true)
+    expect(await settleTerminal(network.observer, network.nodeRunId, { status: 'failed' })).toBe(
+      true,
+    )
   })
 })

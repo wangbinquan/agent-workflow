@@ -472,7 +472,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/services/dispatchFrontier.ts',
       'packages/backend/src/services/execution/taskMechanicsState.ts',
       'packages/backend/src/services/structuralDiff/service.ts',
-      'packages/backend/src/services/workflow.validator.ts',
+      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
     ]) {
       const source = read(path)
       expect(source, path).toContain('@/modules/task-execution/public/')

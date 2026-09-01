@@ -24,16 +24,17 @@ import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/
 import { composeTaskExecutionHumanGateAdapter } from '@/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
 import { SqliteClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import { SqliteHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationPersistence'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
-import { GateContinuationEffectStep } from '@/modules/task-execution/application/drive/gateContinuationEffectStep'
+import { GateContinuationEffectStep } from '@/modules/task-execution/infrastructure/sqliteGateContinuationEffectStep'
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
-import { TaskParkTransaction } from '@/modules/task-execution/application/parkTaskAtHumanGate'
+import { TaskParkTransaction } from '@/modules/task-execution/infrastructure/sqliteTaskParkTransaction'
 import {
   ManualQuestionParkRequired,
   ManualQuestionParkTransaction,
-} from '@/modules/task-execution/application/parkManualQuestions'
+} from '@/modules/task-execution/infrastructure/sqliteManualQuestionParkTransaction'
 import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
-import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { LegacyHumanGateTaskLifecycle } from '@/modules/task-execution/infrastructure/legacyHumanGateTaskLifecycle'
 import {
@@ -189,7 +190,7 @@ function submitDecision(
   })
 }
 
-function prepareOpenOperation(input: {
+async function prepareOpenOperation(input: {
   db: ReturnType<typeof createInMemoryDb>
   store: SqliteHumanGateOperationStore
   taskId: string
@@ -206,10 +207,9 @@ function prepareOpenOperation(input: {
       iteration: 0,
     })
     .run()
-  const result = new ClarifyGateOpenPreparation(
-    input.db,
-    input.store,
-    new SqliteClarifyQuestionSnapshotReader(),
+  const result = await new ClarifyGateOpenPreparation(
+    new SqliteHumanGateOperationPersistence(input.db),
+    new SqliteClarifyQuestionSnapshotReader(input.db),
   ).prepare({
     taskId: input.taskId,
     kind: 'self',
@@ -234,7 +234,7 @@ function prepareOpenOperation(input: {
 }
 
 describe('RFC-333 T5 TaskParkTx', () => {
-  test('consumes the prepared gate and parks task + lifecycle event in one owned transaction', () => {
+  test('consumes the prepared gate and parks task + lifecycle event in one owned transaction', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-park'
     seedTask(db, taskId, 'running')
@@ -261,9 +261,9 @@ describe('RFC-333 T5 TaskParkTx', () => {
     const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
     const operations = new SqliteHumanGateOperationStore()
-    const opening = prepareOpenOperation({ db, store: operations, taskId })
+    const opening = await prepareOpenOperation({ db, store: operations, taskId })
     const prepared = opening.prepared
-    const parked = new TaskParkTransaction(
+    const parked = await new TaskParkTransaction(
       module.ownership,
       composeTaskExecutionHumanGateAdapter(),
       new LegacyHumanGateTaskLifecycle(),
@@ -306,7 +306,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
     })
   })
 
-  test('task park failure rolls collaboration consumption back to prepared', () => {
+  test('task park failure rolls collaboration consumption back to prepared', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-park-fault'
     seedTask(db, taskId, 'running')
@@ -332,7 +332,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
     const claimed = module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
     const operations = new SqliteHumanGateOperationStore()
-    const opening = prepareOpenOperation({ db, store: operations, taskId })
+    const opening = await prepareOpenOperation({ db, store: operations, taskId })
     const prepared = opening.prepared
     db.run(sql`
       CREATE TRIGGER rfc333_fail_task_park
@@ -340,7 +340,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
       BEGIN SELECT RAISE(ABORT, 'rfc333-task-park-fault'); END
     `)
 
-    expect(() =>
+    await expect(
       new TaskParkTransaction(
         module.ownership,
         composeTaskExecutionHumanGateAdapter(),
@@ -351,7 +351,7 @@ describe('RFC-333 T5 TaskParkTx', () => {
         prepared,
         now: NOW + 2,
       }),
-    ).toThrow()
+    ).rejects.toThrow()
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
     expect(
       db
@@ -382,11 +382,11 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     'failed',
     'interrupted',
   ] as const) {
-    test(`create on ${status} preserves task state and records the exact obligation`, () => {
+    test(`create on ${status} preserves task state and records the exact obligation`, async () => {
       const db = createInMemoryDb(MIGRATIONS)
       const taskId = `task-333-manual-${status}`
       seedTask(db, taskId, status)
-      const created = createManual(db, taskId)
+      const created = await createManual(db, taskId)
 
       expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe(status)
       expect(
@@ -411,7 +411,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     })
   }
 
-  test('question-row failure rolls the operation insert back in the same transaction', () => {
+  test('question-row failure rolls the operation insert back in the same transaction', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-create-fault'
     seedTask(db, taskId, 'running')
@@ -420,7 +420,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       BEFORE INSERT ON task_questions
       BEGIN SELECT RAISE(ABORT, 'rfc333-manual-question-fault'); END
     `)
-    expect(() => createManual(db, taskId)).toThrow('rfc333-manual-question-fault')
+    await expect(createManual(db, taskId)).rejects.toThrow('rfc333-manual-question-fault')
     expect(db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)).all()).toEqual(
       [],
     )
@@ -433,7 +433,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     ).toEqual([])
   })
 
-  test('HTTP-side create does not steal the active owner; that owner parks at settle', () => {
+  test('HTTP-side create does not steal the active owner; that owner parks at settle', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-owner-settle'
     seedTask(db, taskId, 'running')
@@ -464,7 +464,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       .where(eq(taskExecutionOwners.taskId, taskId))
       .get()!
 
-    const created = createManual(db, taskId)
+    const created = await createManual(db, taskId)
     const ownerAfterCreate = db
       .select()
       .from(taskExecutionOwners)
@@ -478,7 +478,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     })
     expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()?.status).toBe('running')
 
-    const settled = new ManualQuestionParkTransaction(
+    const settled = await new ManualQuestionParkTransaction(
       module.ownership,
       composeTaskExecutionHumanGateAdapter(),
       new LegacyHumanGateTaskLifecycle(),
@@ -497,17 +497,17 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     ).toMatchObject({ state: 'completed', resultGateRevision: 1 })
   })
 
-  test('a dispatched question completes its stale obligation without parking', () => {
+  test('a dispatched question completes its stale obligation without parking', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-dispatched-before-settle'
     seedTask(db, taskId, 'running')
-    const created = createManual(db, taskId)
+    const created = await createManual(db, taskId)
     db.update(taskQuestions)
       .set({ dispatchedAt: NOW + 11, dispatchedBy: 'user-rfc333' })
       .where(eq(taskQuestions.id, created.questionId))
       .run()
     const module = createTaskExecutionTestModule('daemon-rfc333-manual-ownerless')
-    const settled = new ManualQuestionParkTransaction(
+    const settled = await new ManualQuestionParkTransaction(
       module.ownership,
       composeTaskExecutionHumanGateAdapter(),
       new LegacyHumanGateTaskLifecycle(),
@@ -523,11 +523,11 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     ).toBe('completed')
   })
 
-  test('an auto-dispatch-deferred question yields its park obligation to the runnable predecessor', () => {
+  test('an auto-dispatch-deferred question yields its park obligation to the runnable predecessor', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-auto-dispatch-deferred'
     seedTask(db, taskId, 'running')
-    const created = createManual(db, taskId)
+    const created = await createManual(db, taskId)
     // Regression: a mixed-cause "dispatch all" atomically mints the first
     // handler rerun and marks the lower-priority manual question for automatic
     // dispatch. Parking here, before the DAG can run that predecessor, leaves
@@ -537,7 +537,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
       .where(eq(taskQuestions.id, created.questionId))
       .run()
     const module = createTaskExecutionTestModule('daemon-rfc333-manual-auto-deferred')
-    const settled = new ManualQuestionParkTransaction(
+    const settled = await new ManualQuestionParkTransaction(
       module.ownership,
       composeTaskExecutionHumanGateAdapter(),
       new LegacyHumanGateTaskLifecycle(),
@@ -554,17 +554,17 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     ).toBe('completed')
   })
 
-  test('awaiting-human obligation survives release until a later owner settle', () => {
+  test('awaiting-human obligation survives release until a later owner settle', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-revision-rebase'
     seedTask(db, taskId, 'awaiting_human')
-    const created = createManual(db, taskId)
+    const created = await createManual(db, taskId)
     db.update(tasks)
       .set({ status: 'running', lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 3` })
       .where(eq(tasks.id, taskId))
       .run()
     const module = createTaskExecutionTestModule('daemon-rfc333-manual-rebase')
-    const settled = new ManualQuestionParkTransaction(
+    const settled = await new ManualQuestionParkTransaction(
       module.ownership,
       composeTaskExecutionHumanGateAdapter(),
       new LegacyHumanGateTaskLifecycle(),
@@ -587,7 +587,7 @@ describe('RFC-333 T7 manual-question durable park obligation', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = 'task-333-manual-done-fence'
     seedTask(db, taskId, 'running')
-    createManual(db, taskId)
+    await createManual(db, taskId)
     let caught: unknown = null
     try {
       await trySetTaskStatus({

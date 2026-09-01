@@ -274,11 +274,13 @@ describe('rfc310 development-automation architecture lock', () => {
     expect(revived).toEqual([])
 
     const legacyRoot = join(BACKEND_SRC, 'modules', 'code-capability')
-    // 唯一豁免：capability-templates 资源自身的 upstream 同步写。该资源仍有
-    // 完整 CRUD 路由（routes/capabilityTemplates.ts），且 migrationAnalyzer
-    // 要读它出迁移报告——它的退役是 PR-10 之后的独立决策，不在 T104/T105
-    // 的 round-writer 删除面内。
-    const writeVerbExempt = new Set(['application/templateUpstreamStatus.ts'])
+    // 唯一能力豁免：capability-templates 资源自身的 upstream 同步写。RFC-349
+    // 已将它收进 provider-owned atomic adapters；application 只返回纯 decision。
+    // 该资源仍有完整 CRUD 路由，退役不在 T104/T105 round-writer 删除面内。
+    const writeVerbExempt = new Set([
+      'infrastructure/sqliteTemplateUpstreamPersistence.ts',
+      'infrastructure/postgresqlTemplateUpstreamPersistence.ts',
+    ])
     const writeVerbs: string[] = []
     for (const file of walk(legacyRoot)) {
       if (writeVerbExempt.has(relative(legacyRoot, file).replaceAll('\\', '/'))) continue

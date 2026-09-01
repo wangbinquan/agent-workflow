@@ -34,6 +34,7 @@ import {
   createRepositoryPublicationTransport,
   type RepositoryPublicationSession,
 } from '../src/modules/source-control/composition'
+import { SQLiteRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/sqliteRepositoryTransportCredentialRepository'
 import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
 import { runGit as executeGit } from '../src/util/git'
 import { createUser } from '../src/services/users'
@@ -57,6 +58,10 @@ function appHome(): string {
 
 function subjectOf(user: Awaited<ReturnType<typeof createUser>>) {
   return { kind: 'user' as const, userId: user.id }
+}
+
+function repositoryOf(db: ReturnType<typeof createInMemoryDb>) {
+  return new SQLiteRepositoryTransportCredentialRepository(db)
 }
 
 function git(cwd: string, ...args: string[]): string {
@@ -147,7 +152,7 @@ describe('RFC-321 repository publication transport', () => {
   test('personal wins, SSH is mapped to HTTP(S), and one exact lease is reused then removed', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 31))
-    const credentials = composeRepositoryTransportCredentials(db, box)
+    const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
       username: 'rfc321-publication-alice',
       displayName: 'Alice',
@@ -160,7 +165,7 @@ describe('RFC-321 repository publication transport', () => {
       role: 'user',
       password: 'longEnoughPassword',
     })
-    credentials.adminConnections.synchronize({
+    await credentials.adminConnections.synchronize({
       provider: 'gitlab',
       connectionGeneration: 'gitlab-generation',
       endpointBindingDigest: DIGEST,
@@ -180,7 +185,7 @@ describe('RFC-321 repository publication transport', () => {
       updatedAt: 1,
       updatedBy: null,
     })
-    credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
+    await credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
       token: PERSONAL_TOKEN,
       connectionGeneration: 'gitlab-generation',
       endpointBindingDigest: DIGEST,
@@ -189,7 +194,7 @@ describe('RFC-321 repository publication transport', () => {
     const root = appHome()
     const capture = createCapturingGit()
     const transport = createRepositoryPublicationTransport({
-      db,
+      repository: repositoryOf(db),
       secretBox: box,
       appHome: root,
       runGit: capture.runGit,
@@ -263,8 +268,8 @@ describe('RFC-321 repository publication transport', () => {
   test('provider metadata wins for self-hosted SSH, while an HTTP input performs no metadata fetch', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 32))
-    const credentials = composeRepositoryTransportCredentials(db, box)
-    credentials.adminConnections.synchronize({
+    const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
+    await credentials.adminConnections.synchronize({
       provider: 'github',
       connectionGeneration: 'github-generation',
       endpointBindingDigest: DIGEST,
@@ -280,7 +285,7 @@ describe('RFC-321 repository publication transport', () => {
     const fetches: Array<{ url: string; headers: BunFetchRequestInit['headers'] }> = []
     const capture = createCapturingGit()
     const transport = createRepositoryPublicationTransport({
-      db,
+      repository: repositoryOf(db),
       secretBox: box,
       appHome: appHome(),
       runGit: capture.runGit,
@@ -330,14 +335,14 @@ describe('RFC-321 repository publication transport', () => {
   test('provider metadata identifies the managed connection when SSH and web authorities differ', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 35))
-    const credentials = composeRepositoryTransportCredentials(db, box)
+    const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
       username: 'rfc321-cross-authority-owner',
       displayName: 'Alice',
       role: 'user',
       password: 'longEnoughPassword',
     })
-    credentials.adminConnections.synchronize({
+    await credentials.adminConnections.synchronize({
       provider: 'gitlab',
       connectionGeneration: 'gitlab-cross-authority-generation',
       endpointBindingDigest: DIGEST,
@@ -350,7 +355,7 @@ describe('RFC-321 repository publication transport', () => {
       updatedAt: 1,
       updatedBy: null,
     })
-    credentials.adminConnections.synchronize({
+    await credentials.adminConnections.synchronize({
       provider: 'github',
       connectionGeneration: 'github-cross-authority-generation',
       endpointBindingDigest: DIGEST,
@@ -363,7 +368,7 @@ describe('RFC-321 repository publication transport', () => {
       updatedAt: 1,
       updatedBy: null,
     })
-    credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
+    await credentials.ownCredentials.put(subjectOf(alice), 'gitlab', {
       token: PERSONAL_TOKEN,
       connectionGeneration: 'gitlab-cross-authority-generation',
       endpointBindingDigest: DIGEST,
@@ -371,7 +376,7 @@ describe('RFC-321 repository publication transport', () => {
     const fetches: Array<{ url: string; headers: BunFetchRequestInit['headers'] }> = []
     const capture = createCapturingGit()
     const transport = createRepositoryPublicationTransport({
-      db,
+      repository: repositoryOf(db),
       secretBox: box,
       appHome: appHome(),
       runGit: capture.runGit,
@@ -432,8 +437,8 @@ describe('RFC-321 repository publication transport', () => {
   test('cross-authority metadata fails closed when more than one connection claims the project', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 36))
-    const credentials = composeRepositoryTransportCredentials(db, box)
-    credentials.adminConnections.synchronize({
+    const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
+    await credentials.adminConnections.synchronize({
       provider: 'gitlab',
       connectionGeneration: 'gitlab-ambiguous-generation',
       endpointBindingDigest: DIGEST,
@@ -446,7 +451,7 @@ describe('RFC-321 repository publication transport', () => {
       updatedAt: 1,
       updatedBy: null,
     })
-    credentials.adminConnections.synchronize({
+    await credentials.adminConnections.synchronize({
       provider: 'github',
       connectionGeneration: 'github-ambiguous-generation',
       endpointBindingDigest: DIGEST,
@@ -461,7 +466,7 @@ describe('RFC-321 repository publication transport', () => {
     })
     const root = appHome()
     const transport = createRepositoryPublicationTransport({
-      db,
+      repository: repositoryOf(db),
       secretBox: box,
       appHome: root,
       endpointDiscovery: metadataDiscovery(
@@ -505,12 +510,12 @@ describe('RFC-321 repository publication transport', () => {
   test('known ambiguous SSH ownership never falls back when discovery is unavailable', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 37))
-    const credentials = composeRepositoryTransportCredentials(db, box)
+    const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     for (const [provider, token] of [
       ['gitlab', GLOBAL_TOKEN],
       ['github', GITHUB_GLOBAL_TOKEN],
     ] as const) {
-      credentials.adminConnections.synchronize({
+      await credentials.adminConnections.synchronize({
         provider,
         connectionGeneration: `${provider}-known-ambiguous-generation`,
         endpointBindingDigest: DIGEST,
@@ -526,7 +531,7 @@ describe('RFC-321 repository publication transport', () => {
     }
     const root = appHome()
     const transport = createRepositoryPublicationTransport({
-      db,
+      repository: repositoryOf(db),
       secretBox: box,
       appHome: root,
     })
@@ -547,14 +552,14 @@ describe('RFC-321 repository publication transport', () => {
   test('a stale personal credential fails closed before discovery and never falls back to global', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const box = createSecretBoxFromKey(Buffer.alloc(32, 33))
-    const credentials = composeRepositoryTransportCredentials(db, box)
+    const credentials = composeRepositoryTransportCredentials(repositoryOf(db), box)
     const alice = await createUser(db, {
       username: 'rfc321-stale-publication',
       displayName: 'Alice',
       role: 'user',
       password: 'longEnoughPassword',
     })
-    credentials.adminConnections.synchronize({
+    await credentials.adminConnections.synchronize({
       provider: 'github',
       connectionGeneration: 'github-generation',
       endpointBindingDigest: DIGEST,
@@ -567,7 +572,7 @@ describe('RFC-321 repository publication transport', () => {
       updatedAt: 1,
       updatedBy: null,
     })
-    credentials.ownCredentials.put(subjectOf(alice), 'github', {
+    await credentials.ownCredentials.put(subjectOf(alice), 'github', {
       token: PERSONAL_TOKEN,
       connectionGeneration: 'github-generation',
       endpointBindingDigest: DIGEST,
@@ -579,7 +584,7 @@ describe('RFC-321 repository publication transport', () => {
     let fetches = 0
     const root = appHome()
     const transport = createRepositoryPublicationTransport({
-      db,
+      repository: repositoryOf(db),
       secretBox: box,
       appHome: root,
       endpointDiscovery: metadataDiscovery(

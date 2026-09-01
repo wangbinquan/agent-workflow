@@ -20,14 +20,26 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, capabilityTemplates, webhookEndpoints } from '../src/db/schema'
-import { gatherReadinessFacts } from '../src/modules/code-capability/application/readinessFacts'
+import {
+  gatherReadinessFacts as gatherReadinessFactsFromPort,
+  type GatherFactsInput,
+} from '../src/modules/code-capability/application/readinessFacts'
 import { deriveReadiness } from '../src/modules/code-capability/domain/templateLayers'
+import { createSqliteReadinessFactsRead } from '../src/modules/code-capability/infrastructure/sqliteReadinessFactsRead'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
+
+type SqliteGatherFactsInput = Omit<GatherFactsInput, 'reader'> & { readonly db: DbClient }
+
+const gatherReadinessFacts = ({ db, ...input }: SqliteGatherFactsInput) =>
+  gatherReadinessFactsFromPort({
+    ...input,
+    reader: createSqliteReadinessFactsRead(db),
+  })
 
 describe('RFC-304 — gathering readiness facts from the database', () => {
   let db: DbClient

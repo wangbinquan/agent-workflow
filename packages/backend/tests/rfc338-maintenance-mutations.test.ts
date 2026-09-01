@@ -14,6 +14,7 @@ interface Sources {
   worker: string
   service: string
   runner: string
+  eventArchive: string
   store: string
   migration: string
   catalog: string
@@ -25,6 +26,7 @@ const original: Sources = {
   worker: readBackend('src/platform/background/maintenanceWorker.ts'),
   service: readBackend('src/platform/background/maintenanceService.ts'),
   runner: readBackend('src/platform/background/maintenanceJobRunner.ts'),
+  eventArchive: readBackend('src/platform/background/eventsArchiveMaintenance.ts'),
   store: readBackend('src/platform/persistence/sqlite/maintenanceRunStore.ts'),
   migration: readFileSync(
     resolve(BACKEND, 'db', 'migrations', '0216_rfc338_maintenance_runs.sql'),
@@ -43,11 +45,11 @@ function issues(source: Sources): string[] {
   if (source.service.includes('runMaintenanceJob(')) out.push('main-timer-body')
   if (
     !source.runner.includes('const DB_WRITE_SLICE_ROWS = 1_000') ||
-    !source.runner.includes('const EVENT_ARCHIVE_SLICE_ROWS = 1_000') ||
-    !source.runner.includes('const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000') ||
     !source.runner.includes('DB_WRITE_SLICE_ROWS') ||
-    !source.runner.includes('EVENT_ARCHIVE_SLICE_ROWS') ||
-    !source.runner.includes('knownGlobalRows')
+    !source.eventArchive.includes('const EVENT_ARCHIVE_SLICE_ROWS = 1_000') ||
+    !source.eventArchive.includes('const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000') ||
+    !source.eventArchive.includes('EVENT_ARCHIVE_SLICE_ROWS') ||
+    !source.eventArchive.includes('knownGlobalRows')
   ) {
     out.push('bounded-batch')
   }
@@ -123,12 +125,14 @@ describe('RFC-338 mutation receipts', () => {
       receipt: 'bounded-batch',
       mutate: (source) => ({
         ...source,
-        runner: source.runner
-          .replace('const DB_WRITE_SLICE_ROWS = 1_000', 'const DB_WRITE_SLICE_ROWS = Infinity')
-          .replace(
-            'const EVENT_ARCHIVE_SLICE_ROWS = 1_000',
-            'const EVENT_ARCHIVE_SLICE_ROWS = Infinity',
-          ),
+        runner: source.runner.replace(
+          'const DB_WRITE_SLICE_ROWS = 1_000',
+          'const DB_WRITE_SLICE_ROWS = Infinity',
+        ),
+        eventArchive: source.eventArchive.replace(
+          'const EVENT_ARCHIVE_SLICE_ROWS = 1_000',
+          'const EVENT_ARCHIVE_SLICE_ROWS = Infinity',
+        ),
       }),
     },
     {
@@ -136,7 +140,7 @@ describe('RFC-338 mutation receipts', () => {
       receipt: 'bounded-batch',
       mutate: (source) => ({
         ...source,
-        runner: source.runner.replace(
+        eventArchive: source.eventArchive.replace(
           'const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000',
           'const EVENT_ARCHIVE_COUNT_WINDOW_IDS = Infinity',
         ),

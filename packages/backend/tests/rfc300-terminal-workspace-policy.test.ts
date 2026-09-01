@@ -15,10 +15,8 @@ import {
   setTaskStatus,
 } from '../src/services/lifecycle'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
-import {
-  createWebhookTerminalWorkspacePrunePolicy,
-  shouldRequestWebhookWorkspacePrune,
-} from '../src/services/webhook/terminalWorkspaceCleanup'
+import { shouldRequestWebhookWorkspacePrune } from '../src/services/webhook/terminalWorkspaceCleanup'
+import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 
 const ulid = monotonicFactory()
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -179,7 +177,7 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
     const taskId = await seedTask()
     const effects: Array<{ taskId: string; to: string }> = []
     registerTerminalWorkspacePrunePolicy(
-      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+      composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onWorkspacePrune(_db, id, to) {
@@ -207,7 +205,7 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
   test('the setting is sampled at terminal transition, not when the task started', async () => {
     let enabled = false
     registerTerminalWorkspacePrunePolicy(
-      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => enabled }),
+      composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => enabled }),
     )
 
     const startedWhileOff = await seedTask()
@@ -245,7 +243,7 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
     const taskId = await seedTask()
     let effectCount = 0
     registerTerminalWorkspacePrunePolicy(
-      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+      composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onWorkspacePrune() {
@@ -278,7 +276,7 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
     const taskId = await seedTask()
     const effects: Array<{ taskId: string; to: string }> = []
     registerTerminalWorkspacePrunePolicy(
-      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+      composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onWorkspacePrune(_db, id, to) {
@@ -314,7 +312,7 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
 
   test('failed/interrupted and a context-only inherited child never gain a claim', async () => {
     registerTerminalWorkspacePrunePolicy(
-      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
+      composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => true }),
     )
     let effectCount = 0
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
@@ -360,7 +358,7 @@ describe('RFC-300 lifecycle terminal status + workspace claim CAS', () => {
   test('disabled or throwing provider never blocks the terminal transition', async () => {
     const disabledId = await seedTask()
     registerTerminalWorkspacePrunePolicy(
-      createWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => false }),
+      composeSqliteWebhookTerminalWorkspacePrunePolicy({ db, enabled: () => false }),
     )
     await setTaskStatus({
       db,

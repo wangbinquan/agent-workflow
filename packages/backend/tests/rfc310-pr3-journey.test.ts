@@ -40,7 +40,7 @@ import {
   composeDevelopmentAutomation,
   type DevelopmentAutomationModule,
 } from '../src/modules/development-automation/composition'
-import { composeRequirementSourceRunner } from '../src/modules/integration/composition/requirementSource'
+import { composeSqliteRequirementSourceRunner } from '../src/modules/integration/composition/requirementSource'
 import type { MissionRow } from '../src/modules/development-automation/application/ports/missionStore'
 import {
   createSqliteUploadSessionStore,
@@ -134,7 +134,7 @@ function launchBody(
 /** 显式泵：反复 reconcile 直到谓词满足（与路由 fire-and-forget 并发收敛）。 */
 async function pumpUntil(
   missionId: string,
-  predicate: (mission: MissionRow) => boolean,
+  predicate: (mission: MissionRow) => boolean | Promise<boolean>,
   // 预算按最慢 arm 放：adapter CLI 首跑要过 bun 编译，秒级；400×25ms ≈ 10s。
   rounds = 400,
 ): Promise<MissionRow> {
@@ -142,7 +142,7 @@ async function pumpUntil(
   for (let i = 0; i < rounds; i += 1) {
     const mission = fx.store.getMission(missionId)
     if (mission === null) throw new Error(`mission disappeared: ${missionId}`)
-    if (predicate(mission)) return mission
+    if (await predicate(mission)) return mission
     try {
       await automation.reconcile(missionId)
     } catch (err) {
@@ -160,9 +160,9 @@ async function pumpUntil(
 }
 
 /** 被动等待（不 reconcile）：等 route fire-and-forget 的那一轮 arm 落定。 */
-async function waitFor(predicate: () => boolean, rounds = 400): Promise<void> {
+async function waitFor(predicate: () => boolean | Promise<boolean>, rounds = 400): Promise<void> {
   for (let i = 0; i < rounds; i += 1) {
-    if (predicate()) return
+    if (await predicate()) return
     await new Promise((resolveSleep) => setTimeout(resolveSleep, 25))
   }
   throw new Error('waitFor exhausted')
@@ -234,7 +234,7 @@ beforeAll(async () => {
   automation = composeDevelopmentAutomation({
     db,
     appHome: HOME,
-    requirementSource: composeRequirementSourceRunner(db),
+    requirementSource: composeSqliteRequirementSourceRunner(db),
   })
 })
 
@@ -468,8 +468,8 @@ describe('rfc310 pr3 journey — external reference + source refresh', () => {
     expect((await applied.json()) as object).toMatchObject({ changed: true, sourceRevision: 'r2' })
 
     // apply 重置 requirement cells → 泵到重新物化出 r2 的 manifest。
-    await pumpUntil(missionId, () => {
-      const manifest = automation.materializer.getRequirementManifest(missionId)
+    await pumpUntil(missionId, async () => {
+      const manifest = await automation.materializer.getRequirementManifest(missionId)
       return manifest !== null && manifest.source.kind === 'external'
         ? manifest.source.sourceRevision === 'r2'
         : false
@@ -520,7 +520,9 @@ describe('rfc310 pr3 journey — platform-channel answers over HTTP', () => {
     // 被动等 launch 的那一轮后台 reconcile 物化 bundle（它只跑一个 arm，之后
     // mission 停在 working）——绝不能自己泵：多泵一轮就推进到 facts-collect
     // blocked，问题集发布只对非 blocked 状态生效（blocked 出口是 retry 命令）。
-    await waitFor(() => automation.materializer.getRequirementManifest(missionId) !== null)
+    await waitFor(
+      async () => (await automation.materializer.getRequirementManifest(missionId)) !== null,
+    )
     const stashed = await automation.materializer.stashQuestionSet({
       missionId,
       origin: 'platform',
@@ -646,7 +648,7 @@ describe('rfc310 pr3 journey — composition sweeps and recovery', () => {
       idempotencyKey: null,
       now: Date.now() - UPLOAD_SESSION_TTL_MS - 60_000,
     })
-    expect(automation.sweepUploads().swept).toBeGreaterThanOrEqual(1)
+    expect((await automation.sweepUploads()).swept).toBeGreaterThanOrEqual(1)
 
     const recovered = await automation.recover()
     expect(recovered.settledFences).toBeGreaterThanOrEqual(0)

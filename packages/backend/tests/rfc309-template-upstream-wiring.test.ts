@@ -15,25 +15,76 @@
 // LESS, not guess.
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { Hono, type MiddlewareHandler } from 'hono'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createApp } from '../src/server'
 import { capabilityTemplates } from '../src/db/schema'
 import {
-  mergeFromUpstream,
-  readUpstreamReport,
+  mergeFromUpstream as mergeFromUpstreamWithPort,
+  readUpstreamReport as readUpstreamReportWithPort,
 } from '../src/modules/code-capability/application/templateUpstreamStatus'
+import { composeSqliteCodeHistoryQueries } from '../src/modules/code-capability/composition/historyQueries'
 import {
-  copyTemplate,
+  composeSqliteCapabilityTemplateOperations,
+  createSqliteCapabilityTemplatePersistence,
+} from '../src/modules/code-capability/composition/capabilityTemplateOperations'
+import { createSqliteTemplateUpstreamPersistence } from '../src/modules/code-capability/infrastructure/sqliteTemplateUpstreamPersistence'
+import {
+  mountCapabilityTemplateRoutes,
+  type CapabilityTemplateRouteDeps,
+} from '../src/routes/capabilityTemplates'
+import { resetRouteMetaRegistry } from '../src/routes/registry'
+import {
+  copyTemplate as copyTemplateWithPersistence,
   mergeableSnapshot,
   templateDigest,
 } from '../src/services/capabilityTemplates'
-import type { Actor } from '../src/auth/actor'
+import {
+  assertNameUnchangedForEditor,
+  canViewResource,
+  filterVisibleRows,
+  getResourceAcl,
+  requireResourceEdit,
+  requireResourceGovern,
+  updateResourceAcl,
+} from '../src/services/resourceAcl'
 import type { Permission } from '@agent-workflow/shared'
+import { errorHandler } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
+
+const readUpstreamReport = async (db: DbClient, row: typeof capabilityTemplates.$inferSelect) => {
+  const report = await readUpstreamReportWithPort(
+    createSqliteTemplateUpstreamPersistence(db),
+    row.id,
+  )
+  if (report === null) throw new Error(`no template ${row.id}`)
+  return report
+}
+const mergeFromUpstream = (
+  db: DbClient,
+  row: typeof capabilityTemplates.$inferSelect,
+  actor: Actor,
+  now?: number,
+) => mergeFromUpstreamWithPort(createSqliteTemplateUpstreamPersistence(db), row.id, actor, now)
+
+const copyTemplate = (
+  db: DbClient,
+  source: typeof capabilityTemplates.$inferSelect,
+  actor: Actor,
+  name: string | undefined,
+  now?: number,
+) =>
+  copyTemplateWithPersistence(
+    createSqliteCapabilityTemplatePersistence(db),
+    source,
+    actor,
+    name,
+    now,
+  )
 
 const COPIER = {
   user: { id: 'u-copier', name: 'copier', role: 'user' },
@@ -350,13 +401,61 @@ describe('RFC-309 T16 — a copy with no recorded base (everything made before 0
 // every route-thrown error code to be NAMED by a test reads this file for them.
 describe('RFC-309 T16 — the merge endpoint says which thing went wrong', () => {
   const TOKEN = 'aw-fixture-upstream-token'
-  let app: ReturnType<typeof createApp>
+  let app: Hono
 
   beforeEach(() => {
-    app = createApp({ token: TOKEN, configPath: '', opencodeVersion: '1.15.0', dbVersion: 1, db })
+    resetRouteMetaRegistry()
+    app = new Hono()
+    const actor = buildActor({
+      user: {
+        id: 'rfc309-template-upstream-user',
+        username: 'rfc309-template-upstream-user',
+        displayName: 'RFC-309 Template Upstream User',
+        role: 'admin',
+        status: 'active',
+      },
+      source: 'daemon',
+    })
+    const injectActor: MiddlewareHandler = async (context, next) => {
+      context.set('actor', actor)
+      await next()
+    }
+    app.use('*', injectActor)
+    app.onError(errorHandler)
+    const persistence = createSqliteCapabilityTemplatePersistence(db)
+    const capabilityTemplateAcl: CapabilityTemplateRouteDeps['capabilityTemplateAcl'] = {
+      load: (id) => persistence.load(id),
+      canView: async (routeActor, resource) =>
+        canViewResource(db, routeActor, 'capability_template', resource),
+      read: async (routeActor, resource) =>
+        getResourceAcl(db, routeActor, 'capability_template', resource),
+      update: async (routeActor, resource, body, updatedAt) =>
+        updateResourceAcl(db, routeActor, 'capability_template', resource, body, {
+          ...(updatedAt === undefined ? {} : { updatedAt }),
+        }),
+    }
+    mountCapabilityTemplateRoutes(app, {
+      codeHistoryQueries: composeSqliteCodeHistoryQueries(db),
+      capabilityTemplates: composeSqliteCapabilityTemplateOperations({
+        db,
+        access: {
+          filterVisible: async (routeActor, rows) =>
+            filterVisibleRows(db, routeActor, 'capability_template', rows),
+          canView: async (routeActor, resource) =>
+            canViewResource(db, routeActor, 'capability_template', resource),
+          requireEdit: async (routeActor, resource) =>
+            requireResourceEdit(db, routeActor, 'capability_template', resource),
+          requireGovern: async (routeActor, resource) =>
+            requireResourceGovern(db, routeActor, 'capability_template', resource),
+          assertNameUnchangedForEditor,
+        },
+      }),
+      capabilityTemplateAcl,
+    })
   })
   afterEach(() => {
     db.$client.close()
+    resetRouteMetaRegistry()
   })
 
   const headers = { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }

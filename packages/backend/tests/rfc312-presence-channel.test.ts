@@ -19,6 +19,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { checkUpgradeGate, WS_CHANNELS, type WsConnectionData } from '../src/ws/registry'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { admitWsIdentity } from './helpers/identityAccessWs'
+import { STUB_REALTIME_RUNTIME } from './helpers/realtimeRuntime'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -54,6 +55,8 @@ function fakeWs(identity: Awaited<ReturnType<typeof admitWsIdentity>>): {
     actor: identity.actor,
     authority: identity.authority,
     identityAccess: identity.identityAccess,
+    channels: STUB_REALTIME_RUNTIME.channels,
+    credentials: STUB_REALTIME_RUNTIME.credentials,
     credential: { kind: 'session', hash: 'h', expiresAt: null },
     closing: false,
     revalidating: false,
@@ -75,16 +78,20 @@ function fakeWs(identity: Awaited<ReturnType<typeof admitWsIdentity>>): {
 
 describe('rfc312 /ws/presence channel', () => {
   test('无 users:presence ⇒ 升级被拒，错误码是 permission-required', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
     // 普通 user 的静态 preset 不含该点（它走显式 grant），所以裸 user 应被拒
-    const verdict = await checkUpgradeGate(db, actorWith('user'), { kind: 'presence' })
+    const verdict = await checkUpgradeGate(STUB_REALTIME_RUNTIME.channels, actorWith('user'), {
+      kind: 'presence',
+    })
     expect(verdict).not.toBe(true)
     expect(verdict === true ? null : verdict.code).toBe('permission-required')
   })
 
   test('admin 由动态全量 baseline 自动持有 ⇒ 升级通过', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    expect(await checkUpgradeGate(db, actorWith('admin'), { kind: 'presence' })).toBe(true)
+    expect(
+      await checkUpgradeGate(STUB_REALTIME_RUNTIME.channels, actorWith('admin'), {
+        kind: 'presence',
+      }),
+    ).toBe(true)
   })
 
   test('连接建立即收到一次全量快照，内容 = 当前在线者', async () => {
@@ -95,7 +102,11 @@ describe('rfc312 /ws/presence channel', () => {
     trackUserPresence.opened('someone-else')
 
     const { ws, sent } = fakeWs(await admitWsIdentity(identityAccess, 'viewer'))
-    await WS_CHANNELS.presence.onOpenExtra?.(ws, { kind: 'presence' }, db)
+    await WS_CHANNELS.presence.onOpenExtra?.(
+      ws,
+      { kind: 'presence' },
+      STUB_REALTIME_RUNTIME.channels,
+    )
 
     expect(sent).toHaveLength(1)
     const frame = sent[0] as { type: string; online: string[] }
@@ -113,7 +124,11 @@ describe('rfc312 /ws/presence channel', () => {
     const { ws } = fakeWs(await admitWsIdentity(identityAccess, 'me'))
 
     expect(getUserPresence.stateOf('me')).toBe('offline')
-    await WS_CHANNELS.presence.onOpenExtra?.(ws, { kind: 'presence' }, db)
+    await WS_CHANNELS.presence.onOpenExtra?.(
+      ws,
+      { kind: 'presence' },
+      STUB_REALTIME_RUNTIME.channels,
+    )
     expect(getUserPresence.stateOf('me')).toBe('online')
 
     // 释放句柄已装上，且只应生效一次
@@ -131,7 +146,11 @@ describe('rfc312 /ws/presence channel', () => {
     const { ws, sent } = fakeWs(await admitWsIdentity(identityAccess, 'bot', 'pat'))
     ws.data.credential = { kind: 'pat', hash: 'h', expiresAt: null }
 
-    await WS_CHANNELS.presence.onOpenExtra?.(ws, { kind: 'presence' }, db)
+    await WS_CHANNELS.presence.onOpenExtra?.(
+      ws,
+      { kind: 'presence' },
+      STUB_REALTIME_RUNTIME.channels,
+    )
     expect(getUserPresence.stateOf('bot')).toBe('offline')
     expect(ws.data.presenceLease).toBeUndefined()
     // 但快照照发——它有权限看别人

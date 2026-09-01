@@ -74,7 +74,10 @@ describe('RFC-341 collaboration owner source locks', () => {
     )
     const sealCallAt = autoDispatch.indexOf('const sealResult = await sealRoundQuestions({')
     const forwardedBarrierAt = autoDispatch.indexOf('afterCommit: args.afterSealCommit', sealCallAt)
-    const distillAt = autoDispatch.indexOf('await enqueueDistillJob(', forwardedBarrierAt)
+    const distillAt = autoDispatch.indexOf(
+      'await args.memoryDistillEnqueuer.enqueue(',
+      forwardedBarrierAt,
+    )
     const askerReadAt = autoDispatch.indexOf('const askerRows =', roundAt)
     const nestedDispatchAt = autoDispatch.indexOf('dispatchTaskQuestions(', askerReadAt)
     const txAt = seal.indexOf('const committed = dbTxSync(args.db, (tx) => {')

@@ -21,6 +21,7 @@ import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
+import { createSqliteTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 
@@ -137,7 +138,12 @@ describe('RFC-314 D2 —— 窗口成员', () => {
     await seedRun(db, 'nr_a', monotonic(100, 20, 'A'))
     await seedRun(db, 'nr_b', monotonic(200, 20, 'B'), 1)
 
-    const { tree } = await getSessionTree(db, 't1', 'nr_a', { rootPrefix: 2, tail: 3 })
+    const { tree } = await getSessionTree(
+      createSqliteTaskExecutionReadModels(db).sessions,
+      't1',
+      'nr_a',
+      { rootPrefix: 2, tail: 3 },
+    )
 
     // 逐 run 各取各的窗口：A 与 B 的头 2 条 + 尾 3 条都在，中段（*-2 … *-16）被舍弃。
     // 旧的「全局取窗口」在 tail=3 时只会留下全局最新的 3 条（全部来自 nr_b），
@@ -165,7 +171,12 @@ describe('RFC-314 D2 —— 窗口成员', () => {
       { id: 200, ts: 1, payload: 'BACKFILLED-OLD-TS' },
     ])
 
-    const { tree } = await getSessionTree(db, 't1', 'nr_a', { rootPrefix: 1, tail: 2 })
+    const { tree } = await getSessionTree(
+      createSqliteTaskExecutionReadModels(db).sessions,
+      't1',
+      'nr_a',
+      { rootPrefix: 1, tail: 2 },
+    )
 
     // 尾窗按 id 取 ⇒ 回灌那条在窗口内（旧的按 ts 取会把它排到最前、落在 tail 之外）；
     // 而**输出顺序**仍按 (ts,id)，所以它排在最前面。两件事在这一条断言里同时被钉住。
@@ -185,7 +196,10 @@ describe('RFC-314 D2 —— 结构判据', () => {
     const raw = (db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client
     const rec = recordStatements(raw)
     try {
-      await getSessionTree(db, 't1', 'nr_a', { rootPrefix: 3, tail: 5 })
+      await getSessionTree(createSqliteTaskExecutionReadModels(db).sessions, 't1', 'nr_a', {
+        rootPrefix: 3,
+        tail: 5,
+      })
     } finally {
       rec.stop()
     }

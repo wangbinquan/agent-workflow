@@ -17,6 +17,7 @@ import type {
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 
 setDefaultTimeout(120_000)
 
@@ -98,7 +99,7 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
 
     const result = await submitMissionAnswers(
       {
-        store: fx.store,
+        store: createSqliteMissionPersistence(fx.db),
         snapshots: fx.snapshots,
         requirement: fx.materializer,
         ports: deps.ports,
@@ -136,7 +137,7 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
     const missionId = await fx.launchDirect('t55-noop-1')
     const mission = fx.store.getMission(missionId)!
     const out = await invalidateInFlightAction(
-      { store: fx.store, now: () => Date.now() },
+      { store: createSqliteMissionPersistence(fx.db), now: () => Date.now() },
       mission,
       'input-invalidated',
     )
@@ -163,7 +164,11 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
     const { missionId, actionRunId } = await launchWithInFlightAction(fx, deps, 't55-cancelfail-1')
     const mission = fx.store.getMission(missionId)!
     const out = await invalidateInFlightAction(
-      { store: fx.store, ports: deps.ports, now: () => Date.now() },
+      {
+        store: createSqliteMissionPersistence(fx.db),
+        ports: deps.ports,
+        now: () => Date.now(),
+      },
       mission,
       'input-invalidated',
     )

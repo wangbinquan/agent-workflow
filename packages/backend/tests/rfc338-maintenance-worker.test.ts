@@ -280,6 +280,72 @@ describe('RFC-338 maintenance Worker', () => {
     expect(second.terminated).toBe(true)
   })
 
+  test('supervisor pause drains one generation, resume starts another, and stop is idempotent', async () => {
+    class FakeWorker {
+      onmessage: ((event: MessageEvent<unknown>) => void) | null = null
+      onerror: ((event: ErrorEvent) => unknown) | null = null
+      readonly messages: unknown[] = []
+      terminated = false
+      postMessage(message: unknown): void {
+        this.messages.push(message)
+      }
+      terminate(): void {
+        this.terminated = true
+      }
+      emit(data: unknown): void {
+        this.onmessage?.({ data } as MessageEvent<unknown>)
+      }
+    }
+    const first = new FakeWorker()
+    const second = new FakeWorker()
+    const workers = [first, second]
+    const supervisor = startMaintenanceWorkerSupervisor({
+      dbPath: '/tmp/rfc338-pause-resume.sqlite',
+      migrationsFolder: MIGRATIONS,
+      appHome: '/tmp/rfc338-pause-resume',
+      sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0 },
+      workerFactory: () => workers.shift()!,
+    })
+    first.emit({
+      type: 'ready',
+      version: MAINTENANCE_PROTOCOL_VERSION,
+      catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+      at: 10,
+    })
+
+    const pausing = supervisor.pause()
+    expect(first.messages.at(-1)).toMatchObject({ type: 'drain' })
+    supervisor.wake()
+    expect(
+      first.messages.filter((message) => (message as { type?: string }).type === 'wake'),
+    ).toHaveLength(1)
+    first.emit({ type: 'drained', version: MAINTENANCE_PROTOCOL_VERSION, at: 20 })
+    await pausing
+    expect(first.terminated).toBe(true)
+    expect(supervisor.live()).toMatchObject({ state: 'stopped', active: null })
+
+    await supervisor.resume()
+    expect(second.messages[0]).toMatchObject({ type: 'init' })
+    second.emit({
+      type: 'ready',
+      version: MAINTENANCE_PROTOCOL_VERSION,
+      catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+      at: 30,
+    })
+    expect(supervisor.live()).toMatchObject({ state: 'ready' })
+
+    const stopping = supervisor.stop()
+    const stoppingAgain = supervisor.stop()
+    expect(
+      second.messages.filter((message) => (message as { type?: string }).type === 'drain'),
+    ).toHaveLength(1)
+    second.emit({ type: 'drained', version: MAINTENANCE_PROTOCOL_VERSION, at: 40 })
+    await Promise.all([stopping, stoppingAgain])
+    expect(second.terminated).toBe(true)
+    await supervisor.resume()
+    expect(workers).toHaveLength(0)
+  })
+
   test('supervisor restarts a Worker whose heartbeat stops without an ErrorEvent', async () => {
     class FakeWorker {
       onmessage: ((event: MessageEvent<unknown>) => void) | null = null

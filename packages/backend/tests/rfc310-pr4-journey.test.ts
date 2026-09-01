@@ -99,7 +99,7 @@ async function seedRepositoryCells(missionId: string): Promise<void> {
   const base =
     mission.requirementBundleRef === null
       ? {}
-      : (fx.snapshots.getCells(mission.requirementBundleRef) ?? {})
+      : ((await fx.snapshots.getCells(mission.requirementBundleRef)) ?? {})
   const merged = { ...base, ...structuredClone(PR3_JAVA_CELLS) }
   const id = `snap-repo-${missionId.slice(-6)}`
   store.insertFactSnapshot({
@@ -141,11 +141,15 @@ async function launchMissionToAction(key: string): Promise<{
   }
 }
 
-function envelopeFor(prompt: string, missionId: string, outcome: 'changed' | 'no-change'): string {
+async function envelopeFor(
+  prompt: string,
+  missionId: string,
+  outcome: 'changed' | 'no-change',
+): Promise<string> {
   const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
   const actionRunRef = /"actionRunRef": "([^"]+)"/.exec(prompt)![1]!
   const inputDigest = /"inputDigest": "([^"]+)"/.exec(prompt)![1]!
-  const manifest = automation.materializer.getRequirementManifest(missionId)!
+  const manifest = (await automation.materializer.getRequirementManifest(missionId))!
   const body =
     outcome === 'changed'
       ? {
@@ -188,7 +192,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
 
     // 真 workspace：baseline 内容 + requirement evidence mount 就位。
     expect(readFileSync(join(workspacePath, 'README.md'), 'utf8')).toBe('# baseline\n')
-    const manifest = automation.materializer.getRequirementManifest(missionId)!
+    const manifest = (await automation.materializer.getRequirementManifest(missionId))!
     const mountDir = join(workspacePath, '.agent-workflow', 'inputs', 'requirements')
     expect(manifest.files.length).toBeGreaterThan(0)
     expect(readFileSync(join(mountDir, manifest.bundleId, 'body.md'), 'utf8')).toBe('do the thing')
@@ -197,7 +201,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
     mkdirSync(join(workspacePath, 'src'), { recursive: true })
     writeFileSync(join(workspacePath, 'src', 'feature.ts'), 'export const feature = 1\n')
     const ref = launches[launches.length - 1]!.executionRef
-    outcomes.set(ref, exited(ref, envelopeFor(prompt, missionId, 'changed')))
+    outcomes.set(ref, exited(ref, await envelopeFor(prompt, missionId, 'changed')))
 
     const collected = await automation.reconcile(missionId)
     expect(collected.kind).toBe('action-collect')
@@ -214,7 +218,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
     // mission 保持 working，发布链（missionDeliveryChain）下轮接管。
     const mission = fx.store.getMission(missionId)!
     expect(mission.status).toBe('working')
-    const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__action.candidateRef']).toMatchObject({ state: 'known' })
     expect(cells['__action.candidateState']).toMatchObject({ state: 'known', value: 'derived' })
     expect(cells['__action.candidateTreeOid']).toMatchObject({ state: 'known' })
@@ -226,7 +230,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
 
     // 攻击面：写 Git metadata + 篡改 evidence mount + 顺手写业务文件。
     writeFileSync(join(first.workspacePath, '.git', 'attack-marker'), 'evil\n')
-    const manifest = automation.materializer.getRequirementManifest(first.missionId)!
+    const manifest = (await automation.materializer.getRequirementManifest(first.missionId))!
     writeFileSync(
       join(
         first.workspacePath,
@@ -240,7 +244,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
     )
     writeFileSync(join(first.workspacePath, 'innocent.ts'), 'export const x = 1\n')
     const ref1 = launches[launches.length - 1]!.executionRef
-    outcomes.set(ref1, exited(ref1, envelopeFor(first.prompt, first.missionId, 'changed')))
+    outcomes.set(ref1, exited(ref1, await envelopeFor(first.prompt, first.missionId, 'changed')))
 
     const collected = await automation.reconcile(first.missionId)
     expect(collected.kind).toBe('action-collect')
@@ -276,7 +280,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
     writeFileSync(join(second.workspacePath, 'clean.ts'), 'export const ok = 1\n')
     outcomes.set(
       second.executionRef,
-      exited(second.executionRef, envelopeFor(second.prompt, first.missionId, 'changed')),
+      exited(second.executionRef, await envelopeFor(second.prompt, first.missionId, 'changed')),
     )
     const settled = await automation.reconcile(first.missionId)
     expect(settled.kind).toBe('action-collect')
@@ -291,7 +295,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
   test('no-change against the action baseline is legal and settles honestly', async () => {
     const { missionId, actionRunId, prompt } = await launchMissionToAction('j4-nochange-1')
     const ref = launches[launches.length - 1]!.executionRef
-    outcomes.set(ref, exited(ref, envelopeFor(prompt, missionId, 'no-change')))
+    outcomes.set(ref, exited(ref, await envelopeFor(prompt, missionId, 'no-change')))
     const collected = await automation.reconcile(missionId)
     expect(collected.kind).toBe('action-collect')
     if (collected.kind !== 'action-collect') return

@@ -320,7 +320,7 @@ describe('rfc310 pr7b T78 — conflict repair agent surface (real git + real rem
 
     // candidate 那条路没被误用：merge 不是 baseline 上的 overlay diff。
     const mission = fx.store.getMission(missionId)!
-    const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__action.candidateRef']).toBeUndefined()
     expect(cells['__conflict.mergedSha']).toMatchObject({ state: 'known', value: remoteHead })
     // 后续 fast-forward 发布的 CAS 期望值必须已经前进到 merge commit。

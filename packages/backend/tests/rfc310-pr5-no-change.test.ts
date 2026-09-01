@@ -48,7 +48,7 @@ async function settleNoChange(
   // 直接注入 no-change 后置 cells（orchestrator 结算路径在 PR-4 测试已锁；
   // 这里聚焦重派与确认命令）。
   const mission = fx.store.getMission(missionId)!
-  const base = fx.snapshots.getCells(mission.requirementBundleRef!) ?? {}
+  const base = (await fx.snapshots.getCells(mission.requirementBundleRef!)) ?? {}
   const { createSqliteMissionStore } =
     await import('../src/modules/development-automation/infrastructure/sqliteMissionStore')
   const { canonicalStringify, canonicalDigest } =
@@ -99,7 +99,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     expect(gateRound.kind === 'decided' && gateRound.selected.kind).toBe('request-human-decision')
     const mission = fx.store.getMission(missionId)!
     expect(mission.status).toBe('awaiting-information')
-    const cells = fx.snapshots.getCells(mission.requirementBundleRef!)!
+    const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__gate.pendingHumanDecision']).toMatchObject({
       state: 'known',
       value: 'no-change-confirmation',
@@ -116,7 +116,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     expect(terminal.status).toBe('completed-no-change')
     expect(terminal.terminalKind).toBe('no-change-confirmed')
     expect(terminal.terminalAt).not.toBeNull()
-    const receiptCells = fx.snapshots.getCells(terminal.requirementBundleRef!)!
+    const receiptCells = (await fx.snapshots.getCells(terminal.requirementBundleRef!))!
     expect(receiptCells['__gate.noChangeReceipt']).toMatchObject({ state: 'known' })
 
     // 终态吸收：再次 reconcile 是 noop。
@@ -170,7 +170,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
       ports: {
         ...deps.ports,
         uploadPlanReader: {
-          read: () => ({
+          read: async () => ({
             planDigest: 'p'.repeat(64),
             baselineSha: 'a'.repeat(40),
             entries: [
@@ -198,7 +198,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
       await import('../src/modules/development-automation/domain/canonicalJson')
     const store = createSqliteMissionStore(fx.db)
     const fresh = fx.store.getMission(missionId)!
-    const base = fx.snapshots.getCells(fresh.requirementBundleRef!) ?? {}
+    const base = (await fx.snapshots.getCells(fresh.requirementBundleRef!)) ?? {}
     const merged = {
       ...base,
       '__gate.pendingHumanDecision': {

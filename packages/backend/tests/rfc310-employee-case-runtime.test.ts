@@ -20,7 +20,7 @@ import {
   developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
-import { createDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { createSqliteRuntimeStore } from '@/modules/digital-employee/infrastructure/sqliteRuntimeStore'
@@ -113,7 +113,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
 
   test('a pending execution does not starve a later terminal execution', async () => {
     type RuntimeDependencies = ConstructorParameters<typeof DigitalEmployeeRuntimeService>[0]
-    type RunningRound = ReturnType<RuntimeDependencies['store']['listRunningRounds']>[number]
+    type RunningRound = Awaited<
+      ReturnType<RuntimeDependencies['store']['listRunningRounds']>
+    >[number]
     type SettleRoundInput = Parameters<RuntimeDependencies['store']['settleRound']>[0]
     type ExecutionRef = Parameters<RuntimeDependencies['execution']['inspect']>[0]
 
@@ -210,7 +212,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
 
   test('a terminal execution receipt ends the Case when a user limit is reached', async () => {
     type RuntimeDependencies = ConstructorParameters<typeof DigitalEmployeeRuntimeService>[0]
-    type RunningRound = ReturnType<RuntimeDependencies['store']['listRunningRounds']>[number]
+    type RunningRound = Awaited<
+      ReturnType<RuntimeDependencies['store']['listRunningRounds']>
+    >[number]
     type SettleRoundInput = Parameters<RuntimeDependencies['store']['settleRound']>[0]
     const round = {
       id: 'round-user-limit',
@@ -375,7 +379,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     let now = 20_000
     let ordinal = 0
     const id = () => `planning-isolation-${++ordinal}`
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
@@ -455,7 +459,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       toolId: analyzeTool.id,
       actorUserId: 'planning-author',
     })
-    const job = module.commands.createJobTemplate({
+    const job = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'planning-author',
       body: {
@@ -470,11 +474,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ],
       },
     })
-    const jobRef = module.commands.publishJobTemplate({
+    const jobRef = await module.commands.publishJobTemplate({
       id: job.id,
       actorUserId: 'planning-author',
     })
-    const employee = module.commands.createEmployee({
+    const employee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'planning-author',
       body: {
@@ -504,7 +508,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         artifactRefs: materialArtifactRefs,
         workSubject: { typeId: 'work-request', subjectRef },
       })
-    const healthy = launch('BODY-1', {
+    const healthy = await launch('BODY-1', {
       kind: 'body',
       body: '正文输入应由平台材料节点处理',
       externalId: null,
@@ -512,7 +516,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       executionOptions: {},
     })
     now += 1
-    const invalid = launch('EXTERNAL-1', {
+    const invalid = await launch('EXTERNAL-1', {
       kind: 'external-id',
       body: null,
       externalId: 'EXTERNAL-1',
@@ -520,7 +524,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       executionOptions: {},
     })
 
-    const planned = module.runtime!.worker.planOneReaction()
+    const planned = await module.runtime!.worker.planOneReaction()
     const plannedRound = db
       .select()
       .from(employeeReactionRounds)
@@ -528,13 +532,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
       .get()
     expect(plannedRound?.caseId).toBe(healthy.caseRef.id)
     expect(
-      JSON.parse(module.runtime!.queries.getCase(invalid.caseRef.id).projectionJson).case,
+      JSON.parse((await module.runtime!.queries.getCase(invalid.caseRef.id)).projectionJson).case,
     ).toMatchObject({
       state: 'blocked',
       blockReason: expect.stringContaining('employee-tool-binding-unavailable'),
     })
     expect(
-      JSON.parse(module.runtime!.queries.getCase(healthy.caseRef.id).projectionJson).case,
+      JSON.parse((await module.runtime!.queries.getCase(healthy.caseRef.id)).projectionJson).case,
     ).toMatchObject({
       state: 'active',
       activeRoundId: planned,
@@ -547,7 +551,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     // must recognize the durable materials and recover through the platform.
     now += 1
     const legacyMaterialRef = '.agent-workflow/inputs/requirements/legacy-child/external/issue-8.md'
-    const legacyPlatformRecovery = launch(
+    const legacyPlatformRecovery = await launch(
       'INVOCATION-LEGACY-PLATFORM',
       {
         kind: 'external-id',
@@ -575,7 +579,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .where(eq(employeeCases.id, legacyPlatformRecovery.caseRef.id))
       .run()
-    const legacyRecoveredRound = module.runtime!.worker.planOneReaction()
+    const legacyRecoveredRound = await module.runtime!.worker.planOneReaction()
     expect(legacyRecoveredRound).not.toBeNull()
     const legacyRecoveredPlan = JSON.parse(
       db
@@ -589,8 +593,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
       toolSlotRef: 'platform',
     })
     expect(
-      JSON.parse(module.runtime!.queries.getCase(legacyPlatformRecovery.caseRef.id).projectionJson)
-        .case,
+      JSON.parse(
+        (await module.runtime!.queries.getCase(legacyPlatformRecovery.caseRef.id)).projectionJson,
+      ).case,
     ).toMatchObject({
       state: 'active',
       blockReason: null,
@@ -598,7 +603,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       activeRoundId: legacyRecoveredRound,
     })
 
-    const recoverable = launch('BODY-RECOVERABLE', {
+    const recoverable = await launch('BODY-RECOVERABLE', {
       kind: 'body',
       body: '精确工具暂时不可用后应自动恢复规划',
       externalId: null,
@@ -637,9 +642,10 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ),
       )
       .run()
-    expect(module.runtime!.worker.planOneReaction()).toBeNull()
+    expect(await module.runtime!.worker.planOneReaction()).toBeNull()
     expect(
-      JSON.parse(module.runtime!.queries.getCase(recoverable.caseRef.id).projectionJson).case,
+      JSON.parse((await module.runtime!.queries.getCase(recoverable.caseRef.id)).projectionJson)
+        .case,
     ).toMatchObject({
       state: 'blocked',
       currentWorkItemRef: 'analyze-implement',
@@ -648,10 +654,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
 
     db.insert(employeeToolRegistrationRevisions).values(frozenToolRevision).run()
     now += 1
-    const recoveredRound = module.runtime!.worker.planOneReaction()
+    const recoveredRound = await module.runtime!.worker.planOneReaction()
     expect(recoveredRound).not.toBeNull()
     expect(
-      JSON.parse(module.runtime!.queries.getCase(recoverable.caseRef.id).projectionJson).case,
+      JSON.parse((await module.runtime!.queries.getCase(recoverable.caseRef.id)).projectionJson)
+        .case,
     ).toMatchObject({
       state: 'active',
       blockReason: null,
@@ -678,7 +685,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     const launchedPlans: unknown[] = []
     const launchedAttempts: Array<{ ordinal: number; mode: string }> = []
     const nextId = () => `resource-${String(++ordinal).padStart(4, '0')}`
-    const eventCenter = composeEventCenter({
+    const eventCenter = await composeEventCenter({
       db,
       typePackageDescriptorJsons: [
         developmentEmployeeTypePackage.descriptorJson,
@@ -723,7 +730,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       now: () => now,
       id: nextId,
       connectionCatalog: {
-        resolve(ref) {
+        async resolve(ref) {
           const purpose = ref.id === 'pipeline-adapter' ? 'pipeline-gate' : 'approval-gateway'
           return {
             ref,
@@ -740,7 +747,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         codecs: [developmentEmployeeRuntimeCodec],
         detailProjectionParticipants: [
           composeDevelopmentEmployeeCaseDetailProjection(
-            createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+            createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(db),
           ),
         ],
         platformWorkItems: {
@@ -1029,7 +1036,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
     const runtime = module.runtime!
     const typeRef = { typeId: 'development', revision: 10 }
-    const typePackage = module.queries.getType(typeRef)
+    const typePackage = await module.queries.getType(typeRef)
     const manifest = typePackage.authoringManifest
     const pipelineProblemDefinitions = [
       {
@@ -1143,7 +1150,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         adapterRef: { id: 'approval-adapter', revision: 1 },
       },
     ]
-    const baseJob = module.commands.createJobTemplate({
+    const baseJob = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1169,11 +1176,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ],
       },
     })
-    const baseJobRef = module.commands.publishJobTemplate({
+    const baseJobRef = await module.commands.publishJobTemplate({
       id: baseJob.id,
       actorUserId: 'author',
     })
-    const childEmployee = module.commands.createEmployee({
+    const childEmployee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1184,7 +1191,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const childEmployeeRef = { id: childEmployee.id, revision: childEmployee.revision }
-    const secondChildEmployee = module.commands.createEmployee({
+    const secondChildEmployee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1198,7 +1205,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       id: secondChildEmployee.id,
       revision: secondChildEmployee.revision,
     }
-    const thirdChildEmployee = module.commands.createEmployee({
+    const thirdChildEmployee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1212,7 +1219,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       id: thirdChildEmployee.id,
       revision: thirdChildEmployee.revision,
     }
-    const job = module.commands.createJobTemplate({
+    const job = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1256,8 +1263,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ],
       },
     })
-    const jobRef = module.commands.publishJobTemplate({ id: job.id, actorUserId: 'author' })
-    const employee = module.commands.createEmployee({
+    const jobRef = await module.commands.publishJobTemplate({ id: job.id, actorUserId: 'author' })
+    const employee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1268,7 +1275,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       },
     })
     const employeeRef = { id: employee.id, revision: employee.revision }
-    const quorumJob = module.commands.createJobTemplate({
+    const quorumJob = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1320,11 +1327,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ],
       },
     })
-    const quorumJobRef = module.commands.publishJobTemplate({
+    const quorumJobRef = await module.commands.publishJobTemplate({
       id: quorumJob.id,
       actorUserId: 'author',
     })
-    const quorumEmployee = module.commands.createEmployee({
+    const quorumEmployee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1338,7 +1345,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       id: quorumEmployee.id,
       revision: quorumEmployee.revision,
     }
-    const allJob = module.commands.createJobTemplate({
+    const allJob = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1382,11 +1389,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ],
       },
     })
-    const allJobRef = module.commands.publishJobTemplate({
+    const allJobRef = await module.commands.publishJobTemplate({
       id: allJob.id,
       actorUserId: 'author',
     })
-    const allEmployee = module.commands.createEmployee({
+    const allEmployee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author',
       body: {
@@ -1398,7 +1405,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
     const allEmployeeRef = { id: allEmployee.id, revision: allEmployee.revision }
 
-    const launched = runtime.commands.launch({
+    const launched = await runtime.commands.launch({
       employeeRef,
       primaryContextTypeId: 'development.issue-handling',
       primaryContextSchemaVersion: 1,
@@ -1457,14 +1464,20 @@ describe('RFC-310 stateful employee Case runtime', () => {
       subscriberRef,
     }))
     for (const subscriber of lifecycleSubscribers) {
-      eventCenter.participant.subscribe({
+      await eventCenter.participant.subscribe({
         eventTypeRef: EMPLOYEE_CASE_STATE_CHANGED_EVENT_REF,
         subject: { typeId: 'digital-employee.case', subjectRef: launched.caseRef.id },
         subscriber,
       })
     }
-    const auditorLifecycle = eventCenter.participant.pendingDeliveries(lifecycleSubscribers[0]!, 10)
-    const parentLifecycle = eventCenter.participant.pendingDeliveries(lifecycleSubscribers[1]!, 10)
+    const auditorLifecycle = await eventCenter.participant.pendingDeliveries(
+      lifecycleSubscribers[0]!,
+      10,
+    )
+    const parentLifecycle = await eventCenter.participant.pendingDeliveries(
+      lifecycleSubscribers[1]!,
+      10,
+    )
     expect(auditorLifecycle).toHaveLength(1)
     expect(parentLifecycle).toHaveLength(1)
     expect(auditorLifecycle[0]).toMatchObject({
@@ -1474,14 +1487,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
     expect(auditorLifecycle[0]!.eventId).toBe(parentLifecycle[0]!.eventId)
     expect(auditorLifecycle[0]!.deliveryId).not.toBe(parentLifecycle[0]!.deliveryId)
-    eventCenter.participant.acceptDelivery(auditorLifecycle[0]!.deliveryId)
-    expect(eventCenter.participant.pendingDeliveries(lifecycleSubscribers[0]!, 10)).toEqual([])
-    expect(eventCenter.participant.pendingDeliveries(lifecycleSubscribers[1]!, 10)).toHaveLength(1)
+    await eventCenter.participant.acceptDelivery(auditorLifecycle[0]!.deliveryId)
+    expect(await eventCenter.participant.pendingDeliveries(lifecycleSubscribers[0]!, 10)).toEqual(
+      [],
+    )
+    expect(
+      await eventCenter.participant.pendingDeliveries(lifecycleSubscribers[1]!, 10),
+    ).toHaveLength(1)
     expect(await runtime.worker.runOneOutbox()).toBe('idle')
-    expect(runtime.worker.pumpOneDelivery()).toBe(false)
-    const roundId = runtime.worker.planOneReaction()
+    expect(await runtime.worker.pumpOneDelivery()).toBe(false)
+    const roundId = await runtime.worker.planOneReaction()
     expect(roundId).not.toBeNull()
-    let projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    let projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.activeRound).toMatchObject({
       id: roundId,
       ruleId: 'continue-prepare-materials',
@@ -1492,14 +1509,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
 
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
     expect(launchedPlans).toHaveLength(0)
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.rounds[0]).toMatchObject({ state: 'completed' })
     expect(projection.case).toMatchObject({
       state: 'active',
       currentWorkItemRef: 'analyze-implement',
     })
 
-    const analyzeRound = runtime.worker.planOneReaction()
+    const analyzeRound = await runtime.worker.planOneReaction()
     expect(analyzeRound).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Lifecycle publication can precede the Agent launch outbox.
@@ -1527,7 +1544,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       { ordinal: 3, mode: 'same-scene' },
     ])
     expect(await runtime.worker.inspectOneExecution()).toBe('completed')
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.activeRound).toBeUndefined()
     expect(projection.inbox).toEqual([])
     expect(projection.case).toMatchObject({
@@ -1536,18 +1553,18 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
     expect(projection.attention).toEqual([])
 
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Attention cleanup may precede the deterministic platform work item.
     }
     expect(
-      JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson).case
+      JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson).case
         .currentWorkItemRef,
     ).toBe('publish-mr')
 
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.case.currentWorkItemRef).toBe('observe-mr')
     expect(projection.contexts).toEqual(
       expect.arrayContaining([
@@ -1581,10 +1598,10 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .where(eq(employeeCases.id, launched.caseRef.id))
       .run()
-    const delegationRound = runtime.worker.planOneReaction()
+    const delegationRound = await runtime.worker.planOneReaction()
     expect(delegationRound).not.toBeNull()
     expect(await runtime.worker.runOneOutbox()).toBe('completed')
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.case.state).toBe('waiting')
     expect(projection.channels).toHaveLength(2)
     expect(projection.channels).toEqual(
@@ -1611,10 +1628,10 @@ describe('RFC-310 stateful employee Case runtime', () => {
     )!
     const childCaseId = primaryChannel.childCaseId as string
     const detachedChildCaseId = secondaryChannel.childCaseId as string
-    const childProjection = JSON.parse(runtime.queries.getCase(childCaseId).projectionJson)
+    const childProjection = JSON.parse((await runtime.queries.getCase(childCaseId)).projectionJson)
     expect(childProjection.case.employeeRef).toEqual(childEmployeeRef)
     expect(childProjection.channels).toEqual([])
-    const collaborationCases = JSON.parse(runtime.queries.listCasePage({ limit: 100 })) as {
+    const collaborationCases = JSON.parse(await runtime.queries.listCasePage({ limit: 100 })) as {
       items: Array<{ id: string; openChannelCount: number }>
     }
     expect(
@@ -1626,12 +1643,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Activate the collaboration result subscription and settle child ingress outbox.
     }
-    runtime.commands.terminate(childCaseId, 'completed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
+    await runtime.commands.terminate(childCaseId, 'completed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
     for (let index = 0; index < 8; index += 1) {
-      runtime.worker.pumpOneDelivery()
+      await runtime.worker.pumpOneDelivery()
     }
-    const resultRound = runtime.worker.planOneReaction()
+    const resultRound = await runtime.worker.planOneReaction()
     expect(resultRound).not.toBeNull()
 
     // Regression: an Attention can become desired again before its older
@@ -1712,7 +1729,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .where(eq(eventSubscriptions.id, pipelineSubscriptionId))
         .get(),
     ).toEqual({ state: 'active' })
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.channels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ childCaseId, state: 'satisfied' }),
@@ -1746,9 +1763,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
       ]),
     )
     const parentInboxCountAfterAnyJoin = projection.inbox.length
-    runtime.commands.terminate(detachedChildCaseId, 'completed-late')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    await runtime.commands.terminate(detachedChildCaseId, 'completed-late')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(
       projection.channels.find(
         (channel: { childCaseId: string }) => channel.childCaseId === detachedChildCaseId,
@@ -1759,7 +1776,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     // Persist the quorum path as a second real parent Case. Two of three child
     // completions satisfy the join; the remaining channel is detached and a
     // late result is retained as observation-only evidence.
-    const quorumLaunched = runtime.commands.launch({
+    const quorumLaunched = await runtime.commands.launch({
       employeeRef: quorumEmployeeRef,
       primaryContextTypeId: 'development.issue-handling',
       primaryContextSchemaVersion: 1,
@@ -1796,12 +1813,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .where(eq(employeeCases.id, quorumLaunched.caseRef.id))
       .run()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Create all three durable invocation channels and child Cases.
     }
     let quorumProjection = JSON.parse(
-      runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson,
+      (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
     )
     expect(quorumProjection.channels).toHaveLength(3)
     expect(quorumProjection.channels).toEqual(
@@ -1824,14 +1841,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
       // Activate all three exact invocation-result subscriptions.
     }
 
-    runtime.commands.terminate(quorumPrimaryCaseId, 'quorum-primary-completed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    await runtime.commands.terminate(quorumPrimaryCaseId, 'quorum-primary-completed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Settle the first result; quorum must still be waiting.
     }
-    quorumProjection = JSON.parse(runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson)
+    quorumProjection = JSON.parse(
+      (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
+    )
     expect(
       quorumProjection.channels.find(
         (channel: { childCaseId: string }) => channel.childCaseId === quorumPrimaryCaseId,
@@ -1842,14 +1861,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
     ).toHaveLength(2)
     expect(quorumProjection.case.state).toBe('waiting')
 
-    runtime.commands.terminate(quorumSecondaryCaseId, 'quorum-secondary-completed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    await runtime.commands.terminate(quorumSecondaryCaseId, 'quorum-secondary-completed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // The second result satisfies 2/3 and durably detaches the final channel.
     }
-    quorumProjection = JSON.parse(runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson)
+    quorumProjection = JSON.parse(
+      (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
+    )
     expect(
       quorumProjection.channels.filter(
         (channel: { state: string }) => channel.state === 'satisfied',
@@ -1866,9 +1887,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       blockReason: null,
     })
     const quorumInboxCountAfterJoin = quorumProjection.inbox.length
-    runtime.commands.terminate(quorumLateCaseId, 'quorum-tertiary-completed-late')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    quorumProjection = JSON.parse(runtime.queries.getCase(quorumLaunched.caseRef.id).projectionJson)
+    await runtime.commands.terminate(quorumLateCaseId, 'quorum-tertiary-completed-late')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    quorumProjection = JSON.parse(
+      (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
+    )
     expect(
       quorumProjection.channels.find(
         (channel: { childCaseId: string }) => channel.childCaseId === quorumLateCaseId,
@@ -1876,7 +1899,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     ).toEqual([expect.objectContaining({ milestoneType: 'observed-late' })])
     expect(quorumProjection.inbox).toHaveLength(quorumInboxCountAfterJoin)
 
-    const allLaunched = runtime.commands.launch({
+    const allLaunched = await runtime.commands.launch({
       employeeRef: allEmployeeRef,
       primaryContextTypeId: 'development.issue-handling',
       primaryContextSchemaVersion: 1,
@@ -1913,11 +1936,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .where(eq(employeeCases.id, allLaunched.caseRef.id))
       .run()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Create both durable all-join child Cases and subscriptions.
     }
-    let allProjection = JSON.parse(runtime.queries.getCase(allLaunched.caseRef.id).projectionJson)
+    let allProjection = JSON.parse(
+      (await runtime.queries.getCase(allLaunched.caseRef.id)).projectionJson,
+    )
     expect(allProjection.channels).toHaveLength(2)
     const allChildCaseIds = (allProjection.channels as Array<{ childCaseId: string }>).map(
       (channel) => channel.childCaseId,
@@ -1926,14 +1951,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
       // Activate both exact invocation-result subscriptions.
     }
 
-    runtime.commands.terminate(allChildCaseIds[0]!, 'all-primary-completed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    await runtime.commands.terminate(allChildCaseIds[0]!, 'all-primary-completed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // One satisfied member cannot complete an all join.
     }
-    allProjection = JSON.parse(runtime.queries.getCase(allLaunched.caseRef.id).projectionJson)
+    allProjection = JSON.parse(
+      (await runtime.queries.getCase(allLaunched.caseRef.id)).projectionJson,
+    )
     expect(
       allProjection.channels.filter((channel: { state: string }) => channel.state === 'satisfied'),
     ).toHaveLength(1)
@@ -1942,14 +1969,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
     ).toHaveLength(1)
     expect(allProjection.case.state).toBe('waiting')
 
-    runtime.commands.terminate(allChildCaseIds[1]!, 'all-secondary-completed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    await runtime.commands.terminate(allChildCaseIds[1]!, 'all-secondary-completed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // The second member satisfies the exact all join.
     }
-    allProjection = JSON.parse(runtime.queries.getCase(allLaunched.caseRef.id).projectionJson)
+    allProjection = JSON.parse(
+      (await runtime.queries.getCase(allLaunched.caseRef.id)).projectionJson,
+    )
     expect(
       allProjection.channels.filter((channel: { state: string }) => channel.state === 'satisfied'),
     ).toHaveLength(2)
@@ -1959,7 +1988,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       blockReason: null,
     })
 
-    const partialLaunched = runtime.commands.launch({
+    const partialLaunched = await runtime.commands.launch({
       employeeRef: quorumEmployeeRef,
       primaryContextTypeId: 'development.issue-handling',
       primaryContextSchemaVersion: 1,
@@ -1996,12 +2025,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .where(eq(employeeCases.id, partialLaunched.caseRef.id))
       .run()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Create the three quorum channels used by the partial-result branch.
     }
     let partialProjection = JSON.parse(
-      runtime.queries.getCase(partialLaunched.caseRef.id).projectionJson,
+      (await runtime.queries.getCase(partialLaunched.caseRef.id)).projectionJson,
     )
     const partialChildCaseIds = (partialProjection.channels as Array<{ childCaseId: string }>).map(
       (channel) => channel.childCaseId,
@@ -2012,16 +2041,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
     }
 
     for (const [index, terminalKind] of (['completed', 'execution-failed'] as const).entries()) {
-      runtime.commands.terminate(partialChildCaseIds[index]!, terminalKind)
-      expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-      for (let pump = 0; pump < 8; pump += 1) runtime.worker.pumpOneDelivery()
-      expect(runtime.worker.planOneReaction()).not.toBeNull()
+      await runtime.commands.terminate(partialChildCaseIds[index]!, terminalKind)
+      expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+      for (let pump = 0; pump < 8; pump += 1) await runtime.worker.pumpOneDelivery()
+      expect(await runtime.worker.planOneReaction()).not.toBeNull()
       while ((await runtime.worker.runOneOutbox()) !== 'idle') {
         // One success plus one failure still leaves quorum(2/3) reachable.
       }
     }
     partialProjection = JSON.parse(
-      runtime.queries.getCase(partialLaunched.caseRef.id).projectionJson,
+      (await runtime.queries.getCase(partialLaunched.caseRef.id)).projectionJson,
     )
     expect(partialProjection.case.state).toBe('waiting')
     expect(
@@ -2036,15 +2065,15 @@ describe('RFC-310 stateful employee Case runtime', () => {
       partialProjection.channels.filter((channel: { state: string }) => channel.state === 'open'),
     ).toHaveLength(1)
 
-    runtime.commands.terminate(partialChildCaseIds[2]!, 'execution-failed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    await runtime.commands.terminate(partialChildCaseIds[2]!, 'execution-failed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // A second failed member makes quorum impossible and blocks exactly once.
     }
     partialProjection = JSON.parse(
-      runtime.queries.getCase(partialLaunched.caseRef.id).projectionJson,
+      (await runtime.queries.getCase(partialLaunched.caseRef.id)).projectionJson,
     )
     expect(
       partialProjection.channels.map((channel: { state: string }) => channel.state).sort(),
@@ -2072,11 +2101,11 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .where(eq(employeeCases.id, launched.caseRef.id))
       .run()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Prior attention cleanup may precede the new multi-member invocation outbox.
     }
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     const timedOutChannels = projection.channels.filter(
       (channel: { state: string }) => channel.state === 'open',
     )
@@ -2087,15 +2116,15 @@ describe('RFC-310 stateful employee Case runtime', () => {
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Activate the exact invocation-result attention before its deadline fires.
     }
-    now += module.queries.getExecutionPolicy().content.externalWaitDeadlineMs + 1
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    expect(runtime.worker.publishOneChannelResult()).toBe('completed')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    now += (await module.queries.getExecutionPolicy()).content.externalWaitDeadlineMs + 1
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Drain every durable timeout settlement before reading the projection.
     }
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     for (const timedOutChildCaseId of timedOutChildCaseIds) {
       expect(
         projection.channels.find(
@@ -2113,12 +2142,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
     for (const timedOutChildCaseId of timedOutChildCaseIds) {
       expect(
-        JSON.parse(runtime.queries.getCase(timedOutChildCaseId).projectionJson).case.state,
+        JSON.parse((await runtime.queries.getCase(timedOutChildCaseId)).projectionJson).case.state,
       ).not.toBe('terminal')
-      runtime.commands.terminate(timedOutChildCaseId, 'cancelled')
+      await runtime.commands.terminate(timedOutChildCaseId, 'cancelled')
     }
     const resumedAfterTimeout = JSON.parse(
-      runtime.commands.resume(launched.caseRef.id).projectionJson,
+      (await runtime.commands.resume(launched.caseRef.id)).projectionJson,
     )
     expect(resumedAfterTimeout.case).toMatchObject({
       state: 'active',
@@ -2157,8 +2186,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
     observeMrEvent('development.pipeline-check-due', 'pipeline-red:1')
     observeMrEvent('development.pipeline-check-due', 'pipeline-red:2')
     observeMrEvent('development.review-updated', 'review-comment:1')
-    for (let index = 0; index < 12; index += 1) runtime.worker.pumpOneDelivery()
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    for (let index = 0; index < 12; index += 1) await runtime.worker.pumpOneDelivery()
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(
       projection.inbox
         .filter((item: { state: string }) => item.state === 'pending')
@@ -2175,8 +2204,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
     // A provider event is only a hint, so the platform refreshes authoritative
     // MR facts before entering the optional review lane. The lower-priority
     // pipeline event stays queued for the next round.
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.activeRound).toMatchObject({
       workItemRef: 'observe-mr',
       ruleId: 'handle-review',
@@ -2184,26 +2213,26 @@ describe('RFC-310 stateful employee Case runtime', () => {
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Attention cleanup can precede the authoritative MR refresh.
     }
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.case.currentWorkItemRef).toBe('classify-feedback')
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // The platform classifier freezes the complete review thread tree.
     }
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.case.currentWorkItemRef).toBe('acknowledge-feedback')
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Platform acknowledgement settles without launching an Agent execution.
     }
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.case.currentWorkItemRef).toBe('repair-feedback')
 
     // Lifecycle is the only declared preemptor: it invalidates stale repair continuation.
     observeMrEvent('development.lifecycle-updated', 'lifecycle-head-changed:1')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
-    projection = JSON.parse(runtime.queries.getCase(launched.caseRef.id).projectionJson)
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
+    projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(projection.activeRound).toMatchObject({
       workItemRef: 'observe-mr',
       ruleId: 'handle-lifecycle',
@@ -2239,16 +2268,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
     }
 
     retryLimits = { defaultNodeRetries: 5, sessionRestartBudget: 2 }
-    const updatedPolicy = module.queries.getExecutionPolicy()
+    const updatedPolicy = await module.queries.getExecutionPolicy()
     expect(updatedPolicy).toMatchObject({
       revision: 2,
       content: { sameSceneAttempts: 5, freshSceneAttempts: 2 },
     })
-    const preview = runtime.commands.previewPolicyUpgrade(
+    const preview = await runtime.commands.previewPolicyUpgrade(
       launched.caseRef.id,
       updatedPolicy.revision,
     )
-    const upgraded = runtime.commands.applyPolicyUpgrade(preview)
+    const upgraded = await runtime.commands.applyPolicyUpgrade(preview)
     expect(JSON.parse(upgraded.projectionJson).case.executionPolicyRevision).toBe(2)
 
     // A business-terminal settlement must never resurrect an Attention whose
@@ -2286,12 +2315,12 @@ describe('RFC-310 stateful employee Case runtime', () => {
       .run()
     observedMergeRequestStatus = 'merged'
     observeMrEvent('development.lifecycle-updated', 'lifecycle-merged-terminal-race')
-    for (let index = 0; index < 8; index += 1) runtime.worker.pumpOneDelivery()
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // The authoritative MR refresh settles the Case as terminal.
     }
-    expect(runtime.queries.getCase(launched.caseRef.id)).toMatchObject({ state: 'terminal' })
+    expect(await runtime.queries.getCase(launched.caseRef.id)).toMatchObject({ state: 'terminal' })
     expect(
       db
         .select()
@@ -2315,13 +2344,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
     ).toEqual({ state: 'cancelled' })
 
     retryLimits = { defaultNodeRetries: 0, sessionRestartBudget: 0 }
-    const latestPolicy = module.queries.getExecutionPolicy()
+    const latestPolicy = await module.queries.getExecutionPolicy()
     expect(latestPolicy).toMatchObject({
       revision: 3,
       content: { sameSceneAttempts: 0, freshSceneAttempts: 0 },
     })
     corruptOutputsRemaining = 1
-    const terminalOnFailure = runtime.commands.launch({
+    const terminalOnFailure = await runtime.commands.launch({
       employeeRef,
       primaryContextTypeId: 'development.issue-handling',
       primaryContextSchemaVersion: 1,
@@ -2344,22 +2373,22 @@ describe('RFC-310 stateful employee Case runtime', () => {
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Drain initial attention before executing the terminal failure fixture.
     }
-    expect(runtime.worker.pumpOneDelivery()).toBe(false)
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.pumpOneDelivery()).toBe(false)
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Body input bypasses external-material acquisition and advances to implementation.
     }
     expect(
-      JSON.parse(runtime.queries.getCase(terminalOnFailure.caseRef.id).projectionJson).case
+      JSON.parse((await runtime.queries.getCase(terminalOnFailure.caseRef.id)).projectionJson).case
         .currentWorkItemRef,
     ).toBe('analyze-implement')
-    expect(runtime.worker.planOneReaction()).not.toBeNull()
+    expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {
       // Launch the implementation Agent after the platform-only intake step.
     }
     expect(await runtime.worker.inspectOneExecution()).toBe('failed')
     expect(
-      JSON.parse(runtime.queries.getCase(terminalOnFailure.caseRef.id).projectionJson).case,
+      JSON.parse((await runtime.queries.getCase(terminalOnFailure.caseRef.id)).projectionJson).case,
     ).toMatchObject({
       state: 'blocked',
       terminalKind: null,
@@ -2388,8 +2417,8 @@ describe('RFC-310 stateful employee Case runtime', () => {
       actorUserId: null,
       eventOrigin,
     }
-    const firstEventLaunch = runtime.commands.launchWork(eventWork)
-    const repeatedEventLaunch = runtime.commands.launchWork(eventWork)
+    const firstEventLaunch = await runtime.commands.launchWork(eventWork)
+    const repeatedEventLaunch = await runtime.commands.launchWork(eventWork)
     expect(repeatedEventLaunch.caseRef.id).toBe(firstEventLaunch.caseRef.id)
     expect(JSON.parse(firstEventLaunch.projectionJson).case).toMatchObject({
       name: '由统一事件投递启动数字员工',
@@ -2397,7 +2426,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       launchOrigin: 'event',
     })
 
-    expect(() =>
+    await expect(
       runtime.commands.launchWork({
         employeeId: employee.id,
         intake: {
@@ -2410,7 +2439,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
         actorUserId: 'catalog-user',
       }),
-    ).toThrow('manual digital employee work requires a task name')
+    ).rejects.toThrow('manual digital employee work requires a task name')
 
     await db.insert(users).values({
       id: 'case-collaborator',
@@ -2420,7 +2449,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       createdAt: now,
       updatedAt: now,
     })
-    const manualLaunch = runtime.commands.launchWork({
+    const manualLaunch = await runtime.commands.launchWork({
       employeeId: employee.id,
       intake: {
         name: '修复目录任务命名链',
@@ -2465,7 +2494,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(manualProjection.detail.input.advancedOptions).toEqual({
       'working-branch': 'feature/rfc336-advanced-options',
     })
-    expect(() =>
+    await expect(
       runtime.commands.launchWork({
         employeeId: employee.id,
         intake: {
@@ -2484,13 +2513,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
         },
         actorUserId: 'catalog-user',
       }),
-    ).toThrow()
+    ).rejects.toThrow()
     const mine = JSON.parse(
-      runtime.queries.listCasePage({ ownerUserId: 'catalog-user', launchOrigin: 'manual' }),
+      await runtime.queries.listCasePage({
+        ownerUserId: 'catalog-user',
+        launchOrigin: 'manual',
+      }),
     ) as { items: Array<{ id: string; taskName: string }> }
     expect(mine.items.map((item) => item.id)).toEqual([manualLaunch.caseRef.id])
     expect(mine.items[0]?.taskName).toBe('修复目录任务命名链')
-    const events = JSON.parse(runtime.queries.listCasePage({ launchOrigin: 'event' })) as {
+    const events = JSON.parse(await runtime.queries.listCasePage({ launchOrigin: 'event' })) as {
       items: Array<{ id: string }>
     }
     expect(events.items.map((item) => item.id)).toContain(firstEventLaunch.caseRef.id)

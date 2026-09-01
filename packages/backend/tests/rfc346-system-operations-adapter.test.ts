@@ -12,12 +12,22 @@ import {
   createRestoreArtifactIngress,
 } from '../src/modules/system-operations/infrastructure/restoreArtifactIngress'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { SQLITE_POST_RESTORE_RECOVERY } from './helpers/sqlitePostRestoreRecovery'
 
 const tmps: string[] = []
 function tmp(): string {
   const path = mkdtempSync(join(tmpdir(), 'rfc346-'))
   tmps.push(path)
   return path
+}
+
+function createTestLegacyPlatformRecoveryAdapter(
+  deps: Omit<Parameters<typeof createLegacyPlatformRecoveryAdapter>[0], 'postOpenRecovery'>,
+) {
+  return createLegacyPlatformRecoveryAdapter({
+    ...deps,
+    postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
+  })
 }
 
 afterEach(() => {
@@ -29,18 +39,17 @@ describe('RFC-346 legacy platform adapter', () => {
     const home = tmp()
     const log: string[] = []
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {
+        log.push('prepare:true')
+      },
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
       resolveRestoreMigrations: async () => '/migrations',
       mechanisms: {
-        ensureCredentialsSealed(_db, _secretBox, options) {
-          log.push(`seal:${options?.blockOnCredentialedPath === true}`)
-          return { sealed: 0, linked: 0, scrubbed: 0 }
-        },
         async createBackup(options) {
           log.push(`backup:${options.includeWorktrees === true}:${options.appHome === home}`)
           return {
@@ -55,24 +64,24 @@ describe('RFC-346 legacy platform adapter', () => {
     await expect(adapter.backup.request({ includeWorktrees: true })).resolves.toMatchObject({
       sizeBytes: 1,
     })
-    expect(log).toEqual(['seal:true', 'backup:true:true'])
+    expect(log).toEqual(['prepare:true', 'backup:true:true'])
   })
 
   test('backup preparation failure prevents the snapshot effect', async () => {
     const home = tmp()
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     let backupCalls = 0
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {
+        throw new Error('credential preparation failed')
+      },
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
       resolveRestoreMigrations: async () => '/migrations',
       mechanisms: {
-        ensureCredentialsSealed() {
-          throw new Error('credential preparation failed')
-        },
         async createBackup() {
           backupCalls += 1
           throw new Error('must not run')
@@ -91,9 +100,10 @@ describe('RFC-346 legacy platform adapter', () => {
     const log: string[] = []
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {},
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
@@ -135,9 +145,10 @@ describe('RFC-346 legacy platform adapter', () => {
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/invalid.tar.gz')
     let stageCalls = 0
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {},
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
@@ -166,9 +177,10 @@ describe('RFC-346 legacy platform adapter', () => {
     const home = tmp()
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {},
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
@@ -202,9 +214,10 @@ describe('RFC-346 legacy platform adapter', () => {
     const log: string[] = []
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {},
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
@@ -252,9 +265,10 @@ describe('RFC-346 legacy platform adapter', () => {
     const log: string[] = []
     const artifacts = createRestoreArtifactIngress({ uploadRoot: join(home, 'uploads') })
     const ref = artifacts.ingestLocalPath('/input/backup.tar.gz')
-    const adapter = createLegacyPlatformRecoveryAdapter({
+    const adapter = createTestLegacyPlatformRecoveryAdapter({
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {},
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
@@ -289,13 +303,14 @@ describe('RFC-346 legacy platform adapter', () => {
     let restoreCalls = 0
     const base = {
       artifacts,
-      backupResources: () => ({ db: {} as DbClient, secretBox: undefined }),
+      backupResources: () => ({ db: {} as DbClient }),
+      prepareBackup: async () => {},
       appHome: home,
       dbPath: join(home, 'db.sqlite'),
       lockPath: join(home, '.daemon.lock'),
       resolveRestoreMigrations: async () => '/migrations',
     }
-    const live = createLegacyPlatformRecoveryAdapter({
+    const live = createTestLegacyPlatformRecoveryAdapter({
       ...base,
       mechanisms: {
         readPidFromLock: () => 321,
@@ -314,7 +329,7 @@ describe('RFC-346 legacy platform adapter', () => {
       }),
     ).resolves.toEqual({ status: 'daemon-running', pid: 321 })
 
-    const lockRace = createLegacyPlatformRecoveryAdapter({
+    const lockRace = createTestLegacyPlatformRecoveryAdapter({
       ...base,
       mechanisms: {
         readPidFromLock: () => null,

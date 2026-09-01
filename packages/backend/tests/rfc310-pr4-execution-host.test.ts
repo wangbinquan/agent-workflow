@@ -34,6 +34,7 @@ import { createAgent } from '../src/services/agent'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 setDefaultTimeout(120_000)
 
@@ -378,7 +379,7 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     // 普通任务的 interrupted 收敛，没有专用逻辑。
     h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, launched.executionRef)).run()
     const { reapOrphanRuns } = await import('../src/services/orphans')
-    await reapOrphanRuns(h.db)
+    await reapOrphanRuns(taskRecoveryOperations(h.db))
     const snap = await r.fetchOutcome(launched.executionRef)
     expect(snap.kind).toBe('exited')
     if (snap.kind === 'exited') expect(snap.taskStatus).toBe('interrupted')

@@ -40,7 +40,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/services/startTaskDeps.ts',
   'packages/backend/src/services/structuralDiff/callGraph/expandService.ts',
   'packages/backend/src/services/task.ts',
-  'packages/backend/src/services/workgroup/taskActions.ts',
+  'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts',
 ])
 
 const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
@@ -151,14 +151,19 @@ describe('RFC-331 scheduler topology contract', () => {
       executionContext: {} as TaskDriveRequest['executionContext'],
     } satisfies TaskDriveRequest
     await recording.driver.drive(request)
-    await recording.driver.cancelChild({ taskId: 'cancel-child', cascadeFromParent: true })
+    await recording.driver.cancelChild({
+      taskId: 'cancel-child',
+      cause: { kind: 'parent-cascade', parentTaskId: 'root' },
+    })
     await recording.driver.resumeChild({
       taskId: 'resume-child',
       runtime: { runConfig: { appHome: '/tmp/rfc331' } },
     })
     expect(recording.driver.isTaskActive('active-child')).toBe(true)
     expect(recording.kicks).toEqual([request])
-    expect(recording.cancellations).toEqual([{ taskId: 'cancel-child', cascadeFromParent: true }])
+    expect(recording.cancellations).toEqual([
+      { taskId: 'cancel-child', cause: { kind: 'parent-cascade', parentTaskId: 'root' } },
+    ])
     expect(recording.resumptions.map((item) => item.taskId)).toEqual(['resume-child'])
     expect(recording.activeChecks).toEqual(['active-child'])
 

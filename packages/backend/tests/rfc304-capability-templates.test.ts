@@ -29,17 +29,31 @@ import { capabilityTemplates } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import {
   assertTemplateFieldsAllowed,
-  copyTemplate,
-  createTemplate,
-  deleteTemplate,
-  getTemplateRow,
+  copyTemplate as copyTemplateWithPersistence,
+  createTemplate as createTemplateWithPersistence,
+  deleteTemplate as deleteTemplateWithPersistence,
+  getTemplateRow as getTemplateRowWithPersistence,
   serializeTemplate,
-  updateTemplate,
+  updateTemplate as updateTemplateWithPersistence,
 } from '../src/services/capabilityTemplates'
+import type { CapabilityTemplatePersistence } from '../src/modules/code-capability/application/ports/capabilityTemplatePersistence'
+import { createSqliteCapabilityTemplatePersistence } from '../src/modules/code-capability/infrastructure/sqliteCapabilityTemplatePersistence'
 import { SYSTEM_DOMAIN_POINTS, type Permission } from '@agent-workflow/shared'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
+
+function bindTemplatePersistence<Args extends unknown[], Result>(
+  operation: (persistence: CapabilityTemplatePersistence, ...args: Args) => Result,
+): (db: DbClient, ...args: Args) => Result {
+  return (db, ...args) => operation(createSqliteCapabilityTemplatePersistence(db), ...args)
+}
+
+const copyTemplate = bindTemplatePersistence(copyTemplateWithPersistence)
+const createTemplate = bindTemplatePersistence(createTemplateWithPersistence)
+const deleteTemplate = bindTemplatePersistence(deleteTemplateWithPersistence)
+const getTemplateRow = bindTemplatePersistence(getTemplateRowWithPersistence)
+const updateTemplate = bindTemplatePersistence(updateTemplateWithPersistence)
 
 const actorWith = (id: string, points: Permission[]): Actor =>
   ({

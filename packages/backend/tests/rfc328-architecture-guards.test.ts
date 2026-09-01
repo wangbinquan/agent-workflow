@@ -13,7 +13,7 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 type GuardUnit = Pick<SourceUnit, 'path' | 'text' | 'source'>
 
 const WORKER_MUTATION_FILES = new Set([
-  'packages/backend/src/services/lifecycle.ts',
+  'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
   'packages/backend/src/services/nodeRunMint.ts',
   'packages/backend/src/services/runner.ts',
   'packages/backend/src/services/scheduler.ts',
@@ -39,7 +39,10 @@ const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
   ],
   ['packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts', new Set(['tickOnce'])],
   ['packages/backend/src/services/runtime/claudeCode/sessionCapture.ts', new Set(['persistRows'])],
-  ['packages/backend/src/services/workgroup/rounds.ts', new Set(['stampWgRound'])],
+  [
+    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/rounds.ts',
+    new Set(['stampWgRound']),
+  ],
   ['packages/backend/src/services/task.ts', new Set(['persistPreparedProjection'])],
 ])
 const WORKER_MUTATION_TABLES = new Set(['tasks', 'nodeRuns', 'nodeRunOutputs', 'nodeRunEvents'])
@@ -145,7 +148,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
 ])
 const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
   [
-    'packages/backend/src/services/lifecycle.ts',
+    'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
     new Set([
       'abandonSupersededMergeStates',
       'setNodeRunStatus',

@@ -27,7 +27,7 @@ import {
   users,
 } from '@/db/schema'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
+import { createSqliteLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createUser } from '@/services/users'
 
@@ -87,14 +87,14 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
       .run()
   }
 
-  test('只数未终结的 Mission（terminalAt 为 NULL）', () => {
+  test('只数未终结的 Mission（terminalAt 为 NULL）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const drain = createLegacyMissionDrainPort(db)
-    expect(drain.openMissionCount(db)).toBe(0)
+    const drain = createSqliteLegacyMissionDrainPort(db)
+    expect(await drain.openMissionCount()).toBe(0)
 
     seedMission(db, 'open-1', false)
     seedMission(db, 'closed-1', true)
-    expect(drain.openMissionCount(db)).toBe(1)
+    expect(await drain.openMissionCount()).toBe(1)
   })
 
   /**
@@ -143,7 +143,7 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
       .run()
   }
 
-  test('排空报告带上活跃 MR 认领 / 子链接 / 未决审批三项计数', () => {
+  test('排空报告带上活跃 MR 认领 / 子链接 / 未决审批三项计数', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedMission(db, 'parent-1', false)
     seedMission(db, 'child-1', false)
@@ -177,7 +177,7 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
       .run()
     seedApproval(db, { id: 'saga-1', missionId: 'parent-1', latestStatus: 'pending' })
 
-    const report = createLegacyMissionDrainPort(db).drainReport(10)
+    const report = await createSqliteLegacyMissionDrainPort(db).drainReport(10)
     expect(report.truncated).toBe(false)
     // 顺序是端口契约的一部分：按 (createdAt, id) 升序。两条 createdAt 相同，
     // 于是按 id —— 'child-1' 在 'parent-1' 之前。截断判据（下一条用例）依赖这个
@@ -200,7 +200,7 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
     ])
   })
 
-  test('**已了结**的审批不计入未决数（这份终态词表归 development-automation）', () => {
+  test('**已了结**的审批不计入未决数（这份终态词表归 development-automation）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedMission(db, 'settled-1', false)
     for (const [index, status] of ['approved', 'rejected', 'expired', 'unavailable'].entries()) {
@@ -210,15 +210,16 @@ describe('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', () => {
         latestStatus: status,
       })
     }
-    expect(createLegacyMissionDrainPort(db).drainReport(10).entries[0]?.pendingApprovalCount).toBe(
-      0,
-    )
+    expect(
+      (await createSqliteLegacyMissionDrainPort(db).drainReport(10)).entries[0]
+        ?.pendingApprovalCount,
+    ).toBe(0)
   })
 
-  test('超过 limit 时如实标 truncated（报告不能假装自己是全部）', () => {
+  test('超过 limit 时如实标 truncated（报告不能假装自己是全部）', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     for (let index = 0; index < 4; index += 1) seedMission(db, `bulk-${index}`, false)
-    const report = createLegacyMissionDrainPort(db).drainReport(2)
+    const report = await createSqliteLegacyMissionDrainPort(db).drainReport(2)
     expect(report.truncated).toBe(true)
     expect(report.entries).toHaveLength(2)
   })

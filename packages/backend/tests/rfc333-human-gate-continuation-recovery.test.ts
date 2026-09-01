@@ -7,7 +7,9 @@ import {
   recoverPendingHumanGateContinuations,
   type PendingHumanGateContinuation,
 } from '@/services/humanGateContinuationRecovery'
+import { createSqliteHumanGateContinuationRecoveryQueries } from '@/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery'
 import { reapOrphanRuns } from '@/services/orphans'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_788_969_900_000
@@ -87,7 +89,7 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
       })
       .run()
 
-    expect(await reapOrphanRuns(db)).toEqual({ tasks: 0, runs: 0 })
+    expect(await reapOrphanRuns(taskRecoveryOperations(db))).toEqual({ tasks: 0, runs: 0 })
     expect(
       db
         .select({ status: tasks.status })
@@ -151,10 +153,11 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
       ])
       .run()
 
-    expect(await reapOrphanRuns(db, { killStaleRunProcessTree: async () => 'no-pid' })).toEqual({
-      tasks: 0,
-      runs: 1,
-    })
+    expect(
+      await reapOrphanRuns(taskRecoveryOperations(db), {
+        killStaleRunProcessTree: async () => 'no-pid',
+      }),
+    ).toEqual({ tasks: 0, runs: 1 })
     expect(
       db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).get(),
     ).toEqual({ status: 'pending' })
@@ -220,7 +223,7 @@ describe('RFC-333 pending human-gate continuation recovery', () => {
     const calls: PendingHumanGateContinuation[] = []
 
     const result = await recoverPendingHumanGateContinuations({
-      db,
+      queries: createSqliteHumanGateContinuationRecoveryQueries(db),
       wake: async (continuation) => {
         calls.push(continuation)
         if (continuation.continuationRef === 'intent-gate-b') {

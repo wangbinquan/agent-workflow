@@ -15,6 +15,7 @@ import {
   composeDigitalEmployee,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
 } from '@/modules/digital-employee/composition'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { isEmployeeReactionEventEnabled } from '@/modules/digital-employee/application/runtimeService'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import { inspectExecutionContractWorkflowDefinition } from '@/modules/execution-contract/infrastructure/taskExecutionAdapter'
@@ -31,6 +32,7 @@ import {
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { buildDigitalEmployeeFixedPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { createApp } from '@/server'
 import {
   ensureDigitalEmployeeAgentTemplates,
@@ -114,7 +116,7 @@ function fixtureModule(retryLimits?: {
     id: () => `resource-${++ordinal}`,
     now: () => 1_000 + ordinal,
     connectionCatalog: {
-      resolve(ref) {
+      async resolve(ref) {
         if (ref.id === 'missing-adapter') return null
         const purpose = ref.id.startsWith('pipeline-adapter') ? 'pipeline-gate' : 'approval-gateway'
         const available = ref.id !== 'pipeline-adapter-archived'
@@ -749,10 +751,14 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     const db = createInMemoryDb(MIGRATIONS)
     expect(await listAgents(db)).toEqual([])
 
-    await ensureDigitalEmployeeAgentTemplates(db)
-    await ensureDigitalEmployeeAgentTemplates(db)
+    const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      db,
+      composeDigitalEmployeeAgentTemplateCatalogParticipant,
+    )
+    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+    await ensureDigitalEmployeeAgentTemplates(agentTemplates)
 
-    const templates = await listDigitalEmployeeAgentTemplates(db)
+    const templates = await listDigitalEmployeeAgentTemplates(agentTemplates)
     expect(templates).toHaveLength(8)
     expect(templates.map((template) => template.frontmatterExtra.digitalEmployeeTemplate)).toEqual([
       'code-writing',
@@ -797,8 +803,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     // User regression 2026-08-22: the classifier's problem list must be part
     // of the exact tool revision, while the built-in repair Agent explicitly
     // declares that it can solve every problem emitted by that classifier.
-    const catalog = composeDigitalEmployeeBuiltinToolCatalog({
-      db,
+    const catalog = await composeDigitalEmployeeBuiltinToolCatalog({
+      agentTemplates: composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+        db,
+        composeDigitalEmployeeAgentTemplateCatalogParticipant,
+      ),
       typePackageDescriptorJsons: [
         ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
         developmentEmployeeTypePackage.descriptorJson,
@@ -967,7 +976,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       actorUserId: 'author',
     })
 
-    expect(() =>
+    await expect(
       module.commands.createJobTemplate({
         typeRef,
         actorUserId: 'author',
@@ -1006,7 +1015,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           ],
         },
       }),
-    ).toThrow('must match the classifier tool revision')
+    ).rejects.toThrow('must match the classifier tool revision')
   })
 
   test('design and test packages use the same type -> work item -> tool -> employee core', async () => {
@@ -1021,7 +1030,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       id: () => `generic-${++ordinal}`,
     })
 
-    expect(module.queries.listTypes().map((item) => item.typeRef.typeId)).toEqual([
+    expect((await module.queries.listTypes()).map((item) => item.typeRef.typeId)).toEqual([
       'design',
       'test',
     ])
@@ -1043,7 +1052,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       toolId: tool.id,
       actorUserId: 'generic-author',
     })
-    const job = module.commands.createJobTemplate({
+    const job = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'generic-author',
       body: {
@@ -1054,11 +1063,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       },
     })
-    const jobRef = module.commands.publishJobTemplate({
+    const jobRef = await module.commands.publishJobTemplate({
       id: job.id,
       actorUserId: 'generic-author',
     })
-    const employee = module.commands.createEmployee({
+    const employee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'generic-author',
       body: {
@@ -1157,9 +1166,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     )
   })
 
-  test('a job template cannot publish before every required graph node has a tool', () => {
+  test('a job template cannot publish before every required graph node has a tool', async () => {
     const module = fixtureModule()
-    const draft = module.commands.createJobTemplate({
+    const draft = await module.commands.createJobTemplate({
       typeRef: { typeId: 'development', revision: 10 },
       actorUserId: 'author-1',
       body: {
@@ -1177,11 +1186,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       'care-collaboration',
     ])
 
-    expect(() =>
+    await expect(
       module.commands.publishJobTemplate({ id: draft.id, actorUserId: 'author-1' }),
-    ).toThrow('job template does not cover every required work-item tool slot')
+    ).rejects.toThrow('job template does not cover every required work-item tool slot')
 
-    expect(() =>
+    await expect(
       module.commands.createJobTemplate({
         typeRef: { typeId: 'development', revision: 10 },
         actorUserId: 'author-1',
@@ -1192,13 +1201,15 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           reactionLaneOrder: ['care-review'],
         },
       }),
-    ).toThrow('reaction lane order must contain every event-driven business lane exactly once')
+    ).rejects.toThrow(
+      'reaction lane order must contain every event-driven business lane exactly once',
+    )
   })
 
   test('unconfigured optional lanes stay disabled without blocking employee save', async () => {
     const module = fixtureModule()
     const typeRef = { typeId: 'development', revision: 10 }
-    const typePackage = module.queries.getType(typeRef)
+    const typePackage = await module.queries.getType(typeRef)
     const optionalLanes = new Set(
       typePackage.authoringManifest.lifecycleRegions.flatMap((region) =>
         region.responsibilityLanes.filter((lane) => lane.optional).map((lane) => lane.laneId),
@@ -1242,7 +1253,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         }
       }
     }
-    const job = module.commands.createJobTemplate({
+    const job = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author-optional',
       body: {
@@ -1251,11 +1262,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         defaultToolBindings: bindings,
       },
     })
-    const jobRef = module.commands.publishJobTemplate({
+    const jobRef = await module.commands.publishJobTemplate({
       id: job.id,
       actorUserId: 'author-optional',
     })
-    const employee = module.commands.createEmployee({
+    const employee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author-optional',
       body: {
@@ -1264,7 +1275,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         workScope: { kind: 'repository', repositoryId: 'repo-core-only' },
       },
     })
-    const enabled = module.queries.getEmployee(employee.id).definition.enabledWorkItemRefs
+    const enabled = (await module.queries.getEmployee(employee.id)).definition.enabledWorkItemRefs
     expect(enabled).toEqual(coreItems.map((item) => item.workItemRef))
     expect(enabled).not.toContain('classify-feedback')
     expect(enabled).not.toContain('collect-pipeline')
@@ -1312,7 +1323,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       },
     })
-    const partialJob = module.commands.createJobTemplate({
+    const partialJob = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author-optional',
       body: {
@@ -1340,19 +1351,19 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       },
     })
-    expect(() =>
+    await expect(
       module.commands.publishJobTemplate({
         id: partialJob.id,
         actorUserId: 'author-optional',
       }),
-    ).toThrow('ordered dispatch must be configured for classify-pipeline')
+    ).rejects.toThrow('ordered dispatch must be configured for classify-pipeline')
   })
 
   test('type -> work item -> tool registration closes an exact employee definition', async () => {
     const module = fixtureModule()
     const typeRef = { typeId: 'development', revision: 10 }
-    const manifest = module.queries.getAuthoringManifest(typeRef)
-    const typePackage = module.queries.getType(typeRef)
+    const manifest = await module.queries.getAuthoringManifest(typeRef)
+    const typePackage = await module.queries.getType(typeRef)
     expect(manifest.lifecycleRegions.map((region) => region.regionId)).toEqual(['delivery', 'care'])
     expect(manifest.workItems).toHaveLength(20)
     expect(
@@ -1540,16 +1551,16 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           defaultAdapterBindings: [{ laneId: 'care-pipeline', slotRef: 'primary', adapterRef }],
         },
       })
-    expect(() => invalidAdapterJob({ id: 'wrong-purpose-adapter', revision: 1 })).toThrow(
+    await expect(invalidAdapterJob({ id: 'wrong-purpose-adapter', revision: 1 })).rejects.toThrow(
       'requires pipeline-gate',
     )
-    expect(() => invalidAdapterJob({ id: 'missing-adapter', revision: 1 })).toThrow(
+    await expect(invalidAdapterJob({ id: 'missing-adapter', revision: 1 })).rejects.toThrow(
       'Adapter revision is not published',
     )
-    expect(() => invalidAdapterJob({ id: 'pipeline-adapter-archived', revision: 1 })).toThrow(
-      'archived',
-    )
-    expect(() => invalidAdapterJob({ id: 'pipeline-adapter-hidden', revision: 1 })).toThrow(
+    await expect(
+      invalidAdapterJob({ id: 'pipeline-adapter-archived', revision: 1 }),
+    ).rejects.toThrow('archived')
+    await expect(invalidAdapterJob({ id: 'pipeline-adapter-hidden', revision: 1 })).rejects.toThrow(
       'not visible',
     )
 
@@ -1576,7 +1587,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       toolId: compileOnlyTool.id,
       actorUserId: 'author-1',
     })
-    expect(() =>
+    await expect(
       module.commands.createJobTemplate({
         typeRef,
         actorUserId: 'author-1',
@@ -1601,9 +1612,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           ],
         },
       }),
-    ).toThrow('does not accept classify-pipeline/environment')
+    ).rejects.toThrow('does not accept classify-pipeline/environment')
 
-    const template = module.commands.createJobTemplate({
+    const template = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author-1',
       body: {
@@ -1614,11 +1625,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         orderedDispatchConfigurations,
       },
     })
-    const templateRef = module.commands.publishJobTemplate({
+    const templateRef = await module.commands.publishJobTemplate({
       id: template.id,
       actorUserId: 'author-1',
     })
-    expect(() =>
+    await expect(
       module.commands.createEmployee({
         typeRef,
         actorUserId: 'author-1',
@@ -1629,8 +1640,8 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
           workScope: { kind: 'repository', repositoryId: 'repo-1' },
         },
       }),
-    ).toThrow()
-    const employee = module.commands.createEmployee({
+    ).rejects.toThrow()
+    const employee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author-1',
       body: {
@@ -1642,7 +1653,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     })
     const employeeRef = { id: employee.id, revision: employee.revision }
 
-    const current = module.queries.getEmployee(employee.id)
+    const current = await module.queries.getEmployee(employee.id)
     expect(employeeRef).toEqual({ id: employee.id, revision: 1 })
     expect(current.definition.workScopeSummary).toBe('仓库：repo-1')
     expect(current.workScope).toEqual({ kind: 'repository', repositoryId: 'repo-1' })
@@ -1668,7 +1679,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     expect(JSON.stringify(current)).not.toContain('sameSceneAttempts')
     expect(JSON.stringify(current)).not.toContain('retry')
 
-    const employeeWithPipelineOverride = module.commands.createEmployee({
+    const employeeWithPipelineOverride = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author-1',
       body: {
@@ -1685,7 +1696,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         ],
       },
     })
-    const overridden = module.queries.getEmployee(employeeWithPipelineOverride.id)
+    const overridden = await module.queries.getEmployee(employeeWithPipelineOverride.id)
     expect(overridden.definition.exactToolBindings).toEqual(current.definition.exactToolBindings)
     expect(overridden.definition.exactAdapterBindings).toEqual([
       {
@@ -1717,11 +1728,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     expect(overridden.definition.compiledClosureDigest).not.toBe(
       current.definition.compiledClosureDigest,
     )
-    expect(module.queries.getEmployee(employee.id).definition.exactAdapterBindings).toEqual(
+    expect((await module.queries.getEmployee(employee.id)).definition.exactAdapterBindings).toEqual(
       exactDefaultAdapterBindings,
     )
 
-    const savedAgain = module.commands.updateEmployee({
+    const savedAgain = await module.commands.updateEmployee({
       id: employee.id,
       actorUserId: 'author-1',
       body: {
@@ -1737,9 +1748,9 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       name: 'Java 开发数字员工（更新）',
       revision: 2,
     })
-    expect(module.queries.getEmployee(employee.id).revision).toBe(2)
+    expect((await module.queries.getEmployee(employee.id)).revision).toBe(2)
 
-    const cppTemplate = module.commands.createJobTemplate({
+    const cppTemplate = await module.commands.createJobTemplate({
       typeRef,
       actorUserId: 'author-1',
       body: {
@@ -1750,11 +1761,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         orderedDispatchConfigurations,
       },
     })
-    const cppTemplateRef = module.commands.publishJobTemplate({
+    const cppTemplateRef = await module.commands.publishJobTemplate({
       id: cppTemplate.id,
       actorUserId: 'author-1',
     })
-    const cppEmployee = module.commands.createEmployee({
+    const cppEmployee = await module.commands.createEmployee({
       typeRef,
       actorUserId: 'author-1',
       body: {
@@ -1764,11 +1775,11 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         toolOverrides: [],
       },
     })
-    expect(module.queries.listJobTemplates(typeRef).map((job) => job.name)).toEqual([
+    expect((await module.queries.listJobTemplates(typeRef)).map((job) => job.name)).toEqual([
       'C++ 开发岗位',
       '标准开发岗位',
     ])
-    expect(module.queries.getEmployee(cppEmployee.id).definition.jobTemplateRef).toEqual(
+    expect((await module.queries.getEmployee(cppEmployee.id)).definition.jobTemplateRef).toEqual(
       cppTemplateRef,
     )
   })
@@ -3154,17 +3165,17 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
       }),
     ).rejects.toMatchObject({ code: 'employee-work-item-does-not-accept-tools' })
 
-    const initial = module.queries.getExecutionPolicy()
+    const initial = await module.queries.getExecutionPolicy()
     expect(initial.revision).toBe(1)
     expect(initial.content.sameSceneAttempts).toBe(3)
     expect(initial.content.freshSceneAttempts).toBe(1)
 
     limits = { defaultNodeRetries: 5, sessionRestartBudget: 2 }
-    const updated = module.queries.getExecutionPolicy()
+    const updated = await module.queries.getExecutionPolicy()
     expect(updated.revision).toBe(2)
     expect(updated.content.sameSceneAttempts).toBe(5)
     expect(updated.content.freshSceneAttempts).toBe(2)
-    expect(module.queries.getExecutionPolicy().revision).toBe(2)
+    expect((await module.queries.getExecutionPolicy()).revision).toBe(2)
   })
 
   test('new tools reject connectionRef because Adapter binding belongs to the lane', async () => {
@@ -3250,7 +3261,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
     })
     expect(corrected.id).toBe(created.id)
     expect(corrected.validationReceipt.status).toBe('valid')
-    expect(module.queries.listTools(typeRef, 'prepare-approval')).toHaveLength(1)
+    expect(await module.queries.listTools(typeRef, 'prepare-approval')).toHaveLength(1)
     expect(
       await module.commands.publishTool({
         typeRef,
@@ -3259,7 +3270,7 @@ describe('RFC-310 Digital Employee OS authoring hierarchy', () => {
         actorUserId: 'author-1',
       }),
     ).toEqual({ id: created.id, revision: 2 })
-    expect(module.queries.listTools(typeRef, 'prepare-approval')).toMatchObject([
+    expect(await module.queries.listTools(typeRef, 'prepare-approval')).toMatchObject([
       { id: created.id, publishedRevision: 2 },
     ])
   })

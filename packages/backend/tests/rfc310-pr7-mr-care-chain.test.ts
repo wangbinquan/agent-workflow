@@ -36,6 +36,7 @@ import {
   createAutomationPolicy,
   publishAutomationPolicy,
 } from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -60,6 +61,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
   // of leaving it permanently hidden in `selected`.
   test('feedback action selection is released back to observed by exact action run', async () => {
     const fx = await buildPr3Fixture()
+    const persistence = createSqliteMissionPersistence(fx.db)
     const now = 10_000_000
     fx.store.createMission({
       id: 'm-selection-lease',
@@ -116,8 +118,8 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     })
 
     expect(
-      prepareFeedbackSelection(
-        { store: fx.store, now: () => now + 1 },
+      await prepareFeedbackSelection(
+        { store: persistence, now: () => now + 1 },
         mission,
         defaultAutomationPolicyContent(),
         'run-feedback-1',
@@ -129,15 +131,15 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     })
 
     expect(
-      releaseFeedbackSelection(
-        { store: fx.store, now: () => now + 2 },
+      await releaseFeedbackSelection(
+        { store: persistence, now: () => now + 2 },
         mission.id,
         'a-different-run',
       ),
     ).toBe(0)
     expect(
-      releaseFeedbackSelection(
-        { store: fx.store, now: () => now + 3 },
+      await releaseFeedbackSelection(
+        { store: persistence, now: () => now + 3 },
         mission.id,
         'run-feedback-1',
       ),
@@ -198,7 +200,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
       updatedAt: now,
     })
     const mission = fx.store.getMission(missionId)!
-    const deps = { store: fx.store }
+    const deps = { store: createSqliteMissionPersistence(fx.db) }
     const freshCells = {
       'mr.conflict': cell(true),
       '__mr.factsCollectedAt': cell(String(now)),
@@ -213,13 +215,13 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
 
     // 预算未触顶 → 规则的选择原样放行。
     expect(
-      redispatchMrCare(deps, mission, freshCells, repairPolicy, repair, { now: now + 1 }),
+      await redispatchMrCare(deps, mission, freshCells, repairPolicy, repair, { now: now + 1 }),
     ).toEqual(repair)
 
     // report-only 与「规则路由 conflict.repair」互相矛盾 → 诚实 typed block，
     // 既不默默照做也不默默跳过。
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         mission,
         freshCells,
@@ -253,13 +255,13 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
       now,
     })
     expect(
-      redispatchMrCare(deps, mission, freshCells, repairPolicy, repair, { now: now + 2 }),
+      await redispatchMrCare(deps, mission, freshCells, repairPolicy, repair, { now: now + 2 }),
     ).toEqual({ kind: 'block', reason: 'conflict-needs-committer' })
 
     // 但 facts 过期时不判终局：陈旧的 conflict=true 先重采，别把人推给一个
     // 可能已经不存在的冲突。
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         mission,
         { 'mr.conflict': cell(true), '__mr.factsCollectedAt': cell(String(now)) },
@@ -274,7 +276,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     // 一个还没试过的 Mission 视角：换 capability 的历史不算 repair 次数。
     const other = fx.store.getMission(missionId)!
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         other,
         freshCells,
@@ -290,11 +292,11 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     const policy = defaultAutomationPolicyContent()
     const now = 10_000_000
     const mission = { id: 'm-care', mrClaimId: 'claim-1', status: 'watching' } as MissionRow
-    const deps = { store: fx.store }
+    const deps = { store: createSqliteMissionPersistence(fx.db) }
 
     // 无 claim / 非静止态 → 不接管。
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         { ...mission, mrClaimId: null } as MissionRow,
         {},
@@ -311,14 +313,14 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
       templateRef: 't@1',
       workSetRef: 'none',
     }
-    expect(redispatchMrCare(deps, mission, {}, policy, action, { now })).toEqual(action)
+    expect(await redispatchMrCare(deps, mission, {}, policy, action, { now })).toEqual(action)
 
     // facts 缺/过期 → collect-mr-facts。
-    expect(redispatchMrCare(deps, mission, {}, policy, WAIT_MR_CARE, { now })).toEqual({
+    expect(await redispatchMrCare(deps, mission, {}, policy, WAIT_MR_CARE, { now })).toEqual({
       kind: 'collect-mr-facts',
     })
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         mission,
         { '__mr.factsCollectedAt': cell(String(now - MR_FACTS_STALE_MS - 1)) },
@@ -331,7 +333,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
     const fresh = { '__mr.factsCollectedAt': cell(String(now)) }
     // selectable feedback 无规则接手 → 诚实 wait。
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         mission,
         { ...fresh, 'mr.unhandledFeedbackCount': cell(2) },
@@ -343,7 +345,7 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
 
     // No required pipeline gates means there is no pipeline snapshot to wait
     // for. Fresh MR facts with no feedback must publish readiness immediately.
-    expect(redispatchMrCare(deps, mission, fresh, policy, WAIT_MR_CARE, { now })).toEqual({
+    expect(await redispatchMrCare(deps, mission, fresh, policy, WAIT_MR_CARE, { now })).toEqual({
       kind: 'publish-readiness',
     })
 
@@ -408,18 +410,18 @@ describe('rfc310 pr7 — mr care redispatch (pure with store)', () => {
       ),
     }
     expect(
-      redispatchMrCare(deps, mission, withDispositions, policy, WAIT_MR_CARE, { now }),
+      await redispatchMrCare(deps, mission, withDispositions, policy, WAIT_MR_CARE, { now }),
     ).toEqual({ kind: 'reply-feedback', feedbackReceiptRef: 'fb-1' })
     // 已 addressed 的行不再重复派；无 required pipeline gate 时直接推进
     // readiness，而不是停回永远不会再被唤醒的 wait。
     fx.store.setFeedbackState({ id: 'fb-1', state: 'addressed', now })
     expect(
-      redispatchMrCare(deps, mission, withDispositions, policy, WAIT_MR_CARE, { now }),
+      await redispatchMrCare(deps, mission, withDispositions, policy, WAIT_MR_CARE, { now }),
     ).toEqual({ kind: 'publish-readiness' })
 
     // machine holds 清零（watching + allPass）→ publish-readiness。
     expect(
-      redispatchMrCare(
+      await redispatchMrCare(
         deps,
         mission,
         {
@@ -585,7 +587,9 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
     const rows = fx.store.listFeedback(missionId)
     expect(rows).toHaveLength(2)
     // MR 采集结果与 repository facts 合并写入 repositoryFactsRef（arm 裁量注释）。
-    const cells = fx.snapshots.getCells(fx.store.getMission(missionId)!.repositoryFactsRef!)!
+    const cells = (await fx.snapshots.getCells(
+      fx.store.getMission(missionId)!.repositoryFactsRef!,
+    ))!
     expect(cells['mr.unhandledFeedbackCount']).toMatchObject({ value: 1 })
     expect(cells['__mr.unresolvedFeedback']).toMatchObject({ state: 'known' })
 
@@ -613,7 +617,7 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
     {
       const m = fx.store.getMission(missionId)!
       const merged = {
-        ...fx.snapshots.getCells(m.requirementBundleRef!)!,
+        ...(await fx.snapshots.getCells(m.requirementBundleRef!))!,
         '__feedback.lastDispositions': cell(
           JSON.stringify([{ threadRef: 'th-a', revision: '1:10', disposition: 'addressed' }]),
         ),
@@ -650,7 +654,7 @@ describe('rfc310 pr7 — collect-mr-facts arm ledger integration', () => {
     {
       const m = fx.store.getMission(missionId)!
       const merged = {
-        ...fx.snapshots.getCells(m.requirementBundleRef!)!,
+        ...(await fx.snapshots.getCells(m.requirementBundleRef!))!,
         '__feedback.lastDispositions': cell(
           JSON.stringify([{ threadRef: 'th-a', revision: '1:10', disposition: 'needs-human' }]),
         ),

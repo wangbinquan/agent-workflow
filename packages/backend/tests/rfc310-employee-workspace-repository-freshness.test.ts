@@ -10,15 +10,17 @@ import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
 import { employeeCases, employeeCaseWorkspaces, employeeReactionRounds } from '@/db/schema'
-import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import {
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
+  composeSqliteRepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import {
   assertDevelopmentWorkspaceRepositoryFreshness,
   buildDevelopmentWorkspaceRepositoryPreparation,
+  createDevelopmentWorkspaceRepositoryPreparation,
 } from '@/services/developmentDeliveryDeps'
 import { resolveCachedRepo } from '@/services/gitRepoCache'
 import { DomainError } from '@/util/errors'
@@ -108,8 +110,9 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
     const initialSha = commitAndPush(source, 'version 1\n', 'initial')
 
     const db = createInMemoryDb(MIGRATIONS)
+    const repositoryStore = composeSqliteRepositoryWorkspaceStore(db)
     const remoteUrl = `file://${remote}`
-    const cached = await resolveCachedRepo({ db, appHome }, { url: remoteUrl })
+    const cached = await resolveCachedRepo({ store: repositoryStore, appHome }, { url: remoteUrl })
     expect(git(cached.cached.localPath, 'rev-parse', 'HEAD')).toBe(initialSha)
 
     const freshSha = commitAndPush(source, 'version 2\n', 'advance before Case launch')
@@ -214,9 +217,10 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
 
     let preparationCalls = 0
     const productionPreparation = buildDevelopmentWorkspaceRepositoryPreparation(
-      db,
-      undefined,
-      appHome,
+      createDevelopmentWorkspaceRepositoryPreparation({
+        store: repositoryStore,
+        appHome,
+      }),
     )
     const workspaceInput = {
       db,
@@ -238,7 +242,7 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
       conflictMerge: bindConflictMergeParticipant(),
       now: () => 10,
     }
-    const workspace = composeDevelopmentEmployeeWorkspace(workspaceInput)
+    const workspace = composeSqliteDevelopmentEmployeeWorkspace(workspaceInput)
     const first = await workspace.prepare({
       planJson: JSON.stringify(plan),
       attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial' }),

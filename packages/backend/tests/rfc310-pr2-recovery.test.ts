@@ -24,13 +24,14 @@ import {
   listPreparedEffectRows,
   missionEpochsOf,
 } from '../src/modules/development-automation/infrastructure/sqliteReconcilerReaders'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr2Fixture, type Pr2Fixture } from './helpers/rfc310Pr2Fixture'
 
 function readersOf(f: Pr2Fixture) {
   return {
-    listFencedMissionIds: () => listFencedMissionIds(f.db),
-    listPreparedEffectRows: () => listPreparedEffectRows(f.db),
-    missionEpochsOf: (ids: readonly string[]) => missionEpochsOf(f.db, ids),
+    listFencedMissionIds: async () => listFencedMissionIds(f.db),
+    listPreparedEffectRows: async () => listPreparedEffectRows(f.db),
+    missionEpochsOf: async (ids: readonly string[]) => missionEpochsOf(f.db, ids),
   }
 }
 
@@ -71,7 +72,11 @@ describe('rfc310 pr2 recovery', () => {
     f.store.markEffectDispatched(effect.effect.id, Date.now())
 
     const cancelResult = await cancelMission(
-      { store: f.store, lookup: f.lookup, now: () => Date.now() },
+      {
+        store: createSqliteMissionPersistence(f.db),
+        lookup: f.lookup,
+        now: () => Date.now(),
+      },
       { missionId },
     )
     expect(cancelResult.pending).toBe(true)

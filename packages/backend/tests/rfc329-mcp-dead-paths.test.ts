@@ -14,6 +14,7 @@ import { resolve } from 'node:path'
 import { Hono } from 'hono'
 import { ALL_TOOLS, describeResource, type McpToolContext } from '@/mcp/tools'
 import { MCP_OPERATIONS } from '@/mcp/operationBindings'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import type { AppDeps } from '@/server'
@@ -52,7 +53,11 @@ function recordingCtx(
 describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longer claims one', () => {
   test('`GET /api/cached-repos/:id` is not a mounted route (the premise of the whole finding)', () => {
     resetRouteMetaRegistry()
-    mountCachedRepoRoutes(new Hono(), { db: {} as AppDeps['db'], configPath: '' } as AppDeps)
+    mountCachedRepoRoutes(
+      new Hono(),
+      { db: {} as AppDeps['db'], configPath: '' } as AppDeps,
+      {} as RepositoryWorkspaceStore,
+    )
     const mounted = allRouteMeta().map((m) => `${m.method} ${m.path}`)
     resetRouteMetaRegistry()
     // The DELETE on the same template exists; the GET never did. That asymmetry
@@ -72,7 +77,11 @@ describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longe
 
   test('every path describe_resource(repos) advertises is a real mounted route', () => {
     resetRouteMetaRegistry()
-    mountCachedRepoRoutes(new Hono(), { db: {} as AppDeps['db'], configPath: '' } as AppDeps)
+    mountCachedRepoRoutes(
+      new Hono(),
+      { db: {} as AppDeps['db'], configPath: '' } as AppDeps,
+      {} as RepositoryWorkspaceStore,
+    )
     const mounted = new Set(allRouteMeta().map((m) => `${m.method} ${m.path}`))
     resetRouteMetaRegistry()
     const advertised = describeResource('repos').operations.map((o) => `${o.method} ${o.path}`)

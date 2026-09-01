@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { createTaskExecutionContext } from '../src/modules/task-execution/application/taskExecutionContext'
+import { createTaskExecutionContext } from '../src/modules/task-execution/composition/sqliteTaskExecutionContext'
 import {
   createOwnershipToken,
   createWorkerIdentity,

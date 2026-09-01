@@ -131,7 +131,7 @@ function versionedAdapterDesignPackage(input: {
 const catalogDefaultAdapterRef = { id: 'catalog-pipeline-default', revision: 4 } as const
 
 const adapterCatalog: ToolConnectionCatalogPort = {
-  resolve(ref) {
+  async resolve(ref) {
     return {
       ref,
       purpose: 'pipeline-gate',
@@ -141,14 +141,14 @@ const adapterCatalog: ToolConnectionCatalogPort = {
       closureSummary: `${ref.id}@${ref.revision}; pipeline-gate; available`,
     }
   },
-  selectAutomatic(input) {
+  async selectAutomatic(input) {
     const candidates =
       input.candidates.length === 0 ? [catalogDefaultAdapterRef] : [...input.candidates]
     candidates.sort(
       (left, right) => left.id.localeCompare(right.id) || left.revision - right.revision,
     )
     const ref = candidates[0]
-    return ref === undefined ? null : this.resolve(ref, input.subject)
+    return ref === undefined ? null : await this.resolve(ref, input.subject)
   },
 }
 
@@ -540,7 +540,7 @@ async function seedPublishedEmployee(input: {
     toolId: tool.id,
     actorUserId: 'owner-1',
   })
-  const job = module.commands.createJobTemplate({
+  const job = await module.commands.createJobTemplate({
     typeRef,
     actorUserId: 'owner-1',
     body: {
@@ -551,7 +551,7 @@ async function seedPublishedEmployee(input: {
       ],
     },
   })
-  const jobRef = module.commands.publishJobTemplate({ id: job.id, actorUserId: 'owner-1' })
+  const jobRef = await module.commands.publishJobTemplate({ id: job.id, actorUserId: 'owner-1' })
   return module.commands.createEmployee({
     typeRef,
     actorUserId: 'owner-1',
@@ -619,7 +619,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
             }),
           )
         }
-        const job = v1.commands.createJobTemplate({
+        const job = await v1.commands.createJobTemplate({
           typeRef,
           actorUserId: 'legacy-owner',
           body: {
@@ -632,11 +632,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
             })),
           },
         })
-        const jobRef = v1.commands.publishJobTemplate({
+        const jobRef = await v1.commands.publishJobTemplate({
           id: job.id,
           actorUserId: 'legacy-owner',
         })
-        const employee = v1.commands.createEmployee({
+        const employee = await v1.commands.createEmployee({
           typeRef,
           actorUserId: 'legacy-owner',
           body: {
@@ -675,7 +675,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           issues,
           idPrefix: 'legacy-adapter-v2',
         })
-        const current = v2.queries.getEmployee(employee.id)
+        const current = await v2.queries.getEmployee(employee.id)
         const sourceConnections = sourceRows.map((source) => {
           const after = db
             .select()
@@ -758,7 +758,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       },
     ])
 
-    const unavailable = await runScenario([], { resolve: () => null })
+    const unavailable = await runScenario([], { resolve: async () => null })
     expect(unavailable.employeeTypeRevision).toBe(1)
     expect(unavailable.issues).toContainEqual(
       expect.objectContaining({ reasonCode: 'adapter-binding-missing' }),
@@ -778,7 +778,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         db,
         appHome,
         typePackage,
-        connectionCatalog: { resolve: () => null },
+        connectionCatalog: { resolve: async () => null },
         idPrefix: 'current-adapter-initial',
       })
       const tool = await initial.commands.createTool({
@@ -801,7 +801,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         toolId: tool.id,
         actorUserId: 'legacy-owner',
       })
-      const job = initial.commands.createJobTemplate({
+      const job = await initial.commands.createJobTemplate({
         typeRef,
         actorUserId: 'legacy-owner',
         body: {
@@ -812,11 +812,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const jobRef = initial.commands.publishJobTemplate({
+      const jobRef = await initial.commands.publishJobTemplate({
         id: job.id,
         actorUserId: 'legacy-owner',
       })
-      const employee = initial.commands.createEmployee({
+      const employee = await initial.commands.createEmployee({
         typeRef,
         actorUserId: 'legacy-owner',
         body: {
@@ -825,7 +825,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           workScope: { kind: 'global' },
         },
       })
-      expect(initial.queries.getEmployee(employee.id).definition.exactAdapterBindings).toEqual([])
+      expect(
+        (await initial.queries.getEmployee(employee.id)).definition.exactAdapterBindings,
+      ).toEqual([])
 
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const reloaded = createFixtureModule({
@@ -836,7 +838,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         issues,
         idPrefix: 'current-adapter-reloaded',
       })
-      const current = reloaded.queries.getEmployee(employee.id)
+      const current = await reloaded.queries.getEmployee(employee.id)
       expect(issues).toEqual([])
       expect(current.revision).toBe(2)
       expect(current.definition.exactAdapterBindings).toEqual([
@@ -864,9 +866,9 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         platformTools,
         idPrefix: 'ordered-dispatch-v1',
       })
-      const classifier = source.queries.listTools(sourceTypeRef, 'design-work')[0]!
-      const repair = source.queries.listTools(sourceTypeRef, 'design-repair')[0]!
-      const job = source.commands.createJobTemplate({
+      const classifier = (await source.queries.listTools(sourceTypeRef, 'design-work'))[0]!
+      const repair = (await source.queries.listTools(sourceTypeRef, 'design-repair'))[0]!
+      const job = await source.commands.createJobTemplate({
         typeRef: sourceTypeRef,
         actorUserId: 'ordered-dispatch-owner',
         body: {
@@ -904,11 +906,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const jobRef = source.commands.publishJobTemplate({
+      const jobRef = await source.commands.publishJobTemplate({
         id: job.id,
         actorUserId: 'ordered-dispatch-owner',
       })
-      const employee = source.commands.createEmployee({
+      const employee = await source.commands.createEmployee({
         typeRef: sourceTypeRef,
         actorUserId: 'ordered-dispatch-owner',
         body: {
@@ -919,7 +921,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       })
 
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
-      const target = createFixtureModule({
+      const target = await createFixtureModule({
         db,
         appHome,
         typePackage: versionedOrderedDispatchDesignPackage(2),
@@ -977,7 +979,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         toolId: tool.id,
         actorUserId: 'collaboration-owner',
       })
-      const targetJob = v1.commands.createJobTemplate({
+      const targetJob = await v1.commands.createJobTemplate({
         typeRef,
         actorUserId: 'collaboration-owner',
         body: {
@@ -988,11 +990,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const targetJobRef = v1.commands.publishJobTemplate({
+      const targetJobRef = await v1.commands.publishJobTemplate({
         id: targetJob.id,
         actorUserId: 'collaboration-owner',
       })
-      const target = v1.commands.createEmployee({
+      const target = await v1.commands.createEmployee({
         typeRef,
         actorUserId: 'collaboration-owner',
         body: {
@@ -1002,7 +1004,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         },
       })
       const targetV1Ref = { id: target.id, revision: target.revision }
-      const parentJob = v1.commands.createJobTemplate({
+      const parentJob = await v1.commands.createJobTemplate({
         typeRef,
         actorUserId: 'collaboration-owner',
         body: {
@@ -1023,11 +1025,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const parentJobRef = v1.commands.publishJobTemplate({
+      const parentJobRef = await v1.commands.publishJobTemplate({
         id: parentJob.id,
         actorUserId: 'collaboration-owner',
       })
-      const parent = v1.commands.createEmployee({
+      const parent = await v1.commands.createEmployee({
         typeRef,
         actorUserId: 'collaboration-owner',
         body: {
@@ -1037,7 +1039,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         },
       })
       const parentV1Ref = { id: parent.id, revision: parent.revision }
-      const rootJob = v1.commands.createJobTemplate({
+      const rootJob = await v1.commands.createJobTemplate({
         typeRef,
         actorUserId: 'collaboration-owner',
         body: {
@@ -1058,11 +1060,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const rootJobRef = v1.commands.publishJobTemplate({
+      const rootJobRef = await v1.commands.publishJobTemplate({
         id: rootJob.id,
         actorUserId: 'collaboration-owner',
       })
-      const root = v1.commands.createEmployee({
+      const root = await v1.commands.createEmployee({
         typeRef,
         actorUserId: 'collaboration-owner',
         body: {
@@ -1080,7 +1082,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         issues,
         idPrefix: 'collaboration-v2',
       })
-      const launchable = v2.queries.listLaunchableEmployees()
+      const launchable = await v2.queries.listLaunchableEmployees()
       const upgradedTarget = launchable.find((employee) => employee.id === target.id)!
       const upgradedParent = launchable.find((employee) => employee.id === parent.id)!
       const upgradedRoot = launchable.find((employee) => employee.id === root.id)!
@@ -1179,7 +1181,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         issues,
         idPrefix: 'collaboration-same-type',
       })
-      expect(sameTypeReconciled.queries.getEmployee(parent.id)).toMatchObject({
+      expect(await sameTypeReconciled.queries.getEmployee(parent.id)).toMatchObject({
         revision: 4,
         definition: {
           exactCollaborationBindings: [
@@ -1187,7 +1189,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      expect(sameTypeReconciled.queries.getEmployee(root.id)).toMatchObject({
+      expect(await sameTypeReconciled.queries.getEmployee(root.id)).toMatchObject({
         revision: 4,
         definition: {
           exactCollaborationBindings: [
@@ -1204,8 +1206,8 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         issues,
         idPrefix: 'collaboration-replay',
       })
-      expect(replayed.queries.getEmployee(parent.id).revision).toBe(4)
-      expect(replayed.queries.getEmployee(root.id).revision).toBe(4)
+      expect((await replayed.queries.getEmployee(parent.id)).revision).toBe(4)
+      expect((await replayed.queries.getEmployee(root.id)).revision).toBe(4)
       expect(db.select().from(employeeDefinitionRevisions).all()).toHaveLength(revisionCount)
     } finally {
       rmSync(appHome, { recursive: true, force: true })
@@ -1220,7 +1222,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       let ordinal = 0
       const id = () => `invocation-upgrade-${++ordinal}`
       const v1Package = versionedCollaboratingDesignPackage(1)
-      const eventCenter = composeEventCenter({
+      const eventCenter = await composeEventCenter({
         db,
         typePackageDescriptorJsons: [
           v1Package.descriptorJson,
@@ -1408,7 +1410,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         toolId: tool.id,
         actorUserId: 'invocation-owner',
       })
-      const targetJob = v1.commands.createJobTemplate({
+      const targetJob = await v1.commands.createJobTemplate({
         typeRef,
         actorUserId: 'invocation-owner',
         body: {
@@ -1419,11 +1421,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const targetJobRef = v1.commands.publishJobTemplate({
+      const targetJobRef = await v1.commands.publishJobTemplate({
         id: targetJob.id,
         actorUserId: 'invocation-owner',
       })
-      const target = v1.commands.createEmployee({
+      const target = await v1.commands.createEmployee({
         typeRef,
         actorUserId: 'invocation-owner',
         body: {
@@ -1433,7 +1435,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         },
       })
       const targetV1Ref = { id: target.id, revision: target.revision }
-      const parentJob = v1.commands.createJobTemplate({
+      const parentJob = await v1.commands.createJobTemplate({
         typeRef,
         actorUserId: 'invocation-owner',
         body: {
@@ -1454,11 +1456,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const parentJobRef = v1.commands.publishJobTemplate({
+      const parentJobRef = await v1.commands.publishJobTemplate({
         id: parentJob.id,
         actorUserId: 'invocation-owner',
       })
-      const parent = v1.commands.createEmployee({
+      const parent = await v1.commands.createEmployee({
         typeRef,
         actorUserId: 'invocation-owner',
         body: {
@@ -1468,7 +1470,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         },
       })
       const parentV1Ref = { id: parent.id, revision: parent.revision }
-      const launched = v1.runtime!.commands.launch({
+      const launched = await v1.runtime!.commands.launch({
         employeeRef: parentV1Ref,
         primaryContextTypeId: 'design.work',
         primaryContextSchemaVersion: 1,
@@ -1492,7 +1494,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         .where(eq(employeeCases.id, launched.caseRef.id))
         .run()
 
-      const failedRoundId = v1.runtime!.worker.planOneReaction()!
+      const failedRoundId = (await v1.runtime!.worker.planOneReaction())!
       const failedRound = db
         .select()
         .from(employeeReactionRounds)
@@ -1594,8 +1596,8 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       }
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const v2 = composeRuntime(v2Package, issues)
-      expect(v2.queries.getEmployee(target.id)).toMatchObject({ revision: 2 })
-      expect(v2.queries.getEmployee(parent.id)).toMatchObject({
+      expect(await v2.queries.getEmployee(target.id)).toMatchObject({ revision: 2 })
+      expect(await v2.queries.getEmployee(parent.id)).toMatchObject({
         revision: 1,
         typeRef: { typeId: 'design', revision: 1 },
       })
@@ -1603,7 +1605,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         resourceId: parent.id,
         reasonCode: 'work-scope-incompatible',
       })
-      const recoveredRoundId = v2.runtime!.worker.planOneReaction()!
+      const recoveredRoundId = (await v2.runtime!.worker.planOneReaction())!
       expect(recoveredRoundId).not.toBe(failedRoundId)
 
       let recoveredInvocation = db
@@ -1638,7 +1640,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         childCaseId: null,
       })
       expect(
-        JSON.parse(v2.runtime!.queries.getCase(launched.caseRef.id).projectionJson).case,
+        JSON.parse((await v2.runtime!.queries.getCase(launched.caseRef.id)).projectionJson).case,
       ).toMatchObject({ state: 'waiting', blockReason: null })
     } finally {
       rmSync(appHome, { recursive: true, force: true })
@@ -1664,7 +1666,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         typePackage: targetPackage,
         issues,
       })
-      const upgraded = upgradedModule.queries.listLaunchableEmployees()
+      const upgraded = await upgradedModule.queries.listLaunchableEmployees()
 
       expect(issues).toEqual([])
       expect(upgraded).toHaveLength(1)
@@ -1688,10 +1690,10 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         aclRevision: 0,
       })
       expect(
-        upgradedModule.queries.listJobTemplates({ typeId: 'design', revision: 2 }),
+        await upgradedModule.queries.listJobTemplates({ typeId: 'design', revision: 2 }),
       ).toHaveLength(1)
       expect(
-        upgradedModule.queries.listTools({ typeId: 'design', revision: 2 }, 'design-work'),
+        await upgradedModule.queries.listTools({ typeId: 'design', revision: 2 }, 'design-work'),
       ).toHaveLength(1)
 
       const countsAfterUpgrade = {
@@ -1706,7 +1708,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         typePackage: targetPackage,
         issues,
       })
-      expect(replayedModule.queries.listLaunchableEmployees()[0]?.revision).toBe(2)
+      expect((await replayedModule.queries.listLaunchableEmployees())[0]?.revision).toBe(2)
       expect({
         tools: db.select().from(employeeToolRegistrations).all().length,
         jobs: db.select().from(employeeJobTemplates).all().length,
@@ -1792,7 +1794,13 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           .run()
 
         const issues: Array<{ reasonCode: string; resourceId: string }> = []
-        createFixtureModule({ db, appHome, typePackage: versionedDesignPackage(2), issues })
+        const successorModule = createFixtureModule({
+          db,
+          appHome,
+          typePackage: versionedDesignPackage(2),
+          issues,
+        })
+        await successorModule.maintenance.settleAutomaticUpgrades()
         expect(issues).toEqual([])
 
         const successorTool = db
@@ -1843,7 +1851,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         typePackage: versionedDesignPackage(2),
       })
       // 另一位 owner 在目标版本下已有同名模版：D17' 下它在别的 (owner) 分区，不是占位。
-      const foreign = future.commands.createJobTemplate({
+      const foreign = await future.commands.createJobTemplate({
         typeRef: futureTypeRef,
         actorUserId: 'other-owner',
         body: {
@@ -1872,7 +1880,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         toolId: tool.id,
         actorUserId: 'standalone-owner',
       })
-      const published = v1.commands.createJobTemplate({
+      const published = await v1.commands.createJobTemplate({
         typeRef,
         actorUserId: 'standalone-owner',
         body: {
@@ -1883,7 +1891,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      v1.commands.publishJobTemplate({ id: published.id, actorUserId: 'standalone-owner' })
+      await v1.commands.publishJobTemplate({ id: published.id, actorUserId: 'standalone-owner' })
 
       const issues: Array<{ reasonCode: string; resourceId: string }> = []
       const v2 = createFixtureModule({
@@ -1893,7 +1901,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         issues,
       })
       expect(issues).toEqual([])
-      const v2Jobs = v2.queries.listJobTemplates(futureTypeRef)
+      const v2Jobs = await v2.queries.listJobTemplates(futureTypeRef)
       expect(v2Jobs).toHaveLength(2)
       const successor = v2Jobs.find((job) => job.publishedRevision !== null)
       expect(successor).toMatchObject({
@@ -1941,7 +1949,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       })
       await module.maintenance.settleAutomaticUpgrades()
 
-      expect(module.queries.listLaunchableEmployees()).toEqual([])
+      expect(await module.queries.listLaunchableEmployees()).toEqual([])
       expect(issues).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -1989,7 +1997,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       await module.maintenance.settleAutomaticUpgrades()
 
       expect(issues).toEqual([])
-      expect(module.queries.getEmployee(original.id)).toMatchObject({
+      expect(await module.queries.getEmployee(original.id)).toMatchObject({
         id: original.id,
         revision: 2,
         typeRef: { typeId: 'design', revision: 2 },
@@ -2040,7 +2048,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         issues,
       })
 
-      expect(module.queries.listLaunchableEmployees()).toEqual([])
+      expect(await module.queries.listLaunchableEmployees()).toEqual([])
       expect(issues).toEqual([
         expect.objectContaining({
           reasonCode: 'work-scope-incompatible',
@@ -2057,7 +2065,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
     }
   })
 
-  test('platform tools migrate only through a provider-validated target successor', () => {
+  test('platform tools migrate only through a provider-validated target successor', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-auto-upgrade-platform-'))
     try {
       const db = createInMemoryDb(MIGRATIONS)
@@ -2076,7 +2084,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           }),
         )!,
       ).ref as { id: string; revision: number }
-      const job = v1.commands.createJobTemplate({
+      const job = await v1.commands.createJobTemplate({
         typeRef: { typeId: 'design', revision: 1 },
         actorUserId: 'owner-platform',
         body: {
@@ -2087,11 +2095,11 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
           ],
         },
       })
-      const jobRef = v1.commands.publishJobTemplate({
+      const jobRef = await v1.commands.publishJobTemplate({
         id: job.id,
         actorUserId: 'owner-platform',
       })
-      const employee = v1.commands.createEmployee({
+      const employee = await v1.commands.createEmployee({
         typeRef: { typeId: 'design', revision: 1 },
         actorUserId: 'owner-platform',
         body: {
@@ -2108,7 +2116,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         platformTools,
         idPrefix: 'platform-v2',
       })
-      expect(v2.queries.listLaunchableEmployees()).toEqual([
+      expect(await v2.queries.listLaunchableEmployees()).toEqual([
         expect.objectContaining({
           id: employee.id,
           revision: 2,
@@ -2117,7 +2125,7 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
       ])
       expect(db.select().from(employeeToolRegistrations).all()).toEqual([])
       expect(
-        v2.queries.listJobTemplates({ typeId: 'design', revision: 2 })[0]?.draft
+        (await v2.queries.listJobTemplates({ typeId: 'design', revision: 2 }))[0]?.draft
           .defaultToolBindings[0]?.registrationRef,
       ).toEqual({
         id: 'platform-fixture:design:2:design-work:platform-design-agent',
@@ -2137,14 +2145,14 @@ describe('RFC-310 Type Package automatic compatible upgrades', () => {
         idPrefix: 'platform-v3',
       })
       expect(issues).toEqual([])
-      expect(v3.queries.listLaunchableEmployees()).toEqual([
+      expect(await v3.queries.listLaunchableEmployees()).toEqual([
         expect.objectContaining({
           id: employee.id,
           revision: 3,
           typeRef: { typeId: 'design', revision: 3 },
         }),
       ])
-      expect(v3.queries.getEmployee(employee.id)).toMatchObject({
+      expect(await v3.queries.getEmployee(employee.id)).toMatchObject({
         id: employee.id,
         revision: 3,
         typeRef: { typeId: 'design', revision: 3 },

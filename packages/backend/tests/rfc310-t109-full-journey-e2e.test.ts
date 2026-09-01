@@ -54,7 +54,7 @@ import {
   createVerificationProfile,
   publishVerificationProfile,
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
-import { createSqliteVerificationProfileStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import { adoptActiveMr } from '../src/modules/development-automation/application/cutover'
 import { createSqliteCutoverStore } from '../src/modules/development-automation/infrastructure/sqliteCutoverStore'
 import {
@@ -171,8 +171,8 @@ beforeAll(async () => {
     })
     .run()
 
-  const vStore = createSqliteVerificationProfileStore(fx.db)
-  const profile = createVerificationProfile(
+  const vStore = createSqliteVerificationProfilePersistence(fx.db)
+  const profile = await createVerificationProfile(
     { store: vStore, now: () => Date.now() },
     {
       actorUserId: 'admin',
@@ -195,7 +195,7 @@ beforeAll(async () => {
       },
     },
   )
-  publishVerificationProfile(
+  await publishVerificationProfile(
     { store: vStore, now: () => Date.now() },
     { id: profile.id, actorUserId: 'admin' },
   )
@@ -293,7 +293,7 @@ afterAll(async () => {
   await suite.close()
 })
 
-function envelopeFor(prompt: string, missionId: string): string {
+async function envelopeFor(prompt: string, missionId: string): Promise<string> {
   const nonce = /<agent-result nonce="([^"]+)">/.exec(prompt)![1]!
   const actionRunRef = /"actionRunRef": "([^"]+)"/.exec(prompt)![1]!
   const inputDigest = /"inputDigest": "([^"]+)"/.exec(prompt)![1]!
@@ -303,9 +303,9 @@ function envelopeFor(prompt: string, missionId: string): string {
       ? {
           capabilityId,
           summary: 'implemented the feature',
-          requirementCoverage: automation.materializer
-            .getRequirementManifest(missionId)!
-            .files.map((f) => ({ itemRef: f.fileId, disposition: 'implemented' as const })),
+          requirementCoverage: (await automation.materializer.getRequirementManifest(
+            missionId,
+          ))!.files.map((f) => ({ itemRef: f.fileId, disposition: 'implemented' as const })),
         }
       : {
           capabilityId,
@@ -335,11 +335,11 @@ let lastSeededThreadRef = ''
 let lastSeededRevision = ''
 
 /** staleness 快进：把 repositoryFactsRef cells 的 factsCollectedAt patch 回过去。 */
-function expireMrFacts(missionId: string): void {
+async function expireMrFacts(missionId: string): Promise<void> {
   const m = fx.store.getMission(missionId)!
   const ref = m.repositoryFactsRef
   if (ref === null) return
-  const cells = fx.snapshots.getCells(ref)
+  const cells = await fx.snapshots.getCells(ref)
   if (cells === null || cells['__mr.factsCollectedAt'] === undefined) return
   const merged = {
     ...cells,
@@ -370,11 +370,11 @@ interface Milestone {
 async function reconcileUntil(
   missionId: string,
   trail: Milestone[],
-  pred: () => boolean,
+  pred: () => boolean | Promise<boolean>,
   { max = 12, label = '' }: { max?: number; label?: string } = {},
 ): Promise<void> {
   for (let i = 0; i < max; i += 1) {
-    if (pred()) return
+    if (await pred()) return
     const outcome = (await automation.reconcile(missionId)) as {
       kind: string
       selected?: { kind: string }
@@ -388,10 +388,10 @@ async function reconcileUntil(
     // scripted Agent：发射后立即由测试落盘并结算 outcome（下一轮 collect）。
     const last = launches[launches.length - 1]
     if (last !== undefined && !outcomes.has(last.executionRef)) {
-      actOnLaunch(last)
+      await actOnLaunch(last)
     }
   }
-  if (!pred()) {
+  if (!(await pred())) {
     const m = fx.store.getMission(missionId)
     const rejections = fx.db
       .select({
@@ -409,7 +409,7 @@ async function reconcileUntil(
 
 let journeyMissionId = ''
 
-function actOnLaunch(last: (typeof launches)[number]): void {
+async function actOnLaunch(last: (typeof launches)[number]): Promise<void> {
   if (last.capabilityId === 'change.implement') {
     writeFileSync(
       join(last.workspacePath, 'core', 'src', 'main', 'java', 'Greeting.java'),
@@ -429,7 +429,7 @@ function actOnLaunch(last: (typeof launches)[number]): void {
     kind: 'exited',
     executionRef: last.executionRef,
     taskStatus: 'done',
-    resultText: envelopeFor(last.prompt, journeyMissionId),
+    resultText: await envelopeFor(last.prompt, journeyMissionId),
     errorSummary: null,
     errorMessage: null,
   })
@@ -483,9 +483,12 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     await reconcileUntil(
       missionId,
       trail,
-      () => {
+      async () => {
         const ref = fx.store.getMission(missionId)!.repositoryFactsRef
-        return ref !== null && fx.snapshots.getCells(ref)?.['__mr.factsCollectedAt'] !== undefined
+        return (
+          ref !== null &&
+          (await fx.snapshots.getCells(ref))?.['__mr.factsCollectedAt'] !== undefined
+        )
       },
       { max: 4, label: 'first-facts' },
     )
@@ -508,7 +511,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
 
     // facts 过期 → 再采 → 台账 selectable → policy 路由 feedback.apply →
     // 「Agent」修复 → verify/commit/push 第二轮 → reply 真回帖。
-    expireMrFacts(missionId)
+    await expireMrFacts(missionId)
     await reconcileUntil(missionId, trail, () => fx.store.listFeedback(missionId).length > 0, {
       max: 4,
       label: 'ledger-populated',
@@ -552,7 +555,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
       number: missionMrNumber,
       state: 'merged',
     })
-    expireMrFacts(missionId)
+    await expireMrFacts(missionId)
     await reconcileUntil(
       missionId,
       trail,
@@ -617,7 +620,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
 
     const adopted = await adoptActiveMr(
       {
-        store: fx.store,
+        store: fx.deps().store,
         cutoverStore: createSqliteCutoverStore(fx.db),
         ports: { mrEffects },
         now: () => Date.now(),

@@ -7,14 +7,16 @@ import { buildWebSocketAdapter } from '@/ws/server'
 import type { WsConnectionData } from '@/ws/registry'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { MIGRATIONS } from './migration-freeze'
+import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
 describe('RFC-338 WebSocket responsiveness control frame', () => {
   test('answers a bounded ping without DB/domain work and ignores every other inbound frame', () => {
     const db = createInMemoryDb(MIGRATIONS)
+    const identityAccess = createIdentityAccessRuntime({ db })
     const adapter = buildWebSocketAdapter({
       daemonToken: 'd'.repeat(64),
-      db,
-      identityAccess: createIdentityAccessRuntime({ db }),
+      realtime: composeTestSqliteRealtimeRuntime({ db, identityAccess }),
+      identityAccess,
     })
     const sent: string[] = []
     const ws = {

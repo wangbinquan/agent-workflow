@@ -23,12 +23,12 @@ import {
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
 } from '../src/services/intent/journalArtifacts'
-import { createManagedSkillWithFiles } from '../src/services/skill'
+import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   commitSkillVersionInTx,
   stageSkillVersion,
   type StagedSkillVersion,
-} from '../src/services/skillVersion'
+} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const OWNER_ID = 'rfc343-intent-owner'

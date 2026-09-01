@@ -43,6 +43,7 @@
 // 32766 上限死循环），写语句的计划同样要审。
 
 import { describe, expect, test } from 'bun:test'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
@@ -61,6 +62,10 @@ import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
 } from '../src/modules/development-automation/infrastructure/missionReadModels'
+import {
+  composeRepositoryWorkspaceOperations,
+  composeSqliteRepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 import { archiveEvents } from '../src/services/eventsArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
@@ -236,7 +241,7 @@ const GUARDED: GuardedPath[] = [
   },
   {
     name: '/api/cached-repos — keyset 首页',
-    run: (db) => listCachedReposPage(db, { limit: 20 }),
+    run: (db) => listCachedReposPage(composeSqliteRepositoryWorkspaceStore(db), { limit: 20 }),
   },
   {
     name: '/api/code/missions — keyset 首页',
@@ -250,7 +255,12 @@ const GUARDED: GuardedPath[] = [
     name: '/api/overview — 计数面板',
     run: (db) => {
       const actor = actorOf('admin')
-      return buildOverview(db, resourceScopeAuthority(db, actor))
+      const store = composeSqliteRepositoryWorkspaceStore(db)
+      return buildOverview(
+        db,
+        resourceScopeAuthority(db, actor),
+        composeRepositoryWorkspaceOperations(store, undefined).overviewQueries,
+      )
     },
   },
   // 周期任务：历史事故密度最高的地方（归档器无界 IN 撞 32766 死循环、备份 VACUUM
@@ -285,7 +295,8 @@ const GUARDED: GuardedPath[] = [
     // （「invariants 七规则集合化延后；分块 + 让出已消掉坏死与长冻结」）。分块已经
     // 让它不再冻结主连接，但每条规则仍逐任务查一次。集合化之前，先把比率钉住。
     maxStatementsPerRow: 3.1,
-    run: (db) => runLifecycleInvariants({ db, scope: { all: true } }),
+    run: (db) =>
+      runLifecycleInvariants({ operations: taskRecoveryOperations(db), scope: { all: true } }),
   },
 ]
 

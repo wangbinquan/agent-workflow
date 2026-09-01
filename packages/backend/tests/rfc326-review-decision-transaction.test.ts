@@ -701,7 +701,8 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
   test('updateTaskMembers: the WS revalidation runs after the task lock is released', async () => {
     f = await buildFixture()
     const seen: Array<{ reason: string; lockHeld: boolean }> = []
-    registerRevalidationTrigger(async (_db, reason) => {
+    registerRevalidationTrigger(async (reason) => {
+      if (reason === undefined) throw new Error('expected targeted task-members revalidation')
       seen.push({ reason, lockHeld: __hasTaskReviewMutationQueueForTesting(f.taskId) })
     })
     await updateTaskMembers(

@@ -142,10 +142,10 @@ describe('RFC-333 canonical human-gate request', () => {
 })
 
 describe('RFC-333 SQLite human-gate operation store', () => {
-  test('does not recovery-claim an intentional manual-question owner wait', () => {
+  test('does not recovery-claim an intentional manual-question owner wait', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db, 'task-333-manual-wait')
-    const created = createManualQuestionOpen(createCollaborationCommandContext({ db }), {
+    const created = await createManualQuestionOpen(createCollaborationCommandContext({ db }), {
       taskId: 'task-333-manual-wait',
       title: 'Question',
       body: 'Please revisit this.',

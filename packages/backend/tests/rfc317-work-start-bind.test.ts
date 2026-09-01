@@ -12,7 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 
 const participantOf = (tag: string) => ({
-  launch: () => ({ caseId: `case-${tag}` }),
+  launch: async () => ({ caseId: `case-${tag}` }),
 })
 
 describe('RFC-317 T54 —— work-start participant 的绑定是一次性的', () => {
@@ -28,32 +28,32 @@ describe('RFC-317 T54 —— work-start participant 的绑定是一次性的', (
     ).toThrow('is not bound')
   })
 
-  test('绑一次可用', () => {
+  test('绑一次可用', async () => {
     const deferred = createDeferredDigitalEmployeeWorkStart()
     deferred.bind(participantOf('rest') as never)
-    expect(
+    await expect(
       deferred.participant.launch({
         employeeId: 'e1',
         intake: {} as never,
         actorUserId: null,
         origin: 'api',
       } as never),
-    ).toEqual({ caseId: 'case-rest' })
+    ).resolves.toEqual({ caseId: 'case-rest' })
   })
 
-  test('**绑第二次直接抛**——改造前它会静默覆盖，把 webhook 改道到另一套 runtime', () => {
+  test('**绑第二次直接抛**——改造前它会静默覆盖，把 webhook 改道到另一套 runtime', async () => {
     const deferred = createDeferredDigitalEmployeeWorkStart()
     deferred.bind(participantOf('rest') as never)
     expect(() => deferred.bind(participantOf('mcp') as never)).toThrow('already bound')
     // 且第一次那份仍然有效——抛出之后不能留下半绑定的状态。
-    expect(
+    await expect(
       deferred.participant.launch({
         employeeId: 'e1',
         intake: {} as never,
         actorUserId: null,
         origin: 'api',
       } as never),
-    ).toEqual({ caseId: 'case-rest' })
+    ).resolves.toEqual({ caseId: 'case-rest' })
   })
 })
 

@@ -19,6 +19,7 @@ import {
   readCommittedReviewArtifactBody,
 } from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
+import { SqliteHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationPersistence'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_788_970_000_000
@@ -139,7 +140,7 @@ function commitPrepared(input: {
 }
 
 describe('RFC-333 T4 review artifact recovery', () => {
-  test('reads committed staged content before rename, then roll-forwards exactly once', () => {
+  test('reads committed staged content before rename, then roll-forwards exactly once', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
@@ -160,15 +161,14 @@ describe('RFC-333 T4 review artifact recovery', () => {
     expect(readCommittedReviewArtifactBody(db, appHome, plan.finalPath)).toBe(body)
 
     const recovery = new HumanGateOperationRecovery({
-      db,
-      operations,
+      operations: new SqliteHumanGateOperationPersistence(db),
       artifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'retain-for-owner-retry',
       },
       now: () => NOW + 4 + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1,
     })
-    expect(recovery.runOnce()).toMatchObject({
+    expect(await recovery.runOnce()).toMatchObject({
       claimed: 1,
       finalized: 1,
       failed: 0,
@@ -190,10 +190,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
         .where(eq(collaborationGateArtifacts.operationId, 'operation-committed'))
         .get()?.state,
     ).toBe('finalized')
-    expect(recovery.runOnce().claimed).toBe(0)
+    expect((await recovery.runOnce()).claimed).toBe(0)
   })
 
-  test('keeps committed staged fallback readable after one finalize failure and retries later', () => {
+  test('keeps committed staged fallback readable after one finalize failure and retries later', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
@@ -226,29 +226,27 @@ describe('RFC-333 T4 review artifact recovery', () => {
     }
     let now = NOW + 4 + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
     const firstRecovery = new HumanGateOperationRecovery({
-      db,
-      operations,
+      operations: new SqliteHumanGateOperationPersistence(db),
       artifacts: faultingArtifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'retain-for-owner-retry',
       },
       now: () => now,
     })
-    expect(firstRecovery.runOnce()).toMatchObject({ claimed: 1, failed: 1 })
+    expect(await firstRecovery.runOnce()).toMatchObject({ claimed: 1, failed: 1 })
     expect(readCommittedReviewArtifactBody(db, appHome, plan.finalPath)).toBe(body)
     expect(existsSync(absolute(appHome, plan.finalPath))).toBe(false)
 
     now += DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
     const secondRecovery = new HumanGateOperationRecovery({
-      db,
-      operations,
+      operations: new SqliteHumanGateOperationPersistence(db),
       artifacts: realArtifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'retain-for-owner-retry',
       },
       now: () => now,
     })
-    expect(secondRecovery.runOnce()).toMatchObject({
+    expect(await secondRecovery.runOnce()).toMatchObject({
       claimed: 1,
       finalized: 1,
       failed: 0,
@@ -256,7 +254,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
     expect(readFileSync(absolute(appHome, plan.finalPath), 'utf8')).toBe(body)
   })
 
-  test('cleans a stale prepared operation and releases the exact-gate slot for a new source', () => {
+  test('cleans a stale prepared operation and releases the exact-gate slot for a new source', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
@@ -272,15 +270,14 @@ describe('RFC-333 T4 review artifact recovery', () => {
     })
 
     const recovery = new HumanGateOperationRecovery({
-      db,
-      operations,
+      operations: new SqliteHumanGateOperationPersistence(db),
       artifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'cleanup-stale',
       },
       now: () => NOW + 3 + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1,
     })
-    expect(recovery.runOnce()).toMatchObject({ claimed: 1, cleaned: 1, failed: 0 })
+    expect(await recovery.runOnce()).toMatchObject({ claimed: 1, cleaned: 1, failed: 0 })
     expect(existsSync(absolute(appHome, plan.stagedPath))).toBe(false)
     expect(
       db
@@ -316,7 +313,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
     ).toBe(false)
   })
 
-  test('retains incomplete preparing work with a fenced recovery epoch', () => {
+  test('retains incomplete preparing work with a fenced recovery epoch', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedTask(db)
     const appHome = tempHome()
@@ -333,15 +330,14 @@ describe('RFC-333 T4 review artifact recovery', () => {
     })
     let now = NOW + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
     const recovery = new HumanGateOperationRecovery({
-      db,
-      operations,
+      operations: new SqliteHumanGateOperationPersistence(db),
       artifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'cleanup-stale',
       },
       now: () => now,
     })
-    expect(recovery.runOnce()).toMatchObject({ claimed: 1, retained: 1, failed: 0 })
+    expect(await recovery.runOnce()).toMatchObject({ claimed: 1, retained: 1, failed: 0 })
     expect(
       db
         .select({
@@ -352,9 +348,9 @@ describe('RFC-333 T4 review artifact recovery', () => {
         .where(eq(collaborationGateOperations.id, 'operation-preparing'))
         .get(),
     ).toEqual({ state: 'preparing', claimEpoch: 2 })
-    expect(recovery.runOnce().claimed).toBe(0)
+    expect((await recovery.runOnce()).claimed).toBe(0)
     now += DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
-    expect(recovery.runOnce().claimed).toBe(1)
+    expect((await recovery.runOnce()).claimed).toBe(1)
   })
 
   test('recovery source has no task-drive or native-timer authority', () => {

@@ -10,14 +10,14 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
     const result = await runDigitalEmployeeOsCycle(
       {
         runtime: {
-          publishOneChannelResult() {
+          async publishOneChannelResult() {
             return 'idle'
           },
-          pumpOneDelivery() {
+          async pumpOneDelivery() {
             calls.push(`delivery:${cycle}`)
             return cycle === 0
           },
-          planOneReaction() {
+          async planOneReaction() {
             calls.push(`plan:${cycle}`)
             return cycle === 0 ? 'round-1' : null
           },
@@ -61,9 +61,9 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
     const result = await runDigitalEmployeeOsCycle(
       {
         runtime: {
-          publishOneChannelResult: () => 'idle',
-          pumpOneDelivery: () => true,
-          planOneReaction: () => 'round',
+          publishOneChannelResult: async () => 'idle',
+          pumpOneDelivery: async () => true,
+          planOneReaction: async () => 'round',
           runOneOutbox: async () => 'completed',
           inspectOneExecution: async () => 'completed',
         },

@@ -25,6 +25,10 @@ import {
 } from '../src/services/gitRepoCache'
 import { createApp } from '../src/server'
 import { ValidationError } from '../src/util/errors'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '../src/modules/source-control/composition'
 
 const TOKEN = 'a'.repeat(64)
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -242,13 +246,15 @@ function jsFilter(
 
 describe('RFC-311 T28 — listCachedReposPage oracle', () => {
   let db: DbClient
+  let store: RepositoryWorkspaceStore
   beforeEach(() => {
     db = createInMemoryDb(MIGRATIONS)
+    store = composeSqliteRepositoryWorkspaceStore(db)
     seed(db)
   })
 
   test('every filter combination pages to the same ids/counts as the legacy JS pipeline', async () => {
-    const full = await listCachedRepos(db)
+    const full = await listCachedRepos(store)
     // canonical 全序:(lastFetchedAt DESC, id DESC)。旧管线对 tie 未定序,
     // oracle 端显式重排后对比。ISO 字符串比较与 epoch 数值比较同序。
     const reference = [...full].sort((a, b) =>
@@ -271,7 +277,7 @@ describe('RFC-311 T28 — listCachedReposPage oracle', () => {
             let cursor: string | undefined
             let facetsSeen: Record<string, number> | undefined
             for (let hop = 0; hop < 20; hop += 1) {
-              const page = await listCachedReposPage(db, {
+              const page = await listCachedReposPage(store, {
                 view,
                 q,
                 submodules,
@@ -314,10 +320,10 @@ describe('RFC-311 T28 — listCachedReposPage oracle', () => {
   })
 
   test('malformed cursor is rejected', async () => {
-    await expect(listCachedReposPage(db, { cursor: 'not-a-cursor' })).rejects.toThrow(
+    await expect(listCachedReposPage(store, { cursor: 'not-a-cursor' })).rejects.toThrow(
       ValidationError,
     )
-    await expect(listCachedReposPage(db, { cursor: '12.' })).rejects.toThrow(ValidationError)
+    await expect(listCachedReposPage(store, { cursor: '12.' })).rejects.toThrow(ValidationError)
   })
 
   // 实现门 P2-4:断点必须是行值比较——展开式在**绑定参数**下会退化成

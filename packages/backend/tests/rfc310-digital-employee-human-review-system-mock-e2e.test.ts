@@ -27,6 +27,8 @@ import {
   DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
@@ -156,8 +158,12 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
 
     try {
       await seedTestDefaultOpencodeRuntime(db)
-      await ensureDigitalEmployeeAgentTemplates(db)
-      const templates = await listDigitalEmployeeAgentTemplates(db)
+      const agentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+        db,
+        composeDigitalEmployeeAgentTemplateCatalogParticipant,
+      )
+      await ensureDigitalEmployeeAgentTemplates(agentTemplates)
+      const templates = await listDigitalEmployeeAgentTemplates(agentTemplates)
       const planningAgent = templates.find(
         (agent) => agent.frontmatterExtra.digitalEmployeeTemplate === 'implementation-planning',
       )

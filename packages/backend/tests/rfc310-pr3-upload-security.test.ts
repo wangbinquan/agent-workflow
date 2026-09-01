@@ -38,9 +38,10 @@ import {
   type LaunchDeps,
 } from '../src/modules/development-automation/application/commands/launchMission'
 import { createRepositoryBaselineResolver } from '../src/modules/development-automation/infrastructure/gitBaselineReader'
-import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
 import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import { insertUploadPlan } from '../src/modules/development-automation/infrastructure/sqliteUploadPlanStore'
+import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -325,20 +326,22 @@ async function mkRealRepo(binary: Uint8Array): Promise<string> {
   return repoPath
 }
 
-function previewDeps(db: DbClient): LaunchDeps {
+function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionStore } {
+  const sessions = createSqliteUploadSessionStore(db)
   return {
-    store: createSqliteMissionStore(db),
-    lookup: {
-      resolveAssignment: async () => null,
-      getEmployeeRevisionContent: async () => EMPLOYEE_CONTENT,
-      getPolicyRevisionContent: async () => defaultAutomationPolicyContent(),
-    },
-    now: () => Date.now(),
-    uploadAdmission: {
-      sessions: createSqliteUploadSessionStore(db),
-      transact: (fn) => db.transaction(() => fn()),
-      resolveBaseline: createRepositoryBaselineResolver(db),
-      persistPlan: (plan) => insertUploadPlan(db, plan),
+    sessions,
+    deps: {
+      store: createSqliteMissionPersistence(db),
+      lookup: {
+        resolveAssignment: async () => null,
+        getEmployeeRevisionContent: async () => EMPLOYEE_CONTENT,
+        getPolicyRevisionContent: async () => defaultAutomationPolicyContent(),
+      },
+      now: () => Date.now(),
+      uploadAdmission: {
+        uploads: createSqliteMissionInputUploadPersistence(db),
+        resolveBaseline: createRepositoryBaselineResolver(db),
+      },
     },
   }
 }
@@ -357,8 +360,7 @@ describe('rfc310 pr3 upload security — real git baseline chain', () => {
         createdAt: 0,
       })
       .run()
-    const deps = previewDeps(db)
-    const sessions = deps.uploadAdmission!.sessions
+    const { deps, sessions } = previewDeps(db)
 
     const mkUp = (name: string, bytes: Uint8Array) => {
       const tmp = join(appHome, name)
@@ -414,8 +416,8 @@ describe('rfc310 pr3 upload security — real git baseline chain', () => {
 
   test('missing cached repo resolves to baseline-reader-not-wired (no default-branch guessing)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const deps = previewDeps(db)
-    const ref = deps.uploadAdmission!.sessions.createUpload({
+    const { deps, sessions } = previewDeps(db)
+    const ref = sessions.createUpload({
       actorUserId: 'u-1',
       originalName: 'a.md',
       bytes: 1,

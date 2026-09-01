@@ -19,6 +19,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { capabilityTemplates, agents } from '../src/db/schema'
 import { resolveReviewerAgent } from '../src/services/codeReviewAgentCaller'
+import { composeSqliteReviewerResolutionRead } from '../src/modules/code-capability/composition/reviewerResolution'
 import { seedCapabilityCell } from './helpers/legacyCapabilitySeed'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -26,7 +27,11 @@ const NOW = 1_700_000_000_000
 const REPO = 'repo-1'
 
 const ask = (db: DbClient) =>
-  resolveReviewerAgent(db, { repoId: REPO, capability: 'mr-review', slot: 'reviewer' })
+  resolveReviewerAgent(composeSqliteReviewerResolutionRead(db), {
+    repoId: REPO,
+    capability: 'mr-review',
+    slot: 'reviewer',
+  })
 
 describe('RFC-304 — resolving the reviewer slot', () => {
   let db: DbClient

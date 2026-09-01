@@ -20,7 +20,7 @@ import {
   reviseVerificationProfileDraft,
   type VerificationProfileCommandDeps,
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
-import { createSqliteVerificationProfileStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -54,7 +54,7 @@ const VALID_CONTENT = {
 function newDeps(): VerificationProfileCommandDeps {
   const db = createInMemoryDb(MIGRATIONS)
   let tick = 2_000_000
-  return { store: createSqliteVerificationProfileStore(db), now: () => ++tick }
+  return { store: createSqliteVerificationProfilePersistence(db), now: () => ++tick }
 }
 
 describe('rfc310 pr1b verification profile', () => {
@@ -88,40 +88,48 @@ describe('rfc310 pr1b verification profile', () => {
     ])
   })
 
-  test('store lifecycle: publish increments, revisions immutable, archive blocks publish', () => {
+  test('store lifecycle: publish increments, revisions immutable, archive blocks publish', async () => {
     const deps = newDeps()
-    const created = createVerificationProfile(deps, {
+    const created = await createVerificationProfile(deps, {
       actorUserId: 'user-1',
       name: 'maven',
       draft: VALID_CONTENT,
     })
-    const first = publishVerificationProfile(deps, { id: created.id, actorUserId: 'user-1' })
+    const first = await publishVerificationProfile(deps, {
+      id: created.id,
+      actorUserId: 'user-1',
+    })
     expect(first.revision).toBe(1)
-    reviseVerificationProfileDraft(deps, {
+    await reviseVerificationProfileDraft(deps, {
       id: created.id,
       draft: { ...VALID_CONTENT, stopPolicy: 'collect-all' },
     })
-    const second = publishVerificationProfile(deps, { id: created.id, actorUserId: 'user-1' })
+    const second = await publishVerificationProfile(deps, {
+      id: created.id,
+      actorUserId: 'user-1',
+    })
     expect(second.revision).toBe(2)
-    expect(deps.store.getRevision(created.id, 1)?.contentJson).toContain('first-failure')
-    archiveVerificationProfile(deps, { id: created.id })
-    expect(() =>
+    expect((await deps.store.getRevision(created.id, 1))?.contentJson).toContain('first-failure')
+    await archiveVerificationProfile(deps, { id: created.id })
+    await expect(
       publishVerificationProfile(deps, { id: created.id, actorUserId: 'user-1' }),
-    ).toThrow('archived')
+    ).rejects.toThrow('archived')
   })
 
-  test('name conflict is typed 409; invalid draft leaves no revision', () => {
+  test('name conflict is typed 409; invalid draft leaves no revision', async () => {
     const deps = newDeps()
-    createVerificationProfile(deps, { actorUserId: 'u', name: 'dup', draft: {} })
-    expect(() =>
+    await createVerificationProfile(deps, { actorUserId: 'u', name: 'dup', draft: {} })
+    await expect(
       createVerificationProfile(deps, { actorUserId: 'u', name: 'dup', draft: {} }),
-    ).toThrow('name already used')
-    const broken = createVerificationProfile(deps, {
+    ).rejects.toThrow('name already used')
+    const broken = await createVerificationProfile(deps, {
       actorUserId: 'u',
       name: 'broken',
       draft: { schemaVersion: 1, steps: 'nope' },
     })
-    expect(() => publishVerificationProfile(deps, { id: broken.id, actorUserId: 'u' })).toThrow()
-    expect(deps.store.listRevisions(broken.id)).toEqual([])
+    await expect(
+      publishVerificationProfile(deps, { id: broken.id, actorUserId: 'u' }),
+    ).rejects.toThrow()
+    expect(await deps.store.listRevisions(broken.id)).toEqual([])
   })
 })
