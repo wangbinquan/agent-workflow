@@ -95,4 +95,36 @@ describe('RFC-349 collaboration route operations', () => {
     expect(publisher).toContain('taskBroadcaster.broadcast(TASK_CHANNEL(input.taskId)')
     expect(publisher).toContain("type: 'clarify.draft.updated'")
   })
+
+  test('SQLite daemon composition wires every collaboration decision port without a root cycle', () => {
+    const start = source('src/cli/start.ts')
+    const root = source('src/modules/collaboration/composition.ts')
+    const composition = source(
+      'src/modules/collaboration/composition/legacySqliteDecisionCommands.ts',
+    )
+
+    for (const factory of [
+      'createSqliteReviewDecisionCommand',
+      'createSqliteQuestionDispatchCommand',
+      'createSqliteClarifyDecisionCommand',
+    ]) {
+      expect(start).toContain(factory)
+      expect(composition).toContain(`export { ${factory} }`)
+      expect(root).not.toContain(`export { ${factory} }`)
+    }
+    expect(start).toContain('reviewDecisions: createSqliteReviewDecisionCommand')
+    expect(start).toContain('questionDispatches: createSqliteQuestionDispatchCommand')
+    expect(start).toContain('clarifyDecisions: createSqliteClarifyDecisionCommand')
+
+    for (const path of [
+      'src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts',
+      'src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts',
+      'src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts',
+    ]) {
+      const text = source(path)
+      expect(text, path).toContain('../composition/commandContext')
+      expect(text, path).not.toContain('@/services/humanGateComposition')
+      expect(text, path).toContain('await import(')
+    }
+  })
 })

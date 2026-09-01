@@ -1,5 +1,5 @@
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
-import type { TaskEngineTaskSnapshot } from '@/modules/task-execution/application/ports/taskEngineApplicationPersistence'
+import type { TaskEngineTaskSnapshot } from '@/modules/task-execution/public/types'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
 import type {
   TaskScopeOutcome,

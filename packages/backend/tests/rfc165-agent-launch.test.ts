@@ -658,7 +658,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
       method: 'POST',
       body: launchBody,
     })
-    expect(ok.status).toBe(201)
+    expect(ok.status, await ok.clone().text()).toBe(201)
     const created = (await ok.json()) as { sourceAgentName: string | null; workflowId: string }
     expect(created.sourceAgentName).toBe('solo')
     expect(created.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
@@ -722,7 +722,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
 
     const resumedIds: string[] = []
     const result = await autoResumeInterruptedTasks({
-      db,
+      operations: taskRecoveryOperations(db),
       breaker: { maxAttempts: 3, windowMs: 60_000 },
       resume: async (id: string) => {
         resumedIds.push(id)

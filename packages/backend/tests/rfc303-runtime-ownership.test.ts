@@ -8,6 +8,7 @@ import { resolve } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { nodeRuns, tasks, webhookMrLaunchGuards, webhookMrStreamStates } from '@/db/schema'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
+import { InMemoryWebhookLaunchSupervisor } from '@/modules/integration/infrastructure/inMemoryWebhookLaunchSupervisor'
 import { createSqliteMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/sqliteMrTerminalControlPersistence'
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
@@ -236,7 +237,10 @@ describe('RFC-303 protected launch guard', () => {
       lastDeliveryId: 'delivery-open',
       updatedAt: 1,
     })
-    const coordinator = new MrLaunchGuardCoordinator(createSqliteMrLaunchGuardPersistence(db))
+    const coordinator = new MrLaunchGuardCoordinator(
+      createSqliteMrLaunchGuardPersistence(db),
+      new InMemoryWebhookLaunchSupervisor(),
+    )
     const guard = await coordinator.reserve({
       endpointId: 'endpoint-1',
       streamKey: 'gitlab:77:9',
@@ -288,7 +292,10 @@ describe('RFC-303 protected launch guard', () => {
       lastDeliveryId: 'delivery-merge',
       updatedAt: 2,
     })
-    const coordinator = new MrLaunchGuardCoordinator(createSqliteMrLaunchGuardPersistence(db))
+    const coordinator = new MrLaunchGuardCoordinator(
+      createSqliteMrLaunchGuardPersistence(db),
+      new InMemoryWebhookLaunchSupervisor(),
+    )
     await expect(
       coordinator.reserve({
         endpointId: 'endpoint-1',

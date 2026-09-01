@@ -312,6 +312,7 @@ import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-executi
 import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
 import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
 import {
   composePostgresqlRuntimeRegistryOperations,
@@ -332,6 +333,11 @@ import {
   createSqliteCollaborationTaskAccessPort,
   planMembersReplacement,
 } from '@/modules/collaboration/composition'
+import {
+  createSqliteClarifyDecisionCommand,
+  createSqliteQuestionDispatchCommand,
+  createSqliteReviewDecisionCommand,
+} from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
@@ -638,6 +644,8 @@ export interface AppDeps {
   schedulerDriver?: SchedulerDriverPort
   /** Read projections composed with the same task-execution runtime. */
   taskExecutionReadModels?: TaskExecutionReadModels
+  /** Provider-selected Agent/Workgroup launch operations shared with route mounts. */
+  taskRouteLaunch?: ReturnType<typeof createSqliteTaskRouteLaunchOperations>
   /**
    * RFC-321 bootstrap publication transport. Task launch/continuation topologies
    * reuse its GitHub/GitLab endpoint discovery instead of rebuilding a
@@ -1787,23 +1795,29 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     })
   const maintenanceDisk =
     deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)
-  const collaborationContext =
-    deps.collaborationContext ??
-    createCollaborationCommandContext({
-      db: deps.db,
-      appHome,
-      taskExecutionReadModels,
-    })
+  let collaborationContext = deps.collaborationContext
   const memoryOperations =
     deps.memoryOperations ??
     composeSqliteMemoryOperations({
       db: deps.db,
       injectionQueries: memoryInjectionQueries,
       reviewedArtifacts: {
-        read: async (finalPath) =>
-          await readCommittedReviewArtifactBody(collaborationContext, finalPath),
+        read: async (finalPath) => {
+          if (collaborationContext === undefined) {
+            throw new Error('collaboration-command-context-not-composed')
+          }
+          return await readCommittedReviewArtifactBody(collaborationContext, finalPath)
+        },
       },
     })
+  collaborationContext ??= createCollaborationCommandContext({
+    db: deps.db,
+    appHome,
+    taskExecutionReadModels,
+    reviewDecisions: createSqliteReviewDecisionCommand({ db: deps.db, appHome }),
+    questionDispatches: createSqliteQuestionDispatchCommand(deps.db),
+    clarifyDecisions: createSqliteClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
+  })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? {
@@ -2423,18 +2437,26 @@ function composeSqliteApiRouteMounts(
       contexts: identityAccess.contexts,
       authorization: resourceScopeAuthorization,
     })
-  const taskRouteLaunch = createSqliteTaskRouteLaunchOperations({
-    db: deps.db,
-    configPath: deps.configPath,
-    execution: buildStartTaskDeps(
-      deps.db,
-      schedulerDriver,
-      deps.configPath,
-      SYSTEM_USER_ID,
-      deps.secretBox,
-      identityAccess,
-    ),
-  })
+  const taskRouteLaunch =
+    deps.taskRouteLaunch ??
+    createSqliteTaskRouteLaunchOperations({
+      db: deps.db,
+      configPath: deps.configPath,
+      execution: {
+        ...buildStartTaskDeps(
+          deps.db,
+          schedulerDriver,
+          deps.configPath,
+          SYSTEM_USER_ID,
+          deps.secretBox,
+          identityAccess,
+        ),
+        agentLaunchResources: Object.freeze({
+          resources: composeSqliteAgentLaunchResourceOperations(deps.db),
+          integrity: agentResourceIntegrity.launch,
+        }),
+      },
+    })
   const workgroupTaskRoom = composeSqliteWorkgroupTaskRoom({
     db: deps.db,
     configPath: deps.configPath,

@@ -93,6 +93,10 @@ export type ClaimedWorkspacePruneOutcome =
  * claim; this set closes the much shorter same-process duplicate-delete race. */
 const workspacePrunesInFlight = new Set<string>()
 
+function lacksMaterializedWorkspace(path: string): boolean {
+  return path.length === 0 || !existsSync(path)
+}
+
 interface WorkspaceGcCleanupPlanV1 {
   readonly v: 1
   readonly kind: 'workspace-prune' | 'iso-container'
@@ -625,7 +629,7 @@ export async function runWorktreeGc(
       result.skipped += 1
       continue
     }
-    if (t.worktreePath === '' || !existsSync(t.worktreePath)) {
+    if (lacksMaterializedWorkspace(t.worktreePath)) {
       if (t.workspacePruningAt !== null) {
         await finishClaimedWorkspacePrune(db, t.id, now)
         result.skipped += 1

@@ -84,10 +84,7 @@ module.exports = {
       // 整个 CRUD 已经用脚投票漂进了路由层。存量违例逐条记在
       // scripts/depcheck.ts → KNOWN_VIOLATIONS（棘轮只减不增）；type-only
       // 边放行——类型引用在 emit 后消失，不构成绕过 service 的数据通路。
-      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
-      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
-      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
-      // 眼里长得一模一样）。
+      // RFC-349 已把 route→DB 存量清零；规则继续以零基线阻止回归。
       name: 'no-routes-to-db',
       severity: 'error',
       comment:
@@ -107,10 +104,7 @@ module.exports = {
       // ——RFC-294 的 preflight AST 扫描器看不见它，因为 ws/ 在 MODULES_ROOT 之外，
       // 而一条 SQL 字符串根本不是 import 边。裸 SQL 已在 T41 改走 identity-access 的
       // public 端口；剩下的 6 张表边逐条入账，棘轮只减不增。
-      // @ledger KNOWN_VIOLATIONS —— 本规则有存量债记在 scripts/depcheck.ts。
-      // 这是**机器标记**，由 RFC-317 T20 双向钉死：有标记必须有条目，有条目必须有标记。
-      // 不用散文判定的原因见该守卫的注释（一句「已入账」和一句「不再有条目」在正则
-      // 眼里长得一模一样）。
+      // RFC-349 已把 WS/MCP→DB 存量清零；规则继续以零基线阻止回归。
       name: 'no-transport-to-db',
       severity: 'error',
       comment:

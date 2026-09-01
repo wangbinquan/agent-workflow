@@ -9,9 +9,8 @@ import type {
   CollaborationCommandContext,
 } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import { humanGateComposition } from '@/services/humanGateComposition'
-import { autoDispatchClarifyRoundWithDecision } from '@/services/clarify/autoDispatch'
 import type { TaskActorRole } from '@agent-workflow/shared'
+import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createSqliteClarifyDecisionCommand(
   db: DbClient,
@@ -19,6 +18,8 @@ export function createSqliteClarifyDecisionCommand(
 ): ClarifyDecisionCommandPort {
   return {
     async submit(command) {
+      const { autoDispatchClarifyRoundWithDecision } =
+        await import('@/services/clarify/autoDispatch')
       const decided = await autoDispatchClarifyRoundWithDecision({
         db,
         originNodeRunId: command.nodeRunId,
@@ -65,7 +66,7 @@ export function createClarifyDecisionCommandContext(input: {
   readonly role: TaskActorRole
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): CollaborationCommandContext {
-  return humanGateComposition.createCollaborationCommandContext({
+  return createCollaborationCommandContext({
     db: input.db,
     clarifyDecisions: createSqliteClarifyDecisionCommand(input.db, input.memoryDistillEnqueuer),
   })

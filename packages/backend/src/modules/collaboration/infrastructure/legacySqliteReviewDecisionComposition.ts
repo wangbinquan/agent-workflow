@@ -9,8 +9,7 @@ import type {
   CollaborationCommandContext,
   ReviewDecisionCommandPort,
 } from '@/modules/collaboration/public/types'
-import { humanGateComposition } from '@/services/humanGateComposition'
-import { submitReviewDecision as submitLegacyReviewDecision } from '@/services/review'
+import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createSqliteReviewDecisionCommand(input: {
   readonly db: DbClient
@@ -18,6 +17,7 @@ export function createSqliteReviewDecisionCommand(input: {
 }): ReviewDecisionCommandPort {
   return {
     async submit(command) {
+      const { submitReviewDecision: submitLegacyReviewDecision } = await import('@/services/review')
       const decided = await submitLegacyReviewDecision({
         db: input.db,
         appHome: input.appHome,
@@ -60,7 +60,7 @@ export function createReviewDecisionCommandContext(input: {
     db: input.db,
     appHome: input.appHome,
   })
-  return humanGateComposition.createCollaborationCommandContext({
+  return createCollaborationCommandContext({
     db: input.db,
     appHome: input.appHome,
     reviewDecisions,

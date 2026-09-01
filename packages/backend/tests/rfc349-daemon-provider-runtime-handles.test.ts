@@ -202,6 +202,57 @@ describe('RFC-349 daemon provider runtime handle adapters', () => {
     expect(events).toEqual(['pause:0', 'resume', 'pause:1', 'resume', 'pause:2'])
   })
 
+  test('preserves receiver binding for stateful pause, resume and stop methods', async () => {
+    class StatefulService implements PausableDaemonRuntimeService {
+      readonly events: string[] = []
+
+      async pause(): Promise<void> {
+        this.events.push('pause')
+      }
+
+      async resume(): Promise<void> {
+        this.events.push('resume')
+      }
+
+      async stop(): Promise<void> {
+        this.events.push('stop')
+      }
+    }
+
+    const eagerService = new StatefulService()
+    const eager = await createPausableDaemonRuntimeServiceBindings({
+      runtimeId: 'stateful-eager',
+      closeParticipantId: 'stateful-eager-close',
+      service: eagerService,
+    })
+    const eagerHandle = await eager.runtimeFactory.start(lifecycle)
+    await eagerHandle.stop()
+    await eagerHandle.drain()
+    await eager.closeParticipant.close({
+      reason: 'daemon-shutdown',
+      provider: 'postgresql',
+      generationId: 'pg-1',
+    })
+    expect(eagerService.events).toEqual(['pause', 'resume', 'pause', 'stop'])
+
+    const lazyService = new StatefulService()
+    const lazy = createLazyPausableDaemonRuntimeServiceBindings({
+      runtimeId: 'stateful-lazy',
+      closeParticipantId: 'stateful-lazy-close',
+      start: () => lazyService.resume(),
+      service: lazyService,
+    })
+    const lazyHandle = await lazy.runtimeFactory.start(lifecycle)
+    await lazyHandle.stop()
+    await lazyHandle.drain()
+    await lazy.closeParticipant.close({
+      reason: 'daemon-shutdown',
+      provider: 'postgresql',
+      generationId: 'pg-1',
+    })
+    expect(lazyService.events).toEqual(['resume', 'pause', 'stop'])
+  })
+
   test('keeps a lazily started service frozen until the provider session resumes', async () => {
     const events: string[] = []
     const service: PausableDaemonRuntimeService = {

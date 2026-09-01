@@ -131,8 +131,8 @@ describe('RFC-346 System Operations contracts', () => {
     )
     expect(commands).toContain('context: CommandContext | LocalSystemOperationContext')
     expect(commands).not.toContain('type SystemOperationCommandContext')
-    expect(queries).toContain(
-      "import type { QueryContext } from '@/modules/identity-access/public/participants'",
+    expect(queries).toMatch(
+      /import type \{[\s\S]*?\bQueryContext\b[\s\S]*?\} from '@\/modules\/identity-access\/public\/participants'/,
     )
     expect(queries).toContain('execute(context: QueryContext): RecoveryStatusView')
     expect(queries).not.toContain('type SystemOperationQueryContext')
@@ -313,7 +313,8 @@ describe('RFC-346 System Operations contracts', () => {
     expect(restore).toContain('systemOperations.operations.getRecoveryStatus')
     expect(restore).toContain('systemOperations.operations.cancelStagedRestore')
     expect(restore).toContain('systemOperations.operations.stageRestore')
-    expect(server.match(/composeSystemOperations\s*\(/g)).toHaveLength(1)
+    expect(server.match(/composeSystemOperations\s*\(/g)).toHaveLength(2)
+    expect(server.match(/composePostgresqlSystemOperations\s*\(/g)).toHaveLength(1)
     expect(server).toContain('mountBackupRoutes(app, systemOperations, identityAccess)')
     expect(server).toContain('mountRestoreRoutes(app, systemOperations, identityAccess)')
     expect(server).toContain('for (const alias of SYSTEM_OPERATION_ALIASES)')
@@ -404,6 +405,7 @@ describe('RFC-346 System Operations contracts', () => {
             ]
           : [
               'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
+              'packages/backend/src/modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator.ts',
             ],
       )
     }

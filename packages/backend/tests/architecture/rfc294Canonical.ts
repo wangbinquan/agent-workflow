@@ -60,6 +60,7 @@ export const PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST = [
   'ReadonlyMap',
   'Record',
   'RegExp',
+  'ReturnType',
   'Uint8Array',
   'extends:Error',
   'z.infer',

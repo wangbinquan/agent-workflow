@@ -213,9 +213,15 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
   })
 
   test('taskQuestionDispatch 第四变体删除，改共享谓词', () => {
-    const tqd = read('packages/backend/src/services/taskQuestionDispatch.ts')
-    expect(tqd).not.toMatch(/function isChannelEdge\(/)
-    expect(tqd).toContain('isClarifyChannelEdge')
+    const facade = read('packages/backend/src/services/taskQuestionDispatch.ts')
+    const implementation = read(
+      'packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts',
+    )
+    expect(facade).toContain(
+      "export * from '@/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch'",
+    )
+    expect(implementation).not.toMatch(/function isChannelEdge\(/)
+    expect(implementation).toContain('isClarifyChannelEdge')
   })
 
   test('五端口字面量比较式全仓禁绝（常量/注册表是唯一之家）——设计门 high 采纳', () => {

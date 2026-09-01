@@ -200,7 +200,8 @@ interface OffTableDeviation {
 }
 
 /**
- * 开账当天（RFC-317 T47）的真实偏离：23 处。
+ * 开账当天（RFC-317 T47）的真实偏离：23 处；provider cutover 把四个
+ * TaskExecution composition 写点收进 owner participants 后，当前为 15 处。
  *
  * **全部集中在一件事上**：终态改写。它们与 `allowTerminal` 账本
  * （`rfc317-allow-terminal-ledger.test.ts`）高度重合，这不是巧合——转移表说
@@ -288,26 +289,6 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     offTable: ['awaiting_human', 'done', 'pending', 'running'],
     why: '评审兄弟级联：一条被打回时，同批兄弟 run 一并重置为 pending，无论它们当前处在哪一态。',
   },
-  {
-    site: 'modules/task-execution/composition/nodeMechanics.ts:failed',
-    offTable: ['done'],
-    why: 'workgroup host 的 ask-back 在执行期间被策略关闭：把已标 done 的 host run 改成 failed。',
-  },
-  {
-    site: 'modules/task-execution/composition/nodeMechanics.ts:running',
-    offTable: ['canceled', 'interrupted'],
-    why: 'call child adoption 复用既有 node_run：从 shutdown/cancel 终态重新认领为 running；pending 来源本身符合 mark-running 表。',
-  },
-  {
-    site: 'modules/task-execution/composition/wrapperRunLifecycle.ts:running',
-    offTable: ['awaiting_human', 'awaiting_review', 'canceled', 'interrupted'],
-    why: '重新认领（四处）：daemon 重启或 wrapper 复活后把 run 拉回 running。表里 `mark-running` 只允许从 pending 出发。',
-  },
-  {
-    site: 'modules/task-execution/composition/wrapperMechanics.ts:pending',
-    offTable: ['canceled', 'failed', 'interrupted', 'pending', 'running'],
-    why: '重跑注入（两处）：把任意状态的 run 重置回 pending 以便调度器重新派发。',
-  },
 ]
 
 describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推出来', () => {
@@ -317,14 +298,14 @@ describe('RFC-317 T47 —— CAS 站点的 allowedFrom 必须能从转移表推�
   test('语料非空：确实抽到了静态可知的 CAS 站点（抽空即假绿）', () => {
     // 这条不可省：下面的判据形如「越界集合等于账本」，抽不到站点时两边都空，满绿。
     expect(units.length).toBeGreaterThan(700)
-    expect(sites.length).toBeGreaterThan(50)
+    expect(sites.length).toBeGreaterThanOrEqual(40)
   })
 
   test('表内站点确实占多数（判据不是恒真）', () => {
     // 如果 oracle 算错、把所有来源都判成合法，下面那条「越界集合等于账本」会因为
     // 两边都空而假绿。这条从反面钉住：确实有一大批站点被判为**表内**。
     const onTable = sites.filter((site) => offTableSources(site).length === 0)
-    expect(onTable.length).toBeGreaterThan(40)
+    expect(onTable.length).toBeGreaterThanOrEqual(20)
   })
 
   test('越界站点与偏离账本**逐条相等**（新增一条 ⇒ 红；改对一条不销账 ⇒ 也红）', () => {

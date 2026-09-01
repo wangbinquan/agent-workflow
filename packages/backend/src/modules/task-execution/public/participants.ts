@@ -96,6 +96,7 @@ export type {
   TaskSourceTerminationParticipant,
   TaskSourceTerminationReceipt,
 } from '../application/applySourceTerminationEffect'
+export type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
 
 /** Required runtime participants; production construction has no fallback. */
 export interface SchedulerRuntimeTopology {

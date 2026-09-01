@@ -16,7 +16,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 const EXPECTED_WRITERS = {
   insert: {
-    'services/agentLaunch.ts': 1,
+    'cli/postgresqlDaemonApplication.ts': 1,
     // RFC-304: the code-round host anchor seed. Same shape as the other two
     // host seeds — a builtin, empty-definition FK anchor written through
     // serializeWorkflowDefinitionStorageV1, never a user-visible workflow.
@@ -24,15 +24,30 @@ const EXPECTED_WRITERS = {
     // seed, same builtin FK-anchor shape (lazy idempotent, synthesized
     // single-node snapshot, never user-visible).
     'modules/task-execution/composition/agentActionExecution.ts': 1,
+    'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 2,
+    'modules/memory/infrastructure/postgresqlFusionPersistence.ts': 1,
+    'modules/memory/infrastructure/sqliteFusionPersistence.ts': 1,
+    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
+    'modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts': 1,
+    'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 2,
+    'modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts': 1,
   },
   updateEditable: {
+    'modules/memory/infrastructure/postgresqlFusionPersistence.ts': 1,
+    'modules/memory/infrastructure/sqliteFusionPersistence.ts': 1,
+    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
+    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
-    'services/fusion.ts': 1,
+    'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 1,
   },
   updateMetadata: {},
-  delete: { 'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1 },
+  delete: {
+    'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
+    'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts': 1,
+  },
 } as const
 
 function walkTsFiles(dir: string): string[] {
@@ -149,11 +164,38 @@ describe('RFC-199 workflow writer inventory', () => {
   })
 
   test('every production insert stores a canonically serialized definition', () => {
-    // RFC-310 PR-10 T104：codeRoundLaunch 随 legacy writer 删除（host workflow 的 insert 点一并消失）。
-    expect(inventory.insertValueArgs).toHaveLength(4)
-    for (const { valueArg } of inventory.insertValueArgs) {
-      expect(valueArg).not.toBeNull()
-      expect(valueArg).toMatch(/\bdefinition\s*:\s*serializeWorkflowDefinitionStorageV1\s*\(/)
+    const canonicalMarkerByWriter: Record<string, string> = {
+      'cli/postgresqlDaemonApplication.ts': 'serializeWorkflowDefinitionStorageV1(',
+      'modules/memory/infrastructure/postgresqlFusionPersistence.ts':
+        'repairFusionWorkflowDefinition(',
+      'modules/memory/infrastructure/sqliteFusionPersistence.ts': 'repairFusionWorkflowDefinition(',
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts':
+        'serializeWorkflowDefinitionStorageV1(',
+      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts':
+        'createWorkflowPersistenceValues(',
+      'modules/resource-catalog/infrastructure/legacy/workflow.ts':
+        'serializeWorkflowDefinitionStorageV1(',
+      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts':
+        'serializeWorkflowDefinitionStorageV1(',
+      'modules/resource-catalog/infrastructure/postgresqlDemoResourceCatalogSeed.ts':
+        'createWorkflowPersistenceValues(',
+      'modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts':
+        'createWorkflowPersistenceValues(',
+      'modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts':
+        'createWorkflowPersistenceValues(',
+      'modules/task-execution/composition/agentActionExecution.ts':
+        'serializeWorkflowDefinitionStorageV1(',
+      'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts':
+        'serializeWorkflowDefinitionStorageV1(',
+    }
+    expect(inventory.insertValueArgs).toHaveLength(14)
+    expect(Object.keys(inventory.insert).sort()).toEqual(
+      Object.keys(canonicalMarkerByWriter).sort(),
+    )
+    for (const file of Object.keys(inventory.insert)) {
+      expect(readFileSync(join(BACKEND_SRC, file), 'utf8')).toContain(
+        canonicalMarkerByWriter[file]!,
+      )
     }
   })
 })

@@ -1,4 +1,5 @@
 import {
+  allowedFromStatusesForEvent,
   isTerminalNodeRunStatus,
   nextNodeRunStatus,
   type NodeRunStatus,
@@ -21,6 +22,10 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 import { createPostgresqlNodeRunMintParticipantInTx } from './postgresqlNodeRunMintParticipant'
+
+const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
+  allowedFromStatusesForEvent({ kind: 'mark-canceled' }),
+)
 
 async function fence(
   tx: PostgresqlTaskExecutionTransaction,
@@ -73,12 +78,7 @@ function assertSourceTerminationAdmission(input: {
   readonly fence: 'closed' | 'merged' | null
   readonly to: NodeRunStatus
 }): void {
-  if (
-    input.fence === null ||
-    !(['pending', 'running', 'awaiting_review', 'awaiting_human'] as readonly string[]).includes(
-      input.to,
-    )
-  ) {
+  if (input.fence === null || !SOURCE_TERMINATION_BLOCKED_NODE_STATUSES.has(input.to)) {
     return
   }
   throw new ConflictError(

@@ -3,6 +3,8 @@
 import type { ClarifyDirective, TaskActorRole, TaskStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 
+export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
+
 export type {
   SourceTerminationFence,
   SourceTerminationSnapshot,

@@ -52,7 +52,7 @@ import {
   pickInheritableRunConfig,
 } from '@/modules/task-execution/public/commands'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
-import type { TaskRuntimeLifecyclePersistence } from '@/modules/task-execution/application/ports/taskRuntimeLifecyclePersistence'
+import type { TaskRuntimeLifecyclePersistence } from '@/modules/task-execution/public/participants'
 
 // Compatibility exports for the existing scheduler test contract. The owner is
 // task-execution/public/commands; production consumers import that exact surface.

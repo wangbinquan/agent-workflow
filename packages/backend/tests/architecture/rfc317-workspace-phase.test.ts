@@ -80,12 +80,7 @@ interface PhaseOwner {
  * 报出其中**两条根本不承重**（`taskWorkspacePhase.ts` 压根不含该形态，`task.ts`
  * 改造后也不再共现）。留着它们只会让后来的人以为那两个文件里藏着一份自造判据。
  */
-const PHASE_OWNERS: readonly PhaseOwner[] = [
-  {
-    file: 'packages/backend/src/services/gc.ts',
-    why: '这里是**墓碑生命周期的主人**（认领 / 执行 / 治愈前推），不是消费者。它的 `worktreePath === \'\' || !existsSync(...)` 问的是「目录还在不在」，答的是「要不要把行治愈前推」，与「是不是还在准备仓库」是两个问题——后者还要求存在 `__repo_prep__` 行，而 GC 根本不关心那个。',
-  },
-]
+const PHASE_OWNERS: readonly PhaseOwner[] = []
 
 const TOMBSTONE_NAMES = new Set(['workspacePrunedAt', 'workspacePruningAt', 'workspaceState'])
 
@@ -215,13 +210,12 @@ describe('RFC-317 T50 负向 fixture —— 判据真的会咬', () => {
     ).toEqual([])
   })
 
-  test('账本里的文件被豁免（否则墓碑机制的主人会报自己）', () => {
+  test('零账本时，历史 owner 路径也不能绕过判据', () => {
     const fixture = sourceUnit(
       'packages/backend/src/services/gc.ts',
       `export function f(t: any) { return t.worktreePath === '' && t.workspacePrunedAt === null }`,
     )
-    expect(handWrittenPhasePredicates([fixture])).toEqual([])
-    // 而绕过豁免时它必须被报出来——否则「豁免承重」那条自证就成了空转。
+    expect(handWrittenPhasePredicates([fixture])).toHaveLength(1)
     expect(handWrittenPhasePredicates([fixture], { applyOwners: false })).toHaveLength(1)
   })
 })

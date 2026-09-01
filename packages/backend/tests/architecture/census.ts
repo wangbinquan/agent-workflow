@@ -74,6 +74,8 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
   'packages/backend/src/main.ts',
+  'packages/backend/src/cli/daemonProviderMigrationAdmission.ts',
+  'packages/backend/src/cli/postgresqlDaemonApplication.ts',
   'packages/backend/src/cli/start.ts',
   'packages/backend/src/platform/background/maintenanceWorker.ts',
   'packages/backend/src/server.ts',

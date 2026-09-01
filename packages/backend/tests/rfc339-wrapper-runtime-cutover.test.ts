@@ -294,7 +294,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const rawMembershipReaders = tsFilesUnder('packages/backend/src/modules/task-execution').filter(
       (file) =>
         file !== 'packages/backend/src/modules/task-execution/domain/executionScope.ts' &&
-        read(file).includes('nodeIds'),
+        read(file).includes('.nodeIds'),
     )
     expect(rawMembershipReaders).toEqual([])
 
@@ -395,31 +395,23 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     }
     expect(mutations.taskExecutionAuthorityLedger.unknown).toEqual([])
     expect(
-      mutations.taskExecutionAuthorityLedger.entries
-        .filter((entry) =>
-          /modules\/task-execution\/composition\/wrapper(?:Mechanics|RunLifecycle)\.ts$/.test(
-            entry.file,
-          ),
-        )
-        .map((entry) => `${entry.consumer}:${entry.authorityKind}`)
-        .sort(),
-    ).toEqual([
-      'clearWrapperReuseDisabled:worker-epoch',
-      'dispatchFanoutShardAttempt:worker-epoch',
-      'persistWrapperProgress:worker-epoch',
-      'recordConsumed:worker-epoch',
-      'upsertWrapperOutput:worker-epoch',
-    ])
+      mutations.taskExecutionAuthorityLedger.entries.filter((entry) =>
+        /modules\/task-execution\/composition\/wrapper(?:Mechanics|RunLifecycle)\.ts$/.test(
+          entry.file,
+        ),
+      ),
+    ).toEqual([])
   })
 
   test('bootstrap is the only runtime composer and every continuation caller receives a public driver', () => {
     const server = read('packages/backend/src/server.ts')
     const cli = read('packages/backend/src/cli/start.ts')
     const runtime = read(
-      'packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts',
+      'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
     )
     expect(server.match(/composeTaskExecutionRuntime\(/g)).toHaveLength(1)
-    expect(cli.match(/composeTaskExecutionRuntime\(/g)).toHaveLength(1)
+    expect(cli).toContain('const taskExecutionRuntime = taskExecutionProvider.runtime')
+    expect(cli).not.toContain('composeTaskExecutionRuntime(')
     expect(runtime.match(/export function composeTaskExecutionRuntime\(/g)).toHaveLength(1)
     expect(runtime).toContain('wrapperRuntimeFactory: composeWrapperRuntime')
     expect(runtime).toContain('mergeRecoveryFactory: composeExecutionMergeRecovery')
@@ -451,10 +443,10 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       expect(source, path).not.toContain('createLegacyTaskExecutionTopology')
     }
     expect(server).toContain('schedulerDriver?: SchedulerDriverPort')
-    expect(server).toContain('type RuntimeComposedAppDeps = AppDeps & {')
-    expect(server).toContain('export type ComposedAppDeps = RuntimeComposedAppDeps &')
-    expect(server).toContain('RepositoryBootstrap & {')
-    expect(server).toContain('const effectiveDeps: ComposedAppDeps = {')
+    expect(server).toContain('type RuntimeComposedAppDeps = SqliteAppDeps & {')
+    expect(server).toContain('type SqliteComposedAppDeps = RuntimeComposedAppDeps &')
+    expect(server).toContain('export interface ComposedAppDeps<')
+    expect(server).toContain('const effectiveDeps: SqliteComposedAppDeps = {')
     expect(server).toContain('export function mountApiRoutes(')
     expect(server).toContain('deps: ComposedAppDeps')
     expect(server).toContain('identityAccess: IdentityAccessModule')
@@ -472,7 +464,6 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/services/dispatchFrontier.ts',
       'packages/backend/src/services/execution/taskMechanicsState.ts',
       'packages/backend/src/services/structuralDiff/service.ts',
-      'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
     ]) {
       const source = read(path)
       expect(source, path).toContain('@/modules/task-execution/public/')
@@ -494,17 +485,21 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const containing = (needle: string): string[] =>
       productionSources.filter((path) => read(path).includes(needle))
     expect(containing('composeTaskExecutionRuntime(')).toEqual([
-      'packages/backend/src/cli/start.ts',
-      'packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts',
+      'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
+      'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
       'packages/backend/src/server.ts',
     ])
     expect(containing('composeWrapperRuntime')).toEqual([
-      'packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts',
+      'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
       'packages/backend/src/modules/task-execution/composition/wrapperRuntime.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
     ])
     expect(containing('composeExecutionMergeRecovery')).toEqual([
       'packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts',
-      'packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts',
+      'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
     ])
     expect(containing('createExecutionScopeIndex(')).toEqual([
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',

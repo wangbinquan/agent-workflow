@@ -60,8 +60,10 @@ import {
   currentTaskExecutionContext,
   taskExecutionModule,
   withTaskExecutionMutation,
-  type TaskCommittedEventIdentity,
-  type TaskNodeChangeV1,
+} from '@/modules/task-execution/public/operations'
+import type {
+  TaskCommittedEventIdentity,
+  TaskNodeChangeV1,
 } from '@/modules/task-execution/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'

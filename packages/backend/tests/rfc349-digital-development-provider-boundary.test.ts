@@ -6,6 +6,18 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 const BACKEND = resolve(import.meta.dir, '..')
+const BANNED_PROVIDER_MECHANISMS = [
+  /from\s+['"]@\/db(?:\/|['"])/,
+  /from\s+['"](?:bun:sqlite|drizzle-orm)/,
+  /\bDbClient\b/,
+  /\bDbTxSync\b/,
+  /\bPostgresqlDatabaseClient\b/,
+] as const
+
+interface CandidateSource {
+  readonly file: string
+  readonly source: string
+}
 
 function files(root: string): string[] {
   return readdirSync(root).flatMap((name) => {
@@ -17,6 +29,14 @@ function files(root: string): string[] {
 function businessFiles(moduleName: string): string[] {
   const root = join(BACKEND, 'src', 'modules', moduleName)
   return ['application', 'domain', 'public'].flatMap((layer) => files(join(root, layer)))
+}
+
+export function providerMechanismViolations(candidates: readonly CandidateSource[]): string[] {
+  return candidates.flatMap(({ file, source }) =>
+    BANNED_PROVIDER_MECHANISMS.flatMap((matcher) =>
+      matcher.test(source) ? [`${file} => ${String(matcher)}`] : [],
+    ),
+  )
 }
 
 describe('RFC-349 Digital Employee / Development Automation provider boundary', () => {
@@ -36,20 +56,27 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
         'employeeCaseMembers.ts',
       ].map((name) => join(BACKEND, 'src', 'services', name)),
     ]
-    const banned = [
-      /from\s+['"]@\/db(?:\/|['"])/,
-      /from\s+['"](?:bun:sqlite|drizzle-orm)/,
-      /\bDbClient\b/,
-      /\bDbTxSync\b/,
-      /\bPostgresqlDatabaseClient\b/,
-    ]
-    const violations = candidates.flatMap((file) => {
-      const source = readFileSync(file, 'utf8')
-      return banned.flatMap((matcher) =>
-        matcher.test(source) ? [`${relative(BACKEND, file)} => ${String(matcher)}`] : [],
-      )
-    })
+    expect(candidates.length).toBeGreaterThanOrEqual(10)
+    const violations = providerMechanismViolations(
+      candidates.map((file) => ({
+        file: relative(BACKEND, file),
+        source: readFileSync(file, 'utf8'),
+      })),
+    )
     expect(violations).toEqual([])
+  })
+
+  test('negative fixture: a business import of a provider mechanism is rejected', () => {
+    expect(
+      providerMechanismViolations([
+        {
+          file: 'src/modules/digital-employee/application/authoring.ts',
+          source: "import { sql } from 'drizzle-orm'",
+        },
+      ]),
+    ).toEqual([
+      'src/modules/digital-employee/application/authoring.ts => /from\\s+[\'"](?:bun:sqlite|drizzle-orm)/',
+    ])
   })
 
   test('both live providers have authoring/runtime/mission/config/upload adapters', () => {

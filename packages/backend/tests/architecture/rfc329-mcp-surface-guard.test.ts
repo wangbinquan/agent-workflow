@@ -37,6 +37,7 @@ import { ALL_TOOLS, MCP_RESOURCE_KINDS, type McpToolContext } from '@/mcp/tools'
 import { allRouteMeta } from '@/routes/registry'
 import { recordingOperationHandles } from '../helpers/mcpOperationRecording'
 import { createApp } from '@/server'
+import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import {
   EXEMPT_REASONS,
   MCP_SURFACE_EXEMPTION_LEAVES,
@@ -68,6 +69,18 @@ function mountedRoutes(): Array<{ key: string; permissions: ReadonlyArray<Permis
     dbVersion: 28,
     db: createInMemoryDb(MIGRATIONS),
     secretBox: createSecretBoxFromKey(randomBytes(32)),
+    databaseMigration: composeDatabaseMigrationModule({
+      sqlitePath: join(home, 'db.sqlite'),
+      operationsRoot: join(home, 'database-migrations'),
+      generationPointerPath: join(home, 'database-generation.json'),
+      configPath: join(home, 'config.json'),
+      admission: {
+        async freezeAndDrain() {},
+        async reopenSqlite() {},
+        async activatePostgresql() {},
+        async openPostgresqlAdmission() {},
+      },
+    }),
   })
   return allRouteMeta().map((meta) => ({
     key: canon(meta.method, meta.path),

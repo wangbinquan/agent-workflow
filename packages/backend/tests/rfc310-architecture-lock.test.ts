@@ -47,6 +47,7 @@ const PUBLIC_ALLOWED = new Set([
 
 /** 消费者账本：import 这两个入口的仓内生产文件（相对 backend/src）。 */
 const COMPOSITION_CONSUMERS: string[] = [
+  'cli/postgresqlDaemonApplication.ts',
   'cli/start.ts',
   'platform/background/maintenanceWorker.ts',
   'server.ts',
@@ -136,10 +137,12 @@ describe('rfc310 development-automation architecture lock', () => {
           edge.specifier === `${MODULE_SPEC}/composition` ||
           edge.specifier === `${MODULE_SPEC}/composition.ts`
         ) {
-          compositionConsumers.push(rel(file))
+          const consumer = rel(file)
+          if (!compositionConsumers.includes(consumer)) compositionConsumers.push(consumer)
         }
         if (edge.specifier === `${MODULE_SPEC}/composition/required-ports`) {
-          requiredPortConsumers.push(rel(file))
+          const consumer = rel(file)
+          if (!requiredPortConsumers.includes(consumer)) requiredPortConsumers.push(consumer)
         }
       }
     }
@@ -241,10 +244,12 @@ describe('rfc310 development-automation architecture lock', () => {
   // ---- PR-10 T104/T105/T108：legacy code-capability 退役棘轮 -----------------
 
   test('T104/T105: the legacy code-capability writer surface is gone and stays gone', () => {
-    // 一条棘轮同时锁四件事，任一被「顺手加回来」立刻红：
-    //   ①已删的 writer 家族文件不得复活；②生产代码不得再 import 它们；
-    //   ③code-capability 模块内不得出现任何写动词（insert/update/delete）；
-    //   ④shared 权限目录不得再有 code-rounds:launch。
+    // 一条棘轮同时锁三件事，任一被「顺手加回来」立刻红：
+    //   ①已删的 round-writer 家族文件不得复活；②生产代码不得再 import 它们；
+    //   ③shared 权限目录不得再有 code-rounds:launch。
+    // RFC-349 已将 capability-template 与 demo-seed 的合法 provider writer 放回
+    // code-capability context，因此不能再把整个 context 的 insert/update/delete
+    // 当成已退役 round-writer 的同义词。
     const retiredFiles = [
       'src/services/codeRoundLaunch.ts',
       'src/services/codeCapabilityWake.ts',
@@ -256,8 +261,6 @@ describe('rfc310 development-automation architecture lock', () => {
       'src/services/codeCapabilityGate.ts',
       'src/services/codeRoundLease.ts',
       'src/services/codeCiEventTarget.ts',
-      'src/modules/code-capability/composition',
-      'src/modules/code-capability/ports',
       'src/modules/code-capability/application/stageEngine.ts',
       'src/modules/code-capability/application/monitorLoop.ts',
       'src/modules/code-capability/application/enableCommand.ts',
@@ -265,34 +268,21 @@ describe('rfc310 development-automation architecture lock', () => {
       'src/modules/code-capability/infrastructure/gitAdapter.ts',
       'src/modules/code-capability/infrastructure/codeHostAdapter.ts',
     ]
-    const revived = retiredFiles.filter((rel) => {
-      const retiredPath = join(BACKEND_SRC, '..', rel)
-      return rel === 'src/modules/code-capability/composition'
-        ? existsSync(retiredPath) && statSync(retiredPath).isFile()
-        : existsSync(retiredPath)
-    })
+    const revived = retiredFiles.filter((rel) => existsSync(join(BACKEND_SRC, '..', rel)))
     expect(revived).toEqual([])
 
-    const legacyRoot = join(BACKEND_SRC, 'modules', 'code-capability')
-    // 唯一能力豁免：capability-templates 资源自身的 upstream 同步写。RFC-349
-    // 已将它收进 provider-owned atomic adapters；application 只返回纯 decision。
-    // 该资源仍有完整 CRUD 路由，退役不在 T104/T105 round-writer 删除面内。
-    const writeVerbExempt = new Set([
-      'infrastructure/sqliteTemplateUpstreamPersistence.ts',
-      'infrastructure/postgresqlTemplateUpstreamPersistence.ts',
-    ])
-    const writeVerbs: string[] = []
-    for (const file of walk(legacyRoot)) {
-      if (writeVerbExempt.has(relative(legacyRoot, file).replaceAll('\\', '/'))) continue
-      const lines = readFileSync(file, 'utf8').split('\n')
-      lines.forEach((line, index) => {
-        if (/^\s*(?:\/\/|\*|\/\*)/.test(line)) return
-        if (/\.(?:insert|update|delete)\(/.test(line)) {
-          writeVerbs.push(`${relative(legacyRoot, file)}:${index + 1}`)
+    const retiredModuleSpecifiers = retiredFiles.map((file) =>
+      file.replace(/^src\//, '@/').replace(/\.ts$/, ''),
+    )
+    const retiredImports: string[] = []
+    for (const file of walk(BACKEND_SRC)) {
+      for (const edge of edgesOf(file)) {
+        if (retiredModuleSpecifiers.includes(edge.specifier)) {
+          retiredImports.push(`${rel(file)} -> ${edge.specifier}`)
         }
-      })
+      }
     }
-    expect(writeVerbs).toEqual([])
+    expect(retiredImports).toEqual([])
 
     const permissions = readFileSync(
       join(BACKEND_SRC, '..', '..', 'shared', 'src', 'schemas', 'permission.ts'),

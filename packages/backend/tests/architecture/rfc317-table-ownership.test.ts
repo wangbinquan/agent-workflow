@@ -74,65 +74,91 @@ interface OwnershipDebt {
  * 逐条记在这里并写清出路——棘轮只减不增。
  */
 const OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
-  {
+  ...[
+    'integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts',
+    'integration/infrastructure/developmentToolConnectionStore.ts',
+    'integration/infrastructure/postgresqlDevelopmentAdapterRevisionStore.ts',
+    'integration/infrastructure/sqliteDevelopmentAdapterStore.ts',
+  ].map((file) => ({
     table: 'developmentAdapterDefinitionRevisions',
     owner: 'development-automation',
-    file: 'integration/infrastructure/sqliteDevelopmentAdapterStore.ts',
-    why: 'integration 侧的适配器定义存储直接读写 development 的适配器定义与其修订表。适配器定义「归谁」本身尚未裁决：它既是 development 的执行配置，也是 integration 的对外协议映射。',
+    file,
+    why:
+      'Integration 的 provider adapter 仍直接持久化 Development Automation 拥有的适配器修订表；这只是精确存量，不是业务层可复制的访问方式。',
     removeWhen:
-      'RFC-317 B10（传输/平台批次）先裁决适配器定义的归属 context，再据此把这张表连同 store 整体划归一侧，另一侧改走 public 端口。',
-  },
-  {
+      'RFC-294 W4-E8 将定义修订持久化收回 Development Automation，并让 Integration 只消费 owner-owned public port。',
+  })),
+  ...[
+    'integration/composition/postgresqlDevelopmentAdapterConfigOperations.ts',
+    'integration/infrastructure/developmentToolConnectionStore.ts',
+    'integration/infrastructure/sqliteDevelopmentAdapterStore.ts',
+  ].map((file) => ({
     table: 'developmentAdapterDefinitions',
     owner: 'development-automation',
-    file: 'integration/infrastructure/sqliteDevelopmentAdapterStore.ts',
-    why: '同上——与 revisions 表是同一个 store 的两半，必须同去同留。',
-    removeWhen: '同 developmentAdapterDefinitionRevisions。',
-  },
+    file,
+    why:
+      'Integration 的 provider adapter 仍直接持久化 Development Automation 拥有的适配器定义表；它与 revisions 必须作为同一 owner contract 收口。',
+    removeWhen:
+      'RFC-294 W4-E8 将定义存储收回 Development Automation，并让 Integration 只消费 owner-owned public port。',
+  })),
+  ...[
+    'developmentApprovalSagas',
+    'developmentMissionLinks',
+    'developmentMissions',
+    'developmentMrClaims',
+  ].map((table) => ({
+    table,
+    owner: 'development-automation',
+    file: 'digital-employee/infrastructure/writerCutoverPersistence.ts',
+    why:
+      'Digital Employee 的 writer cutover infrastructure 仍跨 context 操作 Development Automation 的 mission lifecycle 表；调用点已被精确钉住。',
+    removeWhen:
+      'RFC-294 W4-E9 把 writer cutover 收敛为 Development Automation owner-owned command，Digital Employee 只传 closed request。',
+  })),
   {
     table: 'employeeApprovalSagas',
     owner: 'digital-employee',
-    file: 'development-automation/composition/digitalEmployeePlatformWorkItems.ts',
-    why: '平台工作项在发布环节读 OS 的审批 saga 行判断人审是否已放行。这是**读**侧耦合，与 DE-02 已收口的两处同形，但它牵到审批状态机的多个态，收口需要先把「审批已放行」定义成 OS 的一条 public 判据。',
+    file: 'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
+    why:
+      'Development Automation 的工作项 persistence 仍读取 Digital Employee 拥有的审批 saga；这是 provider adapter 的精确跨表存量。',
     removeWhen:
-      'RFC-317 B7 生命周期批次：在 digital-employee/public/queries 上补 `approvalSettled(caseId, workItemRef)`，与 lastSettledRound 同形。',
+      'RFC-294 W4-E9 由 Digital Employee 暴露 closed approval query，Development Automation 不再引用 foreign table。',
   },
-  {
+  ...[
+    'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
+    'development-automation/infrastructure/postgresqlEmployeeWorkspacePersistence.ts',
+    'development-automation/infrastructure/sqliteEmployeeWorkspacePersistence.ts',
+  ].map((file) => ({
     table: 'employeeCaseWorkspaces',
     owner: 'digital-employee',
-    file: 'development-automation/composition/digitalEmployeePlatformWorkItems.ts',
-    why: '读工作区基线（cachedRepoId / baselineSha）以定位仓库副本。',
-    removeWhen: '与下面 digitalEmployeeWorkspace.ts 的同表条目一起收口（同一个工作区持久化端口）。',
-  },
-  {
-    table: 'employeeCaseWorkspaces',
-    owner: 'digital-employee',
-    file: 'development-automation/composition/digitalEmployeeWorkspace.ts',
-    why: '**写**侧：development-automation 在这里 insert 工作区行。这已不是「借读一张表」，而是两个 context 共同写同一张表——收口意味着把整套工作区持久化搬进 OS 或搬出 OS，是一次独立的设计裁决，不该塞进 T41。',
+    file,
+    why:
+      'Development Automation 的双 provider workspace persistence 仍共享 Digital Employee workspace 表；所有站点均为精确 infrastructure 存量。',
     removeWhen:
-      'RFC-317 B7 生命周期批次：裁决工作区持久化的归属，落 `EmployeeWorkspaceStorePort`（prepare / checkpoint / restore / validate 四组），两侧各自只经端口。',
-  },
+      'RFC-294 W4-E9 落地 Digital Employee owner-owned EmployeeWorkspaceStorePort，外域只消费 closed operations。',
+  })),
   {
     table: 'employeeChangeCandidates',
     owner: 'digital-employee',
-    file: 'development-automation/composition/digitalEmployeePlatformWorkItems.ts',
-    why: '发布环节读 OS 的变更候选行（候选文件集与其判定结果）以组装真正要提交的内容。与 approvalSagas 是同一次发布判定的两半，读的都是 OS 内部的中间产物。',
-    removeWhen: '同 employeeApprovalSagas —— 一并在 B7 补 public 查询面。',
+    file: 'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
+    why:
+      'Development Automation 的平台工作项 persistence 仍读取 Digital Employee 变更候选表以生成发布工作项。',
+    removeWhen:
+      'RFC-294 W4-E9 由 Digital Employee 提供 closed change-candidate projection，删除 foreign table import。',
   },
-  {
+  ...[
+    'development-automation/infrastructure/employeePlatformWorkItemPersistence.ts',
+    'development-automation/infrastructure/postgresqlEmployeeWorkspacePersistence.ts',
+    'development-automation/infrastructure/sqliteEmployeeWorkspacePersistence.ts',
+  ].map((file) => ({
     table: 'employeeRoundWorkspaceStates',
     owner: 'digital-employee',
-    file: 'development-automation/composition/digitalEmployeePlatformWorkItems.ts',
-    why: '读某轮次最后一次尝试的 validationJson。DE-02 收口 lastSettledRound 之后，这里拿到的是端口给的 roundRef，但取 validation 仍直查表。',
-    removeWhen: '同 employeeCaseWorkspaces —— 归入 B7 的 EmployeeWorkspaceStorePort。',
-  },
-  {
-    table: 'employeeRoundWorkspaceStates',
-    owner: 'digital-employee',
-    file: 'development-automation/composition/digitalEmployeeWorkspace.ts',
-    why: '**写**侧：insert / update 轮次工作区状态行（含 onConflictDoNothing 的并发路径）。同 employeeCaseWorkspaces，属共同写，收口需独立裁决。',
-    removeWhen: '同 employeeCaseWorkspaces。',
-  },
+    file,
+    why:
+      'Development Automation 的双 provider workspace persistence 仍共享 Digital Employee round workspace 状态表；所有站点均被逐文件钉住。',
+    removeWhen:
+      'RFC-294 W4-E9 将 round workspace persistence 收回 Digital Employee owner port，删除跨 context 表访问。',
+  })),
 ]
 
 const units = packageSrcUnits(REPO_ROOT, 'backend')

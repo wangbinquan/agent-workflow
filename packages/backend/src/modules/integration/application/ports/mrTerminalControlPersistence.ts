@@ -30,6 +30,18 @@ export interface MrLaunchGuardPersistencePort {
   hasLaunchBarrier(binding: string, revision: number): Promise<boolean>
 }
 
+/**
+ * Process-local ownership is a runtime mechanism, not application policy.
+ * Composition supplies the implementation so this application layer never
+ * imports a concrete SQLite/PostgreSQL/in-memory adapter.
+ */
+export interface MrLaunchSupervisorPort {
+  register(guardId: string, controller: AbortController): boolean
+  abort(guardId: string): boolean
+  release(guardId: string, controller: AbortController): boolean
+  abortAll(): void
+}
+
 export type MrControlEffectStatus =
   | 'pending'
   | 'waiting-launches'

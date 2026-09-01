@@ -88,6 +88,7 @@ export async function buildHarness(opts: {
     inputs: '{}',
     startedAt: Date.now(),
   })
+  const operations = taskRecoveryOperations(db)
   return {
     db,
     taskId,
@@ -97,10 +98,11 @@ export async function buildHarness(opts: {
     deps: {
       db,
       schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
+      taskRecoveryOperations: operations,
       appHome: tmp,
       binaryOverride: ['/nonexistent-opencode-binary-rfc057-test'],
     },
-    operations: taskRecoveryOperations(db),
+    operations,
   }
 }
 

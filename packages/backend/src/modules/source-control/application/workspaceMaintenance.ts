@@ -61,6 +61,10 @@ function emptyReceipt(): WorkspaceGcReceipt {
   return { scanned: 0, removed: 0, skipped: 0 }
 }
 
+function lacksMaterializedWorkspace(path: string): boolean {
+  return path.length === 0
+}
+
 /**
  * Provider-neutral durable workspace cleanup. The application protocol owns
  * claim/recovery ordering; provider stores own SQL and the filesystem adapter
@@ -239,10 +243,10 @@ export function createWorkspaceMaintenanceCommand(input: {
         skipped += 1
         continue
       }
-      if (task.worktreePath === '' || !filesystem.exists(task.worktreePath)) {
+      if (lacksMaterializedWorkspace(task.worktreePath) || !filesystem.exists(task.worktreePath)) {
         if (task.workspacePruningAt !== null) {
           await finishClaimedWorkspace(task.id, now)
-        } else if (task.worktreePath !== '') {
+        } else if (!lacksMaterializedWorkspace(task.worktreePath)) {
           await store.healMissingWorkspace(task.id, now)
         }
         skipped += 1

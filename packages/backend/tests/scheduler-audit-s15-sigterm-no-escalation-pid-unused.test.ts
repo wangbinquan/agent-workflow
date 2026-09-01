@@ -36,6 +36,20 @@ const RUNNER = resolve(BACKEND_SRC, 'services', 'runner.ts')
 const MANAGED_PROCESS = resolve(BACKEND_SRC, 'services', 'execution', 'managedProcess.ts')
 const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
 const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
+const SQLITE_RECOVERY = resolve(
+  BACKEND_SRC,
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'sqliteTaskRecoveryOperations.ts',
+)
+const POSTGRESQL_RECOVERY = resolve(
+  BACKEND_SRC,
+  'modules',
+  'task-execution',
+  'infrastructure',
+  'postgresqlTaskRecoveryOperations.ts',
+)
 const TASK = resolve(BACKEND_SRC, 'services', 'task.ts')
 const PROCESS_UTIL = resolve(BACKEND_SRC, 'util', 'process.ts')
 const LOCK_UTIL = resolve(BACKEND_SRC, 'util', 'lock.ts')
@@ -136,7 +150,7 @@ describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
     // the same helper, and the awaited kill remains before the status flip.
     const killCall = '(dependencies.killStaleRunProcessTree ?? killStaleRunProcessTree)(r, {'
     const killIdx = orphansSrc.indexOf(killCall)
-    const flipIdx = orphansSrc.indexOf('await transitionNodeRunStatus({', killIdx)
+    const flipIdx = orphansSrc.indexOf('await operations.interruptNodeRun({', killIdx)
     expect(killIdx).toBeGreaterThan(-1)
     expect(flipIdx).toBeGreaterThan(killIdx)
     expect(
@@ -155,6 +169,12 @@ describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
     const stuckSrc = readFileSync(STUCK, 'utf8')
     expect(countNonCommentMatches(stuckSrc, /'S5'/g)).toBeGreaterThanOrEqual(2)
     expect(countNonCommentMatches(stuckSrc, /\bpid\b/g)).toBeGreaterThan(0)
-    expect(stuckSrc).toContain('latestEventTsForRun')
+    expect(stuckSrc).toContain('operations.loadStuckTaskSnapshots(')
+    for (const adapter of [SQLITE_RECOVERY, POSTGRESQL_RECOVERY]) {
+      const source = readFileSync(adapter, 'utf8')
+      expect(source).toContain('latestEventTsForRun')
+      expect(source).toContain('lastEventTs')
+      expect(source).toContain('pid: nodeRuns.pid')
+    }
   })
 })

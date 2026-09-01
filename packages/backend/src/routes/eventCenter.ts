@@ -97,7 +97,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
         .catch(null)
         .parse(c.req.query('family'))
       return c.json(
-        module.committedEvents.queries.deliveryPage({
+        await module.committedEvents.queries.deliveryPage({
           page: pageNumber(c.req.query('page'), 1),
           limit: pageNumber(c.req.query('limit'), 50, 200),
           stage,
@@ -123,7 +123,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       const body = committedDeliveryRetryBodySchema.parse(await safeJsonOrEmpty(c.req.raw))
       try {
         return c.json(
-          module.committedEvents.commands.retry({
+          await module.committedEvents.commands.retry({
             eventId: c.req.param('eventId'),
             consumerId: c.req.param('consumerId'),
             observedLeaseEpoch: body.observedLeaseEpoch,
@@ -150,7 +150,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List independent per-subscription event delivery state',
     },
-    (c) => c.json({ items: module.queries.operations.deliveryStatuses() }),
+    async (c) => c.json({ items: await module.queries.operations.deliveryStatuses() }),
   )
   registerRoute(
     app,
@@ -168,7 +168,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
         .catch(null)
         .parse(c.req.query('state'))
       return c.json(
-        module.queries.operations.deliveryStatusPage({
+        await module.queries.operations.deliveryStatusPage({
           page: pageNumber(c.req.query('page'), 1),
           limit: pageNumber(c.req.query('limit'), 50, 200),
           state,
@@ -186,9 +186,9 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List one bounded page of immutable source events',
     },
-    (c) =>
+    async (c) =>
       c.json(
-        module.queries.operations.eventRecordPage({
+        await module.queries.operations.eventRecordPage({
           page: pageNumber(c.req.query('page'), 1),
           limit: pageNumber(c.req.query('limit'), 50, 200),
           sourceId: optionalQuery(c.req.query('sourceId')),
@@ -236,7 +236,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'Read on-demand observer activation health',
     },
-    (c) => c.json({ items: module.queries.operations.observerHealth() }),
+    async (c) => c.json({ items: await module.queries.operations.observerHealth() }),
   )
   registerRoute(
     app,
@@ -249,7 +249,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     },
     async (c) =>
       c.json(
-        module.participant.subscribe(
+        await module.participant.subscribe(
           subscriptionBodySchema.parse(await safeJsonOrEmpty(c.req.raw)),
         ),
         201,
@@ -264,7 +264,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'Cancel a durable event subscription',
     },
-    (c) => c.json(module.participant.unsubscribe(c.req.param('id'))),
+    async (c) => c.json(await module.participant.unsubscribe(c.req.param('id'))),
   )
   registerRoute(
     app,
@@ -279,7 +279,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       const body = observationBodySchema.parse(await safeJsonOrEmpty(c.req.raw))
       const { routingFacts, ...observation } = body
       return c.json(
-        module.commands.observe({
+        await module.commands.observe({
           ...observation,
           ...(routingFacts === undefined
             ? {}
@@ -298,7 +298,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'never',
       summary: 'List source-neutral event response rules',
     },
-    (c) => c.json({ items: module.responseRules.queries.list() }),
+    async (c) => c.json({ items: await module.responseRules.queries.list() }),
   )
   registerRoute(
     app,
@@ -312,7 +312,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     async (c) => {
       const actor = actorOf(c)
       return c.json(
-        module.responseRules.commands.create(await safeJsonOrEmpty(c.req.raw), {
+        await module.responseRules.commands.create(await safeJsonOrEmpty(c.req.raw), {
           userId: actor.user.id,
           canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
           hasPermission: (permission) => actor.permissions.has(permission),
@@ -333,11 +333,15 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
     async (c) => {
       const actor = actorOf(c)
       return c.json(
-        module.responseRules.commands.update(c.req.param('id'), await safeJsonOrEmpty(c.req.raw), {
-          userId: actor.user.id,
-          canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
-          hasPermission: (permission) => actor.permissions.has(permission),
-        }),
+        await module.responseRules.commands.update(
+          c.req.param('id'),
+          await safeJsonOrEmpty(c.req.raw),
+          {
+            userId: actor.user.id,
+            canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
+            hasPermission: (permission) => actor.permissions.has(permission),
+          },
+        ),
       )
     },
   )
@@ -381,7 +385,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List global custom event source definitions',
     },
-    (c) => c.json({ items: module.customSources.queries.list() }),
+    async (c) => c.json({ items: await module.customSources.queries.list() }),
   )
   registerRoute(
     app,
@@ -401,7 +405,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
         )
       }
       return c.json(
-        module.customSources.commands.create(await safeJsonOrEmpty(c.req.raw), actor.user.id),
+        await module.customSources.commands.create(await safeJsonOrEmpty(c.req.raw), actor.user.id),
         201,
       )
     },
@@ -415,7 +419,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'never',
       summary: 'Read one editable custom event source draft and its program',
     },
-    (c) => {
+    async (c) => {
       const actor = actorOf(c)
       if (!actor.permissions.has('scripts:author')) {
         throw new ForbiddenError(
@@ -423,7 +427,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
           'reading an event observer program requires scripts:author',
         )
       }
-      return c.json(module.customSources.queries.get(c.req.param('id')))
+      return c.json(await module.customSources.queries.get(c.req.param('id')))
     },
   )
   registerRoute(
@@ -444,7 +448,10 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
         )
       }
       return c.json(
-        module.customSources.commands.update(c.req.param('id'), await safeJsonOrEmpty(c.req.raw)),
+        await module.customSources.commands.update(
+          c.req.param('id'),
+          await safeJsonOrEmpty(c.req.raw),
+        ),
       )
     },
   )

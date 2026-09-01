@@ -10,7 +10,8 @@
 //     repair T3, and RFC-109 syncTaskWorkflow」——**五个具名持有者**。
 //
 // 开账时实测是 **21 个生产站点**；RFC-339 把 scheduler 中 5 个 wrapper 站点收敛到
-// wrapperMechanics / wrapperRunLifecycle 的 3 个具名站点，当前为 **19 个**。其中仍包含正常
+// wrapperMechanics / wrapperRunLifecycle 的 3 个具名站点；RFC-349 为 PostgreSQL 修复引擎
+// 补齐 11 个与 SQLite 同语义的显式 repair override，当前为 **30 个**。其中仍包含正常
 // 用户流程：review supersede 把一条 `done` 的 node_run 改写成 `canceled`（review.ts）、
 // review 兄弟级联把 `done` 改回 `pending`。
 // 共享表在这件事上是**斩钉截铁**的：`nextNodeRunStatus` 对任何终态 `cur` 直接抛，
@@ -109,6 +110,12 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
     count: 1,
     rewrites: 'CR-1 修复：failed→interrupted（把误判失败的任务恢复成可续跑）。',
   },
+  {
+    file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+    count: 11,
+    rewrites:
+      'PostgreSQL C1/R1/R2/S1/S2/T2/U1 等生命周期修复分支，与 SQLite repair options 等价地显式越过终态保护；只允许在 provider-owned repair command 内持有。',
+  },
 ]
 
 /** 一个文件里 `allowTerminal: true` 的**属性赋值**个数（AST，注释与字符串免疫）。 */
@@ -150,10 +157,10 @@ describe('RFC-317 T49 —— allowTerminal 站点账本（只减不增）', () =
     ).toEqual(expected)
   })
 
-  test('总数就是 19，且每条都写清了改写什么', () => {
+  test('总数就是 30，且每条都写清了改写什么', () => {
     // 总数单独锁一条：逐文件相等已经能抓住增减，但「19」仍是 lifecycle.ts
     // 头注释里那句「五个具名持有者」的反证，值得让它在测试里显式出现一次。
-    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(19)
+    expect(ALLOW_TERMINAL_LEDGER.reduce((sum, entry) => sum + entry.count, 0)).toBe(30)
     for (const entry of ALLOW_TERMINAL_LEDGER) {
       expect(entry.rewrites.length, `${entry.file}.rewrites`).toBeGreaterThan(15)
     }

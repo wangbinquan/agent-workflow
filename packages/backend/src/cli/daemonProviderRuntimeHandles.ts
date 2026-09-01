@@ -197,7 +197,7 @@ export async function createPausableDaemonRuntimeServiceBindings(
         stop() {
           if (pausePromise !== null) return pausePromise
 
-          const attempt = invokeAsPromise(input.service.pause)
+          const attempt = invokeAsPromise(() => input.service.pause())
           pausePromise = attempt
           void attempt.then(
             () => undefined,
@@ -231,7 +231,7 @@ export async function createPausableDaemonRuntimeServiceBindings(
       if (stopped) return Promise.resolve()
       if (stopPromise !== null) return stopPromise
 
-      const attempt = invokeAsPromise(input.service.stop)
+      const attempt = invokeAsPromise(() => input.service.stop())
       stopPromise = attempt
       void attempt.then(
         () => {
@@ -276,7 +276,7 @@ export function createLazyPausableDaemonRuntimeServiceBindings(
       const handle: DaemonProviderRuntimeHandle = Object.freeze({
         stop() {
           if (pausePromise !== null) return pausePromise
-          const attempt = invokeAsPromise(input.service.pause)
+          const attempt = invokeAsPromise(() => input.service.pause())
           pausePromise = attempt
           void attempt.then(
             () => undefined,
@@ -308,7 +308,7 @@ export function createLazyPausableDaemonRuntimeServiceBindings(
     close() {
       if (stopped) return Promise.resolve()
       if (stopPromise !== null) return stopPromise
-      const attempt = invokeAsPromise(input.service.stop)
+      const attempt = invokeAsPromise(() => input.service.stop())
       stopPromise = attempt
       void attempt.then(
         () => {

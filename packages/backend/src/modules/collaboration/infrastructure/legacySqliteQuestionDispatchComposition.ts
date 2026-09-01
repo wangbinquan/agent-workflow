@@ -8,13 +8,13 @@ import type {
   CollaborationCommandContext,
   QuestionDispatchCommandPort,
 } from '@/modules/collaboration/public/types'
-import { humanGateComposition } from '@/services/humanGateComposition'
-import { dispatchTaskQuestionsWithDecision } from '@/services/taskQuestionDispatch'
 import type { TaskActorRole } from '@agent-workflow/shared'
+import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createSqliteQuestionDispatchCommand(db: DbClient): QuestionDispatchCommandPort {
   return {
     async dispatch(command) {
+      const { dispatchTaskQuestionsWithDecision } = await import('@/services/taskQuestionDispatch')
       const dispatched = await dispatchTaskQuestionsWithDecision(
         db,
         command.taskId,
@@ -49,7 +49,7 @@ export function createQuestionDispatchCommandContext(input: {
   readonly actor: Actor
   readonly role: TaskActorRole
 }): CollaborationCommandContext {
-  return humanGateComposition.createCollaborationCommandContext({
+  return createCollaborationCommandContext({
     db: input.db,
     questionDispatches: createSqliteQuestionDispatchCommand(input.db),
   })

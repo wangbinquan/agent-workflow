@@ -30,6 +30,7 @@ import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { VerifiedWebhookDeliveryPersistencePort } from '../application/ports/verifiedWebhookDeliveryPersistence'
 import { createPostgresqlVerifiedWebhookDeliveryPersistence } from '../infrastructure/postgresqlVerifiedWebhookDeliveryPersistence'
+import { InMemoryWebhookLaunchSupervisor } from '../infrastructure/inMemoryWebhookLaunchSupervisor'
 
 export function composeVerifiedWebhookDeliveryAcceptance(db: DbClient) {
   return createAcceptVerifiedWebhookDelivery({
@@ -70,7 +71,10 @@ export function composeMrTerminalControlWithPorts(input: {
   readonly persistence: MrTerminalControlPersistence
   readonly taskTermination: MrTerminalControlTaskTermination
 }): MrTerminalControl {
-  const launchGuards = new MrLaunchGuardCoordinator(input.persistence.launchGuards)
+  const launchGuards = new MrLaunchGuardCoordinator(
+    input.persistence.launchGuards,
+    new InMemoryWebhookLaunchSupervisor(),
+  )
   const worker = new MrTerminalControlWorker(
     input.persistence.terminalEffects,
     launchGuards,

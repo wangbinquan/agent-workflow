@@ -44,10 +44,7 @@ const CAPABILITY_TEMPLATE_ROUTE = 'packages/backend/src/routes/capabilityTemplat
  * 只读地使用 `canViewResource` 的路由文件。每条必须写清「读什么、为什么不是写门」。
  * 新增条目 = 新增一次「这里可以只判可见性」的例外，必须是有意识的决定。
  */
-const READ_ONLY_VISIBILITY_ALLOWLIST: Readonly<Record<string, string>> = {
-  'packages/backend/src/routes/tasks.ts':
-    '跨域只读：判「这个 actor 看不看得见本任务引用的那个 workflow」来决定 sync 预览是否可用（tasks.ts:822），不是任何资源的写门。',
-}
+const READ_ONLY_VISIBILITY_ALLOWLIST: Readonly<Record<string, string>> = {}
 
 function routeFiles(): string[] {
   const out: string[] = []

@@ -2,6 +2,7 @@ import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
 } from '@/modules/memory/public/fusion'
+import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -39,7 +40,7 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 
-const CANCELABLE = ['pending', 'running', 'awaiting_review', 'awaiting_human'] as const
+const CANCELABLE_NODE_RUN_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
 export interface PostgresqlFusionEngineTaskDependencies {
   readonly db: PostgresqlDatabaseClient
@@ -211,7 +212,7 @@ async function cancelPostgresqlTask(
         .where(eq(tasks.id, taskId))
         .limit(1)
     )[0]
-    if (row === undefined || !CANCELABLE.includes(row.status as (typeof CANCELABLE)[number])) {
+    if (row === undefined || !CANCELABLE_TASK_STATUSES.includes(row.status)) {
       return []
     }
     const now = Date.now()
@@ -252,7 +253,9 @@ async function cancelPostgresqlTask(
     const canceledRuns = await tx
       .update(nodeRuns)
       .set({ status: 'canceled', finishedAt: now, errorMessage: 'canceled by user' })
-      .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, [...CANCELABLE])))
+      .where(
+        and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, CANCELABLE_NODE_RUN_STATUSES)),
+      )
       .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
     await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
       taskId,
@@ -264,7 +267,7 @@ async function cancelPostgresqlTask(
       await tx
         .select({ id: tasks.id })
         .from(tasks)
-        .where(and(eq(tasks.parentTaskId, taskId), inArray(tasks.status, [...CANCELABLE])))
+        .where(and(eq(tasks.parentTaskId, taskId), inArray(tasks.status, CANCELABLE_TASK_STATUSES)))
     ).map((child) => child.id)
     const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
       taskId,

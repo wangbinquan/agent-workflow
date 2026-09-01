@@ -1,4 +1,5 @@
 import {
+  CANCELABLE_TASK_STATUSES,
   REPAIR_OPTION_IDS,
   WorkflowDefinitionSchema,
   isLifecycleAlertRule,
@@ -273,12 +274,7 @@ const TERMINAL_NON_DONE = [
   'exhausted',
 ] as const satisfies readonly NodeRunStatus[]
 const TERMINAL_NON_DONE_SET: ReadonlySet<NodeRunStatus> = new Set(TERMINAL_NON_DONE)
-const NON_TERMINAL_TASKS = [
-  'pending',
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-] as const satisfies readonly TaskStatus[]
+const NON_TERMINAL_TASKS: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
 const ACTIVITY_GATED_OPTIONS = new Set<RepairOptionId>([
   'R1.mark-task-failed',
   'R2.mark-task-failed',

@@ -245,6 +245,11 @@ import {
   createSqliteHumanGateContinuationRecoveryQueries,
   createSqliteHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
+import {
+  createSqliteClarifyDecisionCommand,
+  createSqliteQuestionDispatchCommand,
+  createSqliteReviewDecisionCommand,
+} from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
@@ -1729,6 +1734,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           db,
           appHome: Paths.root,
           taskExecutionReadModels: readModels,
+          reviewDecisions: createSqliteReviewDecisionCommand({ db, appHome: Paths.root }),
+          questionDispatches: createSqliteQuestionDispatchCommand(db),
+          clarifyDecisions: createSqliteClarifyDecisionCommand(
+            db,
+            memoryOperations.distillCommands,
+          ),
         })
         collaborationContext = routeCollaborationContext
         return {
@@ -2588,6 +2599,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       developmentAutomation,
       schedulerDriver: taskExecutionRuntime.schedulerDriver,
       taskExecutionReadModels: taskExecutionRuntime.readModels,
+      taskRouteLaunch: taskExecutionProvider.routeLaunch,
       memoryOperations,
       databaseMigration: databaseMigration,
       collaborationContext,

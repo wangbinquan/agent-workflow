@@ -41,6 +41,7 @@ import type {
 import type { CommittedEventDeliveryPersistencePort } from './persistence'
 
 const MIGRATED_CANONICAL_HEX_DIGEST_PREFIX = 'canonical-hex-v1:'
+const COMMITTED_EVENT_AGGREGATE_LOCK_KEY_SEPARATOR = ':'
 
 export type PostgresqlCommittedEventTransaction = Parameters<
   Parameters<PostgresqlDatabaseClient['transaction']>[0]
@@ -222,7 +223,9 @@ async function reserveAggregateSequenceTx(
   }>,
 ): Promise<number> {
   if (input.requested !== undefined) assertPositiveInteger(input.requested, 'aggregate.seq')
-  const lockKey = [input.producer, input.family, input.aggregateKind, input.aggregateId].join(':')
+  const lockKey = [input.producer, input.family, input.aggregateKind, input.aggregateId].join(
+    COMMITTED_EVENT_AGGREGATE_LOCK_KEY_SEPARATOR,
+  )
   await tx.run(sql`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`)
   const where = and(
     eq(committedEventAggregateHeads.producer, input.producer),

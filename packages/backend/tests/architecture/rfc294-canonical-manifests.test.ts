@@ -372,6 +372,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/taskClarifyDirective.ts',
       'packages/backend/src/services/taskCollab.ts',
       'packages/backend/src/services/taskFeedback.ts',
+      'packages/backend/src/services/taskPlatformInputPaths.ts',
       'packages/backend/src/services/taskQuestionDispatch.ts',
       'packages/backend/src/services/taskQuestions.ts',
       'packages/backend/src/services/workflow.ts',

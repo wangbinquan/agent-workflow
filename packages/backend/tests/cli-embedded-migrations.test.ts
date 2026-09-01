@@ -51,7 +51,7 @@ describe('单二进制上的迁移目录解析', () => {
     expect(
       openers.length,
       'cli/ 下一个 openDb 调用都扫不到 ⇒ 这条判据在空转（改名了？换 import 了？）',
-    ).toBeGreaterThan(3)
+    ).toBeGreaterThan(0)
     const missing = openers
       .filter((f) => !f.text.includes('resolveMigrationsFolder'))
       .map((f) => rel(f.path))

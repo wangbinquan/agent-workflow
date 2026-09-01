@@ -1,4 +1,4 @@
-import { parseTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
+import { parseTaskPlatformInputPaths } from './taskPlatformInputPaths'
 
 interface ArtifactArchiveItem {
   readonly path: string

@@ -162,16 +162,15 @@ function trackedFileCount(context: string): number {
  * 「模块没有 public 合同」意味着它对外完全不可用，或者它的消费者正在走内部路径——
  * 后者恰恰是 R1 要抓的形态。
  */
-const MODULES_WITHOUT_PUBLIC: Readonly<Record<string, { why: string; removeAfterWave: string }>> = {
-  intent: {
-    why: '只有一个 domain 文件（workflowCreateLayout.ts），是 RFC-234 intent 域切出来的半个 context，尚未有对外合同；当前无跨 context 消费者，故不构成 R1 债务。',
-    removeAfterWave: 'RFC-294 W4（intent 域的 vertical slice：要么补 public 合同，要么并回消费方）',
-  },
-}
+const MODULES_WITHOUT_PUBLIC: Readonly<
+  Record<string, { why: string; removeAfterWave: string }>
+> = {}
 
 /** 非 exact public 入口。与 rfc294-architecture-preflight 的 PUBLIC_SURFACE_PILOT_DEBT 同源。 */
 const NON_EXACT_PUBLIC: Readonly<Record<string, readonly string[]>> = {
   integration: ['mrTerminalControl.ts'],
+  memory: ['catalog.ts', 'fusion.ts'],
+  'task-execution': ['taskRoutes.ts'],
 }
 
 describe('RFC-317 T24 —— R3：模块目录形状', () => {
@@ -408,8 +407,16 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
     why: '**本批唯一值得改的一处**：同文件 34 行已用 Record<CodeHostEventType, …> 穷尽，50 行退回 string 键，疑为穷尽性在某次改动里掉了。修法属 integration 的 owning RFC。',
   },
   {
+    site: 'modules/memory/public/fusion.ts: Record<string, string>',
+    why: 'Fusion task input 是由 workflow / agent 声明生成的开放命名映射；键来自资源合同，不能由 Memory 模块预先穷尽。',
+  },
+  {
     site: 'modules/source-control/public/types.ts: Record<string, string | undefined>',
     why: 'Git 子进程环境由运行器、凭据租约与调用方共同扩展，变量名属于开放的进程协议，无法伪装成仓内穷尽键联合。',
+  },
+  {
+    site: 'modules/task-execution/public/commands.ts: Record<string, string>',
+    why: 'Workgroup turn outputs 由 workflow 节点声明命名，Task Execution 只传递已验证的结果映射，无法预先穷尽所有输出键。',
   },
 ]
 

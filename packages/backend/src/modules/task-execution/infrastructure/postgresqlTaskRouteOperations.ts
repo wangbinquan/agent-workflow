@@ -98,6 +98,10 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
+
+function lacksMaterializedWorkspace(path: string): boolean {
+  return path.length === 0
+}
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import {
   collectUploadInputDefs,
@@ -1300,7 +1304,7 @@ async function syncWorkflow(
       `task '${input.taskId}' is ${row.status}; cannot sync`,
     )
   }
-  if (row.worktreePath === '' || row.workspacePrunedAt !== null) {
+  if (lacksMaterializedWorkspace(row.worktreePath) || row.workspacePrunedAt !== null) {
     throw new ConflictError('worktree-missing', `task '${input.taskId}' has no live worktree`)
   }
   const { authority, workflow } = await loadVisibleWorkflow(

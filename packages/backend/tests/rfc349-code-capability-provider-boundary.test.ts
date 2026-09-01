@@ -7,12 +7,33 @@ import { join, relative, resolve } from 'node:path'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const MODULE = join(BACKEND, 'src', 'modules', 'code-capability')
+const BANNED_PROVIDER_MECHANISMS = [
+  /from\s+['"]@\/db(?:\/|['"])/,
+  /from\s+['"](?:bun:sqlite|drizzle-orm)/,
+  /\bDbClient\b/,
+  /\bdbTxSync\b/,
+  /\bPostgresqlDatabaseClient\b/,
+  /\/infrastructure\//,
+] as const
+
+interface CandidateSource {
+  readonly file: string
+  readonly source: string
+}
 
 function files(root: string): string[] {
   return readdirSync(root).flatMap((name) => {
     const path = join(root, name)
     return statSync(path).isDirectory() ? files(path) : path.endsWith('.ts') ? [path] : []
   })
+}
+
+export function providerMechanismViolations(candidates: readonly CandidateSource[]): string[] {
+  return candidates.flatMap(({ file, source }) =>
+    BANNED_PROVIDER_MECHANISMS.flatMap((matcher) =>
+      matcher.test(source) ? [`${file} => ${String(matcher)}`] : [],
+    ),
+  )
 }
 
 describe('RFC-349 code-capability provider boundary', () => {
@@ -30,24 +51,27 @@ describe('RFC-349 code-capability provider boundary', () => {
       join(BACKEND, 'src', 'services', 'changeNarrative.ts'),
       join(BACKEND, 'src', 'services', 'structuralDiff', 'service.ts'),
     ]
-    const banned = [
-      /from\s+['"]@\/db(?:\/|['"])/,
-      /from\s+['"](?:bun:sqlite|drizzle-orm)/,
-      /\bDbClient\b/,
-      /\bdbTxSync\b/,
-      /\bPostgresqlDatabaseClient\b/,
-      /\/infrastructure\//,
-    ]
-    const violations: string[] = []
-    for (const file of candidates) {
-      const source = readFileSync(file, 'utf8')
-      for (const matcher of banned) {
-        if (matcher.test(source)) {
-          violations.push(`${relative(BACKEND, file)} => ${String(matcher)}`)
-        }
-      }
-    }
+    expect(candidates.length).toBeGreaterThanOrEqual(10)
+    const violations = providerMechanismViolations(
+      candidates.map((file) => ({
+        file: relative(BACKEND, file),
+        source: readFileSync(file, 'utf8'),
+      })),
+    )
     expect(violations).toEqual([])
+  })
+
+  test('negative fixture: a business import of a provider mechanism is rejected', () => {
+    expect(
+      providerMechanismViolations([
+        {
+          file: 'src/modules/code-capability/application/orders.ts',
+          source: "import { openDb } from '@/db/client'",
+        },
+      ]),
+    ).toEqual([
+      'src/modules/code-capability/application/orders.ts => /from\\s+[\'"]@\\/db(?:\\/|[\'"])/',
+    ])
   })
 
   test('SQLite and PostgreSQL own the same closed live adapter families', () => {

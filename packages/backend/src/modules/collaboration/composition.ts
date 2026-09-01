@@ -1,7 +1,7 @@
 // RFC-333 — collaboration composition root. Legacy callers enter through one
 // temporary service bridge until their constructors receive these dependencies.
 
-export { composeTaskExecutionHumanGateAdapter } from './application/adapters/task-execution-human-gate-adapter'
+export { composeTaskExecutionHumanGateAdapter } from './composition/taskExecutionHumanGateAdapter'
 export { createSqliteCollaborationTaskAccessPort } from './infrastructure/sqliteCollaborationTaskAccess'
 export { planMembersReplacement } from './infrastructure/legacySqliteTaskCollab'
 export { createSqliteClarifyRepairParticipant } from './infrastructure/sqliteClarifyRepairParticipant'

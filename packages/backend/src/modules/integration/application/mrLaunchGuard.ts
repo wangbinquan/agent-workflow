@@ -2,8 +2,10 @@
 // consumer-owned Promise port; provider transactions stay in infrastructure.
 import { ulid } from 'ulid'
 
-import { InMemoryWebhookLaunchSupervisor } from '@/modules/integration/infrastructure/inMemoryWebhookLaunchSupervisor'
-import type { MrLaunchGuardPersistencePort } from './ports/mrTerminalControlPersistence'
+import type {
+  MrLaunchGuardPersistencePort,
+  MrLaunchSupervisorPort,
+} from './ports/mrTerminalControlPersistence'
 import type {
   ProtectedMrLaunchGuard,
   ProtectedMrLaunchGuardInput,
@@ -13,7 +15,7 @@ import { ConflictError } from '@/util/errors'
 export class MrLaunchGuardCoordinator {
   constructor(
     private readonly persistence: MrLaunchGuardPersistencePort,
-    readonly supervisor = new InMemoryWebhookLaunchSupervisor(),
+    readonly supervisor: MrLaunchSupervisorPort,
   ) {}
 
   async reserve(input: ProtectedMrLaunchGuardInput): Promise<ProtectedMrLaunchGuard> {

@@ -188,11 +188,10 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
   })
 
   test('boot recovery delegates repository preparation without querying prep rows', () => {
-    const boot = source('packages/backend/src/cli/start.ts')
-    expect(boot).toContain('retryRepoPrep: async (taskId) =>')
-    expect(boot).toContain('await retryRepositoryPreparation(db, taskId, resumeDeps)')
+    const boot = source('packages/backend/src/modules/task-execution/composition/taskAutoResume.ts')
+    expect(boot).toContain('retryRepoPrep: (taskId) => input.repositoryPreparation.retry(taskId)')
     expect(boot).not.toContain('eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)')
-    expect(boot).not.toContain('await retryNode(db, taskId, latest.id')
+    expect(boot).not.toContain('retryNode(')
   })
 
   test('registry owner keeps the exact three-engine truth table', () => {

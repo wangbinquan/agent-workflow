@@ -97,10 +97,27 @@ describe('RFC-313 源码层锁', () => {
 
     // 计数查询必须带排除条件
     expect(nodeMechanics).toContain(
-      'notLike(nodeRunEvents.payload, `${FRAMEWORK_AUDIT_EVENT_PREFIX}%`)',
+      'persistence.countAgentTextEvents(nodeRunId, FRAMEWORK_AUDIT_EVENT_PREFIX)',
     )
+    const sqlitePersistence = read(
+      BACKEND_SRC,
+      'modules',
+      'task-execution',
+      'infrastructure',
+      'sqliteNodeExecutionPersistence.ts',
+    )
+    const postgresqlPersistence = read(
+      BACKEND_SRC,
+      'modules',
+      'task-execution',
+      'infrastructure',
+      'postgresqlNodeExecutionPersistence.ts',
+    )
+    for (const persistence of [sqlitePersistence, postgresqlPersistence]) {
+      expect(persistence).toContain('notLike(nodeRunEvents.payload, `${frameworkPrefix}%`)')
+    }
     // 同样数**真实代码用点**而不是文本命中——doc 里的 {@link} 提及是正常的。
     expect(occurrences(nodeMechanics, 'export const FRAMEWORK_AUDIT_EVENT_PREFIX')).toBe(1)
-    expect(occurrences(nodeMechanics, '${FRAMEWORK_AUDIT_EVENT_PREFIX}%')).toBe(1)
+    expect(occurrences(nodeMechanics, 'FRAMEWORK_AUDIT_EVENT_PREFIX)')).toBe(1)
   })
 })

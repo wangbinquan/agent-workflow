@@ -7,6 +7,7 @@ import {
   REPO_PREP_NODE_ID,
   RESUMABLE_TASK_STATUSES,
   WorkflowDefinitionSchema,
+  allowedFromStatusesForEvent,
   migrateWorkflowDefinitionToLatest,
   parseTriggerContextJson,
   taskWorkspacePhase,
@@ -56,14 +57,13 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
 
-const NODE_CANCELABLE_STATUSES = [
-  'pending',
-  'running',
-  'awaiting_review',
-  'awaiting_human',
-] as const satisfies readonly NodeRunStatus[]
+const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
 const log = createLogger('task-execution.postgresql-child-lifecycle')
+
+function lacksMaterializedWorkspace(path: string): boolean {
+  return path.length === 0 || !existsSync(path)
+}
 
 type ResumeRun = Readonly<{
   id: string
@@ -229,7 +229,7 @@ async function assertResumeAdmission(
       `task '${task.id}' workspace is being reclaimed by GC`,
     )
   }
-  if (phase === 'pruned' || task.worktreePath === '' || !existsSync(task.worktreePath)) {
+  if (phase === 'pruned' || lacksMaterializedWorkspace(task.worktreePath)) {
     throw new DomainError(
       'task-worktree-missing',
       `task '${task.id}' worktree is unavailable; cannot resume`,

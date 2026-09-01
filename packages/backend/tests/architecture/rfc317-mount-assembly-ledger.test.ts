@@ -28,20 +28,17 @@ const SERVER_TS = resolve(import.meta.dir, '..', '..', 'src', 'server.ts')
  * **只减不增**：多一次 ⇒ 红（新模块的装配请落在 bootstrap，别再往路由函数里塞）；
  * 少一次却不销账 ⇒ 也红。
  */
-const ASSEMBLY_CALLS_IN_MOUNT: readonly string[] = [
-  'composeApplicationEventCenter',
-  'composeApprovalGatewayRunner',
-  'composeDevelopmentEmployeePlatformWorkItems',
-  'composeDevelopmentEmployeeWorkspace',
-  'composeDevelopmentToolConnectionCatalog',
-  'composeDigitalEmployee',
-  'composeDigitalEmployeeBuiltinToolCatalog',
-  'composeDigitalEmployeeExecution',
-  'composeDigitalEmployeeTaskCatalogSource',
-  'composeTaskCatalog',
-  'composeTaskExecutionCatalogSources',
-  'createEmployeeInputArtifactStore',
-]
+const ASSEMBLY_CALLS_IN_MOUNT: readonly string[] = []
+
+function hasMountApiRoutesFunction(source: string): boolean {
+  const sf = ts.createSourceFile('server.ts', source, ts.ScriptTarget.Latest, true)
+  return sf.statements.some(
+    (statement) =>
+      ts.isFunctionDeclaration(statement) &&
+      statement.name?.text === 'mountApiRoutes' &&
+      statement.body !== undefined,
+  )
+}
 
 /** `mountApiRoutes` 体内所有 `compose*(` / `create*Store(` 形态的调用名。 */
 export function assemblyCallsInMountApiRoutes(source: string): string[] {
@@ -72,10 +69,8 @@ describe('RFC-317 T54 —— 路由函数里的装配调用只减不增', () => 
     ).toEqual([...ASSEMBLY_CALLS_IN_MOUNT].sort())
   })
 
-  test('判据非空：确实在函数体里找到了装配调用（找不到即假绿）', () => {
-    expect(assemblyCallsInMountApiRoutes(readFileSync(SERVER_TS, 'utf8')).length).toBeGreaterThan(
-      10,
-    )
+  test('目标函数仍存在；零装配调用是目标态，不是假绿', () => {
+    expect(hasMountApiRoutesFunction(readFileSync(SERVER_TS, 'utf8'))).toBe(true)
   })
 })
 

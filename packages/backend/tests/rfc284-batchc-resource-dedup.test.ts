@@ -365,8 +365,12 @@ describe('rfc284 批C T10 §2.4 — 快照式可见性全矩阵（迁移快照�
 
   test('迁移结构锁：registry 两处受众判定与 mcpRuntimeTestTransitions 均已委托；status 检查留调用方', () => {
     const registry = SRC('ws/registry.ts')
-    expect(registry.split('isVisibleToAudienceSnapshot(').length - 1).toBeGreaterThanOrEqual(2)
-    const trans = SRC('services/mcpRuntimeTestTransitions.ts')
+    expect(registry.split('visibleToAudienceSnapshot(').length - 1).toBeGreaterThanOrEqual(3)
+    const facade = SRC('services/mcpRuntimeTestTransitions.ts')
+    expect(facade).toContain(
+      "export * from '@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions'",
+    )
+    const trans = SRC('modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts')
     expect(trans).toContain("accountPermissions.has('resource-acl:bypass')")
     expect(trans).toContain("account?.status === 'active' &&")
   })
