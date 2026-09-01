@@ -1,8 +1,8 @@
 import type { Agent, Mcp, Skill } from '@agent-workflow/shared'
 import type { DbClient } from '../../src/db/client'
 import { listAgents } from '../../src/services/agent'
-import { listMcps } from '../../src/services/mcp'
-import { listSkills } from '../../src/services/skill'
+import { listSkills } from '../../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { composeMcpServiceBindingForTest, listMcpsForTest as listMcps } from './mcpServiceBinding'
 
 /**
  * Test-only display-name lookups.
@@ -17,7 +17,9 @@ export async function getAgent(db: DbClient, name: string): Promise<Agent | null
 }
 
 export async function getMcp(db: DbClient, name: string): Promise<Mcp | null> {
-  return (await listMcps(db)).find((mcp) => mcp.name === name) ?? null
+  return (
+    (await listMcps(composeMcpServiceBindingForTest(db))).find((mcp) => mcp.name === name) ?? null
+  )
 }
 
 export async function getSkill(db: DbClient, name: string): Promise<Skill | null> {

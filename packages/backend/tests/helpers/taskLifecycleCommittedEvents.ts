@@ -4,16 +4,18 @@ import type { DbClient } from '@/db/client'
 import {
   collaborationCommittedEventCodec,
   createCollaborationWsProjector,
+  createSqliteCollaborationCommittedEventProjection,
 } from '@/modules/collaboration/composition/committedEvents'
 import { taskLifecycleCommittedEventCodec } from '@/modules/task-execution/application/taskLifecycleConsumers'
 import {
   decodeTaskLifecycleCommittedEvent,
   TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,
 } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
-import { createTaskLifecycleWsProjector } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjector'
+import { createSqliteTaskLifecycleWsProjector } from '@/modules/task-execution/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
 import { combineCommittedEventCodecRegistries } from '@/platform/events/committed/dispatcherWorker'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
   readonly onTerminalTask?: (db: DbClient, taskId: string, to: TaskStatus) => void
@@ -32,14 +34,14 @@ export function installTaskLifecycleAfterCommitTestPump(
   callbacks: TaskLifecycleAfterCommitTestCallbacks,
 ): () => void {
   const pump = createAfterCommitEventPump({
-    db,
+    persistence: createSqliteCommittedEventDeliveryPersistence(db),
     codecs: combineCommittedEventCodecRegistries(
       taskLifecycleCommittedEventCodec,
       collaborationCommittedEventCodec,
     ),
     projectors: [
-      createTaskLifecycleWsProjector(db),
-      createCollaborationWsProjector(db),
+      createSqliteTaskLifecycleWsProjector(db),
+      createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
       {
         id: 'task-lifecycle-test-effect-projector',
         eventTypes: TASK_LIFECYCLE_COMMITTED_EVENT_TYPES,

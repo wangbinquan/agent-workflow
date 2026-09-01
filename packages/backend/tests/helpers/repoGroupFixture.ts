@@ -16,6 +16,7 @@ import {
 } from '@agent-workflow/shared'
 import type { DbClient } from '../../src/db/client'
 import { createRepoGroup } from '../../src/services/repoGroup'
+import { composeSqliteRepositoryWorkspaceStore } from '../../src/modules/source-control/composition'
 import { remoteUrlFor, startGitHttpRemote } from './gitHttpRemote'
 
 export type RepoGroupAttachmentSpec =
@@ -136,8 +137,9 @@ export async function seedRepoGroup(
   // 在这里 await 而不是要求每个调用方自己起——本夹具有 13 个下游，漏一个就红。
   await startGitHttpRemote()
   const readonlySet = new Set(options.readonlyIndexes ?? [])
+  const store = composeSqliteRepositoryWorkspaceStore(db)
   const group = await createRepoGroup(
-    { db, cache: { db, appHome } },
+    { store, cache: { store, appHome } },
     {
       name: options.name ?? `fixture-group-${sourcePaths.length}`,
       description: '',

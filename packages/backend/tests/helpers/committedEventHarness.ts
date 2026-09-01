@@ -6,10 +6,11 @@ import {
   createCollaborationDurableConsumerDefinitions,
   collaborationCommittedEventCodec,
   createCollaborationWsProjector,
+  createSqliteCollaborationCommittedEventProjection,
 } from '@/modules/collaboration/composition/committedEvents'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
-  createTaskLifecycleWsProjector,
+  createSqliteTaskLifecycleWsProjector,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/composition/committedEvents'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
@@ -19,7 +20,8 @@ import {
 } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
+import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 
 function enableCollaborationCutover(db: DbClient): void {
   db.update(committedEventFamilyCutovers)
@@ -44,9 +46,12 @@ export function installCommittedEventProjectionHarness(db: DbClient): () => void
   )
   registerAfterCommitEventPump(
     createAfterCommitEventPump({
-      db,
+      persistence: createSqliteCommittedEventDeliveryPersistence(db),
       codecs,
-      projectors: [createTaskLifecycleWsProjector(db), createCollaborationWsProjector(db)],
+      projectors: [
+        createSqliteTaskLifecycleWsProjector(db),
+        createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
+      ],
       nudgeDispatcher() {},
     }),
   )
@@ -60,24 +65,25 @@ export interface CommittedEventDeliveryTestHarness {
 }
 
 function durableTestConsumers(db: DbClient) {
+  const memoryDistill = createSqliteMemoryDistillEnqueuer(db)
   const events = {
-    observe(input: { readonly dedupeKey: string }) {
+    async observe(input: { readonly dedupeKey: string }) {
       return { eventId: input.dedupeKey, duplicate: false, deliveryCount: 0, deliveryIds: [] }
     },
   }
   return [
     ...createTaskLifecycleDurableConsumerDefinitions({
       events,
-      closeTerminalGates() {},
-      notifyChildBudget() {},
-      notifyExecutionWatch() {},
-      nudgeWorkspacePrune() {},
+      async closeTerminalGates() {},
+      async notifyChildBudget() {},
+      async notifyExecutionWatch() {},
+      async nudgeWorkspacePrune() {},
     }),
     ...createCollaborationDurableConsumerDefinitions({
       events,
       nudgeContinuation() {},
       async enqueueReviewDistill(input) {
-        await enqueueDistillJob(db, {
+        await memoryDistill.enqueue({
           sourceKind: 'review',
           sourceEventId: input.sourceEventId,
           taskId: input.taskId,
@@ -96,7 +102,7 @@ export async function drainCommittedEventDeliveriesForTests(
 ): Promise<void> {
   enableCollaborationCutover(db)
   const dispatcher = createCommittedEventDispatcher({
-    db,
+    persistence: createSqliteCommittedEventDeliveryPersistence(db),
     workerId: 'committed-event-test-drain',
     codecs: combineCommittedEventCodecRegistries(
       taskLifecycleCommittedEventCodec,
@@ -120,10 +126,13 @@ export function installCommittedEventDeliveryHarness(
     taskLifecycleCommittedEventCodec,
     collaborationCommittedEventCodec,
   )
-  const projectors = [createTaskLifecycleWsProjector(db), createCollaborationWsProjector(db)]
+  const projectors = [
+    createSqliteTaskLifecycleWsProjector(db),
+    createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
+  ]
   const projectionLedger = createCommittedEventProjectionLedger()
   const dispatcher = createCommittedEventDispatcher({
-    db,
+    persistence: createSqliteCommittedEventDeliveryPersistence(db),
     workerId: 'committed-event-test-harness',
     codecs,
     consumers: [...durableTestConsumers(db), ...projectors],
@@ -132,7 +141,7 @@ export function installCommittedEventDeliveryHarness(
   })
   registerAfterCommitEventPump(
     createAfterCommitEventPump({
-      db,
+      persistence: createSqliteCommittedEventDeliveryPersistence(db),
       codecs,
       projectors,
       projectionLedger,

@@ -15,7 +15,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplateStore } from '../../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
@@ -26,7 +26,10 @@ import {
 } from '../../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
 import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
 import { createEmployeePublishLookup } from '../../src/modules/development-automation/infrastructure/publishLookup'
-import { createSqliteMissionStore } from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import {
+  createSqliteMissionPersistence,
+  createSqliteMissionStore,
+} from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { createSqliteFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/sqliteReconcilerReaders'
 import { defaultAutomationPolicyContent } from '../../src/modules/development-automation/domain/automationPolicy'
 import type { AdmissionLookup } from '../../src/modules/development-automation/application/ports/admissionLookup'
@@ -82,9 +85,9 @@ function lookupOf(db: DbClient): AdmissionLookup {
 export async function buildPr2Fixture(): Promise<Pr2Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
-  const templates = createSqliteActionTemplateStore(db)
+  const templates = createSqliteActionTemplatePersistence(db)
 
-  const template = createActionTemplate(
+  const template = await createActionTemplate(
     { store: templates, now },
     {
       actorUserId: 'admin',
@@ -110,7 +113,7 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
       },
     },
   )
-  publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
+  await publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
 
   // actionPriority 换成 repository.languages 谓词（见文件头注释）。
   const policyContent = defaultAutomationPolicyContent()
@@ -164,6 +167,7 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
   await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin', lookup })
 
   const store = createSqliteMissionStore(db)
+  const persistence = createSqliteMissionPersistence(db)
   const snapshots = createSqliteFactSnapshotReader(db)
   const admissionLookup = lookupOf(db)
 
@@ -176,11 +180,11 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
     templateId: template.id,
     policyId: policy.id,
     deps(ports: ReconcilerPorts): ReconcileDeps {
-      return { store, lookup: admissionLookup, snapshots, ports, now }
+      return { store: persistence, lookup: admissionLookup, snapshots, ports, now }
     },
     async launch(idempotencyKey: string): Promise<string> {
       const result = await launchMission(
-        { store, lookup: admissionLookup, now },
+        { store: persistence, lookup: admissionLookup, now },
         {
           idempotencyKey,
           repositoryId: 'repo-1',

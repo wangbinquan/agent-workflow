@@ -57,17 +57,29 @@ export function recordStatements(sqlite: Database): StatementRecording {
   const originals = new Map<string, unknown>()
 
   const recordTransaction = <T>(behavior: string, run: () => T): T => {
-    statements.push({
+    const start = statements.length
+    const begin = {
       sql: behavior === 'deferred' ? 'BEGIN' : `BEGIN ${behavior.toUpperCase()}`,
       params: 0,
       rows: 0,
-    })
+    }
+    const ensureBegin = (): void => {
+      if (!statements.slice(start).some((statement) => /^\s*begin\b/i.test(statement.sql))) {
+        statements.splice(start, 0, begin)
+      }
+    }
     try {
       const result = run()
-      statements.push({ sql: 'COMMIT', params: 0, rows: 0 })
+      ensureBegin()
+      if (!statements.slice(start).some((statement) => /^\s*commit\b/i.test(statement.sql))) {
+        statements.push({ sql: 'COMMIT', params: 0, rows: 0 })
+      }
       return result
     } catch (error) {
-      statements.push({ sql: 'ROLLBACK', params: 0, rows: 0 })
+      ensureBegin()
+      if (!statements.slice(start).some((statement) => /^\s*rollback\b/i.test(statement.sql))) {
+        statements.push({ sql: 'ROLLBACK', params: 0, rows: 0 })
+      }
       throw error
     }
   }
@@ -105,9 +117,9 @@ export function recordStatements(sqlite: Database): StatementRecording {
 
   // Bun 1.4 executes Database.transaction() inside the native binding instead
   // of routing its BEGIN / COMMIT / ROLLBACK through the overridable exec()
-  // method. Keep the recorder attached to the public transaction boundary so
-  // transaction-shape assertions retain the same observation without changing
-  // the production transaction itself.
+  // method, while earlier runtimes do route those statements through exec().
+  // Keep the recorder attached to the public transaction boundary, but add a
+  // synthetic boundary only when the native path did not already expose one.
   const origTransaction = sqlite.transaction.bind(sqlite) as unknown as (
     callback: (...args: unknown[]) => unknown,
   ) => TransactionInvoker

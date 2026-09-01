@@ -1,5 +1,5 @@
 import type { DbClient } from '../../src/db/client'
-import { createRuntime, getRuntime, updateRuntime } from '../../src/services/runtimeRegistry'
+import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
 
 export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
 
@@ -10,14 +10,15 @@ export const TEST_OPENCODE_MODEL = 'openai/gpt-5.6'
  * product-valid.
  */
 export async function seedTestDefaultOpencodeRuntime(db: DbClient): Promise<void> {
-  const existing = await getRuntime(db, 'opencode')
+  const runtimeRegistry = composeSqliteRuntimeRegistryOperations(db)
+  const existing = await runtimeRegistry.getRuntime('opencode')
   if (existing === null) {
-    await createRuntime(db, {
+    await runtimeRegistry.createRuntime({
       name: 'opencode',
       protocol: 'opencode',
       model: TEST_OPENCODE_MODEL,
     })
     return
   }
-  await updateRuntime(db, 'opencode', { model: TEST_OPENCODE_MODEL })
+  await runtimeRegistry.updateRuntime('opencode', { model: TEST_OPENCODE_MODEL })
 }

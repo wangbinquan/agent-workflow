@@ -1,15 +1,48 @@
 import type { DbClient } from '../../src/db/client'
-import { composeTaskExecutionHumanGateAdapter } from '../../src/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
+import { createSqliteTaskDagCollaborationOperations } from '../../src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations'
+import { createSqliteCollaborationRuntimeMechanics } from '../../src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
 import { composeTaskExecutionRuntime } from '../../src/modules/task-execution/composition/taskExecutionRuntime'
+import { createSqliteTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
+import { createSqliteTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import { createSqliteRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
 import type { RunTaskOptions } from '../../src/services/execution/taskEngineRuntimeOptions'
 import { createIdentityAccessRuntime } from '../../src/modules/identity-access/composition'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { legacyTaskExecutionResourceDependencies } from '../../src/services/execution/legacyTaskExecutionResourceDependencies'
+import { createSqliteTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
+import { runGit } from '../../src/util/git'
+import { sqliteMemoryInjectionQueries } from './memoryInjection'
+import { composeSqliteRuntimeRegistryOperations } from '../../src/platform/runtime-registry/composition'
+import { createSqliteWorkgroupTurnsOperations } from '../../src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations'
+import { createSqliteChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations'
+import { composeSqliteDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
+
+export function createTestRepositoryPublicationTransport() {
+  return Object.freeze({
+    async open(input: { readonly remoteUrl: string }) {
+      return {
+        ok: true as const,
+        session: {
+          endpointUrl: input.remoteUrl,
+          receipt: {
+            credentialSource: 'legacy' as const,
+            credentialRevision: null,
+            endpointSource: 'local-fixture' as const,
+            endpointBindingDigest: null,
+          },
+          runNetwork: runGit,
+          close() {},
+        },
+      }
+    },
+  })
+}
 
 function createTaskExecutionTestIdentity(db: DbClient) {
   const identityAccess = createIdentityAccessRuntime({ db })
@@ -17,8 +50,9 @@ function createTaskExecutionTestIdentity(db: DbClient) {
     identityAccess,
     resources: Object.freeze({
       delegatedRequests: identityAccess.delegatedRequests,
-      taskExecutionResources: composeTaskExecutionResourceBinding(
-        legacyTaskExecutionResourceDependencies,
+      taskExecutionResources: createSqliteTaskExecutionResourceBinding(
+        db,
+        composeTaskExecutionResourceBinding(legacyTaskExecutionResourceDependencies),
       ),
     }),
   })
@@ -27,7 +61,24 @@ function createTaskExecutionTestIdentity(db: DbClient) {
 /** Shared direct-runtime helper: test schedulers use the same admitted owner. */
 export function composeTaskExecutionTestRuntime(db: DbClient) {
   const identity = createTaskExecutionTestIdentity(db)
-  return composeTaskExecutionRuntime({ db, identityAccess: identity.resources })
+  const persistence = createSqliteTaskExecutionPersistence(db)
+  return composeTaskExecutionRuntime({
+    readModels: persistence.reads,
+    participants: createSqliteTaskExecutionRuntimeParticipants({
+      db,
+      identityAccess: identity.resources,
+      memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
+      collaborationRuntime: createSqliteCollaborationRuntimeMechanics(db),
+      persistence,
+      runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(db),
+      runtimeRegistry: composeSqliteRuntimeRegistryOperations(db),
+      dynamicWorkflow: {
+        persistence: composeSqliteDynamicWorkflowPersistence(db),
+        validationContext: { load: () => buildWorkflowValidationContext(db) },
+      },
+      repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+    }),
+  })
 }
 
 export interface RecordingSchedulerDriver {
@@ -113,16 +164,61 @@ export function createTaskExecutionTestTopology(input: {
 }
 
 /** Direct scheduler fixtures explicitly select the real instance topology. */
-export function runTaskWithRealTestTopology(options: RunTaskOptions): Promise<void> {
+export function runTaskWithRealTestTopology(
+  options: RunTaskOptions & { readonly db: DbClient },
+): Promise<void> {
   const identity =
     options.identityAccess === undefined ? createTaskExecutionTestIdentity(options.db) : undefined
   const identityAccess = options.identityAccess ?? identity?.resources
   if (identityAccess === undefined) throw new Error('task-execution-test-identity-missing')
-  const runtime = composeTaskExecutionRuntime({ db: options.db, identityAccess })
+  const memoryInjectionQueries =
+    options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(options.db)
+  const persistence = options.persistence ?? createSqliteTaskExecutionPersistence(options.db)
+  const runtimeSessionLeases =
+    options.runtimeSessionLeases ?? createSqliteRuntimeSessionLeaseOperations(options.db)
+  const runtimeRegistry =
+    options.runtimeRegistry ?? composeSqliteRuntimeRegistryOperations(options.db)
+  const repositoryPublicationTransport =
+    options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
+  const dynamicWorkflow =
+    options.dynamicWorkflow ??
+    Object.freeze({
+      persistence: composeSqliteDynamicWorkflowPersistence(options.db),
+      validationContext: { load: () => buildWorkflowValidationContext(options.db) },
+    })
+  const runtime = composeTaskExecutionRuntime({
+    readModels: persistence.reads,
+    participants: createSqliteTaskExecutionRuntimeParticipants({
+      db: options.db,
+      identityAccess,
+      memoryInjectionQueries,
+      collaborationRuntime: createSqliteCollaborationRuntimeMechanics(options.db),
+      persistence,
+      runtimeSessionLeases,
+      runtimeRegistry,
+      dynamicWorkflow,
+      repositoryPublicationTransport,
+    }),
+  })
   return driveTaskEngineApplication(
-    { ...options, identityAccess },
+    {
+      ...options,
+      identityAccess,
+      memoryInjectionQueries,
+      persistence,
+      runtimeSessionLeases,
+      runtimeRegistry,
+      taskDagCollaboration:
+        options.taskDagCollaboration ?? createSqliteTaskDagCollaborationOperations(options.db),
+      collaborationRuntime:
+        options.collaborationRuntime ?? createSqliteCollaborationRuntimeMechanics(options.db),
+      workgroupTurns: options.workgroupTurns ?? createSqliteWorkgroupTurnsOperations(options.db),
+      childLaunch: options.childLaunch ?? createSqliteChildExecutionLaunchOperations(options.db),
+      dynamicWorkflow,
+      processConcurrencyScope: options.processConcurrencyScope ?? options.db,
+      repositoryPublicationTransport,
+    },
     runtime.topology,
-    composeTaskExecutionHumanGateAdapter(),
     runtime,
   )
 }

@@ -17,7 +17,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplateStore } from '../../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createSqliteActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
@@ -28,8 +28,12 @@ import {
 } from '../../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
 import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
 import { createEmployeePublishLookup } from '../../src/modules/development-automation/infrastructure/publishLookup'
-import { createSqliteMissionStore } from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import {
+  createSqliteMissionPersistence,
+  createSqliteMissionStore,
+} from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { createSqliteFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/sqliteReconcilerReaders'
+import { createSqliteRequirementBundleRefPersistence } from '../../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { EvidenceStore } from '../../src/modules/development-automation/infrastructure/evidenceStore'
 import {
   createRequirementMaterializer,
@@ -152,9 +156,9 @@ function lookupOf(db: DbClient): AdmissionLookup {
 export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<Pr3Fixture> {
   const db = options.db ?? createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
-  const templates = createSqliteActionTemplateStore(db)
+  const templates = createSqliteActionTemplatePersistence(db)
 
-  const template = createActionTemplate(
+  const template = await createActionTemplate(
     { store: templates, now },
     {
       actorUserId: 'admin',
@@ -180,11 +184,11 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
       },
     },
   )
-  publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
+  await publishActionTemplate({ store: templates, now }, { id: template.id, actorUserId: 'admin' })
 
   let analyzeTemplateId: string | null = null
   if (options.analyzeRoute === true) {
-    const analyzeTemplate = createActionTemplate(
+    const analyzeTemplate = await createActionTemplate(
       { store: templates, now },
       {
         actorUserId: 'admin',
@@ -210,7 +214,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
         },
       },
     )
-    publishActionTemplate(
+    await publishActionTemplate(
       { store: templates, now },
       { id: analyzeTemplate.id, actorUserId: 'admin' },
     )
@@ -219,7 +223,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
 
   let feedbackTemplateId: string | null = null
   if (options.feedbackRoute === true) {
-    const feedbackTemplate = createActionTemplate(
+    const feedbackTemplate = await createActionTemplate(
       { store: templates, now },
       {
         actorUserId: 'admin',
@@ -245,7 +249,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
         },
       },
     )
-    publishActionTemplate(
+    await publishActionTemplate(
       { store: templates, now },
       { id: feedbackTemplate.id, actorUserId: 'admin' },
     )
@@ -254,7 +258,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
 
   let conflictTemplateId: string | null = null
   if (options.conflictRoute === true) {
-    const conflictTemplate = createActionTemplate(
+    const conflictTemplate = await createActionTemplate(
       { store: templates, now },
       {
         actorUserId: 'admin',
@@ -280,7 +284,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
         },
       },
     )
-    publishActionTemplate(
+    await publishActionTemplate(
       { store: templates, now },
       { id: conflictTemplate.id, actorUserId: 'admin' },
     )
@@ -420,6 +424,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
   await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin', lookup })
 
   const store = createSqliteMissionStore(db)
+  const persistence = createSqliteMissionPersistence(db)
   const snapshots = createSqliteFactSnapshotReader(db)
   const admissionLookup = lookupOf(db)
 
@@ -439,8 +444,8 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
           },
         })
   const materializer = createRequirementMaterializer({
-    db,
-    store,
+    bundleRefs: createSqliteRequirementBundleRefPersistence(db),
+    store: persistence,
     snapshots,
     evidence,
     stagingRoot,
@@ -455,7 +460,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
       | { kind: 'external-reference'; externalId: string }
   }): Promise<string> => {
     const result = await launchMission(
-      { store, lookup: admissionLookup, now },
+      { store: persistence, lookup: admissionLookup, now },
       {
         idempotencyKey: input.idempotencyKey,
         repositoryId: 'repo-1',
@@ -484,7 +489,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
     stagingRoot,
     deps(extraPorts = {}) {
       return {
-        store,
+        store: persistence,
         lookup: admissionLookup,
         snapshots,
         ports: { ...extraPorts, requirementMaterialize: materializer },
