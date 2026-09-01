@@ -9,17 +9,21 @@
 // row + the distill_job_id so the frontend can show "queued" in the UI.
 
 import { TaskFeedbackCreateSchema } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
-import { tasks } from '@/db/schema'
-import { createTaskFeedback, listTaskFeedback } from '@/services/taskFeedback'
-import { canViewTask } from '@/services/taskCollab'
+import type { MemoryOperations } from '@/modules/memory/public/operations'
+import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
+import { canViewTaskFeedback, createTaskFeedback, listTaskFeedback } from '@/services/taskFeedback'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
-export function mountTaskFeedbackRoutes(app: Hono, deps: AppDeps): void {
+export function mountTaskFeedbackRoutes(
+  app: Hono,
+  deps: {
+    readonly collaborationContext: CollaborationCommandContext
+    readonly memoryOperations: MemoryOperations
+  },
+): void {
   registerRoute(
     app,
     {
@@ -32,7 +36,7 @@ export function mountTaskFeedbackRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const taskId = c.req.param('taskId')
       await assertVisible(c, deps, taskId)
-      const items = await listTaskFeedback(deps.db, taskId)
+      const items = await listTaskFeedback(deps.collaborationContext, taskId)
       return c.json({ items })
     },
   )
@@ -55,27 +59,32 @@ export function mountTaskFeedbackRoutes(app: Hono, deps: AppDeps): void {
         throw new ValidationError('invalid-body', 'invalid feedback body', parsed.error.format())
       }
       const actor = actorOf(c)
-      const result = await createTaskFeedback(deps.db, {
-        taskId,
-        authorUserId: actor.user.id,
-        bodyMd: parsed.data.bodyMd,
-      })
+      const result = await createTaskFeedback(
+        deps.collaborationContext,
+        {
+          actor,
+          taskId,
+          bodyMd: parsed.data.bodyMd,
+        },
+        deps.memoryOperations.distillCommands,
+      )
       return c.json({ feedback: result.feedback, distillJobId: result.distillJobId }, 201)
     },
   )
 }
 
-async function assertVisible(c: Context, deps: AppDeps, taskId: string): Promise<void> {
-  const rows = await deps.db
-    .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
+async function assertVisible(
+  c: Context,
+  deps: { readonly collaborationContext: CollaborationCommandContext },
+  taskId: string,
+): Promise<void> {
   // RFC-285 B1：两分支文案与 tasks.ts visibilityCheck 中间件逐字节同形（带引号
   // 形）。byte-oracle 实测抓过残余可区分性：本路由挂在 /api/tasks/:id/* 中间件
   // 之下，「不可见」被中间件先拦（带引号文案）、「缺失」才落到本函数——此处
   // 若用无引号旧文案，两形态字节不同，探测面复活。
-  if (rows.length === 0) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  const visible = await canViewTask(deps.db, actorOf(c), rows[0]!)
+  const visible = await canViewTaskFeedback(deps.collaborationContext, {
+    actor: actorOf(c),
+    taskId,
+  })
   if (!visible) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
 }

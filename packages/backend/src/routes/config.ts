@@ -3,33 +3,43 @@
 // Both require token auth (mounted under /api/* in server.ts).
 
 import type { Hono } from 'hono'
+import type { Config } from '@agent-workflow/shared'
 import { applyConfigPatch, loadConfig, previewConfigPatch } from '@/config'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import {
-  getRuntime,
-  invalidateInheritedRuntimeProbeReceipts,
-  type RuntimeProtocol,
-  withRuntimeProbeConfigFence,
-} from '@/services/runtimeRegistry'
+import { type RuntimeProtocol, withRuntimeProbeConfigFence } from '@/services/runtimeRegistry'
+import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
 import { ValidationError } from '@/util/errors'
-import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { resizeAllNodePools } from '@/services/processNodeConcurrency'
-import { setChildTaskBudgetCapacity, setMaxInvocationDepth } from '@/services/execution/childBudget'
-import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
-import { Paths } from '@/util/paths'
+import type { McpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { notifyConfigApplied } from '@/services/configAppliedListeners'
 import { configureLogger } from '@/util/log'
 
-export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
-  const runtimeTests = getMcpRuntimeTestService({
-    db: deps.db,
-    configPath: deps.configPath,
-    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    runFn: deps.mcpRuntimeTestDependencies?.runFn,
-    now: deps.mcpRuntimeTestDependencies?.now,
-    capacity: deps.mcpRuntimeTestDependencies?.capacity,
-  })
+export type ConfigConcurrencyHotApplyInput = Pick<
+  Config,
+  | 'maxConcurrentNodes'
+  | 'maxConcurrentScriptNodes'
+  | 'maxConcurrentCodeHostCalls'
+  | 'multiProcessSubprocessConcurrency'
+  | 'maxActiveChildTasks'
+  | 'maxInvocationDepth'
+>
+
+/** Bootstrap-captured daemon concurrency mutation. The implementation owns
+ * the process-pool identity; the HTTP route never receives a provider client. */
+export interface ConfigConcurrencyHotApplyCommand {
+  apply(input: ConfigConcurrencyHotApplyInput): void | Promise<void>
+}
+
+export interface ConfigRouteDependencies {
+  readonly configPath: string
+  readonly runtimeRegistry: Pick<
+    RuntimeRegistryOperations,
+    'getRuntime' | 'invalidateInheritedRuntimeProbeReceipts'
+  >
+  readonly runtimeTests: Pick<McpRuntimeTestService, 'reconcileDurableIntents'>
+  readonly concurrencyHotApply: ConfigConcurrencyHotApplyCommand
+}
+
+export function mountConfigRoutes(app: Hono, deps: ConfigRouteDependencies): void {
   registerRoute(
     app,
     {
@@ -65,7 +75,7 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         if (typeof body.defaultRuntime === 'string' && body.defaultRuntime.length > 0) {
           const current = currentConfig.defaultRuntime
           if (body.defaultRuntime !== current) {
-            const row = await getRuntime(deps.db, body.defaultRuntime)
+            const row = await deps.runtimeRegistry.getRuntime(body.defaultRuntime)
             if (row !== null && !row.enabled) {
               throw new ValidationError(
                 'runtime-disabled',
@@ -96,7 +106,7 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         // Invalidate first, then atomically replace config.json while holding the
         // same fence as probe finalization. A failed file write may discard a
         // valid display receipt, but can never leave a stale green one behind.
-        await invalidateInheritedRuntimeProbeReceipts(deps.db, changedBinaryProtocols)
+        await deps.runtimeRegistry.invalidateInheritedRuntimeProbeReceipts(changedBinaryProtocols)
         // RFC-255: seal new credentials, carry preserved ones over, and reject
         // an id that would re-point a built-in catalog provider.
         //
@@ -111,7 +121,7 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         if (updated.logLevel !== currentConfig.logLevel) {
           configureLogger({ level: updated.logLevel })
         }
-        await runtimeTests.reconcileDurableIntents()
+        await deps.runtimeTests.reconcileDurableIntents()
         // RFC-266 linearization point for the concurrency pools. Semaphore
         // supports live resize (growing drains the FIFO so queued nodes start
         // at once, shrinking never preempts an in-flight holder), but until now
@@ -122,24 +132,18 @@ export function mountConfigRoutes(app: Hono, deps: AppDeps): void {
         //
         // AFTER applyConfigPatch on purpose: a failed file write must not leave
         // the daemon admitting work at a capacity that was never persisted.
-        // `deps.db` is the same DbClient object the scheduler holds (one openDb
-        // in cli/start.ts feeds both createApp and buildStartTaskDeps), so the
-        // WeakMap keying reaches the very limiters runTask uses.
-        resizeAllNodePools(deps.db, {
-          agent: updated.maxConcurrentNodes,
-          script: updated.maxConcurrentScriptNodes,
-          // RFC-269 — the third pool hot-applies on the same linearization point.
-          'code-host': updated.maxConcurrentCodeHostCalls,
+        // Bootstrap captures the provider/runtime-specific process-pool key
+        // and exposes one closed command. Keeping the call after persistence
+        // preserves the existing linearization point: a failed config write
+        // can never change live admission capacity.
+        await deps.concurrencyHotApply.apply({
+          maxConcurrentNodes: updated.maxConcurrentNodes,
+          maxConcurrentScriptNodes: updated.maxConcurrentScriptNodes,
+          maxConcurrentCodeHostCalls: updated.maxConcurrentCodeHostCalls,
+          multiProcessSubprocessConcurrency: updated.multiProcessSubprocessConcurrency,
+          maxActiveChildTasks: updated.maxActiveChildTasks,
+          maxInvocationDepth: updated.maxInvocationDepth,
         })
-        resizeAllTaskFanoutSems(updated.multiProcessSubprocessConcurrency)
-        // RFC-287 T10（G4-C9）：子任务配额与三个节点池同一个线性化点热应用。
-        // 少了这一行，「同时活跃子任务数」改完要等 daemon 重启才生效——而设置页
-        // 上它和旁边三项长得一模一样，用户没有任何线索知道这一项是「下次生效」。
-        setChildTaskBudgetCapacity(updated.maxActiveChildTasks)
-        // RFC-287 G4/C9（五轮门补齐）：深度与旁边三项一样是「保存后立即生效」，
-        // 而它此前读的是 runTask 冻结的 opts、且在继承键里 ⇒ 子任务拿的是根任务
-        // 启动那一刻的旧值。UI 文案一直写着立即生效——不接线就是明确的错误陈述。
-        setMaxInvocationDepth(updated.maxInvocationDepth)
         return c.json(updated)
       })
     },

@@ -64,7 +64,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List localized event types and observation sources',
     },
-    () => jsonDocumentResponse(module.queries.catalog.catalogJson()),
+    async () => jsonDocumentResponse(await module.queries.catalog.catalogJson()),
   )
   registerRoute(
     app,
@@ -75,7 +75,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List committed producer and consumer delivery state',
     },
-    (c) => {
+    async (c) => {
       const state = z
         .enum(['pending', 'claimed', 'accepted', 'dead-letter'])
         .nullable()
@@ -161,7 +161,7 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List one bounded page of independent event deliveries',
     },
-    (c) => {
+    async (c) => {
       const state = z
         .enum(['pending', 'claimed', 'accepted', 'dead-letter'])
         .nullable()
@@ -204,9 +204,9 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List durable event subscriptions',
     },
-    (c) =>
+    async (c) =>
       jsonDocumentResponse(
-        module.queries.catalog.subscriptionsJson(c.req.query('subscriberRef') ?? null),
+        await module.queries.catalog.subscriptionsJson(c.req.query('subscriberRef') ?? null),
       ),
   )
   registerRoute(
@@ -218,9 +218,9 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'allow',
       summary: 'List one bounded page of durable event subscriptions',
     },
-    (c) =>
+    async (c) =>
       jsonDocumentResponse(
-        module.queries.catalog.subscriptionPageJson({
+        await module.queries.catalog.subscriptionPageJson({
           page: pageNumber(c.req.query('page'), 1),
           limit: pageNumber(c.req.query('limit'), 50, 200),
           subscriberRef: optionalQuery(c.req.query('subscriberRef')),
@@ -350,9 +350,9 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'never',
       summary: 'Delete a source-neutral event response rule',
     },
-    (c) => {
+    async (c) => {
       const actor = actorOf(c)
-      module.responseRules.commands.remove(c.req.param('id'), {
+      await module.responseRules.commands.remove(c.req.param('id'), {
         userId: actor.user.id,
         canOverrideOwner: actor.permissions.has('event-automation-rules:override-owner'),
         hasPermission: (permission) => actor.permissions.has(permission),
@@ -497,8 +497,8 @@ export function mountEventCenterRoutes(app: Hono, module: EventCenterModule): vo
       tokenAccess: 'never',
       summary: 'Retire a custom event source without deleting exact history',
     },
-    (c) => {
-      module.customSources.commands.retire(c.req.param('id'))
+    async (c) => {
+      await module.customSources.commands.retire(c.req.param('id'))
       return c.json({ ok: true })
     },
   )

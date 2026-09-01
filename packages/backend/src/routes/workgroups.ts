@@ -24,36 +24,41 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { WorkgroupOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
-import type { WorkgroupQueries } from '@/modules/resource-catalog/public/queries'
-import type { WorkgroupCatalogDetail } from '@/modules/resource-catalog/public/types'
-import { assertCanReplaySourceTask } from '@/services/taskCollab'
-import type { AppDeps } from '@/server'
+import type {
+  AgentResourceIntegrityQueries,
+  WorkgroupQueries,
+} from '@/modules/resource-catalog/public/queries'
+import type {
+  CopyWorkgroupCatalogInput,
+  CreateWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogInput,
+  DeleteWorkgroupCatalogReceipt,
+  RenameWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogInput,
+  UpdateWorkgroupCatalogReceipt,
+  WorkgroupCatalogDetail,
+} from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 // RFC-243 T2: workgroup launches go through the unified executor facade — this
 // route must not call startWorkgroupTask directly (source-text lock).
-import { startExecution } from '@/services/execution/executor'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import {
-  evaluateAgentResourceIntegrity,
-  loadAgentResourceInventory,
-} from '@/services/agentResourceIntegrity'
 import { safeJsonOrEmpty } from '@/util/http'
+import type { WorkgroupRouteTaskLaunchOperations } from '@/modules/task-execution/public/commands'
 
 export interface WorkgroupRouteDependencies {
   readonly queries: WorkgroupQueries
   readonly operations: WorkgroupOperationDescriptors
+  readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
   readonly authorityFor: (actor: Actor) => WorkgroupOperationContext
+  readonly taskLaunch: WorkgroupRouteTaskLaunchOperations
 }
 
-export function mountWorkgroupRoutes(
-  app: Hono,
-  deps: AppDeps,
-  module: WorkgroupRouteDependencies,
-): void {
+/** Required TaskExecution launch seam; no provider client crosses the route. */
+export type { WorkgroupRouteTaskLaunchOperations }
+
+export function mountWorkgroupRoutes(app: Hono, module: WorkgroupRouteDependencies): void {
   const { queries, operations } = module
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
@@ -105,19 +110,11 @@ export function mountWorkgroupRoutes(
       const memberAgentIds = group.members.flatMap((member) =>
         member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
       )
-      const result = evaluateAgentResourceIntegrity(
-        await loadAgentResourceInventory(deps.db),
-        memberAgentIds,
+      const result = await module.resourceIntegrityQueries.closureStatus(
+        module.authorityFor(actorOf(c)),
+        { rootAgentIds: memberAgentIds },
       )
-      return c.json({
-        ok: result.ok,
-        issues: result.issues.map((issue) => ({
-          code: issue.code,
-          rootAgentId: issue.rootAgentId,
-          refKind: issue.refKind,
-          direct: issue.ownerAgentId === issue.rootAgentId,
-        })),
-      })
+      return c.json(result)
     },
   )
 
@@ -134,7 +131,7 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      return parsed.data
+      return parsed.data satisfies CreateWorkgroupCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, created) => c.json(created, 201),
@@ -152,7 +149,7 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      return { id: c.req.param('id'), copy: parsed.data }
+      return { id: c.req.param('id'), copy: parsed.data } satisfies CopyWorkgroupCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, copied) => c.json(copied, 201),
@@ -172,10 +169,10 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      return { id, update: parsed.data }
+      return { id, update: parsed.data } satisfies UpdateWorkgroupCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, updated) => c.json(updated),
+    encode: (c, updated: UpdateWorkgroupCatalogReceipt) => c.json(updated),
   })
 
   registerOperationRoute(app, {
@@ -183,15 +180,16 @@ export function mountWorkgroupRoutes(
     method: 'DELETE',
     path: '/api/workgroups/:id',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      deletion: {
-        kind: 'json-body',
-        body: await c.req.raw.text().catch(() => ''),
-      },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        deletion: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
+      }) satisfies DeleteWorkgroupCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: DeleteWorkgroupCatalogReceipt) => {
       captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
@@ -211,7 +209,7 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      return { id, rename: parsed.data }
+      return { id, rename: parsed.data } satisfies RenameWorkgroupCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, renamed) => c.json(renamed),
@@ -256,7 +254,7 @@ export function mountWorkgroupRoutes(
       {
         const src = (body as { sourceTaskId?: unknown }).sourceTaskId
         if (typeof src === 'string' && src.length > 0) {
-          await assertCanReplaySourceTask(deps.db, actorOf(c), src)
+          await module.taskLaunch.assertReplayVisible(actor, src)
         }
       }
       const parsed = StartWorkgroupTaskSchema.safeParse(body)
@@ -265,24 +263,10 @@ export function mountWorkgroupRoutes(
           issues: parsed.error.issues,
         })
       }
-      const task = await startExecution(
-        deps.db,
-        actor,
-        {
-          kind: 'workgroup',
-          refId: existing.id,
-          invoker: { type: 'user', launchKind: 'direct-json' },
-          payload: parsed.data,
-        },
-        buildStartTaskDeps(
-          deps.db,
-          requireSchedulerDriver(deps.schedulerDriver),
-          deps.configPath,
-          actor.user.id,
-          undefined,
-          deps.identityAccess,
-        ),
-      )
+      const task = await module.taskLaunch.launch(actor, {
+        workgroupId: existing.id,
+        payload: parsed.data,
+      })
       return c.json(task, 201)
     },
   )

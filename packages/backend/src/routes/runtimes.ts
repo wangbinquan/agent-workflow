@@ -7,30 +7,26 @@
 import type { Hono } from 'hono'
 import { z } from 'zod'
 import { loadConfig } from '@/config'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
-  cacheRuntimeProbe,
-  createRuntime,
-  deleteRuntime,
-  getRuntime,
   assertRuntimeSpawnCapabilities,
-  listRuntimes,
   parseRuntimeExtraArgs,
   RUNTIME_PROTOCOLS,
   runtimeProbeTargetOf,
   runtimeRowToView,
-  setRuntimeEnabled,
-  updateRuntime,
   withRuntimeProbeConfigFence,
+  type RuntimeRegistryOperations,
 } from '@/services/runtimeRegistry'
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver } from '@/services/runtime'
-import { smokeRuntime as productionSmokeRuntime, type SmokeResult } from '@/services/runtimeSmoke'
-import { getMcpRuntimeTestService, isRuntimeMcpTestEligible } from '@/services/mcpRuntimeTest'
-import { Paths } from '@/util/paths'
+import {
+  smokeRuntime as productionSmokeRuntime,
+  type SmokeOptions,
+  type SmokeResult,
+} from '@/services/runtimeSmoke'
+import { isRuntimeMcpTestEligible, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
 
 // RFC-143: derived from the DRIVERS registry (via RUNTIME_PROTOCOLS) rather than
 // a re-hardcoded literal enum — a new runtime kind is accepted automatically.
@@ -118,15 +114,21 @@ function resolveRuntimeBinary(
  */
 const STATUS_PROBE_TIMEOUT_MS = 5000
 
-export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
-  const runtimeTests = getMcpRuntimeTestService({
-    db: deps.db,
-    configPath: deps.configPath,
-    appHome: deps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    runFn: deps.mcpRuntimeTestDependencies?.runFn,
-    now: deps.mcpRuntimeTestDependencies?.now,
-    capacity: deps.mcpRuntimeTestDependencies?.capacity,
-  })
+interface RuntimeDiagnosticDependencies {
+  smokeRuntime(options: SmokeOptions): Promise<SmokeResult>
+  beforeRuntimeProbeCache?(): void | Promise<void>
+  probeTimeoutMsForTest?: number
+}
+
+export interface RuntimesRouteDependencies {
+  readonly configPath: string
+  readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
+  readonly runtimeRegistry: RuntimeRegistryOperations
+  readonly runtimeTests: Pick<McpRuntimeTestService, 'reconcileDurableIntents'>
+}
+
+export function mountRuntimesRoutes(app: Hono, deps: RuntimesRouteDependencies): void {
+  const runtimeTests = deps.runtimeTests
   const smokeRuntime =
     deps.runtimeDiagnosticTestDependencies?.smokeRuntime ?? productionSmokeRuntime
 
@@ -141,7 +143,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List registered runtimes',
     },
     async (c) => {
-      const rows = await listRuntimes(deps.db)
+      const rows = await deps.runtimeRegistry.listRuntimes()
       const cfg = loadConfig(deps.configPath)
       return c.json({
         runtimes: rows.map((row) => ({
@@ -171,7 +173,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const cfg = loadConfig(deps.configPath)
-      const rows = (await listRuntimes(deps.db)).filter((r) => r.enabled)
+      const rows = (await deps.runtimeRegistry.listRuntimes()).filter((r) => r.enabled)
       // Mirror resolveRuntimeByName's fail-safe: a stale/unknown configured
       // default falls back to the opencode builtin for real dispatch, so the
       // status line must mark that SAME row as the default — else a broken
@@ -299,7 +301,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
             : {}),
         })
       }
-      let row = await createRuntime(deps.db, {
+      let row = await deps.runtimeRegistry.createRuntime({
         name: body.name,
         protocol: body.protocol,
         binaryPath: body.binaryPath ?? null,
@@ -317,8 +319,8 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       const cfg = loadConfig(deps.configPath)
       if (smoke !== undefined) {
         const target = runtimeProbeTargetOf(row, resolveRuntimeBinary(row, cfg))
-        await cacheRuntimeProbe(deps.db, target, smoke)
-        const refreshed = await getRuntime(deps.db, row.name)
+        await deps.runtimeRegistry.cacheRuntimeProbe(target, smoke)
+        const refreshed = await deps.runtimeRegistry.getRuntime(row.name)
         if (refreshed?.id === row.id) row = refreshed
       }
       return c.json(
@@ -345,7 +347,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const name = c.req.param('name')
       const body = parseBody(UpdateBody, await c.req.json().catch(() => ({})))
-      const row = await updateRuntime(deps.db, name, {
+      const row = await deps.runtimeRegistry.updateRuntime(name, {
         ...(body.binaryPath !== undefined ? { binaryPath: body.binaryPath } : {}),
         ...(body.configDirEnv !== undefined ? { configDirEnv: body.configDirEnv } : {}),
         ...(body.configDirName !== undefined ? { configDirName: body.configDirName } : {}),
@@ -382,7 +384,11 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
       const name = c.req.param('name')
       const body = parseBody(EnabledBody, await c.req.json().catch(() => ({})))
       const cfg = loadConfig(deps.configPath)
-      const row = await setRuntimeEnabled(deps.db, name, body.enabled, cfg.defaultRuntime)
+      const row = await deps.runtimeRegistry.setRuntimeEnabled(
+        name,
+        body.enabled,
+        cfg.defaultRuntime,
+      )
       await runtimeTests.reconcileDurableIntents()
       return c.json({
         runtime: runtimeRowToView(row, cfg.defaultRuntime, resolveRuntimeBinary(row, cfg)),
@@ -404,7 +410,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const name = c.req.param('name')
       const cfg = loadConfig(deps.configPath)
-      await deleteRuntime(deps.db, name, {
+      await deps.runtimeRegistry.deleteRuntime(name, {
         defaultRuntime: cfg.defaultRuntime,
         memoryDistillRuntime: cfg.memoryDistillRuntime,
         commitPushRuntime: cfg.commitPushRuntime,
@@ -432,7 +438,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const name = c.req.param('name')
-      const row = await getRuntime(deps.db, name)
+      const row = await deps.runtimeRegistry.getRuntime(name)
       if (row === null) {
         throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
       }
@@ -460,7 +466,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
         // A row with binaryPath=NULL inherits the protocol path from config.json.
         // Config PUT holds this same fence while it first bumps the persisted DB
         // generation and then replaces the file, closing the final check→CAS gap.
-        const currentRow = await getRuntime(deps.db, name)
+        const currentRow = await deps.runtimeRegistry.getRuntime(name)
         const currentConfig = loadConfig(deps.configPath)
         if (
           currentRow === null ||
@@ -472,7 +478,7 @@ export function mountRuntimesRoutes(app: Hono, deps: AppDeps): void {
           )
         }
         await deps.runtimeDiagnosticTestDependencies?.beforeRuntimeProbeCache?.()
-        const cached = await cacheRuntimeProbe(deps.db, probeTarget, smoke)
+        const cached = await deps.runtimeRegistry.cacheRuntimeProbe(probeTarget, smoke)
         if (!cached) {
           throw new ConflictError(
             'runtime-probe-stale',

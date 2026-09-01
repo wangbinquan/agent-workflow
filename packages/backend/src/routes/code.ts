@@ -26,6 +26,7 @@ import type {
   CodeRoundAttemptsQuery,
   CodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/public/queries'
+import type { TemplateUpstreamOperations } from '@/modules/code-capability/application/templateUpstreamStatus'
 import {
   CODE_CAPABILITIES,
   parseCodeCapabilityId,
@@ -56,6 +57,7 @@ export interface CodeHistoryRouteQueries {
     }): Promise<readonly unknown[]>
   }
   readonly metrics: CodeMetricsQuery
+  readonly templateUpstream: TemplateUpstreamOperations
 }
 
 export function mountCodeRoutes(app: Hono, history: CodeHistoryRouteQueries): void {

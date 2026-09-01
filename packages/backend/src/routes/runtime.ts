@@ -7,14 +7,18 @@
 
 import type { Hono } from 'hono'
 import { loadConfig } from '@/config'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { parseBoolQuery } from '@/util/http'
 import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
-import { resolveRuntimeByName } from '@/services/runtimeRegistry'
+import type { RuntimeRegistryOperations } from '@/services/runtimeRegistry'
 import { redactSensitiveString } from '@/util/redact'
 
-export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
+export interface RuntimeRouteDependencies {
+  readonly configPath: string
+  readonly runtimeRegistry: RuntimeRegistryOperations
+}
+
+export function mountRuntimeRoutes(app: Hono, deps: RuntimeRouteDependencies): void {
   registerRoute(
     app,
     {
@@ -35,7 +39,7 @@ export function mountRuntimeRoutes(app: Hono, deps: AppDeps): void {
       const rtParam = c.req.query('runtime')
       const resolved =
         rtParam !== undefined && rtParam.length > 0
-          ? await resolveRuntimeByName(deps.db, rtParam)
+          ? await deps.runtimeRegistry.resolveRuntimeByName(rtParam)
           : null
       // resolveRuntimeByName fail-safes unknown names to the opencode built-in, so a
       // real match is `resolved.name === rtParam`; the bare alias is when it didn't.

@@ -25,9 +25,12 @@ import { publicOriginOf } from '@/routes/publicOrigin'
 import { registerRoute } from '@/routes/registry'
 import { buildApiDocs, clientSnippets, wellKnownMcp } from '@/services/apiDocs'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
-import type { AppDeps } from '@/server'
 
-export function mountDocsRoutes(app: Hono, deps: AppDeps): void {
+export interface DocumentationRouteDependencies {
+  readonly configPath: string
+}
+
+export function mountDocsRoutes(app: Hono, deps: DocumentationRouteDependencies): void {
   registerRoute(
     app,
     {
@@ -55,7 +58,7 @@ export function mountDocsRoutes(app: Hono, deps: AppDeps): void {
  * A discovery document behind authentication cannot be discovered, which is the
  * one thing it exists to do.
  */
-export function mountWellKnownRoutes(app: Hono, deps: AppDeps): void {
+export function mountWellKnownRoutes(app: Hono, deps: DocumentationRouteDependencies): void {
   registerRoute(
     app,
     {

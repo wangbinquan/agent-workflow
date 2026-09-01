@@ -26,36 +26,13 @@ import type {
   SubmitReviewComment,
   TaskActorRole,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import { nodeRuns, tasks as tasksTable } from '@/db/schema'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
-import { requireTaskMember } from '@/services/taskCollab'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
-import { submitReviewDecision } from '@/modules/collaboration/public/commands'
-import { createReviewDecisionCommandContext } from '@/services/reviewDecisionComposition'
-import {
-  filterReviewSummariesForActor,
-  resolveReviewAccess,
-} from '@/modules/collaboration/public/queries'
 import type { ReviewAccessDecision } from '@/modules/collaboration/public/types'
-import {
-  addReviewComment,
-  countPendingReviews,
-  deleteReviewComment,
-  getDocVersionDetail,
-  getReviewDetail,
-  listDocVersionsForReview,
-  listReviewRounds,
-  listReviewSummaries,
-  setDocumentSelection,
-  updateReviewCommentText,
-} from '@/services/review'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { Paths } from '@/util/paths'
 
 /**
  * RFC-326 P10 — the two write routes accept batched comments (≤ 200 × 50 000
@@ -87,25 +64,27 @@ const reviewWriteBodyLimit = verifiedBodyLimit({
  * record on a task-member action.
  */
 async function ensureReviewMember(
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
   nodeRunId: string,
   actor: Actor,
 ): Promise<TaskActorRole> {
-  const rows = await deps.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-  const run = rows[0]
-  if (!run) {
+  const access = await operations.access.resolveNodeRunTask({
+    actor,
+    nodeRunId,
+  })
+  if (!access.nodeRunExists) {
     throw new NotFoundError('node-run-not-found', `node run '${nodeRunId}' not found`)
   }
-  const taskRows = await deps.db
-    .select()
-    .from(tasksTable)
-    .where(eq(tasksTable.id, run.taskId))
-    .limit(1)
-  const task = taskRows[0]
-  if (!task) {
-    throw new NotFoundError('task-not-found', `task '${run.taskId}' not found`)
+  if (access.task === null || access.taskId === null) {
+    throw new NotFoundError('task-not-found', `task '${access.taskId ?? ''}' not found`)
   }
-  return requireTaskMember(deps.db, actor, task)
+  if (access.actorRole === null) {
+    throw new ForbiddenError(
+      'not-task-member',
+      'only task members or an actor with the required global task authority can do this',
+    )
+  }
+  return access.actorRole
 }
 
 /**
@@ -114,14 +93,11 @@ async function ensureReviewMember(
  * is not probeable via error codes).
  */
 async function ensureReviewVisible(
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
   nodeRunId: string,
   actor: Actor,
 ): Promise<ReviewAccessDecision> {
-  if (deps.collaborationContext === undefined) {
-    throw new Error('collaboration-context-not-composed')
-  }
-  const access = await resolveReviewAccess(deps.collaborationContext, { actor, nodeRunId })
+  const access = await operations.access.resolveReview({ actor, nodeRunId })
   if (access === null) {
     // Keep invisible and absent node-run probes byte-identical.
     throw new NotFoundError('node-run-not-found', `node run '${nodeRunId}' not found`)
@@ -130,11 +106,11 @@ async function ensureReviewVisible(
 }
 
 async function requireReviewCommenter(
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
   nodeRunId: string,
   actor: Actor,
 ): Promise<{ access: ReviewAccessDecision; authorRole: ReviewAuthorRole }> {
-  const access = await ensureReviewVisible(deps, nodeRunId, actor)
+  const access = await ensureReviewVisible(operations, nodeRunId, actor)
   if (!access.capabilities.canAddComment || access.commentAuthorRole === null) {
     throw new ForbiddenError(
       'review-comment-not-allowed',
@@ -170,15 +146,19 @@ function toBatchComment(input: SubmitReviewComment): {
   }
 }
 
-function appHomeFor(_deps: AppDeps): string {
-  // RFC-005: doc_version body paths are anchored at the daemon's app home
-  // (Paths.root, derived from AGENT_WORKFLOW_HOME env or default ~/.agent-workflow).
-  // We do NOT touch config.json here to avoid spuriously writing a default
-  // config when configPath is empty (e.g. tests inject deps.configPath = '').
-  return Paths.root
+function requireReviewOperations(
+  operations: CollaborationRouteOperations | undefined,
+): CollaborationRouteOperations['reviews'] {
+  if (operations === undefined) throw new Error('collaboration-route-operations-not-composed')
+  return operations.reviews
 }
 
-export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
+export function mountReviewRoutes(
+  app: Hono,
+  operations: CollaborationRouteOperations,
+  appHome: string,
+): void {
+  if (operations === undefined) throw new Error('collaboration-route-operations-not-composed')
   registerRoute(
     app,
     {
@@ -200,13 +180,10 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
           issues: q.error.issues,
         })
       }
-      if (deps.collaborationContext === undefined) {
-        throw new Error('collaboration-context-not-composed')
-      }
       // Actor filtering happens before pagination so reviewer-only rows are not
       // starved by unrelated global candidates.
-      const out = await listReviewSummaries(deps.db, { ...q.data, unbounded: true })
-      const visible = await filterReviewSummariesForActor(deps.collaborationContext, {
+      const out = await requireReviewOperations(operations).list({ ...q.data, unbounded: true })
+      const visible = await operations.access.filterReviewSummaries({
         actor: actorOf(c),
         rows: out,
       })
@@ -227,7 +204,9 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       // RFC-340: badge counts the union of task-visible and assigned-node
       // reviews. RFC-311's indexed count(*) shape remains intact, so the 15s
       // poll still avoids materializing doc_versions + three tables.
-      return c.json({ count: await countPendingReviews(deps.db, actorOf(c)) })
+      return c.json({
+        count: await requireReviewOperations(operations).countPending(actorOf(c)),
+      })
     },
   )
 
@@ -242,8 +221,11 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
-      const access = await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-      const detail = await getReviewDetail(deps.db, appHomeFor(deps), nodeRunId)
+      const access = await ensureReviewVisible(operations, nodeRunId, actorOf(c))
+      const detail = await requireReviewOperations(operations).detail({
+        appHome,
+        nodeRunId,
+      })
       return c.json({
         ...detail,
         summary: { ...detail.summary, accessScope: access.capabilities.scope },
@@ -263,8 +245,8 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
-      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-      const versions = await listDocVersionsForReview(deps.db, nodeRunId)
+      await ensureReviewVisible(operations, nodeRunId, actorOf(c))
+      const versions = await requireReviewOperations(operations).listVersions(nodeRunId)
       if (versions.length === 0) {
         throw new NotFoundError(
           'review-versions-empty',
@@ -286,12 +268,16 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
-      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
+      await ensureReviewVisible(operations, nodeRunId, actorOf(c))
       const versionId = c.req.param('versionId')
       // RFC-013: returns body + comments for read-only historical view. The
       // helper validates the version belongs to `nodeRunId` so a caller can't
       // brute-force doc_versions across unrelated reviews.
-      const dv = await getDocVersionDetail(deps.db, appHomeFor(deps), nodeRunId, versionId)
+      const dv = await requireReviewOperations(operations).versionDetail({
+        appHome,
+        nodeRunId,
+        versionId,
+      })
       if (dv === null) {
         throw new NotFoundError('review-version-not-found', `doc_version ${versionId} not found`)
       }
@@ -312,8 +298,13 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
-      await ensureReviewVisible(deps, nodeRunId, actorOf(c))
-      return c.json(await listReviewRounds(deps.db, appHomeFor(deps), nodeRunId))
+      await ensureReviewVisible(operations, nodeRunId, actorOf(c))
+      return c.json(
+        await requireReviewOperations(operations).listRounds({
+          appHome,
+          nodeRunId,
+        }),
+      )
     },
   )
 
@@ -339,14 +330,10 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       // RFC-099 (D5/D7): any task member (or admin) may decide; record the
       // user id + role snapshot on the decision row.
       const actor = actorOf(c)
-      const role = await ensureReviewMember(deps, nodeRunId, actor)
-      const commandContext = createReviewDecisionCommandContext({
-        db: deps.db,
-        appHome: appHomeFor(deps),
+      const role = await ensureReviewMember(operations, nodeRunId, actor)
+      const result = await requireReviewOperations(operations).submitDecision({
         actor,
         authorRole: role,
-      })
-      const result = await submitReviewDecision(commandContext, {
         nodeRunId,
         decision: parsed.data.decision,
         expectedReviewIteration: parsed.data.reviewIteration,
@@ -397,9 +384,8 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      await ensureReviewMember(deps, nodeRunId, actor)
-      const result = await setDocumentSelection({
-        db: deps.db,
+      await ensureReviewMember(operations, nodeRunId, actor)
+      const result = await requireReviewOperations(operations).setSelection({
         nodeRunId,
         docVersionId,
         selection: parsed.data.selection,
@@ -430,10 +416,9 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       // RFC-099/RFC-340: record who commented and the relationship snapshot
       // (task role or node-scoped reviewer) used for this opinion.
       const actor = actorOf(c)
-      const { authorRole } = await requireReviewCommenter(deps, nodeRunId, actor)
-      const comment = await addReviewComment({
-        db: deps.db,
-        appHome: appHomeFor(deps),
+      const { authorRole } = await requireReviewCommenter(operations, nodeRunId, actor)
+      const comment = await requireReviewOperations(operations).addComment({
+        appHome,
         nodeRunId,
         // RFC-326: either the web page's composite anchor or the simplified
         // locator (everything absent = document-level), never both (schema).
@@ -466,19 +451,17 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       }
       const actor = actorOf(c)
       // RFC-285 B6①：写门返回的角色快照连同 actor id 一起下传作者校验。
-      const { access, authorRole } = await requireReviewCommenter(deps, nodeRunId, actor)
-      const updated = await updateReviewCommentText(
-        deps.db,
+      const { access, authorRole } = await requireReviewCommenter(operations, nodeRunId, actor)
+      const updated = await requireReviewOperations(operations).updateComment({
         nodeRunId,
         commentId,
-        parsed.data.commentText,
-        {
+        commentText: parsed.data.commentText,
+        authority: {
           actorUserId: actor.user.id,
           role: authorRole,
-          resourceAclBypass:
-            access.capabilities.canManageAnyComments || hasResourceAclBypass(actor),
+          resourceAclBypass: access.capabilities.canManageAnyComments,
         },
-      )
+      })
       return c.json(updated)
     },
   )
@@ -496,17 +479,21 @@ export function mountReviewRoutes(app: Hono, deps: AppDeps): void {
       const nodeRunId = c.req.param('nodeRunId')
       const commentId = c.req.param('commentId')
       const actor = actorOf(c)
-      const { access, authorRole } = await requireReviewCommenter(deps, nodeRunId, actor)
+      const { access, authorRole } = await requireReviewCommenter(operations, nodeRunId, actor)
       if (!access.capabilities.canDeleteOwnComments && !access.capabilities.canManageAnyComments) {
         throw new ForbiddenError(
           'review-comment-delete-not-allowed',
           'this review relationship does not allow deleting comments',
         )
       }
-      await deleteReviewComment(deps.db, nodeRunId, commentId, {
-        actorUserId: actor.user.id,
-        role: authorRole,
-        resourceAclBypass: access.capabilities.canManageAnyComments || hasResourceAclBypass(actor),
+      await requireReviewOperations(operations).deleteComment({
+        nodeRunId,
+        commentId,
+        authority: {
+          actorUserId: actor.user.id,
+          role: authorRole,
+          resourceAclBypass: access.capabilities.canManageAnyComments,
+        },
       })
       return c.json({ ok: true })
     },

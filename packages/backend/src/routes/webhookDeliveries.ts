@@ -5,31 +5,33 @@
 // 指回 replayed_from；event_uuid=NULL 绕过去重（replay 就是明确要求再跑一次）。
 // GitLab 对失败投递不自动重试（设计门 F-6）——replay 是平台侧的主恢复路径。
 import type { Hono } from 'hono'
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { CodeHostEventTypeSchema, WEBHOOK_DELIVERY_STATUSES } from '@agent-workflow/shared'
 
-import type { AppDeps } from '@/server'
 import { actorOf } from '@/auth/actor'
-import { registerRoute } from '@/routes/registry'
-import {
-  tasks,
-  webhookDeliveries,
-  webhookEndpoints,
-  webhookMrControlEffects,
-  webhookMrControlTargets,
-} from '@/db/schema'
-import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
-import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
+import type { EventCenterModule } from '@/modules/event-center/composition'
+import type { WebhookDeliveryRuntime } from '@/modules/integration/composition/webhookIngress'
+import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import { codeHostEventObservations } from '@/modules/integration/public/events'
-import { markDelivery } from '@/services/webhook/deliveryStore'
-import { supportsEventCenterCodeHostDelivery } from '@/services/webhook/dispatcherTypes'
-import { canViewTask } from '@/services/taskCollab'
+import { registerRoute } from '@/routes/registry'
+import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'
+import {
+  supportsEventCenterCodeHostDelivery,
+  type WebhookDispatcher,
+} from '@/services/webhook/dispatcherTypes'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
-export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
-  const acceptVerifiedDelivery = composeVerifiedWebhookDeliveryAcceptance(deps.db)
+export function mountWebhookDeliveryRoutes(
+  app: Hono,
+  deps: {
+    readonly webhookDeliveryRuntime: WebhookDeliveryRuntime
+    readonly digitalEmployeeEventCenter?: EventCenterModule
+    readonly webhookDispatcher?: WebhookDispatcher
+    readonly webhookTerminalControl?: MrTerminalControl
+  },
+): void {
+  const runtime = deps.webhookDeliveryRuntime
   registerRoute(
     app,
     {
@@ -61,60 +63,16 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
         .parse(c.req.query('eventType'))
       const repoPath = c.req.query('repoPath')
       const endpointId = c.req.query('endpointId')
-      const conds = [
-        ...(endpointId !== undefined && endpointId !== ''
-          ? [eq(webhookDeliveries.endpointId, endpointId)]
-          : []),
-        ...(status !== undefined ? [eq(webhookDeliveries.status, status)] : []),
-        ...(eventType !== undefined ? [eq(webhookDeliveries.eventType, eventType)] : []),
-        ...(repoPath !== undefined && repoPath !== ''
-          ? [eq(webhookDeliveries.repoPath, repoPath)]
-          : []),
-      ]
-      const where = conds.length > 0 ? and(...conds) : undefined
-      // 先 count 后取页；两查询间的并发插入造成 ±1 瞬时偏差，10s 轮询自愈（design §1.2）。
-      const total = (
-        await deps.db
-          .select({ n: sql<number>`count(*)` })
-          .from(webhookDeliveries)
-          .where(where)
-      )[0]!.n
-      const offset = (page - 1) * limit
-      // offset ≥ total 短路（评审门 P2-①）：空页探测零成本；total 以内的深
-      // offset 是鉴权读面上的已接受成本（design §1.2）。
-      const rows =
-        offset >= total
-          ? []
-          : await deps.db
-              .select({
-                id: webhookDeliveries.id,
-                endpointId: webhookDeliveries.endpointId,
-                eventUuid: webhookDeliveries.eventUuid,
-                attemptCount: webhookDeliveries.attemptCount,
-                gitlabEventHeader: webhookDeliveries.gitlabEventHeader,
-                objectKind: webhookDeliveries.objectKind,
-                eventType: webhookDeliveries.eventType,
-                repoPath: webhookDeliveries.repoPath,
-                streamHint: webhookDeliveries.streamHint,
-                status: webhookDeliveries.status,
-                statusReason: webhookDeliveries.statusReason,
-                replayedFromDeliveryId: webhookDeliveries.replayedFromDeliveryId,
-                receivedAt: webhookDeliveries.receivedAt,
-                // 列表页刻意不带 body_json（≤256KiB/行；详情页单独取）
-              })
-              .from(webhookDeliveries)
-              .where(where)
-              // id（ULID）tie-break：同毫秒行在裸 receivedAt 排序下顺序未定义，
-              // OFFSET 翻页会跨页重/漏（AC-2）。
-              .orderBy(desc(webhookDeliveries.receivedAt), desc(webhookDeliveries.id))
-              .limit(limit)
-              .offset(offset)
-      return c.json({
-        items: rows,
-        total,
-        page,
-        pageCount: Math.max(1, Math.ceil(total / limit)),
-      })
+      return c.json(
+        await runtime.queries.page({
+          page,
+          limit,
+          ...(endpointId === undefined || endpointId === '' ? {} : { endpointId }),
+          ...(status === undefined ? {} : { status }),
+          ...(eventType === undefined ? {} : { eventType }),
+          ...(repoPath === undefined || repoPath === '' ? {} : { repoPath }),
+        }),
+      )
     },
   )
 
@@ -130,19 +88,7 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Distinct repo paths seen in deliveries (filter options)',
     },
     async (c) => {
-      // Loose index scan（递归 CTE + idx_webhook_deliveries_repo_time 前缀）：
-      // K 个 distinct 仓库 = K×logN 次索引寻位。朴素 SELECT DISTINCT 在 10 万
-      // 投递/天 × 90 天 ≈ 900 万行上是每 30s 轮询一次的全索引扫描。
-      const rows = await deps.db.all<{ p: string }>(sql`
-        WITH RECURSIVE repo_walk(p) AS (
-          SELECT (SELECT min(repo_path) FROM webhook_deliveries WHERE repo_path IS NOT NULL)
-          UNION ALL
-          SELECT (SELECT min(repo_path) FROM webhook_deliveries WHERE repo_path > repo_walk.p)
-            FROM repo_walk WHERE repo_walk.p IS NOT NULL
-        )
-        SELECT p FROM repo_walk WHERE p IS NOT NULL
-      `)
-      return c.json(rows.map((r) => r.p))
+      return c.json(await runtime.queries.listRepoPaths())
     },
   )
 
@@ -156,89 +102,13 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get one delivery including its raw body',
     },
     async (c) => {
-      const row = (
-        await deps.db
-          .select()
-          .from(webhookDeliveries)
-          .where(eq(webhookDeliveries.id, c.req.param('id')))
-          .limit(1)
-      )[0]
+      const row = await runtime.queries.get(c.req.param('id'))
       if (!row) throw new NotFoundError('webhook-delivery-not-found', 'delivery not found')
       const effectDeliveryId = row.replayedFromDeliveryId ?? row.id
-      const effect = (
-        await deps.db
-          .select()
-          .from(webhookMrControlEffects)
-          .where(eq(webhookMrControlEffects.deliveryId, effectDeliveryId))
-          .limit(1)
-      )[0]
-      if (effect === undefined) return c.json({ ...row, terminalControl: null })
-
-      const targetRows = await deps.db
-        .select()
-        .from(webhookMrControlTargets)
-        .where(eq(webhookMrControlTargets.effectId, effect.id))
-      const taskRows =
-        targetRows.length === 0
-          ? []
-          : await deps.db
-              .select({
-                id: tasks.id,
-                ownerUserId: tasks.ownerUserId,
-                status: tasks.status,
-                spaceKind: tasks.spaceKind,
-                workspacePruningAt: tasks.workspacePruningAt,
-                workspacePrunedAt: tasks.workspacePrunedAt,
-              })
-              .from(tasks)
-              .where(
-                inArray(
-                  tasks.id,
-                  targetRows.map((target) => target.taskId),
-                ),
-              )
-      const tasksById = new Map(taskRows.map((task) => [task.id, task]))
-      const visibleTargets = []
-      let hiddenTargetCount = 0
-      const actor = actorOf(c)
-      for (const target of targetRows) {
-        const task = tasksById.get(target.taskId)
-        if (task === undefined || !(await canViewTask(deps.db, actor, task))) {
-          hiddenTargetCount += 1
-          continue
-        }
-        visibleTargets.push({
-          taskId: target.taskId,
-          priorStatus: target.priorStatus,
-          currentStatus: task.status,
-          fenceOutcome: target.fenceOutcome,
-          cancelOutcome: target.cancelOutcome,
-          releaseOutcome: target.releaseOutcome,
-          error: target.error,
-          workspace: {
-            spaceKind: task.spaceKind,
-            state:
-              task.workspacePrunedAt !== null
-                ? 'pruned'
-                : task.workspacePruningAt !== null
-                  ? 'pruning'
-                  : 'retained',
-          },
-        })
-      }
+      const terminalControl = await runtime.queries.terminalControl(effectDeliveryId, actorOf(c))
       return c.json({
         ...row,
-        terminalControl: {
-          kind: effect.kind,
-          observedEventType: effect.observedEventType,
-          status: effect.status,
-          revision: effect.revision,
-          attemptCount: effect.attemptCount,
-          lastError: effect.lastError,
-          totalTargetCount: targetRows.length,
-          hiddenTargetCount,
-          targets: visibleTargets,
-        },
+        terminalControl,
       })
     },
   )
@@ -261,13 +131,7 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       ) {
         throw new ConflictError('webhook-ingress-unavailable', 'event publishing is not wired')
       }
-      const row = (
-        await deps.db
-          .select()
-          .from(webhookDeliveries)
-          .where(eq(webhookDeliveries.id, c.req.param('id')))
-          .limit(1)
-      )[0]
+      const row = await runtime.queries.get(c.req.param('id'))
       if (!row) throw new NotFoundError('webhook-delivery-not-found', 'delivery not found')
       if (row.status === 'rejected') {
         // 重放验签失败的投递 = 绕过拒绝（multica 规则 1）。
@@ -280,13 +144,7 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
         // 保留策略把 body 置空后（F-12），重放无料可用。
         throw new ConflictError('webhook-delivery-body-gone', 'body pruned by retention policy')
       }
-      const endpoint = (
-        await deps.db
-          .select()
-          .from(webhookEndpoints)
-          .where(eq(webhookEndpoints.id, row.endpointId))
-          .limit(1)
-      )[0]
+      const endpoint = await runtime.endpoints.get(row.endpointId)
       if (!endpoint) {
         throw new ConflictError('webhook-endpoint-not-found', 'owning endpoint was deleted')
       }
@@ -307,17 +165,8 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       }
       const event = { ...normalized.event, eventUuid: null }
       const rootDeliveryId = row.replayedFromDeliveryId ?? row.id
-      const root =
-        rootDeliveryId === row.id
-          ? row
-          : (
-              await deps.db
-                .select()
-                .from(webhookDeliveries)
-                .where(eq(webhookDeliveries.id, rootDeliveryId))
-                .limit(1)
-            )[0]
-      if (root === undefined) {
+      const root = rootDeliveryId === row.id ? row : await runtime.queries.get(rootDeliveryId)
+      if (root === null) {
         throw new ConflictError(
           'webhook-delivery-replay-lineage-broken',
           'original delivery is no longer available',
@@ -331,21 +180,14 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
             'the original terminal delivery predates the durable MR/PR control fact',
           )
         }
-        const rootEffect = (
-          await deps.db
-            .select({ id: webhookMrControlEffects.id })
-            .from(webhookMrControlEffects)
-            .where(eq(webhookMrControlEffects.deliveryId, rootDeliveryId))
-            .limit(1)
-        )[0]
-        if (rootEffect === undefined) {
+        if (!(await runtime.queries.hasTerminalControlEffect(rootDeliveryId))) {
           throw new ConflictError(
             'webhook-terminal-replay-effect-missing',
             'the original terminal control effect is unavailable',
           )
         }
       }
-      const insert = acceptVerifiedDelivery({
+      const insert = await runtime.acceptVerifiedDelivery({
         endpointId: endpoint.id,
         event,
         rawBodyBytes: Buffer.from(row.bodyJson, 'utf8'),
@@ -363,22 +205,32 @@ export function mountWebhookDeliveryRoutes(app: Hono, deps: AppDeps): void {
       const deliveryId = insert.deliveryId
       deps.webhookTerminalControl?.wake(insert.effectId)
       const occurredAt = Date.now()
-      const receipts = codeHostEventObservations({
-        endpointId: endpoint.id,
-        deliveryId,
-        event,
-        occurredAt,
-      }).map((observation) => eventCenter.commands.observe(observation))
+      const receipts = await Promise.all(
+        codeHostEventObservations({
+          endpointId: endpoint.id,
+          deliveryId,
+          event,
+          occurredAt,
+        }).map((observation) => eventCenter.commands.observe(observation)),
+      )
       const published = {
         deliveryCount: receipts.reduce((total, receipt) => total + receipt.deliveryCount, 0),
         deliveryIds: receipts.flatMap((receipt) => receipt.deliveryIds),
       }
       if (published.deliveryCount > 0) {
-        await markDelivery(deps.db, deliveryId, 'matched')
+        await runtime.deliveries.mark({ deliveryId, status: 'matched' })
       } else if (insert.effectId !== null) {
-        await markDelivery(deps.db, deliveryId, 'matched', 'terminal-control-accepted')
+        await runtime.deliveries.mark({
+          deliveryId,
+          status: 'matched',
+          reason: 'terminal-control-accepted',
+        })
       } else {
-        await markDelivery(deps.db, deliveryId, 'ignored', 'no-trigger-matched')
+        await runtime.deliveries.mark({
+          deliveryId,
+          status: 'ignored',
+          reason: 'no-trigger-matched',
+        })
       }
       for (const eventDeliveryId of published.deliveryIds) {
         void eventCenter.worker.runOneNotification(eventDeliveryId).catch(() => {})

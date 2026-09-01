@@ -22,7 +22,6 @@ import {
 } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { probeCodeHostConnection } from '@/services/codeHost/connections'
-import type { AppDeps } from '@/server'
 import {
   ConflictError,
   DomainError,
@@ -54,21 +53,21 @@ type AccountPersonalCredentialResolution =
     }
 
 interface AccountRepositoryTransportCredentials {
-  list(subject: OwnRepositoryCredentialSubject): OwnCodeHostPushCredentialList
+  list(subject: OwnRepositoryCredentialSubject): Promise<OwnCodeHostPushCredentialList>
   put(
     subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: PutOwnCodeHostPushCredentialRequest,
-  ): OwnCodeHostPushCredentialSummary
+  ): Promise<OwnCodeHostPushCredentialSummary>
   remove(
     subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
-  ): { readonly removed: boolean }
+  ): Promise<{ readonly removed: boolean }>
   resolvePersonalForTest(
     subject: OwnRepositoryCredentialSubject,
     provider: CodeHostProvider,
     request: TestOwnCodeHostPushCredentialRequest,
-  ): AccountPersonalCredentialResolution
+  ): Promise<AccountPersonalCredentialResolution>
 }
 
 export interface AccountRepositoryTransportCredentialRouteDeps {
@@ -76,6 +75,10 @@ export interface AccountRepositoryTransportCredentialRouteDeps {
   readonly currentSubjects: {
     resolveCurrentSubject(userId: string): Promise<{ readonly userId: string } | null>
   }
+}
+
+export interface AccountRepositoryTransportCredentialRuntimeDeps {
+  readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
 }
 
 class AccountCredentialOperationLimiter {
@@ -102,9 +105,9 @@ function providerOf(raw: string): CodeHostProvider {
   return parsed.data
 }
 
-function credentialCall<T>(operation: () => T): T {
+async function credentialCall<T>(operation: () => Promise<T>): Promise<T> {
   try {
-    return operation()
+    return await operation()
   } catch (error) {
     if (!(error instanceof RepositoryTransportCredentialError)) throw error
     if (error.kind === 'validation') throw new ValidationError(error.code, error.message)
@@ -142,7 +145,7 @@ function requireOperationBudget(limiter: AccountCredentialOperationLimiter, user
 
 export function mountAccountRepositoryTransportCredentialRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: AccountRepositoryTransportCredentialRuntimeDeps,
   routeDeps: AccountRepositoryTransportCredentialRouteDeps,
 ): void {
   const credentials = routeDeps.credentials
@@ -158,7 +161,7 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       summary: 'List the current user code-host push credential summaries',
     },
     async (c) =>
-      c.json(credentials.list(await currentSessionSubject(c, routeDeps.currentSubjects))),
+      c.json(await credentials.list(await currentSessionSubject(c, routeDeps.currentSubjects))),
   )
 
   registerRoute(
@@ -183,7 +186,7 @@ export function mountAccountRepositoryTransportCredentialRoutes(
           'invalid code-host push credential body',
         )
       }
-      return c.json(credentialCall(() => credentials.put(subject, provider, parsed.data)))
+      return c.json(await credentialCall(() => credentials.put(subject, provider, parsed.data)))
     },
   )
 
@@ -209,7 +212,7 @@ export function mountAccountRepositoryTransportCredentialRoutes(
           'invalid code-host push credential test body',
         )
       }
-      const resolved = credentials.resolvePersonalForTest(subject, provider, parsed.data)
+      const resolved = await credentials.resolvePersonalForTest(subject, provider, parsed.data)
       if (!resolved.ok) {
         const message =
           resolved.code === 'code-host-push-credential-connection-missing'
@@ -248,7 +251,9 @@ export function mountAccountRepositoryTransportCredentialRoutes(
       const subject = await currentSessionSubject(c, routeDeps.currentSubjects)
       requireOperationBudget(limiter, subject.userId)
       return c.json(
-        credentialCall(() => credentials.remove(subject, providerOf(c.req.param('provider')))),
+        await credentialCall(() =>
+          credentials.remove(subject, providerOf(c.req.param('provider'))),
+        ),
       )
     },
   )

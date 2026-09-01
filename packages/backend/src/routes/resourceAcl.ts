@@ -1,7 +1,7 @@
 // RFC-099 — generic GET/PUT /api/{resource}/:key/acl endpoints, mounted once
 // per resource by the five resource route modules. Both routes declare their
 // own coarse gate below (GET→`{res}:read`, PUT→`{res}:update`); per-row owner
-// enforcement happens in updateResourceAcl.
+// enforcement is delegated to the owner-composed update callback.
 //
 // "Row missing" and "row invisible" deliberately produce the SAME 404 payload
 // so a non-granted user cannot probe existence (D1).
@@ -10,19 +10,11 @@ import {
   UpdateResourceAclBodySchema,
   type AclResourceType,
   type ResourceAcl,
+  type UpdateResourceAclBody,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { actorOf } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import type { DbTxSync } from '@/db/txSync'
-import {
-  canViewResource,
-  getResourceAcl,
-  updateResourceAcl,
-  type AclRow,
-  type ResourceAclIdentityPersistence,
-} from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
@@ -42,16 +34,27 @@ import { NotFoundError, ValidationError } from '@/util/errors'
  */
 export type MountedAclResourceType = AclResourceType
 
-export interface AclEndpointConfig {
+export interface AclEndpointRow {
+  readonly id: string
+  readonly builtin?: boolean | null
+}
+
+export interface AclEndpointConfig<Row extends AclEndpointRow> {
   type: MountedAclResourceType
   /** e.g. '/api/agents' */
   base: string
   /** RFC-223: every ACL route is addressed by canonical resource id. */
   param: 'id'
   /** Load the row by the route key; null when absent. */
-  load: (db: DbClient, key: string) => Promise<AclRow | null>
-  /** Aggregate-owner persistence for ACL identities outside resource-catalog. */
-  identityPersistence?: ResourceAclIdentityPersistence
+  load: (key: string) => Promise<Row | null>
+  canView: (actor: Actor, row: Row) => Promise<boolean>
+  read: (actor: Actor, row: Row) => Promise<ResourceAcl>
+  update: (
+    actor: Actor,
+    row: Row,
+    body: UpdateResourceAclBody,
+    updatedAt?: number,
+  ) => Promise<ResourceAcl>
   /**
    * RFC-330 —— 404 码。默认 `${type}-not-found`（13 类沿用）；数字员工域的工具 / 模版传
    * 自己既有的连字符码（`employee-tool-not-found` 等），让同一资源在所有路由上只有一个
@@ -61,28 +64,16 @@ export interface AclEndpointConfig {
   /** RFC-201: optional stable-id linearization adapter for operation resources. */
   coordinator?: {
     runExclusive: (resourceId: string, task: () => Promise<ResourceAcl>) => Promise<ResourceAcl>
-    loadById: (db: DbClient, resourceId: string) => Promise<AclRow | null>
-    nextUpdatedAt?: (row: AclRow) => Promise<number>
+    loadById: (resourceId: string) => Promise<Row | null>
+    nextUpdatedAt?: (row: Row) => Promise<number>
   }
   /** Post-commit resource-specific lifecycle invalidation hook. */
   afterUpdate?: (resourceId: string) => void | Promise<void>
-  /** Durable resource-specific invalidation committed atomically with the ACL write. */
-  afterWriteInTx?: (
-    tx: DbTxSync,
-    change: {
-      resourceId: string
-      ownerUserId: string | null
-      visibility: 'public' | 'private'
-      grantedUserIds: ReadonlySet<string>
-      now: number
-    },
-  ) => void
 }
 
-export function mountAclEndpoints(
+export function mountAclEndpoints<Row extends AclEndpointRow>(
   app: Hono,
-  deps: { readonly db: DbClient },
-  cfg: AclEndpointConfig,
+  cfg: AclEndpointConfig<Row>,
 ): void {
   const path = `${cfg.base}/:${cfg.param}/acl`
   // RFC-247 T1/T3 — the GET/PUT pair here is generated from a template, so
@@ -159,11 +150,11 @@ export function mountAclEndpoints(
     async (c) => {
       const key = c.req.param(cfg.param) ?? ''
       const actor = actorOf(c)
-      const row = await cfg.load(deps.db, key)
-      if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
+      const row = await cfg.load(key)
+      if (row === null || !(await cfg.canView(actor, row))) {
         throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
       }
-      return c.json(await getResourceAcl(deps.db, actor, cfg.type, row, cfg.identityPersistence))
+      return c.json(await cfg.read(actor, row))
     },
   )
 
@@ -183,8 +174,8 @@ export function mountAclEndpoints(
     async (c) => {
       const key = c.req.param(cfg.param) ?? ''
       const actor = actorOf(c)
-      const row = await cfg.load(deps.db, key)
-      if (row === null || !(await canViewResource(deps.db, actor, cfg.type, row))) {
+      const row = await cfg.load(key)
+      if (row === null || !(await cfg.canView(actor, row))) {
         throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
       }
       const body: unknown = await c.req.json().catch(() => ({}))
@@ -194,24 +185,20 @@ export function mountAclEndpoints(
           issues: parsed.error.issues,
         })
       }
-      const updateFresh = async (fresh: AclRow): Promise<ResourceAcl> => {
-        if (!(await canViewResource(deps.db, actor, cfg.type, fresh))) {
+      const updateFresh = async (fresh: Row): Promise<ResourceAcl> => {
+        if (!(await cfg.canView(actor, fresh))) {
           throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
         }
         // RFC-104: built-ins are read-only. This runs on the in-lock fresh row.
         assertNotBuiltin(cfg.type, fresh)
         const updatedAt = await cfg.coordinator?.nextUpdatedAt?.(fresh)
-        return updateResourceAcl(deps.db, actor, cfg.type, fresh, parsed.data, {
-          updatedAt,
-          afterWriteInTx: cfg.afterWriteInTx,
-          identityPersistence: cfg.identityPersistence,
-        })
+        return cfg.update(actor, fresh, parsed.data, updatedAt)
       }
       const result =
         cfg.coordinator === undefined
           ? await updateFresh(row)
           : await cfg.coordinator.runExclusive(row.id, async () => {
-              const fresh = await cfg.coordinator!.loadById(deps.db, row.id)
+              const fresh = await cfg.coordinator!.loadById(row.id)
               if (fresh === null) {
                 throw new NotFoundError(notFoundCode, `${cfg.type} not found`)
               }

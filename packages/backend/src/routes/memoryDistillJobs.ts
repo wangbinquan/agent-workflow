@@ -9,18 +9,20 @@
 
 import { DistillJobStatusSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import {
-  cancelPendingJob,
-  listDistillJobs,
-  retryFailedJob,
-} from '@/services/memoryDistillScheduler'
+import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
 import { getDistillJobDetail } from '@/services/memoryDistillJobDetail'
 import { getDistillJobSessionView } from '@/services/memoryDistillSessionView'
 import { ConflictError, ValidationError } from '@/util/errors'
+import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
 
-export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
+export function mountMemoryDistillJobRoutes(
+  app: Hono,
+  deps: {
+    readonly memoryDistillCommands: MemoryDistillCommands
+    readonly memoryDistillQueries: MemoryDistillQueries
+  },
+): void {
   registerRoute(
     app,
     {
@@ -40,7 +42,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
         }
         status = r.data
       }
-      const items = await listDistillJobs(deps.db, status !== undefined ? { status } : {})
+      const items = await deps.memoryDistillQueries.listJobs(status !== undefined ? { status } : {})
       return c.json({ items })
     },
   )
@@ -56,7 +58,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const ok = await retryFailedJob(deps.db, id)
+      const ok = await deps.memoryDistillCommands.retryFailed(id)
       if (!ok) {
         // Distinguish 404 from 409 for cleaner debugging.
         throw new ConflictError(
@@ -79,7 +81,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const ok = await cancelPendingJob(deps.db, id)
+      const ok = await deps.memoryDistillCommands.cancelPending(id)
       if (!ok) {
         throw new ConflictError(
           'distill-job-not-pending',
@@ -101,7 +103,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Get one distill job',
     },
     async (c) => {
-      const detail = await getDistillJobDetail(deps.db, c.req.param('id'))
+      const detail = await getDistillJobDetail(deps.memoryDistillQueries, c.req.param('id'))
       return c.json(detail)
     },
   )
@@ -116,7 +118,7 @@ export function mountMemoryDistillJobRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Distill job session view',
     },
     async (c) => {
-      const view = await getDistillJobSessionView(deps.db, c.req.param('id'))
+      const view = await getDistillJobSessionView(deps.memoryDistillQueries, c.req.param('id'))
       return c.json(view)
     },
   )

@@ -14,52 +14,61 @@ import {
   RenameAgentRequestSchema,
   ResourceRefSchema,
   StartAgentTaskSchema,
-  PREVIEW_CALL_POLICY,
-  VALIDATE_CALL_POLICY,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
 import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { AgentOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type { AgentOperationContext } from '@/modules/resource-catalog/public/participants'
-import type { AgentQueries, AgentReferenceQueries } from '@/modules/resource-catalog/public/queries'
+import type {
+  AgentDependencyQueries,
+  AgentImportQueries,
+  AgentQueries,
+  AgentReferenceQueries,
+  AgentResourceIntegrityQueries,
+} from '@/modules/resource-catalog/public/queries'
 import type {
   AgentCatalogResource,
   AgentReferenceLabels,
+  CreateAgentCatalogInput,
+  DeleteAgentCatalogInput,
+  DeleteAgentCatalogReceipt,
+  GetResourceAclCatalogInput,
+  RenameAgentCatalogInput,
+  UpdateAgentCatalogInput,
+  UpdateResourceAclCatalogInput,
 } from '@/modules/resource-catalog/public/types'
-import { assertCanReplaySourceTask } from '@/services/taskCollab'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { resolveDependsClosure, validateDependsOn } from '@/services/agentDeps'
-import { resolveRefsUsableById } from '@/services/resourceRefs'
-import { resolveAgentImportRefs } from '@/services/importRefs'
-import { filterVisibleRows } from '@/services/resourceAcl'
 import { SKILL_MERGER_AGENT_ID } from '@/services/systemResources'
 // RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).
-import { startExecution } from '@/services/execution/executor'
-import {
-  parseMultipartLaunch,
-  resolveUploadLimits,
-  type MultipartFilePart,
-} from '@/services/launchMultipart'
+import { parseMultipartLaunch, type MultipartFilePart } from '@/services/launchMultipart'
 import type { UploadLimits } from '@/services/upload'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
-import { getAgentResourceStatus } from '@/services/agentResourceIntegrity'
 import { safeJsonOrEmpty } from '@/util/http'
-import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import type { AgentRouteTaskLaunchOperations } from '@/modules/task-execution/public/commands'
 
 export interface AgentRouteDependencies {
   readonly queries: AgentQueries
   readonly referenceQueries: AgentReferenceQueries
+  readonly dependencyQueries: AgentDependencyQueries
+  readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
+  readonly importQueries: AgentImportQueries
   readonly operations: AgentOperationDescriptors
   readonly authorityFor: (actor: Actor) => AgentOperationContext
+  readonly listDigitalEmployeeTemplates: () => Promise<readonly AgentCatalogResource[]>
+  readonly taskLaunch: AgentRouteTaskLaunchOperations
 }
+
+/**
+ * TaskExecution-owned launch boundary consumed by the Agent transport.  The
+ * route never receives a database client or reconstructs provider-specific
+ * launch dependencies.
+ */
+export type { AgentRouteTaskLaunchOperations }
 
 interface ClosureRefNameMaps {
   readonly skill: ReadonlyMap<string, string>
@@ -75,8 +84,25 @@ function closureRefNameMaps(labels: AgentReferenceLabels): ClosureRefNameMaps {
   }
 }
 
-export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDependencies): void {
-  const { queries, referenceQueries, operations } = module
+async function filterVisibleAgentRows<T extends AgentCatalogResource>(
+  queries: AgentQueries,
+  authority: AgentOperationContext,
+  rows: readonly T[],
+): Promise<T[]> {
+  const visible = await Promise.all(rows.map((row) => queries.get(authority, { id: row.id })))
+  const visibleIds = new Set(visible.flatMap((row) => (row === null ? [] : [row.id])))
+  return rows.filter((row) => visibleIds.has(row.id))
+}
+
+export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): void {
+  const {
+    queries,
+    referenceQueries,
+    dependencyQueries,
+    resourceIntegrityQueries,
+    importQueries,
+    operations,
+  } = module
   // RFC-099: load-or-404 that treats "missing" and "not visible" identically
   // (same code + message) so existence never leaks to non-granted users.
   async function loadVisibleAgent(actor: Actor, id: string): Promise<AgentCatalogResource> {
@@ -89,7 +115,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
 
   async function loadClosureNames(
     actor: Actor,
-    closure: readonly Agent[],
+    closure: readonly AgentCatalogResource[],
     visibleAgentIds: ReadonlySet<string>,
   ): Promise<ClosureRefNameMaps> {
     const labels = await referenceQueries.labels(module.authorityFor(actor), {
@@ -120,11 +146,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     },
     async (c) =>
       c.json(
-        await filterVisibleRows(
-          deps.db,
-          actorOf(c),
-          'agent',
-          await listDigitalEmployeeAgentTemplates(deps.db),
+        await filterVisibleAgentRows(
+          queries,
+          module.authorityFor(actorOf(c)),
+          await module.listDigitalEmployeeTemplates(),
         ),
       ),
   )
@@ -145,7 +170,8 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           issues: parsed.error.issues,
         })
       }
-      return c.json(await resolveAgentImportRefs(deps.db, actorOf(c), parsed.data))
+      const actor = actorOf(c)
+      return c.json(await importQueries.resolve(module.authorityFor(actor), parsed.data))
     },
   )
 
@@ -204,7 +230,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     async (c) => {
       const actor = actorOf(c)
       const agent = await loadVisibleAgent(actor, c.req.param('id'))
-      return c.json(await getAgentResourceStatus(deps.db, actor, agent))
+      return c.json(
+        await resourceIntegrityQueries.status(module.authorityFor(actor), { root: agent }),
+      )
     },
   )
 
@@ -221,7 +249,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           issues: parsed.error.issues,
         })
       }
-      return parsed.data
+      return parsed.data satisfies CreateAgentCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, created) => c.json(created, 201),
@@ -246,7 +274,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           kind: 'json-body',
           body: JSON.stringify(body) ?? '{}',
         },
-      }
+      } satisfies UpdateAgentCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, updated) => c.json(updated),
@@ -257,15 +285,16 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     method: 'DELETE',
     path: '/api/agents/:id',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      submission: {
-        kind: 'json-body',
-        body: await c.req.raw.text().catch(() => ''),
-      },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
+      }) satisfies DeleteAgentCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: DeleteAgentCatalogReceipt) => {
       captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
@@ -305,7 +334,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
         const parsedForm = await parseMultipartLaunch(c.req.raw)
         body = parsedForm.payloadJson
-        uploads = { parts: parsedForm.parts, limits: resolveUploadLimits(deps.configPath) }
+        uploads = { parts: parsedForm.parts, limits: module.taskLaunch.uploadLimits() }
       } else {
         try {
           body = await c.req.raw.json()
@@ -333,7 +362,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
       {
         const src = (body as { sourceTaskId?: unknown }).sourceTaskId
         if (typeof src === 'string' && src.length > 0) {
-          await assertCanReplaySourceTask(deps.db, actorOf(c), src)
+          await module.taskLaunch.assertReplayVisible(actor, src)
         }
       }
       const parsed = StartAgentTaskSchema.safeParse(body)
@@ -342,28 +371,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           issues: parsed.error.issues,
         })
       }
-      const task = await startExecution(
-        deps.db,
-        actor,
-        {
-          kind: 'agent',
-          refId: existing.id,
-          invoker: {
-            type: 'user',
-            launchKind: uploads === undefined ? 'direct-json' : 'direct-multipart',
-          },
-          payload: parsed.data,
-          ...(uploads !== undefined ? { uploads } : {}),
-        },
-        buildStartTaskDeps(
-          deps.db,
-          requireSchedulerDriver(deps.schedulerDriver),
-          deps.configPath,
-          actor.user.id,
-          deps.secretBox,
-          deps.identityAccess,
-        ),
-      )
+      const task = await module.taskLaunch.launch(actor, {
+        agentId: existing.id,
+        payload: parsed.data,
+        ...(uploads === undefined ? {} : { uploads }),
+      })
       return c.json(task, 201)
     },
   )
@@ -385,7 +397,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
       return {
         id,
         rename: parsed.data,
-      }
+      } satisfies RenameAgentCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, renamed) => c.json(renamed),
@@ -407,7 +419,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     async (c) => {
       const actor = actorOf(c)
       const root = await loadVisibleAgent(actor, c.req.param('id'))
-      const closure = await resolveDependsClosure(deps.db, root, { call: PREVIEW_CALL_POLICY })
+      const closure = await dependencyQueries.closure(module.authorityFor(actor), {
+        root,
+        onMissing: 'skip',
+      })
       // `onMissing:'skip'` never produces ok:false (cycles only arise when a
       // name appears on the active path — which agent.ts save guard prevents),
       // but defensively handle the type anyway.
@@ -424,7 +439,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
       // longer discloses its NAME: its display identity collapses to its opaque id
       // (and other agents' dependsOn projections keep that id opaque too), so a
       // private dependency's name never leaks (D1 — mirrors the "无权限占位" rule).
-      const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
+      const visible = await filterVisibleAgentRows(
+        queries,
+        module.authorityFor(actor),
+        closure.agents,
+      )
       const visibleAgentIds = new Set(visible.map((a) => a.id))
       const names = await loadClosureNames(actor, closure.agents, visibleAgentIds)
       const masked = toAgentClosureSummaries(closure.agents, {
@@ -468,7 +487,10 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
       }
       // The closure guard is keyed by the existing agent's immutable id. A new
       // draft has no id and stays synthetic; mutable name is display-only.
-      const resolved = await resolveRefsUsableById(deps.db, actor, 'agent', parsed.data.dependsOn)
+      const authority = module.authorityFor(actor)
+      const resolved = await dependencyQueries.resolveUsableIds(authority, {
+        ids: parsed.data.dependsOn,
+      })
       if (resolved.missing.length > 0) {
         return c.json({
           ok: false,
@@ -481,7 +503,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
         parsed.data.id === undefined ? null : await loadVisibleAgent(actor, parsed.data.id)
       const selfId = existing?.id ?? ''
       try {
-        await validateDependsOn(deps.db, selfId, dependsOn)
+        await dependencyQueries.validate(authority, { selfId, dependsOn })
       } catch (err) {
         if (err instanceof DomainError) {
           return c.json({ ok: false, code: err.code, details: err.details })
@@ -492,7 +514,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
       // DB yet — new-agent flow). validateDependsOn already vetted ids exist + no
       // cycle, so onMissing:'fail' is safe here.
       const syntheticRoot: Agent = existing
-        ? { ...existing, dependsOn }
+        ? { ...existing, dependsOn: [...dependsOn] }
         : ({
             id: selfId,
             name: parsed.data.name,
@@ -502,7 +524,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
             syncOutputsOnIterate: true,
             permission: {},
             skills: [],
-            dependsOn,
+            dependsOn: [...dependsOn],
             mcp: [],
             plugins: [],
             frontmatterExtra: {},
@@ -511,8 +533,9 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
             createdAt: 0,
             updatedAt: 0,
           } satisfies Agent)
-      const closure = await resolveDependsClosure(deps.db, syntheticRoot, {
-        call: VALIDATE_CALL_POLICY,
+      const closure = await dependencyQueries.closure(authority, {
+        root: syntheticRoot,
+        onMissing: 'fail',
       })
       if (closure.ok === false) {
         // Shouldn't happen — validateDependsOn already screened cycles — but
@@ -523,7 +546,11 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
           details: { cyclePath: closure.cyclePath },
         })
       }
-      const visible = await filterVisibleRows(deps.db, actor, 'agent', closure.agents)
+      const visible = await filterVisibleAgentRows(
+        queries,
+        module.authorityFor(actor),
+        closure.agents,
+      )
       const visibleAgentIds = new Set(visible.map((a) => a.id))
       return c.json({
         ok: true,
@@ -540,7 +567,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     method: 'GET',
     path: '/api/agents/:id/acl',
     tokenAccess: 'allow',
-    decode: (c) => ({ id: c.req.param('id') }),
+    decode: (c) => ({ id: c.req.param('id') }) satisfies GetResourceAclCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, acl) => c.json(acl),
   })
@@ -550,13 +577,14 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
     method: 'PUT',
     path: '/api/agents/:id/acl',
     tokenAccess: 'never',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      submission: {
-        kind: 'json-body',
-        body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
-      },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        submission: {
+          kind: 'json-body',
+          body: JSON.stringify(await safeJsonOrEmpty(c.req.raw)) ?? '{}',
+        },
+      }) satisfies UpdateResourceAclCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, acl) => c.json(acl),
   })
@@ -574,7 +602,7 @@ export function mountAgentRoutes(app: Hono, deps: AppDeps, module: AgentRouteDep
  * opaque id, owner is hidden, and their other fields are blanked (D1).
  */
 function toAgentClosureSummaries(
-  closure: Agent[],
+  closure: readonly AgentCatalogResource[],
   opts: { names: ClosureRefNameMaps; visibleAgentIds?: ReadonlySet<string> },
 ): AgentClosureSummary[] {
   const { names, visibleAgentIds } = opts

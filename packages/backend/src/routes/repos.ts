@@ -6,24 +6,18 @@
 // pickers query them against the cached mirror's localPath (RFC-110).
 
 import type { Hono } from 'hono'
-import { cachedRepos } from '@/db/schema'
-import type { AppDeps } from '@/server'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { registerRoute } from '@/routes/registry'
 import { getRepoFiles, getRepoRefs, isKnownRepoPath } from '@/services/repo'
 import { ValidationError } from '@/util/errors'
 
-export function mountRepoRoutes(app: Hono, deps: AppDeps): void {
+export function mountRepoRoutes(app: Hono, store: RepositoryWorkspaceStore): void {
   // RFC-099 audit (2026-07-15): `path` is attacker-controllable and repos:read
   // is in the user baseline. Constrain introspection to paths inside a known
   // cached-repos mirror so a user can't enumerate arbitrary host git repos.
   async function requireKnownPath(path: string): Promise<void> {
-    const rows = await deps.db.select({ localPath: cachedRepos.localPath }).from(cachedRepos)
-    if (
-      !isKnownRepoPath(
-        rows.map((r) => r.localPath),
-        path,
-      )
-    ) {
+    const paths = await store.listKnownRepositoryPaths()
+    if (!isKnownRepoPath(paths, path)) {
       throw new ValidationError('repo-path-unknown', 'path is not a known cached repository')
     }
   }

@@ -6,7 +6,6 @@
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type {
   DevelopmentConfigOperations,
@@ -19,8 +18,6 @@ import {
   developmentConfigReviseInputSchema,
   developmentEmployeePlaybookInputSchema,
 } from '@/modules/development-automation/public/operations'
-import { mountAclEndpoints } from '@/routes/resourceAcl'
-import type { ResourceAclIdentityPersistence } from '@/services/resourceAcl'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { NotFoundError } from '@/util/errors'
@@ -31,6 +28,20 @@ interface ResourceHttpBinding {
   readonly base: string
   readonly aclType: AclResourceType
   readonly notFoundCode: string
+}
+
+export interface DevelopmentConfigAclRouteBinding {
+  mount(input: {
+    readonly app: Hono
+    readonly type: AclResourceType
+    readonly base: string
+    readonly notFoundCode: string
+    readonly load: (id: string) => Promise<{
+      readonly id: string
+      readonly ownerUserId: string | null
+      readonly visibility: 'private' | 'public'
+    } | null>
+  }): void
 }
 
 const RESOURCE_BINDINGS: ReadonlyArray<ResourceHttpBinding> = Object.freeze([
@@ -68,11 +79,10 @@ const RESOURCE_BINDINGS: ReadonlyArray<ResourceHttpBinding> = Object.freeze([
 
 function mountConfigResource(
   app: Hono,
-  deps: { readonly db: DbClient },
+  aclRoutes: DevelopmentConfigAclRouteBinding,
   binding: ResourceHttpBinding,
   operations: DevelopmentConfigResourceOperations,
   contexts: DirectAuthorityBinding,
-  identityPersistence?: ResourceAclIdentityPersistence,
 ): void {
   const descriptors = createDevelopmentConfigResourceDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>
@@ -137,33 +147,23 @@ function mountConfigResource(
     context,
     encode: (c) => c.json({ ok: true }),
   })
-  mountAclEndpoints(app, deps, {
+  aclRoutes.mount({
+    app,
     type: binding.aclType,
     base: binding.base,
-    param: 'id',
-    load: (_db, id) => operations.loadAclRow(id),
-    ...(identityPersistence === undefined ? {} : { identityPersistence }),
+    load: (id) => operations.loadAclRow(id),
+    notFoundCode: binding.notFoundCode,
   })
 }
 
 export function mountDevelopmentConfigRoutes(
   app: Hono,
-  deps: { readonly db: DbClient },
+  aclRoutes: DevelopmentConfigAclRouteBinding,
   operations: DevelopmentConfigOperations,
   contexts: DirectAuthorityBinding,
-  developmentAdapterAclIdentity: ResourceAclIdentityPersistence,
 ): void {
   for (const binding of RESOURCE_BINDINGS) {
-    mountConfigResource(
-      app,
-      deps,
-      binding,
-      operations.resources[binding.kind],
-      contexts,
-      binding.aclType === developmentAdapterAclIdentity.type
-        ? developmentAdapterAclIdentity
-        : undefined,
-    )
+    mountConfigResource(app, aclRoutes, binding, operations.resources[binding.kind], contexts)
   }
   const descriptors = createDevelopmentConfigSupplementalDescriptors(operations)
   const context = (c: Parameters<typeof actorOf>[0]) =>

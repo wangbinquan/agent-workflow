@@ -2,7 +2,6 @@
 // / sessions / pats / identities). All but login require an active session
 // + the `account:self` permission (granted to both roles).
 
-import { and, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import {
   CreatePatBodySchema,
@@ -11,40 +10,17 @@ import {
   LoginBodySchema,
   SESSION_TOKEN_PREFIX,
   UpdateOwnProfileBodySchema,
+  type UserIdentity,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 // RFC-285 B4：本文件原有一份同名 extractRawToken 私有副本（第二读点，含
 // ?token= query 支持）——收编进 auth/session 的共享 REST 入口，query 面退役。
 import { extractBearerToken } from '@/auth/session'
 import { hashPassword, verifyPassword, verifyPasswordDummy } from '@/auth/passwords'
+import { hashAuthToken, type AuthRuntime } from '@/auth/application/authRuntime'
+import { assertMatrixGrantable, PatMatrixError } from '@/auth/application/patPolicy'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
-import {
-  assertMatrixGrantable,
-  createPat,
-  listPatsForUser,
-  PatMatrixError,
-  revokePat,
-} from '@/auth/patStore'
-import {
-  createSession,
-  hashToken,
-  listActiveSessionsForUser,
-  revokeAllSessionsForUser,
-  revokeSession,
-} from '@/auth/sessionStore'
-import { userPats, users, userSessions } from '@/db/schema'
-import { listIdentitiesForUser } from '@/services/userIdentities'
-import { isOidcManagedUser, writeLocalPasswordIfUnmanaged } from '@/services/accountAuthPolicy'
-import {
-  assertBootstrapComplete,
-  completeBootstrapWithAdmin,
-  createPasswordLoginSession,
-  getAuthLoginPolicy,
-  type InitialUserAccessTransactionBinding,
-} from '@/auth/loginPolicy'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { listTokenAuditForUser } from '@/services/tokenAudit'
 import {
   ConflictError,
   ForbiddenError,
@@ -65,16 +41,38 @@ import { directRequestAuthority } from '@/routes/operationAuthority'
 interface AuthRouteIdentityAccess {
   readonly contexts: DirectCommandContextFactory
   readonly directAuthority: DirectAuthorityBinding
-  readonly initialUserAccess: InitialUserAccessTransactionBinding
   readonly getUserProfile: GetUserProfile
   readonly updateOwnProfile: UpdateOwnProfile
 }
 
+export interface AuthRouteBindings {
+  readonly auth: AuthRuntime
+  readonly listIdentitiesForUser: (userId: string) => Promise<ReadonlyArray<UserIdentity>>
+  readonly listTokenAuditForUser: (userId: string) => Promise<ReadonlyArray<TokenAuditView>>
+}
+
+export interface TokenAuditView {
+  readonly id: string
+  readonly patId: string
+  readonly userId: string
+  readonly channel: string
+  readonly toolName: string | null
+  readonly method: string | null
+  readonly path: string | null
+  readonly resourceKind: string | null
+  readonly resourceId: string | null
+  readonly statusCode: number
+  readonly snapshotFailed: boolean
+  readonly createdAt: number
+}
+
 export function mountAuthRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: { readonly configPath: string },
   identityAccess: AuthRouteIdentityAccess,
+  bindings: AuthRouteBindings,
 ): void {
+  const { auth } = bindings
   // Public — uses username + password, no session required.
   registerRoute(
     app,
@@ -88,7 +86,7 @@ export function mountAuthRoutes(
       summary: 'Password login',
     },
     async (c) => {
-      const policy = assertBootstrapComplete(deps.db)
+      const policy = await auth.assertBootstrapComplete()
       if (!policy.passwordLoginEnabled) {
         throw new ForbiddenError(
           'password-login-disabled',
@@ -100,8 +98,7 @@ export function mountAuthRoutes(
         throw new ValidationError('login-invalid', 'invalid login payload')
       }
       const { username, password } = parsed.data
-      const rows = await deps.db.select().from(users).where(eq(users.username, username)).limit(1)
-      const row = rows[0]
+      const row = await auth.findUserByUsername(username)
       if (!row || row.status !== 'active' || !row.passwordHash) {
         // RFC-103 T9: run a real argon2 verify against a dummy hash so timing does
         // not distinguish "no user / inactive / no passwordHash" from a wrong
@@ -111,7 +108,7 @@ export function mountAuthRoutes(
       }
       const ok = await verifyPassword(password, row.passwordHash)
       if (!ok) throw new UnauthorizedError('invalid username or password')
-      const { token, user } = createPasswordLoginSession(deps.db, {
+      const { token, user } = await auth.createPasswordLoginSession({
         userId: row.id,
         verifiedPasswordHash: row.passwordHash,
         userAgent: c.req.header('user-agent') ?? null,
@@ -144,7 +141,7 @@ export function mountAuthRoutes(
       if (actorOf(c).source !== 'daemon') {
         throw new ForbiddenError('bootstrap-daemon-required', 'daemon bootstrap token required')
       }
-      return c.json({ required: getAuthLoginPolicy(deps.db).bootstrapCompletedAt === null })
+      return c.json({ required: await auth.isBootstrapRequired() })
     },
   )
 
@@ -169,16 +166,12 @@ export function mountAuthRoutes(
         })
       }
       const passwordHash = await hashPassword(parsed.data.password)
-      const created = completeBootstrapWithAdmin(
-        deps.db,
-        {
-          username: parsed.data.username,
-          displayName: parsed.data.displayName,
-          ...(parsed.data.email !== undefined ? { email: parsed.data.email } : {}),
-          passwordHash,
-        },
-        identityAccess.initialUserAccess,
-      )
+      const created = await auth.completeBootstrap({
+        username: parsed.data.username,
+        displayName: parsed.data.displayName,
+        ...(parsed.data.email !== undefined ? { email: parsed.data.email } : {}),
+        passwordHash,
+      })
       return c.json(
         {
           id: created.id,
@@ -212,13 +205,10 @@ export function mountAuthRoutes(
     async (c) => {
       const token = extractBearerToken(c)
       if (token && token.startsWith(SESSION_TOKEN_PREFIX)) {
-        const hash = hashToken(token)
-        const rows = await deps.db
-          .select()
-          .from(userSessions)
-          .where(eq(userSessions.tokenHash, hash))
-          .limit(1)
-        if (rows[0]) await revokeSession(deps.db, rows[0].id)
+        const resolved = await auth.lookupActiveSessionByHash(hashAuthToken(token), Date.now(), {
+          touch: false,
+        })
+        if (resolved !== null) await auth.revokeSession(resolved.session.id)
       }
       return c.body(null, 204)
     },
@@ -235,8 +225,8 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const identities = await listIdentitiesForUser(deps.db, actor.user.id)
-      const pats = await listPatsForUser(deps.db, actor.user.id)
+      const identities = await bindings.listIdentitiesForUser(actor.user.id)
+      const pats = await auth.listPatsForUser(actor.user.id)
       const profile = await identityAccess.getUserProfile.execute(actor.user.id)
       if (profile === null) throw new NotFoundError('user-not-found', 'user not found')
       return c.json({
@@ -271,7 +261,7 @@ export function mountAuthRoutes(
         directRequestAuthority(identityAccess.directAuthority, actor),
         'http',
       )
-      const profile = accessCall(() =>
+      const profile = await accessCall(() =>
         identityAccess.updateOwnProfile.execute(context, parsed.data),
       )
       return c.json({ profile })
@@ -289,7 +279,7 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      if (await isOidcManagedUser(deps.db, actor.user.id)) {
+      if (await auth.isOidcManagedUser(actor.user.id)) {
         throw new ForbiddenError(
           'oidc-password-managed',
           'password is managed by the linked identity provider',
@@ -298,8 +288,7 @@ export function mountAuthRoutes(
       const parsed = ChangePasswordBodySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
       if (!parsed.success) throw new ValidationError('change-password-invalid', 'invalid payload')
 
-      const rows = await deps.db.select().from(users).where(eq(users.id, actor.user.id)).limit(1)
-      const row = rows[0]
+      const row = await auth.findUserById(actor.user.id)
       if (!row) throw new NotFoundError('user-not-found', 'user not found')
 
       if (!row.forcePasswordChange) {
@@ -314,7 +303,7 @@ export function mountAuthRoutes(
         }
       }
       const newHash = await hashPassword(parsed.data.newPassword)
-      writeLocalPasswordIfUnmanaged(deps.db, {
+      await auth.writeLocalPasswordIfUnmanaged({
         userId: actor.user.id,
         passwordHash: newHash,
         forcePasswordChange: false,
@@ -324,12 +313,11 @@ export function mountAuthRoutes(
 
       // Revoke every other session for this user; keep the current one.
       const currentToken = extractBearerToken(c)
-      const currentHash = currentToken ? hashToken(currentToken) : null
-      await revokeAllSessionsForUser(deps.db, actor.user.id)
+      const currentHash = currentToken ? hashAuthToken(currentToken) : null
+      await auth.revokeAllSessionsForUser(actor.user.id)
       if (currentHash) {
         // Mint a fresh session for the caller so the response can include it.
-        const { token } = await createSession({
-          db: deps.db,
+        const { token } = await auth.createSession({
           userId: actor.user.id,
           userAgent: c.req.header('user-agent') ?? null,
         })
@@ -350,7 +338,7 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      return c.json(await listActiveSessionsForUser(deps.db, actor.user.id))
+      return c.json(await auth.listActiveSessionsForUser(actor.user.id))
     },
   )
 
@@ -365,12 +353,7 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const rows = await deps.db
-        .select()
-        .from(userSessions)
-        .where(eq(userSessions.id, c.req.param('id')))
-        .limit(1)
-      const row = rows[0]
+      const ownerUserId = await auth.findSessionOwner(c.req.param('id'))
       // Unknown id and someone-else's id答 the SAME 403 — answering 404 for the
       // former turned this endpoint into an existence oracle: a logged-in user
       // could probe which session ids are live simply by watching the status
@@ -379,9 +362,9 @@ export function mountAuthRoutes(
       // "indistinguishable from not-found". Locked by
       // tests/auth-self-service-idor.test.ts.
       // See design/test-guard-audit-2026-07-21 §1 (B1-routes-1).
-      if (!row || row.userId !== actor.user.id)
+      if (ownerUserId !== actor.user.id)
         throw new ForbiddenError('forbidden', 'session does not belong to current user')
-      await revokeSession(deps.db, row.id)
+      await auth.revokeSession(c.req.param('id'))
       return c.body(null, 204)
     },
   )
@@ -397,7 +380,7 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      return c.json(await listPatsForUser(deps.db, actor.user.id))
+      return c.json(await auth.listPatsForUser(actor.user.id))
     },
   )
 
@@ -446,8 +429,7 @@ export function mountAuthRoutes(
         }
         throw err
       }
-      const created = await createPat({
-        db: deps.db,
+      const created = await auth.createPat({
         userId: actor.user.id,
         name: parsed.data.name,
         scopes: parsed.data.scopes,
@@ -473,7 +455,7 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      return c.json(await listTokenAuditForUser(deps.db, actor.user.id))
+      return c.json(await bindings.listTokenAuditForUser(actor.user.id))
     },
   )
 
@@ -489,15 +471,10 @@ export function mountAuthRoutes(
     async (c) => {
       const actor = actorOf(c)
       const id = c.req.param('id')
-      const rows = await deps.db
-        .select()
-        .from(userPats)
-        .where(and(eq(userPats.id, id), eq(userPats.userId, actor.user.id)))
-        .limit(1)
-      if (!rows[0]) {
+      if ((await auth.findPatOwner(id)) !== actor.user.id) {
         throw new ForbiddenError('forbidden', 'PAT does not belong to current user')
       }
-      await revokePat(deps.db, id)
+      await auth.revokePat(id)
       return c.body(null, 204)
     },
   )
@@ -513,7 +490,7 @@ export function mountAuthRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      return c.json(await listIdentitiesForUser(deps.db, actor.user.id))
+      return c.json(await bindings.listIdentitiesForUser(actor.user.id))
     },
   )
 
@@ -532,9 +509,9 @@ export function mountAuthRoutes(
   )
 }
 
-function accessCall<T>(body: () => T): T {
+async function accessCall<T>(body: () => Promise<T>): Promise<T> {
   try {
-    return body()
+    return await body()
   } catch (error) {
     if (!(error instanceof UserAccessError)) throw error
     switch (error.kind) {

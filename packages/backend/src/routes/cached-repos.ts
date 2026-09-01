@@ -12,7 +12,8 @@ import {
   StartBatchImportRequestSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import type { AppDeps } from '@/server'
+import type { SecretBox } from '@/auth/secretBox'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
@@ -29,7 +30,17 @@ import { getBatchSnapshot, retryBatchRow, startBatchImport } from '@/services/re
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 
-export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
+export interface CachedRepoRouteDependencies {
+  readonly configPath: string
+  readonly appHome?: string
+  readonly secretBox?: SecretBox
+}
+
+export function mountCachedRepoRoutes(
+  app: Hono,
+  deps: CachedRepoRouteDependencies,
+  store: RepositoryWorkspaceStore,
+): void {
   registerRoute(
     app,
     {
@@ -59,7 +70,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
         limit: param('limit'),
       }
       if (Object.values(raw).every((v) => v === undefined)) {
-        const items = await listCachedRepos(deps.db)
+        const items = await listCachedRepos(store)
         return c.json({ items })
       }
       const parsed = CachedRepoPageQuerySchema.safeParse(raw)
@@ -69,7 +80,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
           parsed.error.issues[0]?.message ?? 'invalid query',
         )
       }
-      return c.json(await listCachedReposPage(deps.db, parsed.data))
+      return c.json(await listCachedReposPage(store, parsed.data))
     },
   )
 
@@ -91,7 +102,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       const cfg = loadConfig(deps.configPath)
       const r = await refreshCachedRepo(
         {
-          db: deps.db,
+          store,
           ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
@@ -121,7 +132,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       // the same ordering the other seven delete routes use.
       const actor = actorOf(c)
       if (actor.source === 'pat') {
-        const existing = (await listCachedRepos(deps.db)).find((r) => r.id === id)
+        const existing = (await listCachedRepos(store)).find((r) => r.id === id)
         if (!existing) throw new NotFoundError('cached-repo-not-found', 'cached repo not found')
         assertTokenDeleteConfirm(
           await readDeleteBody(c),
@@ -135,7 +146,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
         captureDeleteSnapshot(c, actor, existing)
       }
       try {
-        const r = await deleteCachedRepo({ db: deps.db }, id, { force: isForce })
+        const r = await deleteCachedRepo({ store }, id, { force: isForce })
         return c.json({ ok: true, deletedLocalPath: r.deletedLocalPath })
       } catch (err) {
         if (err instanceof CachedRepoHasReferencesError) {
@@ -171,7 +182,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       const cfg = loadConfig(deps.configPath)
       const result = startBatchImport(
         {
-          db: deps.db,
+          store,
           ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           concurrency: cfg.repoBatchImportConcurrency,
@@ -230,7 +241,7 @@ export function mountCachedRepoRoutes(app: Hono, deps: AppDeps): void {
       }
       const snap = retryBatchRow(
         {
-          db: deps.db,
+          store,
           ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
         },

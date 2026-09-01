@@ -15,11 +15,11 @@
 // 禁掉（proposal §6.5）。401 只给验签失败（运维必须在 GitLab Recent Deliveries
 // 看见红色才会去修 secret），500 只给真内部错误。
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
 
-import type { AppDeps } from '@/server'
+import type { SecretBox } from '@/auth/secretBox'
+import type { EventCenterModule } from '@/modules/event-center/composition'
+import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import { registerRoute } from '@/routes/registry'
-import { webhookEndpoints } from '@/db/schema'
 import { CODE_HOST_ADAPTERS, type HeaderBag } from '@/services/webhook/codeHostAdapter'
 import {
   insertDelivery,
@@ -30,9 +30,12 @@ import {
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
-import { composeVerifiedWebhookDeliveryAcceptance } from '@/modules/integration/composition/webhookTerminalControl'
 import { codeHostEventObservations } from '@/modules/integration/public/events'
-import { supportsEventCenterCodeHostDelivery } from '@/services/webhook/dispatcherTypes'
+import {
+  supportsEventCenterCodeHostDelivery,
+  type WebhookDispatcher,
+} from '@/services/webhook/dispatcherTypes'
+import type { WebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
 
 const log = createLogger('webhook-ingress')
 
@@ -69,7 +72,13 @@ const NOT_FOUND = { error: 'not-found' } as const
 
 export function mountWebhookIngressRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: {
+    readonly webhookIngressPersistence: WebhookIngressPersistence
+    readonly secretBox?: SecretBox
+    readonly digitalEmployeeEventCenter?: EventCenterModule
+    readonly webhookDispatcher?: WebhookDispatcher
+    readonly webhookTerminalControl?: MrTerminalControl
+  },
   opts?: { limiters?: WebhookRateLimiters },
 ): void {
   const secretBox = deps.secretBox
@@ -84,7 +93,7 @@ export function mountWebhookIngressRoutes(
     // 管理面（批次二）会以显式错误提示，而不是留一个必 500 的公开路由。
     return
   }
-  const acceptVerifiedDelivery = composeVerifiedWebhookDeliveryAcceptance(deps.db)
+  const persistence = deps.webhookIngressPersistence
   const limiters = opts?.limiters ?? createWebhookRateLimiters()
 
   registerRoute(
@@ -111,13 +120,7 @@ export function mountWebhookIngressRoutes(
       // 端点查找。DB error 必须走 500 而不是塌缩 404（multica 教训：GitLab 对
       // 404 不重投，DB 抖动会静默丢真投递）——drizzle 抛异常由外层 onError 变
       // 500，此处只处理「查到了没有」。
-      const endpoint = (
-        await deps.db
-          .select()
-          .from(webhookEndpoints)
-          .where(eq(webhookEndpoints.urlToken, urlToken))
-          .limit(1)
-      )[0]
+      const endpoint = await persistence.endpoints.getByUrlToken(urlToken)
       if (!endpoint || endpoint.provider !== providerParam) {
         if (!limiters.unmatched.allow('global')) return c.json({ error: 'rate-limited' }, 429)
         return c.json(NOT_FOUND, 404)
@@ -157,7 +160,7 @@ export function mountWebhookIngressRoutes(
       if (verdict !== 'valid') {
         // rejected 行不占去重索引位（迁移 0138 partial index）：修正 secret 后
         // 同 UUID 的手工 Resend 能真正落地（AC-3）。
-        await insertDelivery(deps.db, {
+        await insertDelivery(persistence.deliveries, {
           ...baseRow,
           status: 'rejected',
           statusReason: verdict === 'missing' ? 'missing-token' : 'invalid-token',
@@ -175,7 +178,7 @@ export function mountWebhookIngressRoutes(
         // 非 JSON body：真实 code host 不这么发——常见来源是扫描器/误配置调用方
         // （GitHub 侧典型 = content type 忘改 application/json，body 是
         // `payload=<urlencoded>`；验签会过、解析在此终结，排障表写明）。
-        await insertDelivery(deps.db, {
+        await insertDelivery(persistence.deliveries, {
           ...baseRow,
           status: 'ignored',
           statusReason: 'parse-failed',
@@ -188,7 +191,7 @@ export function mountWebhookIngressRoutes(
       if (!normalized.ok) {
         // 合法 GitLab 投递但平台不处理（未支持的事件/中间态/缺字段）→ 一律
         // 200 + ignored：4xx 会累积 GitLab auto-disable（proposal §6.5）。
-        const insert = await insertDelivery(deps.db, {
+        const insert = await insertDelivery(persistence.deliveries, {
           ...baseRow,
           objectKind,
           status: 'ignored',
@@ -200,7 +203,7 @@ export function mountWebhookIngressRoutes(
       const event = normalized.event
 
       if (!endpoint.enabled) {
-        const insert = await insertDelivery(deps.db, {
+        const insert = await insertDelivery(persistence.deliveries, {
           ...baseRow,
           objectKind,
           eventType: event.eventType,
@@ -212,7 +215,7 @@ export function mountWebhookIngressRoutes(
         return c.json({ deliveryId: insert.deliveryId, status: 'ignored' })
       }
 
-      const insert = acceptVerifiedDelivery({
+      const insert = await persistence.acceptVerifiedDelivery({
         endpointId: endpoint.id,
         event,
         rawBodyBytes: rawBody.bytes,
@@ -228,12 +231,14 @@ export function mountWebhookIngressRoutes(
       let published: { deliveryCount: number; deliveryIds: readonly string[] }
       try {
         const occurredAt = Date.now()
-        const receipts = codeHostEventObservations({
-          endpointId: endpoint.id,
-          deliveryId,
-          event,
-          occurredAt,
-        }).map((observation) => eventCenter.commands.observe(observation))
+        const receipts = await Promise.all(
+          codeHostEventObservations({
+            endpointId: endpoint.id,
+            deliveryId,
+            event,
+            occurredAt,
+          }).map((observation) => eventCenter.commands.observe(observation)),
+        )
         published = {
           deliveryCount: receipts.reduce((total, receipt) => total + receipt.deliveryCount, 0),
           deliveryIds: receipts.flatMap((receipt) => receipt.deliveryIds),
@@ -243,7 +248,9 @@ export function mountWebhookIngressRoutes(
         // Therefore a code-host resend can repair a publish failure instead of
         // being acknowledged as a duplicate that never reached Event Center.
         if (insert.kind === 'inserted') {
-          await markDelivery(deps.db, deliveryId, 'failed', 'internal-error').catch(() => {})
+          await markDelivery(persistence.deliveries, deliveryId, 'failed', 'internal-error').catch(
+            () => {},
+          )
         }
         throw error
       }
@@ -260,11 +267,16 @@ export function mountWebhookIngressRoutes(
         // The legacy webhook row is now only an ingress/routing audit. Per-rule
         // success, retry, and dead-letter state belongs to independent Event
         // Deliveries and must never overwrite this shared row.
-        await markDelivery(deps.db, deliveryId, 'matched')
+        await markDelivery(persistence.deliveries, deliveryId, 'matched')
       } else if (insert.effectId !== null) {
-        await markDelivery(deps.db, deliveryId, 'matched', 'terminal-control-accepted')
+        await markDelivery(
+          persistence.deliveries,
+          deliveryId,
+          'matched',
+          'terminal-control-accepted',
+        )
       } else {
-        await markDelivery(deps.db, deliveryId, 'ignored', 'no-trigger-matched')
+        await markDelivery(persistence.deliveries, deliveryId, 'ignored', 'no-trigger-matched')
       }
       if (insert.kind === 'duplicate') {
         // Re-publish is idempotent by provider UUID and also nudges any durable
@@ -292,7 +304,9 @@ export function mountWebhookIngressRoutes(
           })
         }
       }
-      void touchEndpointLastDelivery(deps.db, endpoint.id, Date.now()).catch(() => {})
+      void touchEndpointLastDelivery(persistence.deliveries, endpoint.id, Date.now()).catch(
+        () => {},
+      )
       return c.json({ deliveryId, status: 'received' })
     },
   )

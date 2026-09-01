@@ -12,13 +12,27 @@ import {
   WorkflowDraftValidationRequestSchema,
   WorkflowValidationRequestSchema,
 } from '@agent-workflow/shared'
-import type { WorkflowDetail, WorkflowExactRevision } from '@agent-workflow/shared'
+import type {
+  WorkflowDetail,
+  WorkflowExactRevision,
+  WorkflowRevision,
+} from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type { WorkflowOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type { WorkflowOperationContext } from '@/modules/resource-catalog/public/participants'
-import type { WorkflowQueries } from '@/modules/resource-catalog/public/queries'
-import type { AppDeps } from '@/server'
+import type {
+  WorkflowQueries,
+  WorkflowValidationQueries,
+} from '@/modules/resource-catalog/public/queries'
+import type {
+  CopyWorkflowCatalogInput,
+  CreateWorkflowCatalogInput,
+  DeleteWorkflowCatalogInput,
+  DeleteWorkflowCatalogReceipt,
+  UpdateWorkflowCatalogInput,
+  UpdateWorkflowCatalogReceipt,
+} from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
@@ -27,32 +41,26 @@ import {
   serializeWorkflowReceiptFor,
   workflowReadLensFor,
 } from '@/services/tokenRedaction'
-import {
-  assertNewRefsUsable,
-  diffNewNames,
-  extractWorkflowAgentRefs,
-  extractWorkflowWorkflowRefs,
-  extractWorkflowWorkgroupRefs,
-} from '@/services/resourceRefs'
-import {
-  loadWorkflowValidationContext,
-  validateWorkflowDefinition,
-  workflowDefinitionCandidateHashOf,
-  workflowValidationContextHashOf,
-} from '@/services/workflow.validator'
-import {} from '@/services/workflow.yaml'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 
 export interface WorkflowRouteDependencies {
   readonly queries: WorkflowQueries
+  readonly validationQueries: WorkflowValidationQueries
   readonly operations: WorkflowOperationDescriptors
   readonly authorityFor: (actor: Actor) => WorkflowOperationContext
 }
 
+export interface WorkflowRouteRuntimeDependencies {
+  readonly workflowExactOperationHook?: (input: {
+    readonly operation: 'validate' | 'export'
+    readonly revision: WorkflowRevision
+  }) => void | Promise<void>
+}
+
 export function mountWorkflowRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: WorkflowRouteRuntimeDependencies,
   module: WorkflowRouteDependencies,
 ): void {
   const { queries, operations } = module
@@ -123,9 +131,10 @@ export function mountWorkflowRoutes(
     method: 'POST',
     path: '/api/workflows',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
-    }),
+    decode: async (c) =>
+      ({
+        submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
+      }) satisfies CreateWorkflowCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, created) => {
       const actor = actorOf(c)
@@ -145,7 +154,7 @@ export function mountWorkflowRoutes(
           issues: parsed.error.issues,
         })
       }
-      return { id: c.req.param('id'), copy: parsed.data }
+      return { id: c.req.param('id'), copy: parsed.data } satisfies CopyWorkflowCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, copied) => {
@@ -162,12 +171,13 @@ export function mountWorkflowRoutes(
     method: 'PUT',
     path: '/api/workflows/:id',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
+      }) satisfies UpdateWorkflowCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: UpdateWorkflowCatalogReceipt) => {
       const actor = actorOf(c)
       // A save answers with a RECEIPT, whose `snapshot` carries the definition
       // just written — the record projection would not reach it.
@@ -180,12 +190,13 @@ export function mountWorkflowRoutes(
     method: 'DELETE',
     path: '/api/workflows/:id',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        submission: { kind: 'json-body', body: await c.req.raw.text().catch(() => '') },
+      }) satisfies DeleteWorkflowCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: DeleteWorkflowCatalogReceipt) => {
       captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
@@ -219,16 +230,12 @@ export function mountWorkflowRoutes(
         'workflow-validation-stale',
       )
       await deps.workflowExactOperationHook?.({ operation: 'validate', revision })
-      // RFC-243 实现门 P1-2: thread the candidate so the 4f/4g call-node rules
-      // (closure loader + workgroup existence) actually run on the editor face.
-      const context = await loadWorkflowValidationContext(deps.db, {
-        definition: workflow.definition,
-        currentWorkflow: { id: workflow.id, name: workflow.name },
-      })
-      const result = validateWorkflowDefinition(workflow.definition, context)
+      const result = await module.validationQueries.validateStored(
+        module.authorityFor(actorOf(c)),
+        { workflow },
+      )
       return c.json({
         revision,
-        validationContextHash: workflowValidationContextHashOf(context),
         validatedAt: Date.now(),
         ...result,
       })
@@ -261,44 +268,12 @@ export function mountWorkflowRoutes(
         )
       }
 
-      const candidateHash = workflowDefinitionCandidateHashOf(parsed.data.definition)
-      if (candidateHash !== parsed.data.claimedCandidateHash) {
-        throw new ValidationError(
-          'workflow-candidate-hash-mismatch',
-          'workflow candidate does not match the claimed hash',
-          { claimed: parsed.data.claimedCandidateHash, actual: candidateHash },
-        )
-      }
-
-      const addedAgentNames = diffNewNames(
-        extractWorkflowAgentRefs(workflow.definition),
-        extractWorkflowAgentRefs(parsed.data.definition),
-      )
-      // RFC-243 (§5.3): NEW call-workflow name selectors ride the same D15 gate
-      // (dangle-tolerant name domain — see resourceRefs.RefCheckGroup.domain).
-      const addedWorkflowNames = diffNewNames(
-        new Set(extractWorkflowWorkflowRefs(workflow.definition)),
-        new Set(extractWorkflowWorkflowRefs(parsed.data.definition)),
-      )
-      const addedWorkgroupNames = diffNewNames(
-        new Set(extractWorkflowWorkgroupRefs(workflow.definition)),
-        new Set(extractWorkflowWorkgroupRefs(parsed.data.definition)),
-      )
-      await assertNewRefsUsable(deps.db, actor, [
-        { type: 'agent', names: addedAgentNames, domain: 'id' },
-        { type: 'workflow', names: addedWorkflowNames, domain: 'name' },
-        { type: 'workgroup', names: addedWorkgroupNames, domain: 'name' },
-      ])
-
-      // RFC-243 实现门 P1-2 — draft face gets the same candidate threading.
-      const context = await loadWorkflowValidationContext(deps.db, {
+      const result = await module.validationQueries.validateDraft(module.authorityFor(actor), {
+        workflow,
         definition: parsed.data.definition,
-        currentWorkflow: { id: workflow.id, name: workflow.name },
+        claimedCandidateHash: parsed.data.claimedCandidateHash,
       })
-      const result = validateWorkflowDefinition(parsed.data.definition, context)
       return c.json({
-        candidateHash,
-        validationContextHash: workflowValidationContextHashOf(context),
         validatedAt: Date.now(),
         ...result,
       })

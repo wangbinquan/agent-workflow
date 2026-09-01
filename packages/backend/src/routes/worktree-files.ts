@@ -15,13 +15,13 @@
 
 import { existsSync, realpathSync, statSync } from 'node:fs'
 import { extname, isAbsolute, resolve, sep } from 'node:path'
-import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
-import { actorOf } from '@/auth/actor'
-import { tasks } from '@/db/schema'
-import type { AppDeps } from '@/server'
+import { actorOf, type Actor } from '@/auth/actor'
+import type {
+  RepositoryWorkspaceStore,
+  WorktreeTaskRecord,
+} from '@/modules/source-control/public/operations'
 import { registerRoute } from '@/routes/registry'
-import { canViewTask } from '@/services/taskCollab'
 import { NotFoundError, ValidationError } from '@/util/errors'
 
 const MIME_BY_EXT: Record<string, string> = {
@@ -39,7 +39,12 @@ const MIME_BY_EXT: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
 }
 
-export function mountWorktreeFilesRoutes(app: Hono, deps: AppDeps): void {
+export interface WorktreeFilesRouteDeps {
+  readonly store: RepositoryWorkspaceStore
+  readonly canViewTask: (actor: Actor, task: WorktreeTaskRecord) => Promise<boolean>
+}
+
+export function mountWorktreeFilesRoutes(app: Hono, deps: WorktreeFilesRouteDeps): void {
   registerRoute(
     app,
     {
@@ -54,9 +59,8 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: AppDeps): void {
       // Load the raw task row (not the Task DTO — canViewTask needs ownerUserId,
       // which the DTO drops). One query yields both the visibility fields and
       // worktreePath.
-      const taskRows = await deps.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-      const task = taskRows[0]
-      if (task === undefined) {
+      const task = await deps.store.findWorktreeTask(taskId)
+      if (task === null) {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
       // RFC-099 (D20): tasks are member-only private. This proxy is NOT under the
@@ -64,7 +68,7 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: AppDeps): void {
       // RFC-005-era single-user route that never got the multi-user check.
       // RFC-285 B1：不可见与不存在同形 404（字节同上面的 missing 分支）。
       const actor = actorOf(c)
-      if (!(await canViewTask(deps.db, actor, task))) {
+      if (!(await deps.canViewTask(actor, task))) {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
 

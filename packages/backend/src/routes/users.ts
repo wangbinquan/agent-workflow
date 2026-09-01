@@ -7,12 +7,11 @@ import {
   PatchUserBodySchema,
   ResetPasswordBodySchema,
 } from '@agent-workflow/shared'
+import type { TokenAuditView } from '@/routes/auth'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { listAllPats } from '@/auth/patStore'
-import { listTokenAudit } from '@/services/tokenAudit'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 import type {
@@ -30,9 +29,14 @@ interface UserRouteIdentityAccess {
   readonly operations: IdentityUserOperations
 }
 
+export interface UserRouteAuthBindings {
+  readonly auth: AuthRuntime
+  readonly listTokenAudit: () => Promise<ReadonlyArray<TokenAuditView>>
+}
+
 export function mountUserRoutes(
   app: Hono,
-  deps: { readonly db: DbClient },
+  deps: UserRouteAuthBindings,
   identityAccess: UserRouteIdentityAccess,
 ): void {
   // /api/users/search — `users:search`. MUST come before /api/users so the
@@ -96,7 +100,7 @@ export function mountUserRoutes(
       summary: 'Platform-wide token call audit (read-only)',
     },
     async (c) => {
-      return c.json(await listTokenAudit(deps.db))
+      return c.json(await deps.listTokenAudit())
     },
   )
 
@@ -110,7 +114,7 @@ export function mountUserRoutes(
       summary: 'Platform-wide token inventory (read-only)',
     },
     async (c) => {
-      return c.json(await listAllPats(deps.db))
+      return c.json(await deps.auth.listAllPats())
     },
   )
 

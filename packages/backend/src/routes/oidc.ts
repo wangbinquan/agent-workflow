@@ -7,15 +7,21 @@ import {
   PatchOidcProviderBodySchema,
   UpdateAuthLoginPolicyBodySchema,
 } from '@agent-workflow/shared'
-import { getAuthLoginPolicy, updateAuthLoginPolicy } from '@/auth/loginPolicy'
-import { createOidcProvidersService, redactedProvider } from '@/services/oidcProviders'
-import type { AppDeps } from '@/server'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
+import { redactedProvider, type OidcProvidersService } from '@/services/oidcProviders'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
+export interface OidcRouteBindings {
+  readonly auth: AuthRuntime
+  /** Null means the process has no secret-box/provider runtime. Login-policy
+   * endpoints remain available; provider administration stays unmounted. */
+  readonly providers: OidcProvidersService | null
+}
+
+export function mountOidcRoutes(app: Hono, bindings: OidcRouteBindings): void {
   registerRoute(
     app,
     {
@@ -25,8 +31,8 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Read the login policy',
     },
-    (c) => {
-      return c.json(getAuthLoginPolicy(deps.db))
+    async (c) => {
+      return c.json(await bindings.auth.getLoginPolicy())
     },
   )
 
@@ -46,16 +52,16 @@ export function mountOidcRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      return c.json(updateAuthLoginPolicy(deps.db, parsed.data))
+      return c.json(await bindings.auth.updateLoginPolicy(parsed.data))
     },
   )
 
-  if (!deps.secretBox) {
+  if (bindings.providers === null) {
     // OIDC requires the secret box. Without it, mounting these routes would
     // panic on first DB write. Skip silently for non-OIDC tests.
     return
   }
-  const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
+  const svc = bindings.providers
 
   registerRoute(
     app,

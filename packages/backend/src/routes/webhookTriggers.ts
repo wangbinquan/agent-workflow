@@ -6,7 +6,6 @@
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import {
   createWebhookTrigger,
@@ -22,6 +21,7 @@ import type { DirectAuthorityBinding } from '@/modules/identity-access/public/pa
 import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { directRequestAuthority } from '@/routes/operationAuthority'
+import type { WebhookTriggerServiceDeps } from '@/services/webhookTriggers'
 
 interface WebhookTriggerRouteIdentityAccess {
   readonly directAuthority: DirectAuthorityBinding
@@ -31,10 +31,10 @@ interface WebhookTriggerRouteIdentityAccess {
 
 export function mountWebhookTriggerRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: { readonly webhookTriggerService: WebhookTriggerServiceDeps },
   identityAccess: WebhookTriggerRouteIdentityAccess,
 ): void {
-  const svcDeps = { db: deps.db, configPath: deps.configPath }
+  const svcDeps = deps.webhookTriggerService
   const resourceAuthority = (c: Parameters<typeof actorOf>[0]) => {
     const actor = actorOf(c)
     return Object.freeze({

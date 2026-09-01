@@ -5,22 +5,21 @@
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { buildOverview } from '@/services/overview'
-import type { MemoryResourceScopeAuthorization } from '@/services/memory'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
+import type { SystemOverviewQuery } from '@/modules/system-operations/public/queries'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 export interface OverviewRouteAuthorization {
   readonly directAuthority: DirectAuthorityBinding
-  readonly resourceScopeAuthorization: MemoryResourceScopeAuthorization
 }
+
+export type OverviewRouteQuery = SystemOverviewQuery
 
 export function mountOverviewRoutes(
   app: Hono,
-  deps: AppDeps,
   authorization: OverviewRouteAuthorization,
+  query: OverviewRouteQuery,
 ): void {
   registerRoute(
     app,
@@ -36,10 +35,9 @@ export function mountOverviewRoutes(
     async (c) => {
       const actor = actorOf(c)
       return c.json(
-        await buildOverview(deps.db, {
+        await query.execute({
           actor,
           authority: directRequestAuthority(authorization.directAuthority, actor),
-          authorization: authorization.resourceScopeAuthorization,
         }),
       )
     },

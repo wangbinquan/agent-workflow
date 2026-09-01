@@ -9,11 +9,21 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import type { PluginOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type { PluginOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { PluginQueries } from '@/modules/resource-catalog/public/queries'
-import type { PluginCatalogResource } from '@/modules/resource-catalog/public/types'
+import type {
+  CheckPluginUpdateCatalogInput,
+  CheckPluginUpdateCatalogReceipt,
+  CreatePluginCatalogInput,
+  DeletePluginCatalogInput,
+  DeletePluginCatalogReceipt,
+  PluginCatalogResource,
+  RenamePluginCatalogInput,
+  UpdatePluginCatalogInput,
+  UpgradePluginCatalogInput,
+  UpgradePluginCatalogReceipt,
+} from '@/modules/resource-catalog/public/types'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { serializePluginFor } from '@/services/tokenRedaction'
@@ -27,11 +37,7 @@ export interface PluginRouteDependencies {
   readonly authorityFor: (actor: Actor) => PluginOperationContext
 }
 
-export function mountPluginRoutes(
-  app: Hono,
-  _deps: AppDeps,
-  module: PluginRouteDependencies,
-): void {
+export function mountPluginRoutes(app: Hono, module: PluginRouteDependencies): void {
   const { queries, operations } = module
 
   async function loadVisiblePlugin(actor: Actor, id: string): Promise<PluginCatalogResource> {
@@ -82,7 +88,7 @@ export function mountPluginRoutes(
           issues: parsed.error.issues,
         })
       }
-      return parsed.data
+      return parsed.data satisfies CreatePluginCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, created) => c.json(serializePluginFor(created, actorOf(c).source), 201),
@@ -105,7 +111,7 @@ export function mountPluginRoutes(
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      return { id: initial.id, update: parsed.data }
+      return { id: initial.id, update: parsed.data } satisfies UpdatePluginCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, updated) => c.json(serializePluginFor(updated, actorOf(c).source)),
@@ -133,10 +139,10 @@ export function mountPluginRoutes(
       return {
         id: initial.id,
         deletion: parsed.data,
-      }
+      } satisfies DeletePluginCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: DeletePluginCatalogReceipt) => {
       captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
@@ -159,7 +165,7 @@ export function mountPluginRoutes(
       return {
         id: initial.id,
         rename: parsed.data,
-      }
+      } satisfies RenamePluginCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, renamed) => c.json(serializePluginFor(renamed, actorOf(c).source)),
@@ -179,10 +185,13 @@ export function mountPluginRoutes(
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      return { id: initial.id, operation: parsed.data }
+      return {
+        id: initial.id,
+        operation: parsed.data,
+      } satisfies CheckPluginUpdateCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => c.json(receipt),
+    encode: (c, receipt: CheckPluginUpdateCatalogReceipt) => c.json(receipt),
     mapError: (error) => {
       throw wrapInstallErrors(error)
     },
@@ -202,10 +211,10 @@ export function mountPluginRoutes(
       }
       const actor = actorOf(c)
       const initial = await loadVisiblePlugin(actor, c.req.param('id'))
-      return { id: initial.id, operation: parsed.data }
+      return { id: initial.id, operation: parsed.data } satisfies UpgradePluginCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => c.json(receipt),
+    encode: (c, receipt: UpgradePluginCatalogReceipt) => c.json(receipt),
     mapError: (error) => {
       throw wrapInstallErrors(error)
     },

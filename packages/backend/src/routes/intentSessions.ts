@@ -44,23 +44,21 @@ import {
   type IntentTurnDto,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { loadConfig } from '@/config'
-import { intentApplyJournal, intentDraftResolutions, intentDrafts } from '@/db/schema'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
-import {
-  applyIntentChangeset,
-  type IntentApplyResourceBinding,
-} from '@/services/intent/applyChangeset'
+import type { IntentApplyOperations, IntentPersistence } from '@/modules/intent/public/operations'
+import { canAuditIntentSessions } from '@/modules/intent/public/operations'
 import { deriveIntentSlots } from '@/services/intent/resolveChangeset'
 import { projectIntentJourney } from '@/services/intent/journey'
-import { listVisibleIntentResources } from '@/services/intent/resourceCatalog'
-import { canAuditIntentSessions } from '@/services/resourceAcl'
+import {
+  intentResourceVisibility,
+  listVisibleIntentResources,
+} from '@/services/intent/resourceCatalog'
+import type { IntentResourceCatalogBinding } from '@/services/intent/resourceCatalog'
 import { cancelIntentTurn } from '@/services/intent/turnEngine'
 import { dispatchIntentTurn, type IntentDispatchDeps } from '@/services/intent/dispatcher'
 import { getIntentTurnSession, projectIntentTurnExecution } from '@/services/intent/turnSession'
@@ -150,14 +148,19 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
   return Buffer.from(JSON.stringify(row), 'utf8').toString('base64url')
 }
 
-export function mountIntentSessionRoutes(
-  app: Hono,
-  deps: AppDeps & { readonly identityAccess: IntentDispatchDeps['identityAccess'] },
-  resources: {
-    readonly directAuthority: DirectAuthorityBinding
-    readonly intentApply: IntentApplyResourceBinding
-  },
-): void {
+export interface IntentSessionRouteDependencies {
+  readonly configPath: string
+  readonly identityAccess: IntentDispatchDeps['identityAccess']
+  readonly directAuthority: DirectAuthorityBinding
+  readonly intentApply: IntentApplyOperations
+  readonly intentPersistence: IntentPersistence
+  readonly intentTurnRuntime: Pick<IntentDispatchDeps, 'runtimeResolver' | 'dumpAuxiliary'>
+  readonly resourceCatalogFor: (actor: Actor) => IntentResourceCatalogBinding
+  /** Exact test seam; production composition leaves it absent. */
+  readonly runTurn?: IntentDispatchDeps['runFn']
+}
+
+export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDependencies): void {
   const appHome = Paths.root
 
   function fireTurn(
@@ -168,13 +171,13 @@ export function mountIntentSessionRoutes(
   ): Promise<void> {
     return dispatchIntentTurn(
       {
-        db: deps.db,
+        persistence: deps.intentPersistence,
         identityAccess: deps.identityAccess,
         appHome,
         configSnapshot,
-        ...(deps.intentTestDependencies?.runFn === undefined
-          ? {}
-          : { runFn: deps.intentTestDependencies.runFn }),
+        ...deps.intentTurnRuntime,
+        resourceCatalogFor: deps.resourceCatalogFor,
+        ...(deps.runTurn === undefined ? {} : { runFn: deps.runTurn }),
       },
       sessionId,
       actor,
@@ -215,7 +218,8 @@ export function mountIntentSessionRoutes(
       const actor = actorOf(c)
       const config = loadIntentTurnConfigSnapshot()
       const { session, reservation } = await createIntentSessionAndReserveTurn(
-        deps.db,
+        deps.intentPersistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
         actor,
         parsed.data,
       )
@@ -262,7 +266,7 @@ export function mountIntentSessionRoutes(
       // even if an unrelated client already used a `cursor` query key.
       const cursorRaw = paged ? c.req.query('cursor') : undefined
       const before = cursorRaw === undefined ? undefined : decodeIntentListCursor(cursorRaw)
-      const rows = await listIntentSessionsForActor(deps.db, actor, {
+      const rows = await listIntentSessionsForActor(deps.intentPersistence, actor, {
         ...(status === undefined ? {} : { status }),
         all,
         ...(before === undefined ? {} : { before }),
@@ -316,8 +320,12 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
-      const turns = await listIntentTurns(deps.db, session.id)
+      const session = await getIntentSessionForActor(
+        deps.intentPersistence,
+        actor,
+        c.req.param('id'),
+      )
+      const turns = await listIntentTurns(deps.intentPersistence, session.id)
       const turnDtos: IntentTurnDto[] = turns.map((t) => ({
         id: t.id,
         seq: t.seq,
@@ -330,12 +338,8 @@ export function mountIntentSessionRoutes(
         execution: projectIntentTurnExecution(t),
         createdAt: t.createdAt,
       }))
-      const commits = (
-        await deps.db
-          .select()
-          .from(intentApplyJournal)
-          .where(eq(intentApplyJournal.sessionId, session.id))
-      )
+      const detailArtifacts = await deps.intentPersistence.loadSessionDetailArtifacts(session.id)
+      const commits = detailArtifacts.commits
         .map((row) => ({
           journalId: row.id,
           draftId: row.draftId,
@@ -348,14 +352,12 @@ export function mountIntentSessionRoutes(
           createdAt: row.createdAt,
         }))
         .sort((a, b) => b.createdAt - a.createdAt || b.journalId.localeCompare(a.journalId))
-      const [draftRows, resolutionRows, workingSetRow] = await Promise.all([
-        deps.db.select().from(intentDrafts).where(eq(intentDrafts.sessionId, session.id)),
-        deps.db
-          .select()
-          .from(intentDraftResolutions)
-          .where(eq(intentDraftResolutions.sessionId, session.id)),
-        getLatestIntentWorkingSetChange(deps.db, session.id),
-      ])
+      const workingSetRow = await getLatestIntentWorkingSetChange(
+        deps.intentPersistence,
+        session.id,
+      )
+      const draftRows = detailArtifacts.drafts
+      const resolutionRows = detailArtifacts.resolutions
       const resolutionByDraft = new Map(
         resolutionRows.map((resolution) => [resolution.draftId, resolution.reason]),
       )
@@ -398,7 +400,7 @@ export function mountIntentSessionRoutes(
         })
         .sort((a, b) => b.revision - a.revision || b.id.localeCompare(a.id))
       const currentDraft = drafts.find((draft) => draft.lifecycle === 'current') ?? null
-      const visibleResources = await listVisibleIntentResources(deps.db, actor)
+      const visibleResources = await listVisibleIntentResources(deps.resourceCatalogFor(actor))
       const visibleByKey = new Map(
         visibleResources.map((resource) => [
           `${resource.resourceType}:${resource.resourceId}`,
@@ -531,8 +533,14 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
-      return c.json(await getIntentTurnSession(deps.db, session.id, c.req.param('turnId')))
+      const session = await getIntentSessionForActor(
+        deps.intentPersistence,
+        actor,
+        c.req.param('id'),
+      )
+      return c.json(
+        await getIntentTurnSession(deps.intentPersistence, session.id, c.req.param('turnId')),
+      )
     },
   )
 
@@ -558,7 +566,7 @@ export function mountIntentSessionRoutes(
       const sessionId = c.req.param('id')
       const config = loadIntentTurnConfigSnapshot()
       const { turnId, reservation } = await insertUserTurnAndReserve(
-        deps.db,
+        deps.intentPersistence,
         actor,
         sessionId,
         'message',
@@ -592,7 +600,7 @@ export function mountIntentSessionRoutes(
       const sessionId = c.req.param('id')
       const config = loadIntentTurnConfigSnapshot()
       const { turnId, reservation } = await insertUserTurnAndReserve(
-        deps.db,
+        deps.intentPersistence,
         actor,
         sessionId,
         'answers',
@@ -625,8 +633,8 @@ export function mountIntentSessionRoutes(
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
       const config = loadIntentTurnConfigSnapshot()
-      const generated = reserveIntentIteration(
-        deps.db,
+      const generated = await reserveIntentIteration(
+        deps.intentPersistence,
         actor,
         sessionId,
         parsed.data,
@@ -661,8 +669,9 @@ export function mountIntentSessionRoutes(
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
       const config = loadIntentTurnConfigSnapshot()
-      const generated = reserveIntentCurrentAction(
-        deps.db,
+      const generated = await reserveIntentCurrentAction(
+        deps.intentPersistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
         actor,
         sessionId,
         parsed.data,
@@ -696,7 +705,13 @@ export function mountIntentSessionRoutes(
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const receipt = await decideIntentMountSuggestions(deps.db, actor, sessionId, parsed.data)
+      const receipt = await decideIntentMountSuggestions(
+        deps.intentPersistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
+        actor,
+        sessionId,
+        parsed.data,
+      )
       emitSessionUpdated(sessionId, actor.user.id)
       return c.json(receipt)
     },
@@ -721,7 +736,13 @@ export function mountIntentSessionRoutes(
         })
       }
       const actor = actorOf(c)
-      const result = await addIntentMount(deps.db, actor, c.req.param('id'), parsed.data)
+      const result = await addIntentMount(
+        deps.intentPersistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
+        actor,
+        c.req.param('id'),
+        parsed.data,
+      )
       emitSessionUpdated(c.req.param('id'), actor.user.id)
       return c.json(result, 201)
     },
@@ -739,7 +760,7 @@ export function mountIntentSessionRoutes(
     async (c) => {
       const actor = actorOf(c)
       const result = await removeIntentMount(
-        deps.db,
+        deps.intentPersistence,
         actor,
         c.req.param('id'),
         decodeURIComponent(c.req.param('handle')),
@@ -770,17 +791,20 @@ export function mountIntentSessionRoutes(
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
       const config = loadIntentTurnConfigSnapshot()
-      const submitted = submitIntentWorkingSetChange(
-        deps.db,
+      const visibility = intentResourceVisibility(deps.resourceCatalogFor(actor))
+      const submitted = await submitIntentWorkingSetChange(
+        deps.intentPersistence,
+        visibility,
         actor,
         sessionId,
         parsed.data,
         config.intentBuilderMaxGenerateRounds ?? 50,
       )
       if (submitted.shouldInterrupt) {
-        cancelIntentTurn(deps.db, actor, sessionId)
-        const next = activateIntentWorkingSetChange(
-          deps.db,
+        await cancelIntentTurn(deps.intentPersistence, actor, sessionId)
+        const next = await activateIntentWorkingSetChange(
+          deps.intentPersistence,
+          visibility,
           actor,
           sessionId,
           config.intentBuilderMaxGenerateRounds ?? 50,
@@ -793,7 +817,7 @@ export function mountIntentSessionRoutes(
         void fireTurn(sessionId, actor, config, submitted.reservation)
       }
       emitSessionUpdated(sessionId, actor.user.id)
-      const latest = await getLatestIntentWorkingSetChange(deps.db, sessionId)
+      const latest = await getLatestIntentWorkingSetChange(deps.intentPersistence, sessionId)
       return c.json(
         latest === null ? submitted.change : projectIntentWorkingSetChange(latest),
         submitted.reservation === null && !submitted.shouldInterrupt ? 202 : 201,
@@ -813,8 +837,8 @@ export function mountIntentSessionRoutes(
     async (c) => {
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const result = cancelIntentWorkingSetChange(
-        deps.db,
+      const result = await cancelIntentWorkingSetChange(
+        deps.intentPersistence,
         actor,
         sessionId,
         c.req.param('changeId'),
@@ -837,8 +861,9 @@ export function mountIntentSessionRoutes(
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
       const config = loadIntentTurnConfigSnapshot()
-      const result = retryIntentWorkingSetChange(
-        deps.db,
+      const result = await retryIntentWorkingSetChange(
+        deps.intentPersistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
         actor,
         sessionId,
         c.req.param('changeId'),
@@ -863,7 +888,7 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const result = await rebaseIntentSession(deps.db, actor, c.req.param('id'))
+      const result = await rebaseIntentSession(deps.intentPersistence, actor, c.req.param('id'))
       emitSessionUpdated(c.req.param('id'), actor.user.id)
       return c.json(result)
     },
@@ -880,7 +905,11 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+      const session = await getIntentSessionForActor(
+        deps.intentPersistence,
+        actor,
+        c.req.param('id'),
+      )
       if (session.ownerUserId !== actor.user.id) {
         // Codex impl-gate P2-4: owner-only mutations keep the 404 shape — the
         // admin read bypass must not leak a distinguishable 422 here.
@@ -895,8 +924,8 @@ export function mountIntentSessionRoutes(
         })
       }
       const config = loadIntentTurnConfigSnapshot()
-      const generated = reserveExactIntentRetry(
-        deps.db,
+      const generated = await reserveExactIntentRetry(
+        deps.intentPersistence,
         actor,
         session.id,
         parsed.data,
@@ -921,16 +950,21 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const session = await getIntentSessionForActor(deps.db, actor, c.req.param('id'))
+      const session = await getIntentSessionForActor(
+        deps.intentPersistence,
+        actor,
+        c.req.param('id'),
+      )
       if (session.ownerUserId !== actor.user.id) {
         // Admin READ bypass never cancels another user's turn — 404 shape (P2-4).
         throw new NotFoundError('intent-session-not-found', 'intent session not found')
       }
-      const aborted = cancelIntentTurn(deps.db, actor, session.id)
+      const aborted = await cancelIntentTurn(deps.intentPersistence, actor, session.id)
       if (aborted) {
         const config = loadIntentTurnConfigSnapshot()
-        const next = activateIntentWorkingSetChange(
-          deps.db,
+        const next = await activateIntentWorkingSetChange(
+          deps.intentPersistence,
+          intentResourceVisibility(deps.resourceCatalogFor(actor)),
           actor,
           session.id,
           config.intentBuilderMaxGenerateRounds ?? 50,
@@ -963,23 +997,18 @@ export function mountIntentSessionRoutes(
         })
       }
       const actor = actorOf(c)
-      const authority = directRequestAuthority(resources.directAuthority, actor)
-      const receipt = await applyIntentChangeset(
-        {
-          db: deps.db,
-          appHome,
-          actor,
-          authority,
-          resourceApply: resources.intentApply,
-        },
-        {
+      const authority = directRequestAuthority(deps.directAuthority, actor)
+      const receipt = await deps.intentApply.apply({
+        actor,
+        authority,
+        command: {
           sessionId: c.req.param('id'),
           clientMutationId: parsed.data.clientMutationId,
           draftRevision: parsed.data.draftRevision,
           draftHash: parsed.data.draftHash,
           decisions: parsed.data.decisions,
         },
-      )
+      })
       intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
         type: 'intent.apply.committed',
         sessionId: c.req.param('id'),
@@ -1001,7 +1030,7 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      await setIntentSessionStatus(deps.db, actor, c.req.param('id'), 'archived')
+      await setIntentSessionStatus(deps.intentPersistence, actor, c.req.param('id'), 'archived')
       emitSessionUpdated(c.req.param('id'), actor.user.id)
       return c.json({ ok: true })
     },
@@ -1018,7 +1047,7 @@ export function mountIntentSessionRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      await setIntentSessionStatus(deps.db, actor, c.req.param('id'), 'active')
+      await setIntentSessionStatus(deps.intentPersistence, actor, c.req.param('id'), 'active')
       emitSessionUpdated(c.req.param('id'), actor.user.id)
       return c.json({ ok: true })
     },
@@ -1046,7 +1075,13 @@ export function mountIntentSessionRoutes(
           issues: parsed.error.issues,
         })
       }
-      const rows = await listIntentProvenanceForActor(deps.db, actorOf(c), parsed.data)
+      const actor = actorOf(c)
+      const rows = await listIntentProvenanceForActor(
+        deps.intentPersistence,
+        intentResourceVisibility(deps.resourceCatalogFor(actor)),
+        actor,
+        parsed.data,
+      )
       return c.json(rows)
     },
   )

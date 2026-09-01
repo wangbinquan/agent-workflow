@@ -10,32 +10,17 @@
 // Resume / single-node retry land in M3 (P-3-08, P-3-09).
 
 import {
-  isTurnEngineWorkgroupTask,
   RepairRequestSchema,
   ReplaceReviewNodeReviewersBodySchema,
   rejectRetiredStartTaskKeys,
   StartTaskSchema,
-  taskExecutionKind,
   TaskStatusSchema,
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
-import { isWorkgroupTask } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
-import type { Context } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
-import { tasks as tasksTable } from '@/db/schema'
-import type { AppDeps } from '@/server'
 import { registerRoute, registerRouteMiddleware } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import {
-  assertCanReplaySourceTask,
-  canViewTask,
-  getTaskMembers,
-  requireTaskOperator,
-  updateTaskMembers,
-} from '@/services/taskCollab'
-import { canViewResource } from '@/services/resourceAcl'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import {
   redactEventPayload,
@@ -44,32 +29,8 @@ import {
   workflowReadLensFor,
   shouldRedactFor,
 } from '@/services/tokenRedaction'
-import { deleteTask } from '@/services/taskDelete'
-import { assertNotBuiltin } from '@/services/systemResources'
 import { parseBoolQuery } from '@/util/http'
-import {
-  SyncWorkflowBodySchema,
-  UpdateTaskMembersBodySchema,
-  emptyWorkflowSyncDiff,
-  type WorkflowSyncPreview,
-} from '@agent-workflow/shared'
-import {
-  cancelTask,
-  computeWorkflowSyncPreview,
-  getNodeRunEvents,
-  getNodeRunStdout,
-  getTask,
-  getTaskDiff,
-  getTaskNodeRuns,
-  listTaskItems,
-  listTasks,
-  resumeTask,
-  retryNode,
-  syncTaskWorkflow,
-} from '@/services/task'
-// RFC-243 T2: task launches go through the unified executor facade — this
-// route must not call startTask directly (source-text lock).
-import { startExecution } from '@/services/execution/executor'
+import { SyncWorkflowBodySchema, UpdateTaskMembersBodySchema } from '@agent-workflow/shared'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { getTaskFileContent } from '@/services/worktreeFileContent'
 import { getChangeNarrativeStatus, triggerChangeNarrative } from '@/services/changeNarrative'
@@ -78,32 +39,23 @@ import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
 import { getCodeIntel } from '@/services/codeIntel/codeIntel'
 import type { ResolvedDeepConfig } from '@/services/structuralDiff/deep/service'
 import { structuralScopeSchema } from '@agent-workflow/shared'
-import { handleMultipartTaskStart } from '@/services/multipartTaskStart'
 import { getSessionTree } from '@/services/sessionView'
 import { getRuntimeInventory } from '@/services/execution/inventoryRead'
 import { getStartupVerification } from '@/services/execution/startupVerificationRead'
 import { listWorktreeDir, readWorktreeFile } from '@/services/worktreeFiles'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { buildStartTaskDeps, resolveSubagentLiveCapture } from '@/services/startTaskDeps'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
-import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
-import { directRequestAuthority } from '@/routes/operationAuthority'
-import {
-  loadTaskExecutionResourceSnapshot,
-  type TaskExecutionResourceBinding,
-} from '@/services/execution/taskExecutionResources'
 import { listRecoveryEventsForTask } from '@/services/recovery'
 import { clearAutoRecoverySuspension, isAutoRecoverySuspended } from '@/services/recoveryBreaker'
-import { applyRepairOption, listRepairOptionsForAlert } from '@/services/lifecycleRepair'
 import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
-import { getWorkflow } from '@/services/workflow'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
-import { Paths } from '@/util/paths'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
-import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
+import type {
+  TaskRouteListFilters,
+  TaskRouteOperations,
+} from '@/modules/task-execution/public/taskRoutes'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
@@ -126,52 +78,42 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
   })
 }
 
-// RFC-159: `resolveSubagentLiveCapture` + the StartTaskDeps assembly
-// (`buildStartTaskDeps`) live in @/services/startTaskDeps, shared with the
-// scheduled-task scheduler so scheduled fires build deps identically to manual
-// launches (live config, per-call). Imported below.
-
-// RFC-103 T2 + RFC-108 T4: `resolveLaunchRuntimeConfig` (commit&push +
-// maxConcurrentNodes + per-node timeout floor) lives in
-// @/services/launchRuntimeConfig (imported above) so EVERY scheduler-kicking
-// route — tasks (start/resume/retry/repair), fusions, parked clarify/review
-// resume — threads the same runtime config from one source (Codex impl gate
-// P2: the floor must reach all StartTaskDeps construction sites, not just the
-// task routes). Call sites below are unchanged.
-
-type TaskExecutionIdentityAccess = NonNullable<AppDeps['identityAccess']> & {
-  readonly taskExecutionResources: TaskExecutionResourceBinding
+export interface TaskRouteDependencies {
+  readonly configPath: string
+  readonly operations: TaskRouteOperations
+  readonly taskExecutionReadModels: TaskExecutionReadModels
+  readonly taskRecoveryOperations: TaskRecoveryOperations
+  readonly codeWorkspace: Parameters<typeof getTaskStructuralDiff>[0]
+  readonly repositoryWorkspace: Parameters<typeof getTaskFileContent>[0]
+  readonly changeNarrative: Pick<
+    Parameters<typeof triggerChangeNarrative>[0],
+    'requireMember' | 'resolveRuntime'
+  >
 }
 
-function requireTaskExecutionIdentityAccess(
-  identityAccess: AppDeps['identityAccess'],
-): TaskExecutionIdentityAccess {
-  if (identityAccess?.taskExecutionResources === undefined) {
-    throw new Error('task-execution-resources-not-composed')
-  }
-  return Object.freeze({
-    ...identityAccess,
-    taskExecutionResources: identityAccess.taskExecutionResources,
-  })
-}
-
-function taskExecutionResourceAuthority(
-  c: Parameters<typeof actorOf>[0],
-  identityAccess: TaskExecutionIdentityAccess,
-) {
-  const actor = actorOf(c)
-  return Object.freeze({
-    actor,
-    authority: directRequestAuthority(identityAccess.directAuthority, actor),
-    resources: identityAccess.taskExecutionResources,
-  })
-}
-
-export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
-  const taskExecutionReadModels = deps.taskExecutionReadModels
-  if (taskExecutionReadModels === undefined) {
+export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
+  // Keep direct dispatcher/tests fail-closed even though production callers
+  // are statically required to supply the complete selected-provider bundle.
+  if (deps.taskExecutionReadModels === undefined) {
     throw new Error('task-execution-read-models-not-composed')
   }
+  if (deps.operations === undefined) {
+    throw new Error('task-route-operations-not-composed')
+  }
+  if (deps.taskRecoveryOperations === undefined) {
+    throw new Error('task-recovery-operations-not-composed')
+  }
+  if (deps.codeWorkspace === undefined) {
+    throw new Error('task-code-workspace-not-composed')
+  }
+  if (deps.repositoryWorkspace === undefined) {
+    throw new Error('task-repository-workspace-not-composed')
+  }
+  if (deps.changeNarrative === undefined) {
+    throw new Error('task-change-narrative-not-composed')
+  }
+  const { operations, taskExecutionReadModels, taskRecoveryOperations } = deps
+  const { codeWorkspace, repositoryWorkspace, changeNarrative } = deps
   registerRoute(
     app,
     {
@@ -187,7 +129,9 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // The legacy homepage feed shares the same generic catalog boundary as
       // the task-catalog route: durable internal executions stay out of public
       // pagination without any execution-kind-specific branch.
-      const filters: Parameters<typeof listTasks>[1] = { catalogVisibility: 'public' }
+      const filters: {
+        -readonly [Key in keyof TaskRouteListFilters]?: TaskRouteListFilters[Key]
+      } = { catalogVisibility: 'public' }
       const status = c.req.query('status')
       if (status !== undefined) {
         const parsed = TaskStatusSchema.safeParse(status)
@@ -246,7 +190,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         filters.visibility = { actorUserId: actor.user.id, scope: 'mine' }
       }
       return c.json(
-        includeOwner ? await listTaskItems(deps.db, filters) : await listTasks(deps.db, filters),
+        includeOwner ? await operations.listItems(filters) : await operations.list(filters),
       )
     },
   )
@@ -260,11 +204,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       await next()
       return
     }
-    await visibilityCheck(c, deps)
+    await operations.assertVisible(actorOf(c), c.req.param('id'))
     await next()
   })
   registerRouteMiddleware(app, '/api/tasks/:id/*', async (c, next) => {
-    await visibilityCheck(c, deps)
+    await operations.assertVisible(actorOf(c), c.req.param('id'))
     await next()
   })
 
@@ -279,7 +223,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const task = await getTask(deps.db, id)
+      const task = await operations.get(id)
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
@@ -300,15 +244,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List review-node reviewer assignments',
     },
     async (c) => {
-      if (deps.collaborationContext === undefined) {
-        throw new Error('collaboration-context-not-composed')
-      }
-      return c.json(
-        await getReviewNodeReviewerConfig(deps.collaborationContext, {
-          actor: actorOf(c),
-          taskId: c.req.param('id'),
-        }),
-      )
+      return c.json(await operations.getReviewers(actorOf(c), c.req.param('id')))
     },
   )
 
@@ -332,16 +268,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           { issues: parsed.error.issues },
         )
       }
-      if (deps.collaborationContext === undefined) {
-        throw new Error('collaboration-context-not-composed')
-      }
-      return c.json(
-        await replaceReviewNodeReviewers(deps.collaborationContext, {
-          actor: actorOf(c),
-          taskId: c.req.param('id'),
-          body: parsed.data,
-        }),
-      )
+      return c.json(await operations.replaceReviewers(actorOf(c), c.req.param('id'), parsed.data))
     },
   )
 
@@ -355,21 +282,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Launch a task',
     },
     async (c) => {
-      const identityAccess = requireTaskExecutionIdentityAccess(deps.identityAccess)
       const ct = c.req.header('content-type') ?? ''
       // RFC-020: multipart branch handles launcher uploads. payload field is
       // JSON-encoded StartTask; files[<inputKey>][] fields are the binary
       // contents bound to `kind: 'upload'` inputs.
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
-        const task = await handleMultipartTaskStart(
-          c.req.raw,
-          {
-            ...deps,
-            identityAccess,
-            schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-          },
-          actorOf(c),
-        )
+        const task = await operations.launchMultipart(c.req.raw, actorOf(c))
         return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
       }
 
@@ -410,7 +328,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         {
           const src = (bodyJson as { sourceTaskId?: unknown }).sourceTaskId
           if (typeof src === 'string' && src.length > 0) {
-            await assertCanReplaySourceTask(deps.db, actorOf(c), src)
+            await operations.assertReplayVisible(actorOf(c), src)
           }
         }
       }
@@ -421,48 +339,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const launchResources = taskExecutionResourceAuthority(c, identityAccess)
-      // RFC-099 (D3) + RFC-104: the launcher must be able to use the WORKFLOW; the
-      // referenced agent/skill/mcp/plugin closure is implicitly authorized. Invisible
-      // and missing produce the identical 404; built-in → 403. Shared gate — the
-      // multipart path and scheduled-task fires enforce the exact same policy.
-      const startDeps = {
-        ...buildStartTaskDeps(
-          deps.db,
-          requireSchedulerDriver(deps.schedulerDriver),
-          deps.configPath,
-          actor.user.id,
-          deps.secretBox,
-          deps.identityAccess,
-        ),
-        launchResources,
-        // RFC-287 G7：**只有这条 JSON-body 路由**把仓库准备推迟到任务行落库之后。
-        //
-        // 用户可见的变化：点启动后接口立刻返回、任务出现在列表里并显示为「准备中」
-        // （复用 pending，G7 不新增状态）；克隆/抓取在后台推进。拉不动远端不再是
-        // 「转半天圈然后一个 HTTP 错误、列表里什么都没有」，而是留下一条 failed
-        // 任务 + 时间线上一条 `__repo_prep__` 步骤 + git 原话，可看可重试。
-        //
-        // multipart 路由（要把上传物写进工作树）与 preCreated 交接不在此列——两者
-        // 必须保持预物化语义（proposal §G7）。
-        deferRepoPreparation: true,
-      }
-      const launchSnapshot = loadTaskExecutionResourceSnapshot(deps.db, launchResources, {
-        kind: 'workflow-launch',
-        workflowId: parsed.data.workflowId,
-      })
-      await assertWorkflowSnapshotLaunchable(deps.db, launchSnapshot.workflow)
-      const task = await startExecution(
-        deps.db,
-        actor,
-        {
-          kind: 'workflow',
-          refId: parsed.data.workflowId,
-          invoker: { type: 'user', launchKind: 'direct-json' },
-          payload: parsed.data,
-        },
-        startDeps,
-      )
+      const task = await operations.launchWorkflow(actor, parsed.data)
       return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))), 201)
     },
   )
@@ -481,10 +358,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const taskId = c.req.param('id')
-      const rows = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
-      const task = rows[0]
-      if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      return c.json(await getTaskMembers(deps.db, actorOf(c), task))
+      return c.json(await operations.getMembers(actorOf(c), taskId))
     },
   )
 
@@ -505,14 +379,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      const rows = await deps.db
-        .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
-        .from(tasksTable)
-        .where(eq(tasksTable.id, taskId))
-        .limit(1)
-      const task = rows[0]
-      if (!task) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      return c.json(await updateTaskMembers(deps.db, actorOf(c), task, parsed.data))
+      return c.json(await operations.replaceMembers(actorOf(c), taskId, parsed.data))
     },
   )
 
@@ -527,8 +394,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
-      const task = await cancelTask(deps.db, c.req.param('id'))
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
+      const task = await operations.cancel(c.req.param('id'))
       return c.json(serializeTaskFor(task, workflowReadLensFor(actorOf(c))))
     },
   )
@@ -547,17 +414,13 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const row = await deps.db
-        .select({ name: tasksTable.name })
-        .from(tasksTable)
-        .where(eq(tasksTable.id, id))
-        .limit(1)
-      if (row[0] === undefined) throw new NotFoundError('task-not-found', `task '${id}' not found`)
+      const task = await operations.get(id)
+      if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
       // RFC-222 (D5): type-to-confirm against the task's name (N-5 order — after
       // existence/authz, before the deleteTask business gates).
-      assertDeleteConfirm(await readDeleteBody(c), row[0].name, 'task')
-      captureDeleteSnapshot(c, actorOf(c), row[0])
-      const result = await deleteTask(deps.db, id)
+      assertDeleteConfirm(await readDeleteBody(c), task.name, 'task')
+      captureDeleteSnapshot(c, actorOf(c), { name: task.name })
+      const result = await operations.delete(id)
       return c.json(result)
     },
   )
@@ -572,7 +435,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'List node runs',
     },
     async (c) => {
-      return c.json(await getTaskNodeRuns(deps.db, c.req.param('id')))
+      return c.json(await operations.nodeRuns(c.req.param('id')))
     },
   )
 
@@ -586,7 +449,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Task worktree diff',
     },
     async (c) => {
-      return c.json(await getTaskDiff(deps.db, c.req.param('id')))
+      return c.json(await operations.diff(c.req.param('id')))
     },
   )
 
@@ -608,7 +471,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       const nodeRunId = c.req.query('nodeRunId')
       const mode = c.req.query('mode') === 'deep' ? 'deep' : 'baseline'
       return c.json(
-        await getTaskStructuralDiff(deps.db, c.req.param('id'), scope, nodeRunId, {
+        await getTaskStructuralDiff(codeWorkspace, c.req.param('id'), scope, nodeRunId, {
           mode,
           deepCfg: mode === 'deep' ? resolveStructuralDeepConfig(deps.configPath) : undefined,
         }),
@@ -652,21 +515,22 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
       const body = (await safeJsonOrEmpty(c.req.raw)) as { scope?: string } | null
       const scope = body?.scope ?? 'task'
       if (scope !== 'task') {
         throw new ValidationError('narrative-scope-invalid', `only scope=task is supported`)
       }
       const id = c.req.param('id')
-      const task = await getTask(deps.db, id)
+      const task = await operations.get(id)
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
       const narrativeCfg = loadConfig(deps.configPath)
       const state = await triggerChangeNarrative(
         {
-          db: deps.db,
+          workspace: codeWorkspace,
+          ...changeNarrative,
           runtimeName: narrativeCfg.changeNarrativeRuntime ?? null,
           defaultRuntime: narrativeCfg.defaultRuntime ?? null,
         },
@@ -707,7 +571,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       if (basePath !== undefined && basePath !== '') q.basePath = basePath
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getTaskFileContent(deps.db, c.req.param('id'), q))
+      return c.json(await getTaskFileContent(repositoryWorkspace, c.req.param('id'), q))
     },
   )
 
@@ -731,7 +595,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       }
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getTaskFileSymbols(deps.db, c.req.param('id'), q))
+      return c.json(await getTaskFileSymbols(codeWorkspace, c.req.param('id'), q))
     },
   )
 
@@ -758,7 +622,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       }
       const repo = c.req.query('repo')
       if (repo !== undefined && repo !== '') q.repo = repo
-      return c.json(await getCodeIntel(deps.db, c.req.param('id'), q))
+      return c.json(await getCodeIntel(codeWorkspace, c.req.param('id'), q))
     },
   )
 
@@ -807,7 +671,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const taskId = c.req.param('id')
-      const alerts = await listOpenLifecycleAlertsForTask(deps.db, taskId)
+      const alerts = await listOpenLifecycleAlertsForTask(taskRecoveryOperations, taskId)
       return c.json({ alerts })
     },
   )
@@ -827,8 +691,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const taskId = c.req.param('id')
       const [events, suspended] = await Promise.all([
-        listRecoveryEventsForTask(deps.db, taskId),
-        isAutoRecoverySuspended(deps.db, taskId),
+        listRecoveryEventsForTask(taskRecoveryOperations, taskId),
+        isAutoRecoverySuspended(taskRecoveryOperations, taskId),
       ])
       return c.json({ events, suspended })
     },
@@ -848,8 +712,8 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
-      await clearAutoRecoverySuspension(deps.db, c.req.param('id'))
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
+      await clearAutoRecoverySuspension(taskRecoveryOperations, c.req.param('id'))
       return c.json({ ok: true })
     },
   )
@@ -873,10 +737,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
       const taskId = c.req.param('id')
       const result = await runLifecycleInvariants({
-        db: deps.db,
+        operations: taskRecoveryOperations,
         scope: { taskId },
         onAlert: (row, transition) => {
           tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
@@ -890,7 +754,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
         onResolved: broadcastLifecycleAlertResolved,
       })
       const invariantIds = new Set(result.openAlerts.map((a) => a.id))
-      const allOpen = await listOpenLifecycleAlertsForTask(deps.db, taskId)
+      const allOpen = await listOpenLifecycleAlertsForTask(taskRecoveryOperations, taskId)
       const extra = allOpen
         .filter((a) => !invariantIds.has(a.id))
         .map((a) => ({
@@ -917,21 +781,10 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
-      await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
+      await operations.assertManualExecutionAllowed(actorOf(c), c.req.param('id'))
       const actor = actorOf(c)
-      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-      const task = await resumeTask(deps.db, c.req.param('id'), {
-        db: deps.db,
-        schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-        configPath: deps.configPath,
-        // RFC-328: a session-backed Resume is the explicit actor decision that
-        // advances an outcome-unknown operation to its next generation.
-        actorUserId: actor.user.id,
-        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        // RFC-103 T2: resume must thread commit&push + maxConcurrentNodes too.
-        ...resolveLaunchRuntimeConfig(deps.configPath),
-      })
+      const task = await operations.resume({ actor, taskId: c.req.param('id') })
       return c.json(serializeTaskFor(task, workflowReadLensFor(actor)))
     },
   )
@@ -951,34 +804,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const task = await getTask(deps.db, id)
-      if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
-      const notSyncable = (reason: WorkflowSyncPreview['reason']): WorkflowSyncPreview => ({
-        syncable: false,
-        reason,
-        workflowId: task.workflowId,
-        workflowName: task.workflowName,
-        currentVersion: task.workflowVersion,
-        latestVersion: null,
-        differs: false,
-        invalid: false,
-        invalidIssues: [],
-        diff: emptyWorkflowSyncDiff(),
-      })
-      const workflow = await getWorkflow(deps.db, task.workflowId)
-      if (workflow === null) return c.json(notSyncable('workflow-deleted'))
-      if (!(await canViewResource(deps.db, actorOf(c), 'workflow', workflow))) {
-        return c.json(notSyncable('workflow-not-visible'))
-      }
-      const identityAccess = requireTaskExecutionIdentityAccess(deps.identityAccess)
-      return c.json(
-        await computeWorkflowSyncPreview(
-          deps.db,
-          task,
-          workflow,
-          taskExecutionResourceAuthority(c, identityAccess),
-        ),
-      )
+      return c.json(await operations.workflowSyncPreview(actorOf(c), id))
     },
   )
 
@@ -998,40 +824,16 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const id = c.req.param('id')
       const actor = actorOf(c)
-      const identityAccess = requireTaskExecutionIdentityAccess(deps.identityAccess)
-      await assertTaskSyncable(deps, id) // RFC-104 builtin 403 / RFC-165 host 422
-      const task = await getTask(deps.db, id)
-      if (task === null) throw new NotFoundError('task-not-found', `task '${id}' not found`)
-      const workflow = await getWorkflow(deps.db, task.workflowId)
-      if (workflow === null) {
-        throw new NotFoundError(
-          'workflow-deleted',
-          `workflow '${task.workflowId}' no longer exists`,
-        )
-      }
-      if (!(await canViewResource(deps.db, actor, 'workflow', workflow))) {
-        // 404-shaped (RFC-099 anti-probing) — same as an unknown workflow.
-        throw new NotFoundError('workflow-not-visible', `workflow '${task.workflowId}' not found`)
-      }
       const body = SyncWorkflowBodySchema.safeParse(await c.req.json().catch(() => ({})))
       if (!body.success) {
         throw new ValidationError('invalid-body', 'expectedVersion (number) required', {
           issues: body.error.issues,
         })
       }
-      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-      const updated = await syncTaskWorkflow(deps.db, id, {
-        db: deps.db,
-        schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
+      const updated = await operations.syncWorkflow({
+        actor,
+        taskId: id,
         expectedVersion: body.data.expectedVersion,
-        launchResources: taskExecutionResourceAuthority(c, identityAccess),
-        // RFC-328: workflow sync is one of the existing explicit manual
-        // continuation commands, so retain its authenticated actor in the
-        // durable replay authorization/audit row.
-        actorUserId: actor.user.id,
-        configPath: deps.configPath,
-        ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-        ...resolveLaunchRuntimeConfig(deps.configPath),
       })
       return c.json(serializeTaskFor(updated, workflowReadLensFor(actor)))
     },
@@ -1048,24 +850,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Repair options for an alert',
     },
     async (c) => {
-      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const actor = actorOf(c)
-      const result = await listRepairOptionsForAlert({
-        db: deps.db,
+      const result = await operations.repairOptions({
+        actor,
         taskId: c.req.param('id'),
         alertId: c.req.param('alertId'),
-        actorUserId: actor.user.id,
-        appHome: Paths.root,
-        deps: {
-          db: deps.db,
-          schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-          configPath: deps.configPath,
-          ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-          // RFC-108 T4 (Codex design gate P2): a repair option may resumeAfterApply
-          // → resumeTask(deps); thread the same runtime config (timeout floor +
-          // commit&push + concurrency) so repair-kicked nodes are not unbounded.
-          ...resolveLaunchRuntimeConfig(deps.configPath),
-        },
       })
       return c.json(result)
     },
@@ -1082,7 +871,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
       const bodyJson = (await c.req.json().catch(() => ({}))) as unknown
       const parsed = RepairRequestSchema.safeParse(bodyJson)
       if (!parsed.success) {
@@ -1092,25 +881,12 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
           parsed.error.issues,
         )
       }
-      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
       const actor = actorOf(c)
-      const result = await applyRepairOption({
-        db: deps.db,
+      const result = await operations.applyRepair({
+        actor,
         taskId: c.req.param('id'),
         alertId: c.req.param('alertId'),
         optionId: parsed.data.optionId,
-        actorUserId: actor.user.id,
-        appHome: Paths.root,
-        deps: {
-          db: deps.db,
-          schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-          configPath: deps.configPath,
-          ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-          // RFC-108 T4 (Codex design gate P2): repair → resumeAfterApply →
-          // resumeTask(deps) must carry the runtime config (timeout floor +
-          // commit&push + concurrency), else auto/manual repairs kick unbounded nodes.
-          ...resolveLaunchRuntimeConfig(deps.configPath),
-        },
         onAlert: (row, transition) => {
           tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
             type: 'lifecycle.alert',
@@ -1137,30 +913,17 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       // RFC-324 —— 观察者看得见任务，但推动任务是成员的事。
-      await requireTaskOperatorFromRoute(c, deps)
-      await assertTaskWorkflowNotBuiltin(deps, c.req.param('id')) // RFC-104: no manual exec of built-ins
+      await operations.requireOperator(actorOf(c), c.req.param('id'))
+      await operations.assertManualExecutionAllowed(actorOf(c), c.req.param('id'))
       const actor = actorOf(c)
       // flag-audit W0：统一布尔解析（此前 `!== 'false'` 双重否定——任何拼错值静默当
       // true）。产品语义保留默认级联。
       const cascade = parseBoolQuery(c, 'cascade', { default: true })
-      const subagentLiveCapture = resolveSubagentLiveCapture(deps.configPath)
-      const task = await retryNode(deps.db, c.req.param('id'), c.req.param('nodeRunId'), {
+      const task = await operations.retry({
+        actor,
+        taskId: c.req.param('id'),
+        nodeRunId: c.req.param('nodeRunId'),
         cascade,
-        deps: {
-          db: deps.db,
-          schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
-          configPath: deps.configPath,
-          // RFC-328: preserve the authenticated manual retry decision; without
-          // it an outcome-unknown task is indistinguishable from actorless auto.
-          actorUserId: actor.user.id,
-          // 重试走到 `__repo_prep__` 时会分流进 retryRepoPreparation → startTask，
-          // 那里要 unseal `cached_repos.url_enc`。漏了 secretBox 的话，凡是配了
-          // secret.key 的部署一律 409 cached-repo-credential-unavailable。
-          ...(deps.secretBox !== undefined ? { secretBox: deps.secretBox } : {}),
-          ...(subagentLiveCapture !== undefined ? { subagentLiveCapture } : {}),
-          // RFC-103 T2: retry must thread commit&push + maxConcurrentNodes too.
-          ...resolveLaunchRuntimeConfig(deps.configPath),
-        },
       })
       return c.json(serializeTaskFor(task, workflowReadLensFor(actor)))
     },
@@ -1176,7 +939,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Node run stdout',
     },
     async (c) => {
-      const text = await getNodeRunStdout(deps.db, c.req.param('id'), c.req.param('nodeRunId'))
+      const text = await operations.stdout(c.req.param('id'), c.req.param('nodeRunId'))
       // RFC-247 AC-39 — agent stdout is free-form text the platform cannot
       // classify, so this is best-effort by nature. It is still worth doing on
       // the token channel: a node that echoed a key is one `get_task` away from
@@ -1218,12 +981,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       // already redacts, reached through a different door. A redaction that
       // covers one door is one the caller routes around without trying.
       const eventsActor = actorOf(c)
-      const events = await getNodeRunEvents(
-        deps.db,
-        c.req.param('id'),
-        c.req.param('nodeRunId'),
-        opts,
-      )
+      const events = await operations.events(c.req.param('id'), c.req.param('nodeRunId'), opts)
       return c.json({
         ...events,
         events: events.events.map((e) => ({
@@ -1250,7 +1008,13 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Node run session view',
     },
     async (c) => {
-      return c.json(await getSessionTree(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
+      return c.json(
+        await getSessionTree(
+          taskExecutionReadModels.sessions,
+          c.req.param('id'),
+          c.req.param('nodeRunId'),
+        ),
+      )
     },
   )
 
@@ -1276,7 +1040,13 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Node run resolved inventory',
     },
     async (c) => {
-      return c.json(await getRuntimeInventory(deps.db, c.req.param('id'), c.req.param('nodeRunId')))
+      return c.json(
+        await getRuntimeInventory(
+          taskExecutionReadModels.runtimeInventory,
+          c.req.param('id'),
+          c.req.param('nodeRunId'),
+        ),
+      )
     },
   )
 
@@ -1295,7 +1065,11 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       return c.json(
-        await getStartupVerification(deps.db, c.req.param('id'), c.req.param('nodeRunId')),
+        await getStartupVerification(
+          taskExecutionReadModels.startupVerification,
+          c.req.param('id'),
+          c.req.param('nodeRunId'),
+        ),
       )
     },
   )
@@ -1315,7 +1089,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const task = await getTask(deps.db, id)
+      const task = await operations.get(id)
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
@@ -1342,7 +1116,7 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const id = c.req.param('id')
-      const task = await getTask(deps.db, id)
+      const task = await operations.get(id)
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
@@ -1354,130 +1128,6 @@ export function mountTaskRoutes(app: Hono, deps: AppDeps): void {
       return c.json({ path: rel, ...result })
     },
   )
-}
-
-/**
- * RFC-324 —— 操作面的路由门。
- *
- * `visibilityCheck` 中间件已经把「看不见 ⇒ 404」办完了，但它对**观察者**是放行的
- * ——那正是观察者这一档存在的意义。推动任务的那几条路由因此需要第二道门；它们此前
- * 只有 `tasks:execute` 这个方法级粗门，成员边界完全没进来过（RFC-324 之前不需要，
- * 因为加进任务的人本来就是同权协作者）。
- */
-async function requireTaskOperatorFromRoute(c: Context, deps: AppDeps): Promise<void> {
-  const id = c.req.param('id') ?? ''
-  const rows = await deps.db
-    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId })
-    .from(tasksTable)
-    .where(eq(tasksTable.id, id))
-    .limit(1)
-  const task = rows[0]
-  // 不存在时交给各路由自己的 404 分支，避免两处 404 文案分叉。
-  if (task === undefined) return
-  await requireTaskOperator(deps.db, actorOf(c), task)
-}
-
-async function visibilityCheck(c: Context, deps: AppDeps): Promise<void> {
-  const id = c.req.param('id')
-  if (!id) return
-  // Global readers can see every task by definition. The concrete handler
-  // still owns its normal not-found read, so this removes only the redundant
-  // middleware probe (especially important for detail polling and member
-  // writes over large frozen workflow snapshots).
-  const actor = actorOf(c)
-  if (actor.permissions.has('tasks:read:all')) return
-  // RFC-311 (audit L2-3): canViewTask needs three scalar columns; the former
-  // select() decoded the full task row (workflow_snapshot and friends) once
-  // per `/api/tasks/:id/*` request — every events/stdout/node-runs poll paid
-  // for it before the handler then re-read the row a second time.
-  const rows = await deps.db
-    .select({ id: tasksTable.id, ownerUserId: tasksTable.ownerUserId, status: tasksTable.status })
-    .from(tasksTable)
-    .where(eq(tasksTable.id, id))
-    .limit(1)
-  const row = rows[0]
-  if (!row) {
-    // Let the per-route 404 handler fire; do not leak existence vs. forbidden.
-    return
-  }
-  if (!(await canViewTask(deps.db, actor, row))) {
-    // RFC-285 B1（D1）：「存在但无权」与「不存在」同形 404——错误码探测不出
-    // 任务存在性。字节形态与本文件各路由的 missing 分支一致（task-not-found +
-    // `task '<id>' not found`）。成员制写门的 403 是另一层语义，保留不动。
-    throw new NotFoundError('task-not-found', `task '${id}' not found`)
-  }
-}
-
-/**
- * RFC-104 + RFC-165 (F13-r3): lifecycle guard by EXECUTION KIND.
- * - 'agent' host tasks (RFC-165 single-agent launches): the synthesized
- *   snapshot is a REAL DAG run by the normal engine, so generic resume /
- *   node retry semantics hold → ALLOWED (this is the only carve-out from
- *   the builtin-workflow lock; the __agent_host__ FK anchor is builtin).
- * - TURN-ENGINE 'workgroup' host tasks (leader_worker / free_collab): generic
- *   resume/retry does not apply (the engine adopts only pending rows;
- *   recovery belongs to RFC-164's engine re-entry) → stays 403 via the
- *   builtin host row, explicitly LOCKED by tests.
- * - RFC-167 dynamic_workflow workgroup tasks (Codex impl-gate P1): every
- *   phase IS generically recoverable (generating re-enters the generate pass
- *   idempotently, awaiting_confirm re-parks, executing resumes the real DAG
- *   through runScope) — without this carve-out an executing dynamic task that
- *   failed or was interrupted had NO recovery endpoint at all → ALLOWED.
- * - plain workflow tasks whose workflow is builtin (fusion): 403 — only the
- *   fusion engine drives aw-skill-fusion; its own continuation + daemon
- *   recovery call the SERVICE directly, bypassing these user routes.
- * A null task returns so the route's own 404 still fires.
- */
-async function assertTaskWorkflowNotBuiltin(deps: AppDeps, taskId: string): Promise<void> {
-  const task = await getTask(deps.db, taskId)
-  if (task === null) return
-  const kind = taskExecutionKind(task)
-  if (kind === 'agent') return
-  // RFC-304: same carve-out, same reason. A code-round task is FK-anchored to
-  // the builtin `__code_round_host__` row, so without this it would 403 on
-  // every resume/retry — the builtin lock exists to stop users hand-driving the
-  // fusion workflow, not to strip host tasks of their recovery endpoints.
-  if (kind === 'code-round') return
-  if (isWorkgroupTask(task)) {
-    const row = (
-      await deps.db
-        .select({ workgroupConfigJson: tasksTable.workgroupConfigJson })
-        .from(tasksTable)
-        .where(eq(tasksTable.id, taskId))
-        .limit(1)
-    )[0]
-    if (
-      !isTurnEngineWorkgroupTask({
-        workgroupId: task.workgroupId,
-        workgroupConfigJson: row?.workgroupConfigJson ?? null,
-      })
-    ) {
-      return // dynamic_workflow — generically recoverable (see doc above)
-    }
-  }
-  const wf = await getWorkflow(deps.db, task.workflowId)
-  if (wf !== null) assertNotBuiltin('workflow', wf)
-}
-
-/**
- * RFC-165 (F13-r3): host tasks (agent / workgroup / RFC-304 code-round) freeze
- * a SYNTHESIZED snapshot — there is no authored workflow to sync from, so
- * sync-workflow is uniformly 422 for them (vs. the 403 builtin lock, which is
- * about manual execution). Plain builtin-workflow tasks (fusion) keep the 403.
- * The `!== 'workflow'` test covers every host kind by construction; a new host
- * kind is 422 the day it is added rather than the day someone remembers.
- */
-async function assertTaskSyncable(deps: AppDeps, taskId: string): Promise<void> {
-  const task = await getTask(deps.db, taskId)
-  if (task === null) return
-  if (taskExecutionKind(task) !== 'workflow') {
-    throw new ValidationError(
-      'task-host-sync-unsupported',
-      'agent/workgroup host tasks run a synthesized snapshot — there is no workflow to sync from',
-    )
-  }
-  const wf = await getWorkflow(deps.db, task.workflowId)
-  if (wf !== null) assertNotBuiltin('workflow', wf)
 }
 
 // RFC-218: the multipart parsing / defs / limits / cleanup-decoration skeleton

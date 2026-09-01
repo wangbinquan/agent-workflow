@@ -18,24 +18,18 @@ import {
   SubmitClarifyAnswersSchema,
   type TaskActorRole,
 } from '@agent-workflow/shared'
-import { desc, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import { clarifyRounds, nodeRuns, tasks as tasksTable } from '@/db/schema'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { sealRoundQuestions } from '@/services/clarifySeal'
-import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
-import { createClarifyDecisionCommandContext } from '@/services/clarifyDecisionComposition'
-import {
-  countAwaitingClarifyRounds,
-  getClarifyRoundDetail,
-  listClarifyRoundSummaries,
-  saveClarifyDraft,
-} from '@/services/clarifyRounds'
-import { canViewTask, requireTaskMember } from '@/services/taskCollab'
-import { visibleTaskIdsOf } from '@/services/taskAuthorization'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+
+function requireClarifyOperations(
+  operations: CollaborationRouteOperations | undefined,
+): CollaborationRouteOperations['clarify'] {
+  if (operations === undefined) throw new Error('collaboration-route-operations-not-composed')
+  return operations.clarify
+}
 
 /**
  * RFC-099 (D5/D7) — answer-rights gate for clarify writes: any task member
@@ -45,58 +39,47 @@ import { NotFoundError, ValidationError } from '@/util/errors'
  * a dual-written round). Returns the role snapshot to record.
  */
 async function ensureClarifyMember(
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
   intermediaryNodeRunId: string,
   actor: Actor,
 ): Promise<TaskActorRole> {
-  const rounds = await deps.db
-    .select({ taskId: clarifyRounds.taskId })
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId))
-    .orderBy(desc(clarifyRounds.createdAt))
-    .limit(1)
-  const round = rounds[0]
-  if (!round) {
+  const access = await operations.access.resolveClarifyTask({
+    actor,
+    intermediaryNodeRunId,
+  })
+  if (!access.roundExists) {
     // No round → keep the legacy 404 shape (after confirming the node_run
     // itself is absent too; an existing run without a round is a service bug
     // the detail endpoint reports consistently).
-    const runs = await deps.db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, intermediaryNodeRunId))
-      .limit(1)
-    if (!runs[0]) {
+    if (!access.nodeRunExists) {
       throw new NotFoundError('clarify-session-not-found', 'clarify session not found')
     }
     throw new NotFoundError('clarify-round-not-found', 'clarify round not found')
   }
-  const taskRow = (
-    await deps.db.select().from(tasksTable).where(eq(tasksTable.id, round.taskId)).limit(1)
-  )[0]
-  if (!taskRow) {
-    throw new NotFoundError('task-not-found', `task '${round.taskId}' not found`)
+  if (access.task === null || access.taskId === null) {
+    throw new NotFoundError('task-not-found', `task '${access.taskId ?? ''}' not found`)
   }
-  return requireTaskMember(deps.db, actor, taskRow)
+  if (access.actorRole === null) {
+    throw new ForbiddenError(
+      'not-task-member',
+      'only task members or an actor with the required global task authority can do this',
+    )
+  }
+  return access.actorRole
 }
 
 /** RFC-099 (D5) — read gate: clarify inherits task visibility. RFC-285 B1: non-viewers get a 404 shaped like a missing session. */
 async function ensureClarifyVisible(
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
   intermediaryNodeRunId: string,
   actor: Actor,
 ): Promise<void> {
-  const rounds = await deps.db
-    .select({ taskId: clarifyRounds.taskId })
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId))
-    .limit(1)
-  const round = rounds[0]
-  if (!round) return // detail endpoint produces its own 404
-  const taskRow = (
-    await deps.db.select().from(tasksTable).where(eq(tasksTable.id, round.taskId)).limit(1)
-  )[0]
-  if (!taskRow) return
-  if (!(await canViewTask(deps.db, actor, taskRow))) {
+  const access = await operations.access.resolveClarifyTask({
+    actor,
+    intermediaryNodeRunId,
+  })
+  if (!access.roundExists || access.task === null) return
+  if (!access.visible) {
     // RFC-285 B1：不可见 ≡ 不存在。不能用 task-not-found——那等于确认「这个
     // session 存在且绑着某个任务」。同形基准是**detail 端点对真缺失产出的
     // 形态**（byte-oracle 实测）：clarify-round-not-found + 带 id 文案——本门
@@ -110,7 +93,7 @@ async function ensureClarifyVisible(
 
 /** RFC-099 (D5) — list filter by task visibility (admin shortcut). */
 async function filterRoundsByTaskVisibility<T extends { taskId: string }>(
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
   actor: Actor,
   rows: readonly T[],
 ): Promise<T[]> {
@@ -119,11 +102,14 @@ async function filterRoundsByTaskVisibility<T extends { taskId: string }>(
   if (taskIds.length === 0) return []
   // RFC-311: one indexed membership query instead of one collaborator lookup
   // per task (this ran on the 15s badge poll — audit L1-10).
-  const visible = await visibleTaskIdsOf(deps.db, actor, taskIds)
+  const visible = await operations.access.visibleTaskIds({
+    actor,
+    taskIds,
+  })
   return rows.filter((r) => visible.has(r.taskId))
 }
 
-export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
+export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOperations): void {
   registerRoute(
     app,
     {
@@ -155,8 +141,8 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       if (q.data.status !== undefined) filter.status = q.data.status
       if (q.data.taskId !== undefined) filter.taskId = q.data.taskId
       if (q.data.limit !== undefined) filter.limit = q.data.limit
-      const summaries = await listClarifyRoundSummaries(deps.db, filter)
-      return c.json(await filterRoundsByTaskVisibility(deps, actorOf(c), summaries))
+      const summaries = await requireClarifyOperations(operations).list(filter)
+      return c.json(await filterRoundsByTaskVisibility(operations, actorOf(c), summaries))
     },
   )
 
@@ -175,7 +161,9 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       // RFC-311: one indexed count(*) — the previous shape materialized every
       // clarify_rounds row (questions/answers JSON included) plus two full
       // tasks-table scans in its helpers, on a 15s × per-tab poll.
-      return c.json({ count: await countAwaitingClarifyRounds(deps.db, actorOf(c)) })
+      return c.json({
+        count: await requireClarifyOperations(operations).countPending(actorOf(c)),
+      })
     },
   )
 
@@ -190,12 +178,12 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const nodeRunId = c.req.param('nodeRunId')
-      await ensureClarifyVisible(deps, nodeRunId, actorOf(c))
+      await ensureClarifyVisible(operations, nodeRunId, actorOf(c))
       // RFC-058 T14: single ClarifyRound shape; `kind` discriminator
       // distinguishes self vs cross. The keying by intermediary node_run id
       // works for both because dual-write already mints the matching
       // clarify_rounds row at session creation time.
-      const detail = await getClarifyRoundDetail(deps.db, nodeRunId)
+      const detail = await requireClarifyOperations(operations).detail(nodeRunId)
       return c.json(detail)
     },
   )
@@ -228,7 +216,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       }
       // RFC-099 (D5/D7): any task member (or admin); capture the role snapshot.
       const actor = actorOf(c)
-      const role = await ensureClarifyMember(deps, nodeRunId, actor)
+      const role = await ensureClarifyMember(operations, nodeRunId, actor)
 
       // RFC-128 P2 (Codex P2-1) — `questionIds` (a subset cap) is ONLY meaningful for the
       // defer/control channel. On the quick channel it would silently drop questions while
@@ -264,8 +252,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
           subsetIds !== undefined
             ? parsed.data.answers.filter((a) => subsetIds.includes(a.questionId))
             : parsed.data.answers
-        const sealResult = await sealRoundQuestions({
-          db: deps.db,
+        const sealResult = await requireClarifyOperations(operations).seal({
           originNodeRunId: nodeRunId,
           answers: sealAnswers,
           // RFC-128 (用户 2026-07-01) — AUTO-STAGE: the centralized-answer control channel seals a
@@ -289,6 +276,7 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
           // RFC-162: per-question scope removed.
           // RFC-099: audit-only setter id — NEVER enters an agent prompt.
           sealedBy: actor.user.id,
+          sealedByRole: role,
         })
         // NB: no resumeTask — the whole point of defer is to NOT advance execution; the
         // user dispatches later from the board. A full seal's node + collaboration frames
@@ -305,12 +293,9 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
       // round.kind internally + dispatches the round's self/questioner AND designer entries (designer
       // aggregates its siblings; multi-source not-ready parks 等齐 until the last sibling answers).
       {
-        const commandContext = createClarifyDecisionCommandContext({
-          db: deps.db,
+        const auto = await requireClarifyOperations(operations).submitDecision({
           actor,
-          role,
-        })
-        const auto = await submitClarifyDecision(commandContext, {
+          actorRole: role,
           nodeRunId,
           answers: parsed.data.answers,
           directive: parsed.data.directive,
@@ -365,9 +350,8 @@ export function mountClarifyRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const role = await ensureClarifyMember(deps, nodeRunId, actor)
-      const result = await saveClarifyDraft({
-        db: deps.db,
+      const role = await ensureClarifyMember(operations, nodeRunId, actor)
+      const result = await requireClarifyOperations(operations).saveDraft({
         intermediaryNodeRunId: nodeRunId,
         roundId: parsed.data.roundId,
         questionId: parsed.data.questionId,

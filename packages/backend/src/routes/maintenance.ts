@@ -1,11 +1,16 @@
-import type { MaintenanceStatus } from '@agent-workflow/shared'
+import type { DatabaseRuntimeTelemetry, MaintenanceStatus } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 
-import type { AppDeps } from '@/server'
 import { loadConfig } from '@/config'
 import { registerRoute } from '@/routes/registry'
 
-export function mountMaintenanceRoutes(app: Hono, deps: AppDeps): void {
+export interface MaintenanceRouteDependencies {
+  readonly configPath: string
+  readonly maintenanceStatus?: () => MaintenanceStatus
+  readonly databaseTelemetry?: () => DatabaseRuntimeTelemetry
+}
+
+export function mountMaintenanceRoutes(app: Hono, deps: MaintenanceRouteDependencies): void {
   registerRoute(
     app,
     {
@@ -29,7 +34,9 @@ export function mountMaintenanceRoutes(app: Hono, deps: AppDeps): void {
         last: null,
         backlog: [],
       })
-      return c.json(deps.maintenanceStatus?.() ?? fallback())
+      const status = deps.maintenanceStatus?.() ?? fallback()
+      const database = deps.databaseTelemetry?.()
+      return c.json(database === undefined ? status : { ...status, database })
     },
   )
 }

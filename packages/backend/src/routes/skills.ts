@@ -16,7 +16,8 @@
 //   PUT    /api/skills/:id/file?path=...            write one file (utf-8)
 //   DELETE /api/skills/:id/file?path=...            delete one file/dir
 
-import { SkillZipDecisionMapSchema } from '@agent-workflow/shared'
+import { SKILL_ZIP_LIMITS, SkillZipDecisionMapSchema } from '@agent-workflow/shared'
+import { Buffer } from 'node:buffer'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type {
@@ -24,19 +25,25 @@ import type {
   SkillVersionCommands,
 } from '@/modules/resource-catalog/public/commands'
 import type { SkillOperationDescriptors } from '@/modules/resource-catalog/public/operations'
-import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
+import type {
+  SkillOperationContext,
+  SkillZipImportParticipant,
+} from '@/modules/resource-catalog/public/participants'
 import type {
   SkillFileQueries,
   SkillQueries,
   SkillVersionQueries,
 } from '@/modules/resource-catalog/public/queries'
-import type { SkillCatalogResource } from '@/modules/resource-catalog/public/types'
-import type { AppDeps } from '@/server'
+import type {
+  CreateSkillCatalogInput,
+  DeleteSkillCatalogInput,
+  DeleteSkillCatalogReceipt,
+  SaveSkillCatalogInput,
+  SkillCatalogResource,
+} from '@/modules/resource-catalog/public/types'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { Paths } from '@/util/paths'
-import { commitSkillZipBuffer, parseSkillZipBuffer, ZIP_LIMITS } from '@/services/skill-zip'
 import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 
@@ -47,12 +54,12 @@ export interface SkillRouteDependencies {
   readonly fileQueries: SkillFileQueries
   readonly versionQueries: SkillVersionQueries
   readonly operations: SkillOperationDescriptors
+  readonly zipImport: SkillZipImportParticipant
   readonly authorityFor: (actor: Actor) => SkillOperationContext
 }
 
-export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDependencies): void {
+export function mountSkillRoutes(app: Hono, module: SkillRouteDependencies): void {
   const { queries, operations } = module
-  const zipFsOpts = { appHome: Paths.root }
 
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleSkill(actor: Actor, id: string): Promise<SkillCatalogResource> {
@@ -78,12 +85,13 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     method: 'POST',
     path: '/api/skills',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      submission: {
-        kind: 'json-body',
-        body: await c.req.raw.text().catch(() => ''),
-      },
-    }),
+    decode: async (c) =>
+      ({
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
+      }) satisfies CreateSkillCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, created) => c.json(created, 201),
   })
@@ -101,7 +109,9 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     },
     async (c) => {
       const buffer = await readZipFileFromMultipart(c.req.raw)
-      const { response } = await parseSkillZipBuffer(deps.db, actorOf(c), buffer)
+      const response = await module.zipImport.parse(module.authorityFor(actorOf(c)), {
+        archive: skillZipArchive(buffer),
+      })
       return c.json(response)
     },
   )
@@ -148,8 +158,9 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
           issues: decisionsParsed.error.issues,
         })
       }
-      const result = await commitSkillZipBuffer(deps.db, zipFsOpts, buffer, decisionsParsed.data, {
-        actor: actorOf(c),
+      const result = await module.zipImport.commit(module.authorityFor(actorOf(c)), {
+        archive: skillZipArchive(buffer),
+        decisions: decisionsParsed.data,
       })
       return c.json(result)
     },
@@ -195,15 +206,16 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     method: 'DELETE',
     path: '/api/skills/:id',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      submission: {
-        kind: 'json-body',
-        body: await c.req.raw.text().catch(() => ''),
-      },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
+      }) satisfies DeleteSkillCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: DeleteSkillCatalogReceipt) => {
       captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
@@ -245,13 +257,14 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
     method: 'POST',
     path: '/api/skills/:id/save',
     tokenAccess: 'allow',
-    decode: async (c) => ({
-      id: c.req.param('id'),
-      submission: {
-        kind: 'json-body',
-        body: await c.req.raw.text().catch(() => ''),
-      },
-    }),
+    decode: async (c) =>
+      ({
+        id: c.req.param('id'),
+        submission: {
+          kind: 'json-body',
+          body: await c.req.raw.text().catch(() => ''),
+        },
+      }) satisfies SaveSkillCatalogInput,
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, saved) => c.json(saved),
   })
@@ -401,6 +414,13 @@ export function mountSkillRoutes(app: Hono, deps: AppDeps, module: SkillRouteDep
   })
 }
 
+function skillZipArchive(buffer: Uint8Array) {
+  return Object.freeze({
+    encoding: 'base64' as const,
+    content: Buffer.from(buffer).toString('base64'),
+  })
+}
+
 async function readZipFileFromMultipart(req: Request): Promise<Uint8Array> {
   let form: Awaited<ReturnType<Request['formData']>>
   try {
@@ -424,10 +444,10 @@ async function extractZipBuffer(
       "multipart form field 'file' (the zip) is required",
     )
   }
-  if (file.size > ZIP_LIMITS.totalBytes) {
+  if (file.size > SKILL_ZIP_LIMITS.totalBytes) {
     throw new ValidationError(
       'zip-limit-exceeded',
-      `uploaded file exceeds ${ZIP_LIMITS.totalBytes} bytes`,
+      `uploaded file exceeds ${SKILL_ZIP_LIMITS.totalBytes} bytes`,
     )
   }
   const ab = await file.arrayBuffer()

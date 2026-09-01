@@ -5,7 +5,6 @@
 import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import {
   createWebhookEndpoint,
@@ -17,11 +16,13 @@ import {
   updateWebhookEndpoint,
 } from '@/services/webhookEndpoints'
 import { safeJsonOrThrowInvalid } from '@/util/http'
+import type { WebhookEndpointServiceDeps } from '@/services/webhookEndpoints'
 
-export function mountWebhookEndpointRoutes(app: Hono, deps: AppDeps): void {
-  const secretBox = deps.secretBox
-  if (!secretBox) return // 对齐 OIDC 自我跳过（server.ts）：无密封器则不开管理面
-  const svcDeps = { db: deps.db, configPath: deps.configPath, secretBox }
+export function mountWebhookEndpointRoutes(
+  app: Hono,
+  deps: { readonly webhookEndpointService: WebhookEndpointServiceDeps },
+): void {
+  const svcDeps = deps.webhookEndpointService
 
   registerRoute(
     app,

@@ -18,11 +18,9 @@ import type { ScheduledTask } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 
 import { actorOf, type Actor } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
-import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import {
   createScheduledTask,
   deleteScheduledTask,
@@ -33,15 +31,15 @@ import {
   runScheduleNow,
   updateScheduleAcl,
   updateScheduledTask,
+  type BuildScheduleLaunch,
   type ScheduleAuthorityRuntime,
 } from '@/services/scheduledTasks'
 import { canEditAccess, canGovernAccess } from '@/services/resourceAcl'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { loadConfig } from '@/config'
 import { safeJsonOrThrowInvalid } from '@/util/http'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
+import type { ScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
 
 /**
  * RFC-324 —— 排期写权：owner / `write` 授权 / ACL bypass。
@@ -49,8 +47,12 @@ import { directRequestAuthority } from '@/routes/operationAuthority'
  * 覆盖「改 cron、启停、立即运行」。**不覆盖改绑目标**，见下面的
  * `requireScheduleGovern`。
  */
-async function requireScheduleEdit(deps: AppDeps, actor: Actor, row: ScheduledTask): Promise<void> {
-  const access = await resolveScheduleAccessFor(deps.db, actor, row)
+async function requireScheduleEdit(
+  operations: ScheduledTaskRuntime['operations'],
+  actor: Actor,
+  row: ScheduledTask,
+): Promise<void> {
+  const access = await resolveScheduleAccessFor(operations, actor, row)
   if (canEditAccess(access)) return
   throw new ForbiddenError(
     'resource-read-only',
@@ -69,11 +71,11 @@ async function requireScheduleEdit(deps: AppDeps, actor: Actor, row: ScheduledTa
  * 开放给 `write` 授权。
  */
 async function requireScheduleGovern(
-  deps: AppDeps,
+  operations: ScheduledTaskRuntime['operations'],
   actor: Actor,
   row: ScheduledTask,
 ): Promise<void> {
-  const access = await resolveScheduleAccessFor(deps.db, actor, row)
+  const access = await resolveScheduleAccessFor(operations, actor, row)
   if (canGovernAccess(access)) return
   throw new ForbiddenError(
     'resource-govern-owner-only',
@@ -81,15 +83,19 @@ async function requireScheduleGovern(
   )
 }
 
-async function loadVisible(deps: AppDeps, actor: Actor, id: string): Promise<ScheduledTask> {
-  const row = await getScheduledTask(deps.db, id)
+async function loadVisible(
+  operations: ScheduledTaskRuntime['operations'],
+  actor: Actor,
+  id: string,
+): Promise<ScheduledTask> {
+  const row = await getScheduledTask(operations, id)
   // Invisible == missing (same 404) so a non-owner can't probe existence.
   // RFC-324 —— 判定必须查一次授权表：只判 owner 会让被授权者看不见自己被授权的
   // 那条调度，于是「授权了却 404」——比拒绝更难排查。
   if (row === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
-  const access = await resolveScheduleAccessFor(deps.db, actor, row)
+  const access = await resolveScheduleAccessFor(operations, actor, row)
   if (access === 'none') {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
@@ -107,10 +113,13 @@ function requireLaunchPermission(actor: Actor): void {
 
 export function mountScheduledTaskRoutes(
   app: Hono,
-  deps: AppDeps & {
+  deps: {
     readonly identityAccess: ScheduleAuthorityRuntime & {
       readonly directAuthority: DirectAuthorityBinding
     }
+    readonly scheduledTaskRuntime: ScheduledTaskRuntime
+    readonly buildScheduleLaunch: BuildScheduleLaunch
+    readonly getDefaultRuntime: () => string | null
   },
 ): void {
   const resourceAuthority = (c: Parameters<typeof actorOf>[0]) => {
@@ -118,7 +127,7 @@ export function mountScheduledTaskRoutes(
     return Object.freeze({
       actor,
       authority: directRequestAuthority(deps.identityAccess.directAuthority, actor),
-      resources: deps.identityAccess.integrationTriggerResources,
+      resources: deps.scheduledTaskRuntime.integrationTriggerResources,
       taskExecutionResources: deps.identityAccess.taskExecutionResources,
     })
   }
@@ -132,7 +141,7 @@ export function mountScheduledTaskRoutes(
       summary: 'List scheduled tasks visible to the caller',
     },
     async (c) => {
-      return c.json(await listScheduledTaskItems(deps.db, actorOf(c)))
+      return c.json(await listScheduledTaskItems(deps.scheduledTaskRuntime.operations, actorOf(c)))
     },
   )
 
@@ -146,7 +155,9 @@ export function mountScheduledTaskRoutes(
       summary: 'Get one scheduled task',
     },
     async (c) => {
-      return c.json(await loadVisible(deps, actorOf(c), c.req.param('id')))
+      return c.json(
+        await loadVisible(deps.scheduledTaskRuntime.operations, actorOf(c), c.req.param('id')),
+      )
     },
   )
 
@@ -187,10 +198,10 @@ export function mountScheduledTaskRoutes(
           issues: parsed.error.issues,
         })
       }
-      const created = await createScheduledTask(deps.db, parsed.data, {
+      const created = await createScheduledTask(deps.scheduledTaskRuntime.operations, parsed.data, {
         actor: actorOf(c),
         resourceAuthority: resourceAuthority(c),
-        defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
+        defaultRuntime: deps.getDefaultRuntime(),
       })
       return c.json(created, 201)
     },
@@ -215,8 +226,12 @@ export function mountScheduledTaskRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisible(deps, actor, c.req.param('id'))
-      await requireScheduleEdit(deps, actor, existing)
+      const existing = await loadVisible(
+        deps.scheduledTaskRuntime.operations,
+        actor,
+        c.req.param('id'),
+      )
+      await requireScheduleEdit(deps.scheduledTaskRuntime.operations, actor, existing)
       const rawPatch = await safeJsonOrThrowInvalid(c.req.raw)
       {
         const retired = rejectRetiredStartTaskKeys(
@@ -245,13 +260,18 @@ export function mountScheduledTaskRoutes(
         parsed.data.launchKind !== undefined ||
         parsed.data.launchPayload !== undefined
       ) {
-        await requireScheduleGovern(deps, actor, existing)
+        await requireScheduleGovern(deps.scheduledTaskRuntime.operations, actor, existing)
       }
-      const updated = await updateScheduledTask(deps.db, existing.id, parsed.data, {
-        actor,
-        resourceAuthority: resourceAuthority(c),
-        defaultRuntime: loadConfig(deps.configPath).defaultRuntime,
-      })
+      const updated = await updateScheduledTask(
+        deps.scheduledTaskRuntime.operations,
+        existing.id,
+        parsed.data,
+        {
+          actor,
+          resourceAuthority: resourceAuthority(c),
+          defaultRuntime: deps.getDefaultRuntime(),
+        },
+      )
       return c.json(updated)
     },
   )
@@ -267,8 +287,12 @@ export function mountScheduledTaskRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisible(deps, actor, c.req.param('id'))
-      await requireScheduleGovern(deps, actor, existing)
+      const existing = await loadVisible(
+        deps.scheduledTaskRuntime.operations,
+        actor,
+        c.req.param('id'),
+      )
+      await requireScheduleGovern(deps.scheduledTaskRuntime.operations, actor, existing)
       // RFC-247 T20 — a token must name what it deletes; the web flow keeps its
       // lighter yes/no confirmation (see services/deleteConfirm.ts).
       assertTokenDeleteConfirm(
@@ -278,7 +302,7 @@ export function mountScheduledTaskRoutes(
         actor.source,
       )
       captureDeleteSnapshot(c, actor, existing)
-      await deleteScheduledTask(deps.db, existing.id)
+      await deleteScheduledTask(deps.scheduledTaskRuntime.operations, existing.id)
       return c.body(null, 204)
     },
   )
@@ -299,24 +323,20 @@ export function mountScheduledTaskRoutes(
       // RFC-165 (N1-r3): run-now IS a launch.
       requireLaunchPermission(actorOf(c))
       const actor = actorOf(c)
-      const existing = await loadVisible(deps, actor, c.req.param('id'))
+      const existing = await loadVisible(
+        deps.scheduledTaskRuntime.operations,
+        actor,
+        c.req.param('id'),
+      )
       // RFC-324 —— run-now 触发的是 owner 已经选定的目标，属于「推动」而不是
       // 「改绑」，因此归编辑档；改目标仍需 owner（requireScheduleGovern）。
-      await requireScheduleEdit(deps, actor, existing)
-      const launch =
-        deps.buildScheduleLaunch ??
-        buildScheduleLaunch(
-          deps.db,
-          requireSchedulerDriver(deps.schedulerDriver),
-          deps.configPath,
-          deps.identityAccess,
-        )
+      await requireScheduleEdit(deps.scheduledTaskRuntime.operations, actor, existing)
       const result = await runScheduleNow(
-        deps.db,
+        deps.scheduledTaskRuntime.operations,
         existing.id,
-        launch,
+        deps.buildScheduleLaunch,
         deps.identityAccess,
-        loadConfig(deps.configPath).defaultRuntime,
+        deps.getDefaultRuntime(),
       )
       return c.json(result, 201)
     },
@@ -336,8 +356,12 @@ export function mountScheduledTaskRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisible(deps, actor, c.req.param('id'))
-      return c.json(await getScheduleAcl(deps.db, actor, existing))
+      const existing = await loadVisible(
+        deps.scheduledTaskRuntime.operations,
+        actor,
+        c.req.param('id'),
+      )
+      return c.json(await getScheduleAcl(deps.scheduledTaskRuntime.operations, actor, existing))
     },
   )
 
@@ -353,14 +377,20 @@ export function mountScheduledTaskRoutes(
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisible(deps, actor, c.req.param('id'))
+      const existing = await loadVisible(
+        deps.scheduledTaskRuntime.operations,
+        actor,
+        c.req.param('id'),
+      )
       const parsed = UpdateScheduleAclBodySchema.safeParse(await safeJsonOrThrowInvalid(c.req.raw))
       if (!parsed.success) {
         throw new ValidationError('acl-invalid', 'invalid acl payload', {
           issues: parsed.error.issues,
         })
       }
-      return c.json(await updateScheduleAcl(deps.db, actor, existing, parsed.data))
+      return c.json(
+        await updateScheduleAcl(deps.scheduledTaskRuntime.operations, actor, existing, parsed.data),
+      )
     },
   )
 }

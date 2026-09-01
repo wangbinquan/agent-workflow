@@ -21,9 +21,12 @@ import {
   type CodeHostConnectionsService,
 } from '@/services/codeHost/connections'
 import { registerRoute } from '@/routes/registry'
-import type { AppDeps } from '@/server'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
+
+export interface CodeHostRouteDependencies {
+  readonly codeHostFetch?: (url: string, init?: RequestInit) => Promise<Response>
+}
 
 function providerOf(raw: string): CodeHostProvider {
   // safeParse 而不是 `as`：RFC-054 W1-7 要求路由层的窄化走 Zod，而不是断言。
@@ -36,7 +39,7 @@ function providerOf(raw: string): CodeHostProvider {
 
 export function mountCodeHostRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: CodeHostRouteDependencies,
   service: CodeHostConnectionsService | null,
 ): void {
   // 对齐 OIDC / webhook 端点的自我跳过：没有密封器就不开凭据面，而不是退化成
@@ -52,7 +55,7 @@ export function mountCodeHostRoutes(
       tokenAccess: 'never',
       summary: 'List code-host connections (token masked to its last 4 chars)',
     },
-    (c) => c.json(service.list()),
+    async (c) => c.json(await service.list()),
   )
 
   registerRoute(
@@ -73,7 +76,7 @@ export function mountCodeHostRoutes(
         throw new ValidationError('code-host-connection-invalid', 'invalid connection body')
       }
       return c.json(
-        service.upsert(provider, {
+        await service.upsert(provider, {
           baseUrl: parsed.data.baseUrl,
           ...(parsed.data.repositoryUrlPrefixes !== undefined
             ? { repositoryUrlPrefixes: parsed.data.repositoryUrlPrefixes }
@@ -114,7 +117,7 @@ export function mountCodeHostRoutes(
       if (!parsed.success) {
         throw new ValidationError('code-host-connection-invalid', 'invalid connection body')
       }
-      const removed = service.remove(provider, parsed.data)
+      const removed = await service.remove(provider, parsed.data)
       if (!removed) {
         throw new NotFoundError('code-host-not-configured', `${provider} is not configured`)
       }
@@ -138,7 +141,7 @@ export function mountCodeHostRoutes(
       )
       const body = parsed.success ? parsed.data : {}
       // 未传的字段回落到已保存的值，所以「先保存再测」与「边填边测」都成立。
-      const stored = service.resolve(provider)
+      const stored = await service.resolve(provider)
       const baseUrl = body.baseUrl ?? stored?.baseUrl
       const token = body.token ?? stored?.token
       const rejectUnauthorized = normalizeCodeHostRejectUnauthorized(
@@ -166,7 +169,7 @@ export function mountCodeHostRoutes(
         token === stored.token &&
         rejectUnauthorized === stored.rejectUnauthorized
       ) {
-        service.recordTest(provider, result)
+        await service.recordTest(provider, result)
       }
       return c.json(result)
     },

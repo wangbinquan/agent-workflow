@@ -12,57 +12,60 @@
 // require task membership (requireTaskMember → 403). The entry must belong to the
 // task in the path (cross-task entryId → 404).
 
-import { eq } from 'drizzle-orm'
 import type { Context, Hono } from 'hono'
 import { TaskQuestionPhaseSchema, type TaskActorRole } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
-import { taskQuestions, tasks as tasksTable } from '@/db/schema'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import {
-  confirmTaskQuestion,
-  createManualTaskQuestion,
-  listTaskQuestions,
-  reassignTaskQuestion,
-  stageTaskQuestion,
-} from '@/services/taskQuestions'
-import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
-import { createQuestionDispatchCommandContext } from '@/services/questionDispatchComposition'
-import { canViewTask, requireTaskMember } from '@/services/taskCollab'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 
-async function loadVisibleTask(deps: AppDeps, taskId: string, actor: Actor) {
-  const [t] = await deps.db.select().from(tasksTable).where(eq(tasksTable.id, taskId)).limit(1)
-  if (!t || !(await canViewTask(deps.db, actor, t))) {
+function requireQuestionOperations(
+  operations: CollaborationRouteOperations | undefined,
+): CollaborationRouteOperations['questions'] {
+  if (operations === undefined) throw new Error('collaboration-route-operations-not-composed')
+  return operations.questions
+}
+
+async function loadVisibleTask(
+  operations: CollaborationRouteOperations,
+  taskId: string,
+  actor: Actor,
+) {
+  const access = await operations.access.resolveTask({ actor, taskId })
+  if (access.task === null || !access.visible) {
     throw new NotFoundError('task-not-found', `task ${taskId} not found`)
   }
-  return t
+  return access
+}
+
+function requireActorRole(access: Awaited<ReturnType<typeof loadVisibleTask>>): TaskActorRole {
+  if (access.actorRole !== null) return access.actorRole
+  throw new ForbiddenError(
+    'not-task-member',
+    'only task members or an actor with the required global task authority can do this',
+  )
 }
 
 /** Member-gated write entry: 404 if task invisible, 403 if not a member, 404 if
  *  the entry belongs to another task. Returns the role snapshot + actor. */
 async function gateMemberEntry(
   c: Context,
-  deps: AppDeps,
+  operations: CollaborationRouteOperations,
 ): Promise<{ entryId: string; role: TaskActorRole; actor: Actor }> {
   const taskId = c.req.param('id') ?? ''
   const entryId = c.req.param('entryId') ?? ''
   const actor = actorOf(c)
-  const task = await loadVisibleTask(deps, taskId, actor)
-  const role = await requireTaskMember(deps.db, actor, task)
-  const [e] = await deps.db
-    .select({ taskId: taskQuestions.taskId })
-    .from(taskQuestions)
-    .where(eq(taskQuestions.id, entryId))
-    .limit(1)
-  if (!e || e.taskId !== taskId) {
+  const access = await loadVisibleTask(operations, taskId, actor)
+  const role = requireActorRole(access)
+  const entryTaskId = await operations.access.questionTaskId(entryId)
+  if (entryTaskId !== taskId) {
     throw new NotFoundError(TASK_QUESTION_CONFLICT.notFound, `task question ${entryId} not found`)
   }
   return { entryId, role, actor }
 }
 
-export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
+export function mountTaskQuestionRoutes(app: Hono, operations: CollaborationRouteOperations): void {
   registerRoute(
     app,
     {
@@ -74,7 +77,7 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const taskId = c.req.param('id')
-      await loadVisibleTask(deps, taskId, actorOf(c))
+      await loadVisibleTask(operations, taskId, actorOf(c))
       const sourceNodeId = c.req.query('sourceNodeId') || undefined
       // RFC-247 T3: validate rather than cast. The old `as TaskQuestionPhase`
       // let `?phase=bogus` through to the service, where it silently matched
@@ -90,7 +93,13 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
               }
               return parsed.data
             })()
-      return c.json(await listTaskQuestions(deps.db, taskId, { sourceNodeId, phase }))
+      return c.json(
+        await requireQuestionOperations(operations).list({
+          taskId,
+          ...(sourceNodeId === undefined ? {} : { sourceNodeId }),
+          ...(phase === undefined ? {} : { phase }),
+        }),
+      )
     },
   )
 
@@ -112,8 +121,8 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const taskId = c.req.param('id')
       const actor = actorOf(c)
-      const task = await loadVisibleTask(deps, taskId, actor)
-      const role = await requireTaskMember(deps.db, actor, task)
+      const access = await loadVisibleTask(operations, taskId, actor)
+      const role = requireActorRole(access)
       const body = (await c.req.json().catch(() => ({}))) as {
         title?: unknown
         body?: unknown
@@ -122,12 +131,13 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       const title = typeof body.title === 'string' ? body.title : ''
       const instruction = typeof body.body === 'string' ? body.body : ''
       const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : null
-      const { id } = await createManualTaskQuestion(
-        deps.db,
+      const { id } = await requireQuestionOperations(operations).createManual({
         taskId,
-        { title, body: instruction, targetNodeId },
-        { userId: actor.user.id, role },
-      )
+        title,
+        body: instruction,
+        targetNodeId,
+        actor: { userId: actor.user.id, role },
+      })
       return c.json({ ok: true, id })
     },
   )
@@ -142,8 +152,11 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Confirm a question entry',
     },
     async (c) => {
-      const { entryId, role, actor } = await gateMemberEntry(c, deps)
-      await confirmTaskQuestion(deps.db, entryId, { userId: actor.user.id, role })
+      const { entryId, role, actor } = await gateMemberEntry(c, operations)
+      await requireQuestionOperations(operations).confirm({
+        entryId,
+        actor: { userId: actor.user.id, role },
+      })
       return c.json({ ok: true })
     },
   )
@@ -165,7 +178,7 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Reassign a question entry',
     },
     async (c) => {
-      const { entryId, role, actor } = await gateMemberEntry(c, deps)
+      const { entryId, role, actor } = await gateMemberEntry(c, operations)
       const body = (await c.req.json().catch(() => ({}))) as { targetNodeId?: unknown }
       const targetNodeId = typeof body.targetNodeId === 'string' ? body.targetNodeId : ''
       if (!targetNodeId) {
@@ -174,9 +187,10 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       // RFC-162: `action` tells the client what happened — 'added-designer' (a clarify question
       // gained an upstream/downstream designer handler), 'removed-designer' (back to single card),
       // or 'moved-manual' (a manual question re-targeted). The asker entry is always kept.
-      const action = await reassignTaskQuestion(deps.db, entryId, targetNodeId, {
-        userId: actor.user.id,
-        role,
+      const action = await requireQuestionOperations(operations).reassign({
+        entryId,
+        targetNodeId,
+        actor: { userId: actor.user.id, role },
       })
       return c.json({ ok: true, action })
     },
@@ -192,10 +206,14 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Stage a question entry',
     },
     async (c) => {
-      const { entryId, role, actor } = await gateMemberEntry(c, deps)
+      const { entryId, role, actor } = await gateMemberEntry(c, operations)
       const body = (await c.req.json().catch(() => ({}))) as { staged?: unknown }
       const staged = body.staged !== false // default true
-      await stageTaskQuestion(deps.db, entryId, staged, { userId: actor.user.id, role })
+      await requireQuestionOperations(operations).stage({
+        entryId,
+        staged,
+        actor: { userId: actor.user.id, role },
+      })
       return c.json({ ok: true })
     },
   )
@@ -216,8 +234,8 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
     async (c) => {
       const taskId = c.req.param('id')
       const actor = actorOf(c)
-      const task = await loadVisibleTask(deps, taskId, actor)
-      const role = await requireTaskMember(deps.db, actor, task)
+      const access = await loadVisibleTask(operations, taskId, actor)
+      const role = requireActorRole(access)
       // RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有任务都是 deferred-dispatch——
       // batch-dispatch 恒适用（旧 deferred-only 门移除；dispatchTaskQuestions 仍防御性去重）。
       const body = (await c.req.json().catch(() => ({}))) as { entryIds?: unknown }
@@ -230,12 +248,9 @@ export function mountTaskQuestionRoutes(app: Hono, deps: AppDeps): void {
           'entryIds (a non-empty array of task_question ids) is required',
         )
       }
-      const commandContext = createQuestionDispatchCommandContext({
-        db: deps.db,
+      const result = await requireQuestionOperations(operations).dispatch({
         actor,
-        role,
-      })
-      const result = await dispatchTaskQuestions(commandContext, {
+        actorRole: role,
         taskId,
         entryIds,
         ...(c.req.header('Idempotency-Key') === undefined

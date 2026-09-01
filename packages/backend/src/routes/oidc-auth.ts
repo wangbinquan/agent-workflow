@@ -4,45 +4,90 @@
 //   GET  /api/auth/oidc/:slug/callback         IdP callback; issues a session
 
 import type { Context, Hono } from 'hono'
+import type { OidcProvider } from '@agent-workflow/shared'
 import { publicOriginOf } from '@/routes/publicOrigin'
 import { resolveEndpoints } from '@/auth/oidc/endpoints'
 import { acquireIdentityClaims, resolveOidcProfileNames } from '@/auth/oidc/identity'
 import { consumeFlow, startFlow } from '@/auth/oidc/flow'
 import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
-import { createLoginSession } from '@/auth/sessionStore'
-import {
-  assertBootstrapComplete,
-  getAuthLoginPolicy,
-  getAuthMethodDiscovery,
-} from '@/auth/loginPolicy'
-import { createOidcProvidersService } from '@/services/oidcProviders'
-import {
-  bindInvitedUserWithIdentity,
-  createIdentity,
-  createUserWithIdentity,
-  findByProviderSubject,
-  type OidcProfileIdentityAccess,
-  syncPreferredSnapshot,
-} from '@/services/userIdentities'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
 import {
   applyEmailTrust,
   decideProvisioning,
   type IdTokenClaims,
 } from '@/services/oidc/provisioning'
-import { findByUsername } from '@/services/users'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { eq } from 'drizzle-orm'
-import { users } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
 import { safeJsonOrEmpty } from '@/util/http'
 
+export interface OidcIdentitySeed {
+  readonly providerId: string
+  readonly subject: string
+  readonly email: string | null
+  readonly emailVerified: boolean
+  readonly displayName?: string
+  readonly gitName?: string
+  readonly preferredSnapshot?: string | null
+  readonly expectedSubjectClaim?: string | null
+  readonly expectedUsernameClaim?: string | null
+  readonly expectedGitNameClaim?: string | null
+  readonly expectedEmailClaim?: string | null
+  readonly now?: number
+}
+
+export interface OidcIdentityLinkInput extends OidcIdentitySeed {
+  readonly userId: string
+}
+
+export interface OidcAuthIdentityBindings {
+  readonly findByProviderSubject: (
+    providerId: string,
+    subject: string,
+  ) => Promise<{ readonly userId: string } | null>
+  readonly createIdentity: (input: OidcIdentityLinkInput) => Promise<unknown>
+  readonly createUserWithIdentity: (input: {
+    readonly username: string
+    readonly displayName: string
+    readonly gitName: string
+    readonly email?: string | null
+    readonly identity: OidcIdentitySeed
+  }) => Promise<{ readonly userId: string }>
+  readonly bindInvitedUserWithIdentity: (input: {
+    readonly userId: string
+    readonly identity: OidcIdentitySeed
+  }) => Promise<void>
+  readonly syncPreferredSnapshot: (input: {
+    readonly providerId: string
+    readonly subject: string
+    readonly userId: string
+    readonly displayName: string
+    readonly gitName: string
+    readonly email?: string | null
+    readonly emailVerified: boolean
+    readonly expectedSubjectClaim?: string | null
+    readonly expectedUsernameClaim?: string | null
+    readonly expectedGitNameClaim?: string | null
+    readonly expectedEmailClaim?: string | null
+  }) => Promise<unknown>
+}
+
+export interface OidcAuthRouteBindings {
+  readonly auth: AuthRuntime
+  readonly providers: {
+    readonly findById: (id: string) => Promise<OidcProvider | null>
+    readonly findBySlug: (slug: string) => Promise<OidcProvider | null>
+    readonly resolveClientSecret: (id: string) => Promise<string | null>
+  } | null
+  readonly identities: OidcAuthIdentityBindings
+}
+
 export function mountOidcAuthRoutes(
   app: Hono,
-  deps: AppDeps,
-  identityAccess: OidcProfileIdentityAccess,
+  deps: { readonly configPath: string },
+  bindings: OidcAuthRouteBindings,
 ): void {
+  const { auth, identities, providers } = bindings
   registerRoute(
     app,
     {
@@ -55,7 +100,7 @@ export function mountOidcAuthRoutes(
       summary: 'List enabled OIDC providers for the login page',
     },
     async (c) => {
-      return c.json(getAuthMethodDiscovery(deps.db, deps.secretBox !== undefined))
+      return c.json(await auth.getLoginMethodDiscovery(providers !== null))
     },
   )
 
@@ -71,10 +116,9 @@ export function mountOidcAuthRoutes(
       summary: 'Begin an OIDC login',
     },
     async (c) => {
-      assertBootstrapComplete(deps.db)
-      if (!deps.secretBox) return c.json({ ok: false, code: 'oidc-not-configured' }, 503)
-      const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-      const provider = await svc.findBySlug(c.req.param('slug'))
+      await auth.assertBootstrapComplete()
+      if (providers === null) return c.json({ ok: false, code: 'oidc-not-configured' }, 503)
+      const provider = await providers.findBySlug(c.req.param('slug'))
       if (!provider || !provider.enabled) {
         return c.json({ ok: false, code: 'provider-not-found' }, 404)
       }
@@ -126,22 +170,21 @@ export function mountOidcAuthRoutes(
       summary: 'OIDC callback',
     },
     async (c) => {
-      if (getAuthLoginPolicy(deps.db).bootstrapCompletedAt === null) {
+      if ((await auth.getLoginPolicy()).bootstrapCompletedAt === null) {
         return c.html(friendly('bootstrap-admin-required'), 403)
       }
-      if (!deps.secretBox) return c.html(friendly('oidc-not-configured'), 503)
+      if (providers === null) return c.html(friendly('oidc-not-configured'), 503)
       const code = c.req.query('code')
       const state = c.req.query('state')
       if (!code || !state) return c.html(friendly('invalid-callback'), 400)
       const flow = consumeFlow(state)
       if (!flow) return c.html(friendly('state-expired'), 400)
 
-      const svc = createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
-      const provider = await svc.findById(flow.providerId)
+      const provider = await providers.findById(flow.providerId)
       if (!provider || !provider.enabled) {
         return c.html(friendly('provider-disabled'), 400)
       }
-      const clientSecret = await svc.resolveClientSecret(provider.id)
+      const clientSecret = await providers.resolveClientSecret(provider.id)
       if (!clientSecret) return c.html(friendly('client-secret-missing'), 500)
 
       // RFC-220 — effective endpoints: discovery merged over manual fallbacks.
@@ -194,24 +237,20 @@ export function mountOidcAuthRoutes(
 
       if (flow.linkUserId) {
         try {
-          await createIdentity(
-            deps.db,
-            {
-              userId: flow.linkUserId,
-              providerId: provider.id,
-              subject: claims.sub,
-              email: claims.email ?? null,
-              emailVerified: !!claims.email_verified,
-              displayName,
-              gitName,
-              preferredSnapshot: snapshotInit,
-              expectedSubjectClaim: provider.subjectClaim,
-              expectedUsernameClaim: provider.usernameClaim,
-              expectedGitNameClaim: provider.gitNameClaim,
-              expectedEmailClaim: provider.emailClaim,
-            },
-            identityAccess,
-          )
+          await identities.createIdentity({
+            userId: flow.linkUserId,
+            providerId: provider.id,
+            subject: claims.sub,
+            email: claims.email ?? null,
+            emailVerified: !!claims.email_verified,
+            displayName,
+            gitName,
+            preferredSnapshot: snapshotInit,
+            expectedSubjectClaim: provider.subjectClaim,
+            expectedUsernameClaim: provider.usernameClaim,
+            expectedGitNameClaim: provider.gitNameClaim,
+            expectedEmailClaim: provider.emailClaim,
+          })
         } catch (err) {
           if (isDomainCode(err, 'provider-config-changed')) {
             return c.html(friendly('provider-config-changed'), 400)
@@ -224,9 +263,11 @@ export function mountOidcAuthRoutes(
         return c.redirect(flow.postLoginRedirect ?? `/account?linked=${provider.slug}`)
       }
 
-      const existingIdentity = await findByProviderSubject(deps.db, provider.id, claims.sub)
+      const existingIdentity = await identities.findByProviderSubject(provider.id, claims.sub)
       const invited =
-        claims.email && claims.email_verified ? await findInvitedByEmail(deps, claims.email) : null
+        claims.email && claims.email_verified
+          ? await auth.findInvitedUserByEmail(claims.email)
+          : null
       const decision = decideProvisioning(
         provider,
         claims,
@@ -256,51 +297,40 @@ export function mountOidcAuthRoutes(
           case 'login':
             userId = decision.userId
             // RFC-335 — both names reconcile on every successful callback.
-            syncPreferredSnapshot(
-              {
-                providerId: provider.id,
-                subject: claims.sub,
-                userId,
-                displayName,
-                gitName,
-                email: claims.email ?? null,
-                emailVerified: !!claims.email_verified,
-                expectedSubjectClaim: provider.subjectClaim,
-                expectedUsernameClaim: provider.usernameClaim,
-                expectedGitNameClaim: provider.gitNameClaim,
-                expectedEmailClaim: provider.emailClaim,
-              },
-              identityAccess,
-            )
+            await identities.syncPreferredSnapshot({
+              providerId: provider.id,
+              subject: claims.sub,
+              userId,
+              displayName,
+              gitName,
+              email: claims.email ?? null,
+              emailVerified: !!claims.email_verified,
+              expectedSubjectClaim: provider.subjectClaim,
+              expectedUsernameClaim: provider.usernameClaim,
+              expectedGitNameClaim: provider.gitNameClaim,
+              expectedEmailClaim: provider.emailClaim,
+            })
             break
           case 'create': {
             // OIDC auto-provisioning: the IdP verified the identity, so the user
             // lands as `active` immediately. User row + identity row commit in
             // ONE transaction — a subjectClaim race must roll back both instead
             // of leaving an identity-less active account (design §6.2).
-            const created = await createUserWithIdentity(
-              deps.db,
-              {
-                username: await pickUniqueUsername(deps, claims),
-                displayName,
-                gitName,
-                email: claims.email ?? null,
-                identity: identitySeed,
-              },
-              identityAccess,
-            )
+            const created = await identities.createUserWithIdentity({
+              username: await pickUniqueUsername(auth, claims),
+              displayName,
+              gitName,
+              email: claims.email ?? null,
+              identity: identitySeed,
+            })
             userId = created.userId
             break
           }
           case 'bindInvited':
-            await bindInvitedUserWithIdentity(
-              deps.db,
-              {
-                userId: decision.userId,
-                identity: identitySeed,
-              },
-              identityAccess,
-            )
+            await identities.bindInvitedUserWithIdentity({
+              userId: decision.userId,
+              identity: identitySeed,
+            })
             userId = decision.userId
             break
         }
@@ -327,7 +357,7 @@ export function mountOidcAuthRoutes(
         throw err
       }
 
-      const { token } = createLoginSession({ db: deps.db, userId })
+      const { token } = await auth.createLoginSession({ userId })
       // For SPA login: redirect with token in fragment so localStorage hook can
       // pick it up without leaking to server logs.
       return c.redirect(`${flow.postLoginRedirect ?? '/'}#aw_session=${encodeURIComponent(token)}`)
@@ -339,7 +369,11 @@ function isDomainCode(err: unknown, code: string): boolean {
   return err instanceof DomainError && err.code === code
 }
 
-function resolveRedirectUri(c: Context, slug: string, deps: AppDeps): string {
+function resolveRedirectUri(
+  c: Context,
+  slug: string,
+  deps: { readonly configPath: string },
+): string {
   // RFC-036 — explicit publicBaseUrl in config.json takes precedence so dev
   // setups behind a proxy that doesn't forward X-Forwarded-* (e.g. vite)
   // still issue redirects that land back on the user-facing origin.
@@ -376,7 +410,7 @@ function buildAuthorizeUrl(
   return url.toString()
 }
 
-async function pickUniqueUsername(deps: AppDeps, claims: IdTokenClaims): Promise<string> {
+async function pickUniqueUsername(auth: AuthRuntime, claims: IdTokenClaims): Promise<string> {
   const base = (claims.preferred_username || claims.email?.split('@')[0] || `oidc-${claims.sub}`)
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '-')
@@ -384,24 +418,9 @@ async function pickUniqueUsername(deps: AppDeps, claims: IdTokenClaims): Promise
     .slice(0, 48)
   let candidate = base || `oidc-${Date.now()}`
   for (let i = 0; i < 10; i++) {
-    const dup = await findByUsername(deps.db, candidate)
+    const dup = await auth.findUserByUsername(candidate)
     if (!dup) return candidate
     candidate = `${base}-${i + 1}`
   }
   return `${base}-${Date.now()}`
-}
-
-async function findInvitedByEmail(deps: AppDeps, email: string) {
-  const rows = await deps.db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase()))
-    .limit(1)
-  const row = rows[0]
-  if (!row || row.status !== 'invited') return null
-  return {
-    id: row.id,
-    email: row.email,
-    status: row.status as 'active' | 'disabled' | 'invited',
-  }
 }

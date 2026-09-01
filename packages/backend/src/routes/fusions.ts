@@ -14,7 +14,6 @@ import { FusionStatusSchema, LaunchFusionSchema, RejectFusionSchema } from '@age
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import {
   approveFusion,
@@ -31,21 +30,18 @@ import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
-import { requireSchedulerDriver } from '@/modules/task-execution/public/commands'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
-import type { MemoryResourceScopeAuthorization } from '@/services/memory'
+import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
+import type { FusionOperations } from '@/modules/memory/public/fusion'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
-export interface FusionRouteAuthorization {
+export interface FusionRouteDependencies {
+  readonly operations: FusionOperations
+  readonly configPath: string
   readonly directAuthority: DirectAuthorityBinding
-  readonly resourceScopeAuthorization: MemoryResourceScopeAuthorization
 }
 
-export function mountFusionRoutes(
-  app: Hono,
-  deps: AppDeps,
-  authorization?: FusionRouteAuthorization,
-): void {
+export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): void {
   function fusionDeps(): FusionDeps {
     // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
     // hung fusion agent is bounded like any other node. RFC-115: also thread
@@ -53,13 +49,9 @@ export function mountFusionRoutes(
     const { defaultPerNodeTimeoutMs, defaultNodeRetries, sessionRestartBudget, defaultRuntime } =
       resolveLaunchRuntimeConfig(deps.configPath)
     return {
-      db: deps.db,
+      operations: deps.operations,
       appHome: Paths.root,
-      schedulerDriver: requireSchedulerDriver(deps.schedulerDriver),
       configPath: deps.configPath,
-      ...(deps.repositoryPublicationTransport === undefined
-        ? {}
-        : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
       ...(defaultPerNodeTimeoutMs !== undefined ? { defaultPerNodeTimeoutMs } : {}),
       ...(defaultNodeRetries !== undefined ? { defaultNodeRetries } : {}),
       ...(sessionRestartBudget !== undefined ? { sessionRestartBudget } : {}),
@@ -83,18 +75,15 @@ export function mountFusionRoutes(
           issues: parsed.error.issues,
         })
       }
-      if (authorization === undefined) {
-        throw new Error('fusion-resource-scope-authorization-not-composed')
-      }
       const actor = actorOf(c)
+      const scopeAuthority: MemoryScopeAuthority = Object.freeze({
+        actor,
+        authority: directRequestAuthority(deps.directAuthority, actor),
+      })
       const fusion = await createFusion(
         parsed.data,
         fusionDeps(),
-        {
-          actor,
-          authority: directRequestAuthority(authorization.directAuthority, actor),
-          authorization: authorization.resourceScopeAuthorization,
-        },
+        scopeAuthority,
         directTaskInitiatorFromActorSource(actor.source),
       )
       return c.json(fusion, 201)

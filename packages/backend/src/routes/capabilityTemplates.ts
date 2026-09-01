@@ -25,75 +25,59 @@
 // template uneditable by exactly the people the merge exists to serve.
 
 import type { Hono } from 'hono'
-import { z } from 'zod'
-import { CapabilityTemplateCopySchema, CapabilityTemplateWriteSchema } from '@agent-workflow/shared'
+import { type ResourceAcl, type UpdateResourceAclBody } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
+import type { CapabilityTemplateOperations } from '@/modules/code-capability/application/capabilityTemplateOperations'
 import { registerRoute } from '@/routes/registry'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
-import {
-  copyTemplate,
-  createTemplate,
-  deleteTemplate,
-  getTemplateRow,
-  listTemplateRows,
-  mayReadScripts,
-  serializeTemplate,
-  updateTemplate,
-} from '@/services/capabilityTemplates'
-import {
-  mergeFromUpstream,
-  readUpstreamReport,
-} from '@/modules/code-capability/application/templateUpstreamStatus'
-import {
-  assertNameUnchangedForEditor,
-  canViewResource,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from '@/services/resourceAcl'
-import type { AppDeps } from '@/server'
+import type { TemplateUpstreamOperations } from '@/modules/code-capability/application/templateUpstreamStatus'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
 
-export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
-  async function loadVisibleTemplate(actor: Actor, id: string) {
-    const row = await getTemplateRow(deps.db, id)
-    if (row === null || !(await canViewResource(deps.db, actor, 'capability_template', row))) {
-      // 404, not 403: an invisible resource must be indistinguishable from a
-      // missing one, or the status code becomes an existence oracle.
-      throw new NotFoundError('capability-template-not-found', `template '${id}' not found`)
-    }
-    return row
+export interface CapabilityTemplateRouteDeps {
+  readonly codeHistoryQueries: {
+    readonly templateUpstream: TemplateUpstreamOperations
   }
+  readonly capabilityTemplates: CapabilityTemplateOperations
+  readonly capabilityTemplateAcl: {
+    readonly load: (key: string) => Promise<{
+      readonly id: string
+      readonly ownerUserId: string | null
+      readonly visibility: 'private' | 'public'
+    } | null>
+    readonly canView: (
+      actor: Actor,
+      row: {
+        readonly id: string
+        readonly ownerUserId: string | null
+        readonly visibility: 'private' | 'public'
+      },
+    ) => Promise<boolean>
+    readonly read: (
+      actor: Actor,
+      row: {
+        readonly id: string
+        readonly ownerUserId: string | null
+        readonly visibility: 'private' | 'public'
+      },
+    ) => Promise<ResourceAcl>
+    readonly update: (
+      actor: Actor,
+      row: {
+        readonly id: string
+        readonly ownerUserId: string | null
+        readonly visibility: 'private' | 'public'
+      },
+      body: UpdateResourceAclBody,
+      updatedAt?: number,
+    ) => Promise<ResourceAcl>
+  }
+}
 
-  /**
-   * Parse a write, re-filling the fields this caller was never shown.
-   *
-   * See the redaction note at the top: a caller without `scripts:author` gets
-   * a body with no `scripts`/`hooks`, so their honest round-trip must not be
-   * read as "delete them".
-   */
-  async function parseWrite(raw: unknown, actor: Actor, existing: { id: string } | null) {
-    // Parsed, not cast: RFC-054 W1-7 bans `as T` in a route handler, and the
-    // reason applies exactly here — a cast would let a body of any shape reach
-    // the re-fill below and be handed on as if it had been checked.
-    const loose = z.record(z.string(), z.unknown()).safeParse(raw)
-    const body: Record<string, unknown> = loose.success ? { ...loose.data } : {}
-    if (!mayReadScripts(actor) && existing !== null) {
-      const stored = await getTemplateRow(deps.db, existing.id)
-      if (stored !== null) {
-        if (body.scripts === undefined) body.scripts = JSON.parse(stored.scriptsJson) as unknown
-        if (body.hooks === undefined) body.hooks = JSON.parse(stored.hooksJson) as unknown
-      }
-    }
-    const parsed = CapabilityTemplateWriteSchema.safeParse(body)
-    if (!parsed.success) {
-      throw new ValidationError('capability-template-invalid', 'invalid template payload', {
-        issues: parsed.error.issues,
-      })
-    }
-    return parsed.data
-  }
+export function mountCapabilityTemplateRoutes(app: Hono, deps: CapabilityTemplateRouteDeps): void {
+  const templateUpstream = deps.codeHistoryQueries.templateUpstream
+  const templates = deps.capabilityTemplates
+  const acl = deps.capabilityTemplateAcl
 
   registerRoute(
     app,
@@ -106,13 +90,7 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const visible = await filterVisibleRows(
-        deps.db,
-        actor,
-        'capability_template',
-        await listTemplateRows(deps.db),
-      )
-      return c.json(visible.map((row) => serializeTemplate(row, actor)))
+      return c.json(await templates.list(actor))
     },
   )
 
@@ -127,7 +105,7 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      return c.json(serializeTemplate(await loadVisibleTemplate(actor, c.req.param('id')), actor))
+      return c.json(await templates.get(actor, c.req.param('id')))
     },
   )
 
@@ -145,9 +123,7 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const input = await parseWrite(await safeJsonOrEmpty(c.req.raw), actor, null)
-      const row = await createTemplate(deps.db, input, actor)
-      return c.json(serializeTemplate(row, actor), 201)
+      return c.json(await templates.create(actor, await safeJsonOrEmpty(c.req.raw)), 201)
     },
   )
 
@@ -162,17 +138,9 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisibleTemplate(actor, c.req.param('id'))
-      // RFC-324: content write. Unlike agents/skills/MCPs, a template's update
-      // body DOES carry its name (the write schema is the whole document), so
-      // the rename fence has to run here.
-      const access = await requireResourceEdit(deps.db, actor, 'capability_template', existing)
-      const input = await parseWrite(await safeJsonOrEmpty(c.req.raw), actor, existing)
-      assertNameUnchangedForEditor(access, existing.name, input.name)
-      // The field-level gate lives in the service, so the bundle path gets it
-      // too — a route-only check would make an import a way around the rule.
-      const row = await updateTemplate(deps.db, existing, input, actor)
-      return c.json(serializeTemplate(row, actor))
+      return c.json(
+        await templates.update(actor, c.req.param('id'), await safeJsonOrEmpty(c.req.raw)),
+      )
     },
   )
 
@@ -187,15 +155,10 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const source = await loadVisibleTemplate(actor, c.req.param('id'))
-      const parsed = CapabilityTemplateCopySchema.safeParse(await safeJsonOrEmpty(c.req.raw))
-      if (!parsed.success) {
-        throw new ValidationError('capability-template-invalid', 'invalid copy payload', {
-          issues: parsed.error.issues,
-        })
-      }
-      const row = await copyTemplate(deps.db, source, actor, parsed.data.name)
-      return c.json(serializeTemplate(row, actor), 201)
+      return c.json(
+        await templates.copy(actor, c.req.param('id'), await safeJsonOrEmpty(c.req.raw)),
+        201,
+      )
     },
   )
 
@@ -210,9 +173,7 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const existing = await loadVisibleTemplate(actor, c.req.param('id'))
-      await requireResourceGovern(deps.db, actor, 'capability_template', existing)
-      await deleteTemplate(deps.db, existing)
+      await templates.delete(actor, c.req.param('id'))
       return c.body(null, 204)
     },
   )
@@ -234,8 +195,16 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const row = await loadVisibleTemplate(actor, c.req.param('id'))
-      return c.json(await readUpstreamReport(deps.db, row))
+      const id = c.req.param('id')
+      await templates.requireVisible(actor, id)
+      const report = await templateUpstream.read(id)
+      if (report === null) {
+        throw new NotFoundError(
+          'capability-template-not-found',
+          `template '${id}' not found in the selected database provider`,
+        )
+      }
+      return c.json(report)
     },
   )
 
@@ -250,12 +219,12 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
     async (c) => {
       const actor = actorOf(c)
-      const row = await loadVisibleTemplate(actor, c.req.param('id'))
-      await requireResourceEdit(deps.db, actor, 'capability_template', row)
+      const id = c.req.param('id')
+      await templates.requireEditable(actor, id)
       // The `scripts:author` check lives in the command, not here: the merge
       // can carry SCRIPTS across and those run as the daemon, so a route-only
       // check would make any second caller a way around the rule.
-      const outcome = await mergeFromUpstream(deps.db, row, actor)
+      const outcome = await templateUpstream.merge(id, actor)
       if (!outcome.ok) {
         if (outcome.code === 'scripts-forbidden') {
           throw new ForbiddenError(
@@ -276,10 +245,13 @@ export function mountCapabilityTemplateRoutes(app: Hono, deps: AppDeps): void {
     },
   )
 
-  mountAclEndpoints(app, deps, {
+  mountAclEndpoints(app, {
     type: 'capability_template',
     base: '/api/capability-templates',
     param: 'id',
-    load: async (db, key) => await getTemplateRow(db, key),
+    load: acl.load,
+    canView: acl.canView,
+    read: acl.read,
+    update: acl.update,
   })
 }

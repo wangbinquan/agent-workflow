@@ -19,6 +19,7 @@ import {
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import {
@@ -30,9 +31,12 @@ import {
   previewRepoGroupLayout,
   updateRepoGroup,
 } from '@/services/repoGroup'
-import type { AppDeps } from '@/server'
 import { ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
+
+export interface RepoGroupRouteDependencies {
+  readonly configPath: string
+}
 
 function assertNoRetiredMembers(raw: unknown): void {
   if (
@@ -48,12 +52,16 @@ function assertNoRetiredMembers(raw: unknown): void {
   }
 }
 
-export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
+export function mountRepoGroupRoutes(
+  app: Hono,
+  deps: RepoGroupRouteDependencies,
+  store: RepositoryWorkspaceStore,
+): void {
   /** 建组 / 改组共用：URL→id 的现场导入要走缓存服务，超时沿用 git clone 配置。 */
   const cacheDeps = () => {
     const cfg = loadConfig(deps.configPath)
     return {
-      db: deps.db,
+      store,
       ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
     }
   }
@@ -67,7 +75,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'List repo groups',
     },
-    (c) => c.json({ items: listRepoGroups(deps.db) }),
+    async (c) => c.json({ items: await listRepoGroups(store) }),
   )
 
   registerRoute(
@@ -89,11 +97,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
         })
       }
       const actor = actorOf(c)
-      const group = await createRepoGroup(
-        { db: deps.db, cache: cacheDeps() },
-        parsed.data,
-        actor.user.id,
-      )
+      const group = await createRepoGroup({ store, cache: cacheDeps() }, parsed.data, actor.user.id)
       return c.json(group, 201)
     },
   )
@@ -107,7 +111,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Get a repo group',
     },
-    (c) => c.json(getRepoGroup(deps.db, c.req.param('id'))),
+    async (c) => c.json(await getRepoGroup(store, c.req.param('id'))),
   )
 
   registerRoute(
@@ -133,7 +137,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
           issues: parsed.error.issues,
         })
       }
-      return c.json(previewRepoGroupLayout(deps.db, parsed.data))
+      return c.json(await previewRepoGroupLayout(store, parsed.data))
     },
   )
 
@@ -146,7 +150,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Preview the flattened layout of a repo group',
     },
-    (c) => c.json(getRepoGroupLayoutResponse(deps.db, c.req.param('id'))),
+    async (c) => c.json(await getRepoGroupLayoutResponse(store, c.req.param('id'))),
   )
 
   registerRoute(
@@ -174,7 +178,7 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       // 服务层那道 409 永远不会触发（实现门 P1）。
       const { expectedVersion, ...body } = parsed.data
       const group = await updateRepoGroup(
-        { db: deps.db, cache: cacheDeps() },
+        { store, cache: cacheDeps() },
         c.req.param('id'),
         body,
         expectedVersion,
@@ -199,10 +203,10 @@ export function mountRepoGroupRoutes(app: Hono, deps: AppDeps): void {
       if (actor.source === 'pat') {
         // RFC-247 T20 同款：令牌删除必须具名回显要删的东西。先查再确认，
         // 这样过期 id 回 404 而不是确认失败（与其它八条删除路由同序）。
-        const existing = getRepoGroup(deps.db, id)
+        const existing = await getRepoGroup(store, id)
         assertTokenDeleteConfirm(await readDeleteBody(c), existing.name, 'repo', actor.source)
       }
-      const r = deleteRepoGroup(deps.db, id, { force })
+      const r = await deleteRepoGroup(store, id, { force })
       return c.json({ ok: true as const, ...r })
     },
   )

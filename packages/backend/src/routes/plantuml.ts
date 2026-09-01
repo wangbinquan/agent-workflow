@@ -18,12 +18,15 @@
 
 import type { Hono } from 'hono'
 import { loadConfig } from '@/config'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { PLANTUML_SOURCE_MAX, hostOf, renderPlantuml } from '@/services/plantuml'
 import { DomainError } from '@/util/errors'
 
-export function mountPlantumlRoutes(app: Hono, deps: AppDeps): void {
+export interface PlantumlRouteDependencies {
+  readonly configPath: string
+}
+
+export function mountPlantumlRoutes(app: Hono, deps: PlantumlRouteDependencies): void {
   registerRoute(
     app,
     {

@@ -25,14 +25,21 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
-import type { AppDeps } from '@/server'
 import type { McpOperationDescriptors } from '@/modules/resource-catalog/public/operations'
 import type {
   McpAclIdentityParticipant,
   McpOperationContext,
 } from '@/modules/resource-catalog/public/participants'
 import type { McpQueries } from '@/modules/resource-catalog/public/queries'
-import type { McpCatalogResource } from '@/modules/resource-catalog/public/types'
+import type {
+  CreateMcpCatalogInput,
+  DeleteMcpCatalogInput,
+  DeleteMcpCatalogReceipt,
+  McpCatalogResource,
+  RenameMcpCatalogInput,
+  UpdateMcpCatalogInput,
+} from '@/modules/resource-catalog/public/types'
+import type { McpProbeStore } from '@/modules/resource-catalog/public/participants'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
@@ -69,12 +76,13 @@ export interface McpRouteDependencies {
   readonly queries: McpQueries
   readonly operations: McpOperationDescriptors
   readonly aclIdentity: McpAclIdentityParticipant
+  readonly probeStore: McpProbeStore
   readonly authorityFor: (actor: Actor) => McpOperationContext
   readonly runtimeTests: McpRuntimeTestService
 }
 
-export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDependencies): void {
-  const { queries, operations, aclIdentity, runtimeTests } = module
+export function mountMcpRoutes(app: Hono, module: McpRouteDependencies): void {
+  const { queries, operations, aclIdentity, probeStore, runtimeTests } = module
   // RFC-099: missing and not-visible produce the identical 404 (D1).
   async function loadVisibleMcp(actor: Actor, id: string): Promise<McpCatalogResource> {
     const mcp = await queries.get(module.authorityFor(actor), { id })
@@ -107,7 +115,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
       summary: 'Stored probe results for all MCP servers',
     },
     async (c) => {
-      const list = await listProbes(deps.db)
+      const list = await listProbes(probeStore)
       const actor = actorOf(c)
       const visibleMcps = await queries.list(module.authorityFor(actor))
       const allowed = new Set(visibleMcps.map((m) => m.id))
@@ -312,7 +320,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           issues: parsed.error.issues,
         })
       }
-      return parsed.data
+      return parsed.data satisfies CreateMcpCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, created) => {
@@ -338,7 +346,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
       return {
         id,
         update: parsed.data,
-      }
+      } satisfies UpdateMcpCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, updated) => {
@@ -367,10 +375,10 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
       return {
         id: resolved.id,
         deletion: parsed.data,
-      }
+      } satisfies DeleteMcpCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
-    encode: (c, receipt) => {
+    encode: (c, receipt: DeleteMcpCatalogReceipt) => {
       captureDeleteSnapshot(c, actorOf(c), receipt.deleted)
       return c.body(null, 204)
     },
@@ -393,7 +401,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
       return {
         id,
         rename: parsed.data,
-      }
+      } satisfies RenameMcpCatalogInput
     },
     context: (c) => module.authorityFor(actorOf(c)),
     encode: (c, renamed) => {
@@ -428,7 +436,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
           const fresh = await loadVisibleMcp(actor, resolved.id)
           return {
             currentName: fresh.name,
-            probe: await getProbeByMcpId(deps.db, fresh.id),
+            probe: await getProbeByMcpId(probeStore, fresh.id),
           }
         },
       )
@@ -485,7 +493,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
                 `mcp '${captured.name}' is disabled; enable it before probing`,
               )
             }
-            const persisted = await getProbeByMcpId(deps.db, captured.id)
+            const persisted = await getProbeByMcpId(probeStore, captured.id)
             const operation = mcpOperationCoordinator.beginOperation(captured.id, mcpRouteNow(), [
               captured.updatedAt + 1,
               (persisted?.startedAt ?? 0) + 1,
@@ -539,7 +547,7 @@ export function mountMcpRoutes(app: Hono, deps: AppDeps, module: McpRouteDepende
                 { generation: start.generation },
               )
             }
-            const persisted = await upsertProbe(deps.db, current.id, current.name, result)
+            const persisted = await upsertProbe(probeStore, current.id, current.name, result)
             return { ...persisted, configHashUsed: expectedHash }
           })
         },

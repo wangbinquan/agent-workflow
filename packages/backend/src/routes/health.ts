@@ -2,11 +2,14 @@
 // Schema per design.md §4.2.2 row 1.
 
 import type { Hono } from 'hono'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
-import { sql } from 'drizzle-orm'
-import { tasks } from '@/db/schema'
+import type { HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
 import { recoveryCountersSnapshot } from '@/services/recovery'
+
+export interface HealthRouteDependencies {
+  readonly opencodeVersion: string | null
+  readonly dbVersion: number
+}
 
 export interface IdentityAccessHealthDiagnostics {
   snapshot(): {
@@ -24,8 +27,9 @@ export interface IdentityAccessHealthDiagnostics {
 
 export function mountHealthRoutes(
   app: Hono,
-  deps: AppDeps,
+  deps: HealthRouteDependencies,
   identityAccess: IdentityAccessHealthDiagnostics,
+  database: HealthDatabaseReadModel,
 ): void {
   registerRoute(
     app,
@@ -41,11 +45,7 @@ export function mountHealthRoutes(
     async (c) => {
       let runningTasks = 0
       try {
-        const rows = await deps.db
-          .select({ n: sql<number>`count(*)` })
-          .from(tasks)
-          .where(sql`status = 'running'`)
-        runningTasks = Number(rows[0]?.n ?? 0)
+        runningTasks = await database.countRunningTasks()
       } catch {
         // DB may be locked or in-flight migration; report 0 rather than failing
         // the health probe (which is used by `agent-workflow doctor` too).

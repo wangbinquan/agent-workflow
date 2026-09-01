@@ -6,11 +6,10 @@
 
 import type { Hono } from 'hono'
 
+import type { MaintenanceDiskOperations } from '@/modules/system-operations/public/operations'
 import { registerRoute } from '@/routes/registry'
-import type { AppDeps } from '@/server'
-import { cleanupRetiredStores, reportDiskReclaimable } from '@/services/maintenanceDisk'
 
-export function mountMaintenanceDiskRoutes(app: Hono, deps: AppDeps): void {
+export function mountMaintenanceDiskRoutes(app: Hono, operations: MaintenanceDiskOperations): void {
   registerRoute(
     app,
     {
@@ -20,7 +19,7 @@ export function mountMaintenanceDiskRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Reclaimable disk space: retired runtime stores + DB freelist',
     },
-    (c) => c.json(reportDiskReclaimable(deps.db)),
+    async (c) => c.json(await operations.report()),
   )
 
   registerRoute(
@@ -32,6 +31,6 @@ export function mountMaintenanceDiskRoutes(app: Hono, deps: AppDeps): void {
       tokenAccess: 'allow',
       summary: 'Delete the retired runtime store directory (irreversible)',
     },
-    (c) => c.json(cleanupRetiredStores()),
+    async (c) => c.json(await operations.cleanupRetiredStores()),
   )
 }

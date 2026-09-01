@@ -11,12 +11,15 @@
 // readout). Requires token auth (mounted under /api/* in server.ts).
 
 import type { Hono } from 'hono'
-import type { AppDeps } from '@/server'
 import { registerRoute } from '@/routes/registry'
 import { readDaemonInfo } from '@/util/daemonInfo'
 import { Paths } from '@/util/paths'
 
-export function mountDaemonRoutes(app: Hono, deps: AppDeps): void {
+export interface DaemonRouteDependencies {
+  readonly daemonInfoPath?: string
+}
+
+export function mountDaemonRoutes(app: Hono, deps: DaemonRouteDependencies): void {
   registerRoute(
     app,
     {

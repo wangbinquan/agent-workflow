@@ -12,24 +12,15 @@ import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { EvidenceStore } from '@/modules/development-automation/infrastructure/evidenceStore'
-import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import type { AppDeps } from '@/server'
-import { Paths } from '@/util/paths'
+import type { MissionInputUploadOperations } from '@/modules/development-automation/application/missionInputUploadOperations'
 import { ValidationError } from '@/util/errors'
 
 export const MISSION_UPLOAD_MAX_BYTES = 32 * 1024 * 1024
 
-export function mountMissionInputUploadRoutes(app: Hono, deps: AppDeps): void {
-  const store = createSqliteUploadSessionStore(deps.db)
-  // Mounting routes is a pure composition step. Constructing EvidenceStore
-  // creates its blob/bundle directories, so doing that here leaked an
-  // `evidence/` directory into whichever cwd-backed AGENT_WORKFLOW_HOME a test
-  // happened to use before a single upload was requested.
-  let evidence: EvidenceStore | undefined
-  const evidenceStore = (): EvidenceStore =>
-    (evidence ??= new EvidenceStore(join(Paths.root, 'evidence')))
-
+export function mountMissionInputUploadRoutes(
+  app: Hono,
+  operations: MissionInputUploadOperations,
+): void {
   registerRoute(
     app,
     {
@@ -58,15 +49,11 @@ export function mountMissionInputUploadRoutes(app: Hono, deps: AppDeps): void {
       try {
         const tmpFile = join(staging, 'payload')
         writeFileSync(tmpFile, bytes)
-        const blob = await evidenceStore().putBlobFromFile(tmpFile)
-        const row = store.createUpload({
+        const row = await operations.create({
+          absolutePath: tmpFile,
           actorUserId: actor.user.id,
           originalName,
-          bytes: blob.bytes,
-          sha256: blob.sha256,
-          blobRef: blob.sha256,
           idempotencyKey,
-          now: Date.now(),
         })
         return c.json(
           {
@@ -94,7 +81,10 @@ export function mountMissionInputUploadRoutes(app: Hono, deps: AppDeps): void {
       summary: 'Discard an unclaimed temporary upload owned by the caller',
     },
     async (c) => {
-      store.deleteUpload(c.req.param('uploadRef'), actorOf(c).user.id)
+      await operations.delete({
+        uploadRef: c.req.param('uploadRef'),
+        actorUserId: actorOf(c).user.id,
+      })
       return c.json({ ok: true })
     },
   )

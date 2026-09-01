@@ -12,15 +12,12 @@
 // nodeRun 归属校验（防跨任务读）。读取全程走 readPortArtifact（archive 引用
 // containment + worktree lexical/realpath 双防御在原语内部，API 不自己拼根）。
 
-import { and, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { extname } from 'node:path'
 import { actorOf } from '@/auth/actor'
-import { nodeRunOutputs, nodeRuns, taskRepos, tasks } from '@/db/schema'
-import type { AppDeps } from '@/server'
+import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import { registerRoute } from '@/routes/registry'
 import { readPortArtifact } from '@/services/portArtifacts'
-import { canViewTask } from '@/services/taskCollab'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
@@ -40,7 +37,10 @@ const MIME_BY_EXT: Record<string, string> = {
   '.json': 'application/json; charset=utf-8',
 }
 
-export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
+export function mountPortArtifactRoutes(
+  app: Hono,
+  deps: { readonly taskExecutionReadModels: TaskExecutionReadModels },
+): void {
   registerRoute(
     app,
     {
@@ -58,36 +58,26 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
       // （Codex 实现门 P2）。
       const portName = c.req.param('portName')
 
-      const taskRows = await deps.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-      const task = taskRows[0]
-      if (task === undefined) {
-        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-      }
       const actor = actorOf(c)
-      if (!(await canViewTask(deps.db, actor, task))) {
-        // RFC-285 B1：不可见与不存在同形（字节同上面的 missing 分支）。
+      const lookup = await deps.taskExecutionReadModels.portArtifacts.find({
+        actor: {
+          userId: actor.user.id,
+          canReadAllTasks: actor.permissions.has('tasks:read:all'),
+        },
+        taskId,
+        nodeRunId,
+        portName,
+      })
+      if (lookup.status === 'task-not-found') {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
-
-      // nodeRun 归属校验 — 跨任务 runId 与不存在同形 404（RFC-099 同形性原则）。
-      const runRows = await deps.db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.id, nodeRunId), eq(nodeRuns.taskId, taskId)))
-        .limit(1)
-      if (runRows[0] === undefined) {
+      if (lookup.status === 'node-run-not-found') {
         throw new NotFoundError('node-run-not-found', `node run '${nodeRunId}' not found`)
       }
-
-      const outRows = await deps.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, nodeRunId), eq(nodeRunOutputs.portName, portName)))
-        .limit(1)
-      const row = outRows[0]
-      if (row === undefined) {
+      if (lookup.status === 'port-not-found') {
         throw new NotFoundError('port-not-found', `port '${portName}' not found on run`)
       }
+      const artifact = lookup.artifact
 
       const itemParam = c.req.query('item')
       const idx = itemParam === undefined ? undefined : Number(itemParam)
@@ -98,28 +88,17 @@ export function mountPortArtifactRoutes(app: Hono, deps: AppDeps): void {
         )
       }
 
-      // 存量行（无归档）的 content 是 repo0 相对；多 repo 任务的回退根是容器，
-      // 要补 repos[0] 的 dirName 前缀（Codex 实现门 P1）。
-      let legacyRepoDirName = ''
-      if (task.repoCount > 1) {
-        const repoRows = await deps.db
-          .select({ worktreeDirName: taskRepos.worktreeDirName })
-          .from(taskRepos)
-          .where(eq(taskRepos.taskId, taskId))
-        legacyRepoDirName = repoRows[0]?.worktreeDirName ?? ''
-      }
-
       // RFC-005 同款：归档路径锚在 daemon app home（Paths.root getter，惰性读
       // AGENT_WORKFLOW_HOME）——AppDeps 不携带 appHome（对齐 reviews.ts appHomeFor）。
       // 选择性读取（Codex 实现门 P2）：元数据请求零字节读，item 请求只读该下标。
       const read = readPortArtifact({
         appHome: Paths.root,
         taskId,
-        archiveJson: row.archiveJson ?? null,
-        content: row.content,
-        kind: row.kind ?? null,
-        fallbackWorktreeRoot: task.worktreePath,
-        legacyRepoDirName,
+        archiveJson: artifact.archiveJson,
+        content: artifact.content,
+        kind: artifact.kind,
+        fallbackWorktreeRoot: artifact.worktreePath,
+        legacyRepoDirName: artifact.legacyRepoDirName,
         only: idx === undefined ? 'meta' : idx,
       })
 

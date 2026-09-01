@@ -18,10 +18,10 @@ import { SETTINGS_NUMERIC_BOUNDS } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { loadConfig } from '@/config'
 import { registerRoute } from '@/routes/registry'
-import type { AppDeps } from '@/server'
-import { previewArchivableTrees, runManualTaskArchive } from '@/services/taskArchive'
+import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
+import { Paths } from '@/util/paths'
 
 const RETENTION_BOUND = SETTINGS_NUMERIC_BOUNDS['taskArchive.retentionDays']
 // 单次调用的硬上限。归档跑在守护进程那条**同步**的 SQLite 连接上,一次吞下上万棵
@@ -36,7 +36,12 @@ const ArchiveRequestSchema = z.object({
   dryRun: z.boolean().optional(),
 })
 
-export function mountTaskArchiveRoutes(app: Hono, deps: AppDeps): void {
+export interface TaskArchiveRouteDependencies {
+  readonly configPath: string
+  readonly taskArchiveMaintenance: TaskArchiveMaintenanceCommand
+}
+
+export function mountTaskArchiveRoutes(app: Hono, deps: TaskArchiveRouteDependencies): void {
   registerRoute(
     app,
     {
@@ -67,7 +72,7 @@ export function mountTaskArchiveRoutes(app: Hono, deps: AppDeps): void {
       }
 
       if (body.dryRun !== false) {
-        const trees = await previewArchivableTrees(deps.db, retentionDays, maxTrees)
+        const trees = await deps.taskArchiveMaintenance.preview({ retentionDays, maxTrees })
         return c.json({
           dryRun: true,
           retentionDays,
@@ -78,11 +83,18 @@ export function mountTaskArchiveRoutes(app: Hono, deps: AppDeps): void {
       }
 
       const actor = actorOf(c)
-      const result = await runManualTaskArchive(deps.db, {
-        retentionDays,
-        maxTrees,
-        actorUserId: actor.user.id,
-      })
+      const result = await deps.taskArchiveMaintenance.runManual(
+        {
+          retentionDays,
+          maxTrees,
+          actorUserId: actor.user.id,
+        },
+        {
+          archiveDir: Paths.taskArchiveDir,
+          runsDir: Paths.runsDir,
+          logsDir: Paths.logsDir,
+        },
+      )
       return c.json({
         dryRun: false,
         retentionDays,

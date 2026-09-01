@@ -11,6 +11,7 @@
 import type { Context, Hono } from 'hono'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
 import {
+  BUNDLE_RESOURCE_TYPES,
   PackageImportReceiptSchema,
   PackagePreviewSchema,
   SKILL_ZIP_LIMITS,
@@ -59,7 +60,7 @@ const HumanMemberMappingsSchema = z.array(
 const PackageSecretInputsSchema = z.array(
   z
     .object({
-      resourceType: z.string().min(1),
+      resourceType: z.enum(BUNDLE_RESOURCE_TYPES),
       resourceName: z.string().min(1),
       field: z.string().min(1),
       value: z.string(),
