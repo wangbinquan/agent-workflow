@@ -384,8 +384,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1908,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1910,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-349 修复数据库迁移源冻结与 provider-neutral runtime bootstrap，新增两个由既有 owner 管理且受 admission/fail-loud guard 约束的写入口。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -405,8 +408,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 365,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 366,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-349 将 SQLite/PostgreSQL runtime registry boot 收敛为一个显式 provider-neutral initialization job；它替代分支内隐式启动，不新增常驻 timer。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -475,12 +481,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25608,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25622,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 新增 SQLite 历史迁移兼容执行器、provider-neutral runtime registry boot 及精确合同；所有符号均归既有 system-operations/runtime-management owner。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:60d61405d0fd7c44b2c3f0e47195ae605e45caa57611a0226b5da77facd2d904",
+    "sourceDigest": "sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +502,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "907d44f3e53590833d6fafc25bad8b2677a65054",
-    "contentDigest": "sha256:d0b0f8663e15898d97f842e572ebcb4d59f07e29071c2cb63f7b5353cff40718",
+    "currentSnapshotSha": "b7f4a887e006fe607d15b7d2f97cd60053377706",
+    "contentDigest": "sha256:7a930ea7e3eadfb5a64b9781dfb814ac24f0e43a7515a3d3540518d192bd283c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

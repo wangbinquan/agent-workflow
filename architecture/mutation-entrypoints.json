@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1908,
+    "entries": 1910,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -35843,6 +35843,56 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#RuntimeRegistryBootInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#RuntimeRegistryBootInput",
+      "symbol": "RuntimeRegistryBootInput",
+      "targetContext": "platform",
+      "targetLayer": "runtime-registry"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#RuntimeRegistryBootOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#RuntimeRegistryBootOperations",
+      "symbol": "RuntimeRegistryBootOperations",
+      "targetContext": "platform",
+      "targetLayer": "runtime-registry"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryOperations.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/runtime-registry/application/runtimeRegistryOperations.ts#CreateRuntimeInput",
@@ -45492,7 +45542,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60d61405d0fd7c44b2c3f0e47195ae605e45caa57611a0226b5da77facd2d904",
+  "sourceDigest": "sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

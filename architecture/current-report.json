@@ -3,12 +3,12 @@
   "manifestDenominators": {
     "ambientWiring": 493,
     "architectureExceptions": 6042,
-    "backgroundJobs": 365,
+    "backgroundJobs": 366,
     "crossContextImports": 6246,
     "facades": 354,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25608,
-    "mutationEntrypoints": 1908,
+    "moduleSymbolOwners": 25622,
+    "mutationEntrypoints": 1910,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 946,
     "transactionExternalEffects": 476
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1879,
+    "backendProductionFiles": 1881,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 365,
+    "backgroundEntries": 366,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -165,5 +165,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60d61405d0fd7c44b2c3f0e47195ae605e45caa57611a0226b5da77facd2d904"
+  "sourceDigest": "sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70"
 }

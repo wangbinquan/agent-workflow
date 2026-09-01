@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:60d61405d0fd7c44b2c3f0e47195ae605e45caa57611a0226b5da77facd2d904`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,7 +10,7 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1879 |
+| backend production TS 文件 | 1881 |
 | `services/` 文件 | 354 |
 | `modules/**` 文件 / 非空 context | 1247 / 16 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
@@ -18,7 +18,7 @@
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 493 |
-| background work entries | 365 |
+| background work entries | 366 |
 | direct native `setInterval`（call / files） | 24 / 21 |
 | direct native timers（全部） | 78 |
 | RFC-317 boundary census（inbound / outbound） | 323 / 11 |
@@ -31,12 +31,12 @@
 | --- | --- |
 | `ambientWiring` | 493 |
 | `architectureExceptions` | 6042 |
-| `backgroundJobs` | 365 |
+| `backgroundJobs` | 366 |
 | `crossContextImports` | 6246 |
 | `facades` | 354 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25608 |
-| `mutationEntrypoints` | 1908 |
+| `moduleSymbolOwners` | 25622 |
+| `mutationEntrypoints` | 1910 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 946 |
 | `transactionExternalEffects` | 476 |
@@ -132,8 +132,8 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 204 |
-| platform | 125 |
+| task-execution | 205 |
+| platform | 126 |
 | identity-access | 52 |
 | resource-catalog | 45 |
 | runtime-management | 45 |

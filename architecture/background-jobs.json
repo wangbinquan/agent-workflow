@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2471",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2472",
       "kind": "register-call",
-      "line": 2471,
+      "line": 2472,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3127",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3128",
       "kind": "register-call",
-      "line": 3127,
+      "line": 3128,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:724",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:735",
       "kind": "register-call",
-      "line": 724,
+      "line": 735,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:730",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:741",
       "kind": "register-call",
-      "line": 730,
+      "line": 741,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2689",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2690",
       "kind": "register-call",
-      "line": 2689,
+      "line": 2690,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:882",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:893",
       "kind": "register-call",
-      "line": 882,
+      "line": 893,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1520",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1531",
       "kind": "register-call",
-      "line": 1520,
+      "line": 1531,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -80,9 +80,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2702",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2703",
       "kind": "global-setter",
-      "line": 2702,
+      "line": 2703,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:739",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:750",
       "kind": "global-setter",
-      "line": 739,
+      "line": 750,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -5443,8 +5443,8 @@
   "denominator": {
     "ambientWiring": 493,
     "disabled": 12,
-    "entries": 365,
-    "executionLocal": 51,
+    "entries": 366,
+    "executionLocal": 52,
     "longRunning": 81,
     "managed": 11,
     "periodic": 221
@@ -11074,6 +11074,29 @@
     },
     {
       "dependencies": [
+        "config"
+      ],
+      "file": "packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/runtime-registry/application/runtimeRegistryBoot.ts#initializeRuntimeRegistryBoot",
+      "phase": "before-ready",
+      "symbol": "initializeRuntimeRegistryBoot",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
         "db"
       ],
       "file": "packages/backend/src/platform/runtime-registry/composition.ts",
@@ -13510,5 +13533,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60d61405d0fd7c44b2c3f0e47195ae605e45caa57611a0226b5da77facd2d904"
+  "sourceDigest": "sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70"
 }
