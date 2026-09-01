@@ -1,6 +1,6 @@
 import type { DbClient } from '@/db/client'
-import { WorkgroupSchema } from '@agent-workflow/shared'
 import { startExecution } from '@/services/execution/executor'
+import { FrozenWorkgroupGroupSchema } from './legacyCallClosure'
 import { startWorkgroupTaskFromFrozen } from '@/services/workgroup/launch'
 import type { ChildExecutionLaunchOperations } from '../application/ports/childExecutionLaunchOperations'
 import type {
@@ -52,7 +52,7 @@ export function createSqliteChildExecutionLaunchOperations(
       await startWorkgroupTaskFromFrozen(
         db,
         {
-          frozenGroup: WorkgroupSchema.parse(request.frozenGroup.group),
+          frozenGroup: FrozenWorkgroupGroupSchema.parse(request.frozenGroup.group),
           workgroupId: request.frozenGroup.id,
           goal: request.goal,
           name: request.name,

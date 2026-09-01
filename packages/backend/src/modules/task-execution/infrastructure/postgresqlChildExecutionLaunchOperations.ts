@@ -1,6 +1,5 @@
 import {
   WorkgroupRuntimeConfigSchema,
-  WorkgroupSchema,
   WorkflowDefinitionSchema,
   WORKFLOW_SCHEMA_VERSION,
   buildClarifyEdges,
@@ -10,7 +9,6 @@ import {
   type StartTask,
   type TaskCatalogVisibility,
   type TaskLaunchOrigin,
-  type Workgroup,
   type WorkgroupRuntimeConfig,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
@@ -29,6 +27,10 @@ import {
   workgroupTaskState,
 } from '@/db/schema'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
+import {
+  FrozenWorkgroupGroupSchema,
+  type FrozenWorkgroupGroup,
+} from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -172,7 +174,10 @@ function parseLineage(raw: string | null, executionLineageId: string): readonly 
   ]
 }
 
-function buildWorkgroupRuntimeConfig(group: Workgroup, goal: string): WorkgroupRuntimeConfig {
+function buildWorkgroupRuntimeConfig(
+  group: FrozenWorkgroupGroup,
+  goal: string,
+): WorkgroupRuntimeConfig {
   return WorkgroupRuntimeConfigSchema.parse({
     workgroupId: group.id,
     workgroupName: group.name,
@@ -258,7 +263,7 @@ async function prepareWorkgroupSubject(
 ): Promise<
   Readonly<{ task: StartTask; subject: ChildLaunchSubject; collaborators: readonly string[] }>
 > {
-  const group = WorkgroupSchema.parse(request.frozenGroup.group)
+  const group = FrozenWorkgroupGroupSchema.parse(request.frozenGroup.group)
   if (group.id !== request.frozenGroup.id || group.version !== request.frozenGroup.version) {
     throw new ValidationError(
       'workgroup-frozen-identity-mismatch',

@@ -267,6 +267,25 @@ export async function resolveIdentity(
   return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
 }
 
+/**
+ * In-process daemon identity for daemon-owned background workers.
+ *
+ * `resolveIdentity`'s legacy daemon-token branch answers a different question:
+ * may an **external HTTP caller** that presents the launch token act as the
+ * daemon? That branch closes by design once the first administrator completes
+ * bootstrap. A worker composed inside the daemon presents no token at all, so
+ * routing it through the token branch made it fail closed on every real
+ * install — RFC-238's MCP runtime-test `loadMcp` threw
+ * `mcp-runtime-test-authority-not-admitted` and the turn hung in flight
+ * forever (only in-memory test databases, which keep
+ * `allowLegacyDaemonTestAccess`, stayed green).
+ */
+export function admitDaemonIdentity(
+  identityAccess: DirectAuthorityAdmissionRuntime,
+): Promise<DirectAuthorityIdentity | null> {
+  return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
+}
+
 export async function resolveActor(
   authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   raw: string,

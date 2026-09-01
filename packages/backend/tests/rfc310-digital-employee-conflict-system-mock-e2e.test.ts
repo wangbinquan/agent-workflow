@@ -526,7 +526,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
           mergeableState: 'conflict',
         },
       })
-      eventCenter.commands.observe({
+      await eventCenter.commands.observe({
         sourceRef: { id: 'code-host.activity', revision: 1 },
         eventTypeRef: { id: 'development.conflict-updated', revision: 2 },
         subject: { typeId: 'merge-request', subjectRef: mergeRequestRef },

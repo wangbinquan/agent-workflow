@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2657,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25622
+    "symbolsIncludingFileRoots": 25626
   },
   "entries": [
     {
@@ -2827,6 +2827,18 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#admitDaemonIdentity",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "admitDaemonIdentity",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -95747,6 +95759,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#WorkgroupRuntimeConfigSource",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkgroupRuntimeConfigSource",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file",
@@ -131694,6 +131718,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "frozenWorkgroupFromClosure",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#FrozenWorkgroupGroup",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FrozenWorkgroupGroup",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#FrozenWorkgroupGroupSchema",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FrozenWorkgroupGroupSchema",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -308136,5 +308184,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70"
+  "sourceDigest": "sha256:1b98494107f229dc4f4d06f5589e01f51124cdd4b56c7c5b392935cd414dccdd"
 }

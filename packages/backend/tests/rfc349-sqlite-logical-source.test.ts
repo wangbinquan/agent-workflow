@@ -74,6 +74,26 @@ describe('RFC-349 SQLite logical source', () => {
     }
   })
 
+  // RFC-349 —— hosted `postgresql-evidence` 的 large migration 只报了
+  // `sqlite-source-mutated`，无法区分「真的有写手漏出冻结窗」与「文件只是被
+  // checkpoint 了一下」（实测：另一条连接跑一次裸 `PRAGMA wal_checkpoint`，零逻辑
+  // 变更也会把 reader 的 `data_version` 加一）。判据本身不放宽，但必须说清是哪个
+  // 信号动了，否则 4.3GB 迁移失败后无从归因。
+  test('names the exact drift signal so a hosted failure is attributable', async () => {
+    const contract = buildLogicalSchemaContract()
+    const path = fixturePath()
+    const source = openSqliteLogicalSource({ path, contract })
+    try {
+      const snapshot = await source.preflight()
+      const writer = new Database(path)
+      writer.exec("UPDATE users SET display_name = 'Drifted' WHERE id = 'usr-1'")
+      writer.close()
+      await expect(source.assertUnchanged(snapshot)).rejects.toThrow(/data_version \d+ -> \d+/)
+    } finally {
+      await source.close()
+    }
+  })
+
   test('runs the production 184-table source scan and chunk reads through a Worker', async () => {
     const contract = buildLogicalSchemaContract()
     const path = fixturePath()

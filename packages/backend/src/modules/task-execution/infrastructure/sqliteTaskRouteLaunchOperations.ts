@@ -10,7 +10,19 @@ import { assertCanReplaySourceTask } from '@/services/taskCollab'
 export interface SqliteTaskRouteLaunchDependencies {
   readonly db: DbClient
   readonly configPath: string
-  readonly execution: StartExecutionDeps
+  /**
+   * Actor-scoped launch dependencies. A single frozen `StartExecutionDeps`
+   * cannot serve this seam: `StartTaskDeps.actorUserId` is what `startTask`
+   * writes into `tasks.owner_user_id` (and what RFC-320 reads for the creator's
+   * Git identity), so a bootstrap-frozen `SYSTEM_USER_ID` silently made every
+   * REST agent/workgroup launch ownerless — the launcher then failed their own
+   * `GET /api/tasks/:id` (`task-not-found`) and could not add collaborators.
+   * The bootstrap owns composition; only the actor id varies per request, the
+   * same shape `trigger.executionFor` already uses.
+   */
+  readonly executionFor: (
+    actor: Parameters<AgentRouteTaskLaunchOperations['launch']>[0],
+  ) => StartExecutionDeps
 }
 
 export function createSqliteTaskRouteLaunchOperations(
@@ -53,7 +65,7 @@ export function createSqliteTaskRouteLaunchOperations(
                   },
                 }),
           },
-          input.execution,
+          input.executionFor(actor),
         )
       },
     }),
@@ -72,7 +84,7 @@ export function createSqliteTaskRouteLaunchOperations(
             invoker: { type: 'user', launchKind: 'direct-json' },
             payload: command.payload,
           },
-          input.execution,
+          input.executionFor(actor),
         )
       },
     }),

@@ -3,6 +3,7 @@ import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/publ
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
+import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
 import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
@@ -42,6 +43,8 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
     readonly taskExecutionResources: TaskExecutionResourceBinding
   }>
   readonly repositoryPublicationTransport: RepositoryPublicationTransport
+  /** Bootstrap-selected credential reader; never reconstructed from SQLite here. */
+  readonly codeHostConnections?: CodeHostConnectionsService
 }): TaskExecutionRuntimeParticipants {
   const runtimeComponents = Object.freeze({
     wrapperRuntimeFactory: composeWrapperRuntime,
@@ -69,6 +72,9 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
             : { dynamicWorkflow: input.dynamicWorkflow }),
           processConcurrencyScope: input.db,
           ...(input.identityAccess === undefined ? {} : { identityAccess: input.identityAccess }),
+          ...(input.codeHostConnections === undefined
+            ? {}
+            : { codeHostConnections: input.codeHostConnections }),
           repositoryPublicationTransport: input.repositoryPublicationTransport,
         },
         topology,

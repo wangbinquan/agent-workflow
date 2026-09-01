@@ -100,8 +100,27 @@ export function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): {
 }
 
 /** Freeze the resource-level group into the task-owned runtime config copy. */
+/** Exactly the fields the runtime config is derived from. A frozen call-closure
+ *  snapshot (RFC-345 `TaskExecutionWorkgroupSnapshot`) carries these and no row
+ *  metadata, so the frozen launch face must not demand the full `Workgroup`. */
+export type WorkgroupRuntimeConfigSource = Pick<
+  Workgroup,
+  | 'id'
+  | 'name'
+  | 'mode'
+  | 'outputContract'
+  | 'leaderMemberId'
+  | 'switches'
+  | 'maxRounds'
+  | 'completionGate'
+  | 'clarifyBudget'
+  | 'fanOut'
+  | 'instructions'
+  | 'members'
+>
+
 export function buildWorkgroupRuntimeConfig(
-  group: Workgroup,
+  group: WorkgroupRuntimeConfigSource,
   goal: string,
 ): WorkgroupRuntimeConfig {
   return WorkgroupRuntimeConfigSchema.parse({

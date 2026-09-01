@@ -1,7 +1,6 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import { Buffer } from 'node:buffer'
 import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
@@ -105,7 +104,7 @@ import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '@/modules/inte
 import { startBatchImportGc } from '@/services/repoBatchImport'
 import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { resolveIdentity } from '@/auth/session'
+import { admitDaemonIdentity } from '@/auth/session'
 import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
@@ -1731,14 +1730,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           persistence: composeSqliteDynamicWorkflowPersistence(db),
           validationContext: { load: () => buildWorkflowValidationContext(db) },
         }),
+        codeHostConnections: repositoryMetadataConnections,
         repositoryPublicationTransport,
       },
       routeLaunch: {
         configPath: Paths.config,
-        execution: Object.freeze({
-          ...taskStartDepsFor(SYSTEM_USER_ID),
-          deferRepoPreparation: true,
-        }),
+        executionFor: (actor) =>
+          Object.freeze({
+            ...taskStartDepsFor(actor.user.id),
+            deferRepoPreparation: true,
+          }),
       },
       routes: ({ readModels }) => {
         const routeCollaborationContext = createCollaborationCommandContext({
@@ -2134,12 +2135,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ...composeSqliteMcpRuntimeTestProvider(db),
     async loadMcp(mcpId) {
       if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
-      const identity = await resolveIdentity(
-        providerCore.authRuntime,
-        token,
-        Buffer.from(token, 'utf8'),
-        identityAccess,
-      )
+      const identity = await admitDaemonIdentity(identityAccess)
       if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
       return mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
     },

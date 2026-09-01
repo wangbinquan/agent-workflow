@@ -165,14 +165,28 @@ export function openSqliteLogicalSource(input: {
       const pageCount = scalarNumber(db, 'PRAGMA page_count')
       const fileBytes =
         input.path === ':memory:' ? pageCount * expected.pageSize : statSync(input.path).size
-      if (
-        dataVersion !== expected.dataVersion ||
-        pageCount !== expected.pageCount ||
-        fileBytes !== expected.fileBytes
-      ) {
+      // Name the exact signal that moved. A bare "generation changed" verdict is
+      // unactionable on a multi-GB hosted migration: `data_version` flips on any
+      // *other connection writing the file at all* (a bare
+      // `PRAGMA wal_checkpoint` bumps it with zero logical change), whereas
+      // page_count/fileBytes only move when the file itself grows or is
+      // rewritten. Which of the three fired is what tells the operator whether a
+      // writer escaped the freeze or the file was merely checkpointed.
+      const drift = [
+        ...(dataVersion === expected.dataVersion
+          ? []
+          : [`data_version ${expected.dataVersion} -> ${dataVersion}`]),
+        ...(pageCount === expected.pageCount
+          ? []
+          : [`page_count ${expected.pageCount} -> ${pageCount}`]),
+        ...(fileBytes === expected.fileBytes
+          ? []
+          : [`file_bytes ${expected.fileBytes} -> ${fileBytes}`]),
+      ]
+      if (drift.length > 0) {
         throw new SqliteLogicalSourceError(
           'sqlite-source-mutated',
-          'SQLite source generation changed after the migration freeze',
+          `SQLite source generation changed after the migration freeze (${drift.join(', ')})`,
         )
       }
     },

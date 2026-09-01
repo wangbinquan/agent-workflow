@@ -1675,7 +1675,9 @@ describe('RFC-294 W0-R current modules ratchet', () => {
 
   test('module capability ownership cannot be structurally forged or serialized', () => {
     expect(capabilityForgeViolations(modules)).toEqual(CAPABILITY_COMPATIBILITY_DEBT)
-  }, 30_000)
+    // RFC-349 把 216 个 provider adapter 加进 modules/**，这条全量 AST 扫描在
+    // hosted runner 上实测 34.5s(ubuntu)/49.4s(macOS)，30s 预算已不足以覆盖语料。
+  }, 180_000)
 
   test('current public contracts stay below the god-surface ceiling or match one live exact exception', () => {
     const measured = godSurfaceViolations(modules)

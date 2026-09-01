@@ -41974,6 +41974,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:68465e3f8c29bc0fdb8f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/codeHost/connections.ts#CodeHostConnectionsService",
+      "toPath": "packages/backend/src/services/codeHost/connections.ts",
+      "toSymbol": "CodeHostConnectionsService",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -96852,6 +96869,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f262378e7c2f238a0a2e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/codeHost/connections.ts#CodeHostConnectionsService",
+      "toPath": "packages/backend/src/services/codeHost/connections.ts",
+      "toSymbol": "CodeHostConnectionsService",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
       "fromSymbol": "$file",
@@ -102716,9 +102750,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6042,
+    "architectureExceptions": 6044,
     "implementationSccs": 0,
-    "observedEdges": 6246,
+    "observedEdges": 6248,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -143621,6 +143655,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file",
+      "id": "import:68465e3f8c29bc0fdb8f",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-outbound",
+      "specifier": "@/services/codeHost/connections",
+      "syntax": "static-import",
+      "targetSymbol": "CodeHostConnectionsService",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/codeHost/connections.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/codeHost/connections.ts#CodeHostConnectionsService"
     },
     {
       "edgeKind": "value",
@@ -197064,6 +197114,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts#$file",
+      "id": "import:f262378e7c2f238a0a2e",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-outbound",
+      "specifier": "@/services/codeHost/connections",
+      "syntax": "static-import",
+      "targetSymbol": "CodeHostConnectionsService",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/codeHost/connections.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/codeHost/connections.ts#CodeHostConnectionsService"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#$file",
@@ -203200,7 +203266,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cf753bb202b8832597d09b3f680a0f5a95791107b50c01ff9bc65676a1a55b70",
+  "sourceDigest": "sha256:1b98494107f229dc4f4d06f5589e01f51124cdd4b56c7c5b392935cd414dccdd",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

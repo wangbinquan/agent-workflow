@@ -20,6 +20,7 @@ import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
 import { getWorkgroupById } from '@/services/workgroups'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
 import { ValidationError } from '@/util/errors'
+import type { z } from 'zod'
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
@@ -27,6 +28,7 @@ import {
   detectCallCycles,
   migrateWorkflowDefinitionToLatest,
   WorkflowDefinitionSchema,
+  WorkgroupSchema,
   type ResourceRefAst,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
@@ -77,6 +79,24 @@ export interface FrozenWorkgroupRef {
   version: number
   group: unknown
 }
+
+/**
+ * The exact shape a frozen workgroup is stored in and re-validated against.
+ *
+ * RFC-345 narrowed the frozen snapshot to the launch-relevant fields
+ * (`TaskExecutionWorkgroupSnapshot`), so a stored closure carries no
+ * `schemaVersion` / `createdAt` / `updatedAt` row metadata. Validating the
+ * payload with the full row `WorkgroupSchema` therefore rejects every
+ * call-workgroup child launch — a `child-launch-failed` on three "Required"
+ * issues that never reach the roster. Older closures that still carry the row
+ * metadata keep parsing: zod strips the extra keys.
+ */
+export const FrozenWorkgroupGroupSchema = WorkgroupSchema.omit({
+  schemaVersion: true,
+  createdAt: true,
+  updatedAt: true,
+})
+export type FrozenWorkgroupGroup = z.infer<typeof FrozenWorkgroupGroupSchema>
 
 /**
  * RFC-271 T6e（决策 28）—— 冻结结果按**边**键控，不再按名字。

@@ -10,14 +10,13 @@ import {
   serializeWorkflowDefinitionStorageV1,
   type Config,
 } from '@agent-workflow/shared'
-import { Buffer } from 'node:buffer'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
-import { resolveIdentity } from '@/auth/session'
+import { admitDaemonIdentity } from '@/auth/session'
 import {
   createPostgresqlIdentityAccessCrossContextBindings,
   composePostgresqlOidcIdentityOperations,
@@ -459,12 +458,7 @@ export async function composePostgresqlDaemonApplication(
     ...composePostgresqlMcpRuntimeTestProvider(input.db),
     async loadMcp(mcpId) {
       if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
-      const identity = await resolveIdentity(
-        core.authRuntime,
-        input.token,
-        Buffer.from(input.token, 'utf8'),
-        identityAccess,
-      )
+      const identity = await admitDaemonIdentity(identityAccess)
       if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
       return await mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
     },
@@ -796,6 +790,7 @@ export async function composePostgresqlDaemonApplication(
         delegatedRequests: identityAccess.delegatedRequests,
         taskExecutionResources,
       }),
+      codeHostConnections,
       repositoryPublicationTransport,
       dynamicWorkflow: Object.freeze({
         persistence: composePostgresqlDynamicWorkflowPersistence(input.db),

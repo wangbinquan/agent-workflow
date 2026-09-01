@@ -3,6 +3,7 @@ import { composePostgresqlMemoryInjectionQueries } from '@/modules/memory/compos
 import type { TaskDagCollaborationOperations } from '@/modules/collaboration/public/participants'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
+import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { composePostgresqlRuntimeRegistryOperations } from '@/platform/runtime-registry/composition'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
@@ -43,6 +44,8 @@ export interface PostgresqlTaskExecutionRuntimeDependencies {
     readonly taskExecutionResources: TaskExecutionResourceBinding
   }>
   readonly repositoryPublicationTransport: RepositoryPublicationTransport
+  /** Bootstrap-selected credential reader; PostgreSQL execution never opens a SQLite fallback. */
+  readonly codeHostConnections: CodeHostConnectionsService
   readonly dynamicWorkflow?: Readonly<{
     readonly persistence: DynamicWorkflowPersistence
     readonly validationContext: DynamicWorkflowValidationContextSource
@@ -117,6 +120,7 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
           childLaunch,
           processConcurrencyScope: dependencies.processConcurrencyScope,
           identityAccess: dependencies.identityAccess,
+          codeHostConnections: dependencies.codeHostConnections,
           repositoryPublicationTransport: dependencies.repositoryPublicationTransport,
           ...(dependencies.dynamicWorkflow === undefined
             ? {}

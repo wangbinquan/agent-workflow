@@ -197,8 +197,8 @@ describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgra
 
   test('openDb source runs migrations with foreign_keys OFF (防回退到 FK-ON 级联)', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'client.ts'), 'utf8')
-    // The FK-OFF toggle must precede migrate() so a 12-step rebuild's DROP TABLE
+    // The FK-OFF toggle must precede migrateSqlite() so a 12-step rebuild's DROP TABLE
     // can't cascade-delete child rows.
-    expect(src).toMatch(/foreign_keys = OFF[\s\S]{0,400}migrate\(/)
+    expect(src).toMatch(/foreign_keys = OFF[\s\S]{0,400}migrateSqlite\(/)
   })
 })

@@ -1451,8 +1451,12 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     const pipelineClassifierCount = () =>
       projection.rounds.filter((round) => round.workItemRef === 'classify-pipeline').length
     const classifierCountBeforeInconclusiveFacts = pipelineClassifierCount()
-    const emitParentPipelineWake = (suffix: string, summary: string, occurredAt: number) => {
-      eventCenter.commands.observe({
+    const emitParentPipelineWake = async (
+      suffix: string,
+      summary: string,
+      occurredAt: number,
+    ): Promise<void> => {
+      await eventCenter.commands.observe({
         sourceRef: { id: 'code-host.activity', revision: 1 },
         eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
         subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
@@ -1483,7 +1487,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    emitParentPipelineWake('partial', 'provider omitted the head binding', Date.now())
+    await emitParentPipelineWake('partial', 'provider omitted the head binding', Date.now())
     await driveUntilIdle()
     projection = JSON.parse(
       (await runtime.queries.getCase(caseId)).projectionJson,
@@ -1503,7 +1507,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       status: 503,
       times: 1,
     })
-    emitParentPipelineWake(
+    await emitParentPipelineWake(
       'transient-outage',
       'provider returns one transient outage before recovering',
       Date.now() + 1,
@@ -1540,7 +1544,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    emitParentPipelineWake(
+    await emitParentPipelineWake(
       'wrong-head',
       'provider returned a different head than the MR snapshot',
       Date.now() + 2,
@@ -1573,7 +1577,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    emitParentPipelineWake(
+    await emitParentPipelineWake(
       'wrong-target',
       'provider returned gates bound to an advanced target snapshot',
       Date.now() + 3,
@@ -1623,7 +1627,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
@@ -1724,7 +1728,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: {
@@ -1747,7 +1751,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     ).toMatchObject({ readyToMerge: true })
 
     mrStates.set('repo-system-mock-dependency', 'merged')
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: {
@@ -1799,7 +1803,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
@@ -1840,7 +1844,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
@@ -1877,7 +1881,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       idempotencyKey: String(pendingApproval.state.idempotencyKey),
       statuses: ['approved'],
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'development.approval-state', revision: 1 },
       eventTypeRef: { id: 'development.approval-updated', revision: 1 },
       subject: {
@@ -1941,7 +1945,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     )
     const advancedTargetSha = git(baselineRepo, 'rev-parse', 'HEAD')
     expect(advancedTargetSha).not.toBe(expectedTargetSha)
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
@@ -1986,7 +1990,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         },
       ],
     })
-    emitParentPipelineWake(
+    await emitParentPipelineWake(
       'target-advanced-pass',
       'the source head passed against the advanced target snapshot',
       Date.now() + 7,
@@ -2008,7 +2012,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     ).toMatchObject({ readyToMerge: true, targetSha: advancedTargetSha })
 
     mrStates.set('repo-system-mock', 'merged')
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock!42' },
@@ -2121,7 +2125,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           },
         ],
       })
-      eventCenter.commands.observe({
+      await eventCenter.commands.observe({
         sourceRef: { id: 'code-host.activity', revision: 1 },
         eventTypeRef: { id: 'development.pipeline-check-due', revision: 1 },
         subject: {
@@ -2155,7 +2159,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
           status: 503,
           times: 1,
         })
-        eventCenter.commands.observe({
+        await eventCenter.commands.observe({
           sourceRef: { id: 'development.approval-state', revision: 1 },
           eventTypeRef: { id: 'development.approval-updated', revision: 1 },
           subject: {
@@ -2182,7 +2186,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
         idempotencyKey: String(terminalApproval.state.idempotencyKey),
         statuses: [approvalStatus],
       })
-      eventCenter.commands.observe({
+      await eventCenter.commands.observe({
         sourceRef: { id: 'development.approval-state', revision: 1 },
         eventTypeRef: { id: 'development.approval-updated', revision: 1 },
         subject: {
@@ -2291,7 +2295,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     )
 
     mrStates.set('repo-system-mock-delivery-only', 'merged')
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: 'repo-system-mock-delivery-only!126' },
@@ -2392,7 +2396,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       body: '第二轮回复：修复后请说明对应提交。',
       actor: { username: 'maintainer-reviewer' },
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.review-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: `repo-system-mock-review!${reviewMrRef}` },
@@ -2438,7 +2442,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       ),
     ).toBe(true)
     const replyCountBeforeReplay = reviewComments.length
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.review-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: `repo-system-mock-review!${reviewMrRef}` },
@@ -2461,7 +2465,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       number: reviewMrNumber,
       state: 'merged',
     })
-    eventCenter.commands.observe({
+    await eventCenter.commands.observe({
       sourceRef: { id: 'code-host.activity', revision: 1 },
       eventTypeRef: { id: 'development.lifecycle-updated', revision: 2 },
       subject: { typeId: 'merge-request', subjectRef: `repo-system-mock-review!${reviewMrRef}` },

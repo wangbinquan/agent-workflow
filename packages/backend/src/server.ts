@@ -4,7 +4,6 @@
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
-import { Buffer } from 'node:buffer'
 import type {
   AclResourceType,
   DatabaseConfig,
@@ -27,7 +26,7 @@ import {
   createSqliteTokenCallAudit,
 } from '@/auth/composition'
 import type { SecretBox } from '@/auth/secretBox'
-import { multiAuth, resolveIdentity } from '@/auth/session'
+import { admitDaemonIdentity, multiAuth } from '@/auth/session'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
@@ -1912,12 +1911,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       ...composeSqliteMcpRuntimeTestProvider(effectiveDeps.db),
       async loadMcp(mcpId) {
         if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
-        const identity = await resolveIdentity(
-          effectiveDeps.authRuntime,
-          effectiveDeps.token,
-          Buffer.from(effectiveDeps.token, 'utf8'),
-          identityAccess,
-        )
+        const identity = await admitDaemonIdentity(identityAccess)
         if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
         return mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
       },
@@ -2456,17 +2450,17 @@ function composeSqliteApiRouteMounts(
     createSqliteTaskRouteLaunchOperations({
       db: deps.db,
       configPath: deps.configPath,
-      execution: {
+      executionFor: (actor) => ({
         ...buildStartTaskDeps(
           deps.db,
           schedulerDriver,
           deps.configPath,
-          SYSTEM_USER_ID,
+          actor.user.id,
           deps.secretBox,
           identityAccess,
         ),
         agentLaunchResources,
-      },
+      }),
     })
   const workgroupTaskRoom = composeSqliteWorkgroupTaskRoom({
     db: deps.db,

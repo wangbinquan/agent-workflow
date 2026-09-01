@@ -2168,9 +2168,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
       .where(eq(employeeCases.id, launched.caseRef.id))
       .run()
 
-    const observeMrEvent = (eventTypeId: string, dedupeKey: string) => {
+    const observeMrEvent = async (eventTypeId: string, dedupeKey: string): Promise<void> => {
       now += 1
-      eventCenter.commands.observe({
+      await eventCenter.commands.observe({
         sourceRef: { id: 'code-host.activity', revision: 1 },
         eventTypeRef: {
           id: eventTypeId,
@@ -2183,9 +2183,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
         payloadArtifactRef: null,
       })
     }
-    observeMrEvent('development.pipeline-check-due', 'pipeline-red:1')
-    observeMrEvent('development.pipeline-check-due', 'pipeline-red:2')
-    observeMrEvent('development.review-updated', 'review-comment:1')
+    await observeMrEvent('development.pipeline-check-due', 'pipeline-red:1')
+    await observeMrEvent('development.pipeline-check-due', 'pipeline-red:2')
+    await observeMrEvent('development.review-updated', 'review-comment:1')
     for (let index = 0; index < 12; index += 1) await runtime.worker.pumpOneDelivery()
     projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
     expect(
@@ -2229,7 +2229,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
     expect(projection.case.currentWorkItemRef).toBe('repair-feedback')
 
     // Lifecycle is the only declared preemptor: it invalidates stale repair continuation.
-    observeMrEvent('development.lifecycle-updated', 'lifecycle-head-changed:1')
+    await observeMrEvent('development.lifecycle-updated', 'lifecycle-head-changed:1')
     for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
     expect(await runtime.worker.planOneReaction()).not.toBeNull()
     projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
@@ -2314,7 +2314,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       })
       .run()
     observedMergeRequestStatus = 'merged'
-    observeMrEvent('development.lifecycle-updated', 'lifecycle-merged-terminal-race')
+    await observeMrEvent('development.lifecycle-updated', 'lifecycle-merged-terminal-race')
     for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
     expect(await runtime.worker.planOneReaction()).not.toBeNull()
     while ((await runtime.worker.runOneOutbox()) !== 'idle') {

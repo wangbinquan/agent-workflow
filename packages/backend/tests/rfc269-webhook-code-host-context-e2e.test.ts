@@ -254,7 +254,12 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       db,
       createIdentityAccessRuntime({ db }),
     )
-    const taskExecutionRuntime = composeTaskExecutionTestRuntime(db)
+    const taskExecutionRuntime = composeTaskExecutionTestRuntime(db, {
+      codeHostConnections: createCodeHostConnectionsService({
+        repositoryTransport,
+        secretBox: box,
+      }),
+    })
     const dispatcher = createWebhookDispatcher({
       ...composeSqliteWebhookDispatchCore(db, box, scheduledTaskRuntime(db).operations),
       ...createSqliteWebhookOrchestrationRuntime({

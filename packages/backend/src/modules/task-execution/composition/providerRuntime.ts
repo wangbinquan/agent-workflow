@@ -163,8 +163,14 @@ function cancellationCommand(
 export interface SqliteTaskExecutionProviderRuntimeDependencies {
   readonly runtime: Omit<
     Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0],
-    'db' | 'persistence'
-  >
+    'db' | 'persistence' | 'codeHostConnections'
+  > &
+    Required<
+      Pick<
+        Parameters<typeof createSqliteTaskExecutionRuntimeParticipants>[0],
+        'codeHostConnections'
+      >
+    >
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (
     context: TaskExecutionProviderRouteContext,

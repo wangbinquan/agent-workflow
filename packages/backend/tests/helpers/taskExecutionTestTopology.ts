@@ -20,6 +20,7 @@ import { createSqliteWorkgroupTurnsOperations } from '../../src/modules/task-exe
 import { createSqliteChildExecutionLaunchOperations } from '../../src/modules/task-execution/infrastructure/sqliteChildExecutionLaunchOperations'
 import { composeSqliteDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
+import type { CodeHostConnectionsService } from '../../src/services/codeHost/connections'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 
@@ -59,7 +60,10 @@ function createTaskExecutionTestIdentity(db: DbClient) {
 }
 
 /** Shared direct-runtime helper: test schedulers use the same admitted owner. */
-export function composeTaskExecutionTestRuntime(db: DbClient) {
+export function composeTaskExecutionTestRuntime(
+  db: DbClient,
+  options: Readonly<{ codeHostConnections?: CodeHostConnectionsService }> = {},
+) {
   const identity = createTaskExecutionTestIdentity(db)
   const persistence = createSqliteTaskExecutionPersistence(db)
   return composeTaskExecutionRuntime({
@@ -76,6 +80,9 @@ export function composeTaskExecutionTestRuntime(db: DbClient) {
         persistence: composeSqliteDynamicWorkflowPersistence(db),
         validationContext: { load: () => buildWorkflowValidationContext(db) },
       },
+      ...(options.codeHostConnections === undefined
+        ? {}
+        : { codeHostConnections: options.codeHostConnections }),
       repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
     }),
   })

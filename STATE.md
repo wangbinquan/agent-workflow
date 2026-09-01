@@ -2,6 +2,35 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **RFC 实施中（Approved / In Progress，2026-08-31）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
+> 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：
+> SQLite 继续默认；PostgreSQL server 外置，二进制只带 client/pool/schema/migration；V1 以一次 durable maintenance-window operation 自动完成
+> preflight、source freeze、backup、copy、verify、cutover、resume 与有边界 rollback，不冒领双写/零停机/多 daemon。
+>
+> - source pin `3f6b854e3` 当前扫描为 184 张 SQLite table、222 条 SQLite migration、约 343 个 production `DbClient` consumer 与 93 个
+>   `dbTxSync` consumer；因此必须先做 application-owned Promise ports + 双 provider adapter，不能只换 driver/URL。
+> - schema contract 将每张表归为 `KEEP` / `ARCHIVE_THEN_OMIT` / `DEFER`。首批只列 RFC-310 已锁零生产消费者的六张 legacy `code_*`
+>   表，完整归档/行数/主键/digest 对账后从 PostgreSQL active schema 省略；source SQLite 不原地 drop，其他表未经批准不得省略。
+> - 用户已于 2026-08-31 批准 proposal D1～D14，并授权完整实现、commit 与 push。当前进入 live baseline/schema consumer census；
+>   RFC-345 仍保持其独立 In Progress 真值，重叠 consumer 必须先协调稳定 ownership，不覆盖其在途内容。
+>
+> **2026-09-02 接手修复（provider cutover 回归 + 主干 CI 复绿）**：`b9f5b1ef8` 的 Main CI / e2e-full / e2e-webkit /
+> postgresql-evidence 四条全红，逐条归因后修掉 6 处**真实产品回归**与 3 处测试面漂移：
+>
+> 1. MCP runtime playground 的 `loadMcp` 用 legacy daemon-token 铸身份，首个管理员 bootstrap 完成后必然
+>    `mcp-runtime-test-authority-not-admitted`，回合永久挂在飞行中（新增 `admitDaemonIdentity` 进程内守护身份）。
+> 2. SQLite daemon 的 `routeLaunch.execution` 冻结成 `SYSTEM_USER_ID`，REST 代理 / 工作组启动的任务**无主**：发起人自己
+>    `GET /api/tasks/:id` 吃 404、加协作者吃 403（改 actor-scoped `executionFor`）。
+> 3. `call-workgroup` 子启动用整行 `WorkgroupSchema.parse` 校验 RFC-345 已收窄的冻结快照，父任务必然
+>    `child-launch-failed`（新增 `FrozenWorkgroupGroupSchema`，两个 provider 同用）。
+> 4. RFC-310 两条 system-mock E2E：`eventCenter.commands.observe` 随本 RFC 变成 Promise，测试未 await。
+> 5. `migrate(` → `migrateSqlite(` 与 `services/workgroup/strategies/leaderWorker.ts` 迁位后的两处 source-lock 失配。
+> 6. `sqliteLogicalSource.assertUnchanged` 现在点名漂移信号（实测：另一条连接一次裸 `wal_checkpoint`，零逻辑变更也会把
+>    `data_version` 加一），否则 4.3GB hosted 迁移失败后无法归因。
+>
+> **仍未关闭**：`postgresql-evidence` 的 large migration 仍以 `sqlite-source-mutated` 收场（copying 阶段），
+> 冻结窗内仍有写手/checkpoint 漏出——下一次 hosted run 会带上漂移信号名，据此定位后再修。
+
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表
 > （`INTENT_NODE_TEACHING satisfies {[K in NodeKind]…}` / `INTENT_RESOURCE_TEACHING` 按 intent payload schema 键控 / `INTENT_PLATFORM_RESOURCE_MAP satisfies Record<AclResourceType,…>`）
