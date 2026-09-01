@@ -35,7 +35,6 @@
 //     "stranger frontends may go stale" is a registered known limitation).
 
 import type { ServerWebSocket } from 'bun'
-import { and, asc, eq, gt } from 'drizzle-orm'
 import type {
   IntentSessionWsMessage,
   McpRuntimeTestWsMessage,
@@ -53,33 +52,15 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type {
   AuthorityFenceRecord,
-  DirectAuthorityAdmission,
   DirectRequestAuthority,
-  PresenceConnectionTracker,
   PresenceLease,
-  PresenceQuery,
-  UserAccessFenceReader,
 } from '@/modules/identity-access/public/participants'
-import type { DbClient } from '@/db/client'
-import { redactEventPayload } from '@/services/tokenRedaction'
-import {
-  memories as memoriesTable,
-  nodeRunEvents,
-  nodeRuns,
-  tasks,
-  workflows,
-  workgroups,
-} from '@/db/schema'
-import { canViewMemory, type MemoryResourceScopeAuthorization } from '@/services/memory'
-import {
-  canAuditIntentSessions,
-  canViewResource,
-  hasResourceAclBypass,
-  isVisibleToAudienceSnapshot,
-  resourceAclAudienceAuthority,
-} from '@/services/resourceAcl'
-import { canViewTask } from '@/services/taskCollab'
-import { batchOwnerUserId } from '@/services/repoBatchImport'
+import type {
+  RealtimeChannelAccess,
+  RealtimeCredential,
+  RealtimeCredentialAccess,
+  RealtimeIdentityAccess,
+} from '@/modules/runtime-management/public/participants'
 import { createLogger } from '@/util/log'
 import {
   AUTHORITY_CHANNEL,
@@ -187,19 +168,7 @@ export type WsOutboundMessage = AnyChannelMessage | WsControlMessage
  * `log.debug('…', { data: ws.data })` while debugging would write a long-lived
  * credential into the rotated daemon log.
  */
-export type WsCredential =
-  | {
-      readonly kind: 'session' | 'pat'
-      readonly hash: string
-      /**
-       * RFC-212 — credential expiry, captured at upgrade. Natural expiry has no
-       * write hook to fire a revocation, so the frame path does a purely local
-       * `now > expiresAt` check (zero DB). `null` = a PAT with no expiry.
-       */
-      readonly expiresAt: number | null
-    }
-  /** Legacy daemon token — process-level admin, nothing to look up. */
-  | { readonly kind: 'daemon' }
+export type WsCredential = RealtimeCredential
 
 export interface WsConnectionData {
   channel: AnyChannelParams
@@ -212,13 +181,10 @@ export interface WsConnectionData {
   actor: Actor
   /** Same opaque handle minted with `actor` at credential admission. */
   authority: DirectRequestAuthority
-  /**
-   * Bootstrap-injected owner factory for the memory scope participant.
-   * Optional only because registry unit fixtures for unrelated channels build
-   * structural connection data. The memory gate requires it at runtime and
-   * fails closed when a bootstrap omitted the binding.
-   */
-  resourceScopeAuthorization?: MemoryResourceScopeAuthorization
+  /** Provider-selected channel policy; no DB/client crosses into transport. */
+  channels: RealtimeChannelAccess
+  /** Bound auth persistence used only by upgrade/revalidation, never frame delivery. */
+  credentials: RealtimeCredentialAccess
   /** Narrow bootstrap binding; registry never composes identity-access from DB. */
   identityAccess: IdentityAccessWsBinding
   /** RFC-212 — credential fingerprint used by the revalidation pass. */
@@ -270,11 +236,7 @@ export interface WsConnectionData {
   visibilityCache: Map<string, boolean>
 }
 
-export interface IdentityAccessWsBinding {
-  readonly directAuthority: DirectAuthorityAdmission
-  readonly authorityFence: UserAccessFenceReader
-  readonly presenceConnections: PresenceConnectionTracker
-  readonly presenceQuery: PresenceQuery
+export interface IdentityAccessWsBinding extends RealtimeIdentityAccess {
   requestAuthorityRevalidation(userId: string, revision: number): void
 }
 
@@ -286,13 +248,12 @@ export interface WsUpgradeRefusal {
 
 /** Context handed to per-frame gates. */
 export interface FrameGateCtx {
-  db: DbClient
+  /** Required by provider-backed gates; optional only for pure direct gate fixtures. */
+  channels?: RealtimeChannelAccess
   actor: Actor
-  /** Present on production frames; optional for unrelated direct gate fixtures. */
   authority?: DirectRequestAuthority
-  /** Present on production frames; the memory gate rejects its absence. */
-  resourceScopeAuthorization?: MemoryResourceScopeAuthorization
   cache: Map<string, boolean>
+  readonly [legacyFixtureField: string]: unknown
 }
 
 /** Structural view of a TypedBroadcaster — gatedSubscribe only subscribes. */
@@ -357,7 +318,7 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
   channelKeyOf: (p: ChannelParamsByKind[K]) => string
   /** (a) whole-connection gate at upgrade time (task / memory-distill-jobs). */
   upgradeGate?: (
-    db: DbClient,
+    channels: RealtimeChannelAccess,
     actor: Actor,
     p: ChannelParamsByKind[K],
   ) => Promise<true | WsUpgradeRefusal>
@@ -377,7 +338,7 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
   onOpenExtra?: (
     ws: ServerWebSocket<WsConnectionData>,
     p: ChannelParamsByKind[K],
-    db: DbClient,
+    channels: RealtimeChannelAccess,
   ) => Promise<void>
   /**
    * RFC-312 实现门 P1 —— **复核解冻后的重同步**。
@@ -393,7 +354,7 @@ export interface ChannelSpec<K extends WsChannelKind, M> {
    * **两个触发点**：①复核解冻后（冻结期丢帧）；②`sendJson` 检测到 Bun 把帧丢了。
    * 未实现该钩子的通道在两处都逐字维持原行为——②处此前就是忽略返回值。
    */
-  resync?: (ws: ServerWebSocket<WsConnectionData>, db: DbClient) => void
+  resync?: (ws: ServerWebSocket<WsConnectionData>) => void
 }
 
 /**
@@ -433,21 +394,19 @@ export function installPresence(ws: ServerWebSocket<WsConnectionData>): void {
  * the task no longer exists (e.g. deleted between broadcaster fire and the
  * gate running).
  */
-async function taskVisibleTo(db: DbClient, actor: Actor, taskId: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  if (rows.length === 0) return false
-  return canViewTask(db, actor, rows[0]!)
+async function taskVisibleTo(
+  channels: RealtimeChannelAccess,
+  actor: Actor,
+  taskId: string,
+): Promise<boolean> {
+  return await channels.canViewTask(actor, taskId)
 }
 
 /** Cached variant for the tasks-list per-frame gate (raw taskId cache key). */
 async function cachedTaskVisible(ctx: FrameGateCtx, taskId: string): Promise<boolean> {
   const cached = ctx.cache.get(taskId)
   if (cached !== undefined) return cached
-  const visible = await taskVisibleTo(ctx.db, ctx.actor, taskId)
+  const visible = await taskVisibleTo(channelAccessOf(ctx), ctx.actor, taskId)
   ctx.cache.set(taskId, visible)
   return visible
 }
@@ -457,17 +416,7 @@ async function cachedWorkflowVisible(ctx: FrameGateCtx, workflowId: string): Pro
   const key = `wf:${workflowId}`
   const cached = ctx.cache.get(key)
   if (cached !== undefined) return cached
-  const rows = await ctx.db
-    .select({
-      id: workflows.id,
-      ownerUserId: workflows.ownerUserId,
-      visibility: workflows.visibility,
-    })
-    .from(workflows)
-    .where(eq(workflows.id, workflowId))
-    .limit(1)
-  const visible =
-    rows.length === 0 ? false : await canViewResource(ctx.db, ctx.actor, 'workflow', rows[0]!)
+  const visible = await channelAccessOf(ctx).canViewResource(ctx.actor, 'workflow', workflowId)
   ctx.cache.set(key, visible)
   return visible
 }
@@ -476,34 +425,43 @@ async function cachedWorkgroupVisible(ctx: FrameGateCtx, workgroupId: string): P
   const key = `wg:${workgroupId}`
   const cached = ctx.cache.get(key)
   if (cached !== undefined) return cached
-  const rows = await ctx.db
-    .select({
-      id: workgroups.id,
-      ownerUserId: workgroups.ownerUserId,
-      visibility: workgroups.visibility,
-    })
-    .from(workgroups)
-    .where(eq(workgroups.id, workgroupId))
-    .limit(1)
-  const visible =
-    rows.length === 0 ? false : await canViewResource(ctx.db, ctx.actor, 'workgroup', rows[0]!)
+  const visible = await channelAccessOf(ctx).canViewResource(ctx.actor, 'workgroup', workgroupId)
   ctx.cache.set(key, visible)
   return visible
 }
 
-function memoryResourceScopeAuthority(ctx: FrameGateCtx): {
-  readonly actor: Actor
-  readonly authority: DirectRequestAuthority
-  readonly authorization: MemoryResourceScopeAuthorization
-} {
-  if (ctx.authority === undefined || ctx.resourceScopeAuthorization === undefined) {
-    throw new Error('memory-resource-scope-authorization-not-composed')
+function hasResourceAclBypass(actor: Actor): boolean {
+  return actor.permissions.has('resource-acl:bypass')
+}
+
+function channelAccessOf(ctx: FrameGateCtx): RealtimeChannelAccess {
+  if (ctx.channels === undefined) throw new Error('realtime-channel-access-not-composed')
+  return ctx.channels
+}
+
+function directAuthorityOf(ctx: FrameGateCtx): DirectRequestAuthority {
+  if (ctx.authority === undefined) throw new Error('realtime-authority-not-composed')
+  return ctx.authority
+}
+
+function visibleToAudienceSnapshot(
+  actor: Actor,
+  snapshot: {
+    readonly visibility: 'public' | 'private'
+    readonly ownerUserId: string | null
+    readonly grantedUserIds: ReadonlySet<string>
+  },
+): boolean {
+  if (hasResourceAclBypass(actor)) return true
+  const privateVisible = actor.permissions.has('resource-acl:private')
+  if (
+    snapshot.ownerUserId === actor.user.id &&
+    (snapshot.visibility === 'public' || privateVisible)
+  ) {
+    return true
   }
-  return {
-    actor: ctx.actor,
-    authority: ctx.authority,
-    authorization: ctx.resourceScopeAuthorization,
-  }
+  if (!privateVisible) return snapshot.visibility === 'public'
+  return snapshot.visibility === 'public' || snapshot.grantedUserIds.has(actor.user.id)
 }
 
 /**
@@ -525,7 +483,7 @@ function deletedWorkflowAudienceVisible(
   }
   // RFC-284 T10（§2.4）：判定收编快照函数自带 ACL bypass 分支，因此上游
   // shortcut 只是一条性能优化，正确性不依赖它。
-  return isVisibleToAudienceSnapshot(actor.user.id, resourceAclAudienceAuthority(actor), context)
+  return visibleToAudienceSnapshot(actor, context)
 }
 
 function deletedWorkgroupAudienceVisible(
@@ -541,7 +499,7 @@ function deletedWorkgroupAudienceVisible(
     return null
   }
   // RFC-284 T10（§2.4）：同 workflow 侧——判定收编快照函数。
-  return isVisibleToAudienceSnapshot(actor.user.id, resourceAclAudienceAuthority(actor), context)
+  return visibleToAudienceSnapshot(actor, context)
 }
 
 /**
@@ -592,44 +550,14 @@ function taskAudienceContextVisible(
 
 /** Task `?since=N` replay — node_run_events joined via nodeRuns.taskId. */
 async function replayTaskEvents(
-  db: DbClient,
+  channels: RealtimeChannelAccess,
   taskId: string,
   since: number,
   ws: ServerWebSocket<WsConnectionData>,
 ): Promise<void> {
-  const rows = await db
-    .select({
-      id: nodeRunEvents.id,
-      nodeRunId: nodeRunEvents.nodeRunId,
-      ts: nodeRunEvents.ts,
-      kind: nodeRunEvents.kind,
-      payload: nodeRunEvents.payload,
-    })
-    .from(nodeRunEvents)
-    .innerJoin(nodeRuns, eq(nodeRunEvents.nodeRunId, nodeRuns.id))
-    .where(and(eq(nodeRuns.taskId, taskId), gt(nodeRunEvents.id, since)))
-    .orderBy(asc(nodeRunEvents.id))
-
-  for (const r of rows) {
-    let payload: unknown
-    try {
-      payload = JSON.parse(r.payload)
-    } catch {
-      payload = r.payload
-    }
-    const msg: TaskWsMessage = {
-      id: r.id,
-      type: 'node.event',
-      nodeRunId: r.nodeRunId,
-      ts: r.ts,
-      kind: r.kind,
-      // The THIRD door onto these bytes (REST events + REST stdout are the
-      // other two). The socket's actor is on `ws.data`, so the same rule the
-      // REST outlets apply is available here — and it has to be applied here
-      // too, or `?since=` becomes the way to read what REST masks.
-      payload: redactEventPayload(payload, ws.data.actor.source),
-    }
-    sendJson(ws, msg, db)
+  const messages = await channels.replayTaskEvents(ws.data.actor.source, taskId, since)
+  for (const message of messages) {
+    sendJson(ws, message)
   }
 }
 
@@ -686,12 +614,12 @@ export const WS_CHANNELS: WsChannelRegistry = {
     channelKeyOf: (p) => TASK_CHANNEL(p.taskId),
     // RFC-054 W2-4 — the per-task channel is gated ONCE at upgrade time; every
     // subsequent frame flows ungated (no frameGate).
-    upgradeGate: async (db, actor, p) =>
-      (await taskVisibleTo(db, actor, p.taskId))
+    upgradeGate: async (channels, actor, p) =>
+      (await taskVisibleTo(channels, actor, p.taskId))
         ? true
         : { code: 'task-not-visible', message: 'task not visible to current actor' },
-    onOpenExtra: async (ws, p, db) => {
-      if (p.since !== undefined) await replayTaskEvents(db, p.taskId, p.since, ws)
+    onOpenExtra: async (ws, p, channels) => {
+      if (p.since !== undefined) await replayTaskEvents(channels, p.taskId, p.since, ws)
     },
   },
   'tasks-list': {
@@ -843,8 +771,8 @@ export const WS_CHANNELS: WsChannelRegistry = {
     parse: (m) => ({ kind: 'repo-import', batchId: decodeURIComponent(m[1] ?? '') }),
     broadcaster: repoImportsBroadcaster,
     channelKeyOf: (p) => REPO_IMPORT_CHANNEL(p.batchId),
-    upgradeGate: async (_db, actor, p) => {
-      const owner = batchOwnerUserId(p.batchId)
+    upgradeGate: async (channels, actor, p) => {
+      const owner = channels.repoImportOwnerUserId(p.batchId)
       if (owner !== null && (owner === actor.user.id || hasResourceAclBypass(actor))) return true
       return { code: 'batch-not-found', message: `batch ${p.batchId} not found or expired` }
     },
@@ -880,10 +808,9 @@ export const WS_CHANNELS: WsChannelRegistry = {
     //     frontends may go stale on supersede" is a known registered
     //     limitation, improving it is out of scope here.
     frameGate: async (ctx, msg) => {
-      const resourceScopeAuthority = memoryResourceScopeAuthority(ctx)
       switch (msg.type) {
         case 'memory.candidate.created':
-          return canViewMemory(ctx.db, resourceScopeAuthority, {
+          return channelAccessOf(ctx).canViewMemory(directAuthorityOf(ctx), ctx.actor, {
             scopeType: msg.memory.scopeType,
             scopeId: msg.memory.scopeId,
           })
@@ -892,14 +819,11 @@ export const WS_CHANNELS: WsChannelRegistry = {
         case 'memory.unarchived':
         case 'memory.deleted':
         case 'memory.updated': {
-          const rows = await ctx.db
-            .select({ scopeType: memoriesTable.scopeType, scopeId: memoriesTable.scopeId })
-            .from(memoriesTable)
-            .where(eq(memoriesTable.id, msg.memoryId))
-            .limit(1)
-          const row = rows[0]
-          if (row === undefined) return false
-          return canViewMemory(ctx.db, resourceScopeAuthority, row)
+          return channelAccessOf(ctx).canViewStoredMemory(
+            directAuthorityOf(ctx),
+            ctx.actor,
+            msg.memoryId,
+          )
         }
         case 'memory.superseded':
           return false
@@ -926,7 +850,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     channelKeyOf: () => MEMORY_DISTILL_JOB_CHANNEL,
     // RFC-305: the upgrade uses the same explicit capabilities as HTTP. Role
     // presets may supply them, but this consumer never inspects the role.
-    upgradeGate: async (_db, actor) =>
+    upgradeGate: async (_channels, actor) =>
       actor.permissions.has('memory-distill-jobs:manage') && actor.permissions.has('memory:update')
         ? true
         : {
@@ -971,7 +895,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     broadcaster: intentSessionsBroadcaster,
     channelKeyOf: () => INTENT_SESSIONS_CHANNEL,
     frameGate: async (ctx, msg) =>
-      canAuditIntentSessions(ctx.actor) || msg.ownerUserId === ctx.actor.user.id,
+      ctx.actor.permissions.has('intent:audit') || msg.ownerUserId === ctx.actor.user.id,
   },
   'mcp-runtime-tests': {
     kind: 'mcp-runtime-tests',
@@ -1009,7 +933,7 @@ export const WS_CHANNELS: WsChannelRegistry = {
     parse: () => ({ kind: 'presence' }),
     broadcaster: presenceBroadcaster,
     channelKeyOf: () => PRESENCE_CHANNEL,
-    upgradeGate: async (_db, actor) =>
+    upgradeGate: async (_channels, actor) =>
       actor.permissions.has('users:presence')
         ? true
         : {
@@ -1022,24 +946,22 @@ export const WS_CHANNELS: WsChannelRegistry = {
     //   ②`onOpenExtra` 跑在升级门与 handleOpen 的 epoch 复核**之后**，
     //     满足"登记必须在完整鉴权之后"——否则升级途中被撤销的连接会制造一次假上线并挂满宽限期。
     // 取快照与发送之间**不得有 await**：否则会出现"增量先到被前端丢弃、旧快照后到"的永久陈旧。
-    onOpenExtra: async (ws, _p, db) => {
+    onOpenExtra: async (ws) => {
       installPresence(ws)
-      sendJson(
-        ws,
-        { type: 'presence.snapshot', online: [...ws.data.identityAccess.presenceQuery.snapshot()] },
-        db,
-      )
+      sendJson(ws, {
+        type: 'presence.snapshot',
+        online: [...ws.data.identityAccess.presenceQuery.snapshot()],
+      })
     },
     // RFC-312 实现门 P1 —— 复核冻结期间的 `presence.changed` 会被丢弃（见
     // `resync` 的类型注释），而 presence 是累积式增量流，丢一帧就永久
     // 错到该用户下次翻转。解冻后重发一次**全量快照**：它是幂等的、与开连接时走的是同一
     // 条 `applyPresenceSnapshot` 路径，因此不需要任何新的重放协议或客户端分支。
-    resync: (ws, db) => {
-      sendJson(
-        ws,
-        { type: 'presence.snapshot', online: [...ws.data.identityAccess.presenceQuery.snapshot()] },
-        db,
-      )
+    resync: (ws) => {
+      sendJson(ws, {
+        type: 'presence.snapshot',
+        online: [...ws.data.identityAccess.presenceQuery.snapshot()],
+      })
     },
   },
 }
@@ -1062,7 +984,7 @@ interface ErasedChannelSpec {
   channelKeyOf: (p: AnyChannelParams) => string
   broadcaster: WsBroadcasterLike<AnyChannelMessage, AnyBroadcastContext>
   upgradeGate?: (
-    db: DbClient,
+    channels: RealtimeChannelAccess,
     actor: Actor,
     p: AnyChannelParams,
   ) => Promise<true | WsUpgradeRefusal>
@@ -1075,9 +997,9 @@ interface ErasedChannelSpec {
   onOpenExtra?: (
     ws: ServerWebSocket<WsConnectionData>,
     p: AnyChannelParams,
-    db: DbClient,
+    channels: RealtimeChannelAccess,
   ) => Promise<void>
-  resync?: (ws: ServerWebSocket<WsConnectionData>, db: DbClient) => void
+  resync?: (ws: ServerWebSocket<WsConnectionData>) => void
 }
 
 type AnyBroadcastContext = ChannelBroadcastContextByKind[WsChannelKind]
@@ -1102,13 +1024,13 @@ export function parseWsChannel(url: URL): AnyChannelParams | null {
 
 /** Run the channel's upgrade gate, if any. true = proceed with the upgrade. */
 export async function checkUpgradeGate(
-  db: DbClient,
+  channels: RealtimeChannelAccess,
   actor: Actor,
   params: AnyChannelParams,
 ): Promise<true | WsUpgradeRefusal> {
   const spec = erasedSpecOf(params.kind)
   if (spec.upgradeGate === undefined) return true
-  return spec.upgradeGate(db, actor, params)
+  return spec.upgradeGate(channels, actor, params)
 }
 
 /**
@@ -1139,7 +1061,7 @@ export function gatedSubscribe(
   ws: ServerWebSocket<WsConnectionData>,
   spec: WsChannelRegistry[WsChannelKind],
   params: AnyChannelParams,
-  db: DbClient,
+  channels: RealtimeChannelAccess,
 ): void {
   const erased = spec as unknown as ErasedChannelSpec
   const channelKey = erased.channelKeyOf(params)
@@ -1167,11 +1089,11 @@ export function gatedSubscribe(
     // Row-level bypass fast path. `resource-acl:bypass` is an ordinary effective
     // account permission; the account role is irrelevant here.
     if (erased.aclBypassShortCircuit === true && hasResourceAclBypass(ws.data.actor)) {
-      sendJson(ws, msg, db)
+      sendJson(ws, msg)
       return
     }
     if (erased.frameGate === undefined) {
-      sendJson(ws, msg, db)
+      sendJson(ws, msg)
       return
     }
     // Fire-and-forget the async gate; a throwing gate (DB blip) falls back
@@ -1180,12 +1102,9 @@ export function gatedSubscribe(
     erased
       .frameGate(
         {
-          db,
+          channels,
           actor: gateActor,
           authority: ws.data.authority,
-          ...(ws.data.resourceScopeAuthorization === undefined
-            ? {}
-            : { resourceScopeAuthorization: ws.data.resourceScopeAuthorization }),
           cache: ws.data.visibilityCache,
         },
         msg,
@@ -1195,7 +1114,7 @@ export function gatedSubscribe(
         // RFC-305 async-continuation fence: a refresh may replace the actor
         // while frameGate awaits DB/ACL work. A verdict minted by the prior
         // authority must never authorize a later send.
-        if (visible && ws.data.actor === gateActor) sendJson(ws, msg, db)
+        if (visible && ws.data.actor === gateActor) sendJson(ws, msg)
       })
       .catch((err) => {
         log.warn('frame gate threw', {
@@ -1208,28 +1127,24 @@ export function gatedSubscribe(
   // Replay channels (task ?since=N) echo the anchor back in the hello frame.
   const since = (params as { since?: unknown }).since
   if (typeof since === 'number') hello.since = since
-  sendJson(ws, hello, db)
+  sendJson(ws, hello)
 }
 
 /** open-time entry: gatedSubscribe + the channel's onOpenExtra (task replay). */
 export async function openWsChannel(
   ws: ServerWebSocket<WsConnectionData>,
   params: AnyChannelParams,
-  db: DbClient,
+  channels: RealtimeChannelAccess,
 ): Promise<void> {
   const spec = WS_CHANNELS[params.kind]
-  gatedSubscribe(ws, spec, params, db)
+  gatedSubscribe(ws, spec, params, channels)
   const erased = spec as unknown as ErasedChannelSpec
   if (erased.onOpenExtra !== undefined) {
-    await erased.onOpenExtra(ws, params, db)
+    await erased.onOpenExtra(ws, params, channels)
   }
 }
 
-function sendJson(
-  ws: ServerWebSocket<WsConnectionData>,
-  msg: WsOutboundMessage,
-  db: DbClient,
-): void {
+function sendJson(ws: ServerWebSocket<WsConnectionData>, msg: WsOutboundMessage): void {
   if (!authorityRevisionCurrent(ws)) return
   try {
     // RFC-312 实现门 P1 —— Bun 的 `ws.send()` 用**返回 0 表示这一帧被丢弃**（背压 / 已关闭），
@@ -1244,7 +1159,7 @@ function sendJson(
       if (spec.resync !== undefined && !ws.data.resyncing) {
         ws.data.resyncing = true
         try {
-          spec.resync(ws, db)
+          spec.resync(ws)
         } finally {
           ws.data.resyncing = false
         }

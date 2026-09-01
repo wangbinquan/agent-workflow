@@ -8,8 +8,12 @@
 import { timingSafeEqual } from 'node:crypto'
 import type { Context, MiddlewareHandler } from 'hono'
 import { PAT_TOKEN_PREFIX, SESSION_TOKEN_PREFIX, type Permission } from '@agent-workflow/shared'
-import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
-import { getAuthLoginPolicy, isBootstrapRequired } from '@/auth/loginPolicy'
+import { hashAuthToken, type AuthRuntime } from '@/auth/application/authRuntime'
+import {
+  legacySqliteAuthRuntimeOf,
+  type LegacySqliteAuthRuntimeBinding,
+  type LegacySqliteAuthRuntimeInput,
+} from '@/auth/infrastructure/legacySqliteAuthRuntime'
 import { ForbiddenError } from '@/util/errors'
 import { UnauthorizedError } from '@/util/errors'
 import { createInFlightCoalescer } from '@/util/inFlight'
@@ -22,21 +26,17 @@ import type {
   DirectRequestAuthority,
 } from '@/modules/identity-access/public/participants'
 import type { Actor } from './actor'
-import { hashToken as hashPatToken, lookupActivePat, lookupActivePatByHash } from './patStore'
-import {
-  hashToken as hashSessionToken,
-  lookupActiveSession,
-  lookupActiveSessionByHash,
-} from './sessionStore'
 
-export interface MultiAuthDeps {
-  db: DbClient
+interface MultiAuthBaseDeps {
   daemonToken: string
   /** Bootstrap-owned runtime shared by HTTP, MCP and WS. */
   identityAccess: DirectAuthorityAdmissionRuntime
   /** Override for tests that want a fixed clock. */
   now?: () => number
 }
+
+export type MultiAuthDeps = MultiAuthBaseDeps &
+  ({ readonly auth: AuthRuntime; readonly db?: never } | LegacySqliteAuthRuntimeBinding)
 
 export type DirectAuthorityAdmissionRuntime = Readonly<{
   directAuthority: DirectAuthorityAdmission
@@ -80,6 +80,7 @@ function isBootstrapDaemonPath(method: string, path: string): boolean {
 }
 
 export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
+  const auth = authRuntimeOf(deps)
   const daemonBuf = Buffer.from(deps.daemonToken, 'utf-8')
   // A browser commonly releases a burst of REST requests after one query
   // invalidation. Resolve one credential snapshot for that overlapping burst;
@@ -97,11 +98,12 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
     const raw = extractBearerToken(c)
     if (!raw) throw new UnauthorizedError()
     const now = deps.now ? deps.now() : Date.now()
-    const resolved = await resolveInFlight(hashSessionToken(raw), async () => {
-      const identity = await resolveIdentity(deps.db, raw, daemonBuf, deps.identityAccess, now)
+    const resolved = await resolveInFlight(hashAuthToken(raw), async () => {
+      const identity = await resolveIdentity(auth, raw, daemonBuf, deps.identityAccess, now)
       return {
         identity,
-        bootstrapRequired: identity?.actor.source === 'daemon' && isBootstrapRequired(deps.db),
+        bootstrapRequired:
+          identity?.actor.source === 'daemon' && (await auth.isBootstrapRequired()),
       }
     })
     const actor = resolved.identity?.actor as Actor | undefined
@@ -129,8 +131,8 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
  * never disagree about which store a credential belongs to.
  */
 export function describeCredential(raw: string): WsCredentialFingerprint {
-  if (raw.startsWith(SESSION_TOKEN_PREFIX)) return { kind: 'session', hash: hashSessionToken(raw) }
-  if (raw.startsWith(PAT_TOKEN_PREFIX)) return { kind: 'pat', hash: hashPatToken(raw) }
+  if (raw.startsWith(SESSION_TOKEN_PREFIX)) return { kind: 'session', hash: hashAuthToken(raw) }
+  if (raw.startsWith(PAT_TOKEN_PREFIX)) return { kind: 'pat', hash: hashAuthToken(raw) }
   return { kind: 'daemon' }
 }
 
@@ -163,17 +165,18 @@ export interface ResolvedUpgradeIdentity {
 }
 
 export async function resolveActorWithWsCredential(
-  db: DbClient,
+  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   raw: string,
   daemonTokenBuf: Buffer,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
 ): Promise<ResolvedUpgradeIdentity> {
+  const auth = authRuntimeOf(authOrDb)
   if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
-    const resolved = await lookupActiveSession(db, raw, now)
+    const resolved = await auth.lookupActiveSession(raw, now)
     const credential = {
       kind: 'session' as const,
-      hash: hashSessionToken(raw),
+      hash: hashAuthToken(raw),
       expiresAt: resolved?.session.expiresAt ?? null,
     }
     if (!resolved) return { actor: null, authority: null, credential }
@@ -187,10 +190,10 @@ export async function resolveActorWithWsCredential(
     }
   }
   if (raw.startsWith(PAT_TOKEN_PREFIX)) {
-    const resolved = await lookupActivePat(db, raw, now)
+    const resolved = await auth.lookupActivePat(raw, now)
     const credential = {
       kind: 'pat' as const,
-      hash: hashPatToken(raw),
+      hash: hashAuthToken(raw),
       expiresAt: resolved?.expiresAt ?? null,
     }
     if (!resolved) return { actor: null, authority: null, credential }
@@ -212,7 +215,10 @@ export async function resolveActorWithWsCredential(
   if (!safeEqual(Buffer.from(raw, 'utf8'), daemonTokenBuf)) {
     return { actor: null, authority: null, credential: { kind: 'daemon' } }
   }
-  if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db)) {
+  if (
+    (await auth.getLoginPolicy()).bootstrapCompletedAt !== null &&
+    !auth.allowLegacyDaemonTestAccess
+  ) {
     return { actor: null, authority: null, credential: { kind: 'daemon' } }
   }
   const identity = await identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
@@ -224,19 +230,20 @@ export async function resolveActorWithWsCredential(
 }
 
 export async function resolveIdentity(
-  db: DbClient,
+  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   raw: string,
   daemonTokenBuf: Buffer,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
 ): Promise<DirectAuthorityIdentity | null> {
+  const auth = authRuntimeOf(authOrDb)
   if (raw.startsWith(SESSION_TOKEN_PREFIX)) {
-    const resolved = await lookupActiveSession(db, raw, now)
+    const resolved = await auth.lookupActiveSession(raw, now)
     if (!resolved) return null
     return identityAccess.directAuthority.fromSession(admittedSessionCredential(resolved.user.id))
   }
   if (raw.startsWith(PAT_TOKEN_PREFIX)) {
-    const resolved = await lookupActivePat(db, raw, now)
+    const resolved = await auth.lookupActivePat(raw, now)
     if (!resolved) return null
     return identityAccess.directAuthority.fromPat(
       admittedPatCredential({
@@ -251,20 +258,23 @@ export async function resolveIdentity(
   // The 64-hex shape is what `generateToken()` produces but we accept the
   // value verbatim — tests and admins may rotate to other shapes.
   if (!safeEqual(Buffer.from(raw, 'utf8'), daemonTokenBuf)) return null
-  if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
+  if (
+    (await auth.getLoginPolicy()).bootstrapCompletedAt !== null &&
+    !auth.allowLegacyDaemonTestAccess
+  )
     return null
 
   return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
 }
 
 export async function resolveActor(
-  db: DbClient,
+  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   raw: string,
   daemonTokenBuf: Buffer,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
 ): Promise<Actor | null> {
-  const identity = await resolveIdentity(db, raw, daemonTokenBuf, identityAccess, now)
+  const identity = await resolveIdentity(authOrDb, raw, daemonTokenBuf, identityAccess, now)
   return (identity?.actor as Actor | undefined) ?? null
 }
 
@@ -278,18 +288,19 @@ export async function resolveActor(
  * still closes the socket.
  */
 export async function reresolveIdentity(
-  db: DbClient,
+  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   credential: WsCredentialFingerprint,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
 ): Promise<DirectAuthorityIdentity | null> {
+  const auth = authRuntimeOf(authOrDb)
   if (credential.kind === 'session') {
-    const resolved = await lookupActiveSessionByHash(db, credential.hash, now, { touch: false })
+    const resolved = await auth.lookupActiveSessionByHash(credential.hash, now, { touch: false })
     if (!resolved) return null
     return identityAccess.directAuthority.fromSession(admittedSessionCredential(resolved.user.id))
   }
   if (credential.kind === 'pat') {
-    const resolved = await lookupActivePatByHash(db, credential.hash, now, { touch: false })
+    const resolved = await auth.lookupActivePatByHash(credential.hash, now, { touch: false })
     if (!resolved) return null
     return identityAccess.directAuthority.fromPat(
       admittedPatCredential({
@@ -303,18 +314,21 @@ export async function reresolveIdentity(
   // daemon: RFC-221 makes this a one-way bootstrap credential. Revalidation
   // closes every existing daemon socket immediately after the first admin
   // transaction commits.
-  if (getAuthLoginPolicy(db).bootstrapCompletedAt !== null && !allowsLegacyDaemonTestAccess(db))
+  if (
+    (await auth.getLoginPolicy()).bootstrapCompletedAt !== null &&
+    !auth.allowLegacyDaemonTestAccess
+  )
     return null
   return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
 }
 
 export async function reresolveActor(
-  db: DbClient,
+  authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   credential: WsCredentialFingerprint,
   identityAccess: DirectAuthorityAdmissionRuntime,
   now: number = Date.now(),
 ): Promise<Actor | null> {
-  const identity = await reresolveIdentity(db, credential, identityAccess, now)
+  const identity = await reresolveIdentity(authOrDb, credential, identityAccess, now)
   return (identity?.actor as Actor | undefined) ?? null
 }
 
@@ -345,4 +359,10 @@ export function extractUpgradeToken(url: URL): string | null {
 function safeEqual(a: Buffer, b: Buffer): boolean {
   if (a.length !== b.length) return false
   return timingSafeEqual(a, b)
+}
+
+function authRuntimeOf(
+  input: MultiAuthDeps | AuthRuntime | LegacySqliteAuthRuntimeInput,
+): AuthRuntime {
+  return legacySqliteAuthRuntimeOf(input)
 }

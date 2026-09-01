@@ -1,23 +1,18 @@
 // RFC-344/RFC-347 — process-edge bootstrap adapter for the user CLI binding.
 
 import { hashPassword } from '@/auth/passwords'
-import {
-  completeBootstrapWithAdmin,
-  isBootstrapRequired,
-  type InitialUserAccessTransactionBinding,
-} from '@/auth/loginPolicy'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { userCommand, type UserCommandDeps } from '@/cli/user'
-import type { DbClient } from '@/db/client'
 
 export type UserCommandIdentityHandle = Pick<
   UserCommandDeps,
   'operations' | 'commandContext' | 'queryContext'
-> & { readonly initialUserAccess: InitialUserAccessTransactionBinding }
+>
 
 export interface UserCommandBootstrapInput {
-  readonly db: DbClient
+  readonly auth: AuthRuntime
   readonly identity: UserCommandIdentityHandle
-  readonly shutdown?: () => void
+  readonly shutdown?: () => void | Promise<void>
 }
 
 export async function runUserCommand(
@@ -25,25 +20,23 @@ export async function runUserCommand(
   bootstrap: UserCommandBootstrapInput,
 ): Promise<{ output: string; status: 'ok' | 'error' }> {
   try {
+    const bootstrapRequired =
+      args[0] === 'create' ? await bootstrap.auth.isBootstrapRequired() : false
     return await userCommand(args, {
       ...bootstrap.identity,
       bootstrap: {
-        isRequired: () => isBootstrapRequired(bootstrap.db),
+        isRequired: () => bootstrapRequired,
         async createFirstAdministrator(input) {
-          return completeBootstrapWithAdmin(
-            bootstrap.db,
-            {
-              username: input.username,
-              displayName: input.displayName,
-              ...(input.email === undefined ? {} : { email: input.email }),
-              passwordHash: await hashPassword(input.password),
-            },
-            bootstrap.identity.initialUserAccess,
-          )
+          return await bootstrap.auth.completeBootstrap({
+            username: input.username,
+            displayName: input.displayName,
+            ...(input.email === undefined ? {} : { email: input.email }),
+            passwordHash: await hashPassword(input.password),
+          })
         },
       },
     })
   } finally {
-    bootstrap.shutdown?.()
+    await bootstrap.shutdown?.()
   }
 }

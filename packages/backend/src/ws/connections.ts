@@ -23,13 +23,8 @@
 
 import type { ServerWebSocket } from 'bun'
 import type { WsControlMessage } from '@agent-workflow/shared'
-import { reresolveIdentity } from '@/auth/session'
-import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import type {
-  DirectAuthorityIdentity,
-  DirectRequestAuthority,
-} from '@/modules/identity-access/public/participants'
+import type { DirectAuthorityIdentity } from '@/modules/identity-access/public/participants'
+import type { RealtimeCredentialAccess } from '@/modules/runtime-management/public/participants'
 import { createLogger, type Logger } from '@/util/log'
 import {
   checkUpgradeGate,
@@ -65,12 +60,7 @@ import {
 export type { RevocationReason }
 
 export interface RevalidateDeps {
-  db: DbClient
   log: Logger
-  /** Test seam for proving one credential is resolved only once per pass. */
-  resolveIdentity?: typeof reresolveIdentity
-  /** Legacy test seam; production always refreshes actor + authority together. */
-  resolveActor?: (db: DbClient, credential: WsCredential, now?: number) => Promise<Actor | null>
 }
 
 export interface RevalidateStats {
@@ -167,15 +157,13 @@ export async function revalidateAllConnections(
   target?: RevalidationTarget,
 ): Promise<RevalidateStats> {
   const stats: RevalidateStats = { scanned: 0, closedAuth: 0, closedGate: 0, refreshed: 0 }
-  // One pass observes one committed DB snapshot at one `now`. Connections
+  // One pass observes one committed provider snapshot at one `now`. Connections
   // carrying the same credential therefore have the same actor verdict.
   // Resolve that credential once while still running every socket's cache
   // clear, upgrade gate, notification and close decision below.
-  const identityByCredential = new Map<
-    string,
-    Promise<
-      DirectAuthorityIdentity | Readonly<{ actor: Actor; authority: DirectRequestAuthority }> | null
-    >
+  const identityByRuntime = new Map<
+    RealtimeCredentialAccess,
+    Map<string, Promise<DirectAuthorityIdentity | null>>
   >()
   // Snapshot: closeConnection mutates `live` while we iterate.
   for (const ws of liveConnections()) {
@@ -185,19 +173,14 @@ export async function revalidateAllConnections(
     let freshIdentity
     try {
       const credentialKey = credentialRevalidationKey(ws.data.credential)
+      let identityByCredential = identityByRuntime.get(ws.data.credentials)
+      if (identityByCredential === undefined) {
+        identityByCredential = new Map()
+        identityByRuntime.set(ws.data.credentials, identityByCredential)
+      }
       let resolution = identityByCredential.get(credentialKey)
       if (resolution === undefined) {
-        resolution =
-          deps.resolveActor === undefined
-            ? (deps.resolveIdentity ?? reresolveIdentity)(
-                deps.db,
-                ws.data.credential,
-                { directAuthority: ws.data.identityAccess.directAuthority },
-                now,
-              )
-            : deps
-                .resolveActor(deps.db, ws.data.credential, now)
-                .then((actor) => (actor === null ? null : { actor, authority: ws.data.authority }))
+        resolution = ws.data.credentials.reresolve(ws.data.credential, now)
         identityByCredential.set(credentialKey, resolution)
       }
       freshIdentity = await resolution
@@ -215,7 +198,7 @@ export async function revalidateAllConnections(
       continue
     }
     // ③ actor replacement — required for every channel (see ChannelRevalidation).
-    ws.data.actor = freshIdentity.actor as Actor
+    ws.data.actor = freshIdentity.actor
     ws.data.authority = freshIdentity.authority
     stats.refreshed += 1
     // ④ cache clear — a no-op for channels that declare cache.kind === 'none'.
@@ -242,7 +225,7 @@ export async function revalidateAllConnections(
     if (spec.revalidation.rerunUpgradeGate === true) {
       let verdict
       try {
-        verdict = await checkUpgradeGate(deps.db, ws.data.actor, ws.data.channel)
+        verdict = await checkUpgradeGate(ws.data.channels, ws.data.actor, ws.data.channel)
       } catch (err) {
         deps.log.warn('ws-revalidate-gate-threw', {
           reason,
@@ -264,7 +247,7 @@ export async function revalidateAllConnections(
       // RFC-312 实现门 P1 —— 冻结期间到达的帧是被**丢弃**的，不是排队。累积式增量流
       // （presence）因此会永久停在旧状态。让通道自己声明如何重同步（数据而非分支）；
       // 没有累积状态的通道不实现该钩子，行为逐字不变。
-      erasedSpecOf(ws.data.channel.kind).resync?.(ws, deps.db)
+      erasedSpecOf(ws.data.channel.kind).resync?.(ws)
     }
   }
   if (stats.closedAuth > 0 || stats.closedGate > 0) {
@@ -311,7 +294,7 @@ const revalidateLog = createLogger('ws.revalidate')
 // import the light revalidationHook module) fan out here. Fire-and-forget: the
 // write point does not wait for sockets to close. Tests drive
 // revalidateAllConnections directly for determinism.
-registerRevalidationTrigger((db, reason, target) => {
+registerRevalidationTrigger((reason, target) => {
   // finding 2: bump the epoch FIRST so an upgrade in flight (which already
   // captured the old epoch) can detect that it raced this revocation.
   revalidationEpoch += 1
@@ -327,7 +310,7 @@ registerRevalidationTrigger((db, reason, target) => {
   for (const ws of frozen) {
     if (!ws.data.closing) ws.data.revalidating = true
   }
-  return revalidateAllConnections({ db, log: revalidateLog }, reason, Date.now(), target)
+  return revalidateAllConnections({ log: revalidateLog }, reason, Date.now(), target)
     .then(() => undefined)
     .catch((err) => {
       revalidateLog.warn('ws-revalidate-threw', {

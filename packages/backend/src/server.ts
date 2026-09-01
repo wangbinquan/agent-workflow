@@ -4,15 +4,36 @@
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
-import type { MaintenanceStatus, WorkflowRevision } from '@agent-workflow/shared'
+import { Buffer } from 'node:buffer'
+import type {
+  AclResourceType,
+  DatabaseConfig,
+  DatabaseRuntimeTelemetry,
+  MaintenanceStatus,
+  ResourceAccess,
+  ResourceAcl,
+  UpdateResourceAclBody,
+  WorkflowRevision,
+} from '@agent-workflow/shared'
 import { join } from 'node:path'
-import { actorOf, tryActorOf } from '@/auth/actor'
+import { and, eq } from 'drizzle-orm'
+import { actorOf, tryActorOf, type Actor } from '@/auth/actor'
+import type { AuthRuntime } from '@/auth/application/authRuntime'
+import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
+import {
+  createPostgresqlAuthRuntime,
+  createPostgresqlTokenCallAudit,
+  createSqliteAuthRuntime,
+  createSqliteTokenCallAudit,
+} from '@/auth/composition'
 import type { SecretBox } from '@/auth/secretBox'
-import { multiAuth } from '@/auth/session'
-import { recordTokenCall, takeDeleteSnapshot } from '@/services/tokenAudit'
+import { multiAuth, resolveIdentity } from '@/auth/session'
+import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
+import { developmentMissions, developmentMrClaims } from '@/db/schema'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
@@ -30,7 +51,7 @@ import { mountDatabaseMigrationRoutes } from '@/routes/databaseMigrations'
 import { mountRestoreRoutes } from '@/routes/restore'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
 import { mountRepoGroupRoutes } from '@/routes/repoGroups'
-import { mountConfigRoutes } from '@/routes/config'
+import { mountConfigRoutes, type ConfigConcurrencyHotApplyCommand } from '@/routes/config'
 import { mountDaemonRoutes } from '@/routes/daemon'
 import { mountDocsRoutes, mountWellKnownRoutes } from '@/routes/docs'
 import { mountHealthRoutes } from '@/routes/health'
@@ -43,25 +64,49 @@ import {
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import {
   createIdentityAccessRuntime,
+  createPostgresqlIdentityAccessRuntime,
   type IdentityAccessModule,
   type IdentityAccessRuntime,
+  type PostgresqlIdentityAccessCrossContextBindings,
 } from '@/modules/identity-access/composition'
+import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
+import { composeSqliteAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
+import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
+import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
+import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
+import { composeSqliteWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
+import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
+import { buildWorkflowValidationContext } from '@/services/workflow.validator'
+import {
+  composeSqliteResourceCatalog,
+  type ProviderResourceCatalogComposition,
+} from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import {
   composeResourcePackageOperations,
+  composeSqliteResourcePackageProvider,
   type ComposedResourcePackageCatalog,
 } from '@/modules/resource-catalog/composition/resourcePackageOperations'
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
+  canViewResource,
   canViewResourceInTx,
   composeResourceScopeAuthorizationBinding,
+  filterVisibleRows,
+  getResourceAcl,
+  requireResourceEdit,
+  requireResourceGovern,
+  updateResourceAcl,
   type ResourceScopeAuthorizationBinding,
 } from '@/modules/resource-catalog/composition/resourceAcl'
+import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
+import { resourceAclAudienceAuthority } from '@/modules/resource-catalog/domain/resourceAccess'
 import {
   composeIntegrationTriggerResourceBinding,
   type IntegrationTriggerResourceBinding,
@@ -77,13 +122,25 @@ import type {
   WorkgroupCatalogModule,
 } from '@/modules/resource-catalog/public/operations'
 import {
+  composePostgresqlSystemOperations,
   composeSystemOperations,
+  type PostgresqlSystemOperationsModule,
   type SystemOperationsModule,
 } from '@/modules/system-operations/composition'
+import {
+  composePostgresqlMaintenanceDiskOperations,
+  composeSqliteMaintenanceDiskOperations,
+} from '@/modules/system-operations/composition/maintenanceDisk'
+import type { MaintenanceDiskOperations } from '@/modules/system-operations/public/operations'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/operations'
+import type { HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
+import { createPostgresqlHealthDatabaseReadModel } from '@/modules/system-operations/composition'
+import { createSqliteHealthDatabaseReadModel } from '@/platform/persistence/sqlite/systemHealthReadModel'
+import { composeSqliteOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
+import { createOidcProvidersService } from '@/services/oidcProviders'
 import { getMcpRuntimeTestService, type McpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import {
@@ -97,8 +154,24 @@ import {
 import { mcpRouteNow, mountMcpRoutes } from '@/routes/mcps'
 import { mountMemoryRoutes } from '@/routes/memories'
 import { mountMemoryDistillJobRoutes } from '@/routes/memoryDistillJobs'
+import {
+  composeSqliteMemoryCatalogOperations,
+  composeSqliteMemoryInjectionQueries,
+  composeSqliteMemoryOperations,
+} from '@/modules/memory/composition'
+import { composeSqliteFusionOperations } from '@/modules/memory/composition/fusion'
+import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
+import type { MemoryOperations } from '@/modules/memory/public/operations'
+import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
+import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
+import {
+  readCommittedReviewArtifactBody,
+  resolveCollaborationTaskAccess,
+} from '@/modules/collaboration/public/queries'
 import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
-import { mountOverviewRoutes } from '@/routes/overview'
+import { mountOverviewRoutes, type OverviewRouteQuery } from '@/routes/overview'
+import { buildOverview } from '@/services/overview'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountPlantumlRoutes } from '@/routes/plantuml'
@@ -112,8 +185,24 @@ import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
 import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
 import { mountFusionRoutes } from '@/routes/fusions'
-import { mountIntentSessionRoutes } from '@/routes/intentSessions'
+import {
+  mountIntentSessionRoutes,
+  type IntentSessionRouteDependencies,
+} from '@/routes/intentSessions'
 import { legacyIntentApplyResourceDependencies } from '@/services/intent/legacyIntentApplyResourceDependencies'
+import {
+  composeSqliteIntentApplyOperations,
+  createSqliteIntentApplyArtifactLifecycle,
+} from '@/modules/intent/composition/apply'
+import {
+  composeIntentDumpAuxiliaryQueries,
+  composeIntentTurnRuntimeResolver,
+} from '@/modules/intent/composition/auxiliaryQueries'
+import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
+import { composeSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
+import type { IntentApplyOperations } from '@/modules/intent/public/operations'
+import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'
@@ -124,10 +213,20 @@ import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountScheduledTaskRoutes } from '@/routes/scheduledTasks'
 import { mountCodeHostRoutes } from '@/routes/codeHosts'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
-import { mountCapabilityTemplateRoutes } from '@/routes/capabilityTemplates'
-import { mountDevelopmentConfigRoutes } from '@/routes/developmentConfig'
+import {
+  mountCapabilityTemplateRoutes,
+  type CapabilityTemplateRouteDeps,
+} from '@/routes/capabilityTemplates'
+import {
+  mountDevelopmentConfigRoutes,
+  type DevelopmentConfigAclRouteBinding,
+} from '@/routes/developmentConfig'
 import { mountDevelopmentMissionRoutes } from '@/routes/developmentMissions'
-import { mountDigitalEmployeeRoutes } from '@/routes/digitalEmployees'
+import {
+  mountDigitalEmployeeRoutes,
+  type DigitalEmployeeAclResourceType,
+  type DigitalEmployeeRoutePersistence,
+} from '@/routes/digitalEmployees'
 import { mountEventCenterRoutes } from '@/routes/eventCenter'
 import { mountExecutionContractRoutes } from '@/routes/executionContracts'
 import { mountMissionInputUploadRoutes } from '@/routes/missionInputUploads'
@@ -140,35 +239,54 @@ import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { Paths } from '@/util/paths'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
-import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
+import { mountWorktreeFilesRoutes, type WorktreeFilesRouteDeps } from '@/routes/worktree-files'
+import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
-import { errorHandler } from '@/util/errors'
+import { errorHandler, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import {
   composeDigitalEmployee,
+  composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeIntegrationTriggerParticipant,
   composeDigitalEmployeeTaskCatalogSource,
+  composeSqliteDigitalEmployeeWriterCutover,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
-  readPersistedDigitalEmployeeTypePackageDescriptorJsons,
-  readDigitalEmployeeWriterState,
 } from '@/modules/digital-employee/composition'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { rowToAgent } from '@/services/agent'
 import { rowToWorkflowDetail } from '@/services/workflow'
 import { rowToWorkgroup } from '@/services/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
-import type { EmployeeCaseDetailProjectionParticipant } from '@/modules/digital-employee/public/types'
+import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
+import type {
+  DigitalEmployeePlatformToolCatalogParticipant,
+  EmployeeCaseDetailProjectionParticipant,
+} from '@/modules/digital-employee/public/types'
 import {
   developmentExecutionContractRegistrations,
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
-import { composeDevelopmentConfigOperations } from '@/modules/development-automation/composition/configOperations'
-import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
+import {
+  composeDevelopmentConfigOperations,
+  type DevelopmentConfigAccessRow,
+  type DevelopmentConfigResourceAccess,
+} from '@/modules/development-automation/composition/configOperations'
+import {
+  composeDevelopmentMissionOperations,
+  createLegacyMissionAdmissionsEnabledQuery,
+} from '@/modules/development-automation/composition/missionOperations'
+import { composeSqliteMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import {
+  composeSqliteCapabilityTemplateOperations,
+  createSqliteCapabilityTemplatePersistence,
+} from '@/modules/code-capability/composition/capabilityTemplateOperations'
+import { composeSqliteLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import {
   createDevelopmentActivityWorkerBinding,
   type DevelopmentActivityWorkerBinding,
@@ -179,31 +297,65 @@ import type {
   DevelopmentMissionOperations,
 } from '@/modules/development-automation/public/operations'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
-import { composeEventCenter, type EventCenterModule } from '@/modules/event-center/composition'
+import {
+  composeEventCenter,
+  deferEventCenterModule,
+  type EventCenterModule,
+} from '@/modules/event-center/composition'
 import { composeDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import { composeTaskExecutionRuntime } from '@/modules/task-execution/composition/taskExecutionRuntime'
+import {
+  composeTaskClarifyDirectiveRouteOperations,
+  composeTaskExecutionRuntime,
+  createSqliteTaskExecutionPersistence,
+} from '@/modules/task-execution/composition/taskExecutionRuntime'
+import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
+import { createSqliteTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants'
+import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createSqliteTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { createSqliteTaskRouteLaunchOperations } from '@/modules/task-execution/composition/taskRouteLaunch'
+import {
+  composePostgresqlRuntimeRegistryOperations,
+  composeSqliteRuntimeRegistryOperations,
+} from '@/platform/runtime-registry/composition'
+import type { RuntimeRegistryOperations } from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import {
   requireSchedulerDriver,
   type SchedulerDriverPort,
 } from '@/modules/task-execution/public/commands'
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition'
-import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
-import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
-import { buildStartTaskDeps } from '@/services/startTaskDeps'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import {
-  composeDevelopmentEmployeeWorkspace,
-  createDevelopmentEmployeeCaseWorkspaceDetailReader,
+  createCollaborationCommandContext,
+  createSqliteCollaborationTaskAccessPort,
+  planMembersReplacement,
+} from '@/modules/collaboration/composition'
+import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
+import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
+import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/sqliteTaskCatalogSources'
+import { buildStartTaskDeps } from '@/services/startTaskDeps'
+import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+import { createSqliteResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
+import { resizeAllNodePools } from '@/services/processNodeConcurrency'
+import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
+import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
+import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import {
+  composeSqliteDevelopmentEmployeeWorkspace,
+  createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader,
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentAutomation,
   composeSqliteDevelopmentAdmissionLookup,
-  createDevelopmentMissionExecutionTerminalObserver,
-  createDevelopmentMissionCodeHostEventContinuation,
+  createSqliteDevelopmentMissionExecutionTerminalObserver,
+  createSqliteDevelopmentDeliveryProvider,
+  createSqliteMissionCodeHostEventContinuation,
   type DevelopmentAdmissionLookup,
   type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
@@ -211,42 +363,69 @@ import {
   buildDevelopmentDeliveryDeps,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
-  buildDevelopmentWorkspaceRepositoryPreparation,
+  createDevelopmentWorkspaceRepositoryPreparation,
   resolveDevelopmentRepoBinding,
+  type DevelopmentDeliveryProvider,
 } from '@/services/developmentDeliveryDeps'
 import {
   composeDevelopmentApprovalEventObserver,
   composeDevelopmentCodeHostEventObserver,
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
-import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import { composeSqliteWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
+import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
+import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { composeDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
-import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
+import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import {
   createCodeHostWebhookDeliveryConsumer,
   createCodeHostWebhookRoutingDirectory,
   createRepositoryEndpointDiscovery,
 } from '@/modules/integration/composition'
+import {
+  composeSqliteWebhookDeliveryRuntime,
+  composeSqliteWebhookIngressPersistence,
+  type WebhookIngressPersistence,
+} from '@/modules/integration/composition/webhookIngress'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import type { DeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
+import { triggerRevalidation } from '@/ws/revalidationHook'
+import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
+import { canManageCaseMembers } from '@/services/employeeCaseMembers'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
-  buildRepositoryTransportConnectionProjection,
+  composePostgresqlRepositoryWorkspaceStore,
+  composeRepositoryWorkspaceOperations,
   composeRepositoryTransportCredentials,
+  composeSqliteRepositoryWorkspaceStore,
   createRepositoryPublicationTransport,
+  PostgresqlRepositoryTransportCredentialRepository,
   reconcileRepositoryTransportConnectionProjections,
+  SQLiteRepositoryTransportCredentialRepository,
   type RepositoryTransportCredentialModule,
+  type RepositoryTransportCredentialRepository,
+  type RepositoryWorkspaceOperations,
+  type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
+import {
+  composePostgresqlRealtimeRuntime,
+  composeSqliteRealtimeRuntime,
+  type RealtimeCompositionPolicy,
+} from '@/modules/runtime-management/composition'
+import type { RealtimeRuntime } from '@/modules/runtime-management/public/participants'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
+import { unsealRepoUrl } from '@/services/repoCredentials'
 
 /**
  * Narrow in-process dependency seams for route tests that exercise diagnostics
@@ -268,7 +447,193 @@ export interface RuntimeDiagnosticTestDependencies {
   probeTimeoutMsForTest?: number
 }
 
+/** Bootstrap event sink shared by both database-provider compositions. */
+export interface DaemonIdentityAccessEventSink {
+  authorityRevisionChanged(input: {
+    readonly userId: string
+    readonly revision: number
+    readonly onFailure: (error: unknown) => void
+  }): void
+}
+
+/** Bootstrap presence sink shared by both database-provider compositions. */
+export interface DaemonPresenceProjectionSink {
+  publish(changes: ReadonlyArray<{ readonly userId: string; readonly online: boolean }>): void
+}
+
+type SqliteAuthRevalidation = NonNullable<
+  Parameters<typeof createSqliteAuthRuntime>[0]['revalidate']
+>
+
+export type DaemonCredentialRevocationReason = Parameters<SqliteAuthRevalidation>[0]
+
+interface DaemonProviderCoreCommonInput {
+  readonly appHome: string
+  readonly secretBox: SecretBox | undefined
+  readonly realtimePolicy: RealtimeCompositionPolicy
+  readonly onCredentialRevoked: (reason: DaemonCredentialRevocationReason) => void
+  readonly identityEvents: DaemonIdentityAccessEventSink
+  readonly presenceProjection: DaemonPresenceProjectionSink
+  readonly identityId?: () => string
+  readonly now?: () => number
+}
+
+export interface ComposeSqliteDaemonProviderCoreInput extends DaemonProviderCoreCommonInput {
+  readonly db: DbClient
+  readonly dbPath: string
+  readonly lockPath: string
+  readonly resolveRestoreMigrations?: () => Promise<string>
+}
+
+export interface ComposePostgresqlDaemonProviderCoreInput extends DaemonProviderCoreCommonInput {
+  readonly db: PostgresqlDatabaseClient
+  readonly runtime: PostgresqlDatabaseRuntime
+  readonly databaseConfig: Extract<DatabaseConfig, { provider: 'postgresql' }>
+  readonly identityCrossContext: PostgresqlIdentityAccessCrossContextBindings
+  readonly lockPath: string
+  readonly contract?: LogicalSchemaContract
+  readonly plan?: PostgresqlSchemaPlan
+}
+
+/**
+ * Closed provider bundle consumed by all daemon transports. Database handles
+ * remain captured by the provider adapters and never cross into route mount.
+ */
+export interface DaemonProviderCore<
+  TSystemOperations extends SystemOperationsModule = SystemOperationsModule,
+> {
+  readonly provider: 'sqlite' | 'postgresql'
+  readonly authRuntime: AuthRuntime
+  readonly tokenCallAudit: TokenCallAuditParticipant
+  readonly identityAccess: IdentityAccessRuntime
+  readonly healthDatabase: HealthDatabaseReadModel
+  readonly runtimeRegistry: RuntimeRegistryOperations
+  readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
+  readonly repositoryWorkspaceOperations: RepositoryWorkspaceOperations
+  readonly repositoryTransportCredentialRepository: RepositoryTransportCredentialRepository
+  readonly realtime: RealtimeRuntime
+  readonly systemOperations: TSystemOperations
+  readonly maintenanceDisk: MaintenanceDiskOperations
+}
+
+function daemonIdentityOptions(input: DaemonProviderCoreCommonInput) {
+  return {
+    events: input.identityEvents,
+    presenceProjection: input.presenceProjection,
+    ...(input.identityId === undefined ? {} : { id: input.identityId }),
+    ...(input.now === undefined ? {} : { now: input.now }),
+  }
+}
+
+/** Bootstrap-only SQLite provider composition. */
+export function composeSqliteDaemonProviderCore(
+  input: ComposeSqliteDaemonProviderCoreInput,
+): SelectedDaemonProviderCore<'sqlite'> {
+  const repositoryWorkspaceStore = composeSqliteRepositoryWorkspaceStore(input.db)
+  const repositoryWorkspaceOperations = composeRepositoryWorkspaceOperations(
+    repositoryWorkspaceStore,
+    input.secretBox,
+  )
+  const repositoryTransportCredentialRepository = new SQLiteRepositoryTransportCredentialRepository(
+    input.db,
+  )
+  const authRuntime = createSqliteAuthRuntime({
+    db: input.db,
+    revalidate: input.onCredentialRevoked,
+  })
+  const identityAccess = createIdentityAccessRuntime({
+    db: input.db,
+    ...daemonIdentityOptions(input),
+  })
+
+  return Object.freeze({
+    provider: 'sqlite',
+    authRuntime,
+    tokenCallAudit: createSqliteTokenCallAudit(input.db),
+    identityAccess,
+    healthDatabase: createSqliteHealthDatabaseReadModel(input.db),
+    runtimeRegistry: composeSqliteRuntimeRegistryOperations(input.db),
+    repositoryWorkspaceStore,
+    repositoryWorkspaceOperations,
+    repositoryTransportCredentialRepository,
+    realtime: composeSqliteRealtimeRuntime({
+      db: input.db,
+      auth: authRuntime,
+      directAuthority: identityAccess.directAuthority,
+      policy: input.realtimePolicy,
+    }),
+    systemOperations: composeSystemOperations({
+      db: input.db,
+      secretBox: input.secretBox,
+      repositoryBackupPreparation: repositoryWorkspaceOperations.backupPreparation,
+      appHome: input.appHome,
+      dbPath: input.dbPath,
+      lockPath: input.lockPath,
+      ...(input.resolveRestoreMigrations === undefined
+        ? {}
+        : { resolveRestoreMigrations: input.resolveRestoreMigrations }),
+    }),
+    maintenanceDisk: composeSqliteMaintenanceDiskOperations(input.db, input.appHome),
+  })
+}
+
+/** Bootstrap-only PostgreSQL provider composition. */
+export function composePostgresqlDaemonProviderCore(
+  input: ComposePostgresqlDaemonProviderCoreInput,
+): SelectedDaemonProviderCore<'postgresql'> {
+  const repositoryWorkspaceStore = composePostgresqlRepositoryWorkspaceStore(input.db)
+  const repositoryWorkspaceOperations = composeRepositoryWorkspaceOperations(
+    repositoryWorkspaceStore,
+    input.secretBox,
+  )
+  const repositoryTransportCredentialRepository =
+    new PostgresqlRepositoryTransportCredentialRepository(input.db)
+  const authRuntime = createPostgresqlAuthRuntime({
+    db: input.db,
+    onCredentialRevoked: input.onCredentialRevoked,
+  })
+  const identityAccess = createPostgresqlIdentityAccessRuntime({
+    db: input.db,
+    crossContextTransactions: input.identityCrossContext,
+    ...daemonIdentityOptions(input),
+  })
+
+  return Object.freeze({
+    provider: 'postgresql',
+    authRuntime,
+    tokenCallAudit: createPostgresqlTokenCallAudit(input.db),
+    identityAccess,
+    healthDatabase: createPostgresqlHealthDatabaseReadModel(input.db),
+    runtimeRegistry: composePostgresqlRuntimeRegistryOperations(input.db),
+    repositoryWorkspaceStore,
+    repositoryWorkspaceOperations,
+    repositoryTransportCredentialRepository,
+    realtime: composePostgresqlRealtimeRuntime({
+      db: input.db,
+      auth: authRuntime,
+      directAuthority: identityAccess.directAuthority,
+      policy: input.realtimePolicy,
+    }),
+    systemOperations: composePostgresqlSystemOperations({
+      runtime: input.runtime,
+      databaseConfig: input.databaseConfig,
+      repositoryBackupPreparation: repositoryWorkspaceOperations.backupPreparation,
+      appHome: input.appHome,
+      lockPath: input.lockPath,
+      ...(input.contract === undefined ? {} : { contract: input.contract }),
+      ...(input.plan === undefined ? {} : { plan: input.plan }),
+    }),
+    maintenanceDisk: composePostgresqlMaintenanceDiskOperations(input.runtime, input.appHome),
+  })
+}
+
 export interface AppDeps {
+  /**
+   * RFC-349 bootstrap-selected provider core shared by HTTP, MCP, WebSocket
+   * and background services. Individual fields below remain test seams; the
+   * daemon supplies this aggregate so every consumer observes one provider.
+   */
+  providerCore?: DaemonProviderCore
   /** One daemon-scoped execution driver composed by server/CLI bootstrap. */
   schedulerDriver?: SchedulerDriverPort
   /** Read projections composed with the same task-execution runtime. */
@@ -296,6 +661,10 @@ export interface AppDeps {
    * 都表示「没有传输凭据模块」。
    */
   repositoryTransport?: RepositoryTransportCredentialModule | null
+  /** RFC-349 bootstrap-selected transport credential persistence. */
+  repositoryTransportCredentialRepository?: RepositoryTransportCredentialRepository
+  /** RFC-349 bootstrap-selected source-control workspace persistence. */
+  repositoryWorkspaceStore?: RepositoryWorkspaceStore
   /** Token required for /api/*. */
   token: string
   /** Absolute path to config.json (lets tests use a temp file). */
@@ -320,8 +689,22 @@ export interface AppDeps {
   opencodeVersion: string | null
   /** DB schema version (count of applied migrations). */
   dbVersion: number
-  /** Drizzle DB client. */
+  /** Legacy direct-test SQLite handle used by the compatibility wrapper. */
   db: DbClient
+  /** RFC-349 bootstrap-selected authentication runtime. */
+  authRuntime?: AuthRuntime
+  /** RFC-349 bootstrap-selected REST/MCP/maintenance audit participant. */
+  tokenCallAudit?: TokenCallAuditParticipant
+  /** RFC-349 bootstrap-selected liveness projection. */
+  healthDatabase?: HealthDatabaseReadModel
+  /** RFC-349 bootstrap-selected backup/restore administration module. */
+  systemOperations?: SystemOperationsModule
+  /** RFC-349 bootstrap-selected webhook ingress persistence. */
+  webhookIngressPersistence?: WebhookIngressPersistence
+  /** RFC-349 bootstrap-selected runtime registry. */
+  runtimeRegistry?: RuntimeRegistryOperations
+  /** Daemon-scoped live concurrency mutation composed by bootstrap. */
+  configConcurrencyHotApply?: ConfigConcurrencyHotApplyCommand
   /**
    * RFC-349 provider-neutral execution-contract projection. Production
    * bootstrap injects the selected provider adapter once so HTTP and the
@@ -335,8 +718,20 @@ export interface AppDeps {
    * omit it and retain the SQLite compatibility composition.
    */
   codeHistoryQueries?: CodeHistoryRouteQueries
+  /** Branded selected-provider Agent template catalog shared with the employee OS. */
+  digitalEmployeeAgentTemplates?: DigitalEmployeeAgentTemplateCatalogParticipant
+  /**
+   * Completed immutable platform-tool projection. Production composes this
+   * asynchronously before HTTP assembly; the synchronous direct-test wrapper
+   * may omit it and exercises the empty platform catalog explicitly.
+   */
+  digitalEmployeePlatformTools?: DigitalEmployeePlatformToolCatalogParticipant
   /** RFC-349 bootstrap-selected admission lookup shared by reconcile and HTTP launch. */
   developmentAdmissionLookup?: DevelopmentAdmissionLookup
+  /** RFC-349 provider-neutral distillation monitoring queries. */
+  memoryDistillQueries?: MemoryDistillQueries
+  /** RFC-349 bootstrap-selected memory command/query/worker aggregate. */
+  memoryOperations?: MemoryOperations
   /**
    * RFC-349 bootstrap-owned database migration application. Production and
    * contract harnesses inject one composition root with their own admission
@@ -351,6 +746,8 @@ export interface AppDeps {
   collaborationContext?: CollaborationCommandContext
   /** RFC-338: indexed/live projection from the off-thread maintenance owner. */
   maintenanceStatus?: () => MaintenanceStatus
+  /** RFC-349: selected-provider mechanism telemetry, kept separate from request latency. */
+  databaseTelemetry?: () => DatabaseRuntimeTelemetry
   /**
    * RFC-036 — AES-256-GCM seal/unseal helper. Required only for the OIDC
    * routes (admin CRUD + login callback). Tests that do not exercise OIDC
@@ -419,6 +816,8 @@ export interface AppDeps {
     appHome?: string
     capacity?: number
   }
+  /** RFC-349 bootstrap-selected MCP runtime-test service. */
+  mcpRuntimeTests?: McpRuntimeTestService
 }
 
 /**
@@ -427,7 +826,17 @@ export interface AppDeps {
  * entry point (including direct dispatcher tests) choose an explicit bootstrap
  * composition instead of discovering a missing driver only on first request.
  */
-type RuntimeComposedAppDeps = AppDeps & {
+type SqliteAppDeps = AppDeps & { readonly db: DbClient }
+
+type RuntimeComposedAppDeps = SqliteAppDeps & {
+  readonly authRuntime: AuthRuntime
+  readonly tokenCallAudit: TokenCallAuditParticipant
+  readonly healthDatabase: HealthDatabaseReadModel
+  readonly systemOperations: SystemOperationsModule
+  readonly maintenanceDisk: MaintenanceDiskOperations
+  readonly webhookIngressPersistence: WebhookIngressPersistence
+  readonly runtimeRegistry: RuntimeRegistryOperations
+  readonly configConcurrencyHotApply: ConfigConcurrencyHotApplyCommand
   readonly identityAccess: IntegrationTriggerIdentityAccess
   readonly schedulerDriver: SchedulerDriverPort
   readonly taskExecutionReadModels: TaskExecutionReadModels
@@ -435,9 +844,12 @@ type RuntimeComposedAppDeps = AppDeps & {
   readonly executionContracts: ReturnType<typeof composeExecutionContract>
   readonly codeHistoryQueries: CodeHistoryRouteQueries
   readonly developmentAdmissionLookup: DevelopmentAdmissionLookup
+  readonly memoryDistillCommands: MemoryDistillCommands
+  readonly memoryDistillQueries: MemoryDistillQueries
+  readonly memoryOperations: MemoryOperations
 }
 
-type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
+export type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
   readonly integrationTriggerResources: IntegrationTriggerResourceBinding
   readonly taskExecutionResources: TaskExecutionResourceBinding
 }
@@ -461,19 +873,23 @@ function withIntegrationTriggerResources(
       { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
     ),
-    taskExecutionResources: composeTaskExecutionResourceBinding(
-      legacyTaskExecutionResourceDependencies,
+    taskExecutionResources: createSqliteTaskExecutionResourceBinding(
+      db,
+      composeTaskExecutionResourceBinding(legacyTaskExecutionResourceDependencies),
     ),
   })
 }
 
 interface RepositoryBootstrap {
+  readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
+  readonly repositoryWorkspaceOperations: RepositoryWorkspaceOperations
   readonly repositoryTransport: RepositoryTransportCredentialModule | null
   readonly codeHostConnections: ReturnType<typeof createCodeHostConnectionsService> | null
+  readonly developmentDeliveryProvider: DevelopmentDeliveryProvider
   readonly repositoryPublicationTransport: ReturnType<typeof createRepositoryPublicationTransport>
 }
 
-export type ComposedAppDeps = RuntimeComposedAppDeps &
+type SqliteComposedAppDeps = RuntimeComposedAppDeps &
   RepositoryBootstrap & {
     readonly developmentAutomation: DevelopmentAutomationModule
     readonly developmentActivityOperations: DevelopmentActivityOperations
@@ -485,9 +901,577 @@ export type ComposedAppDeps = RuntimeComposedAppDeps &
     readonly developmentMissionOperations: DevelopmentMissionOperations
   }
 
-function composeApplicationEventCenter(deps: AppDeps): EventCenterModule {
-  const approvalGateway = composeApprovalGatewayRunner(deps.db)
-  const missionContinuation = createDevelopmentMissionCodeHostEventContinuation(deps.db)
+export type AppRouteMount = (app: Hono) => void
+
+/**
+ * Public transports are mounted before authentication.  Each binding is
+ * composed by the selected provider and closes over provider-owned ports; the
+ * common HTTP assembly never receives either database client.
+ */
+export interface AppPublicRouteMounts {
+  readonly health: AppRouteMount
+  readonly wellKnown: AppRouteMount
+  readonly webhookIngress: AppRouteMount
+}
+
+/**
+ * The route topology remains owned by this file.  Provider composition only
+ * supplies closed mount bindings; `mountApiRoutes` invokes them below in one
+ * fixed order for SQLite and PostgreSQL alike.
+ */
+export interface AppApiRouteMounts {
+  readonly config: AppRouteMount
+  readonly maintenance: AppRouteMount
+  readonly daemon: AppRouteMount
+  readonly plantuml: AppRouteMount
+  readonly runtime: AppRouteMount
+  readonly runtimes: AppRouteMount
+  readonly overview: AppRouteMount
+  readonly agents: AppRouteMount
+  readonly mcps: AppRouteMount
+  readonly plugins: AppRouteMount
+  readonly skills: AppRouteMount
+  readonly repos: AppRouteMount
+  readonly cachedRepos: AppRouteMount
+  readonly repoGroups: AppRouteMount
+  readonly workflows: AppRouteMount
+  readonly workgroups: AppRouteMount
+  readonly resourcePackages: AppRouteMount
+  readonly workgroupTasks: AppRouteMount
+  readonly tasks: AppRouteMount
+  readonly taskCatalog: AppRouteMount
+  readonly taskArchive: AppRouteMount
+  readonly maintenanceDisk: AppRouteMount
+  readonly scheduledTasks: AppRouteMount
+  readonly webhookEndpoints: AppRouteMount
+  readonly codeHosts: AppRouteMount
+  readonly repositoryTransportCredentials: AppRouteMount
+  readonly code: AppRouteMount
+  readonly capabilityTemplates: AppRouteMount
+  readonly eventCenter: AppRouteMount
+  readonly executionContracts: AppRouteMount
+  readonly digitalEmployees: AppRouteMount
+  readonly developmentConfig: AppRouteMount
+  readonly developmentMissions: AppRouteMount
+  readonly missionInputUploads: AppRouteMount
+  readonly webhookTriggers: AppRouteMount
+  readonly webhookDeliveries: AppRouteMount
+  readonly backup: AppRouteMount
+  readonly restore: AppRouteMount
+  readonly databaseMigration?: AppRouteMount
+  readonly worktreeFiles: AppRouteMount
+  readonly portArtifacts: AppRouteMount
+  readonly reviews: AppRouteMount
+  readonly clarify: AppRouteMount
+  readonly taskQuestions: AppRouteMount
+  readonly taskClarifyDirective: AppRouteMount
+  readonly fusion: AppRouteMount
+  readonly intentSessions: AppRouteMount
+  readonly memories: AppRouteMount
+  readonly memoryDistillJobs: AppRouteMount
+  readonly taskFeedback: AppRouteMount
+  readonly auth: AppRouteMount
+  readonly oidcAuth: AppRouteMount
+  readonly oidc: AppRouteMount
+  readonly users: AppRouteMount
+  readonly docs: AppRouteMount
+}
+
+export type AppHttpProviderCore = Pick<
+  DaemonProviderCore,
+  'provider' | 'authRuntime' | 'tokenCallAudit' | 'identityAccess'
+>
+
+/**
+ * A production application keeps the complete selected-provider core.  HTTP
+ * consumes only the authentication subset, while bootstrap reuses the same
+ * value for WebSocket, health, repository and system-operation participants.
+ */
+export type SelectedDaemonProviderCore<
+  TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
+> = Omit<
+  DaemonProviderCore<
+    TProvider extends 'postgresql' ? PostgresqlSystemOperationsModule : SystemOperationsModule
+  >,
+  'provider'
+> & {
+  readonly provider: TProvider
+}
+
+/**
+ * Provider-neutral application assembly consumed by production daemon
+ * sessions.  This contract intentionally contains no SQLite/PG handle and no
+ * optional provider fallback.  A full `DaemonProviderCore` is structurally
+ * sufficient for the closed fields below. Production compositions retain the
+ * complete core as a subtype, so bootstrap also reuses its `realtime`
+ * participant without rebuilding a WebSocket provider.
+ */
+export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProviderCore> {
+  readonly token: string
+  readonly configPath: string
+  readonly core: TCore
+  readonly publicRoutes: AppPublicRouteMounts
+  readonly apiRoutes: AppApiRouteMounts
+}
+
+export type ProviderComposedAppDeps<
+  TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
+> = ComposedAppDeps<SelectedDaemonProviderCore<TProvider>>
+
+export interface ProviderPublicRouteComposition {
+  readonly health: Readonly<{
+    readonly deps: Parameters<typeof mountHealthRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountHealthRoutes>[2]
+    readonly database: Parameters<typeof mountHealthRoutes>[3]
+  }>
+  readonly documentation: Parameters<typeof mountWellKnownRoutes>[1]
+  readonly webhookIngress: Parameters<typeof mountWebhookIngressRoutes>[1]
+}
+
+export interface ProviderPlatformRouteComposition {
+  readonly config: Parameters<typeof mountConfigRoutes>[1]
+  readonly maintenance: Parameters<typeof mountMaintenanceRoutes>[1]
+  readonly daemon: Parameters<typeof mountDaemonRoutes>[1]
+  readonly plantuml: Parameters<typeof mountPlantumlRoutes>[1]
+  readonly runtime: Parameters<typeof mountRuntimeRoutes>[1]
+  readonly runtimes: Parameters<typeof mountRuntimesRoutes>[1]
+  readonly overview: Readonly<{
+    readonly authorization: Parameters<typeof mountOverviewRoutes>[1]
+    readonly query: Parameters<typeof mountOverviewRoutes>[2]
+  }>
+}
+
+export interface ProviderResourceCatalogRouteComposition {
+  readonly agents: Parameters<typeof mountAgentRoutes>[1]
+  readonly mcps: Parameters<typeof mountMcpRoutes>[1]
+  readonly plugins: Parameters<typeof mountPluginRoutes>[1]
+  readonly skills: Parameters<typeof mountSkillRoutes>[1]
+  readonly repositories: Readonly<{
+    readonly store: Parameters<typeof mountRepoRoutes>[1]
+    readonly cached: Parameters<typeof mountCachedRepoRoutes>[1]
+    readonly groups: Parameters<typeof mountRepoGroupRoutes>[1]
+  }>
+  readonly workflows: Readonly<{
+    readonly runtime: Parameters<typeof mountWorkflowRoutes>[1]
+    readonly module: Parameters<typeof mountWorkflowRoutes>[2]
+  }>
+  readonly workgroups: Parameters<typeof mountWorkgroupRoutes>[1]
+  readonly resourcePackages: Parameters<typeof registerResourcePackageRoutes>[1] | null
+  readonly workgroupTasks: Parameters<typeof mountWorkgroupTaskRoutes>[1]
+}
+
+export interface ProviderTaskExecutionRouteComposition {
+  readonly tasks: Parameters<typeof mountTaskRoutes>[1]
+  readonly catalog: Parameters<typeof mountTaskCatalogRoutes>[1]
+  readonly archive: Parameters<typeof mountTaskArchiveRoutes>[1]
+  readonly portArtifacts: Parameters<typeof mountPortArtifactRoutes>[1]
+  readonly clarifyDirective: Parameters<typeof mountTaskClarifyDirectiveRoutes>[1]
+  readonly feedback: Parameters<typeof mountTaskFeedbackRoutes>[1]
+}
+
+export interface ProviderIntegrationRouteComposition {
+  readonly scheduledTasks: Parameters<typeof mountScheduledTaskRoutes>[1]
+  readonly webhookEndpoints: Parameters<typeof mountWebhookEndpointRoutes>[1] | null
+  readonly eventCenter: Parameters<typeof mountEventCenterRoutes>[1]
+  readonly webhookTriggers: Readonly<{
+    readonly deps: Parameters<typeof mountWebhookTriggerRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountWebhookTriggerRoutes>[2]
+  }>
+  readonly webhookDeliveries: Parameters<typeof mountWebhookDeliveryRoutes>[1]
+}
+
+export interface ProviderSourceControlRouteComposition {
+  readonly codeHosts: Readonly<{
+    readonly deps: Parameters<typeof mountCodeHostRoutes>[1]
+    readonly service: Parameters<typeof mountCodeHostRoutes>[2]
+  }>
+  readonly repositoryTransportCredentials: Readonly<{
+    readonly runtime: Parameters<typeof mountAccountRepositoryTransportCredentialRoutes>[1]
+    readonly route: Parameters<typeof mountAccountRepositoryTransportCredentialRoutes>[2]
+  }> | null
+  readonly worktreeFiles: Parameters<typeof mountWorktreeFilesRoutes>[1]
+}
+
+export interface ProviderCodeRouteComposition {
+  readonly history: Parameters<typeof mountCodeRoutes>[1]
+  readonly capabilityTemplates: Parameters<typeof mountCapabilityTemplateRoutes>[1]
+}
+
+export interface ProviderDigitalDevelopmentRouteComposition {
+  readonly executionContracts: Parameters<typeof mountExecutionContractRoutes>[1]
+  readonly digitalEmployees: Readonly<{
+    readonly persistence: Parameters<typeof mountDigitalEmployeeRoutes>[1]
+    readonly module: Parameters<typeof mountDigitalEmployeeRoutes>[2]
+    readonly activityOperations: Parameters<typeof mountDigitalEmployeeRoutes>[3]
+    readonly contexts: Parameters<typeof mountDigitalEmployeeRoutes>[4]
+  }>
+  readonly developmentConfig: Readonly<{
+    readonly aclRoutes: Parameters<typeof mountDevelopmentConfigRoutes>[1]
+    readonly operations: Parameters<typeof mountDevelopmentConfigRoutes>[2]
+    readonly contexts: Parameters<typeof mountDevelopmentConfigRoutes>[3]
+  }>
+  readonly developmentMissions: Readonly<{
+    readonly operations: Parameters<typeof mountDevelopmentMissionRoutes>[1]
+    readonly contexts: Parameters<typeof mountDevelopmentMissionRoutes>[2]
+  }>
+  readonly missionInputUploads: Parameters<typeof mountMissionInputUploadRoutes>[1]
+}
+
+export interface ProviderCollaborationRouteComposition {
+  readonly operations: Parameters<typeof mountClarifyRoutes>[1]
+  readonly appHome: Parameters<typeof mountReviewRoutes>[2]
+}
+
+export interface ProviderMemoryRouteComposition {
+  readonly fusion: Parameters<typeof mountFusionRoutes>[1]
+  readonly memories: Readonly<{
+    readonly catalog: Parameters<typeof mountMemoryRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountMemoryRoutes>[2]
+  }>
+  readonly distillJobs: Parameters<typeof mountMemoryDistillJobRoutes>[1]
+}
+
+export interface ProviderIdentityRouteComposition {
+  readonly auth: Readonly<{
+    readonly deps: Parameters<typeof mountAuthRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountAuthRoutes>[2]
+    readonly bindings: Parameters<typeof mountAuthRoutes>[3]
+  }>
+  readonly oidcAuth: Readonly<{
+    readonly deps: Parameters<typeof mountOidcAuthRoutes>[1]
+    readonly bindings: Parameters<typeof mountOidcAuthRoutes>[2]
+  }>
+  readonly oidc: Parameters<typeof mountOidcRoutes>[1]
+  readonly users: Readonly<{
+    readonly auth: Parameters<typeof mountUserRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountUserRoutes>[2]
+  }>
+}
+
+export interface ProviderSystemRouteComposition {
+  readonly maintenanceDisk: Parameters<typeof mountMaintenanceDiskRoutes>[1]
+  readonly backup: Readonly<{
+    readonly operations: Parameters<typeof mountBackupRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountBackupRoutes>[2]
+  }>
+  readonly restore: Readonly<{
+    readonly operations: Parameters<typeof mountRestoreRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountRestoreRoutes>[2]
+  }>
+  readonly databaseMigration: Readonly<{
+    readonly operations: Parameters<typeof mountDatabaseMigrationRoutes>[1]
+    readonly identityAccess: Parameters<typeof mountDatabaseMigrationRoutes>[2]
+  }>
+}
+
+/**
+ * Complete provider-selected application input.  Every member is an owner
+ * aggregate or closed route port; no route closure and no database handle may
+ * cross this boundary.  `server.ts` alone turns these values into the fixed
+ * route topology.
+ */
+export interface ProviderAppCompositionInput<
+  TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
+> {
+  readonly token: string
+  readonly configPath: string
+  readonly core: SelectedDaemonProviderCore<TProvider>
+  readonly public: ProviderPublicRouteComposition
+  readonly platform: ProviderPlatformRouteComposition
+  readonly resourceCatalog: ProviderResourceCatalogRouteComposition
+  readonly taskExecution: ProviderTaskExecutionRouteComposition
+  readonly integration: ProviderIntegrationRouteComposition
+  readonly sourceControl: ProviderSourceControlRouteComposition
+  readonly code: ProviderCodeRouteComposition
+  readonly digitalDevelopment: ProviderDigitalDevelopmentRouteComposition
+  readonly collaboration: ProviderCollaborationRouteComposition
+  readonly memory: ProviderMemoryRouteComposition
+  readonly intent: IntentSessionRouteDependencies
+  readonly identity: ProviderIdentityRouteComposition
+  readonly system: ProviderSystemRouteComposition
+}
+
+export type SqliteAppCompositionInput = ProviderAppCompositionInput<'sqlite'>
+export type PostgresqlAppCompositionInput = ProviderAppCompositionInput<'postgresql'>
+
+/** Freeze one server-owned route assembly after its provider aggregates bind. */
+function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
+  input: ComposedAppDeps<TCore>,
+): ComposedAppDeps<TCore> {
+  return Object.freeze({
+    token: input.token,
+    configPath: input.configPath,
+    core: Object.freeze({ ...input.core }),
+    publicRoutes: Object.freeze({ ...input.publicRoutes }),
+    apiRoutes: Object.freeze({ ...input.apiRoutes }),
+  })
+}
+
+/**
+ * Bind one daemon's already-composed owner aggregates to the canonical HTTP
+ * route topology. Provider clients stay captured inside the injected
+ * aggregates, so this boundary cannot silently select another provider.
+ */
+export function composeProviderAppDeps<TProvider extends DaemonProviderCore['provider']>(
+  input: ProviderAppCompositionInput<TProvider>,
+): ProviderComposedAppDeps<TProvider> {
+  const publicRoutes = Object.freeze({
+    health: (app: Hono) =>
+      mountHealthRoutes(
+        app,
+        input.public.health.deps,
+        input.public.health.identityAccess,
+        input.public.health.database,
+      ),
+    wellKnown: (app: Hono) => mountWellKnownRoutes(app, input.public.documentation),
+    webhookIngress: (app: Hono) => mountWebhookIngressRoutes(app, input.public.webhookIngress),
+  } satisfies AppPublicRouteMounts)
+
+  const apiRoutes = Object.freeze({
+    config: (app: Hono) => mountConfigRoutes(app, input.platform.config),
+    maintenance: (app: Hono) => mountMaintenanceRoutes(app, input.platform.maintenance),
+    daemon: (app: Hono) => mountDaemonRoutes(app, input.platform.daemon),
+    plantuml: (app: Hono) => mountPlantumlRoutes(app, input.platform.plantuml),
+    runtime: (app: Hono) => mountRuntimeRoutes(app, input.platform.runtime),
+    runtimes: (app: Hono) => mountRuntimesRoutes(app, input.platform.runtimes),
+    overview: (app: Hono) =>
+      mountOverviewRoutes(
+        app,
+        input.platform.overview.authorization,
+        input.platform.overview.query,
+      ),
+    agents: (app: Hono) => mountAgentRoutes(app, input.resourceCatalog.agents),
+    mcps: (app: Hono) => mountMcpRoutes(app, input.resourceCatalog.mcps),
+    plugins: (app: Hono) => mountPluginRoutes(app, input.resourceCatalog.plugins),
+    skills: (app: Hono) => mountSkillRoutes(app, input.resourceCatalog.skills),
+    repos: (app: Hono) => mountRepoRoutes(app, input.resourceCatalog.repositories.store),
+    cachedRepos: (app: Hono) =>
+      mountCachedRepoRoutes(
+        app,
+        input.resourceCatalog.repositories.cached,
+        input.resourceCatalog.repositories.store,
+      ),
+    repoGroups: (app: Hono) =>
+      mountRepoGroupRoutes(
+        app,
+        input.resourceCatalog.repositories.groups,
+        input.resourceCatalog.repositories.store,
+      ),
+    workflows: (app: Hono) =>
+      mountWorkflowRoutes(
+        app,
+        input.resourceCatalog.workflows.runtime,
+        input.resourceCatalog.workflows.module,
+      ),
+    workgroups: (app: Hono) => mountWorkgroupRoutes(app, input.resourceCatalog.workgroups),
+    resourcePackages: (app: Hono) => {
+      if (input.resourceCatalog.resourcePackages === null) return
+      registerResourcePackageRoutes(app, input.resourceCatalog.resourcePackages)
+    },
+    workgroupTasks: (app: Hono) =>
+      mountWorkgroupTaskRoutes(app, input.resourceCatalog.workgroupTasks),
+    tasks: (app: Hono) => mountTaskRoutes(app, input.taskExecution.tasks),
+    taskCatalog: (app: Hono) => mountTaskCatalogRoutes(app, input.taskExecution.catalog),
+    taskArchive: (app: Hono) => mountTaskArchiveRoutes(app, input.taskExecution.archive),
+    maintenanceDisk: (app: Hono) => mountMaintenanceDiskRoutes(app, input.system.maintenanceDisk),
+    scheduledTasks: (app: Hono) => mountScheduledTaskRoutes(app, input.integration.scheduledTasks),
+    webhookEndpoints: (app: Hono) => {
+      if (input.integration.webhookEndpoints === null) return
+      mountWebhookEndpointRoutes(app, input.integration.webhookEndpoints)
+    },
+    codeHosts: (app: Hono) =>
+      mountCodeHostRoutes(
+        app,
+        input.sourceControl.codeHosts.deps,
+        input.sourceControl.codeHosts.service,
+      ),
+    repositoryTransportCredentials: (app: Hono) => {
+      const credentials = input.sourceControl.repositoryTransportCredentials
+      if (credentials === null) return
+      mountAccountRepositoryTransportCredentialRoutes(app, credentials.runtime, credentials.route)
+    },
+    code: (app: Hono) => mountCodeRoutes(app, input.code.history),
+    capabilityTemplates: (app: Hono) =>
+      mountCapabilityTemplateRoutes(app, input.code.capabilityTemplates),
+    eventCenter: (app: Hono) => mountEventCenterRoutes(app, input.integration.eventCenter),
+    executionContracts: (app: Hono) =>
+      mountExecutionContractRoutes(app, input.digitalDevelopment.executionContracts),
+    digitalEmployees: (app: Hono) =>
+      mountDigitalEmployeeRoutes(
+        app,
+        input.digitalDevelopment.digitalEmployees.persistence,
+        input.digitalDevelopment.digitalEmployees.module,
+        input.digitalDevelopment.digitalEmployees.activityOperations,
+        input.digitalDevelopment.digitalEmployees.contexts,
+      ),
+    developmentConfig: (app: Hono) =>
+      mountDevelopmentConfigRoutes(
+        app,
+        input.digitalDevelopment.developmentConfig.aclRoutes,
+        input.digitalDevelopment.developmentConfig.operations,
+        input.digitalDevelopment.developmentConfig.contexts,
+      ),
+    developmentMissions: (app: Hono) =>
+      mountDevelopmentMissionRoutes(
+        app,
+        input.digitalDevelopment.developmentMissions.operations,
+        input.digitalDevelopment.developmentMissions.contexts,
+      ),
+    missionInputUploads: (app: Hono) =>
+      mountMissionInputUploadRoutes(app, input.digitalDevelopment.missionInputUploads),
+    webhookTriggers: (app: Hono) =>
+      mountWebhookTriggerRoutes(
+        app,
+        input.integration.webhookTriggers.deps,
+        input.integration.webhookTriggers.identityAccess,
+      ),
+    webhookDeliveries: (app: Hono) =>
+      mountWebhookDeliveryRoutes(app, input.integration.webhookDeliveries),
+    backup: (app: Hono) =>
+      mountBackupRoutes(app, input.system.backup.operations, input.system.backup.identityAccess),
+    restore: (app: Hono) =>
+      mountRestoreRoutes(app, input.system.restore.operations, input.system.restore.identityAccess),
+    databaseMigration: (app: Hono) =>
+      mountDatabaseMigrationRoutes(
+        app,
+        input.system.databaseMigration.operations,
+        input.system.databaseMigration.identityAccess,
+      ),
+    worktreeFiles: (app: Hono) => mountWorktreeFilesRoutes(app, input.sourceControl.worktreeFiles),
+    portArtifacts: (app: Hono) => mountPortArtifactRoutes(app, input.taskExecution.portArtifacts),
+    reviews: (app: Hono) =>
+      mountReviewRoutes(app, input.collaboration.operations, input.collaboration.appHome),
+    clarify: (app: Hono) => mountClarifyRoutes(app, input.collaboration.operations),
+    taskQuestions: (app: Hono) => mountTaskQuestionRoutes(app, input.collaboration.operations),
+    taskClarifyDirective: (app: Hono) =>
+      mountTaskClarifyDirectiveRoutes(app, input.taskExecution.clarifyDirective),
+    fusion: (app: Hono) => mountFusionRoutes(app, input.memory.fusion),
+    intentSessions: (app: Hono) => mountIntentSessionRoutes(app, input.intent),
+    memories: (app: Hono) =>
+      mountMemoryRoutes(app, input.memory.memories.catalog, input.memory.memories.identityAccess),
+    memoryDistillJobs: (app: Hono) => mountMemoryDistillJobRoutes(app, input.memory.distillJobs),
+    taskFeedback: (app: Hono) => mountTaskFeedbackRoutes(app, input.taskExecution.feedback),
+    auth: (app: Hono) =>
+      mountAuthRoutes(
+        app,
+        input.identity.auth.deps,
+        input.identity.auth.identityAccess,
+        input.identity.auth.bindings,
+      ),
+    oidcAuth: (app: Hono) =>
+      mountOidcAuthRoutes(app, input.identity.oidcAuth.deps, input.identity.oidcAuth.bindings),
+    oidc: (app: Hono) => mountOidcRoutes(app, input.identity.oidc),
+    users: (app: Hono) =>
+      mountUserRoutes(app, input.identity.users.auth, input.identity.users.identityAccess),
+    docs: (app: Hono) => mountDocsRoutes(app, input.public.documentation),
+  } satisfies AppApiRouteMounts)
+
+  return freezeComposedAppDeps({
+    token: input.token,
+    configPath: input.configPath,
+    core: input.core,
+    publicRoutes,
+    apiRoutes,
+  })
+}
+
+/** Named production entry points keep provider selection explicit at bootstrap. */
+export function composeSqliteProviderAppDeps(
+  input: SqliteAppCompositionInput,
+): ProviderComposedAppDeps<'sqlite'> {
+  return composeProviderAppDeps(input)
+}
+
+export function composePostgresqlAppDeps(
+  input: PostgresqlAppCompositionInput,
+): ProviderComposedAppDeps<'postgresql'> {
+  return composeProviderAppDeps(input)
+}
+
+function composeLegacyConfigConcurrencyHotApply(
+  daemonScope: object,
+): ConfigConcurrencyHotApplyCommand {
+  return Object.freeze({
+    apply(input: Parameters<ConfigConcurrencyHotApplyCommand['apply']>[0]) {
+      resizeAllNodePools(daemonScope, {
+        agent: input.maxConcurrentNodes,
+        script: input.maxConcurrentScriptNodes,
+        'code-host': input.maxConcurrentCodeHostCalls,
+      })
+      resizeAllTaskFanoutSems(input.multiProcessSubprocessConcurrency)
+      setChildTaskBudgetCapacity(input.maxActiveChildTasks)
+    },
+  })
+}
+
+function composeSqliteDevelopmentConfigResourceAccess(
+  db: DbClient,
+): DevelopmentConfigResourceAccess {
+  return Object.freeze({
+    filterVisible<T extends DevelopmentConfigAccessRow>(
+      actor: DirectAuthenticatedAuthority,
+      type: AclResourceType,
+      rows: readonly T[],
+    ): Promise<T[]> {
+      return filterVisibleRows(db, actor, type, rows)
+    },
+    canView(
+      actor: DirectAuthenticatedAuthority,
+      type: AclResourceType,
+      row: DevelopmentConfigAccessRow,
+    ): Promise<boolean> {
+      return canViewResource(db, actor, type, row)
+    },
+    requireEdit(
+      actor: DirectAuthenticatedAuthority,
+      type: AclResourceType,
+      row: DevelopmentConfigAccessRow,
+    ): Promise<ResourceAccess> {
+      return requireResourceEdit(db, actor, type, row)
+    },
+    requireGovern(
+      actor: DirectAuthenticatedAuthority,
+      type: AclResourceType,
+      row: DevelopmentConfigAccessRow,
+    ): Promise<void> {
+      return requireResourceGovern(db, actor, type, row)
+    },
+    assertNameUnchangedForEditor,
+  })
+}
+
+function composeSqliteDevelopmentConfigAclRoutes(
+  db: DbClient,
+  developmentAdapterAclIdentity: SqliteComposedAppDeps['developmentAdapterAclIdentity'],
+): DevelopmentConfigAclRouteBinding {
+  return Object.freeze({
+    mount(input: Parameters<DevelopmentConfigAclRouteBinding['mount']>[0]) {
+      mountAclEndpoints(input.app, {
+        type: input.type,
+        base: input.base,
+        param: 'id',
+        load: input.load,
+        canView: (actor, row) => canViewResource(db, actor, input.type, row),
+        read: (actor, row) => getResourceAcl(db, actor, input.type, row),
+        update: (actor, row, body, updatedAt) =>
+          updateResourceAcl(db, actor, input.type, row, body, {
+            ...(input.type === developmentAdapterAclIdentity.type
+              ? { identityPersistence: developmentAdapterAclIdentity }
+              : {}),
+            ...(updatedAt === undefined ? {} : { updatedAt }),
+          }),
+        notFoundCode: input.notFoundCode,
+      })
+    },
+  })
+}
+
+function composeApplicationEventCenter(
+  deps: SqliteAppDeps,
+  developmentDeliveryProvider: DevelopmentDeliveryProvider,
+): EventCenterModule {
+  const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
+  const missionContinuation = createSqliteMissionCodeHostEventContinuation(deps.db)
   const codeHostDeliveryDispatcher =
     deps.webhookDispatcher !== undefined &&
     supportsEventCenterCodeHostDelivery(deps.webhookDispatcher)
@@ -497,84 +1481,153 @@ function composeApplicationEventCenter(deps: AppDeps): EventCenterModule {
     deps.webhookDispatcher !== undefined && supportsEventCenterWorkStart(deps.webhookDispatcher)
       ? deps.webhookDispatcher
       : null
-  return composeEventCenter({
-    db: deps.db,
-    typePackageDescriptorJsons: [
-      developmentEmployeeTypePackage.descriptorJson,
-      codeHostEventCatalogJson,
-      taskLifecycleEventCatalogJson,
-      digitalEmployeeLifecycleEventCatalogJson,
-    ],
-    observer: composeDevelopmentEmployeeEventObserver({
-      codeHost: composeDevelopmentCodeHostEventObserver({
-        binding: (repositoryId) =>
-          resolveDevelopmentRepoBinding(deps.db, deps.secretBox, repositoryId),
-      }),
-      approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
-    }),
-    routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
-    ...(eventWorkStarter === null
-      ? {}
-      : {
-          automationWorkStart: {
-            launch: (input) => eventWorkStarter.dispatchEventTarget(input),
-          },
+  return deferEventCenterModule(
+    composeEventCenter({
+      db: deps.db,
+      typePackageDescriptorJsons: [
+        developmentEmployeeTypePackage.descriptorJson,
+        codeHostEventCatalogJson,
+        taskLifecycleEventCatalogJson,
+        digitalEmployeeLifecycleEventCatalogJson,
+      ],
+      observer: composeDevelopmentEmployeeEventObserver({
+        codeHost: composeDevelopmentCodeHostEventObserver({
+          binding: (repositoryId) =>
+            resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
         }),
-    deliveryConsumers:
-      codeHostDeliveryDispatcher === null
-        ? []
-        : [
-            createCodeHostWebhookDeliveryConsumer(
-              deps.db,
-              codeHostDeliveryDispatcher,
-              missionContinuation,
-            ),
-          ],
-    deliveryRetryLimits: {
-      current() {
-        const config = loadConfig(deps.configPath)
-        return {
-          defaultNodeRetries: config.defaultNodeRetries,
-          sessionRestartBudget: config.sessionRestartBudget,
-        }
+        approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
+      }),
+      routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
+      ...(eventWorkStarter === null
+        ? {}
+        : {
+            automationWorkStart: {
+              launch: (input) => eventWorkStarter.dispatchEventTarget(input),
+            },
+          }),
+      deliveryConsumers:
+        codeHostDeliveryDispatcher === null
+          ? []
+          : [
+              createCodeHostWebhookDeliveryConsumer(
+                deps.db,
+                codeHostDeliveryDispatcher,
+                missionContinuation,
+              ),
+            ],
+      deliveryRetryLimits: {
+        current() {
+          const config = loadConfig(deps.configPath)
+          return {
+            defaultNodeRetries: config.defaultNodeRetries,
+            sessionRestartBudget: config.sessionRestartBudget,
+          }
+        },
       },
+    }),
+  )
+}
+
+/**
+ * SQLite compatibility provider for tests/installs without a secret box. It
+ * keeps repository reads and pipeline evidence real, while the credentialed
+ * code-host binding correctly reports unavailable because no connection can
+ * be decrypted. Production daemon composition supplies the credentialed
+ * provider instead.
+ */
+function composeSqliteUncredentialedDevelopmentDeliveryProvider(input: {
+  readonly db: DbClient
+  readonly store: RepositoryWorkspaceStore
+  readonly secretBox?: SecretBox
+}): DevelopmentDeliveryProvider {
+  return Object.freeze({
+    async resolveRepository(
+      repositoryId: Parameters<DevelopmentDeliveryProvider['resolveRepository']>[0],
+    ) {
+      const row = await input.store.findCachedRepoById(repositoryId)
+      if (row === null) return null
+      const remoteUrl = unsealRepoUrl(row, input.secretBox, input.store)
+      return remoteUrl === null ? null : { remoteUrl, defaultBranch: row.defaultBranch ?? null }
     },
+    async resolveBinding(
+      _repositoryId: Parameters<DevelopmentDeliveryProvider['resolveBinding']>[0],
+    ) {
+      return null
+    },
+    async readMrFactTarget(
+      request: Parameters<DevelopmentDeliveryProvider['readMrFactTarget']>[0],
+    ) {
+      return (
+        input.db
+          .select({
+            repositoryId: developmentMissions.repositoryId,
+            mrIid: developmentMrClaims.mrIid,
+          })
+          .from(developmentMissions)
+          .innerJoin(
+            developmentMrClaims,
+            and(
+              eq(developmentMrClaims.id, request.mrClaimId),
+              eq(developmentMrClaims.missionId, developmentMissions.id),
+            ),
+          )
+          .where(eq(developmentMissions.id, request.missionId))
+          .get() ?? null
+      )
+    },
+    pipeline: composeSqlitePipelineEvidenceRunner(input.db),
   })
 }
 
-function composeRepositoryBootstrap(
-  deps: RuntimeComposedAppDeps,
-  appHome: string,
-): RepositoryBootstrap {
+function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): RepositoryBootstrap {
+  const repositoryWorkspaceStore =
+    deps.repositoryWorkspaceStore ??
+    deps.providerCore?.repositoryWorkspaceStore ??
+    composeSqliteRepositoryWorkspaceStore(deps.db)
+  const repositoryWorkspaceOperations =
+    deps.providerCore?.repositoryWorkspaceOperations ??
+    composeRepositoryWorkspaceOperations(repositoryWorkspaceStore, deps.secretBox)
+  const repository =
+    deps.repositoryTransportCredentialRepository ??
+    deps.providerCore?.repositoryTransportCredentialRepository ??
+    new SQLiteRepositoryTransportCredentialRepository(deps.db)
   const repositoryTransport =
     deps.repositoryTransport ??
     (deps.secretBox === undefined
       ? null
-      : composeRepositoryTransportCredentials(deps.db, deps.secretBox))
-  const repositoryTransportCoordinator =
-    repositoryTransport === null
-      ? null
-      : {
-          participant: repositoryTransport.adminConnections,
-          project: buildRepositoryTransportConnectionProjection,
-        }
+      : composeRepositoryTransportCredentials(repository, deps.secretBox))
   if (repositoryTransport !== null) {
-    reconcileRepositoryTransportConnectionProjections(deps.db, repositoryTransport.adminConnections)
+    void reconcileRepositoryTransportConnectionProjections(
+      repository,
+      repositoryTransport.adminConnections,
+    )
   }
   const codeHostConnections =
-    deps.secretBox === undefined || repositoryTransportCoordinator === null
+    deps.secretBox === undefined || repositoryTransport === null
       ? null
       : createCodeHostConnectionsService({
-          db: deps.db,
           secretBox: deps.secretBox,
-          repositoryTransport: repositoryTransportCoordinator,
+          repositoryTransport: repositoryTransport.adminConnections,
+        })
+  const developmentDeliveryProvider =
+    codeHostConnections === null
+      ? composeSqliteUncredentialedDevelopmentDeliveryProvider({
+          db: deps.db,
+          store: repositoryWorkspaceStore,
+          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+        })
+      : createSqliteDevelopmentDeliveryProvider({
+          db: deps.db,
+          ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+          connections: codeHostConnections,
+          pipeline: composeSqlitePipelineEvidenceRunner(deps.db),
         })
   const repositoryEndpointDiscovery =
     codeHostConnections === null
       ? undefined
       : createRepositoryEndpointDiscovery({
-          resolveConnection(provider) {
-            const connection = codeHostConnections.resolve(provider)
+          async resolveConnection(provider) {
+            const connection = await codeHostConnections.resolve(provider)
             if (connection?.connectionGeneration === undefined) return null
             return {
               provider: connection.provider,
@@ -587,12 +1640,15 @@ function composeRepositoryBootstrap(
           ...(deps.codeHostFetch === undefined ? {} : { fetchImpl: deps.codeHostFetch }),
         })
   return Object.freeze({
+    repositoryWorkspaceStore,
+    repositoryWorkspaceOperations,
     repositoryTransport,
     codeHostConnections,
+    developmentDeliveryProvider,
     repositoryPublicationTransport:
       deps.repositoryPublicationTransport ??
       createRepositoryPublicationTransport({
-        db: deps.db,
+        repository,
         ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
         appHome,
         ...(repositoryEndpointDiscovery === undefined
@@ -607,7 +1663,7 @@ function composeFallbackDevelopmentAutomation(
   appHome: string,
 ): DevelopmentAutomationModule {
   const automationRef: { current: DevelopmentAutomationModule | null } = { current: null }
-  const terminalObserver = createDevelopmentMissionExecutionTerminalObserver({
+  const terminalObserver = createSqliteDevelopmentMissionExecutionTerminalObserver({
     db: deps.db,
     drive: (missionId) => {
       const automation = automationRef.current
@@ -621,15 +1677,15 @@ function composeFallbackDevelopmentAutomation(
     db: deps.db,
     appHome,
     admissionLookup: deps.developmentAdmissionLookup,
-    requirementSource: composeRequirementSourceRunner(deps.db),
+    requirementSource: composeSqliteRequirementSourceRunner(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: deps.repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant(),
-    ...buildDevelopmentDeliveryDeps(deps.db, deps.secretBox),
-    ...buildDevelopmentPipelineDeps(deps.db),
-    ...buildDevelopmentMrFactsDeps(deps.db, deps.secretBox),
+    ...buildDevelopmentDeliveryDeps(deps.developmentDeliveryProvider),
+    ...buildDevelopmentPipelineDeps(deps.developmentDeliveryProvider.pipeline),
+    ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       db: deps.db,
       startDeps: buildStartTaskDeps(
@@ -654,29 +1710,64 @@ function composeFallbackDevelopmentAutomation(
       ),
       onTerminal: terminalObserver.script,
     }),
-    approvalGateway: composeApprovalGatewayRunner(deps.db),
+    approvalGateway: composeSqliteApprovalGatewayRunner(deps.db),
   })
   automationRef.current = automation
   return automation
 }
 
-export function createApp(deps: AppDeps): Hono {
-  const log = createLogger('http')
-  const app = new Hono()
+export function composeSqliteAppDeps(
+  deps: AppDeps & { readonly providerCore: SelectedDaemonProviderCore<'sqlite'> },
+): ProviderComposedAppDeps<'sqlite'>
+export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps
+export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
+  const appHome = deps.appHome ?? Paths.root
+  const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
   const identityAccess = withIntegrationTriggerResources(
     deps.db,
-    deps.identityAccess ?? createIdentityAccessRuntime({ db: deps.db }),
+    deps.identityAccess ??
+      deps.providerCore?.identityAccess ??
+      createIdentityAccessRuntime({ db: deps.db }),
   )
+  const authRuntime =
+    deps.authRuntime ?? deps.providerCore?.authRuntime ?? createSqliteAuthRuntime({ db: deps.db })
+  const tokenCallAudit =
+    deps.tokenCallAudit ?? deps.providerCore?.tokenCallAudit ?? createSqliteTokenCallAudit(deps.db)
+  const healthDatabase =
+    deps.healthDatabase ??
+    deps.providerCore?.healthDatabase ??
+    createSqliteHealthDatabaseReadModel(deps.db)
+  const webhookIngressPersistence =
+    deps.webhookIngressPersistence ?? composeSqliteWebhookIngressPersistence(deps.db)
+  const runtimeRegistry =
+    deps.runtimeRegistry ??
+    deps.providerCore?.runtimeRegistry ??
+    composeSqliteRuntimeRegistryOperations(deps.db)
+  const configConcurrencyHotApply =
+    deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
+  const memoryInjectionQueries =
+    deps.memoryOperations?.injectionQueries ?? composeSqliteMemoryInjectionQueries(deps.db)
+  const taskExecutionPersistence = createSqliteTaskExecutionPersistence(deps.db)
   const taskExecutionRuntime =
-    deps.schedulerDriver === undefined || deps.taskExecutionReadModels === undefined
-      ? composeTaskExecutionRuntime({
-          db: deps.db,
-          identityAccess,
-          ...(deps.repositoryPublicationTransport === undefined
-            ? {}
-            : { repositoryPublicationTransport: deps.repositoryPublicationTransport }),
+    deps.schedulerDriver !== undefined && deps.taskExecutionReadModels !== undefined
+      ? undefined
+      : composeTaskExecutionRuntime({
+          participants: createSqliteTaskExecutionRuntimeParticipants({
+            db: deps.db,
+            memoryInjectionQueries,
+            collaborationRuntime: createSqliteCollaborationRuntimeMechanics(deps.db),
+            persistence: taskExecutionPersistence,
+            runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(deps.db),
+            runtimeRegistry,
+            dynamicWorkflow: {
+              persistence: composeSqliteDynamicWorkflowPersistence(deps.db),
+              validationContext: { load: () => buildWorkflowValidationContext(deps.db) },
+            },
+            identityAccess,
+            repositoryPublicationTransport: repositoryBootstrap.repositoryPublicationTransport,
+          }),
+          readModels: deps.taskExecutionReadModels ?? taskExecutionPersistence.reads,
         })
-      : undefined
   const schedulerDriver = requireSchedulerDriver(
     deps.schedulerDriver ?? taskExecutionRuntime?.schedulerDriver,
   )
@@ -684,22 +1775,59 @@ export function createApp(deps: AppDeps): Hono {
   if (taskExecutionReadModels === undefined) {
     throw new Error('task-execution-read-models-not-composed')
   }
-  const appHome = deps.appHome ?? Paths.root
-  const systemOperations = composeSystemOperations({
-    db: deps.db,
-    secretBox: deps.secretBox,
-    appHome,
-  })
+  const systemOperations =
+    deps.systemOperations ??
+    deps.providerCore?.systemOperations ??
+    composeSystemOperations({
+      db: deps.db,
+      secretBox: deps.secretBox,
+      appHome,
+      repositoryBackupPreparation:
+        repositoryBootstrap.repositoryWorkspaceOperations.backupPreparation,
+    })
+  const maintenanceDisk =
+    deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)
+  const collaborationContext =
+    deps.collaborationContext ??
+    createCollaborationCommandContext({
+      db: deps.db,
+      appHome,
+      taskExecutionReadModels,
+    })
+  const memoryOperations =
+    deps.memoryOperations ??
+    composeSqliteMemoryOperations({
+      db: deps.db,
+      injectionQueries: memoryInjectionQueries,
+      reviewedArtifacts: {
+        read: async (finalPath) =>
+          await readCommittedReviewArtifactBody(collaborationContext, finalPath),
+      },
+    })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
-      ? { ...deps, digitalEmployeeEventCenter: composeApplicationEventCenter(deps) }
+      ? {
+          ...deps,
+          digitalEmployeeEventCenter: composeApplicationEventCenter(
+            deps,
+            repositoryBootstrap.developmentDeliveryProvider,
+          ),
+        }
       : deps),
     appHome,
+    authRuntime,
+    tokenCallAudit,
+    healthDatabase,
+    systemOperations,
+    maintenanceDisk,
+    webhookIngressPersistence,
+    runtimeRegistry,
+    configConcurrencyHotApply,
     identityAccess,
     digitalEmployeeCaseDetailProjection:
       deps.digitalEmployeeCaseDetailProjection ??
       composeDevelopmentEmployeeCaseDetailProjection(
-        createDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
+        createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
       ),
     schedulerDriver,
     taskExecutionReadModels,
@@ -714,21 +1842,18 @@ export function createApp(deps: AppDeps): Hono {
     codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db),
     developmentAdmissionLookup:
       deps.developmentAdmissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db),
-    collaborationContext:
-      deps.collaborationContext ??
-      createCollaborationCommandContext({
-        db: deps.db,
-        appHome,
-        taskExecutionReadModels,
-      }),
+    memoryDistillCommands: memoryOperations.distillCommands,
+    memoryDistillQueries: deps.memoryDistillQueries ?? memoryOperations.distillQueries,
+    memoryOperations,
+    collaborationContext,
   }
-  const repositoryBootstrap = composeRepositoryBootstrap(runtimeDeps, appHome)
   const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperations(
     runtimeDeps.db,
   )
   const developmentConfigOperations = composeDevelopmentConfigOperations(
     runtimeDeps.db,
     developmentAdapterConfigOperations,
+    composeSqliteDevelopmentConfigResourceAccess(runtimeDeps.db),
   )
   const developmentActivityWorker = createDevelopmentActivityWorkerBinding()
   const developmentAutomation =
@@ -736,13 +1861,14 @@ export function createApp(deps: AppDeps): Hono {
     composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome)
   const developmentMissionOperations = composeDevelopmentMissionOperations({
     db: runtimeDeps.db,
+    deliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
     admissionLookup: runtimeDeps.developmentAdmissionLookup,
-    ...(runtimeDeps.secretBox === undefined ? {} : { secretBox: runtimeDeps.secretBox }),
     automation: developmentAutomation,
-    legacyAdmissionsEnabled: () =>
-      readDigitalEmployeeWriterState(runtimeDeps.db).legacyAdmissionsEnabled,
+    legacyAdmissionsEnabled: createLegacyMissionAdmissionsEnabledQuery(
+      composeSqliteDigitalEmployeeWriterCutover(runtimeDeps.db),
+    ),
   })
-  const effectiveDeps: ComposedAppDeps = {
+  const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
     ...repositoryBootstrap,
     // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
@@ -755,6 +1881,1048 @@ export function createApp(deps: AppDeps): Hono {
     developmentMissionOperations,
   }
 
+  let mcpCatalogRef: McpCatalogModule | null = null
+  const userRuntimeTests =
+    effectiveDeps.mcpRuntimeTests ??
+    getMcpRuntimeTestService({
+      ...composeSqliteMcpRuntimeTestProvider(effectiveDeps.db),
+      async loadMcp(mcpId) {
+        if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
+        const identity = await resolveIdentity(
+          effectiveDeps.authRuntime,
+          effectiveDeps.token,
+          Buffer.from(effectiveDeps.token, 'utf8'),
+          identityAccess,
+        )
+        if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
+        return mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
+      },
+      loadRuntime: (name) => effectiveDeps.runtimeRegistry.getRuntime(name),
+      configPath: effectiveDeps.configPath,
+      appHome: effectiveDeps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
+      ...(effectiveDeps.mcpRuntimeTestDependencies?.runFn === undefined
+        ? {}
+        : { runFn: effectiveDeps.mcpRuntimeTestDependencies.runFn }),
+      ...(effectiveDeps.mcpRuntimeTestDependencies?.now === undefined
+        ? {}
+        : { now: effectiveDeps.mcpRuntimeTestDependencies.now }),
+      ...(effectiveDeps.mcpRuntimeTestDependencies?.capacity === undefined
+        ? {}
+        : { capacity: effectiveDeps.mcpRuntimeTestDependencies.capacity }),
+    })
+  const providerResourceCatalog = composeSqliteResourceCatalog({ db: effectiveDeps.db })
+  const agentResourceIntegrity = composeSqliteAgentResourceIntegrity({
+    db: effectiveDeps.db,
+    authorization: providerResourceCatalog.authorization,
+  })
+  const agentResourceIntegrityQueries = agentResourceIntegrity.queries
+  const agentCatalog = composeAgentCatalog({
+    db: effectiveDeps.db,
+    importQueries: composeSqliteAgentImportQueries(effectiveDeps.db),
+    resourceIntegrityQueries: agentResourceIntegrityQueries,
+  })
+  const mcpProbeStore = composeSqliteMcpProbeStore(effectiveDeps.db)
+  const mcpCatalog = composeMcpCatalog({
+    db: effectiveDeps.db,
+    coordinator: mcpOperationCoordinator,
+    nextMutationTimestamp: async (mcp) => {
+      const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
+      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
+        mcp.updatedAt + 1,
+        (persisted?.startedAt ?? 0) + 1,
+        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
+      ])
+    },
+    runtime: Object.freeze({
+      prepareDelete: (mcpId: string) => userRuntimeTests.prepareMcpDelete(mcpId),
+      reconcileDurableIntents: () => userRuntimeTests.reconcileDurableIntents(),
+    }),
+    transitionMutationInTx: transitionMcpRuntimeTestsInTx,
+    deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
+  })
+  mcpCatalogRef = mcpCatalog
+  const pluginCatalog = composePluginCatalog({
+    db: effectiveDeps.db,
+    coordinator: pluginOperationCoordinator,
+  })
+  const skillCatalog = composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })
+  const workflowCatalog = composeWorkflowCatalog({ db: effectiveDeps.db })
+  const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
+  const resourcePackageCatalog =
+    effectiveDeps.secretBox === undefined
+      ? null
+      : (() => {
+          const provider = composeSqliteResourcePackageProvider({
+            db: effectiveDeps.db,
+            appHome,
+          })
+          return composeResourcePackageOperations({
+            execution: createSqliteResourcePackageExecutionAdapter({
+              db: effectiveDeps.db,
+              appHome,
+              box: effectiveDeps.secretBox,
+              provider,
+            }),
+            resources: provider.resources,
+          })
+        })()
+  const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
+  const overviewQuery: OverviewRouteQuery = Object.freeze({
+    execute: (input: Parameters<OverviewRouteQuery['execute']>[0]) =>
+      buildOverview(
+        effectiveDeps.db,
+        {
+          actor: input.actor,
+          authority: input.authority,
+          authorization: resourceScopeAuthorization,
+        },
+        repositoryBootstrap.repositoryWorkspaceOperations.overviewQueries,
+      ),
+  })
+  const intentApply = composeSqliteIntentApplyOperations({
+    db: effectiveDeps.db,
+    appHome,
+    resources: composeIntentApplyResourceBinding(
+      legacyIntentApplyResourceDependencies,
+      providerResourceCatalog.persistence.identities,
+    ),
+    artifacts: createSqliteIntentApplyArtifactLifecycle({
+      db: effectiveDeps.db,
+      appHome,
+    }),
+  })
+  const identityUserOperations = composeIdentityUserOperations({
+    identityAccess,
+    auth: effectiveDeps.authRuntime,
+    afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
+  })
+  const apiRoutes = composeSqliteApiRouteMounts(
+    effectiveDeps,
+    identityAccess,
+    identityUserOperations,
+    systemOperations,
+    userRuntimeTests,
+    agentCatalog,
+    mcpCatalog,
+    mcpProbeStore,
+    pluginCatalog,
+    skillCatalog,
+    workflowCatalog,
+    workgroupCatalog,
+    resourcePackageCatalog,
+    providerResourceCatalog,
+    resourceScopeAuthorization,
+    agentResourceIntegrity,
+    overviewQuery,
+    intentApply,
+    taskExecutionPersistence,
+  )
+  return freezeComposedAppDeps({
+    token: effectiveDeps.token,
+    configPath: effectiveDeps.configPath,
+    core:
+      effectiveDeps.providerCore === undefined
+        ? Object.freeze({
+            provider: 'sqlite',
+            authRuntime,
+            tokenCallAudit,
+            identityAccess,
+          })
+        : Object.freeze({ ...effectiveDeps.providerCore, identityAccess }),
+    publicRoutes: Object.freeze({
+      health: (app: Hono) =>
+        mountHealthRoutes(app, effectiveDeps, identityAccess.diagnostics, healthDatabase),
+      wellKnown: (app: Hono) => mountWellKnownRoutes(app, effectiveDeps),
+      webhookIngress: (app: Hono) => mountWebhookIngressRoutes(app, effectiveDeps),
+    }),
+    apiRoutes,
+  })
+}
+
+export function composeDigitalEmployeeRoutePersistence(input: {
+  readonly identityAccess: IdentityAccessRuntime
+  readonly resourceCatalog: ProviderResourceCatalogComposition
+  readonly acl: {
+    getResourceAcl(
+      actor: Actor,
+      type: DigitalEmployeeAclResourceType,
+      row: {
+        readonly id: string
+        readonly ownerUserId?: string | null
+        readonly visibility?: 'private' | 'public'
+      },
+    ): Promise<ResourceAcl>
+    updateResourceAcl(
+      actor: Actor,
+      type: DigitalEmployeeAclResourceType,
+      row: {
+        readonly id: string
+        readonly ownerUserId?: string | null
+        readonly visibility?: 'private' | 'public'
+      },
+      body: UpdateResourceAclBody,
+      options?: Parameters<typeof updateResourceAcl>[5],
+    ): Promise<ResourceAcl>
+  }
+}): DigitalEmployeeRoutePersistence {
+  async function assertActiveMembers(subject: {
+    readonly ownerUserId?: string
+    readonly members?: readonly { readonly userId: string }[]
+  }): Promise<void> {
+    const referenced = new Set((subject.members ?? []).map((member) => member.userId))
+    if (subject.ownerUserId !== undefined) referenced.add(subject.ownerUserId)
+    if (referenced.size === 0) return
+    const people = await input.identityAccess.userDirectory.lookup([...referenced])
+    const active = new Set(
+      people.filter((person) => person.status === 'active').map((person) => person.id),
+    )
+    const invalid = [...referenced].filter(
+      (userId) => userId === SYSTEM_USER_ID || !active.has(userId),
+    )
+    if (invalid.length === 0) return
+    throw new ValidationError('members-user-invalid', 'referenced user(s) not active', {
+      userIds: invalid,
+    })
+  }
+
+  async function getCaseMembers(
+    actor: Parameters<DigitalEmployeeRoutePersistence['getCaseMembers']>[0],
+    runtime: Parameters<DigitalEmployeeRoutePersistence['getCaseMembers']>[1],
+    row: Parameters<DigitalEmployeeRoutePersistence['getCaseMembers']>[2],
+  ): ReturnType<DigitalEmployeeRoutePersistence['getCaseMembers']> {
+    const memberRows = await runtime.queries.listCaseMembers(row.id)
+    const wanted = [
+      ...new Set([
+        ...(row.ownerUserId === null ? [] : [row.ownerUserId]),
+        ...memberRows.map((member) => member.userId),
+      ]),
+    ]
+    const people =
+      wanted.length === 0 ? [] : await input.identityAccess.userDirectory.lookup(wanted)
+    const byId = new Map(people.map((person) => [person.id, person]))
+    const owner =
+      row.ownerUserId === null || row.ownerUserId === SYSTEM_USER_ID
+        ? null
+        : (byId.get(row.ownerUserId) ?? null)
+    const members = memberRows.flatMap((member) => {
+      const user = byId.get(member.userId)
+      return user === undefined ? [] : [{ user, role: member.role }]
+    })
+    const canManage = canManageCaseMembers(actor, row)
+    return {
+      caseId: row.id,
+      ownerUserId: row.ownerUserId,
+      owner,
+      members,
+      canManage,
+      canOperate:
+        canManage ||
+        memberRows.some(
+          (member) => member.role === 'collaborator' && member.userId === actor.user.id,
+        ),
+    }
+  }
+
+  return Object.freeze({
+    assertNameUnchangedForEditor,
+    adapterVisibilitySubject(actor: Actor) {
+      return { userId: actor.user.id, authority: resourceAclAudienceAuthority(actor) }
+    },
+    projectVisibleRowsWithAccess: (actor, type, rows) =>
+      input.resourceCatalog.authorization.projectVisibleRowsWithAccess(actor, type, rows),
+    filterVisibleRows: (actor, type, rows) =>
+      input.resourceCatalog.authorization.filterVisibleRows(actor, type, rows),
+    requireResourceEdit: (actor, type, row) =>
+      input.resourceCatalog.authorization.requireResourceEdit(actor, type, row),
+    requireResourceGovern: (actor, type, row) =>
+      input.resourceCatalog.authorization.requireResourceGovern(actor, type, row),
+    getCaseMembers,
+    async updateCaseMembers(actor, runtime, row, body) {
+      if (!canManageCaseMembers(actor, row)) {
+        throw new ForbiddenError(
+          'forbidden',
+          'only the employee case owner or an actor with resource-acl:bypass can manage members',
+        )
+      }
+      await assertActiveMembers(body)
+      const current = await runtime.queries.listCaseMembers(row.id)
+      const plan = planMembersReplacement({
+        prevOwner: row.ownerUserId,
+        requestedOwner: body.ownerUserId,
+        requestedMembers: body.members,
+        currentMembers: current,
+      })
+      const committed = await runtime.commands.replaceCaseMembers({
+        caseId: row.id,
+        ownerUserId: plan.nextOwner,
+        members: [...plan.nextMembers].map(([userId, role]) => ({ userId, role })),
+        addedBy: actor.user.id,
+        now: Date.now(),
+      })
+      const visibleUserIds = new Set<string>()
+      if (committed.previousOwnerUserId !== null) {
+        visibleUserIds.add(committed.previousOwnerUserId)
+      }
+      if (plan.nextOwner !== null) visibleUserIds.add(plan.nextOwner)
+      for (const userId of committed.previousMemberUserIds) visibleUserIds.add(userId)
+      for (const userId of plan.nextMembers.keys()) visibleUserIds.add(userId)
+      tasksListBroadcaster.broadcast(
+        TASKS_LIST_CHANNEL,
+        { type: 'employee-case.members.changed', caseId: row.id },
+        { kind: 'employee-case.members-changed-audience', caseId: row.id, visibleUserIds },
+      )
+      return await getCaseMembers(actor, runtime, { ...row, ownerUserId: plan.nextOwner })
+    },
+    assertMembersUsersActive: assertActiveMembers,
+    mountAcl({ app, type, base, load, notFoundCode }) {
+      mountAclEndpoints(app, {
+        type,
+        base,
+        param: 'id',
+        load,
+        canView: (actor, row) =>
+          input.resourceCatalog.authorization.canViewResource(actor, type, row),
+        read: (actor, row) => input.acl.getResourceAcl(actor, type, row),
+        update: (actor, row, body, updatedAt) =>
+          input.acl.updateResourceAcl(actor, type, row, body, {
+            ...(updatedAt === undefined ? {} : { updatedAt }),
+          }),
+        ...(notFoundCode === undefined ? {} : { notFoundCode }),
+      })
+    },
+  } satisfies DigitalEmployeeRoutePersistence)
+}
+
+/** SQLite compatibility composition used by direct `createApp({ db })` tests. */
+function composeSqliteApiRouteMounts(
+  deps: SqliteComposedAppDeps,
+  identityAccess: IdentityAccessModule & IntegrationTriggerIdentityAccess,
+  identityUserOperations: IdentityUserOperations,
+  systemOperations: SystemOperationsModule,
+  mcpRuntimeTests: McpRuntimeTestService,
+  agentCatalog: AgentCatalogModule,
+  mcpCatalog: McpCatalogModule,
+  mcpProbeStore: ReturnType<typeof composeSqliteMcpProbeStore>,
+  pluginCatalog: PluginCatalogModule,
+  skillCatalog: SkillCatalogModule,
+  workflowCatalog: WorkflowCatalogModule,
+  workgroupCatalog: WorkgroupCatalogModule,
+  resourcePackageCatalog: ComposedResourcePackageCatalog | null,
+  providerResourceCatalog: ReturnType<typeof composeSqliteResourceCatalog>,
+  resourceScopeAuthorization: ResourceScopeAuthorizationBinding,
+  agentResourceIntegrity: ReturnType<typeof composeSqliteAgentResourceIntegrity>,
+  overviewQuery: OverviewRouteQuery,
+  intentApply: IntentApplyOperations,
+  taskExecutionPersistence: ReturnType<typeof createSqliteTaskExecutionPersistence>,
+): AppApiRouteMounts {
+  const appHome = deps.appHome ?? Paths.root
+  const inputArtifacts = createEmployeeInputArtifactStore(
+    join(appHome, 'artifacts', 'employee-inputs'),
+  )
+  const developmentDelivery = buildDevelopmentDeliveryDeps(deps.developmentDeliveryProvider)
+  const repositoryTransportModule = deps.repositoryTransport
+  const repositoryWorkspaceStore = deps.repositoryWorkspaceStore
+  const codeHostConnections = deps.codeHostConnections
+  const repositoryPublicationTransport = deps.repositoryPublicationTransport
+  const schedulerDriver = deps.schedulerDriver
+  const codeWorkspace = composeSqliteLegacyCodeReadProviders(deps.db).workspace
+  const taskRouteOperations = createSqliteTaskRouteOperations({
+    db: deps.db,
+    collaboration: deps.collaborationContext,
+    recovery: taskExecutionPersistence.recoveryAdministration,
+    startDepsFor: (actor) =>
+      buildStartTaskDeps(
+        deps.db,
+        schedulerDriver,
+        deps.configPath,
+        actor.user.id,
+        deps.secretBox,
+        identityAccess,
+      ),
+    multipart: {
+      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+      configPath: deps.configPath,
+      schedulerDriver,
+      identityAccess: Object.freeze({
+        directAuthority: identityAccess.directAuthority,
+        taskExecutionResources: identityAccess.taskExecutionResources,
+      }),
+    },
+    resourceAuthorityFor: (actor) =>
+      Object.freeze({
+        actor,
+        authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+        resources: identityAccess.taskExecutionResources,
+      }),
+    assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, workflow),
+    appHome,
+  })
+  const routeDeps = {
+    ...deps,
+    identityAccess,
+    repositoryPublicationTransport,
+    schedulerDriver,
+    operations: taskRouteOperations,
+    taskExecutionReadModels: deps.taskExecutionReadModels,
+    taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
+    codeWorkspace,
+    repositoryWorkspace: repositoryWorkspaceStore,
+    changeNarrative: {
+      async requireMember(actor: Actor, taskId: string) {
+        const access = await resolveCollaborationTaskAccess(deps.collaborationContext, {
+          actor,
+          taskId,
+        })
+        if (access.task === null) {
+          throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+        }
+        if (access.actorRole === null) {
+          throw new ForbiddenError(
+            'not-task-member',
+            'only task members or an actor with the required global task authority can do this',
+          )
+        }
+      },
+      resolveRuntime: ({
+        runtimeName,
+        defaultRuntime,
+      }: {
+        readonly runtimeName: string | null
+        readonly defaultRuntime: string | null
+      }) => deps.runtimeRegistry.resolveRuntimeByName(runtimeName ?? defaultRuntime),
+    },
+    collaborationContext: deps.collaborationContext,
+  }
+  const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
+  const developmentWorkspace = composeSqliteDevelopmentEmployeeWorkspace({
+    db: deps.db,
+    appHome,
+    reactionRounds: createEmployeeReactionRoundQueries(deps.db),
+    inputArtifacts,
+    repositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation({
+      store: repositoryWorkspaceStore,
+      appHome,
+      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    }),
+    sourceControl: bindEmployeeCaseWorkspaceParticipant({
+      publicationTransport: repositoryPublicationTransport,
+    }),
+    conflictMerge: bindConflictMergeParticipant(),
+  })
+  const executionContracts = deps.executionContracts
+  const eventCenter =
+    deps.digitalEmployeeEventCenter ??
+    composeApplicationEventCenter(deps, deps.developmentDeliveryProvider)
+  const digitalEmployeeAgentTemplates =
+    deps.digitalEmployeeAgentTemplates ??
+    composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+      deps.db,
+      composeDigitalEmployeeAgentTemplateCatalogParticipant,
+    )
+  const digitalEmployee = composeDigitalEmployee({
+    db: deps.db,
+    appHome,
+    typePackages: [developmentEmployeeTypePackage],
+    typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
+    ...(deps.digitalEmployeePlatformTools === undefined
+      ? {}
+      : { platformTools: deps.digitalEmployeePlatformTools }),
+    executionContracts,
+    retryLimits: {
+      current() {
+        const config = loadConfig(deps.configPath)
+        return {
+          defaultNodeRetries: config.defaultNodeRetries,
+          sessionRestartBudget: config.sessionRestartBudget,
+        }
+      },
+    },
+    inputArtifacts,
+    connectionCatalog: composeSqliteDevelopmentToolConnectionCatalog(deps.db),
+    runtime: {
+      eventCenter: eventCenter.participant,
+      codecs: [developmentEmployeeRuntimeCodec],
+      detailProjectionParticipants:
+        deps.digitalEmployeeCaseDetailProjection === undefined
+          ? []
+          : [deps.digitalEmployeeCaseDetailProjection],
+      execution: createReactionExecutionAdapter(
+        composeDigitalEmployeeExecution({
+          db: deps.db,
+          appHome,
+          startDeps: buildStartTaskDeps(
+            deps.db,
+            schedulerDriver,
+            deps.configPath,
+            SYSTEM_USER_ID,
+            deps.secretBox,
+            deps.identityAccess,
+          ),
+          workspace: developmentWorkspace,
+          executionContracts,
+        }),
+      ),
+      platformWorkItems: composeSqliteDevelopmentEmployeePlatformWorkItems({
+        reactionRounds: createEmployeeReactionRoundQueries(deps.db),
+        db: deps.db,
+        appHome,
+        approvalGateway,
+        ...developmentDelivery,
+        conflictMerge: bindConflictMergeParticipant(),
+        sourceControl: {
+          ...bindChangeCandidateParticipant(),
+          ...bindCandidateDeliveryParticipant({
+            publicationTransport: repositoryPublicationTransport,
+          }),
+          ...bindEmployeeCaseWorkspaceParticipant({
+            publicationTransport: repositoryPublicationTransport,
+          }),
+        },
+      }),
+    },
+  })
+  if (deps.digitalEmployeeWorkStart !== undefined && digitalEmployee.runtime !== null) {
+    deps.digitalEmployeeWorkStart.bind({
+      async launch(input) {
+        const result = await digitalEmployee.runtime!.commands.launchWork({
+          employeeId: input.employeeId,
+          intake: input.intake,
+          actorUserId: input.actorUserId,
+          eventOrigin: input.origin,
+        })
+        return { caseId: result.caseRef.id }
+      },
+    })
+  }
+  if (digitalEmployee.runtime === null) {
+    throw new Error('task catalog requires the digital employee runtime')
+  }
+  deps.developmentActivityWorker.bind(digitalEmployee.runtime.worker)
+  const taskCatalog = composeTaskCatalog({
+    sources: [
+      ...composeTaskExecutionCatalogSources(deps.db),
+      composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
+    ],
+  })
+  const developmentActivityOperations = deps.developmentActivityOperations
+  const developmentConfigOperations = deps.developmentConfigOperations
+  const developmentMissionOperations = deps.developmentMissionOperations
+  const databaseMigration = deps.databaseMigration
+  const oidcProviders =
+    deps.secretBox === undefined
+      ? null
+      : createOidcProvidersService({ db: deps.db, secretBox: deps.secretBox })
+  const oidcIdentities = composeSqliteOidcIdentityOperations({
+    db: deps.db,
+    identityAccess,
+  })
+  const memoryCatalog =
+    deps.memoryOperations.catalog ??
+    composeSqliteMemoryCatalogOperations({
+      db: deps.db,
+      contexts: identityAccess.contexts,
+      authorization: resourceScopeAuthorization,
+    })
+  const taskRouteLaunch = createSqliteTaskRouteLaunchOperations({
+    db: deps.db,
+    configPath: deps.configPath,
+    execution: buildStartTaskDeps(
+      deps.db,
+      schedulerDriver,
+      deps.configPath,
+      SYSTEM_USER_ID,
+      deps.secretBox,
+      identityAccess,
+    ),
+  })
+  const workgroupTaskRoom = composeSqliteWorkgroupTaskRoom({
+    db: deps.db,
+    configPath: deps.configPath,
+    schedulerDriver,
+    taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
+  })
+  const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
+    db: deps.db,
+    resources: composeIntegrationTriggerResourceBinding(
+      { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+      composeDigitalEmployeeIntegrationTriggerParticipant,
+    ),
+    validation: Object.freeze({
+      assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, workflow),
+      assertAgentIntegrity: (agentIds) =>
+        agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
+    } satisfies Parameters<typeof composeSqliteScheduledTaskRuntime>[0]['validation']),
+    resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
+  })
+  const scheduledIdentityAccess = Object.freeze({
+    ...identityAccess,
+    integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
+  })
+  const scheduledLaunch =
+    deps.buildScheduleLaunch ??
+    buildScheduleLaunch(deps.db, schedulerDriver, deps.configPath, identityAccess)
+  const webhookEndpointService =
+    deps.secretBox === undefined
+      ? null
+      : composeSqliteWebhookEndpointServiceDependencies({
+          db: deps.db,
+          configPath: deps.configPath,
+          secretBox: deps.secretBox,
+        })
+  const webhookTriggerService = composeSqliteWebhookTriggerServiceDependencies(
+    deps.db,
+    deps.configPath,
+    scheduledTaskRuntime.operations,
+  )
+  const webhookDeliveryRuntime = composeSqliteWebhookDeliveryRuntime(deps.db)
+  const capabilityTemplatePersistence = createSqliteCapabilityTemplatePersistence(deps.db)
+  const capabilityTemplateAccess = Object.freeze({
+    filterVisible: (actor, rows) => filterVisibleRows(deps.db, actor, 'capability_template', rows),
+    canView: (actor, row) => canViewResource(deps.db, actor, 'capability_template', row),
+    requireEdit: (actor, row) => requireResourceEdit(deps.db, actor, 'capability_template', row),
+    requireGovern: (actor, row) =>
+      requireResourceGovern(deps.db, actor, 'capability_template', row),
+    assertNameUnchangedForEditor,
+  } satisfies Parameters<typeof composeSqliteCapabilityTemplateOperations>[0]['access'])
+  const capabilityTemplateAcl: CapabilityTemplateRouteDeps['capabilityTemplateAcl'] = {
+    load: (id) => capabilityTemplatePersistence.load(id),
+    canView: (actor, row) => canViewResource(deps.db, actor, 'capability_template', row),
+    read: (actor, row) => getResourceAcl(deps.db, actor, 'capability_template', row),
+    update: (actor, row, body, updatedAt) =>
+      updateResourceAcl(deps.db, actor, 'capability_template', row, body, {
+        ...(updatedAt === undefined ? {} : { updatedAt }),
+      }),
+  }
+  const capabilityTemplateRouteDeps = Object.freeze({
+    codeHistoryQueries: deps.codeHistoryQueries,
+    capabilityTemplates: composeSqliteCapabilityTemplateOperations({
+      db: deps.db,
+      access: capabilityTemplateAccess,
+    }),
+    capabilityTemplateAcl: Object.freeze(capabilityTemplateAcl),
+  } satisfies CapabilityTemplateRouteDeps)
+  const intentAuthorityFor = (actor: Actor) =>
+    directOperationAuthority(identityAccess.directAuthority, actor)
+  const intentCatalogActors = new WeakMap<object, Actor>()
+  const intentResourceCatalogFor = composeIntentResourceCatalogFor({
+    query: providerResourceCatalog.createQuery({
+      resolveActor(context) {
+        const actor = intentCatalogActors.get(context)
+        if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
+        return actor
+      },
+    }),
+    contextFor(actor) {
+      const context = identityAccess.contexts.queryFromAuthority(
+        directRequestAuthority(identityAccess.directAuthority, actor),
+        'http',
+      )
+      intentCatalogActors.set(context, actor)
+      return context
+    },
+    authorityFor: intentAuthorityFor,
+    catalogs: {
+      agents: agentCatalog.queries,
+      skills: skillCatalog.queries,
+      skillFiles: skillCatalog.fileQueries,
+      mcps: mcpCatalog.queries,
+      plugins: pluginCatalog.queries,
+      workflows: workflowCatalog.queries,
+      workgroups: workgroupCatalog.queries,
+    },
+  })
+  const intentPersistence = composeSqliteIntentPersistence({
+    db: deps.db,
+    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+  })
+  const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
+    authorityFor: intentAuthorityFor,
+    capabilityTemplates: capabilityTemplateRouteDeps.capabilityTemplates,
+    developmentConfig: developmentConfigOperations,
+    digitalEmployee: composeDigitalEmployeePlatformInventoryParticipant({
+      queries: digitalEmployee.queries,
+      access: providerResourceCatalog.authorization,
+    }),
+  })
+  const intentDumpAuxiliaryBase = composeIntentDumpAuxiliaryQueries({
+    persistence: intentPersistence,
+    platformInventory: intentPlatformInventory,
+  })
+  const intentDumpAuxiliary = Object.freeze({
+    ...intentDumpAuxiliaryBase,
+    runtimeInventory: Object.freeze({
+      ...intentDumpAuxiliaryBase.runtimeInventory,
+      async resolveDefault() {
+        const runtime = await intentPersistence.resolveIntentRuntime(
+          loadConfig(deps.configPath).defaultRuntime ?? 'opencode',
+        )
+        return { name: runtime.name, protocol: runtime.protocol }
+      },
+    }),
+  })
+  const intentSessionRoutes = Object.freeze({
+    configPath: deps.configPath,
+    identityAccess,
+    directAuthority: identityAccess.directAuthority,
+    intentApply,
+    intentPersistence,
+    intentTurnRuntime: Object.freeze({
+      runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
+      dumpAuxiliary: intentDumpAuxiliary,
+    }),
+    resourceCatalogFor: intentResourceCatalogFor,
+    ...(deps.intentTestDependencies?.runFn === undefined
+      ? {}
+      : { runTurn: deps.intentTestDependencies.runFn }),
+  } satisfies IntentSessionRouteDependencies)
+  const digitalEmployeePersistence = composeDigitalEmployeeRoutePersistence({
+    identityAccess,
+    resourceCatalog: providerResourceCatalog,
+    acl: Object.freeze({
+      getResourceAcl: (actor, type, row) => getResourceAcl(deps.db, actor, type, row),
+      updateResourceAcl: (actor, type, row, body, options) =>
+        updateResourceAcl(deps.db, actor, type, row, body, options),
+    }),
+  })
+  const missionInputUploads = composeSqliteMissionInputUploadOperations({ db: deps.db, appHome })
+  const collaborationRouteOperations = composeSqliteCollaborationRouteOperations({
+    db: deps.db,
+    context: deps.collaborationContext,
+  })
+  const collaborationTaskAccess = createSqliteCollaborationTaskAccessPort(deps.db)
+  const taskClarifyDirectiveRoutes = Object.freeze({
+    operations: composeTaskClarifyDirectiveRouteOperations(deps.collaborationContext),
+  })
+  const worktreeFiles = Object.freeze({
+    store: repositoryWorkspaceStore,
+    canViewTask: async (actor, task) =>
+      (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
+  } satisfies WorktreeFilesRouteDeps)
+  const fusionOperations = composeSqliteFusionOperations({
+    db: deps.db,
+    appHome,
+    memories: memoryCatalog,
+    tasks: createSqliteFusionEngineTaskOperations({
+      db: deps.db,
+      appHome,
+      schedulerDriver,
+      startDeps: buildStartTaskDeps(
+        deps.db,
+        schedulerDriver,
+        deps.configPath,
+        SYSTEM_USER_ID,
+        deps.secretBox,
+        identityAccess,
+      ),
+    }),
+  })
+  return Object.freeze({
+    config: (app) =>
+      mountConfigRoutes(app, {
+        configPath: deps.configPath,
+        runtimeRegistry: deps.runtimeRegistry,
+        runtimeTests: mcpRuntimeTests,
+        concurrencyHotApply: deps.configConcurrencyHotApply,
+      }),
+    maintenance: (app) => mountMaintenanceRoutes(app, deps),
+    daemon: (app) => mountDaemonRoutes(app, deps),
+    plantuml: (app) => mountPlantumlRoutes(app, deps),
+    runtime: (app) =>
+      mountRuntimeRoutes(app, {
+        configPath: deps.configPath,
+        runtimeRegistry: deps.runtimeRegistry,
+      }),
+    runtimes: (app) =>
+      mountRuntimesRoutes(app, {
+        configPath: deps.configPath,
+        runtimeRegistry: deps.runtimeRegistry,
+        runtimeTests: mcpRuntimeTests,
+        ...(deps.runtimeDiagnosticTestDependencies === undefined
+          ? {}
+          : { runtimeDiagnosticTestDependencies: deps.runtimeDiagnosticTestDependencies }),
+      }),
+    overview: (app) =>
+      mountOverviewRoutes(
+        app,
+        {
+          directAuthority: identityAccess.directAuthority,
+        },
+        overviewQuery,
+      ),
+    agents: (app) =>
+      mountAgentRoutes(app, {
+        queries: agentCatalog.queries,
+        referenceQueries: agentCatalog.referenceQueries,
+        dependencyQueries: agentCatalog.dependencyQueries,
+        resourceIntegrityQueries: agentCatalog.resourceIntegrityQueries,
+        importQueries: agentCatalog.importQueries,
+        operations: agentCatalog.operations,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+        listDigitalEmployeeTemplates: () =>
+          listDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates),
+        taskLaunch: taskRouteLaunch.agent,
+      }),
+    mcps: (app) =>
+      mountMcpRoutes(app, {
+        queries: mcpCatalog.queries,
+        operations: mcpCatalog.operations,
+        aclIdentity: mcpCatalog.participants.aclIdentity,
+        probeStore: mcpProbeStore,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+        runtimeTests: mcpRuntimeTests,
+      }),
+    plugins: (app) =>
+      mountPluginRoutes(app, {
+        queries: pluginCatalog.queries,
+        operations: pluginCatalog.operations,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+      }),
+    skills: (app) =>
+      mountSkillRoutes(app, {
+        fileCommands: skillCatalog.fileCommands,
+        versionCommands: skillCatalog.versionCommands,
+        queries: skillCatalog.queries,
+        fileQueries: skillCatalog.fileQueries,
+        versionQueries: skillCatalog.versionQueries,
+        operations: skillCatalog.operations,
+        zipImport: skillCatalog.zipImport,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+      }),
+    repos: (app) => mountRepoRoutes(app, repositoryWorkspaceStore),
+    cachedRepos: (app) => mountCachedRepoRoutes(app, deps, repositoryWorkspaceStore),
+    repoGroups: (app) => mountRepoGroupRoutes(app, deps, repositoryWorkspaceStore),
+    workflows: (app) =>
+      mountWorkflowRoutes(app, deps, {
+        queries: workflowCatalog.queries,
+        validationQueries: workflowCatalog.validationQueries,
+        operations: workflowCatalog.operations,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+      }),
+    workgroups: (app) =>
+      mountWorkgroupRoutes(app, {
+        queries: workgroupCatalog.queries,
+        operations: workgroupCatalog.operations,
+        resourceIntegrityQueries: agentResourceIntegrity.queries,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+        taskLaunch: taskRouteLaunch.workgroup,
+      }),
+    resourcePackages: (app) => {
+      if (resourcePackageCatalog === null) return
+      registerResourcePackageRoutes(app, {
+        catalog: resourcePackageCatalog,
+        commandContextFor: (actor) =>
+          identityAccess.contexts.fromAuthority(
+            directRequestAuthority(identityAccess.directAuthority, actor),
+            'http',
+          ),
+        queryContextFor: (actor) =>
+          identityAccess.contexts.queryFromAuthority(
+            directRequestAuthority(identityAccess.directAuthority, actor),
+            'http',
+          ),
+      })
+    },
+    workgroupTasks: (app) =>
+      mountWorkgroupTaskRoutes(app, {
+        module: workgroupTaskRoom,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+      }),
+    tasks: (app) => mountTaskRoutes(app, routeDeps),
+    taskCatalog: (app) => mountTaskCatalogRoutes(app, taskCatalog),
+    taskArchive: (app) =>
+      mountTaskArchiveRoutes(app, {
+        configPath: deps.configPath,
+        taskArchiveMaintenance: createSqliteTaskArchiveMaintenanceCommand(deps.db),
+      }),
+    maintenanceDisk: (app) => mountMaintenanceDiskRoutes(app, deps.maintenanceDisk),
+    scheduledTasks: (app) =>
+      mountScheduledTaskRoutes(app, {
+        identityAccess: scheduledIdentityAccess,
+        scheduledTaskRuntime,
+        buildScheduleLaunch: scheduledLaunch,
+        getDefaultRuntime: () => loadConfig(deps.configPath).defaultRuntime ?? null,
+      }),
+    webhookEndpoints: (app) => {
+      if (webhookEndpointService === null) return
+      mountWebhookEndpointRoutes(app, { webhookEndpointService })
+    },
+    codeHosts: (app) => mountCodeHostRoutes(app, deps, codeHostConnections),
+    repositoryTransportCredentials: (app) => {
+      if (repositoryTransportModule === null) return
+      mountAccountRepositoryTransportCredentialRoutes(app, deps, {
+        credentials: repositoryTransportModule.ownCredentials,
+        currentSubjects: identityAccess.resolveAuthority,
+      })
+    },
+    code: (app) => mountCodeRoutes(app, deps.codeHistoryQueries),
+    capabilityTemplates: (app) => mountCapabilityTemplateRoutes(app, capabilityTemplateRouteDeps),
+    eventCenter: (app) => mountEventCenterRoutes(app, eventCenter),
+    executionContracts: (app) => mountExecutionContractRoutes(app, executionContracts),
+    digitalEmployees: (app) =>
+      mountDigitalEmployeeRoutes(
+        app,
+        digitalEmployeePersistence,
+        digitalEmployee,
+        developmentActivityOperations,
+        identityAccess.directAuthority,
+      ),
+    developmentConfig: (app) =>
+      mountDevelopmentConfigRoutes(
+        app,
+        composeSqliteDevelopmentConfigAclRoutes(deps.db, deps.developmentAdapterAclIdentity),
+        developmentConfigOperations,
+        identityAccess.directAuthority,
+      ),
+    developmentMissions: (app) =>
+      mountDevelopmentMissionRoutes(
+        app,
+        developmentMissionOperations,
+        identityAccess.directAuthority,
+      ),
+    missionInputUploads: (app) => mountMissionInputUploadRoutes(app, missionInputUploads),
+    webhookTriggers: (app) =>
+      mountWebhookTriggerRoutes(app, { webhookTriggerService }, scheduledIdentityAccess),
+    webhookDeliveries: (app) =>
+      mountWebhookDeliveryRoutes(app, {
+        webhookDeliveryRuntime,
+        ...(deps.digitalEmployeeEventCenter === undefined
+          ? {}
+          : { digitalEmployeeEventCenter: deps.digitalEmployeeEventCenter }),
+        ...(deps.webhookDispatcher === undefined
+          ? {}
+          : { webhookDispatcher: deps.webhookDispatcher }),
+        ...(deps.webhookTerminalControl === undefined
+          ? {}
+          : { webhookTerminalControl: deps.webhookTerminalControl }),
+      }),
+    backup: (app) => mountBackupRoutes(app, systemOperations, identityAccess),
+    restore: (app) => mountRestoreRoutes(app, systemOperations, identityAccess),
+    ...(databaseMigration === undefined
+      ? {}
+      : {
+          databaseMigration: (app: Hono) =>
+            mountDatabaseMigrationRoutes(app, databaseMigration.operations, identityAccess),
+        }),
+    worktreeFiles: (app) => mountWorktreeFilesRoutes(app, worktreeFiles),
+    portArtifacts: (app) => mountPortArtifactRoutes(app, deps),
+    reviews: (app) => mountReviewRoutes(app, collaborationRouteOperations, appHome),
+    clarify: (app) => mountClarifyRoutes(app, collaborationRouteOperations),
+    taskQuestions: (app) => mountTaskQuestionRoutes(app, collaborationRouteOperations),
+    taskClarifyDirective: (app) => mountTaskClarifyDirectiveRoutes(app, taskClarifyDirectiveRoutes),
+    fusion: (app) =>
+      mountFusionRoutes(app, {
+        operations: fusionOperations,
+        configPath: deps.configPath,
+        directAuthority: identityAccess.directAuthority,
+      }),
+    intentSessions: (app) => mountIntentSessionRoutes(app, intentSessionRoutes),
+    memories: (app) =>
+      mountMemoryRoutes(app, memoryCatalog, {
+        contexts: identityAccess.contexts,
+        directAuthority: identityAccess.directAuthority,
+      }),
+    memoryDistillJobs: (app) => mountMemoryDistillJobRoutes(app, routeDeps),
+    taskFeedback: (app) => mountTaskFeedbackRoutes(app, deps),
+    auth: (app) =>
+      mountAuthRoutes(app, { configPath: deps.configPath }, identityAccess, {
+        auth: deps.authRuntime,
+        listIdentitiesForUser: (userId) => oidcIdentities.listIdentitiesForUser(userId),
+        listTokenAuditForUser: (userId) => listTokenAuditForUser(deps.db, userId),
+      }),
+    oidcAuth: (app) =>
+      mountOidcAuthRoutes(
+        app,
+        { configPath: deps.configPath },
+        {
+          auth: deps.authRuntime,
+          providers: oidcProviders,
+          identities: oidcIdentities,
+        },
+      ),
+    oidc: (app) => mountOidcRoutes(app, { auth: deps.authRuntime, providers: oidcProviders }),
+    users: (app) =>
+      mountUserRoutes(
+        app,
+        { auth: deps.authRuntime, listTokenAudit: () => listTokenAudit(deps.db) },
+        {
+          contexts: identityAccess.contexts,
+          directAuthority: identityAccess.directAuthority,
+          operations: identityUserOperations,
+        },
+      ),
+    docs: (app) => mountDocsRoutes(app, deps),
+  } satisfies AppApiRouteMounts)
+}
+
+/**
+ * Every `/api/*` route in its canonical order.  Provider composition supplies
+ * closed bindings, but cannot add, remove or reorder route domains.
+ */
+export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
+  const routes = deps.apiRoutes
+  routes.config(app)
+  routes.maintenance(app)
+  routes.daemon(app)
+  routes.plantuml(app)
+  routes.runtime(app)
+  routes.runtimes(app)
+  routes.overview(app)
+  routes.agents(app)
+  routes.mcps(app)
+  routes.plugins(app)
+  routes.skills(app)
+  routes.repos(app)
+  routes.cachedRepos(app)
+  routes.repoGroups(app)
+  routes.workflows(app)
+  routes.workgroups(app)
+  routes.resourcePackages(app)
+  routes.workgroupTasks(app)
+  routes.tasks(app)
+  routes.taskCatalog(app)
+  routes.taskArchive(app)
+  routes.maintenanceDisk(app)
+  routes.scheduledTasks(app)
+  routes.webhookEndpoints(app)
+  routes.codeHosts(app)
+  routes.repositoryTransportCredentials(app)
+  routes.code(app)
+  routes.capabilityTemplates(app)
+  routes.eventCenter(app)
+  routes.executionContracts(app)
+  routes.digitalEmployees(app)
+  routes.developmentConfig(app)
+  routes.developmentMissions(app)
+  routes.missionInputUploads(app)
+  routes.webhookTriggers(app)
+  routes.webhookDeliveries(app)
+  routes.backup(app)
+  routes.restore(app)
+  routes.databaseMigration?.(app)
+  for (const alias of SYSTEM_OPERATION_ALIASES) registerOperationAlias(alias)
+  routes.worktreeFiles(app)
+  routes.portArtifacts(app)
+  routes.reviews(app)
+  routes.clarify(app)
+  routes.taskQuestions(app)
+  routes.taskClarifyDirective(app)
+  routes.fusion(app)
+  routes.intentSessions(app)
+  routes.memories(app)
+  routes.memoryDistillJobs(app)
+  routes.taskFeedback(app)
+  routes.auth(app)
+  routes.oidcAuth(app)
+  routes.oidc(app)
+  routes.users(app)
+  routes.docs(app)
+}
+
+/** Build the HTTP/MCP application from already-selected provider ports. */
+export function createComposedApp(deps: ComposedAppDeps): Hono {
+  const log = createLogger('http')
+  const app = new Hono()
+
   app.use('*', async (c, next) => {
     const started = performance.now()
     await next()
@@ -762,44 +2930,32 @@ export function createApp(deps: AppDeps): Hono {
     log.debug('req', { method: c.req.method, path: c.req.path, status: c.res.status, ms })
   })
 
-  // Public routes (no auth).
-  mountHealthRoutes(app, effectiveDeps, identityAccess.diagnostics)
-  // RFC-247 D18 — discovery must answer before any credential exists.
-  mountWellKnownRoutes(app, effectiveDeps)
-  // RFC-257 — code-host webhook ingress. Public by design (caller is GitLab);
-  // authenticated by per-endpoint secret + URL token inside the handler.
-  mountWebhookIngressRoutes(app, effectiveDeps)
+  deps.publicRoutes.health(app)
+  deps.publicRoutes.wellKnown(app)
+  deps.publicRoutes.webhookIngress(app)
 
-  // Authenticated routes — three-track auth (RFC-036): session token / PAT /
-  // legacy daemon token. Daemon token still maps to the seeded __system__
-  // admin actor so existing single-user deployments stay zero-touch.
-  app.use('/api/*', multiAuth({ db: deps.db, daemonToken: deps.token, identityAccess }))
-
-  // RFC-247 D16 — the REST half of the token audit. Mounted right after
-  // multiAuth so the actor exists, and BEFORE the routes so it observes every
-  // one of them including the ones that throw. It records after `next()` and
-  // never rethrows: an audit failure must not turn a working call into a 500
-  // (F13). `/api/mcp` records per TOOL instead — a single "POST /api/mcp" row
-  // would say nothing about what the model actually did.
+  app.use(
+    '/api/*',
+    multiAuth({
+      auth: deps.core.authRuntime,
+      daemonToken: deps.token,
+      identityAccess: deps.core.identityAccess,
+    }),
+  )
   app.use('/api/*', async (c, next) => {
     await next()
     const actor = tryActorOf(c)
-    if (actor === null || actor.source !== 'pat') return
-    if (c.req.path === '/api/mcp') return
-    void recordTokenCall(deps.db, {
+    if (actor === null || actor.source !== 'pat' || c.req.path === '/api/mcp') return
+    void deps.core.tokenCallAudit.record({
       actor,
       channel: 'rest',
       method: c.req.method,
       path: c.req.path,
       statusCode: c.res.status,
-      // AC-20 — captured by the delete route before it removed the row; the
-      // row itself is unreachable from here.
       deletedSnapshot: takeDeleteSnapshot(c),
     })
   })
 
-  // /api/whoami returns the resolved actor; keeps `ok`/`pid` fields for
-  // backwards compatibility with anything that pinged the P-1-08 probe.
   registerRoute(
     app,
     {
@@ -829,114 +2985,21 @@ export function createApp(deps: AppDeps): Hono {
     },
   )
 
-  // RFC-247 T4 — the manual permission gates that used to live here are GONE.
-  //
-  // They were mounted by PATH PREFIX (`app.use('/api/skills/*', …)`) and by
-  // hand-written method mapping, which is why whole domains shipped with no
-  // gate at all: nothing forced a new route to acquire one, and nothing could
-  // answer "which permission does this endpoint need" for an arbitrary path.
-  //
-  // Every route now declares its own contract via `registerRoute` and the
-  // framework derives the gate from that declaration. The startup self-check
-  // below refuses to boot when the declarations and the mounted routes
-  // disagree in EITHER direction, which is what makes the guarantee real
-  // rather than aspirational.
-
-  const userRuntimeTests = getMcpRuntimeTestService({
-    db: effectiveDeps.db,
-    configPath: effectiveDeps.configPath,
-    appHome: effectiveDeps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
-    runFn: effectiveDeps.mcpRuntimeTestDependencies?.runFn,
-    now: effectiveDeps.mcpRuntimeTestDependencies?.now,
-    capacity: effectiveDeps.mcpRuntimeTestDependencies?.capacity,
-  })
-  const agentCatalog = composeAgentCatalog({ db: effectiveDeps.db })
-  const mcpCatalog = composeMcpCatalog({
-    db: effectiveDeps.db,
-    coordinator: mcpOperationCoordinator,
-    nextMutationTimestamp: async (mcp) => {
-      const persisted = await getProbeByMcpId(effectiveDeps.db, mcp.id)
-      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
-        mcp.updatedAt + 1,
-        (persisted?.startedAt ?? 0) + 1,
-        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
-      ])
-    },
-    runtime: Object.freeze({
-      prepareDelete: (mcpId: string) => userRuntimeTests.prepareMcpDelete(mcpId),
-      reconcileDurableIntents: () => userRuntimeTests.reconcileDurableIntents(),
-    }),
-    transitionMutationInTx: transitionMcpRuntimeTestsInTx,
-    deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
-  })
-  const pluginCatalog = composePluginCatalog({
-    db: effectiveDeps.db,
-    coordinator: pluginOperationCoordinator,
-  })
-  const skillCatalog = composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })
-  const workflowCatalog = composeWorkflowCatalog({ db: effectiveDeps.db })
-  const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
-  const resourcePackageCatalog =
-    effectiveDeps.secretBox === undefined
-      ? null
-      : composeResourcePackageOperations({
-          db: effectiveDeps.db,
-          appHome: effectiveDeps.appHome ?? Paths.root,
-          box: effectiveDeps.secretBox,
-        })
-  const resourceScopeAuthorization = composeResourceScopeAuthorizationBinding()
-  const intentApply = composeIntentApplyResourceBinding(legacyIntentApplyResourceDependencies)
-  const identityUserOperations = composeIdentityUserOperations({
-    db: effectiveDeps.db,
-    identityAccess,
-    afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
-  })
-  mountApiRoutes(
-    app,
-    effectiveDeps,
-    identityAccess,
-    identityUserOperations,
-    systemOperations,
-    userRuntimeTests,
-    agentCatalog,
-    mcpCatalog,
-    pluginCatalog,
-    skillCatalog,
-    workflowCatalog,
-    workgroupCatalog,
-    resourcePackageCatalog,
-    resourceScopeAuthorization,
-    intentApply,
-  )
-
-  // RFC-344 — tools invoke stable operation ids on this already-mounted app.
-  // No second Hono, route mount, module composition, or credential parse.
+  mountApiRoutes(app, deps)
   mountMcpTransport(app, {
-    db: effectiveDeps.db,
-    configPath: effectiveDeps.configPath,
+    tokenCallAudit: deps.core.tokenCallAudit,
+    configPath: deps.configPath,
     operationInvokerFor: (actor) =>
       createBoundOperationInvoker(
         app,
-        directMcpOperationAuthority(identityAccess.directAuthority, actor),
+        directMcpOperationAuthority(deps.core.identityAccess.directAuthority, actor),
       ),
   })
 
-  // RFC-247 T4 — refuse to boot on a coverage mismatch, in either direction.
-  // Placed after every mount and before the SPA fallback so it sees the real
-  // route table. `app.routes` is Hono's own registry of what was mounted, so a
-  // route cannot hide from this by being registered through some other helper.
-  assertRouteMetaCoverage(app.routes.map((r) => ({ method: r.method, path: r.path })))
+  assertRouteMetaCoverage(app.routes.map((route) => ({ method: route.method, path: route.path })))
   assertOperationCatalogClosed()
-
   app.onError(errorHandler)
 
-  // P-5-05: When running as the compiled single-binary, the daemon also
-  // serves the frontend SPA from its embedded asset table. /, /index.html,
-  // and any /assets/* path map directly; unknown client-side routes fall back
-  // to index.html so TanStack Router can handle a hard refresh. Missing
-  // /assets/* paths stay 404 instead of returning HTML to a JS/CSS request.
-  // In dev mode IS_EMBEDDED=false and these handlers are no-ops, letting the
-  // vite dev server serve the SPA on its own port.
   if (IS_EMBEDDED) {
     app.get('*', async (c) => {
       if (c.req.path.startsWith('/api/') || c.req.path.startsWith('/ws/')) {
@@ -957,305 +3020,11 @@ export function createApp(deps: AppDeps): Hono {
   app.notFound((c) =>
     c.json({ ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` }, 404),
   )
-
   return app
 }
 
-/**
- * Every `/api/*` route, mounted onto whatever app is passed in.
- *
- * Kept as the bootstrap-owned REST table. RFC-344's MCP adapter invokes stable
- * operation ids against this already-mounted table; it never calls this mount
- * function or composes a second module root.
- *
- * Note what is deliberately NOT here: `multiAuth`. Authentication belongs to
- * the entry point (HTTP for `createApp`, the token that opened the MCP session),
- * while authorization belongs to the operation/route declarations.
- */
-export function mountApiRoutes(
-  app: Hono,
-  deps: ComposedAppDeps,
-  identityAccess: IdentityAccessModule & IntegrationTriggerIdentityAccess,
-  identityUserOperations: IdentityUserOperations,
-  systemOperations: SystemOperationsModule,
-  mcpRuntimeTests: McpRuntimeTestService,
-  agentCatalog: AgentCatalogModule,
-  mcpCatalog: McpCatalogModule,
-  pluginCatalog: PluginCatalogModule,
-  skillCatalog: SkillCatalogModule,
-  workflowCatalog: WorkflowCatalogModule,
-  workgroupCatalog: WorkgroupCatalogModule,
-  resourcePackageCatalog: ComposedResourcePackageCatalog | null,
-  resourceScopeAuthorization: ResourceScopeAuthorizationBinding,
-  intentApply: ReturnType<typeof composeIntentApplyResourceBinding>,
-): void {
-  const appHome = deps.appHome ?? Paths.root
-  const inputArtifacts = createEmployeeInputArtifactStore(
-    join(appHome, 'artifacts', 'employee-inputs'),
-  )
-  const developmentDelivery = buildDevelopmentDeliveryDeps(deps.db, deps.secretBox)
-  const repositoryTransportModule = deps.repositoryTransport
-  const codeHostConnections = deps.codeHostConnections
-  const repositoryPublicationTransport = deps.repositoryPublicationTransport
-  const schedulerDriver = deps.schedulerDriver
-  const routeDeps = {
-    ...deps,
-    identityAccess,
-    repositoryPublicationTransport,
-    schedulerDriver,
-    taskExecutionReadModels: deps.taskExecutionReadModels,
-    collaborationContext: deps.collaborationContext,
-  }
-  const approvalGateway = composeApprovalGatewayRunner(deps.db)
-  const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
-    db: deps.db,
-    appHome,
-    reactionRounds: createEmployeeReactionRoundQueries(deps.db),
-    inputArtifacts,
-    repositoryPreparation: buildDevelopmentWorkspaceRepositoryPreparation(
-      deps.db,
-      deps.secretBox,
-      appHome,
-    ),
-    sourceControl: bindEmployeeCaseWorkspaceParticipant({
-      publicationTransport: repositoryPublicationTransport,
-    }),
-    conflictMerge: bindConflictMergeParticipant(),
-  })
-  const executionContracts = deps.executionContracts
-  const eventCenter = deps.digitalEmployeeEventCenter ?? composeApplicationEventCenter(deps)
-  const digitalEmployee = composeDigitalEmployee({
-    db: deps.db,
-    appHome,
-    typePackages: [developmentEmployeeTypePackage],
-    typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
-    platformTools: composeDigitalEmployeeBuiltinToolCatalog({
-      db: deps.db,
-      typePackageDescriptorJsons: [
-        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(deps.db),
-        developmentEmployeeTypePackage.descriptorJson,
-      ],
-    }),
-    executionContracts,
-    retryLimits: {
-      current() {
-        const config = loadConfig(deps.configPath)
-        return {
-          defaultNodeRetries: config.defaultNodeRetries,
-          sessionRestartBudget: config.sessionRestartBudget,
-        }
-      },
-    },
-    inputArtifacts,
-    connectionCatalog: composeDevelopmentToolConnectionCatalog(deps.db),
-    runtime: {
-      eventCenter: eventCenter.participant,
-      codecs: [developmentEmployeeRuntimeCodec],
-      detailProjectionParticipants:
-        deps.digitalEmployeeCaseDetailProjection === undefined
-          ? []
-          : [deps.digitalEmployeeCaseDetailProjection],
-      execution: createReactionExecutionAdapter(
-        composeDigitalEmployeeExecution({
-          db: deps.db,
-          appHome,
-          startDeps: buildStartTaskDeps(
-            deps.db,
-            schedulerDriver,
-            deps.configPath,
-            SYSTEM_USER_ID,
-            deps.secretBox,
-            deps.identityAccess,
-          ),
-          workspace: developmentWorkspace,
-          executionContracts,
-        }),
-      ),
-      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
-        reactionRounds: createEmployeeReactionRoundQueries(deps.db),
-        db: deps.db,
-        appHome,
-        approvalGateway,
-        ...developmentDelivery,
-        conflictMerge: bindConflictMergeParticipant(),
-        sourceControl: {
-          ...bindChangeCandidateParticipant(),
-          ...bindCandidateDeliveryParticipant({
-            publicationTransport: repositoryPublicationTransport,
-          }),
-          ...bindEmployeeCaseWorkspaceParticipant({
-            publicationTransport: repositoryPublicationTransport,
-          }),
-        },
-      }),
-    },
-  })
-  if (deps.digitalEmployeeWorkStart !== undefined && digitalEmployee.runtime !== null) {
-    deps.digitalEmployeeWorkStart.bind({
-      launch(input) {
-        const result = digitalEmployee.runtime!.commands.launchWork({
-          employeeId: input.employeeId,
-          intake: input.intake,
-          actorUserId: input.actorUserId,
-          eventOrigin: input.origin,
-        })
-        return { caseId: result.caseRef.id }
-      },
-    })
-  }
-  if (digitalEmployee.runtime === null) {
-    throw new Error('task catalog requires the digital employee runtime')
-  }
-  deps.developmentActivityWorker.bind(digitalEmployee.runtime.worker)
-  const taskCatalog = composeTaskCatalog({
-    sources: [
-      ...composeTaskExecutionCatalogSources(deps.db),
-      composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
-    ],
-  })
-  const developmentActivityOperations = deps.developmentActivityOperations
-  const developmentConfigOperations = deps.developmentConfigOperations
-  const developmentMissionOperations = deps.developmentMissionOperations
-  mountConfigRoutes(app, deps)
-  mountMaintenanceRoutes(app, deps)
-  mountDaemonRoutes(app, deps)
-  mountPlantumlRoutes(app, deps)
-  mountRuntimeRoutes(app, deps)
-  mountRuntimesRoutes(app, deps)
-  mountOverviewRoutes(app, deps, {
-    directAuthority: identityAccess.directAuthority,
-    resourceScopeAuthorization,
-  }) // RFC-190
-  mountAgentRoutes(app, routeDeps, {
-    queries: agentCatalog.queries,
-    referenceQueries: agentCatalog.referenceQueries,
-    operations: agentCatalog.operations,
-    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-  })
-  mountMcpRoutes(app, deps, {
-    queries: mcpCatalog.queries,
-    operations: mcpCatalog.operations,
-    aclIdentity: mcpCatalog.participants.aclIdentity,
-    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-    runtimeTests: mcpRuntimeTests,
-  })
-  mountPluginRoutes(app, deps, {
-    queries: pluginCatalog.queries,
-    operations: pluginCatalog.operations,
-    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-  })
-  mountSkillRoutes(app, deps, {
-    fileCommands: skillCatalog.fileCommands,
-    versionCommands: skillCatalog.versionCommands,
-    queries: skillCatalog.queries,
-    fileQueries: skillCatalog.fileQueries,
-    versionQueries: skillCatalog.versionQueries,
-    operations: skillCatalog.operations,
-    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-  })
-  mountRepoRoutes(app, deps)
-  mountCachedRepoRoutes(app, deps)
-  mountRepoGroupRoutes(app, deps)
-  mountWorkflowRoutes(app, deps, {
-    queries: workflowCatalog.queries,
-    operations: workflowCatalog.operations,
-    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-  })
-  mountWorkgroupRoutes(app, routeDeps, {
-    queries: workgroupCatalog.queries,
-    operations: workgroupCatalog.operations,
-    authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
-  }) // RFC-164
-  // RFC-271 配置包：导出六条 + 导入两条。需要 secretBox 来签 previewToken——
-  // 缺它时**整组不挂**（与 OIDC 路由同姿势），而不是退化成一个不签名的版本：
-  // 不签名的 preview→commit 绑定等于没有绑定。
-  if (resourcePackageCatalog !== null) {
-    registerResourcePackageRoutes(app, {
-      catalog: resourcePackageCatalog,
-      commandContextFor: (actor) =>
-        identityAccess.contexts.fromAuthority(
-          directRequestAuthority(identityAccess.directAuthority, actor),
-          'http',
-        ),
-      queryContextFor: (actor) =>
-        identityAccess.contexts.queryFromAuthority(
-          directRequestAuthority(identityAccess.directAuthority, actor),
-          'http',
-        ),
-    })
-  }
-  mountWorkgroupTaskRoutes(app, routeDeps) // RFC-164 PR-4
-  mountTaskRoutes(app, routeDeps)
-  mountTaskCatalogRoutes(app, taskCatalog)
-  mountTaskArchiveRoutes(app, deps) // RFC-311 T19
-  mountMaintenanceDiskRoutes(app, deps) // RFC-311 T20
-  mountScheduledTaskRoutes(app, routeDeps) // RFC-159
-  mountWebhookEndpointRoutes(app, deps) // RFC-257 T7
-  mountCodeHostRoutes(app, deps, codeHostConnections) // RFC-269
-  if (repositoryTransportModule !== null) {
-    mountAccountRepositoryTransportCredentialRoutes(app, deps, {
-      credentials: repositoryTransportModule.ownCredentials,
-      currentSubjects: identityAccess.resolveAuthority,
-    })
-  }
-  mountCodeRoutes(app, deps.codeHistoryQueries) // RFC-304 T31b / RFC-349 provider cutover
-  mountCapabilityTemplateRoutes(app, deps) // RFC-304 T57
-  mountEventCenterRoutes(app, eventCenter) // RFC-310 shared Event Center
-  mountExecutionContractRoutes(app, executionContracts) // platform deterministic IO contracts
-  mountDigitalEmployeeRoutes(
-    app,
-    deps,
-    digitalEmployee,
-    developmentActivityOperations,
-    identityAccess.directAuthority,
-  ) // RFC-310 Digital Employee OS / RFC-344 activity operation
-  mountDevelopmentConfigRoutes(
-    app,
-    deps,
-    developmentConfigOperations,
-    identityAccess.directAuthority,
-    deps.developmentAdapterAclIdentity,
-  ) // RFC-310 PR-1B / RFC-344
-  mountDevelopmentMissionRoutes(app, developmentMissionOperations, identityAccess.directAuthority) // RFC-310 legacy drain / RFC-344
-  mountMissionInputUploadRoutes(app, deps) // RFC-310 PR-3
-  mountWebhookTriggerRoutes(app, deps, identityAccess) // RFC-257 T8
-  mountWebhookDeliveryRoutes(app, deps) // RFC-257 T9
-  mountBackupRoutes(app, systemOperations, identityAccess)
-  mountRestoreRoutes(app, systemOperations, identityAccess)
-  if (deps.databaseMigration !== undefined) {
-    mountDatabaseMigrationRoutes(app, deps.databaseMigration.operations, identityAccess)
-  }
-  for (const alias of SYSTEM_OPERATION_ALIASES) registerOperationAlias(alias)
-  mountWorktreeFilesRoutes(app, deps)
-  mountPortArtifactRoutes(app, deps)
-  mountReviewRoutes(app, routeDeps)
-  mountClarifyRoutes(app, routeDeps)
-  mountTaskQuestionRoutes(app, routeDeps)
-  mountTaskClarifyDirectiveRoutes(app, deps)
-  mountFusionRoutes(app, routeDeps, {
-    directAuthority: identityAccess.directAuthority,
-    resourceScopeAuthorization,
-  })
-  mountIntentSessionRoutes(app, deps, {
-    directAuthority: identityAccess.directAuthority,
-    intentApply,
-  }) // RFC-234 / RFC-345 T4b
-  mountMemoryRoutes(app, deps, {
-    contexts: identityAccess.contexts,
-    directAuthority: identityAccess.directAuthority,
-    resourceScopeAuthorization,
-  })
-  mountMemoryDistillJobRoutes(app, deps)
-  mountTaskFeedbackRoutes(app, deps)
-  // RFC-036 — auth + OIDC + user-CRUD routes. The first three are always
-  // mounted; OIDC routes self-skip when deps.secretBox is omitted.
-  mountAuthRoutes(app, deps, identityAccess)
-  mountOidcAuthRoutes(app, deps, identityAccess)
-  mountOidcRoutes(app, deps)
-  mountUserRoutes(app, deps, {
-    contexts: identityAccess.contexts,
-    directAuthority: identityAccess.directAuthority,
-    operations: identityUserOperations,
-  })
-  mountDocsRoutes(app, deps) // RFC-247 D17
+export function createApp(deps: AppDeps): Hono
+export function createApp(deps: ComposedAppDeps): Hono
+export function createApp(deps: AppDeps | ComposedAppDeps): Hono {
+  return createComposedApp('apiRoutes' in deps ? deps : composeSqliteAppDeps(deps))
 }

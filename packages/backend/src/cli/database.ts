@@ -3,6 +3,10 @@
 // the offline daemon-lock boundary live here.
 
 import { sha256Hex } from '@/util/hash'
+import {
+  databaseMigrationStartIdempotencyKeyWith,
+  databaseMigrationStartIdentityFromOverview,
+} from '@agent-workflow/shared'
 import type { Lock } from '@/util/lock'
 import { acquireLock, DaemonLockHeldError } from '@/util/lock'
 import { Paths } from '@/util/paths'
@@ -91,8 +95,15 @@ function targetFromArgs(argv: readonly string[]): DatabaseMigrationTargetView {
   }
 }
 
-function idempotencyKey(target: DatabaseMigrationTargetView): string {
-  return `cli:${sha256Hex(JSON.stringify(target)).slice(0, 32)}`
+export function databaseMigrationStartIdempotencyKey(
+  overview: DatabaseRuntimeOverview,
+  target: DatabaseMigrationTargetView,
+): string {
+  const identity = databaseMigrationStartIdentityFromOverview(overview, target)
+  if (identity === null) {
+    throw new Error('database migration source identity is unavailable or is not SQLite')
+  }
+  return databaseMigrationStartIdempotencyKeyWith(identity, sha256Hex)
 }
 
 function formatBytes(bytes: number): string {
@@ -218,14 +229,13 @@ export async function databaseCommand(
       }
       const target = targetFromArgs(argv)
       return render(
-        await withOfflineLock(
-          () =>
-            operations.application.commands.start.execute(operations.context, {
-              idempotencyKey: idempotencyKey(target),
-              target,
-            }),
-          lockFactory,
-        ),
+        await withOfflineLock(async () => {
+          const overview = await operations.application.queries.overview.execute(operations.context)
+          return await operations.application.commands.start.execute(operations.context, {
+            idempotencyKey: databaseMigrationStartIdempotencyKey(overview, target),
+            target,
+          })
+        }, lockFactory),
       )
     }
     if (argv[0] === 'migration') {

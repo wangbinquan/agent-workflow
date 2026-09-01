@@ -1,27 +1,32 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
+import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
+import { Buffer } from 'node:buffer'
 import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
+import {
+  composeSqliteWebhookDispatchCore,
+  createSqliteWebhookExecutionRuntime,
+} from '@/modules/integration/composition/webhookDispatch'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
   composeSqliteDevelopmentAdmissionLookup,
-  createDevelopmentMissionCodeHostEventContinuation,
+  createSqliteDevelopmentDeliveryProvider,
+  createSqliteDevelopmentMissionExecutionTerminalObserver,
+  createSqliteMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
-import { createLegacyMissionDrainPort } from '@/modules/development-automation/composition/legacyMissionDrain'
-import { createSqliteMissionStore } from '@/modules/development-automation/infrastructure/sqliteMissionStore'
-import { missionIdOfExecutionRef } from '@/modules/development-automation/infrastructure/sqliteReconcilerReaders'
-import { composeRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
+import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
   bindConflictMergeParticipant,
   bindEmployeeCaseWorkspaceParticipant,
-  buildRepositoryTransportConnectionProjection,
   cleanupOrphanedGitCredentialLeases,
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
@@ -29,17 +34,23 @@ import {
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
+import { composeSqliteAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
+import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
 import {
-  composeSqliteTaskExecutionReadModels,
-  composeTaskExecutionRuntime,
-} from '@/modules/task-execution/composition/taskExecutionRuntime'
+  composeSqliteTaskExecutionProviderRuntime,
+  type SelectedSqliteTaskExecutionProviderRuntime,
+  type TaskExecutionBackgroundControl,
+  type TaskExecutionBackgroundStartDependencies,
+} from '@/modules/task-execution/composition/providerRuntime'
+import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
 import {
-  createIdentityAccessRuntime,
-  type IdentityAccessRuntime,
-} from '@/modules/identity-access/composition'
-import { composeApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
-import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
-import { ulid } from 'ulid'
+  composeSqliteMemoryOperations,
+  composeSqliteMemoryInjectionQueries,
+} from '@/modules/memory/composition'
+import { composeSqliteIntentMaintenanceSnapshotQueries } from '@/modules/intent/composition/maintenance'
+import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
+import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { sha256Hex } from '@/util/hash'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
@@ -48,16 +59,20 @@ import {
   buildDevelopmentWorkspaceRepositoryPreparation,
   buildDevelopmentMrFactsDeps,
   buildDevelopmentPipelineDeps,
+  createDevelopmentWorkspaceRepositoryPreparation,
   resolveDevelopmentRepoBinding,
 } from '@/services/developmentDeliveryDeps'
-import { openDb, DbCorruptionError } from '@/db/client'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { createApp } from '@/server'
-import { startFusionReconcileLoop } from '@/services/fusion'
+import { composeSqliteAppDeps, composeSqliteDaemonProviderCore, createComposedApp } from '@/server'
+import { reconcileRunningFusions } from '@/services/fusion'
 import { startLimitsTicker } from '@/services/limits'
-import { resumeQueuedIntentWorkingSets } from '@/services/intent/dispatcher'
+import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
+import {
+  resumeQueuedIntentWorkingSets,
+  type IntentDispatchDeps,
+} from '@/services/intent/dispatcher'
 import { reapOrphanRuns } from '@/services/orphans'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
@@ -66,19 +81,14 @@ import {
   prepareTaskExecutionRecovery,
 } from '@/services/taskExecutionParticipants'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
-import { autoResumeInterruptedTasks } from '@/services/autoResume'
-import { startAutoRepairLoop } from '@/services/autoRepair'
-import { startHeartbeatKillLoop } from '@/services/autoKill'
-import { startOrphanReconcileLoop } from '@/services/orphanReconcile'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import {
   composeHumanGateContinuationDriver,
+  activeTaskIdsSnapshot,
   isTaskActive,
-  resumeTask,
   retryRepositoryPreparation,
+  shutdownActiveTaskExecutions,
 } from '@/services/task'
-import { buildScheduleLaunch } from '@/services/scheduleLaunch'
-import { startScheduledTaskLoop } from '@/services/scheduledTaskScheduler'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { recoverInterruptedArchives } from '@/services/taskArchive'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
@@ -90,17 +100,33 @@ import {
 } from '@/services/gc'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
+import { composeSqlitePostRestoreRecovery } from '@/modules/system-operations/composition'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
-import { createWebhookTerminalWorkspacePrunePolicy } from '@/services/webhook/terminalWorkspaceCleanup'
-import { sealOpenHumanGatesForTask } from '@/services/terminalSweep'
+import { composeSqliteWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
+import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
 import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
-import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
+import { resolveIdentity } from '@/auth/session'
+import { composeSqliteMcpRuntimeTestProvider } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { composeAgentCatalog } from '@/modules/resource-catalog/composition/agentOperations'
+import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
+import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
+import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/workflowOperations'
+import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
+import { composeSqliteAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
+import { composeSqliteMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
+import type { McpCatalogModule } from '@/modules/resource-catalog/public/operations'
+import { getProbeByMcpId } from '@/services/mcpProbeStore'
+import { mcpRouteNow } from '@/routes/mcps'
+import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
+import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import {
-  enqueueDistillJob,
-  setMemoryDistillLangProvider,
-  startMemoryDistillLoop,
-} from '@/services/memoryDistillScheduler'
+  deletePreparedMcpRuntimeTestsInTx,
+  transitionMcpRuntimeTestsInTx,
+} from '@/services/mcpRuntimeTestTransitions'
+import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
+import { setMemoryDistillLangProvider } from '@/services/memoryDistillScheduler'
 import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import {
   PRESENCE_CHANNEL,
@@ -114,7 +140,6 @@ import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { readControlFile, requestShutdown, startControlListener } from '@/services/controlListener'
 import { buildWebSocketAdapter } from '@/ws/server'
-import { isBootstrapRequired } from '@/auth/loginPolicy'
 import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
@@ -126,17 +151,18 @@ import {
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import { composeIntegrationTriggerResourceBinding } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { composeEventCenter, startEventCenterWorker } from '@/modules/event-center/composition'
+import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
+import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
+import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
 import {
-  activateDigitalEmployeeOsWriter,
+  composeSqliteDigitalEmployeeWriterCutover,
   composeDigitalEmployee,
   composeDigitalEmployeeIntegrationTriggerParticipant,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
-  refreshDigitalEmployeeWriterState,
-  startDigitalEmployeeOsWorker,
 } from '@/modules/digital-employee/composition'
+import { runDigitalEmployeeOsCycle } from '@/modules/digital-employee/application/osWorker'
 import { rowToAgent } from '@/services/agent'
 import { rowToWorkflowDetail } from '@/services/workflow'
 import { rowToWorkgroup } from '@/services/workgroups'
@@ -151,11 +177,15 @@ import {
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
+import { composeSqliteCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
+import { composeSqliteCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
+import { composeSqliteDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composeSqliteFusionOperations } from '@/modules/memory/composition/fusion'
 import {
-  composeDevelopmentEmployeeWorkspace,
-  createDevelopmentEmployeeCaseWorkspaceDetailReader,
+  composeSqliteDevelopmentEmployeeWorkspace,
+  createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader,
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
-import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentApprovalEventObserver,
@@ -174,7 +204,7 @@ import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/e
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
 import {
   createTaskLifecycleDurableConsumerDefinitions,
-  createTaskLifecycleWsProjector,
+  createSqliteTaskLifecycleWsProjector,
   taskLifecycleCommittedEventCodec,
 } from '@/modules/task-execution/composition/committedEvents'
 import {
@@ -184,11 +214,12 @@ import {
 import {
   createCollaborationDurableConsumerDefinitions,
   createCollaborationWsProjector,
+  createSqliteCollaborationCommittedEventProjection,
   collaborationCommittedEventCodec,
   createHumanGateContinuationWorkerDefinition,
 } from '@/modules/collaboration/composition/committedEvents'
-import { listPendingHumanGateContinuations } from '@/services/humanGateContinuationRecovery'
 import { createAfterCommitEventPump } from '@/platform/events/committed/afterCommitEventPump'
+import { createSqliteCommittedEventDeliveryPersistence } from '@/platform/events/committed/sqlitePersistence'
 import { createCommittedEventProjectionLedger } from '@/platform/events/committed/types'
 import {
   createCommittedEventDispatcherWorkerDefinition,
@@ -201,10 +232,842 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
+import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
+import { createDaemonRealtimePolicyBinding } from './daemonRealtimePolicy'
+import { composeSqliteResourceCatalog } from '@/modules/resource-catalog/composition/providerResourceCatalog'
+import { composeSqliteSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
+import type { SkillCatalogBootParticipant } from '@/modules/resource-catalog/public/participants'
+import { composeSqliteWebhookDeliveryPersistence } from '@/modules/integration/composition/webhookDelivery'
+import {
+  createCollaborationCommandContext,
+  createSqliteHumanGateContinuationRecoveryQueries,
+  createSqliteHumanGateTerminalSweepCommand,
+} from '@/modules/collaboration/composition'
+import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
+import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
+import { buildWorkflowValidationContext } from '@/services/workflow.validator'
+import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
+import { batchOwnerUserId } from '@/services/repoBatchImport'
+import { redactEventPayload } from '@/services/tokenRedaction'
+import { triggerRevalidation } from '@/ws/revalidationHook'
+import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
+import type { Actor } from '@/auth/actor'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
+import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
+import { createSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
+import {
+  composeIntentDumpAuxiliaryQueries,
+  composeIntentTurnRuntimeResolver,
+} from '@/modules/intent/composition/auxiliaryQueries'
+import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
+import { composeDigitalEmployeePlatformInventoryParticipant } from '@/modules/digital-employee/composition'
+import {
+  composeDevelopmentConfigOperations,
+  type DevelopmentConfigResourceAccess,
+} from '@/modules/development-automation/composition/configOperations'
+import { composeDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/developmentAdapterConfigOperations'
+import { assertNameUnchangedForEditor } from '@/services/resourceAcl'
+import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
+import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
+import {
+  createDaemonProviderBootstrap,
+  type DaemonProviderBootstrap,
+} from './daemonProviderBootstrap'
+import {
+  createDaemonProviderRuntimeSession,
+  type DaemonProviderCloseParticipant,
+  type DaemonProviderRuntimeAdmission,
+  type DaemonProviderRuntimeHandleFactory,
+} from './daemonProviderRuntimeSession'
+import {
+  createLazyPausableDaemonRuntimeServiceBindings,
+  createManagedWorkerRuntimeHandleFactory,
+  createPausableDaemonRuntimeServiceBindings,
+  createPollingDaemonRuntimeHandleFactory,
+} from './daemonProviderRuntimeHandles'
+import {
+  composePostgresqlDaemonApplication,
+  type PostgresqlDaemonApplication,
+  type PostgresqlDaemonApplicationInput,
+} from './postgresqlDaemonApplication'
+import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
+import {
+  createPostgresqlCollaborationCommittedEventProjection,
+  createPostgresqlHumanGateContinuationRecoveryQueries,
+  createPostgresqlHumanGateTerminalSweepCommand,
+} from '@/modules/collaboration/composition'
+import { enforceLimits } from '@/services/limits'
 
 export interface StartOptions {
   port?: number
   host?: string
+}
+
+interface DaemonProviderHttpAdmission {
+  readonly lifecycle: Pick<
+    DaemonProviderRuntimeAdmission,
+    'closeWriterAdmission' | 'openWriterAdmission'
+  >
+  readonly run: (request: Request, next: () => Promise<Response>) => Promise<Response>
+}
+
+function isProviderControlRequest(request: Request): boolean {
+  const path = new URL(request.url).pathname
+  return (
+    path === '/api/database' ||
+    path.startsWith('/api/database/') ||
+    path === '/api/health' ||
+    (!path.startsWith('/api/') && !path.startsWith('/ws/'))
+  )
+}
+
+/**
+ * Provider-session HTTP fence. It is deliberately independent from the
+ * migration state machine: the runtime session closes this gate before it
+ * drains background writers and opens it only after every selected-provider
+ * handle has started. Migration-control and health routes remain reachable so
+ * a failed switch can report/recover without reopening business traffic.
+ */
+function createDaemonProviderHttpAdmission(): DaemonProviderHttpAdmission {
+  let open = false
+  return Object.freeze({
+    lifecycle: Object.freeze({
+      closeWriterAdmission() {
+        open = false
+      },
+      openWriterAdmission() {
+        open = true
+      },
+    }),
+    async run(request: Request, next: () => Promise<Response>) {
+      if (open || isProviderControlRequest(request)) return await next()
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          code: 'database-maintenance',
+          message: 'database provider runtime is not accepting business requests',
+        }),
+        { status: 503, headers: { 'Content-Type': 'application/json' } },
+      )
+    },
+  })
+}
+
+interface DaemonProviderRuntimeComposition {
+  readonly provider: 'sqlite' | 'postgresql'
+  readonly generationId: string
+  readonly app: Pick<ReturnType<typeof createComposedApp>, 'fetch'>
+  readonly webSocket: ReturnType<typeof buildWebSocketAdapter>
+  readonly runtimeFactories?: readonly DaemonProviderRuntimeHandleFactory[]
+  readonly backgroundWriterFactories?: readonly DaemonProviderRuntimeHandleFactory[]
+  readonly providerCloseParticipants?: readonly DaemonProviderCloseParticipant[]
+  readonly shutdownIdentity: () => void | Promise<void>
+  readonly closeProvider: () => void | Promise<void>
+}
+
+type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModule>[0]['admission']
+
+interface DeferredDatabaseMigrationAdmission {
+  readonly admission: DatabaseMigrationAdmission
+  readonly bind: (admission: DatabaseMigrationAdmission) => void
+}
+
+interface DeferredSchedulerDriver {
+  readonly driver: SchedulerDriverPort
+  readonly bind: (driver: SchedulerDriverPort) => void
+}
+
+/** Bootstrap-local cycle breaker for the one TaskExecution composition. */
+function createDeferredSchedulerDriver(): DeferredSchedulerDriver {
+  let bound: SchedulerDriverPort | null = null
+  const requireBound = (): SchedulerDriverPort => {
+    if (bound === null) throw new Error('task-execution-scheduler-not-bound')
+    return bound
+  }
+  return Object.freeze({
+    driver: Object.freeze({
+      drive: (request: Parameters<SchedulerDriverPort['drive']>[0]) =>
+        requireBound().drive(request),
+      cancelChild: (input: Parameters<SchedulerDriverPort['cancelChild']>[0]) =>
+        requireBound().cancelChild(input),
+      resumeChild: (input: Parameters<SchedulerDriverPort['resumeChild']>[0]) =>
+        requireBound().resumeChild(input),
+      isTaskActive: (taskId: Parameters<SchedulerDriverPort['isTaskActive']>[0]) =>
+        requireBound().isTaskActive(taskId),
+    }),
+    bind(driver: SchedulerDriverPort) {
+      if (bound !== null && bound !== driver) {
+        throw new Error('task-execution-scheduler-already-bound')
+      }
+      bound = driver
+    },
+  })
+}
+
+function _bindTaskExecutionProviderBackground(
+  background: TaskExecutionBackgroundControl,
+  dependencies: TaskExecutionBackgroundStartDependencies,
+) {
+  return createLazyPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'task-execution',
+    closeParticipantId: 'task-execution-final-close',
+    service: background,
+    start: () => background.start(dependencies),
+  })
+}
+
+/**
+ * Break the intentional app/bootstrap cycle without exposing an ambient
+ * registry. Migration routes are composed before the provider controller, but
+ * remain fail-closed until this exact daemon binds its controller-owned port.
+ */
+function _createDeferredDatabaseMigrationAdmission(): DeferredDatabaseMigrationAdmission {
+  let bound: DatabaseMigrationAdmission | null = null
+  const requireBound = (): DatabaseMigrationAdmission => {
+    if (bound === null) throw new Error('database-migration-admission-not-bound')
+    return bound
+  }
+  return Object.freeze({
+    admission: Object.freeze({
+      freezeAndDrain: (input: Parameters<DatabaseMigrationAdmission['freezeAndDrain']>[0]) =>
+        requireBound().freezeAndDrain(input),
+      reopenSqlite: (input: Parameters<DatabaseMigrationAdmission['reopenSqlite']>[0]) =>
+        requireBound().reopenSqlite(input),
+      activatePostgresql: (
+        input: Parameters<DatabaseMigrationAdmission['activatePostgresql']>[0],
+      ) => requireBound().activatePostgresql(input),
+      openPostgresqlAdmission: (
+        input: Parameters<DatabaseMigrationAdmission['openPostgresqlAdmission']>[0],
+      ) => requireBound().openPostgresqlAdmission(input),
+    }),
+    bind(admission: DatabaseMigrationAdmission) {
+      if (bound !== null && bound !== admission) {
+        throw new Error('database-migration-admission-already-bound')
+      }
+      bound = admission
+    },
+  })
+}
+
+/** Join one provider's already-composed application and background lifetimes. */
+async function _createComposedDaemonProviderRuntimeSession(
+  input: DaemonProviderRuntimeComposition,
+) {
+  const httpAdmission = createDaemonProviderHttpAdmission()
+  return await createDaemonProviderRuntimeSession({
+    provider: input.provider,
+    generationId: input.generationId,
+    runtime: Object.freeze({
+      fetch: (request: Request) =>
+        httpAdmission.run(request, async () => await input.app.fetch(request)),
+      tryUpgrade: input.webSocket.tryUpgrade,
+      websocketHandlers: input.webSocket.handlers,
+    }),
+    admission: Object.freeze({
+      ...httpAdmission.lifecycle,
+      closeWebSocketAdmission: input.webSocket.admission.close,
+      openWebSocketAdmission: input.webSocket.admission.open,
+    }),
+    ...(input.runtimeFactories === undefined ? {} : { runtimeFactories: input.runtimeFactories }),
+    ...(input.backgroundWriterFactories === undefined
+      ? {}
+      : { backgroundWriterFactories: input.backgroundWriterFactories }),
+    ...(input.providerCloseParticipants === undefined
+      ? {}
+      : { providerCloseParticipants: input.providerCloseParticipants }),
+    shutdownIdentity: input.shutdownIdentity,
+    closeProvider: input.closeProvider,
+  })
+}
+
+type PostgresqlProviderRuntime = Extract<
+  ReturnType<typeof resolveDatabaseProviderRuntime>,
+  { readonly provider: 'postgresql' }
+>
+
+interface ComposedPostgresqlProviderSession {
+  readonly application: PostgresqlDaemonApplication
+  readonly session: Awaited<ReturnType<typeof _createComposedDaemonProviderRuntimeSession>>
+}
+
+function requirePostgresqlConfig(
+  config: ReturnType<typeof loadConfig>,
+): PostgresqlDaemonApplicationInput['config'] {
+  if (config.database.provider !== 'postgresql') {
+    throw new Error('postgresql-daemon-config-provider-mismatch')
+  }
+  return Object.freeze({ ...config, database: config.database })
+}
+
+/**
+ * Compose one complete frozen PostgreSQL daemon session. The selected client
+ * is captured by owner factories once; HTTP, WS, workers and maintenance all
+ * use the same aggregate and are stopped before the provider pool closes.
+ */
+async function composePostgresqlProviderSession(input: {
+  readonly provider: PostgresqlProviderRuntime
+  readonly config: PostgresqlDaemonApplicationInput['config']
+  readonly token: string
+  readonly secretBox: ReturnType<typeof createSecretBox>
+  readonly dbVersion: number
+  readonly migrationAdmission: DatabaseMigrationAdmission
+  readonly log: ReturnType<typeof createLogger>
+}): Promise<ComposedPostgresqlProviderSession> {
+  if (input.config.database.provider !== 'postgresql') {
+    throw new Error('postgresql-daemon-config-provider-mismatch')
+  }
+  const db = input.provider.openClient()
+  const databaseMigration = composeDatabaseMigrationModule({
+    admission: input.migrationAdmission,
+    sqlitePath: Paths.db,
+    operationsRoot: Paths.databaseMigrationsDir,
+    generationPointerPath: Paths.databaseGenerationPointer,
+    configPath: Paths.config,
+    executionMode: 'background',
+    onBackgroundFailure({ operationId, error }) {
+      input.log.error('database migration background operation failed', {
+        operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+
+  let boundMaintenanceStatus: ReturnType<typeof startMaintenanceService>['status'] | null = null
+  const application = await composePostgresqlDaemonApplication({
+    provider: input.provider,
+    db,
+    config: input.config,
+    token: input.token,
+    appHome: Paths.root,
+    configPath: Paths.config,
+    daemonInfoPath: Paths.daemonInfo,
+    lockPath: Paths.lock,
+    secretBox: input.secretBox,
+    databaseMigration,
+    dbVersion: input.dbVersion,
+    maintenanceStatus() {
+      if (boundMaintenanceStatus === null) {
+        throw new Error('postgresql-maintenance-status-not-bound')
+      }
+      return boundMaintenanceStatus()
+    },
+  })
+  const runtime = application.runtime
+
+  const maintenanceService = startMaintenanceService({
+    provider: 'postgresql',
+    generationId: input.provider.generation.payload.generationId,
+    database: input.config.database,
+    store: createPostgresqlMaintenanceRunStore(db),
+    appHome: Paths.root,
+    configPath: Paths.config,
+    loadConfig: () => loadConfig(Paths.config),
+    payloadSources: Object.freeze({
+      activeTaskIds: activeTaskIdsSnapshot,
+      activeIntentApplyJournalIds: runtime.intentMaintenance.activeApplyJournalIds,
+      activeResourceBundleApplyIds: runtime.resourcePackageActivity.activeApplyIds,
+      bootIntentTurnIds: runtime.intentMaintenance.bootTurnIds,
+    }),
+    onLifecycleDelta(delta) {
+      for (const alert of delta.alerts) {
+        tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+          type: 'lifecycle.alert',
+          taskId: alert.taskId,
+          rule: alert.rule,
+          severity: alert.severity,
+          transition: alert.transition,
+        })
+      }
+      for (const taskId of delta.resolvedTaskIds) {
+        tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+          type: 'lifecycle.alert.resolved',
+          taskId,
+        })
+      }
+    },
+    onIntentQueued(sessionIds) {
+      void runtime.resumeIntentSessions(sessionIds).catch((error) => {
+        input.log.warn('queued PostgreSQL intent working-set admission failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    },
+  })
+  boundMaintenanceStatus = maintenanceService.status
+
+  const maintenanceBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'maintenance',
+    closeParticipantId: 'maintenance-final-close',
+    service: maintenanceService,
+  })
+  const mcpRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'mcp-runtime-tests',
+    closeParticipantId: 'mcp-runtime-tests-final-close',
+    service: runtime.mcpRuntimeTests,
+  })
+  const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
+    runtime.taskExecution.background,
+    {
+      configPath: Paths.config,
+      scheduled: {
+        operations: runtime.scheduledTasks.operations,
+        identityAccess: runtime.scheduledTaskIdentityAccess,
+        loadConfig: () => loadConfig(Paths.config),
+      },
+    },
+  )
+
+  const humanGateRecovery = createPostgresqlHumanGateContinuationRecoveryQueries(db)
+  const humanGateWorker = createHumanGateContinuationWorkerDefinition({
+    listPending: () => humanGateRecovery.listPending(),
+    drive: runtime.driveHumanGateContinuation,
+    onError(continuation) {
+      input.log.warn('pending PostgreSQL human-gate continuation drive failed', {
+        taskId: continuation.taskId,
+        continuationRef: continuation.continuationRef,
+        error:
+          continuation.error instanceof Error
+            ? continuation.error.message
+            : String(continuation.error),
+      })
+    },
+  })
+  const humanGateRuntimeFactory = createManagedWorkerRuntimeHandleFactory({
+    id: 'human-gate-continuation',
+    stopReason: 'provider-session-paused',
+    start() {
+      return startManagedWorkerDefinition(humanGateWorker.definition, DAEMON_GENERATION)
+    },
+  })
+
+  const committedEventCodecs = combineCommittedEventCodecRegistries(
+    taskLifecycleCommittedEventCodec,
+    collaborationCommittedEventCodec,
+  )
+  const committedEventProjectors = [
+    runtime.taskExecution.lifecycleProjector,
+    createCollaborationWsProjector(createPostgresqlCollaborationCommittedEventProjection(db)),
+  ]
+  const committedEventProjectionLedger = createCommittedEventProjectionLedger()
+  const committedEventPersistence = createPostgresqlCommittedEventDeliveryPersistence(db)
+  const terminalSweep = createPostgresqlHumanGateTerminalSweepCommand(db)
+  const committedEventDispatcher = createCommittedEventDispatcher({
+    persistence: committedEventPersistence,
+    workerId: `committed-events-${DAEMON_GENERATION}`,
+    codecs: committedEventCodecs,
+    consumers: [
+      ...createTaskLifecycleDurableConsumerDefinitions({
+        events: runtime.eventCenter.commands,
+        async closeTerminalGates(taskId, status) {
+          await terminalSweep.run({ taskId, cause: `task-${status}` })
+        },
+        async notifyChildBudget(taskId, status) {
+          notifyChildBudgetTaskStatus(runtime.taskExecution.persistence.childBudget, taskId, status)
+        },
+        async notifyExecutionWatch(taskId, status) {
+          notifyTaskTerminal(taskId, status)
+        },
+        async nudgeWorkspacePrune(taskId) {
+          if (isTaskActive(taskId)) return
+          await runtime.workspaceMaintenance.finalizeClaimedWorkspace(taskId)
+        },
+      }),
+      ...createCollaborationDurableConsumerDefinitions({
+        events: runtime.eventCenter.commands,
+        nudgeContinuation: humanGateWorker.nudge,
+        async enqueueReviewDistill(request) {
+          await runtime.memory.distillCommands.enqueue({
+            sourceKind: 'review',
+            sourceEventId: request.sourceEventId,
+            taskId: request.taskId,
+          })
+        },
+      }),
+      ...committedEventProjectors,
+    ],
+    projectionLedger: committedEventProjectionLedger,
+    maxAttempts() {
+      const current = loadConfig(Paths.config)
+      return 1 + current.defaultNodeRetries + current.sessionRestartBudget
+    },
+  })
+  const committedEventWorker = createCommittedEventDispatcherWorkerDefinition({
+    persistence: committedEventPersistence,
+    dispatcher: committedEventDispatcher,
+  })
+  const committedEventRuntimeFactory = createManagedWorkerRuntimeHandleFactory({
+    id: 'committed-event-dispatcher',
+    stopReason: 'provider-session-paused',
+    start() {
+      return startManagedWorkerDefinition(committedEventWorker.definition, DAEMON_GENERATION)
+    },
+  })
+  const committedEventPump = createAfterCommitEventPump({
+    persistence: committedEventPersistence,
+    codecs: committedEventCodecs,
+    projectors: committedEventProjectors,
+    projectionLedger: committedEventProjectionLedger,
+    nudgeDispatcher: committedEventWorker.nudge,
+  })
+  const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'after-commit-event-pump',
+    start() {
+      registerAfterCommitEventPump(committedEventPump)
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          registerAfterCommitEventPump(null)
+        },
+        drain() {
+          if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')
+        },
+      })
+    },
+  })
+
+  setMemoryDistillLangProvider(() => {
+    try {
+      return loadConfig(Paths.config).memoryDistillLang ?? null
+    } catch {
+      return null
+    }
+  })
+  const memoryDistillRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'memory-distill',
+    intervalMs: 1_000,
+    beforeStart: () => runtime.memory.distillWorker.recoverRunning().then(() => undefined),
+    async run() {
+      const current = loadConfig(Paths.config)
+      if (current.memoryDistillerEnabled === false) return
+      await runtime.memory.distillWorker.tick({
+        runtimeName: current.memoryDistillRuntime ?? null,
+        defaultRuntime: current.defaultRuntime ?? null,
+        model: current.memoryDistillModel ?? null,
+        sourceContextBudget: current.memoryDistillSourceContext,
+      })
+    },
+    onError(error) {
+      input.log.warn('PostgreSQL memory distill tick failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+  const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'development-wake',
+    intervalMs: DAEMON_CADENCE.developmentWakeSweep,
+    run: () => runtime.developmentAutomation.sweepWakes().then(() => undefined),
+    onError(error) {
+      input.log.warn('PostgreSQL development wake sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+  if (runtime.digitalEmployee.runtime === null) {
+    throw new Error('postgresql-digital-employee-runtime-not-composed')
+  }
+  const employeeRuntime = runtime.digitalEmployee.runtime
+  const digitalEmployeeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'digital-employee-os',
+    intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
+    runImmediately: true,
+    async run() {
+      const result = await runDigitalEmployeeOsCycle({ runtime: employeeRuntime.worker })
+      if (result.steps >= 32) {
+        input.log.warn('PostgreSQL digital employee OS reached its bounded step budget', {
+          ...result,
+        })
+      }
+    },
+    onError(error) {
+      input.log.warn('PostgreSQL digital employee OS cycle failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+  const eventCenterRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'event-center',
+    intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
+    runImmediately: true,
+    async run() {
+      const result = await runEventCenterCycle(runtime.eventCenter.worker)
+      if (result.steps >= 32) {
+        input.log.warn('PostgreSQL event center reached its bounded step budget', { ...result })
+      }
+    },
+    onError(error) {
+      input.log.warn('PostgreSQL event center cycle failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+  const fusionRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'fusion-reconcile',
+    intervalMs: DAEMON_CADENCE.fusionReconcile,
+    run: () => reconcileRunningFusions({ operations: runtime.fusion, appHome: Paths.root }),
+    onError() {},
+  })
+  const limitsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'resource-limits',
+    intervalMs: DAEMON_CADENCE.resourceLimits,
+    run: () => enforceLimits(runtime.resourceLimits).then(() => undefined),
+    onError(error) {
+      input.log.error('PostgreSQL resource limit enforcement failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
+
+  const backupRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'scheduled-backup',
+    start() {
+      const current = loadConfig(Paths.config)
+      const ticker = startBackupScheduler({
+        createScheduledBackup: () =>
+          application.core.systemOperations.application.commands.requestBackup.execute(
+            application.core.systemOperations.localContext,
+            { includeWorktrees: true },
+          ),
+        intervalMs: current.backupIntervalMs,
+        retentionCount: current.backupRetentionCount,
+        retentionDays: current.backupRetentionDays,
+        maxTotalBytes: current.backupMaxTotalBytes,
+        protectedKeepCount: current.backupProtectedKeepCount,
+        loadRetention: () => {
+          const next = loadConfig(Paths.config)
+          return {
+            retentionCount: next.backupRetentionCount,
+            retentionDays: next.backupRetentionDays,
+            maxTotalBytes: next.backupMaxTotalBytes,
+            protectedKeepCount: next.backupProtectedKeepCount,
+          }
+        },
+        appHome: Paths.root,
+        pruneMode: 'external',
+        onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
+      })
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          ticker.stop()
+        },
+        drain() {
+          if (!stopped) throw new Error('scheduled-backup-drain-before-stop')
+        },
+      })
+    },
+  })
+  const submoduleRefreshRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'submodule-refresh',
+    start() {
+      const ticker = startSubmoduleRefreshLoop(
+        application.core.repositoryWorkspaceStore,
+        () => loadConfig(Paths.config),
+        undefined,
+        Paths.root,
+        input.secretBox,
+      )
+      const unregister = registerConfigAppliedListener(Paths.config, () => ticker.reconfigure())
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          unregister()
+          ticker.stop()
+        },
+        drain() {
+          if (!stopped) throw new Error('submodule-refresh-drain-before-stop')
+        },
+      })
+    },
+  })
+  const batchImportRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'batch-import-gc',
+    start() {
+      const ticker = startBatchImportGc(
+        undefined,
+        loadConfig(Paths.config).repoBatchImportRetentionMs,
+      )
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          ticker.stop()
+        },
+        drain() {
+          if (!stopped) throw new Error('batch-import-gc-drain-before-stop')
+        },
+      })
+    },
+  })
+
+  const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
+    id: 'task-execution-graceful-shutdown',
+    async close() {
+      const { gracefulShutdown } = await import('@/services/shutdown')
+      await gracefulShutdown(
+        {
+          controller: { shutdownActive: shutdownActiveTaskExecutions },
+          operations: runtime.taskExecution.shutdown,
+          recovery: runtime.taskExecution.recovery,
+        },
+        30_000,
+      )
+    },
+  })
+  const webhookTerminalClose: DaemonProviderCloseParticipant = Object.freeze({
+    id: 'webhook-terminal-control',
+    close: () => runtime.webhookTerminalControl.stop(),
+  })
+
+  const session = await _createComposedDaemonProviderRuntimeSession({
+    provider: 'postgresql',
+    generationId: input.provider.generation.payload.generationId,
+    app: application.app,
+    webSocket: application.webSocket,
+    runtimeFactories: [
+      taskExecutionBindings.runtimeFactory,
+      maintenanceBindings.runtimeFactory,
+      mcpRuntimeBindings.runtimeFactory,
+    ],
+    backgroundWriterFactories: [
+      afterCommitPumpFactory,
+      humanGateRuntimeFactory,
+      committedEventRuntimeFactory,
+      memoryDistillRuntimeFactory,
+      developmentWakeRuntimeFactory,
+      digitalEmployeeRuntimeFactory,
+      eventCenterRuntimeFactory,
+      fusionRuntimeFactory,
+      limitsRuntimeFactory,
+      backupRuntimeFactory,
+      submoduleRefreshRuntimeFactory,
+      batchImportRuntimeFactory,
+    ],
+    providerCloseParticipants: [
+      taskExecutionBindings.closeParticipant,
+      maintenanceBindings.closeParticipant,
+      mcpRuntimeBindings.closeParticipant,
+      gracefulTaskShutdown,
+      webhookTerminalClose,
+    ],
+    shutdownIdentity: () => application.core.identityAccess.shutdown(),
+    closeProvider: () => input.provider.close(),
+  })
+  return Object.freeze({ application, session })
+}
+
+async function servePostgresqlDaemon(input: {
+  readonly bootstrap: DaemonProviderBootstrap
+  readonly authRuntime: Pick<
+    PostgresqlDaemonApplication['core']['authRuntime'],
+    'isBootstrapRequired'
+  >
+  readonly token: string
+  readonly bindHost: string
+  readonly bindPort: number
+  readonly lock: Lock
+  readonly log: ReturnType<typeof createLogger>
+}): Promise<never> {
+  const server = Bun.serve({
+    port: input.bindPort,
+    hostname: input.bindHost,
+    idleTimeout: 255,
+    async fetch(request: Request, bunServer): Promise<Response> {
+      return await input.bootstrap.runBusinessRequest(request, async () => {
+        const upgraded = await input.bootstrap.tryUpgrade(request, bunServer)
+        if (upgraded === true) return undefined as unknown as Response
+        if (upgraded === false) return await input.bootstrap.fetch(request)
+        return upgraded
+      })
+    },
+    websocket: input.bootstrap.websocketHandlers,
+  })
+  const baseUrl = `http://${server.hostname}:${server.port}/`
+  input.log.info('listening', { url: baseUrl, databaseProvider: 'postgresql' })
+
+  const removeDaemonInfo = (): void => {
+    try {
+      unlinkSync(Paths.daemonInfo)
+    } catch {
+      // already removed or never written
+    }
+  }
+  let shuttingDown = false
+  const shutdown = async (signal: string): Promise<void> => {
+    if (shuttingDown) return
+    shuttingDown = true
+    input.log.info('shutting down', { signal, databaseProvider: 'postgresql' })
+    removeDaemonInfo()
+    server.stop(true)
+    try {
+      await input.bootstrap.stop()
+    } catch (error) {
+      input.log.warn('PostgreSQL daemon shutdown error', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    controlListener.close()
+    input.lock.release()
+    process.exit(0)
+  }
+  const controlListener = startControlListener({
+    controlFilePath: Paths.controlFile,
+    devWatch: devLockHandoffMs() > 0,
+    onShutdown: () => {
+      removeDaemonInfo()
+      void shutdown('control-shutdown')
+    },
+  })
+  process.on('SIGTERM', () => {
+    removeDaemonInfo()
+    void shutdown('SIGTERM')
+  })
+  process.on('SIGINT', () => {
+    removeDaemonInfo()
+    void shutdown('SIGINT')
+  })
+  process.on('exit', () => {
+    removeDaemonInfo()
+    controlListener.close()
+    input.lock.release()
+  })
+
+  writeFileSync(
+    Paths.daemonInfo,
+    JSON.stringify(
+      {
+        pid: input.lock.pid,
+        host: server.hostname,
+        port: server.port,
+        url: baseUrl,
+        startedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    ),
+  )
+  const browserUrl = readyBrowserUrl(
+    baseUrl,
+    input.token,
+    await input.authRuntime.isBootstrapRequired(),
+  )
+  process.stdout.write(
+    `\nagent-workflow ready — open this URL in your browser:\n  ${browserUrl}\n\n`,
+  )
+  await new Promise<void>(() => {
+    /* never resolves */
+  })
+  throw new Error('postgresql-daemon-listener-returned')
 }
 
 const MAX_DEV_LOCK_HANDOFF_MS = 60_000
@@ -269,8 +1132,25 @@ async function acquireStartLock(
   }
 }
 
+interface DbCorruptionFailure extends Error {
+  readonly dbPath: string
+  readonly checkErrors: readonly string[]
+}
+
+function isDbCorruptionFailure(error: unknown): error is DbCorruptionFailure {
+  return (
+    error instanceof Error &&
+    error.name === 'DbCorruptionError' &&
+    'dbPath' in error &&
+    typeof error.dbPath === 'string' &&
+    'checkErrors' in error &&
+    Array.isArray(error.checkErrors) &&
+    error.checkErrors.every((entry) => typeof entry === 'string')
+  )
+}
+
 /** RFC-213 — human-facing fail-closed message: list backups + the restore command. */
-function formatDbCorruptionGuidance(err: DbCorruptionError): string {
+function formatDbCorruptionGuidance(err: DbCorruptionFailure): string {
   const lines = [
     '',
     '✖ agent-workflow: database corruption detected — refusing to start.',
@@ -412,25 +1292,34 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       })
     },
   })
+  const logicalSchemaContract = buildLogicalSchemaContract()
+  const bootGeneration = readDatabaseGeneration({
+    pointerPath: Paths.databaseGenerationPointer,
+    migrationsDir: Paths.databaseMigrationsDir,
+    expectedSchemaDigest: logicalSchemaContract.digest,
+  })
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
   // catch below only guards truly unexpected filesystem-level throws.
-  try {
-    const applied = await applyPendingRestoreIfAny({
-      appHome: Paths.root,
-      dbPath: Paths.db,
-      migrationsFolder,
-    })
-    if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
-  } catch (err) {
-    lock.release()
-    console.error(
-      `agent-workflow: staged restore failed unexpectedly — refusing to boot with an unknown DB state.\n` +
-        `  ${err instanceof Error ? err.message : String(err)}\n` +
-        `  The pre-restore safety backup (if taken) is under ${join(Paths.root, 'backups')}/.\n` +
-        `  To abandon the staged restore and boot normally: rm -rf ${join(Paths.root, '.restore-pending')}`,
-    )
-    process.exit(1)
+  if (bootGeneration.payload.provider === 'sqlite') {
+    try {
+      const applied = await applyPendingRestoreIfAny({
+        appHome: Paths.root,
+        dbPath: Paths.db,
+        migrationsFolder,
+        postOpenRecovery: composeSqlitePostRestoreRecovery(),
+      })
+      if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
+    } catch (err) {
+      lock.release()
+      console.error(
+        `agent-workflow: staged restore failed unexpectedly — refusing to boot with an unknown DB state.\n` +
+          `  ${err instanceof Error ? err.message : String(err)}\n` +
+          `  The pre-restore safety backup (if taken) is under ${join(Paths.root, 'backups')}/.\n` +
+          `  To abandon the staged restore and boot normally: rm -rf ${join(Paths.root, '.restore-pending')}`,
+      )
+      process.exit(1)
+    }
   }
 
   // 3. Load config; honor logLevel if user set non-default in config.
@@ -485,7 +1374,30 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   }
 
-  // 5. DB — open + apply migrations. dbVersion = number of SQL files in the
+  // Provider-independent bootstrap secrets are needed by either selected
+  // composition. They are created before opening a client, but no owner module
+  // receives them until its verified provider graph is composed below.
+  const secretBox = createSecretBox(Paths.secretKeyFile)
+  log.info('secret box ready', { keyFile: Paths.secretKeyFile })
+  const token = ensureTokenFile(Paths.tokenFile)
+  log.info('token ready', { tokenFile: Paths.tokenFile })
+  const dbVersion = existsSync(migrationsFolder)
+    ? readdirSync(migrationsFolder).filter((file) => file.endsWith('.sql')).length
+    : 0
+  const deferredDatabaseMigrationAdmission = _createDeferredDatabaseMigrationAdmission()
+
+  // 5. DB — resolve the verified live generation before opening any provider
+  // client. The pointer is authoritative; config may supply mechanism settings
+  // but cannot silently select a different database.
+  const databaseProvider = resolveDatabaseProviderRuntime({
+    config: config.database,
+    sqlitePath: Paths.db,
+    generationPointerPath: Paths.databaseGenerationPointer,
+    operationsRoot: Paths.databaseMigrationsDir,
+    contract: logicalSchemaContract,
+  })
+
+  // DB — open + apply migrations. dbVersion = number of SQL files in the
   // bundled migrations folder (== the highest version we've applied, since
   // openDb() applies all pending migrations on startup). The migrations folder
   // itself (and any staged restore) was already resolved/applied at step 2.5.
@@ -493,6 +1405,75 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
   // migrations. A pending migration without its rollback generation is fatal;
   // backupOnMigration=false is the operator's explicit opt-out.
+  if (databaseProvider.provider === 'postgresql') {
+    const initialLifecycle = Object.freeze({
+      operationId: 'daemon-start',
+      provider: 'postgresql' as const,
+      generationId: databaseProvider.generation.payload.generationId,
+    })
+    const initial = await composePostgresqlProviderSession({
+      provider: databaseProvider,
+      config: requirePostgresqlConfig(config),
+      token,
+      secretBox,
+      dbVersion,
+      migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+      log,
+    })
+    const daemonProviderBootstrap = createDaemonProviderBootstrap({
+      initialSession: initial.session,
+      sessionFactory: {
+        async create(lifecycleInput) {
+          if (lifecycleInput.provider === 'sqlite') {
+            throw new Error('sqlite-provider-session-source-retired')
+          }
+          const nextConfig = loadConfig(Paths.config)
+          const nextProvider = resolveDatabaseProviderRuntime({
+            config: nextConfig.database,
+            sqlitePath: Paths.db,
+            generationPointerPath: Paths.databaseGenerationPointer,
+            operationsRoot: Paths.databaseMigrationsDir,
+            contract: logicalSchemaContract,
+          })
+          if (
+            nextProvider.provider !== 'postgresql' ||
+            nextProvider.generation.payload.generationId !== lifecycleInput.generationId
+          ) {
+            await nextProvider.close()
+            throw new Error('postgresql-daemon-target-generation-mismatch')
+          }
+          return (
+            await composePostgresqlProviderSession({
+              provider: nextProvider,
+              config: requirePostgresqlConfig(nextConfig),
+              token,
+              secretBox,
+              dbVersion,
+              migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+              log,
+            })
+          ).session
+        },
+      },
+      createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
+    })
+    deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap.databaseMigration)
+    await initial.session.resume(initialLifecycle)
+    await servePostgresqlDaemon({
+      bootstrap: daemonProviderBootstrap,
+      authRuntime: initial.application.core.authRuntime,
+      token,
+      bindHost: opts.host ?? config.bindHost,
+      bindPort: opts.port ?? config.bindPort ?? 0,
+      lock,
+      log,
+    })
+  }
+
+  if (databaseProvider.provider !== 'sqlite') {
+    throw new Error('sqlite-daemon-provider-narrowing-failed')
+  }
+
   await maybePreMigrationBackup({
     appHome: Paths.root,
     dbPath: Paths.db,
@@ -500,10 +1481,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     enabled: config.backupOnMigration,
   })
 
-  let db: ReturnType<typeof openDb>
+  let db: ReturnType<typeof databaseProvider.openClient>
   try {
-    db = openDb({
-      path: Paths.db,
+    db = databaseProvider.openClient({
       migrationsFolder,
       synchronous: config.sqliteSynchronous,
       // RFC-311 capacity/telemetry pragmas (all settings-configurable).
@@ -513,7 +1493,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
     })
   } catch (err) {
-    if (err instanceof DbCorruptionError) {
+    if (isDbCorruptionFailure(err)) {
       // RFC-213 fail-closed: never serve a corrupt DB. Print the available
       // backups + the exact restore command, then exit non-zero. The DB is
       // unwritable, so this does NOT record a recovery_event.
@@ -533,15 +1513,17 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // predicate; lifecycle owns the atomic terminal status+claim write; GC owns
   // physical deletion. Read config at each transition so the setting is hot.
   registerTerminalWorkspacePrunePolicy(
-    createWebhookTerminalWorkspacePrunePolicy({
+    composeSqliteWebhookTerminalWorkspacePrunePolicy({
       db,
       enabled: () => loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup,
     }),
   )
-  const dbVersion = existsSync(migrationsFolder)
-    ? readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql')).length
-    : 0
   log.info('db ready', { path: Paths.db, dbVersion })
+  const providerSessionLifecycle = Object.freeze({
+    operationId: 'daemon-start',
+    provider: databaseProvider.provider,
+    generationId: databaseProvider.generation.payload.generationId,
+  })
 
   // RFC-282 §4.3 — runtime declaration self-check, before any business
   // service: every registered driver must state a stance on every declaration
@@ -558,46 +1540,22 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
 
   // RFC-279: migration 0147 can leave a direct-upgrade legacy URL under a
-  // closed escrow prefix. Create the daemon SecretBox and converge credentials
-  // immediately after openDb, before any recovery, seeder, scheduler, or HTTP
-  // behavior can observe the database.
-  const secretBox = createSecretBox(Paths.secretKeyFile)
-  log.info('secret box ready', { keyFile: Paths.secretKeyFile })
-  ensureCredentialsSealed(db, secretBox)
-  const repositoryTransportModule = composeRepositoryTransportCredentials(db, secretBox)
-  reconcileRepositoryTransportConnectionProjections(db, repositoryTransportModule.adminConnections)
-  const repositoryMetadataConnections = createCodeHostConnectionsService({
+  // closed escrow prefix. Converge credentials immediately after openDb,
+  // before any recovery, seeder, scheduler, or HTTP behavior can observe the
+  // database. The provider-independent SecretBox was created before provider
+  // selection and is reused by this selected SQLite graph.
+  const realtimePolicy = createDaemonRealtimePolicyBinding()
+  const providerCore = composeSqliteDaemonProviderCore({
     db,
-    secretBox,
-    repositoryTransport: {
-      participant: repositoryTransportModule.adminConnections,
-      project: buildRepositoryTransportConnectionProjection,
-    },
-  })
-  const repositoryEndpointDiscovery = createRepositoryEndpointDiscovery({
-    resolveConnection(provider) {
-      const connection = repositoryMetadataConnections.resolve(provider)
-      if (connection?.connectionGeneration === undefined) return null
-      return {
-        provider: connection.provider,
-        apiBaseUrl: connection.baseUrl,
-        connectionGeneration: connection.connectionGeneration,
-        token: connection.token,
-        rejectUnauthorized: connection.rejectUnauthorized,
-      }
-    },
-  })
-  const repositoryPublicationTransport = createRepositoryPublicationTransport({
-    db,
-    secretBox,
     appHome: Paths.root,
-    endpointDiscovery: repositoryEndpointDiscovery,
-  })
-  const identityAccess: IdentityAccessRuntime = createIdentityAccessRuntime({
-    db,
-    events: {
+    dbPath: Paths.db,
+    lockPath: Paths.lock,
+    secretBox,
+    realtimePolicy: realtimePolicy.policy,
+    onCredentialRevoked: triggerRevalidation,
+    identityEvents: {
       authorityRevisionChanged({ userId, revision, onFailure }) {
-        triggerAuthorityRevalidation(db, userId, revision, onFailure)
+        triggerAuthorityRevalidation(userId, revision, onFailure)
       },
     },
     presenceProjection: {
@@ -611,22 +1569,262 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
     },
   })
-  const integrationIdentityAccess = Object.freeze({
-    ...identityAccess,
-    integrationTriggerResources: composeIntegrationTriggerResourceBinding(
+  const repositoryWorkspaceStore = providerCore.repositoryWorkspaceStore
+  const repositoryTransportRepository = providerCore.repositoryTransportCredentialRepository
+  await ensureCredentialsSealed(repositoryWorkspaceStore, secretBox)
+  const repositoryTransportModule = composeRepositoryTransportCredentials(
+    repositoryTransportRepository,
+    secretBox,
+  )
+  await reconcileRepositoryTransportConnectionProjections(
+    repositoryTransportRepository,
+    repositoryTransportModule.adminConnections,
+  )
+  const repositoryMetadataConnections = createCodeHostConnectionsService({
+    secretBox,
+    repositoryTransport: repositoryTransportModule.adminConnections,
+  })
+  const developmentDeliveryProvider = createSqliteDevelopmentDeliveryProvider({
+    db,
+    secretBox,
+    connections: repositoryMetadataConnections,
+    pipeline: composeSqlitePipelineEvidenceRunner(db),
+  })
+  const developmentWorkspaceRepositoryPreparation = createDevelopmentWorkspaceRepositoryPreparation(
+    {
+      store: repositoryWorkspaceStore,
+      appHome: Paths.root,
+      secretBox,
+    },
+  )
+  const repositoryEndpointDiscovery = createRepositoryEndpointDiscovery({
+    async resolveConnection(provider) {
+      const connection = await repositoryMetadataConnections.resolve(provider)
+      if (connection?.connectionGeneration === undefined) return null
+      return {
+        provider: connection.provider,
+        apiBaseUrl: connection.baseUrl,
+        connectionGeneration: connection.connectionGeneration,
+        token: connection.token,
+        rejectUnauthorized: connection.rejectUnauthorized,
+      }
+    },
+  })
+  const repositoryPublicationTransport = createRepositoryPublicationTransport({
+    repository: repositoryTransportRepository,
+    secretBox,
+    appHome: Paths.root,
+    endpointDiscovery: repositoryEndpointDiscovery,
+  })
+  const identityAccess = providerCore.identityAccess
+  const resourceCatalog = composeSqliteResourceCatalog({ db })
+  const agentResourceIntegrity = composeSqliteAgentResourceIntegrity({
+    db,
+    authorization: resourceCatalog.authorization,
+  })
+  const taskExecutionResourceSnapshots = composeTaskExecutionResourceBinding(
+    legacyTaskExecutionResourceDependencies,
+  )
+  const taskExecutionResources = createSqliteTaskExecutionResourceBinding(
+    db,
+    taskExecutionResourceSnapshots,
+  )
+  const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
+  const runtimeSessionLeases = createSqliteRuntimeSessionLeaseOperations(db)
+  const runtimeRegistry = providerCore.runtimeRegistry
+  let collaborationContext: ReturnType<typeof createCollaborationCommandContext> | null = null
+  const requireCollaborationContext = (): ReturnType<typeof createCollaborationCommandContext> => {
+    if (collaborationContext === null) {
+      throw new Error('collaboration-command-context-not-bound')
+    }
+    return collaborationContext
+  }
+  const memoryOperations = composeSqliteMemoryOperations({
+    db,
+    injectionQueries: memoryInjectionQueries,
+    reviewedArtifacts: {
+      read: async (finalPath) =>
+        await readCommittedReviewArtifactBody(requireCollaborationContext(), finalPath),
+    },
+    catalogBinding: {
+      contexts: identityAccess.contexts,
+      authorization: composeResourceScopeAuthorizationBinding(),
+    },
+  })
+  const memoryCatalog = memoryOperations.catalog
+  if (memoryCatalog === undefined) throw new Error('memory-catalog-not-composed')
+
+  const broadcastAlert = (
+    row: { taskId: string; rule: string; severity: 'warning' | 'error' },
+    transition: 'new' | 'promoted',
+  ): void => {
+    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+      type: 'lifecycle.alert',
+      taskId: row.taskId,
+      rule: row.rule,
+      severity: row.severity,
+      transition,
+    })
+  }
+  const broadcastResolved = (taskId: string): void => {
+    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
+      type: 'lifecycle.alert.resolved',
+      taskId,
+    })
+  }
+
+  const deferredScheduler = createDeferredSchedulerDriver()
+  const taskStartDepsFor = (actorUserId: string) => ({
+    ...buildStartTaskDeps(
+      db,
+      deferredScheduler.driver,
+      Paths.config,
+      actorUserId,
+      secretBox,
+      identityAccess,
+    ),
+    agentLaunchResources: Object.freeze({
+      resources: composeSqliteAgentLaunchResourceOperations(db),
+      integrity: agentResourceIntegrity.launch,
+    }),
+  })
+  const fusionStartDeps = Object.freeze({
+    actorUserId: SYSTEM_USER_ID,
+    secretBox,
+    identityAccess,
+    repositoryWorkspace: providerCore.repositoryWorkspaceStore,
+    runtimeSessionLeases,
+    configPath: Paths.config,
+    ...(config.subagentLiveCapture === undefined
+      ? {}
+      : { subagentLiveCapture: config.subagentLiveCapture }),
+    ...resolveLaunchRuntimeConfig(Paths.config),
+  })
+  const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime =
+    composeSqliteTaskExecutionProviderRuntime(db, {
+      runtime: {
+        memoryInjectionQueries,
+        collaborationRuntime: createSqliteCollaborationRuntimeMechanics(db),
+        runtimeSessionLeases,
+        runtimeRegistry,
+        identityAccess: Object.freeze({
+          delegatedRequests: identityAccess.delegatedRequests,
+          taskExecutionResources,
+        }),
+        dynamicWorkflow: Object.freeze({
+          persistence: composeSqliteDynamicWorkflowPersistence(db),
+          validationContext: { load: () => buildWorkflowValidationContext(db) },
+        }),
+        repositoryPublicationTransport,
+      },
+      routeLaunch: {
+        configPath: Paths.config,
+        execution: Object.freeze({
+          ...taskStartDepsFor(SYSTEM_USER_ID),
+          deferRepoPreparation: true,
+        }),
+      },
+      routes: ({ readModels }) => {
+        const routeCollaborationContext = createCollaborationCommandContext({
+          db,
+          appHome: Paths.root,
+          taskExecutionReadModels: readModels,
+        })
+        collaborationContext = routeCollaborationContext
+        return {
+          collaboration: routeCollaborationContext,
+          startDepsFor: (actor) => taskStartDepsFor(actor.user.id),
+          multipart: {
+            secretBox,
+            configPath: Paths.config,
+            schedulerDriver: deferredScheduler.driver,
+            identityAccess: Object.freeze({
+              directAuthority: identityAccess.directAuthority,
+              taskExecutionResources,
+            }),
+          },
+          resourceAuthorityFor: (actor) =>
+            Object.freeze({
+              actor,
+              authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+              resources: taskExecutionResources,
+            }),
+          assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(db, workflow),
+          appHome: Paths.root,
+        }
+      },
+      lifecycleRepair: {
+        appHome: Paths.root,
+        deps: taskStartDepsFor(SYSTEM_USER_ID),
+        onAlert: broadcastAlert,
+        onResolved: broadcastResolved,
+      },
+      fusion: {
+        appHome: Paths.root,
+        startDeps: fusionStartDeps,
+      },
+      trigger: {
+        executionFor: (actor) => ({
+          ...taskStartDepsFor(actor.user.id),
+          deferRepoPreparation: true,
+        }),
+      },
+      rootResumeRuntime: () => ({
+        runConfig: {
+          appHome: Paths.root,
+          ...(config.subagentLiveCapture === undefined
+            ? {}
+            : { subagentLiveCapture: config.subagentLiveCapture }),
+          ...resolveLaunchRuntimeConfig(Paths.config),
+        },
+      }),
+      repositoryPreparationRetry: Object.freeze({
+        async retry(taskId: string) {
+          await retryRepositoryPreparation(db, taskId, taskStartDepsFor(SYSTEM_USER_ID))
+        },
+      }),
+    })
+  deferredScheduler.bind(taskExecutionProvider.runtime.schedulerDriver)
+  const taskExecutionPersistence = taskExecutionProvider.persistence
+  const taskExecutionRuntime = taskExecutionProvider.runtime
+  if (collaborationContext === null) {
+    throw new Error('collaboration-command-context-not-composed')
+  }
+  const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
+    db,
+    resources: composeIntegrationTriggerResourceBinding(
       { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
     ),
-    taskExecutionResources: composeTaskExecutionResourceBinding(
-      legacyTaskExecutionResourceDependencies,
-    ),
+    validation: Object.freeze({
+      assertWorkflowLaunchable: (
+        workflow: Parameters<typeof assertWorkflowSnapshotLaunchable>[1],
+      ) => assertWorkflowSnapshotLaunchable(db, workflow),
+      assertAgentIntegrity: (agentIds: readonly string[]) =>
+        agentResourceIntegrity.launch.assertUsable({ rootAgentIds: agentIds }),
+    }),
+    resourceAclChanged: () => triggerRevalidation('resource-acl-changed'),
   })
-  const taskExecutionReadModels = composeSqliteTaskExecutionReadModels(db)
-  const taskExecutionRuntime = composeTaskExecutionRuntime({
+  const integrationIdentityAccess = Object.freeze({
+    ...identityAccess,
+    integrationTriggerResources: scheduledTaskRuntime.integrationTriggerResources,
+    taskExecutionResources,
+  })
+  const fusionOperations = composeSqliteFusionOperations({
     db,
-    readModels: taskExecutionReadModels,
-    identityAccess: integrationIdentityAccess,
-    repositoryPublicationTransport,
+    appHome: Paths.root,
+    memories: memoryCatalog,
+    tasks: taskExecutionProvider.fusion,
+  })
+  realtimePolicy.bind({
+    resourceVisibility: resourceCatalog.authorization,
+    memoryVisibility: {
+      async canViewMemory(authority, actor, scope) {
+        return await memoryCatalog.queries.canView({ authority, actor }, scope)
+      },
+    },
+    repoImportOwnerUserId: batchOwnerUserId,
+    redactTaskEventPayload: redactEventPayload,
   })
   const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(Paths.root)
   if (removedCredentialLeases > 0) {
@@ -638,9 +1836,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // legacy/current structural op while locks remain evidence, migrate
   // skills/{name} -> skills/{id}, and prove DB/FS/FK consistency before users,
   // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
+  const skillCatalogBoot: SkillCatalogBootParticipant = composeSqliteSkillCatalogBoot({
+    db,
+    appHome: Paths.root,
+  })
   {
-    const { runSkillIdentityMigrationBarrier } = await import('@/services/skillIdentityMigration')
-    const report = runSkillIdentityMigrationBarrier(db, { appHome: Paths.root })
+    const report = await skillCatalogBoot.runIdentityMigrationBarrier()
     if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
       log.info('skill identity migration barrier complete', { ...report })
     }
@@ -651,24 +1852,20 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // database whose fusion identity is ambiguous.
   {
     const { repairFusionProvenance } = await import('@/services/fusion')
-    const report = repairFusionProvenance(db)
+    const report = await repairFusionProvenance(fusionOperations.persistence)
     if (Object.values(report).some((count) => count > 0)) {
-      log.info('fusion provenance repair complete', report)
+      log.info('fusion provenance repair complete', { ...report })
     }
   }
   // Activate the boot-epoch availability gate while its verified set is still
   // empty. Every persisted skill stays hidden from all consumers and HTTP until
   // the per-skill background reverify explicitly admits it (or quarantines it).
-  {
-    const { activateBootReverify } = await import('@/services/skillBootVerify')
-    activateBootReverify()
-  }
+  skillCatalogBoot.activateAvailabilityGate()
 
   // RFC-036 bootstrap hint: if no real user has been created yet, log a
   // one-shot pointer to the CLI so admins know how to leave single-user mode.
   try {
-    const { countNonSystemUsers } = await import('@/services/users')
-    if ((await countNonSystemUsers(db)) === 0) {
+    if (await providerCore.authRuntime.isBootstrapRequired()) {
       log.info(
         'first multi-user run? create your admin via `agent-workflow user create --admin --username <name>`',
       )
@@ -696,14 +1893,17 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // process. Any task/node_run left in 'running' is flipped to 'interrupted'
   // with task.error_message = 'daemon-restart' so the UI surfaces what
   // happened.
-  const reap = await reapOrphanRuns(db)
+  const reap = await reapOrphanRuns(taskExecutionPersistence.recoveryAdministration)
   if (reap.tasks > 0 || reap.runs > 0) {
     log.warn('reaped orphan runs from previous daemon', {
       tasks: reap.tasks,
       runs: reap.runs,
     })
   }
-  const repairedRuntimeLeases = repairRuntimeSessionLeasesAfterOrphanReap(db, true)
+  const repairedRuntimeLeases = await repairRuntimeSessionLeasesAfterOrphanReap(
+    runtimeSessionLeases,
+    true,
+  )
   if (repairedRuntimeLeases > 0) {
     log.info('released runtime session leases held by terminal orphan runs', {
       leases: repairedRuntimeLeases,
@@ -815,7 +2015,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // best-effort.
   try {
     const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
-    const healed = await healScheduledLaunchPayloads(db)
+    const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
     if (healed.converted > 0 || healed.disabled > 0) {
       log.info('scheduled launch payloads healed', healed)
     }
@@ -831,9 +2031,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.
   try {
     const { recoverFusionDecisions } = await import('@/services/fusion')
-    const r = recoverFusionDecisions(db)
+    const r = await recoverFusionDecisions(fusionOperations.persistence)
     if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
-      log.info('fusion decision recovery on boot', r)
+      log.info('fusion decision recovery on boot', { ...r })
     }
   } catch (err) {
     log.warn('fusion decision recovery on boot failed', {
@@ -845,8 +2045,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // versioning, and re-sync a live files/ left stale by a crash between the
   // version-archive tx and the live-files copy. Idempotent + best-effort.
   try {
-    const { reconcileSkillLiveFiles } = await import('@/services/skillVersion')
-    reconcileSkillLiveFiles(db, { appHome: Paths.root })
+    await skillCatalogBoot.reconcileLiveFiles()
   } catch (err) {
     log.warn('skill-version reconcile on boot failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -858,7 +2057,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // the workflows list). Idempotent; createFusion also lazy-seeds defensively.
   try {
     const { seedFusionResources } = await import('@/services/fusion')
-    await seedFusionResources(db)
+    await seedFusionResources(fusionOperations.persistence)
   } catch (err) {
     log.warn('fusion resource seed on boot failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -867,7 +2066,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   // RFC-310: business templates are platform resources, not schema data. Seed
   // them after DB admission so pure migrations remain free of resource rows.
-  await ensureDigitalEmployeeAgentTemplates(db)
+  const digitalEmployeeAgentTemplates = composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant(
+    db,
+    composeDigitalEmployeeAgentTemplateCatalogParticipant,
+  )
+  await ensureDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates)
 
   // 5e-bis. RFC-307: sample content, ONCE per install. Marker-gated rather
   // than existence-gated — a user who deletes the samples means it, and
@@ -875,7 +2078,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // no samples is exactly the state every install before this RFC was in.
   try {
     const { seedDemoContent } = await import('@/services/demoSeed')
-    const result = await seedDemoContent(db)
+    const result = await seedDemoContent({
+      resourceCatalog: composeSqliteDemoResourceCatalogSeedParticipant(db),
+      codeCapability: composeSqliteCodeCapabilityDemoSeedParticipant(db),
+    })
     if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
   } catch (err) {
     log.warn('demo content seed on boot failed', {
@@ -889,14 +2095,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // are editable + deletable now; a deleted row is NOT re-seeded (seed no-ops on a
   // non-empty table). migrateConfigIntoBuiltins then backfills binary from config.
   try {
-    const { seedBuiltinRuntimes, migrateConfigIntoBuiltins } =
-      await import('@/services/runtimeRegistry')
-    await seedBuiltinRuntimes(db)
+    await runtimeRegistry.seedBuiltinRuntimes()
     // RFC-113 (idempotent): config defaults land on the built-in runtime rows
     // (§3.1). RFC-115 removed the one-time agent-param re-home pass — the agent
     // contract dropped its model/variant/temperature/steps/maxSteps columns
     // (migration 0057), so generation params now live solely on the runtimes.
-    await migrateConfigIntoBuiltins(db, config)
+    await runtimeRegistry.migrateConfigIntoBuiltins(config)
   } catch (err) {
     log.warn('builtin runtime seed/migration on boot failed', {
       error: err instanceof Error ? err.message : String(err),
@@ -909,23 +2113,104 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // still has the 6 dropped generation defaults but every built-in runtime
   // profile is NULL, RFC-113's config→runtime backfill never ran and continuing
   // would silently change every inherited runtime's default model.
-  {
-    const { assertConfigDefaultsMigrated } = await import('@/services/runtimeRegistry')
-    await assertConfigDefaultsMigrated(db, Paths.config)
-  }
-
-  // 6. Token (generate-on-first-run, chmod 600).
-  const token = ensureTokenFile(Paths.tokenFile)
-  log.info('token ready', { tokenFile: Paths.tokenFile })
+  await runtimeRegistry.assertConfigDefaultsMigrated(Paths.config)
 
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes resolve the same DB-keyed daemon singleton.
+  let mcpCatalogRef: McpCatalogModule | null = null
   const mcpRuntimeTests = getMcpRuntimeTestService({
-    db,
+    ...composeSqliteMcpRuntimeTestProvider(db),
+    async loadMcp(mcpId) {
+      if (mcpCatalogRef === null) throw new Error('mcp-catalog-not-composed')
+      const identity = await resolveIdentity(
+        providerCore.authRuntime,
+        token,
+        Buffer.from(token, 'utf8'),
+        identityAccess,
+      )
+      if (identity === null) throw new Error('mcp-runtime-test-authority-not-admitted')
+      return mcpCatalogRef.queries.get(identity.actor, { id: mcpId })
+    },
+    loadRuntime: (name) => runtimeRegistry.getRuntime(name),
     configPath: Paths.config,
     appHome: Paths.root,
   })
-  await mcpRuntimeTests.start()
+  const mcpProbeStore = composeSqliteMcpProbeStore(db)
+  const mcpCatalog = composeMcpCatalog({
+    db,
+    coordinator: mcpOperationCoordinator,
+    nextMutationTimestamp: async (mcp) => {
+      const persisted = await getProbeByMcpId(mcpProbeStore, mcp.id)
+      return mcpOperationCoordinator.nextCausalTimestamp(mcp.id, mcpRouteNow(), [
+        mcp.updatedAt + 1,
+        (persisted?.startedAt ?? 0) + 1,
+        mcpOperationCoordinator.activeLastStartedAt(mcp.id) + 1,
+      ])
+    },
+    runtime: Object.freeze({
+      prepareDelete: (mcpId: string) => mcpRuntimeTests.prepareMcpDelete(mcpId),
+      reconcileDurableIntents: () => mcpRuntimeTests.reconcileDurableIntents(),
+    }),
+    transitionMutationInTx: transitionMcpRuntimeTestsInTx,
+    deletePreparedInTx: deletePreparedMcpRuntimeTestsInTx,
+  })
+  mcpCatalogRef = mcpCatalog
+  const agentCatalog = composeAgentCatalog({
+    db,
+    importQueries: composeSqliteAgentImportQueries(db),
+    resourceIntegrityQueries: agentResourceIntegrity.queries,
+  })
+  const skillCatalog = composeSkillCatalog({ db, appHome: Paths.root })
+  const pluginCatalog = composePluginCatalog({ db, coordinator: pluginOperationCoordinator })
+  const workflowCatalog = composeWorkflowCatalog({ db })
+  const workgroupCatalog = composeWorkgroupCatalog({ db })
+  const capabilityTemplateAccess: Parameters<
+    typeof composeSqliteCapabilityTemplateOperations
+  >[0]['access'] = {
+    filterVisible(actor, rows) {
+      return resourceCatalog.authorization.filterVisibleRows(actor, 'capability_template', rows)
+    },
+    canView(actor, row) {
+      return resourceCatalog.authorization.canViewResource(actor, 'capability_template', row)
+    },
+    requireEdit(actor, row) {
+      return resourceCatalog.authorization.requireResourceEdit(actor, 'capability_template', row)
+    },
+    requireGovern(actor, row) {
+      return resourceCatalog.authorization.requireResourceGovern(actor, 'capability_template', row)
+    },
+    assertNameUnchangedForEditor,
+  }
+  const capabilityTemplateOperations = composeSqliteCapabilityTemplateOperations({
+    db,
+    access: capabilityTemplateAccess,
+  })
+  const developmentAdapterConfigOperations = composeDevelopmentAdapterConfigOperations(db)
+  const developmentConfigAccess: DevelopmentConfigResourceAccess = {
+    filterVisible(actor, type, rows) {
+      return resourceCatalog.authorization.filterVisibleRows(actor, type, rows)
+    },
+    canView(actor, type, row) {
+      return resourceCatalog.authorization.canViewResource(actor, type, row)
+    },
+    requireEdit(actor, type, row) {
+      return resourceCatalog.authorization.requireResourceEdit(actor, type, row)
+    },
+    requireGovern(actor, type, row) {
+      return resourceCatalog.authorization.requireResourceGovern(actor, type, row)
+    },
+    assertNameUnchangedForEditor,
+  }
+  const developmentConfigOperations = composeDevelopmentConfigOperations(
+    db,
+    developmentAdapterConfigOperations,
+    developmentConfigAccess,
+  )
+  const mcpRuntimeTestBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'mcp-runtime-tests',
+    closeParticipantId: 'mcp-runtime-tests-final-close',
+    service: mcpRuntimeTests,
+  })
 
   // RFC-257 — webhook 分流器 + 三段式重启恢复：上个进程遗留的 received/
   // processing 投递标 failed/interrupted（GitLab 对失败投递不自动重试，恢复
@@ -935,7 +2220,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // auto-resume can attach a new task driver.
   const webhookTerminalControl = composeMrTerminalControl(db)
   await webhookTerminalControl.reconcileOnBoot()
-  const recoveredDeliveries = await recoverInterruptedDeliveries(db)
+  const webhookDeliveryPersistence = composeSqliteWebhookDeliveryPersistence(db)
+  const recoveredDeliveries = await recoverInterruptedDeliveries(webhookDeliveryPersistence)
   if (recoveredDeliveries > 0) {
     log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
   }
@@ -943,8 +2229,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // publish section 清理/publish intent 对账/supersede 续跑）随 writer 一并
   // 移除——Mission 面的恢复由 development-automation 的 recover sweep 承担。
   const digitalEmployeeWorkStart = createDeferredDigitalEmployeeWorkStart()
+  const webhookTaskExecutions = taskExecutionProvider.trigger.taskExecutions
   const webhookDispatcher = createWebhookDispatcher({
-    db,
+    ...composeSqliteWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
     identityAccess: integrationIdentityAccess,
     resolveEventTargetAuthority: async (userId) => {
       const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)
@@ -954,39 +2241,62 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         actor: admitted.actor,
       })
     },
-    configPath: Paths.config,
-    secretBox,
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
     terminalControl: webhookTerminalControl,
-    digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
+    ...createSqliteWebhookExecutionRuntime({
+      taskExecutions: webhookTaskExecutions,
+      digitalEmployeeWorkStart: digitalEmployeeWorkStart.participant,
+    }),
   })
-  const developmentApprovalGateway = composeApprovalGatewayRunner(db)
-  const missionEventContinuation = createDevelopmentMissionCodeHostEventContinuation(db)
-  // RFC-317 T41（DE-01）—— 旧 Mission 排空视图的接线点。合同在 digital-employee，
-  // 实现在 development-automation；bootstrap 是唯一知道两者如何对接的地方。
-  const legacyMissionDrain = createLegacyMissionDrainPort(db)
-  const employeeWriterState = activateDigitalEmployeeOsWriter(db, legacyMissionDrain)
+  const developmentApprovalGateway = composeSqliteApprovalGatewayRunner(db)
+  const missionEventContinuation = createSqliteMissionCodeHostEventContinuation(db)
+  const employeeWriterCutover = composeSqliteDigitalEmployeeWriterCutover(db)
+  const employeeWriterState = await employeeWriterCutover.activate()
   log.info('digital employee writer activated', { ...employeeWriterState })
 
   // RFC-310 PR-3/PR-4 + RFC-344 —— bootstrap owns exactly one
   // development-automation composition. HTTP and MCP receive this participant;
   // boot recovery, terminal callbacks and wake sweeps drive the same instance.
-  const developmentMissionStore = createSqliteMissionStore(db)
   const developmentAdmissionLookup = composeSqliteDevelopmentAdmissionLookup(db)
+  const developmentAutomationRef: {
+    current: ReturnType<typeof composeDevelopmentAutomation> | null
+  } = { current: null }
+  const developmentTerminalObserver = createSqliteDevelopmentMissionExecutionTerminalObserver({
+    db,
+    async drive(missionId) {
+      const current = developmentAutomationRef.current
+      if (current === null) throw new Error('development-automation-not-composed')
+      try {
+        const outcome = await current.drive(missionId)
+        if (outcome.stop === 'step-budget') {
+          log.warn('development mission drive reached its bounded step budget', {
+            missionId,
+            steps: outcome.steps,
+          })
+        }
+        return outcome
+      } catch (err) {
+        log.warn('development mission drive after execution terminal failed', {
+          missionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+        throw err
+      }
+    },
+  })
   const developmentAutomation = composeDevelopmentAutomation({
     db,
     appHome: Paths.root,
     admissionLookup: developmentAdmissionLookup,
-    requirementSource: composeRequirementSourceRunner(db),
+    requirementSource: composeSqliteRequirementSourceRunner(db),
     changeCandidate: bindChangeCandidateParticipant(),
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant(),
-    ...buildDevelopmentDeliveryDeps(db, secretBox),
-    ...buildDevelopmentPipelineDeps(db),
-    ...buildDevelopmentMrFactsDeps(db, secretBox),
+    ...buildDevelopmentDeliveryDeps(developmentDeliveryProvider),
+    ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
+    ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       db,
       startDeps: buildStartTaskDeps(
@@ -998,31 +2308,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         identityAccess,
       ),
       onTerminal: (executionRef) => {
-        const missionId = missionIdOfExecutionRef(db, executionRef)
-        if (missionId === null) return
-        developmentMissionStore.recordWakeHint({
-          id: ulid(),
-          missionId,
-          source: 'agent-execution',
-          deliveryKey: `agent-exec:${executionRef}`,
-          now: Date.now(),
-        })
-        void developmentAutomation
-          .drive(missionId)
-          .then((outcome) => {
-            if (outcome.stop === 'step-budget') {
-              log.warn('development mission drive reached its bounded step budget', {
-                missionId,
-                steps: outcome.steps,
-              })
-            }
-          })
-          .catch((err: unknown) => {
-            log.warn('development mission drive after Agent terminal failed', {
-              missionId,
-              err: err instanceof Error ? err.message : String(err),
-            })
-          })
+        void developmentTerminalObserver.agent(executionRef)
       },
     }),
     scriptLauncher: composeScriptActionExecution({
@@ -1036,26 +2322,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         identityAccess,
       ),
       onTerminal: (executionRef) => {
-        const missionId = missionIdOfExecutionRef(db, executionRef)
-        if (missionId === null) return
-        developmentMissionStore.recordWakeHint({
-          id: ulid(),
-          missionId,
-          source: 'agent-execution',
-          deliveryKey: `script-exec:${executionRef}`,
-          now: Date.now(),
-        })
-        void developmentAutomation.drive(missionId).catch((err: unknown) => {
-          log.warn('development mission drive after Script terminal failed', {
-            missionId,
-            err: err instanceof Error ? err.message : String(err),
-          })
-        })
+        void developmentTerminalObserver.script(executionRef)
       },
     }),
     approvalGateway: developmentApprovalGateway,
   })
-  const employeeHttpEventCenter = composeEventCenter({
+  developmentAutomationRef.current = developmentAutomation
+  const employeeHttpEventCenter = await composeEventCenter({
     db,
     typePackageDescriptorJsons: [
       developmentEmployeeTypePackage.descriptorJson,
@@ -1066,7 +2339,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ],
     observer: composeDevelopmentEmployeeEventObserver({
       codeHost: composeDevelopmentCodeHostEventObserver({
-        binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
+        binding: (repositoryId) =>
+          resolveDevelopmentRepoBinding(developmentDeliveryProvider, repositoryId),
       }),
       approval: composeDevelopmentApprovalEventObserver({
         gateway: developmentApprovalGateway,
@@ -1090,27 +2364,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
   })
   const employeeCaseDetailProjection = composeDevelopmentEmployeeCaseDetailProjection(
-    createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+    createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(db),
   )
-
-  const broadcastAlert = (
-    row: { taskId: string; rule: string; severity: 'warning' | 'error' },
-    transition: 'new' | 'promoted',
-  ): void => {
-    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-      type: 'lifecycle.alert',
-      taskId: row.taskId,
-      rule: row.rule,
-      severity: row.severity,
-      transition,
-    })
-  }
-  const broadcastResolved = (taskId: string): void => {
-    tasksListBroadcaster.broadcast(TASKS_LIST_CHANNEL, {
-      type: 'lifecycle.alert.resolved',
-      taskId,
-    })
-  }
 
   const gateContinuationDeps = {
     db,
@@ -1123,9 +2378,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       : {}),
     ...resolveLaunchRuntimeConfig(Paths.config),
   }
+  const humanGateContinuationRecovery = createSqliteHumanGateContinuationRecoveryQueries(db)
 
   const humanGateContinuationWorkerDefinition = createHumanGateContinuationWorkerDefinition({
-    listPending: () => listPendingHumanGateContinuations(db),
+    listPending: () => humanGateContinuationRecovery.listPending(),
     drive: composeHumanGateContinuationDriver(gateContinuationDeps),
     onError: (continuation) => {
       log.warn('pending human-gate continuation drive failed', {
@@ -1143,35 +2399,39 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     collaborationCommittedEventCodec,
   )
   const committedEventProjectors = [
-    createTaskLifecycleWsProjector(db),
-    createCollaborationWsProjector(db),
+    createSqliteTaskLifecycleWsProjector(db),
+    createCollaborationWsProjector(createSqliteCollaborationCommittedEventProjection(db)),
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
+  const committedEventPersistence = createSqliteCommittedEventDeliveryPersistence(db)
+  const humanGateTerminalSweep = createSqliteHumanGateTerminalSweepCommand(db)
 
   const committedEventDispatcher = createCommittedEventDispatcher({
-    db,
+    persistence: committedEventPersistence,
     workerId: `committed-events-${DAEMON_GENERATION}`,
     codecs: committedEventCodecs,
     consumers: [
       ...createTaskLifecycleDurableConsumerDefinitions({
         events: employeeHttpEventCenter.commands,
-        closeTerminalGates(taskId, status) {
-          sealOpenHumanGatesForTask(db, taskId, `task-${status}`)
+        async closeTerminalGates(taskId, status) {
+          await humanGateTerminalSweep.run({ taskId, cause: `task-${status}` })
         },
-        notifyChildBudget(taskId, status) {
-          notifyChildBudgetTaskStatus(db, taskId, status)
+        async notifyChildBudget(taskId, status) {
+          notifyChildBudgetTaskStatus(taskExecutionPersistence.childBudget, taskId, status)
         },
-        notifyExecutionWatch: notifyTaskTerminal,
-        nudgeWorkspacePrune(taskId) {
+        async notifyExecutionWatch(taskId, status) {
+          notifyTaskTerminal(taskId, status)
+        },
+        async nudgeWorkspacePrune(taskId) {
           if (isTaskActive(taskId)) return
-          void finishClaimedWebhookWorkspacePrune(db, taskId)
+          await finishClaimedWebhookWorkspacePrune(db, taskId)
         },
       }),
       ...createCollaborationDurableConsumerDefinitions({
         events: employeeHttpEventCenter.commands,
         nudgeContinuation: humanGateContinuationWorkerDefinition.nudge,
         async enqueueReviewDistill(input) {
-          await enqueueDistillJob(db, {
+          await memoryOperations.distillCommands.enqueue({
             sourceKind: 'review',
             sourceEventId: input.sourceEventId,
             taskId: input.taskId,
@@ -1187,46 +2447,84 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
   })
   const committedEventWorkerDefinition = createCommittedEventDispatcherWorkerDefinition({
-    db,
+    persistence: committedEventPersistence,
     dispatcher: committedEventDispatcher,
   })
   const committedEventPump = createAfterCommitEventPump({
-    db,
+    persistence: committedEventPersistence,
     codecs: committedEventCodecs,
     projectors: committedEventProjectors,
     projectionLedger: committedEventProjectionLedger,
     nudgeDispatcher: committedEventWorkerDefinition.nudge,
   })
   registerAfterCommitEventPump(committedEventPump)
-  const humanGateContinuationWorker = startManagedWorkerDefinition(
-    humanGateContinuationWorkerDefinition.definition,
-    DAEMON_GENERATION,
-  )
-  void humanGateContinuationWorker.done.catch((error) => {
-    log.error('human-gate continuation worker stopped unexpectedly', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+  const humanGateContinuationRuntimeFactory = createManagedWorkerRuntimeHandleFactory({
+    id: 'human-gate-continuation',
+    stopReason: 'provider-session-paused',
+    start() {
+      const worker = startManagedWorkerDefinition(
+        humanGateContinuationWorkerDefinition.definition,
+        DAEMON_GENERATION,
+      )
+      void worker.done.catch((error) => {
+        log.error('human-gate continuation worker stopped unexpectedly', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+      return worker
+    },
   })
-  const committedEventWorker = startManagedWorkerDefinition(
-    committedEventWorkerDefinition.definition,
-    DAEMON_GENERATION,
-  )
-  void committedEventWorker.done.catch((error) => {
-    log.error('committed-event dispatcher stopped unexpectedly', {
-      error: error instanceof Error ? error.message : String(error),
-    })
+  const committedEventRuntimeFactory = createManagedWorkerRuntimeHandleFactory({
+    id: 'committed-event-dispatcher',
+    stopReason: 'provider-session-paused',
+    start() {
+      const worker = startManagedWorkerDefinition(
+        committedEventWorkerDefinition.definition,
+        DAEMON_GENERATION,
+      )
+      void worker.done.catch((error) => {
+        log.error('committed-event dispatcher stopped unexpectedly', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+      return worker
+    },
   })
+  let intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> | null = null
+  const pendingIntentSessionIds = new Set<string>()
+  const resumeIntentSessions = (sessionIds: readonly string[]): void => {
+    if (sessionIds.length === 0) return
+    if (intentDispatchDeps === null) {
+      for (const sessionId of sessionIds) pendingIntentSessionIds.add(sessionId)
+      return
+    }
+    void resumeQueuedIntentWorkingSets(
+      { ...intentDispatchDeps, configSnapshot: loadConfig(Paths.config) },
+      sessionIds,
+    ).catch((err) =>
+      log.warn('queued intent working-set admission failed', {
+        err: err instanceof Error ? err.message : String(err),
+      }),
+    )
+  }
 
   // RFC-338 — every periodic DB/FS-heavy maintenance body runs on a dedicated
   // Worker connection. Main only admits durable slots and consumes typed
   // notification/admission deltas; Worker failure never falls back to running
   // the old body on this HTTP event loop.
+  const intentMaintenanceSnapshots = composeSqliteIntentMaintenanceSnapshotQueries(db)
   const maintenanceService = startMaintenanceService({
     dbPath: Paths.db,
     migrationsFolder,
     appHome: Paths.root,
     configPath: Paths.config,
     loadConfig: () => loadConfig(Paths.config),
+    payloadSources: Object.freeze({
+      activeTaskIds: activeTaskIdsSnapshot,
+      activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,
+      activeResourceBundleApplyIds,
+      bootIntentTurnIds: intentMaintenanceSnapshots.bootTurnIds,
+    }),
     onLifecycleDelta: (delta) => {
       for (const alert of delta.alerts) {
         broadcastAlert(alert, alert.transition)
@@ -1235,24 +2533,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         broadcastResolved(taskId)
       }
     },
-    onIntentQueued: (sessionIds) => {
-      if (sessionIds.length === 0) return
-      void resumeQueuedIntentWorkingSets(
-        {
-          db,
-          identityAccess,
-          appHome: Paths.root,
-          configSnapshot: loadConfig(Paths.config),
-        },
-        sessionIds,
-      ).catch((err) =>
-        log.warn('queued intent working-set admission failed', {
-          err: err instanceof Error ? err.message : String(err),
-        }),
-      )
-    },
+    onIntentQueued: resumeIntentSessions,
   })
-
+  const maintenanceRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'maintenance',
+    closeParticipantId: 'maintenance-final-close',
+    service: maintenanceService,
+  })
   // RFC-349 T5 — compose this provider-neutral participant once at daemon
   // bootstrap. HTTP and the Digital Employee worker must not independently
   // choose or reopen a database provider.
@@ -1263,73 +2550,64 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     implicitAgentDeclarations: developmentImplicitAgentContractDeclarations,
   })
   const codeHistoryQueries = composeSqliteCodeHistoryQueries(db)
+  const databaseMigration = composeDatabaseMigrationModule({
+    admission: deferredDatabaseMigrationAdmission.admission,
+    sqlitePath: Paths.db,
+    operationsRoot: Paths.databaseMigrationsDir,
+    generationPointerPath: Paths.databaseGenerationPointer,
+    configPath: Paths.config,
+    executionMode: 'background',
+    onBackgroundFailure({ operationId, error }) {
+      log.error('database migration background operation failed', {
+        operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
 
   // 7. HTTP server.
-  const app = createApp({
-    token,
-    configPath: Paths.config,
-    daemonInfoPath: Paths.daemonInfo,
-    // RFC-226: runtime readiness is not daemon health. Startup never executes
-    // OpenCode; explicit runtime status/Test/use paths perform the version and
-    // RFC-227 byte-frozen runtime admission instead.
-    opencodeVersion: null,
-    dbVersion,
-    db,
-    executionContracts: employeeExecutionContracts,
-    codeHistoryQueries,
-    developmentAdmissionLookup,
-    identityAccess: integrationIdentityAccess,
-    maintenanceStatus: maintenanceService.status,
-    secretBox,
-    repositoryPublicationTransport,
-    developmentAutomation,
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
-    taskExecutionReadModels: taskExecutionRuntime.readModels,
-    webhookDispatcher,
-    webhookTerminalControl,
-    digitalEmployeeEventCenter: employeeHttpEventCenter,
-    digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
-    digitalEmployeeWorkStart,
-    digitalEmployeeTypePackageDriftPolicy,
-  })
+  const app = createComposedApp(
+    composeSqliteAppDeps({
+      providerCore,
+      token,
+      configPath: Paths.config,
+      daemonInfoPath: Paths.daemonInfo,
+      // RFC-226: runtime readiness is not daemon health. Startup never executes
+      // OpenCode; explicit runtime status/Test/use paths perform the version and
+      // RFC-227 byte-frozen runtime admission instead.
+      opencodeVersion: null,
+      dbVersion,
+      db,
+      executionContracts: employeeExecutionContracts,
+      codeHistoryQueries,
+      developmentAdmissionLookup,
+      identityAccess: integrationIdentityAccess,
+      maintenanceStatus: maintenanceService.status,
+      secretBox,
+      repositoryPublicationTransport,
+      developmentAutomation,
+      schedulerDriver: taskExecutionRuntime.schedulerDriver,
+      taskExecutionReadModels: taskExecutionRuntime.readModels,
+      memoryOperations,
+      databaseMigration: databaseMigration,
+      collaborationContext,
+      mcpRuntimeTests,
+      webhookDispatcher,
+      webhookTerminalControl,
+      digitalEmployeeEventCenter: employeeHttpEventCenter,
+      digitalEmployeeCaseDetailProjection: employeeCaseDetailProjection,
+      digitalEmployeeWorkStart,
+      digitalEmployeeTypePackageDriftPolicy,
+    }),
+  )
 
   const bindHost = opts.host ?? config.bindHost
   const bindPort = opts.port ?? config.bindPort ?? 0
   const ws = buildWebSocketAdapter({
     daemonToken: token,
-    db,
+    realtime: providerCore.realtime,
     identityAccess,
-    resourceScopeAuthorization: composeResourceScopeAuthorizationBinding(),
   })
-  const server = Bun.serve({
-    port: bindPort,
-    hostname: bindHost,
-    // Bun's default idleTimeout is 10s — far too short for endpoints that
-    // synchronously await `npm install` (POST /api/plugins/:id/check-update
-    // and /upgrade can legitimately block for up to
-    // DEFAULT_INSTALL_TIMEOUT_MS = 60s). When the inbound socket is idle
-    // longer than the timeout Bun closes it, the daemon's response never
-    // reaches the client, and Vite surfaces "socket hang up" while the npm
-    // child keeps running orphaned. 255s is Bun's hard maximum and gives
-    // ~4× headroom over the install ceiling without changing endpoint
-    // semantics. See tests/cli-start-idle-timeout.test.ts.
-    idleTimeout: 255,
-    async fetch(req: Request, srv): Promise<Response> {
-      // `tryUpgrade` is async because RFC-036 token resolution may need a
-      // DB round-trip to validate a session token / PAT. The Bun fetch
-      // handler natively accepts a Promise<Response> so awaiting here keeps
-      // upgrade ordering deterministic (upgrade decision happens before
-      // any Hono route runs).
-      const upgraded = await ws.tryUpgrade(req, srv)
-      if (upgraded === true) return undefined as unknown as Response
-      if (upgraded === false) return await app.fetch(req)
-      return upgraded
-    },
-    websocket: ws.handlers,
-  })
-
-  const baseUrl = `http://${server.hostname}:${server.port}/`
-  log.info('listening', { url: baseUrl })
 
   // 7b. RFC-170 §invariant④ (T-BOOT): AFTER HTTP opens, re-verify every managed
   //     snapshot's integrity in the background (re-hash vs content_hash). A durable
@@ -1346,10 +2624,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       // upgrade — and sweep orphaned husk rows (no files, no versions) that would
       // otherwise squat their name invisibly forever. Per-skill best-effort; see
       // backfillLegacySkillVersions.
-      const { backfillLegacySkillVersions } = await import('@/services/skillVersion')
-      const bf = backfillLegacySkillVersions(db, { appHome: Paths.root })
-      const { runBootSnapshotReverify } = await import('@/services/skillBootVerify')
-      const r = runBootSnapshotReverify(db, { appHome: Paths.root })
+      const bf = await skillCatalogBoot.backfillLegacyVersions()
+      const r = await skillCatalogBoot.reverifySnapshots()
       log.info('boot snapshot reverify', {
         ...r,
         legacyBackfilled: bf.backfilled,
@@ -1364,7 +2640,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   // 8. Background loops. RFC-338 owns every DB/FS-heavy maintenance cadence;
   // limits and the in-memory batch-import Map remain lightweight on main.
-  const limitsTicker = startLimitsTicker(db)
+  const limitsTicker = startLimitsTicker(composeLegacySqliteResourceLimitOperations(db))
   // Scheduled backup creation keeps its own cadence; retention is admitted to
   // the maintenance Worker both by the configured heavy schedule and after a
   // backup settles.
@@ -1392,7 +2668,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
   // nobody launches a task against them. Reads its own enable flag each tick.
   const submoduleRefreshTicker = startSubmoduleRefreshLoop(
-    db,
+    repositoryWorkspaceStore,
     () => loadConfig(Paths.config),
     undefined,
     Paths.root,
@@ -1419,20 +2695,30 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   })
 
-  // RFC-041 — distill queue worker. Honors `memoryDistillerEnabled`
-  // (default true); when false the handle is a no-op shell.
-  const memoryDistillTicker = startMemoryDistillLoop({
-    db,
-    enabled: batchImportCfg.memoryDistillerEnabled !== false,
-    // RFC-117: distiller runtime profile (per-feature name → default → deprecated model).
-    runtimeName: batchImportCfg.memoryDistillRuntime ?? null,
-    defaultRuntime: batchImportCfg.defaultRuntime ?? null,
-    model: batchImportCfg.memoryDistillModel ?? null,
-    // RFC-044: per-source byte budget for the new distiller context blocks.
-    // Undefined falls back to DEFAULT_SOURCE_CONTEXT_BUDGET inside runDistill.
-    sourceContextBudget: batchImportCfg.memoryDistillSourceContext,
+  // RFC-041 — the provider session owns the distill loop. Stopping prevents a
+  // new claim and draining waits for the exact in-flight LLM turn before the
+  // selected provider can close.
+  const memoryDistillRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'memory-distill',
+    intervalMs: 1_000,
+    beforeStart: async () => {
+      await memoryOperations.distillWorker.recoverRunning()
+    },
+    async run() {
+      if (batchImportCfg.memoryDistillerEnabled === false) return
+      await memoryOperations.distillWorker.tick({
+        runtimeName: batchImportCfg.memoryDistillRuntime ?? null,
+        defaultRuntime: batchImportCfg.defaultRuntime ?? null,
+        model: batchImportCfg.memoryDistillModel ?? null,
+        sourceContextBudget: batchImportCfg.memoryDistillSourceContext,
+      })
+    },
+    onError(err) {
+      log.warn('memory distill tick failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    },
   })
-
   // Intent/apply/resource-bundle boot convergence is admitted by
   // maintenanceService and executes off-thread; typed queued-session deltas
   // above are the only work handed back to main.
@@ -1457,11 +2743,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       })
     }
   }
-  const developmentWakeTimer = setInterval(() => {
-    let writer: ReturnType<typeof refreshDigitalEmployeeWriterState>
-    try {
-      writer = refreshDigitalEmployeeWriterState(db, legacyMissionDrain)
-    } catch (err) {
+  const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'development-wake',
+    intervalMs: DAEMON_CADENCE.developmentWakeSweep,
+    async run() {
+      const writer = await employeeWriterCutover.refresh()
+      if (writer.mode === 'os-active' && !writer.legacyAdmissionsEnabled) return
+      await developmentAutomation.sweepWakes()
+    },
+    onError(err) {
       // This correctness sweep shares the foreground connection with HTTP.
       // A bounded maintenance write may own SQLite briefly; keep the daemon
       // alive and retry on the next cadence instead of leaking BUSY from the
@@ -1469,16 +2759,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       log.warn('development writer refresh failed', {
         err: err instanceof Error ? err.message : String(err),
       })
-      return
-    }
-    if (writer.mode === 'os-active' && !writer.legacyAdmissionsEnabled) return
-    void developmentAutomation.sweepWakes().catch((err: unknown) => {
-      log.warn('development wake sweep failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    })
-  }, DAEMON_CADENCE.developmentWakeSweep)
-  developmentWakeTimer.unref?.()
+    },
+  })
   // Upload/input/retention sweeps are direct RFC-338 Worker adapters. The
   // development wake driver remains a separate 30s correctness loop.
 
@@ -1489,15 +2771,13 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const employeeInputArtifacts = createEmployeeInputArtifactStore(
     join(Paths.root, 'artifacts', 'employee-inputs'),
   )
-  const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
+  const employeeWorkspace = composeSqliteDevelopmentEmployeeWorkspace({
     db,
     appHome: Paths.root,
     reactionRounds: createEmployeeReactionRoundQueries(db),
     inputArtifacts: employeeInputArtifacts,
     repositoryPreparation: buildDevelopmentWorkspaceRepositoryPreparation(
-      db,
-      secretBox,
-      Paths.root,
+      developmentWorkspaceRepositoryPreparation,
     ),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
@@ -1505,15 +2785,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     conflictMerge: bindConflictMergeParticipant(),
   })
   const employeeEventCenter = employeeHttpEventCenter
-  const employeeDelivery = buildDevelopmentDeliveryDeps(db, secretBox)
+  const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
   const employeeOs = composeDigitalEmployee({
     db,
     appHome: Paths.root,
-    legacyMissionDrain,
     typePackages: [developmentEmployeeTypePackage],
     typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
-    platformTools: composeDigitalEmployeeBuiltinToolCatalog({
-      db,
+    platformTools: await composeDigitalEmployeeBuiltinToolCatalog({
+      agentTemplates: digitalEmployeeAgentTemplates,
       typePackageDescriptorJsons: [
         ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
         developmentEmployeeTypePackage.descriptorJson,
@@ -1535,7 +2814,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
     },
     inputArtifacts: employeeInputArtifacts,
-    connectionCatalog: composeDevelopmentToolConnectionCatalog(db),
+    connectionCatalog: composeSqliteDevelopmentToolConnectionCatalog(db),
     runtime: {
       eventCenter: employeeEventCenter.participant,
       codecs: [developmentEmployeeRuntimeCodec],
@@ -1556,7 +2835,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           executionContracts: employeeExecutionContracts,
         }),
       ),
-      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+      platformWorkItems: composeSqliteDevelopmentEmployeePlatformWorkItems({
         reactionRounds: createEmployeeReactionRoundQueries(db),
         db,
         appHome: Paths.root,
@@ -1576,39 +2855,109 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
   })
   await employeeOs.maintenance.settleAutomaticUpgrades()
+  const intentAuthorityFor = (actor: Actor) =>
+    directOperationAuthority(identityAccess.directAuthority, actor)
+  const intentCatalogActors = new WeakMap<object, Actor>()
+  const intentResourceCatalogFor = composeIntentResourceCatalogFor({
+    query: resourceCatalog.createQuery({
+      resolveActor(context) {
+        const actor = intentCatalogActors.get(context)
+        if (actor === undefined) throw new Error('intent-resource-catalog-context-not-bound')
+        return actor
+      },
+    }),
+    contextFor(actor) {
+      const context = identityAccess.contexts.queryFromAuthority(
+        directRequestAuthority(identityAccess.directAuthority, actor),
+        'http',
+      )
+      intentCatalogActors.set(context, actor)
+      return context
+    },
+    authorityFor: intentAuthorityFor,
+    catalogs: {
+      agents: agentCatalog.queries,
+      skills: skillCatalog.queries,
+      skillFiles: skillCatalog.fileQueries,
+      mcps: mcpCatalog.queries,
+      plugins: pluginCatalog.queries,
+      workflows: workflowCatalog.queries,
+      workgroups: workgroupCatalog.queries,
+    },
+  })
+  const intentPersistence = createSqliteIntentPersistence(db)
+  const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
+    authorityFor: intentAuthorityFor,
+    capabilityTemplates: capabilityTemplateOperations,
+    developmentConfig: developmentConfigOperations,
+    digitalEmployee: composeDigitalEmployeePlatformInventoryParticipant({
+      queries: employeeOs.queries,
+      access: resourceCatalog.authorization,
+    }),
+  })
+  const intentDumpAuxiliaryBase = composeIntentDumpAuxiliaryQueries({
+    persistence: intentPersistence,
+    platformInventory: intentPlatformInventory,
+  })
+  const intentDumpAuxiliary = Object.freeze({
+    ...intentDumpAuxiliaryBase,
+    runtimeInventory: Object.freeze({
+      ...intentDumpAuxiliaryBase.runtimeInventory,
+      async resolveDefault() {
+        const runtime = await intentPersistence.resolveIntentRuntime(
+          loadConfig(Paths.config).defaultRuntime ?? 'opencode',
+        )
+        return { name: runtime.name, protocol: runtime.protocol }
+      },
+    }),
+  })
+  intentDispatchDeps = Object.freeze({
+    persistence: intentPersistence,
+    identityAccess: Object.freeze({
+      resolveAuthority: identityAccess.resolveAuthority,
+      legacyProjection: identityAccess.legacyProjection,
+    }),
+    appHome: Paths.root,
+    runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
+    dumpAuxiliary: intentDumpAuxiliary,
+    resourceCatalogFor: intentResourceCatalogFor,
+  })
+  const queuedBeforeIntentComposition = [...pendingIntentSessionIds]
+  pendingIntentSessionIds.clear()
+  resumeIntentSessions(queuedBeforeIntentComposition)
   if (employeeOs.runtime === null) {
     throw new Error('digital employee runtime composition unexpectedly unavailable')
   }
-  const employeeOsWorker = startDigitalEmployeeOsWorker({
-    dependencies: {
-      runtime: employeeOs.runtime.worker,
-    },
+  const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'digital-employee-os',
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
-    onError: (err) => {
-      log.warn('digital employee OS cycle failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    },
-    onCycle: (result) => {
+    runImmediately: true,
+    async run() {
+      const result = await runDigitalEmployeeOsCycle({ runtime: employeeOs.runtime!.worker })
       if (result.steps >= 32) {
         log.warn('digital employee OS cycle reached its bounded step budget', { ...result })
       }
     },
-  })
-  const eventCenterWorker = startEventCenterWorker({
-    dependencies: {
-      ...employeeEventCenter.worker,
-    },
-    intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
-    onError: (err) => {
-      log.warn('event center cycle failed', {
+    onError(err) {
+      log.warn('digital employee OS cycle failed', {
         err: err instanceof Error ? err.message : String(err),
       })
     },
-    onCycle: (result) => {
+  })
+  const eventCenterRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'event-center',
+    intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
+    runImmediately: true,
+    async run() {
+      const result = await runEventCenterCycle(employeeEventCenter.worker)
       if (result.steps >= 32) {
         log.warn('event center cycle reached its bounded step budget', { ...result })
       }
+    },
+    onError(err) {
+      log.warn('event center cycle failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
     },
   })
   // Employee input, intent cleanup/recovery, token audit, lifecycle invariants
@@ -1617,82 +2966,117 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   // RFC-101: settle running fusions (engine task done → awaiting_approval) so
   // the inbox badge lights up without a client poll.
-  const fusionReconcileTicker = startFusionReconcileLoop({
-    db,
-    appHome: Paths.root,
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
+  const fusionReconcileRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'fusion-reconcile',
+    intervalMs: DAEMON_CADENCE.fusionReconcile,
+    async run() {
+      await reconcileRunningFusions({ operations: fusionOperations, appHome: Paths.root })
+    },
+    onError() {
+      // Reconciliation is best-effort; the next provider-owned tick retries.
+    },
   })
-
-  // RFC-108 T19 (AR-04) — closed auto-repair loop (DEFAULT OFF). Free until an
-  // operator enables a rule in config.autoRepair (each tick early-outs in O(1)).
-  const autoRepairTicker = startAutoRepairLoop({
-    db,
-    appHome: Paths.root,
-    configPath: Paths.config,
-    schedulerDriver: taskExecutionRuntime.schedulerDriver,
-    onAlert: broadcastAlert,
-    onResolved: broadcastResolved,
-  })
-
-  // RFC-108 T20 (AR-05a) — heartbeat stalled-child auto-kill (DEFAULT OFF).
-  const heartbeatKillTicker = startHeartbeatKillLoop({ db, configPath: Paths.config })
-
-  // RFC-108 T17 (AR-10) — periodic post-boot orphan reconciler (reap-to-
-  // interrupted is the safe-on default; auto-resume stays behind T18's opt-in).
-  const orphanReconcileTicker = startOrphanReconcileLoop({ db, configPath: Paths.config })
-  // RFC-159 — scheduled-task background loop. Fires each due schedule as its owner,
-  // building deps live (buildStartTaskDeps) so scheduled launches match manual ones.
-  const scheduledTaskTicker = startScheduledTaskLoop({
-    db,
-    identityAccess: integrationIdentityAccess,
-    loadConfig: () => loadConfig(Paths.config),
-    buildLaunch: buildScheduleLaunch(
-      db,
-      taskExecutionRuntime.schedulerDriver,
-      Paths.config,
-      integrationIdentityAccess,
-    ),
-  })
-
-  // RFC-108 T18 (AR-03) — boot auto-resume (DEFAULT OFF, decision D1). Closes
-  // the daemon-restart loop: every task `reapOrphanRuns` just flipped to
-  // `interrupted` is re-driven automatically, but only through the breaker +
-  // recovery audit (autoResumeInterruptedTasks) and RFC-328's canonical
-  // continuation intent. Non-blocking — never hold the ready line on N
-  // resumes; the durable intent/owner claim keeps it safe against the
-  // scheduler or a human racing in.
-  if (config.autoResumeOnBoot) {
-    const resumeDeps = {
-      db,
-      schedulerDriver: taskExecutionRuntime.schedulerDriver,
-      // RFC-282 C1-2: the scheduler resolves config heads at the mint freeze.
+  // TaskExecution owns all four provider-bound periodic writers and the one
+  // boot auto-resume attempt. Its reversible background aggregate is also the
+  // exact provider-session drain boundary used during database cutover.
+  const taskExecutionBackgroundBindings = await _bindTaskExecutionProviderBackground(
+    taskExecutionProvider.background,
+    {
       configPath: Paths.config,
-      // boot 恢复同样会走到 unseal（同文件另外三处都经 buildStartTaskDeps 带上了它）。
-      ...(secretBox !== undefined ? { secretBox } : {}),
-      ...(config.subagentLiveCapture !== undefined
-        ? { subagentLiveCapture: config.subagentLiveCapture }
-        : {}),
-      ...resolveLaunchRuntimeConfig(Paths.config),
-    }
-    void autoResumeInterruptedTasks({
-      db,
-      breaker: {
-        maxPerWindow: config.maxAutoRecoveriesPerWindow,
-        windowMs: config.autoRecoveryWindowMs,
+      scheduled: {
+        operations: scheduledTaskRuntime.operations,
+        identityAccess: integrationIdentityAccess,
+        loadConfig: () => loadConfig(Paths.config),
       },
-      resume: (taskId) => resumeTask(db, taskId, resumeDeps).then(() => undefined),
-      // RFC-287 G7（plan.md T13⑥）：仓库准备未完成的任务不走 resume——它必然撞
-      // `task-repo-prep-incomplete`。重跑的是**准备本身**，入口是既有的单节点重试
-      // （retryNode 认 `__repo_prep__` 并分流到 retryRepoPreparation）。
-      retryRepoPrep: async (taskId) => {
-        await retryRepositoryPreparation(db, taskId, resumeDeps)
+    },
+  )
+  const providerRuntimeFactories = Object.freeze([
+    taskExecutionBackgroundBindings.runtimeFactory,
+    maintenanceRuntimeBindings.runtimeFactory,
+    mcpRuntimeTestBindings.runtimeFactory,
+  ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
+  const providerBackgroundWriterFactories = Object.freeze([
+    humanGateContinuationRuntimeFactory,
+    committedEventRuntimeFactory,
+    memoryDistillRuntimeFactory,
+    developmentWakeRuntimeFactory,
+    employeeOsRuntimeFactory,
+    eventCenterRuntimeFactory,
+    fusionReconcileRuntimeFactory,
+  ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
+  const providerCloseParticipants = Object.freeze([
+    taskExecutionBackgroundBindings.closeParticipant,
+    maintenanceRuntimeBindings.closeParticipant,
+    mcpRuntimeTestBindings.closeParticipant,
+  ] satisfies readonly DaemonProviderCloseParticipant[])
+  const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({
+    provider: 'sqlite',
+    generationId: providerSessionLifecycle.generationId,
+    app,
+    webSocket: ws,
+    runtimeFactories: providerRuntimeFactories,
+    backgroundWriterFactories: providerBackgroundWriterFactories,
+    providerCloseParticipants,
+    shutdownIdentity: () => identityAccess.shutdown(),
+    closeProvider: () => databaseProvider.close(),
+  })
+  const daemonProviderBootstrap = createDaemonProviderBootstrap({
+    initialSession: initialProviderSession,
+    sessionFactory: {
+      async create(input) {
+        if (input.provider === 'sqlite') {
+          throw new Error('sqlite-provider-session-source-retired')
+        }
+        const nextConfig = loadConfig(Paths.config)
+        const nextProvider = resolveDatabaseProviderRuntime({
+          config: nextConfig.database,
+          sqlitePath: Paths.db,
+          generationPointerPath: Paths.databaseGenerationPointer,
+          operationsRoot: Paths.databaseMigrationsDir,
+          contract: logicalSchemaContract,
+        })
+        if (
+          nextProvider.provider !== 'postgresql' ||
+          nextProvider.generation.payload.generationId !== input.generationId
+        ) {
+          await nextProvider.close()
+          throw new Error('postgresql-daemon-target-generation-mismatch')
+        }
+        return (
+          await composePostgresqlProviderSession({
+            provider: nextProvider,
+            config: requirePostgresqlConfig(nextConfig),
+            token,
+            secretBox,
+            dbVersion,
+            migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+            log,
+          })
+        ).session
       },
-    }).catch((err) =>
-      log.warn('boot auto-resume failed', {
-        error: err instanceof Error ? err.message : String(err),
-      }),
-    )
-  }
+    },
+    createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
+  })
+  deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap.databaseMigration)
+  await initialProviderSession.resume(providerSessionLifecycle)
+
+  const server = Bun.serve({
+    port: bindPort,
+    hostname: bindHost,
+    // Bun's default idle timeout is too short for bounded package installs.
+    idleTimeout: 255,
+    async fetch(req: Request, srv): Promise<Response> {
+      return await daemonProviderBootstrap.runBusinessRequest(req, async () => {
+        const upgraded = await daemonProviderBootstrap.tryUpgrade(req, srv)
+        if (upgraded === true) return undefined as unknown as Response
+        if (upgraded === false) return await daemonProviderBootstrap.fetch(req)
+        return upgraded
+      })
+    },
+    websocket: daemonProviderBootstrap.websocketHandlers,
+  })
+  const baseUrl = `http://${server.hostname}:${server.port}/`
+  log.info('listening', { url: baseUrl })
 
   // 9. Graceful shutdown (P-4-06).
   //
@@ -1727,31 +3111,31 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     submoduleRefreshTicker.stop()
     unregisterSubmoduleRefreshConfig()
     batchImportGcTicker.stop()
-    memoryDistillTicker.stop()
-    fusionReconcileTicker.stop()
-    autoRepairTicker.stop()
-    heartbeatKillTicker.stop()
-    orphanReconcileTicker.stop()
-    scheduledTaskTicker.stop()
-    employeeOsWorker.stop()
-    eventCenterWorker.stop()
+    await memoryOperations.distillWorker.recoverRunning()
     registerAfterCommitEventPump(null)
-    await committedEventWorker.stop(signal)
-    await humanGateContinuationWorker.stop(signal)
-    clearInterval(developmentWakeTimer)
-    await maintenanceService.stop()
     await webhookTerminalControl.stop()
-    identityAccess.shutdown()
     removeDaemonInfo()
     server.stop(true)
     try {
       const { gracefulShutdown } = await import('@/services/shutdown')
-      await Promise.all([mcpRuntimeTests.shutdown(30_000), gracefulShutdown(db, 30_000)])
+      await gracefulShutdown(
+        {
+          controller: { shutdownActive: shutdownActiveTaskExecutions },
+          operations: taskExecutionPersistence.shutdown,
+          recovery: taskExecutionPersistence.recoveryAdministration,
+        },
+        30_000,
+      )
     } catch (err) {
       log.warn('graceful shutdown error', {
         error: err instanceof Error ? err.message : String(err),
       })
     }
+    // Every provider-bound task mutation/recovery path above must settle while
+    // the selected client and authority runtime are still live. Identity owns
+    // no database close; the provider is deliberately the last session
+    // resource released after HTTP admission and all writers have drained.
+    await daemonProviderBootstrap.stop()
     // `stop` treats lock disappearance as the terminal acknowledgement. Retract
     // the loopback control endpoint first, otherwise the caller can observe a
     // successful stop while the previous process's control file still exists.
@@ -1816,7 +3200,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   // RFC-221 — the daemon token is only a first-admin bootstrap credential.
   // Once handoff commits, never print it as a browser login URL again.
-  const browserUrl = readyBrowserUrl(baseUrl, token, isBootstrapRequired(db))
+  const browserUrl = readyBrowserUrl(
+    baseUrl,
+    token,
+    await providerCore.authRuntime.isBootstrapRequired(),
+  )
   process.stdout.write(
     `\nagent-workflow ready — open this URL in your browser:\n  ${browserUrl}\n\n`,
   )

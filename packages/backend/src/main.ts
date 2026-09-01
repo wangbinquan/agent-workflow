@@ -13,6 +13,7 @@ import { appVersion } from './util/version'
 import { runGitCredentialSubcommand } from './util/gitCredentialLease'
 import { SYSTEM_USER_ID } from './auth/systemIdentity'
 import { createSecretBox } from './auth/secretBox'
+import type { Actor } from './auth/actor'
 import { backupCommand } from './cli/backup'
 import { restoreCommand } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
@@ -32,12 +33,30 @@ import {
 import { runUserCommand, type UserCommandIdentityHandle } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
 import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
-import { openDb } from './db/client'
-import { createIdentityAccessRuntime } from './modules/identity-access/composition'
+import { loadConfig } from './config'
+import { createPostgresqlAuthRuntime, createSqliteAuthRuntime } from './auth/composition'
+import {
+  createIdentityAccessRuntime,
+  createPostgresqlIdentityAccessRuntime,
+} from './modules/identity-access/composition'
+import { createPostgresqlIdentityAccessCrossContextBindings } from './modules/identity-access/composition/providerOperations'
 import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
-import { composeResourcePackageOperations } from './modules/resource-catalog/composition/resourcePackageOperations'
+import {
+  composeResourcePackageOperations,
+  composeSqliteResourcePackageProvider,
+} from './modules/resource-catalog/composition/resourcePackageOperations'
+import {
+  composePostgresqlResourcePackageCatalog,
+  composePostgresqlResourcePackageProvider,
+} from './modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
+import { createPostgresqlMcpTransactionLifecycle } from './modules/resource-catalog/composition/mcpRuntimeTestPersistence'
+import { createPostgresqlCapabilityTemplatePackageMutationOwner } from './modules/code-capability/composition/capabilityTemplateOperations'
 import { composeLocalSystemOperations } from './modules/system-operations/composition'
 import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
+import { resolveDatabaseProviderRuntime } from './platform/persistence/databaseProviderRuntime'
+import { migratePostgresqlSchema } from './platform/persistence/postgresqlMigrator'
+import { buildLogicalSchemaContract } from './platform/persistence/schemaContract'
+import { createPostgresqlResourcePackageAtomicApplyOperations } from './platform/persistence/postgresqlResourcePackageAtomicApply'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
@@ -46,6 +65,11 @@ import {
 import { runManagedProcess } from './services/execution/managedProcess'
 import { resolveMigrationsFolder } from './util/migrationsFolder'
 import { Paths } from './util/paths'
+import { installPlugin, plannedGenerationDir } from './services/pluginInstaller'
+import {
+  createPostgresqlResourcePackageExecutionAdapter,
+  createSqliteResourcePackageExecutionAdapter,
+} from './services/resourcePackage/executionAdapter'
 
 declare const AW_E2E_BUILD: boolean | undefined
 
@@ -76,10 +100,23 @@ function readPortFlag(argv: string[]): number | undefined {
 }
 
 async function composeUserCommandBootstrap() {
-  const migrationsFolder = await resolveMigrationsFolder()
-  const db = openDb({ path: Paths.db, migrationsFolder })
-  const identityAccess = createIdentityAccessRuntime({ db })
-  const operations = composeIdentityUserOperations({ db, identityAccess })
+  const provider = await resolveCommandProvider()
+  const identityAccess =
+    provider.provider === 'sqlite'
+      ? createIdentityAccessRuntime({ db: provider.db })
+      : createPostgresqlIdentityAccessRuntime({
+          db: provider.db,
+          crossContextTransactions: createPostgresqlIdentityAccessCrossContextBindings(),
+        })
+  const auth =
+    provider.provider === 'sqlite'
+      ? createSqliteAuthRuntime({ db: provider.db })
+      : createPostgresqlAuthRuntime({
+          db: provider.db,
+          // A standalone CLI has no live HTTP/WS credential cache to invalidate.
+          onCredentialRevoked: () => undefined,
+        })
+  const operations = composeIdentityUserOperations({ identityAccess, auth })
   const localOperator = await identityAccess.localOperator.forUser(SYSTEM_USER_ID)
   if (localOperator === null) {
     identityAccess.shutdown()
@@ -92,30 +129,170 @@ async function composeUserCommandBootstrap() {
     queryContext: () => localOperator.queryContext(),
   }) satisfies UserCommandIdentityHandle
 
-  return { db, identity, shutdown: () => identityAccess.shutdown() }
+  return {
+    auth,
+    identity,
+    async shutdown() {
+      identityAccess.shutdown()
+      await provider.runtime.close()
+    },
+  }
+}
+
+async function resolveCommandProvider() {
+  const config = loadConfig(Paths.config)
+  const contract = buildLogicalSchemaContract()
+  const runtime = resolveDatabaseProviderRuntime({
+    config: config.database,
+    sqlitePath: Paths.db,
+    generationPointerPath: Paths.databaseGenerationPointer,
+    operationsRoot: Paths.databaseMigrationsDir,
+    contract,
+  })
+  try {
+    if (runtime.provider === 'postgresql') {
+      await migratePostgresqlSchema({ runtime: runtime.runtime })
+      return Object.freeze({
+        provider: 'postgresql' as const,
+        runtime,
+        db: runtime.openClient(),
+      })
+    }
+    return Object.freeze({
+      provider: 'sqlite' as const,
+      runtime,
+      db: runtime.openClient({ migrationsFolder: await resolveMigrationsFolder() }),
+    })
+  } catch (error) {
+    await runtime.close()
+    throw error
+  }
 }
 
 async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap> {
-  const migrationsFolder = await resolveMigrationsFolder()
-  const db = openDb({ path: Paths.db, migrationsFolder })
-  const identityAccess = createIdentityAccessRuntime({ db })
-  const catalog = composeResourcePackageOperations({
-    db,
-    appHome: Paths.root,
-    box: createSecretBox(Paths.secretKeyFile),
-  })
-  const identity = Object.freeze({
-    async localIdentityForUser(userId: string) {
-      const local = await identityAccess.localOperator.forUser(userId)
-      if (local === null) return null
+  const provider = await resolveCommandProvider()
+  const identityAccess =
+    provider.provider === 'sqlite'
+      ? createIdentityAccessRuntime({ db: provider.db })
+      : createPostgresqlIdentityAccessRuntime({
+          db: provider.db,
+          crossContextTransactions: createPostgresqlIdentityAccessCrossContextBindings(),
+        })
+  type PostgresqlResourcePackageProviderInput = Parameters<
+    typeof composePostgresqlResourcePackageProvider
+  >[0]
+  type PackageAuthority = Parameters<
+    PostgresqlResourcePackageProviderInput['authorityResolver']['resolve']
+  >[0]
+  const actorsByAuthority = new WeakMap<PackageAuthority, Actor>()
+  const authorityResolver: PostgresqlResourcePackageProviderInput['authorityResolver'] =
+    Object.freeze({
+      resolve(authority: PackageAuthority) {
+        const actor = actorsByAuthority.get(authority)
+        if (actor === undefined) throw new Error('foreign-resource-package-authority')
+        return actor
+      },
+    })
+  const box = createSecretBox(Paths.secretKeyFile)
+  const pluginInstaller: PostgresqlResourcePackageProviderInput['pluginInstaller'] = Object.freeze({
+    plannedGenerationDirectory(
+      input: Parameters<
+        PostgresqlResourcePackageProviderInput['pluginInstaller']['plannedGenerationDirectory']
+      >[0],
+    ) {
+      return plannedGenerationDir(input.pluginId, input.spec, input.generationId, input.pluginsDir)
+    },
+    async install(
+      input: Parameters<PostgresqlResourcePackageProviderInput['pluginInstaller']['install']>[0],
+    ) {
+      const installed = await installPlugin(input.pluginId, input.spec, {
+        generationId: input.generationId,
+        pluginsDir: input.pluginsDir,
+      })
       return Object.freeze({
-        actor: local.actor,
-        commandContext: () => local.commandContext(),
-        queryContext: () => local.queryContext(),
+        cachedPath: installed.cachedPath,
+        resolvedVersion: installed.resolvedVersion,
+        sourceKind: installed.sourceKind,
+        generationDirectory: installed.generationDir,
+      })
+    },
+  })
+  const catalog =
+    provider.provider === 'sqlite'
+      ? (() => {
+          const resourcePackageProvider = composeSqliteResourcePackageProvider({
+            db: provider.db,
+            appHome: Paths.root,
+          })
+          return composeResourcePackageOperations({
+            execution: createSqliteResourcePackageExecutionAdapter({
+              db: provider.db,
+              appHome: Paths.root,
+              box,
+              provider: resourcePackageProvider,
+            }),
+            resources: resourcePackageProvider.resources,
+          })
+        })()
+      : (() => {
+          const resourcePackageProvider = composePostgresqlResourcePackageProvider({
+            db: provider.db,
+            appHome: Paths.root,
+            authorityResolver,
+            mcpLifecycle: createPostgresqlMcpTransactionLifecycle(),
+            capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
+              db: provider.db,
+            }),
+            pluginInstaller,
+          })
+          const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+            db: provider.db,
+            box,
+          })
+          return composePostgresqlResourcePackageCatalog({
+            provider: resourcePackageProvider,
+            execution: createPostgresqlResourcePackageExecutionAdapter({
+              box,
+              provider: resourcePackageProvider,
+              atomicApply,
+            }),
+          })
+        })()
+  const identity = Object.freeze({
+    async resolveLocalIdentityByUsername(username: string) {
+      const user = await identityAccess.userDirectory.findByUsername(username)
+      if (user === null) return null
+      if (user.status !== 'active') return Object.freeze({ status: user.status, identity: null })
+      const local = await identityAccess.localOperator.forUser(user.id)
+      return Object.freeze({
+        status: user.status,
+        identity:
+          local === null
+            ? null
+            : Object.freeze({
+                actor: local.actor,
+                commandContext() {
+                  const context = local.commandContext()
+                  actorsByAuthority.set(context.authority, local.actor)
+                  return context
+                },
+                queryContext() {
+                  const context = local.queryContext()
+                  actorsByAuthority.set(context.authority, local.actor)
+                  return context
+                },
+              }),
       })
     },
   }) satisfies PackageCommandIdentityHandle
-  return { db, identity, catalog, shutdown: () => identityAccess.shutdown() }
+  return {
+    identity,
+    catalog,
+    async shutdown() {
+      identityAccess.shutdown()
+      await provider.runtime.close()
+    },
+  }
 }
 
 async function main(): Promise<void> {
@@ -319,16 +496,26 @@ async function main(): Promise<void> {
       break
 
     case 'backup': {
-      const result = await backupCommand(Bun.argv.slice(3), requireLocalSystemOperations())
-      process.stdout.write(result.output)
-      if (result.status !== 'ok') process.exit(1)
+      const operations = requireLocalSystemOperations()
+      try {
+        const result = await backupCommand(Bun.argv.slice(3), requireLocalSystemOperations())
+        process.stdout.write(result.output)
+        if (result.status !== 'ok') process.exit(1)
+      } finally {
+        await operations.shutdown()
+      }
       break
     }
 
     case 'restore': {
-      const result = await restoreCommand(Bun.argv.slice(3), requireLocalSystemOperations())
-      process.stdout.write(result.output)
-      if (result.status !== 'ok') process.exit(1)
+      const operations = requireLocalSystemOperations()
+      try {
+        const result = await restoreCommand(Bun.argv.slice(3), requireLocalSystemOperations())
+        process.stdout.write(result.output)
+        if (result.status !== 'ok') process.exit(1)
+      } finally {
+        await operations.shutdown()
+      }
       break
     }
 
@@ -348,9 +535,14 @@ async function main(): Promise<void> {
     }
 
     case 'auth': {
-      const result = await authCommand(Bun.argv.slice(3))
-      process.stdout.write(result.output)
-      if (result.status !== 'ok') process.exit(1)
+      const bootstrap = await composeUserCommandBootstrap()
+      try {
+        const result = await authCommand(Bun.argv.slice(3), bootstrap.auth)
+        process.stdout.write(result.output)
+        if (result.status !== 'ok') process.exit(1)
+      } finally {
+        await bootstrap.shutdown()
+      }
       break
     }
 

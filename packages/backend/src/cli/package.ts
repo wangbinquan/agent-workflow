@@ -8,16 +8,14 @@
 // 导出支持 `--id`：同一个 owner 可以有两个同名工作流（`workflows.name` 非唯一），
 // `--type --name` 在那种情况下选不中确定的一行。
 
-import type { DbClient } from '@/db/client'
 import type { Actor } from '@/auth/actor'
-import { users } from '@/db/schema'
-import { eq } from 'drizzle-orm'
 import { writeFileSync, readFileSync } from 'node:fs'
 import {
   PackageImportReceiptSchema,
   PackagePreviewSchema,
   type BundleResourceType,
   type PackagePreview,
+  type UserPublic,
 } from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type { ResourcePackageCatalogModule } from '@/modules/resource-catalog/public/operations'
@@ -189,18 +187,20 @@ const RESOURCE_TYPES: readonly BundleResourceType[] = [
 ]
 
 export interface PackageCommandIdentityHandle {
-  localIdentityForUser(userId: string): Promise<Readonly<{
-    actor: Actor
-    commandContext(): CommandContext
-    queryContext(): QueryContext
+  resolveLocalIdentityByUsername(username: string): Promise<Readonly<{
+    status: UserPublic['status']
+    identity: Readonly<{
+      actor: Actor
+      commandContext(): CommandContext
+      queryContext(): QueryContext
+    }> | null
   }> | null>
 }
 
 export interface PackageCommandBootstrap {
-  readonly db: DbClient
   readonly identity: PackageCommandIdentityHandle
   readonly catalog: PackageCommandCatalog
-  shutdown(): void
+  shutdown(): void | Promise<void>
 }
 
 export type PackageCommandBootstrapFactory = () => Promise<PackageCommandBootstrap>
@@ -228,21 +228,21 @@ export async function packageCommand(
   let bootstrap: PackageCommandBootstrap | undefined
   try {
     bootstrap = await bootstrapFactory()
-    const { db, identity, catalog } = bootstrap
-    const row = db.select().from(users).where(eq(users.username, username)).get()
-    if (row === undefined) return { output: `user '${username}' not found\n`, status: 'error' }
+    const { identity, catalog } = bootstrap
+    const resolved = await identity.resolveLocalIdentityByUsername(username)
+    if (resolved === null) return { output: `user '${username}' not found\n`, status: 'error' }
     // ⚠️ 与 HTTP 同构的**第二半**：HTTP 侧 session lookup 对非 active 用户返回 null，
     // 所以停用的人在网页上什么都做不了。只查「行存在」会让 CLI 给一个已停用的主体
     // 造出可写 Actor，导入的资源归到该主体名下 —— 那正是「绕过判据」。
-    if (row.status !== 'active') {
+    if (resolved.status !== 'active') {
       return {
-        output: `user '${username}' is ${row.status}, not active: refusing to act as them\n`,
+        output: `user '${username}' is ${resolved.status}, not active: refusing to act as them\n`,
         status: 'error',
       }
     }
     // 与 HTTP 同构：bootstrap 注入的 local participant 从当前数据库访问状态解析
     // 最终 permissions + access revision；消费者不把角色当成第二条授权轴。
-    const operationIdentity = await identity.localIdentityForUser(row.id)
+    const operationIdentity = resolved.identity
     if (operationIdentity === null) {
       return { output: `user '${username}' is not active\n`, status: 'error' }
     }
@@ -252,7 +252,7 @@ export async function packageCommand(
     const e = err as { code?: string; message?: string }
     return { output: `${e.code ?? 'error'}: ${e.message ?? String(err)}\n`, status: 'error' }
   } finally {
-    bootstrap?.shutdown()
+    await bootstrap?.shutdown()
   }
 }
 

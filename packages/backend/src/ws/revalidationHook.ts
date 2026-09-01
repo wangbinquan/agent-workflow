@@ -6,10 +6,7 @@
 // (see memory reference_binary_build_module_cycle). This module imports nothing
 // heavy; `connections.ts` registers the real implementation at load, and the
 // daemon loads it via `ws/server.ts` at boot. Before registration (e.g. a unit
-// test that never boots the WS server) the trigger is a safe no-op — there are
-// no live connections to revalidate anyway.
-
-import type { DbClient } from '@/db/client'
+// test that never boots the WS server) there are no live connections to revalidate.
 
 export type RevocationReason =
   | 'session-revoked'
@@ -28,11 +25,7 @@ export interface RevalidationTarget {
   readonly revision: number
 }
 
-type TriggerImpl = (
-  db: DbClient,
-  reason: RevocationReason,
-  target?: RevalidationTarget,
-) => Promise<void>
+type TriggerImpl = (reason: RevocationReason, target?: RevalidationTarget) => Promise<void>
 
 let impl: TriggerImpl | undefined
 
@@ -42,31 +35,30 @@ export function registerRevalidationTrigger(fn: TriggerImpl): void {
 
 /**
  * Fire a WS revalidation after a revocation. MUST be called after the write
- * commits (design §4): the rescan re-reads the DB, so firing before commit would
- * read the pre-revocation state and leave the connection alive. No-op until the
- * WS server has registered its implementation.
+ * commits (design §4): the rescan re-reads provider persistence, so firing before commit would
+ * read the pre-revocation state and leave the connection alive. It stays dormant
+ * until the WS server has registered its implementation.
  */
-export function triggerRevalidation(db: DbClient, reason: RevocationReason): void {
-  void impl?.(db, reason).catch(() => {
+export function triggerRevalidation(reason: RevocationReason): void {
+  void impl?.(reason).catch(() => {
     // The registered implementation logs and fails closed. This terminal catch
-    // protects legacy fire-and-forget callers from an unhandled rejection.
+    // protects fire-and-forget callers from an unhandled rejection.
   })
 }
 
 /** RFC-244: awaited variant for audience-transition notifications. */
-export function triggerRevalidationAndWait(db: DbClient, reason: RevocationReason): Promise<void> {
-  return impl?.(db, reason) ?? Promise.resolve()
+export function triggerRevalidationAndWait(reason: RevocationReason): Promise<void> {
+  return impl?.(reason) ?? Promise.resolve()
 }
 
 /** RFC-305 targeted account-authority refresh. The commit is already durable;
  * only sockets for the changed subject are frozen and re-resolved. */
 export function triggerAuthorityRevalidation(
-  db: DbClient,
   userId: string,
   revision: number,
   onFailure?: (error: unknown) => void,
 ): void {
-  void impl?.(db, 'authority-changed', { userId, revision }).catch((error: unknown) => {
+  void impl?.('authority-changed', { userId, revision }).catch((error: unknown) => {
     // Registered implementation fails closed for every targeted socket.
     onFailure?.(error)
   })

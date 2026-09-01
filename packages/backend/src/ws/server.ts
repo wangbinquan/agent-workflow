@@ -28,14 +28,12 @@ import type { ServerWebSocket } from 'bun'
 import { type WsControlMessage, WsClientControlMessageSchema } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectRequestAuthority } from '@/modules/identity-access/public/participants'
-import {
-  extractUpgradeToken,
-  reresolveIdentity,
-  resolveActorWithWsCredential,
-  type WsCredentialWithExpiry,
-} from '@/auth/session'
-import { allowsLegacyDaemonTestAccess, type DbClient } from '@/db/client'
-import type { MemoryResourceScopeAuthorization } from '@/services/memory'
+import { extractUpgradeToken } from '@/auth/session'
+import type {
+  RealtimeCredential,
+  RealtimeIdentityAccess,
+  RealtimeRuntime,
+} from '@/modules/runtime-management/public/participants'
 import { createLogger } from '@/util/log'
 import {
   checkUpgradeGate,
@@ -57,12 +55,6 @@ import {
 
 const log = createLogger('ws.server')
 
-const missingResourceScopeAuthorization = Object.freeze({
-  inTransaction(): never {
-    throw new Error('resource-scope-authorization-not-composed')
-  },
-}) satisfies MemoryResourceScopeAuthorization
-
 /**
  * Per-connection data — derived from the registry's channel-params union
  * (RFC-152: the previously hand-written kind union now comes from
@@ -70,33 +62,142 @@ const missingResourceScopeAuthorization = Object.freeze({
  */
 type ConnectionData = WsConnectionData
 
+/**
+ * Provider-session WebSocket admission. Bootstrap closes this handle before it
+ * releases a provider: new upgrades are refused, already-open sockets are
+ * synchronously untracked/closed, and the returned promise waits for every
+ * upgrade that was accepted by Bun but has not reached `open` yet.
+ */
+export interface WebSocketAdmissionHandle {
+  close(): Promise<void>
+  open(): void
+}
+
+interface UpgradeAdmissionLease {
+  isAdmitted(): boolean
+  settle(): void
+}
+
+interface WebSocketAdmissionController {
+  readonly handle: WebSocketAdmissionHandle
+  beginUpgrade(): UpgradeAdmissionLease | null
+  prepareUpgrade(data: ConnectionData, lease: UpgradeAdmissionLease): void
+  cancelUpgrade(data: ConnectionData): void
+  acceptConnection(ws: ServerWebSocket<ConnectionData>): boolean
+  releaseConnection(ws: ServerWebSocket<ConnectionData>): void
+}
+
+export const WS_CLOSE_PROVIDER_TRANSITION = 1012
+
+function createWebSocketAdmissionController(): WebSocketAdmissionController {
+  let accepting = true
+  let nextLeaseId = 0
+  const upgradeLeases = new Set<number>()
+  const pendingByData = new Map<ConnectionData, UpgradeAdmissionLease>()
+  const admittedConnections = new Set<ServerWebSocket<ConnectionData>>()
+  const drainWaiters = new Set<() => void>()
+
+  const drained = (): boolean => upgradeLeases.size === 0 && admittedConnections.size === 0
+
+  const resolveDrainWaiters = (): void => {
+    if (!drained()) return
+    for (const resolve of drainWaiters) resolve()
+    drainWaiters.clear()
+  }
+
+  const beginUpgrade = (): UpgradeAdmissionLease | null => {
+    if (!accepting) return null
+    const leaseId = ++nextLeaseId
+    upgradeLeases.add(leaseId)
+    let settled = false
+    return Object.freeze({
+      isAdmitted: () => accepting && !settled,
+      settle() {
+        if (settled) return
+        settled = true
+        upgradeLeases.delete(leaseId)
+        resolveDrainWaiters()
+      },
+    })
+  }
+
+  const handle: WebSocketAdmissionHandle = Object.freeze({
+    async close() {
+      accepting = false
+      for (const ws of [...admittedConnections]) {
+        admittedConnections.delete(ws)
+        closeConnection(ws, WS_CLOSE_PROVIDER_TRANSITION, 'provider-transition')
+      }
+      if (drained()) return
+      await new Promise<void>((resolve) => drainWaiters.add(resolve))
+    },
+    open() {
+      if (!drained()) {
+        throw new Error('websocket-admission-not-drained')
+      }
+      accepting = true
+    },
+  })
+
+  return {
+    handle,
+    beginUpgrade,
+    prepareUpgrade(data, lease) {
+      pendingByData.set(data, lease)
+    },
+    cancelUpgrade(data) {
+      const lease = pendingByData.get(data)
+      pendingByData.delete(data)
+      lease?.settle()
+    },
+    acceptConnection(ws) {
+      const lease = pendingByData.get(ws.data)
+      pendingByData.delete(ws.data)
+      if (!accepting) {
+        lease?.settle()
+        closeConnection(ws, WS_CLOSE_PROVIDER_TRANSITION, 'provider-transition')
+        return false
+      }
+      admittedConnections.add(ws)
+      trackConnection(ws)
+      lease?.settle()
+      return true
+    },
+    releaseConnection(ws) {
+      const lease = pendingByData.get(ws.data)
+      pendingByData.delete(ws.data)
+      admittedConnections.delete(ws)
+      lease?.settle()
+      resolveDrainWaiters()
+    },
+  }
+}
+
 export interface WebSocketAdapterDeps {
   /**
    * Legacy daemon-token value used to bootstrap a daemon before any user
    * exists. Continues to upgrade WS connections as the `__system__` admin
-   * actor (via auth/session.ts:resolveActor) so the single-user / scripted
+   * actor (via the bound realtime credential participant) so the single-user / scripted
    * daemon mode keeps working alongside the OIDC/PAT paths introduced by
    * RFC-036.
    */
   daemonToken: string
-  db: DbClient
+  realtime: RealtimeRuntime
   /** One bootstrap-owned identity-access runtime shared with HTTP and MCP. */
-  identityAccess: Pick<
-    IdentityAccessWsBinding,
-    'directAuthority' | 'authorityFence' | 'presenceConnections' | 'presenceQuery'
-  >
-  /** Production bootstrap must inject this. Omission is a fail-closed test seam. */
-  resourceScopeAuthorization?: MemoryResourceScopeAuthorization
+  identityAccess: RealtimeIdentityAccess
 }
 
 export interface WebSocketAdapter {
+  /** Provider lifecycle fence bound directly into DaemonProviderRuntimeSession. */
+  admission: WebSocketAdmissionHandle
+
   /**
    * Try to upgrade a WebSocket request. Returns true if handled (caller
    * should return without producing a Response), false if the request isn't
    * a WS endpoint at all, or a Response to send back when the upgrade is
    * refused (bad token, unknown channel, etc.).
    *
-   * Async because token resolution (RFC-036) may hit the DB to validate a
+   * Async because token resolution (RFC-036) may consult provider persistence to validate a
    * session token or PAT before the upgrade is allowed.
    */
   tryUpgrade(req: Request, server: { upgrade: BunUpgradeFn }): Promise<true | false | Response>
@@ -118,15 +219,14 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   // length-check + timing-safe equality, so we avoid Buffer.from() per
   // upgrade attempt.
   const daemonTokenBuf = Buffer.from(deps.daemonToken, 'utf-8')
-  const resourceScopeAuthorization =
-    deps.resourceScopeAuthorization ?? missingResourceScopeAuthorization
+  const admission = createWebSocketAdmissionController()
   const identityAccess: IdentityAccessWsBinding = Object.freeze({
     directAuthority: deps.identityAccess.directAuthority,
     authorityFence: deps.identityAccess.authorityFence,
     presenceConnections: deps.identityAccess.presenceConnections,
     presenceQuery: deps.identityAccess.presenceQuery,
     requestAuthorityRevalidation(userId: string, revision: number) {
-      triggerAuthorityRevalidation(deps.db, userId, revision, (error) => {
+      triggerAuthorityRevalidation(userId, revision, (error) => {
         log.warn('targeted authority revalidation failed', {
           userId,
           revision,
@@ -150,125 +250,148 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
         status,
         headers: { 'Content-Type': 'application/json' },
       })
-    const channel = parseWsChannel(url)
-    if (channel === null) {
-      return wsError('ws-unknown-channel', 'unknown ws channel', 404)
-    }
-    // RFC-285 B4：WS 升级是 query token 的唯一保留面（浏览器 WebSocket 发不了
-    // 自定义头），入口收编为 auth/session 的 extractUpgradeToken 显式函数。
-    const queryToken = extractUpgradeToken(url)
-    if (queryToken === null) {
-      return wsError('auth-required', 'invalid or missing token', 401)
-    }
-    // RFC-036 — accept session tokens (aws_s_…), PATs (aws_pat_…) and the
-    // legacy daemon token, the same set the HTTP `multiAuth` middleware
-    // recognises. Previously this branch only ran `timingSafeEquals` against
-    // the static daemon token, so any client that logged in via OIDC and
-    // received a session token failed every WS upgrade with 401 — the
-    // SessionTab fell back to remount-on-tab-switch refetches and looked
-    // "not live" even though the runner was broadcasting correctly.
-    // RFC-212 impl-gate finding 2: capture the revocation epoch BEFORE resolving
-    // the actor, so a revocation that commits during this upgrade (any of the
-    // awaits below) is detectable at open time.
-    const upgradeEpoch = currentRevalidationEpoch()
-    let actor: Actor | null = null
-    let authority: DirectRequestAuthority | null = null
-    // RFC-312 T0 —— 一次解析同时拿到 actor 与凭据指纹。此前这里解析一遍、下面
-    // `buildWsCredential` 对同一个 token 再解析一遍，于是每次升级查 5 次、**写两次**
-    // `last_used_at`（rolling renewal 被执行了两遍）。合并后 3 读 1 写，对所有 WS 连接生效。
-    let credential: WsCredentialWithExpiry = { kind: 'daemon' }
-    try {
-      const resolved = await resolveActorWithWsCredential(
-        deps.db,
-        queryToken,
-        daemonTokenBuf,
-        deps.identityAccess,
-      )
-      actor = resolved.actor
-      authority = resolved.authority
-      credential = resolved.credential
-    } catch (err) {
-      log.warn('upgrade-token-resolve-threw', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    }
-    if (actor === null || authority === null) {
-      return wsError('auth-required', 'invalid or missing token', 401)
-    }
-    if (actor.source === 'daemon' && !allowsLegacyDaemonTestAccess(deps.db)) {
+    const upgradeLease = admission.beginUpgrade()
+    if (upgradeLease === null) {
       return wsError(
-        'bootstrap-admin-required',
-        'complete first-administrator setup before opening application channels',
-        403,
+        'ws-admission-closed',
+        'websocket admission is closed for a provider transition',
+        503,
       )
     }
-    // RFC-247 D2 / §3.5 — the token gates for WebSocket.
-    //
-    // `/ws/*` is upgraded here in Bun.serve's fetch handler, entirely OUTSIDE
-    // `multiAuth` (which is mounted on `/api/*`), and `resolveActor` above
-    // accepts PATs. So none of the three gates the route-metadata layer applies
-    // to HTTP reach this path — they have to be restated.
-    //
-    //   · purpose: an `mcp_only` token is for `/api/mcp` and nothing else. Left
-    //     unhandled, a token that cannot call `GET /api/tasks` could simply
-    //     subscribe to `/ws/tasks/:id` for the same data.
-    //   · channel allowlist: DEFAULT DENY. `repo-import` is owner-gated since
-    //     RFC-285 B6② (the RFC-152 D4 leftover is closed), and `intent-sessions`
-    //     carries a domain RFC-247 D7 puts permanently out of a token's reach.
-    //     Denying by default means a channel added later is closed to tokens
-    //     until someone decides otherwise, rather than open until someone
-    //     notices.
-    if (actor.source === 'pat') {
-      if (actor.purpose === 'mcp_only') {
+    let pendingData: ConnectionData | null = null
+    let transferredToSocket = false
+    try {
+      const channel = parseWsChannel(url)
+      if (channel === null) {
+        return wsError('ws-unknown-channel', 'unknown ws channel', 404)
+      }
+      // RFC-285 B4：WS 升级是 query token 的唯一保留面（浏览器 WebSocket 发不了
+      // 自定义头），入口收编为 auth/session 的 extractUpgradeToken 显式函数。
+      const queryToken = extractUpgradeToken(url)
+      if (queryToken === null) {
+        return wsError('auth-required', 'invalid or missing token', 401)
+      }
+      // RFC-036 — accept session tokens (aws_s_…), PATs (aws_pat_…) and the
+      // legacy daemon token, the same set the HTTP `multiAuth` middleware
+      // recognises. Previously this branch only ran `timingSafeEquals` against
+      // the static daemon token, so any client that logged in via OIDC and
+      // received a session token failed every WS upgrade with 401 — the
+      // SessionTab fell back to remount-on-tab-switch refetches and looked
+      // "not live" even though the runner was broadcasting correctly.
+      // RFC-212 impl-gate finding 2: capture the revocation epoch BEFORE resolving
+      // the actor, so a revocation that commits during this upgrade (any of the
+      // awaits below) is detectable at open time.
+      const upgradeEpoch = currentRevalidationEpoch()
+      let actor: Actor | null = null
+      let authority: DirectRequestAuthority | null = null
+      // RFC-312 T0 —— 一次解析同时拿到 actor 与凭据指纹。此前这里解析一遍、下面
+      // `buildWsCredential` 对同一个 token 再解析一遍，于是每次升级查 5 次、**写两次**
+      // `last_used_at`（rolling renewal 被执行了两遍）。合并后 3 读 1 写，对所有 WS 连接生效。
+      let credential: RealtimeCredential = { kind: 'daemon' }
+      try {
+        const resolved = await deps.realtime.credentials.resolveUpgrade(queryToken, daemonTokenBuf)
+        actor = resolved.actor
+        authority = resolved.authority
+        credential = resolved.credential
+      } catch (err) {
+        log.warn('upgrade-token-resolve-threw', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+      if (actor === null || authority === null) {
+        return wsError('auth-required', 'invalid or missing token', 401)
+      }
+      if (actor.source === 'daemon' && !deps.realtime.credentials.allowLegacyDaemonTestAccess) {
         return wsError(
-          'token-mcp-only',
-          'this token was issued for MCP use only and cannot open a WebSocket',
+          'bootstrap-admin-required',
+          'complete first-administrator setup before opening application channels',
           403,
         )
       }
-      if (!TOKEN_ALLOWED_WS_CHANNELS[channel.kind]) {
-        return wsError(
-          'token-forbidden-channel',
-          `personal access tokens cannot open the '${channel.kind}' channel`,
-          403,
-        )
+      // RFC-247 D2 / §3.5 — the token gates for WebSocket.
+      //
+      // `/ws/*` is upgraded here in Bun.serve's fetch handler, entirely OUTSIDE
+      // `multiAuth` (which is mounted on `/api/*`), and `resolveActor` above
+      // accepts PATs. So none of the three gates the route-metadata layer applies
+      // to HTTP reach this path — they have to be restated.
+      //
+      //   · purpose: an `mcp_only` token is for `/api/mcp` and nothing else. Left
+      //     unhandled, a token that cannot call `GET /api/tasks` could simply
+      //     subscribe to `/ws/tasks/:id` for the same data.
+      //   · channel allowlist: DEFAULT DENY. `repo-import` is owner-gated since
+      //     RFC-285 B6② (the RFC-152 D4 leftover is closed), and `intent-sessions`
+      //     carries a domain RFC-247 D7 puts permanently out of a token's reach.
+      //     Denying by default means a channel added later is closed to tokens
+      //     until someone decides otherwise, rather than open until someone
+      //     notices.
+      if (actor.source === 'pat') {
+        if (actor.purpose === 'mcp_only') {
+          return wsError(
+            'token-mcp-only',
+            'this token was issued for MCP use only and cannot open a WebSocket',
+            403,
+          )
+        }
+        if (!TOKEN_ALLOWED_WS_CHANNELS[channel.kind]) {
+          return wsError(
+            'token-forbidden-channel',
+            `personal access tokens cannot open the '${channel.kind}' channel`,
+            403,
+          )
+        }
       }
-    }
 
-    // RFC-152 — upgrade-time whole-connection gates come from the registry:
-    //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel
-    //                        does per-frame filtering instead because it
-    //                        enumerates all tasks system-wide),
-    //   memory-distill-jobs → explicit capability gate,
-    //   everything else     → gate-less, passes through.
-    const verdict = await checkUpgradeGate(deps.db, actor, channel)
-    if (verdict !== true) {
-      return wsError(verdict.code, verdict.message, 403)
+      // RFC-152 — upgrade-time whole-connection gates come from the registry:
+      //   task               → canViewTask (RFC-054 W2-4; the tasks-list channel
+      //                        does per-frame filtering instead because it
+      //                        enumerates all tasks system-wide),
+      //   memory-distill-jobs → explicit capability gate,
+      //   everything else     → gate-less, passes through.
+      const verdict = await checkUpgradeGate(deps.realtime.channels, actor, channel)
+      if (verdict !== true) {
+        return wsError(verdict.code, verdict.message, 403)
+      }
+      const data: ConnectionData = {
+        channel,
+        actor,
+        authority,
+        identityAccess,
+        channels: deps.realtime.channels,
+        credentials: deps.realtime.credentials,
+        // RFC-212 — fingerprint (never the raw token) so a live socket can be
+        // re-checked when a credential is revoked; also carries the credential's
+        // expiry for the zero-DB frame-path expiry check. Computed from the same
+        // token resolveActor just consumed.
+        credential,
+        closing: false,
+        revalidating: false,
+        upgradeEpoch,
+        unsubscribe: () => {
+          /* set on open */
+        },
+        visibilityCache: new Map<string, boolean>(),
+      }
+      if (!upgradeLease.isAdmitted()) {
+        return wsError(
+          'ws-admission-closed',
+          'websocket admission is closed for a provider transition',
+          503,
+        )
+      }
+      admission.prepareUpgrade(data, upgradeLease)
+      pendingData = data
+      const ok = server.upgrade(req, { data })
+      if (!ok) {
+        return wsError('upgrade-failed', 'websocket upgrade failed', 426)
+      }
+      transferredToSocket = true
+      return true
+    } finally {
+      if (!transferredToSocket) {
+        if (pendingData === null) upgradeLease.settle()
+        else admission.cancelUpgrade(pendingData)
+      }
     }
-    const data: ConnectionData = {
-      channel,
-      actor,
-      authority,
-      resourceScopeAuthorization,
-      identityAccess,
-      // RFC-212 — fingerprint (never the raw token) so a live socket can be
-      // re-checked when a credential is revoked; also carries the credential's
-      // expiry for the zero-DB frame-path expiry check. Computed from the same
-      // token resolveActor just consumed.
-      credential,
-      closing: false,
-      revalidating: false,
-      upgradeEpoch,
-      unsubscribe: () => {
-        /* set on open */
-      },
-      visibilityCache: new Map<string, boolean>(),
-    }
-    const ok = server.upgrade(req, { data })
-    if (!ok) {
-      return wsError('upgrade-failed', 'websocket upgrade failed', 426)
-    }
-    return true
   }
 
   async function handleOpen(ws: ServerWebSocket<ConnectionData>): Promise<void> {
@@ -278,7 +401,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // this upgrade cannot slip past: either the rescan sees this connection (and
     // re-checks the actor it just resolved), or it completed earlier and the
     // actor resolved above is already newer than that revocation.
-    trackConnection(ws)
+    if (!admission.acceptConnection(ws)) return
     // RFC-212 impl-gate finding 2: if a revocation committed DURING this upgrade
     // (epoch changed), this connection was resolved with a possibly-stale actor
     // and was invisible to that rescan's live snapshot. It's tracked now, so
@@ -286,21 +409,18 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // frame — close it if the credential was revoked, refresh the actor otherwise
     // (an access change). The subscribe below then runs under the fresh actor.
     if (currentRevalidationEpoch() !== ws.data.upgradeEpoch) {
-      const fresh = await reresolveIdentity(
-        deps.db,
-        ws.data.credential,
-        deps.identityAccess,
-        Date.now(),
-      ).catch(() => null)
+      const fresh = await ws.data.credentials
+        .reresolve(ws.data.credential, Date.now())
+        .catch(() => null)
       if (fresh === null) {
         closeConnection(ws, WS_CLOSE_AUTH_REVOKED, 'auth-revoked-mid-upgrade')
         return
       }
-      ws.data.actor = fresh.actor as Actor
+      ws.data.actor = fresh.actor
       ws.data.authority = fresh.authority
       // RFC-312 —— epoch 变了意味着复核期间权限可能已经变化，只重解析 actor 不够：
       // 必须用新 actor 重跑本通道的完整升级门，否则"已失权但恰好卡在升级中"的连接会漏网。
-      const verdict = await checkUpgradeGate(deps.db, ws.data.actor, ch)
+      const verdict = await checkUpgradeGate(ws.data.channels, ws.data.actor, ch)
       if (verdict !== true) {
         closeConnection(ws, WS_CLOSE_NOT_VISIBLE, verdict.code)
         return
@@ -309,7 +429,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // RFC-152/RFC-305 — gatedSubscribe (ACL-bypass shortcut → frameGate → error ⇒
     // drop) + hello frame + onOpenExtra (task `?since` replay), all driven
     // by the channel's registry spec.
-    await openWsChannel(ws, ch, deps.db)
+    await openWsChannel(ws, ch, ws.data.channels)
   }
 
   function handleClose(ws: ServerWebSocket<ConnectionData>): void {
@@ -321,6 +441,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
     // 此前只有服务端主动关的 `closeConnection` 置位，传输层/客户端关这条路径漏了，
     // 于是那段守卫写了却从不生效。
     ws.data.closing = true
+    admission.releaseConnection(ws)
     untrackConnection(ws)
     try {
       ws.data.unsubscribe()
@@ -350,6 +471,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
   }
 
   return {
+    admission: admission.handle,
     tryUpgrade,
     handlers: {
       open: handleOpen,

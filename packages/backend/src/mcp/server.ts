@@ -21,13 +21,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { Actor } from '@/auth/actor'
 import { actorOf } from '@/auth/actor'
+import type { TokenCallAuditParticipant, TokenCallRecord } from '@/auth/application/tokenCallAudit'
 import { bindingForTool } from '@/mcp/operationBindings'
 import { createBoundMcpOperationHandles } from '@/mcp/operationClient'
 import { McpCallError, toolsFor, type McpToolContext } from '@/mcp/tools'
-import type { DbClient } from '@/db/client'
 import type { OperationInvoker } from '@/platform/operations/contracts'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
-import { recordTokenCall, type TokenCallRecord } from '@/services/tokenAudit'
 import { redactErrorText } from '@/services/tokenRedaction'
 import { ForbiddenError, UnauthorizedError } from '@/util/errors'
 
@@ -159,7 +158,7 @@ function toolError(err: unknown): {
 }
 
 export interface McpTransportDeps {
-  readonly db: DbClient
+  readonly tokenCallAudit: Pick<TokenCallAuditParticipant, 'record'>
   readonly configPath: string
   readonly operationInvokerFor: (actor: Actor) => OperationInvoker
 }
@@ -196,7 +195,7 @@ export function mountMcpTransport(app: Hono, deps: McpTransportDeps): void {
     }
 
     const server = buildMcpServer(actor, deps.operationInvokerFor(actor), (record) => {
-      void recordTokenCall(deps.db, { ...record, actor, channel: 'mcp' })
+      void deps.tokenCallAudit.record({ ...record, actor, channel: 'mcp' })
     })
     const transport = new WebStandardStreamableHTTPServerTransport({
       // Stateless: no session id, no server-side conversation state. A blocking
