@@ -385,7 +385,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1907,
+      "baseline": 1908,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
         "why": "RFC-349 将数据库迁移、provider 切换与恢复控制面收为具名 operation/command；新增写入口由同一 provider admission 与 operation catalog 精确约束。"
@@ -491,7 +491,7 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25592,
+      "baseline": 25596,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
         "why": "RFC-349 新增 SQLite/PostgreSQL infrastructure adapters、provider-neutral ports 与唯一 bootstrap composition；所有新增 symbol 均映射到既有 bounded context owner，不引入 unassigned owner。"
@@ -499,7 +499,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:19e88cb32bd38f27d9d5f28b4814214b4cf90ca3c39215dc76263d23b9c9bfcb",
+    "sourceDigest": "sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +512,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f98bd95725ec889b3bd1491cacaf71777a0379eb",
-    "contentDigest": "sha256:2a71a6d37d73757efb048e869e7e6ca8a2149a1f5aab9b890a62a82742223824",
+    "currentSnapshotSha": "05a03a08b87e0da33f9fcb6aa036bd9a4d622c8c",
+    "contentDigest": "sha256:72f5bb50e357415e83282acd909a48a5da30903056f5277a77c934199751623e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

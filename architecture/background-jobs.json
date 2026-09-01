@@ -179,9 +179,9 @@
     {
       "callee": "registerMint",
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:543",
+      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:548",
       "kind": "register-call",
-      "line": 543,
+      "line": 548,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#executeHostTurn",
       "removeAfterWave": "W6/W9",
       "symbol": "executeHostTurn",
@@ -344,9 +344,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/agents.ts",
-      "id": "ambient:packages/backend/src/routes/agents.ts#registerOperationRoute:565",
+      "id": "ambient:packages/backend/src/routes/agents.ts#registerOperationRoute:570",
       "kind": "register-call",
-      "line": 565,
+      "line": 570,
       "ownerEntryId": "owner:packages/backend/src/routes/agents.ts#mountAgentRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAgentRoutes",
@@ -355,9 +355,9 @@
     {
       "callee": "registerOperationRoute",
       "file": "packages/backend/src/routes/agents.ts",
-      "id": "ambient:packages/backend/src/routes/agents.ts#registerOperationRoute:575",
+      "id": "ambient:packages/backend/src/routes/agents.ts#registerOperationRoute:580",
       "kind": "register-call",
-      "line": 575,
+      "line": 580,
       "ownerEntryId": "owner:packages/backend/src/routes/agents.ts#mountAgentRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAgentRoutes",
@@ -13510,5 +13510,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:19e88cb32bd38f27d9d5f28b4814214b4cf90ca3c39215dc76263d23b9c9bfcb"
+  "sourceDigest": "sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6"
 }

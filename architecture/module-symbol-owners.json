@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2655,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25592
+    "symbolsIncludingFileRoots": 25596
   },
   "entries": [
     {
@@ -81575,6 +81575,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WORKGROUP_OPERATION_KEY_SEPARATOR",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WORKGROUP_OPERATION_KEY_SEPARATOR",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS",
@@ -146711,6 +146723,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#captureOperationCatalogForTests",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "captureOperationCatalogForTests",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/operations/catalog.ts",
       "id": "owner:packages/backend/src/platform/operations/catalog.ts#DECLARED_BY_ID",
@@ -146929,6 +146953,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#OperationCatalogTestCheckpoint",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "OperationCatalogTestCheckpoint",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
       "id": "owner:packages/backend/src/platform/operations/catalog.ts#OperationCatalogToolProjection",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -147053,6 +147089,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "RESOURCE_PROJECTION",
+      "targetContext": "platform",
+      "targetLayer": "operations"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/operations/catalog.ts",
+      "id": "owner:packages/backend/src/platform/operations/catalog.ts#restoreOperationCatalogForTests",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "restoreOperationCatalogForTests",
       "targetContext": "platform",
       "targetLayer": "operations"
     },
@@ -307776,5 +307824,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:19e88cb32bd38f27d9d5f28b4814214b4cf90ca3c39215dc76263d23b9c9bfcb"
+  "sourceDigest": "sha256:517ff322c622ff4d7106a90d2a935d1aaec221d86377df2060d72edd107012a6"
 }
