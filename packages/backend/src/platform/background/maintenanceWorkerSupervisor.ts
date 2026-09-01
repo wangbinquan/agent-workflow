@@ -29,16 +29,8 @@ export interface MaintenanceWorkerLiveState {
   }
 }
 
-export interface MaintenanceWorkerSupervisorOptions {
-  readonly dbPath: string
-  readonly migrationsFolder: string
+interface MaintenanceWorkerSupervisorCommonOptions {
   readonly appHome: string
-  readonly sqlite: {
-    readonly synchronous: 'NORMAL' | 'FULL'
-    readonly pageCacheMib: number
-    readonly mmapMib: number
-    readonly busyTimeoutMs?: number
-  }
   readonly onDelta?: (runId: string, job: MaintenanceJobKey, delta: MaintenanceWorkerDelta) => void
   readonly onEvent?: (event: MaintenanceWorkerEvent) => void
   readonly workerFactory?: () => WorkerLike
@@ -48,9 +40,45 @@ export interface MaintenanceWorkerSupervisorOptions {
   readonly clearTimer?: (handle: unknown) => void
 }
 
+export type MaintenanceWorkerSupervisorOptions = MaintenanceWorkerSupervisorCommonOptions &
+  (
+    | Readonly<{
+        provider?: 'sqlite'
+        dbPath: string
+        migrationsFolder: string
+        sqlite: {
+          readonly synchronous: 'NORMAL' | 'FULL'
+          readonly pageCacheMib: number
+          readonly mmapMib: number
+          readonly busyTimeoutMs?: number
+        }
+        generationId?: never
+        database?: never
+      }>
+    | Readonly<{
+        provider: 'postgresql'
+        dbPath?: never
+        migrationsFolder?: never
+        sqlite?: never
+        generationId: string
+        database: {
+          readonly provider: 'postgresql'
+          readonly urlEnv: string
+          readonly poolMax: number
+          readonly connectTimeoutMs: number
+          readonly statementTimeoutMs: number
+          readonly idleTimeoutMs: number
+        }
+      }>
+  )
+
 export interface MaintenanceWorkerSupervisor {
   wake(): void
   live(): MaintenanceWorkerLiveState
+  pause(timeoutMs?: number): Promise<void>
+  resume(): Promise<void>
+  stop(timeoutMs?: number): Promise<void>
+  /** RFC-338 compatibility name for the permanent stop operation. */
   drain(timeoutMs?: number): Promise<void>
 }
 
@@ -87,6 +115,7 @@ export function startMaintenanceWorkerSupervisor(
 
   let worker: WorkerLike | null = null
   let stopped = false
+  let paused = false
   let restartAttempt = 0
   let restartTimer: unknown | null = null
   let handshakeTimer: unknown | null = null
@@ -94,6 +123,7 @@ export function startMaintenanceWorkerSupervisor(
   let failureDrainTimer: unknown | null = null
   let restartAfterDrainReason: string | null = null
   let drainResolve: (() => void) | null = null
+  let lifecycleDrain: Promise<void> | null = null
   let live: MaintenanceWorkerLiveState = {
     state: 'starting',
     lastHeartbeatAt: null,
@@ -115,7 +145,7 @@ export function startMaintenanceWorkerSupervisor(
     failureDrainTimer = null
   }
   const scheduleSpawn = (): void => {
-    if (stopped || worker !== null || restartTimer !== null) return
+    if (stopped || paused || worker !== null || restartTimer !== null) return
     if (restartAttempt >= 6) return
     const delay = Math.min(10_000, 250 * 2 ** restartAttempt)
     restartAttempt += 1
@@ -134,7 +164,7 @@ export function startMaintenanceWorkerSupervisor(
     scheduleSpawn()
   }
   const scheduleRestart = (reason: string, force = false): void => {
-    if (stopped) return
+    if (stopped || paused) return
     clearHandshake()
     clearWatchdog()
     live = { ...live, state: 'degraded', error: reason, active: null }
@@ -169,10 +199,10 @@ export function startMaintenanceWorkerSupervisor(
   }
 
   const scheduleWatchdog = (): void => {
-    if (stopped || live.state !== 'ready' || watchdogTimer !== null) return
+    if (stopped || paused || live.state !== 'ready' || watchdogTimer !== null) return
     watchdogTimer = setTimer(() => {
       watchdogTimer = null
-      if (stopped || live.state !== 'ready') return
+      if (stopped || paused || live.state !== 'ready') return
       const lastHeartbeatAt = live.lastHeartbeatAt
       if (lastHeartbeatAt !== null && now() - lastHeartbeatAt > heartbeatTimeoutMs) {
         // A Worker that cannot answer its heartbeat also cannot be trusted to
@@ -204,7 +234,10 @@ export function startMaintenanceWorkerSupervisor(
         restartAttempt = 0
         live = { state: 'ready', lastHeartbeatAt: event.at, error: null, active: null }
         scheduleWatchdog()
-        post({ type: 'wake', version: MAINTENANCE_PROTOCOL_VERSION })
+        // A generation that finished its handshake after pause/stop already
+        // requested a drain. Waking it would admit a slice this supervisor is
+        // waiting to see finish.
+        if (!stopped && !paused) post({ type: 'wake', version: MAINTENANCE_PROTOCOL_VERSION })
         return
       case 'heartbeat':
         live = { ...live, lastHeartbeatAt: event.at }
@@ -232,7 +265,7 @@ export function startMaintenanceWorkerSupervisor(
         restartAfterDrainReason = null
         worker?.terminate()
         worker = null
-        if (!stopped && restartReason !== null) {
+        if (!stopped && !paused && restartReason !== null) {
           live = {
             state: 'degraded',
             lastHeartbeatAt: event.at,
@@ -252,7 +285,7 @@ export function startMaintenanceWorkerSupervisor(
   }
 
   function spawn(): void {
-    if (stopped || worker !== null) return
+    if (stopped || paused || worker !== null) return
     try {
       const next = factory()
       worker = next
@@ -295,7 +328,7 @@ export function startMaintenanceWorkerSupervisor(
         restartAfterDrainReason = null
         worker = null
 
-        if (stopped) {
+        if (stopped || paused) {
           live = { ...live, state: 'stopped', error: null, active: null }
           const resolve = drainResolve
           drainResolve = null
@@ -312,20 +345,32 @@ export function startMaintenanceWorkerSupervisor(
         }
         scheduleSpawn()
       })
-      post({
-        type: 'init',
-        version: MAINTENANCE_PROTOCOL_VERSION,
-        catalogDigest: MAINTENANCE_CATALOG_DIGEST,
-        dbPath: options.dbPath,
-        migrationsFolder: options.migrationsFolder,
-        appHome: options.appHome,
-        sqlite: {
-          synchronous: options.sqlite.synchronous,
-          pageCacheMib: options.sqlite.pageCacheMib,
-          mmapMib: options.sqlite.mmapMib,
-          busyTimeoutMs: options.sqlite.busyTimeoutMs ?? 50,
-        },
-      })
+      if (options.provider === 'postgresql') {
+        post({
+          type: 'init',
+          version: MAINTENANCE_PROTOCOL_VERSION,
+          catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+          provider: 'postgresql',
+          generationId: options.generationId,
+          appHome: options.appHome,
+          database: options.database,
+        })
+      } else {
+        post({
+          type: 'init',
+          version: MAINTENANCE_PROTOCOL_VERSION,
+          catalogDigest: MAINTENANCE_CATALOG_DIGEST,
+          dbPath: options.dbPath,
+          migrationsFolder: options.migrationsFolder,
+          appHome: options.appHome,
+          sqlite: {
+            synchronous: options.sqlite.synchronous,
+            pageCacheMib: options.sqlite.pageCacheMib,
+            mmapMib: options.sqlite.mmapMib,
+            busyTimeoutMs: options.sqlite.busyTimeoutMs ?? 50,
+          },
+        })
+      }
       handshakeTimer = setTimer(
         () => scheduleRestart('maintenance worker handshake timed out', true),
         10_000,
@@ -337,9 +382,50 @@ export function startMaintenanceWorkerSupervisor(
   }
 
   spawn()
+
+  const drainWorker = (timeoutMs: number): Promise<void> => {
+    if (lifecycleDrain !== null) return lifecycleDrain
+    if (restartTimer !== null) clearTimer(restartTimer)
+    restartTimer = null
+    clearHandshake()
+    clearWatchdog()
+    clearFailureDrain()
+    restartAfterDrainReason = null
+    if (worker === null) {
+      live = { ...live, state: 'stopped', active: null }
+      return Promise.resolve()
+    }
+    const pending = new Promise<void>((resolve) => {
+      let timeout: unknown | null = null
+      drainResolve = () => {
+        if (timeout !== null) clearTimer(timeout)
+        resolve()
+      }
+      post({ type: 'drain', version: MAINTENANCE_PROTOCOL_VERSION })
+      timeout = setTimer(() => {
+        worker?.terminate()
+        worker = null
+        live = {
+          state: 'stopped',
+          lastHeartbeatAt: live.lastHeartbeatAt,
+          error: 'maintenance worker drain timed out',
+          active: null,
+        }
+        const finish = drainResolve
+        drainResolve = null
+        finish?.()
+      }, timeoutMs)
+      ;(timeout as { unref?: () => void } | null)?.unref?.()
+    }).finally(() => {
+      if (lifecycleDrain === pending) lifecycleDrain = null
+    })
+    lifecycleDrain = pending
+    return pending
+  }
+
   return {
     wake() {
-      if (stopped) return
+      if (stopped || paused) return
       if (worker === null && restartTimer === null) {
         restartAttempt = Math.min(restartAttempt, 5)
         spawn()
@@ -347,41 +433,30 @@ export function startMaintenanceWorkerSupervisor(
       if (live.state === 'ready') post({ type: 'wake', version: MAINTENANCE_PROTOCOL_VERSION })
     },
     live: () => live,
-    drain(timeoutMs = 10_000) {
-      if (stopped) return Promise.resolve()
+    pause(timeoutMs = 10_000) {
+      if (stopped || paused) return lifecycleDrain ?? Promise.resolve()
+      paused = true
+      return drainWorker(timeoutMs)
+    },
+    async resume() {
+      if (stopped || !paused) return
+      await lifecycleDrain
+      if (stopped || !paused) return
+      paused = false
+      live = { state: 'starting', lastHeartbeatAt: live.lastHeartbeatAt, error: null, active: null }
+      spawn()
+    },
+    stop(timeoutMs = 10_000) {
+      if (stopped) return lifecycleDrain ?? Promise.resolve()
       stopped = true
-      if (restartTimer !== null) clearTimer(restartTimer)
-      restartTimer = null
-      clearHandshake()
-      clearWatchdog()
-      clearFailureDrain()
-      restartAfterDrainReason = null
-      if (worker === null) {
-        live = { ...live, state: 'stopped', active: null }
-        return Promise.resolve()
-      }
-      return new Promise<void>((resolve) => {
-        let timeout: unknown | null = null
-        drainResolve = () => {
-          if (timeout !== null) clearTimer(timeout)
-          resolve()
-        }
-        post({ type: 'drain', version: MAINTENANCE_PROTOCOL_VERSION })
-        timeout = setTimer(() => {
-          worker?.terminate()
-          worker = null
-          live = {
-            state: 'stopped',
-            lastHeartbeatAt: live.lastHeartbeatAt,
-            error: 'maintenance worker drain timed out',
-            active: null,
-          }
-          const finish = drainResolve
-          drainResolve = null
-          finish?.()
-        }, timeoutMs)
-        ;(timeout as { unref?: () => void } | null)?.unref?.()
-      })
+      paused = false
+      return drainWorker(timeoutMs)
+    },
+    drain(timeoutMs = 10_000) {
+      if (stopped) return lifecycleDrain ?? Promise.resolve()
+      stopped = true
+      paused = false
+      return drainWorker(timeoutMs)
     },
   }
 }

@@ -9,17 +9,11 @@ import { ulid } from 'ulid'
 
 import { openDb } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
-import {
-  createMaintenanceRunStore,
-  type MaintenanceRunStore,
-} from '@/platform/persistence/sqlite/maintenanceRunStore'
-import { isDbSnapshotInProgress } from '@/services/backup'
-import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
+import type { MaintenanceRunStore } from './maintenanceRunStorePort'
+import { createSqliteMaintenanceRunStore } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
+import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
-import { activeIntentApplyJournalIds } from '@/services/intent/applyChangeset'
-import { listIntentTurnIdsForBootRecovery } from '@/services/intent/maintenance'
 import { startMaintenanceTicker, type MaintenanceTickerHandle } from '@/services/maintenanceTicker'
-import { activeTaskIdsSnapshot } from '@/services/task'
 import { createLogger } from '@/util/log'
 import { FIXED_MAINTENANCE_JOB_SPECS, maintenanceJobSpec } from './maintenanceCatalog'
 import { parseMaintenanceJobPayload } from './maintenanceJobPayload'
@@ -37,9 +31,7 @@ const ADMISSION_BUSY_TIMEOUT_MS = 5
 const EVENT_LOOP_SAMPLE_MS = 50
 const EVENT_LOOP_WINDOW_MS = 30_000
 
-export interface MaintenanceServiceOptions {
-  readonly dbPath: string
-  readonly migrationsFolder: string
+interface MaintenanceServiceCommonOptions {
   readonly appHome: string
   readonly configPath: string
   readonly loadConfig: () => Config
@@ -49,10 +41,53 @@ export interface MaintenanceServiceOptions {
   readonly onIntentQueued?: (sessionIds: readonly string[]) => void
 }
 
+export interface MaintenancePayloadSources {
+  readonly activeTaskIds: () => Promise<readonly string[]> | readonly string[]
+  readonly activeIntentApplyJournalIds: () => Promise<readonly string[]> | readonly string[]
+  readonly activeResourceBundleApplyIds: () => Promise<readonly string[]> | readonly string[]
+  /** Capture before HTTP admission opens; later scans would misclassify fresh turns as boot orphans. */
+  readonly bootIntentTurnIds: () => Promise<readonly string[]> | readonly string[]
+}
+
+export type MaintenanceServiceOptions = MaintenanceServiceCommonOptions &
+  (
+    | Readonly<{
+        provider?: 'sqlite'
+        dbPath: string
+        migrationsFolder: string
+        generationId?: never
+        database?: never
+        store?: never
+        payloadSources: MaintenancePayloadSources
+      }>
+    | Readonly<{
+        provider: 'postgresql'
+        dbPath?: never
+        migrationsFolder?: never
+        generationId: string
+        database: {
+          readonly provider: 'postgresql'
+          readonly urlEnv: string
+          readonly poolMax: number
+          readonly connectTimeoutMs: number
+          readonly statementTimeoutMs: number
+          readonly idleTimeoutMs: number
+        }
+        /** Dedicated admission adapter composed from the verified live
+         * PostgreSQL generation. The Worker opens its own bounded pool. */
+        store: MaintenanceRunStore
+        payloadSources: MaintenancePayloadSources
+      }>
+  )
+
 export interface MaintenanceService {
   readonly status: () => MaintenanceStatus
   readonly reconfigure: () => void
   readonly runSoon: (job: MaintenanceJobKey) => void
+  /** Fence new durable admissions and drain the active Worker slice. */
+  readonly pause: () => Promise<void>
+  /** Start a fresh Worker generation and replay admissions deferred by pause. */
+  readonly resume: () => Promise<void>
   readonly stop: () => Promise<void>
 }
 
@@ -70,7 +105,9 @@ interface MaintenanceAdmissionTimerApi {
 
 interface MaintenanceAdmissionController {
   admit(input: MaintenanceAdmissionInput): void
-  stop(): void
+  pause(): Promise<void>
+  resume(): void
+  stop(): Promise<void>
 }
 
 /**
@@ -81,7 +118,7 @@ interface MaintenanceAdmissionController {
  */
 export function createMaintenanceAdmissionController(options: {
   readonly store: Pick<MaintenanceRunStore, 'enqueue'>
-  readonly payloadFor: (job: MaintenanceJobKey) => unknown
+  readonly payloadFor: (job: MaintenanceJobKey) => Promise<unknown> | unknown
   readonly wake: () => void
   readonly now?: () => number
   readonly makeId?: () => string
@@ -90,8 +127,10 @@ export function createMaintenanceAdmissionController(options: {
     job: MaintenanceJobKey
     attempt: number
     delayMs: number
-    sqliteCode: string
+    contentionCode: string
   }) => void
+  readonly classifyRetryable?: (error: unknown) => string | undefined
+  readonly onAdmitted?: () => void
   readonly onFailed?: (input: { job: MaintenanceJobKey; error: unknown }) => void
 }): MaintenanceAdmissionController {
   const now = options.now ?? Date.now
@@ -100,44 +139,63 @@ export function createMaintenanceAdmissionController(options: {
     setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
     clearTimeout: (handle: ReturnType<typeof setTimeout>) => clearTimeout(handle),
   }
-  const pending = new Map<string, ReturnType<typeof setTimeout> | null>()
+  interface PendingAdmission {
+    readonly input: MaintenanceAdmissionInput
+    payload: Readonly<Record<string, unknown>> | null
+    attempt: number
+    handle: ReturnType<typeof setTimeout> | null
+  }
+  const pending = new Map<string, PendingAdmission>()
+  const inFlight = new Set<Promise<void>>()
+  let paused = false
   let stopped = false
 
-  const tryAdmission = (
-    input: MaintenanceAdmissionInput,
-    payload: Readonly<Record<string, unknown>>,
-    key: string,
-    attempt: number,
-  ): void => {
-    if (stopped) return
+  const classifyRetryable =
+    options.classifyRetryable ?? ((error: unknown) => retryableSqliteWriteErrorCode(error))
+
+  const track = (promise: Promise<void>): void => {
+    inFlight.add(promise)
+    void promise.finally(() => inFlight.delete(promise))
+  }
+
+  const tryAdmission = async (key: string, entry: PendingAdmission): Promise<void> => {
+    if (stopped || paused || pending.get(key) !== entry || entry.payload === null) return
     try {
-      const receipt = options.store.enqueue({
+      const receipt = await options.store.enqueue({
         id: makeId(),
-        jobKey: input.job,
-        jobClass: input.jobClass,
-        slotKey: input.slot.slotKey,
-        cycleKey: input.slot.cycleKey,
-        payload,
-        scheduledAt: input.slot.scheduledAt,
+        jobKey: entry.input.job,
+        jobClass: entry.input.jobClass,
+        slotKey: entry.input.slot.slotKey,
+        cycleKey: entry.input.slot.cycleKey,
+        payload: entry.payload,
+        scheduledAt: entry.input.slot.scheduledAt,
         now: now(),
       })
-      pending.delete(key)
-      if (receipt.inserted || receipt.coalesced) options.wake()
+      if (pending.get(key) === entry) pending.delete(key)
+      options.onAdmitted?.()
+      if (!paused && !stopped && (receipt.inserted || receipt.coalesced)) options.wake()
     } catch (error) {
-      const sqliteCode = retryableSqliteWriteErrorCode(error)
-      if (sqliteCode === undefined) {
-        pending.delete(key)
-        options.onFailed?.({ job: input.job, error })
+      const contentionCode = classifyRetryable(error)
+      if (contentionCode === undefined) {
+        if (pending.get(key) === entry) pending.delete(key)
+        options.onFailed?.({ job: entry.input.job, error })
         return
       }
-      const delayMs = Math.min(ADMISSION_MAX_RETRY_DELAY_MS, 250 * 2 ** Math.min(attempt, 7))
-      options.onDeferred?.({ job: input.job, attempt: attempt + 1, delayMs, sqliteCode })
+      const delayMs = Math.min(ADMISSION_MAX_RETRY_DELAY_MS, 250 * 2 ** Math.min(entry.attempt, 7))
+      entry.attempt += 1
+      options.onDeferred?.({
+        job: entry.input.job,
+        attempt: entry.attempt,
+        delayMs,
+        contentionCode,
+      })
+      if (paused || stopped || pending.get(key) !== entry) return
       const handle = timers.setTimeout(() => {
-        pending.set(key, null)
-        tryAdmission(input, payload, key, attempt + 1)
+        entry.handle = null
+        track(tryAdmission(key, entry))
       }, delayMs)
       handle.unref?.()
-      pending.set(key, handle)
+      entry.handle = handle
     }
   }
 
@@ -146,23 +204,57 @@ export function createMaintenanceAdmissionController(options: {
       if (stopped) return
       const key = `${input.job}\u0000${input.slot.slotKey}`
       if (pending.has(key)) return
-      try {
-        const payload = parseMaintenanceJobPayload(
-          input.job,
-          input.payload ?? options.payloadFor(input.job),
-        ) as Readonly<Record<string, unknown>>
-        pending.set(key, null)
-        tryAdmission(input, payload, key, 0)
-      } catch (error) {
-        options.onFailed?.({ job: input.job, error })
+      const entry: PendingAdmission = { input, payload: null, attempt: 0, handle: null }
+      pending.set(key, entry)
+      const resolution = Promise.resolve(
+        input.payload === undefined ? options.payloadFor(input.job) : input.payload,
+      )
+        .then(
+          (value) =>
+            parseMaintenanceJobPayload(input.job, value) as Readonly<Record<string, unknown>>,
+        )
+        .then(async (payload) => {
+          if (pending.get(key) !== entry || stopped) return
+          entry.payload = payload
+          await tryAdmission(key, entry)
+        })
+        .catch((error: unknown) => {
+          if (pending.get(key) === entry) pending.delete(key)
+          options.onFailed?.({ job: input.job, error })
+        })
+      track(resolution)
+    },
+    async pause() {
+      if (stopped || paused) {
+        await Promise.allSettled([...inFlight])
+        return
+      }
+      paused = true
+      for (const entry of pending.values()) {
+        if (entry.handle !== null) timers.clearTimeout(entry.handle)
+        entry.handle = null
+      }
+      await Promise.allSettled([...inFlight])
+    },
+    resume() {
+      if (stopped || !paused) return
+      paused = false
+      for (const [key, entry] of pending) {
+        if (entry.payload !== null && entry.handle === null) track(tryAdmission(key, entry))
       }
     },
-    stop() {
+    async stop() {
+      if (stopped) {
+        await Promise.allSettled([...inFlight])
+        return
+      }
       stopped = true
-      for (const handle of pending.values()) {
-        if (handle !== null) timers.clearTimeout(handle)
+      paused = false
+      for (const entry of pending.values()) {
+        if (entry.handle !== null) timers.clearTimeout(entry.handle)
       }
       pending.clear()
+      await Promise.allSettled([...inFlight])
     },
   }
 }
@@ -190,9 +282,23 @@ function fixedSlot(job: MaintenanceJobKey, intervalMs: number, now: number): Cle
   }
 }
 
+function postgresqlRetryableCode(error: unknown): string | undefined {
+  let current: unknown = error
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== 'object' || current === null) return undefined
+    const code = (current as { readonly code?: unknown }).code
+    if (code === '40001' || code === '40P01') return code
+    current = (current as { readonly cause?: unknown }).cause
+  }
+  return undefined
+}
+
 export function startMaintenanceService(options: MaintenanceServiceOptions): MaintenanceService {
   let currentConfig = options.loadConfig()
   let stopped = false
+  let paused = false
+  let pausePromise: Promise<void> | null = null
+  let stopPromise: Promise<void> | null = null
   let lastCheckpointSucceededAt = Date.now()
   const eventLoopSamples: Array<{ at: number; gapMs: number }> = []
   let previousEventLoopSampleAt = performance.now()
@@ -208,29 +314,63 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   }, EVENT_LOOP_SAMPLE_MS)
   eventLoopTimer.unref?.()
 
-  // Main-thread admission uses its own short-wait connection. A contended
-  // durable INSERT may defer a slot by one supervisor tick, but can never sit
-  // on the HTTP event loop for the primary connection's historical 5 seconds.
-  const admissionDb = openDb({
-    path: options.dbPath,
-    migrationsFolder: options.migrationsFolder,
-    skipMigrations: true,
-    skipIntegrityCheck: true,
-    journalMode: 'preserve',
-    synchronous: currentConfig.sqliteSynchronous,
-    pageCacheMib: Math.min(16, currentConfig.sqlitePageCacheMib),
-    mmapMib: currentConfig.sqliteMmapMib,
-    // Daily mode admits every heavy job at one wall-clock instant. Keep each
-    // INSERT wait tiny so a contended 12-job cycle cannot add up to a visible
-    // main-event-loop pause; the admission controller retries every slot.
-    busyTimeoutMs: ADMISSION_BUSY_TIMEOUT_MS,
-    slowQueryMs: 0,
-  })
-  const store = createMaintenanceRunStore(admissionDb)
-  // Snapshot before startMaintenanceService returns and before HTTP can accept
-  // a new intent turn. The Worker may execute later, so a live scan there would
-  // misclassify this daemon's fresh work as an orphan from the previous boot.
-  const bootIntentTurnIds = listIntentTurnIdsForBootRecovery(admissionDb)
+  // SQLite keeps the RFC-338 short-wait admission connection; PostgreSQL
+  // receives an async store already composed from the verified generation.
+  // Neither path borrows the foreground request connection for Worker bodies.
+  let admissionDb: ReturnType<typeof openDb> | null = null
+  let store: MaintenanceRunStore
+  let payloadSources: MaintenancePayloadSources
+  if (options.provider === 'postgresql') {
+    store = options.store
+    payloadSources = options.payloadSources
+  } else {
+    // Main-thread admission uses its own short-wait connection. A contended
+    // durable INSERT may defer a slot by one supervisor tick, but can never sit
+    // on the HTTP event loop for the primary connection's historical 5 seconds.
+    admissionDb = openDb({
+      path: options.dbPath,
+      migrationsFolder: options.migrationsFolder,
+      skipMigrations: true,
+      skipIntegrityCheck: true,
+      journalMode: 'preserve',
+      synchronous: currentConfig.sqliteSynchronous,
+      pageCacheMib: Math.min(16, currentConfig.sqlitePageCacheMib),
+      mmapMib: currentConfig.sqliteMmapMib,
+      // Daily mode admits every heavy job at one wall-clock instant. Keep each
+      // INSERT wait tiny so a contended 12-job cycle cannot add up to a visible
+      // main-event-loop pause; the admission controller retries every slot.
+      busyTimeoutMs: ADMISSION_BUSY_TIMEOUT_MS,
+      slowQueryMs: 0,
+    })
+    store = createSqliteMaintenanceRunStore(admissionDb)
+    payloadSources = options.payloadSources
+  }
+  const bootIntentTurnIds = Promise.resolve(payloadSources.bootIntentTurnIds())
+
+  let projection: Awaited<ReturnType<MaintenanceRunStore['readProjection']>> = {
+    active: null,
+    last: null,
+    backlog: [],
+  }
+  let projectionRefresh: Promise<void> | null = null
+  const refreshProjection = (): void => {
+    if (projectionRefresh !== null || stopped) return
+    const pending = store
+      .readProjection()
+      .then((value) => {
+        projection = value
+      })
+      .catch((error: unknown) => {
+        log.warn('maintenance status projection refresh failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+      .finally(() => {
+        if (projectionRefresh === pending) projectionRefresh = null
+      })
+    projectionRefresh = pending
+  }
+  refreshProjection()
 
   const consumeDelta = (
     _runId: string,
@@ -241,6 +381,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     else if (delta.kind === 'intent-queued') options.onIntentQueued?.(delta.sessionIds)
   }
   const observeWorkerEvent = (event: MaintenanceWorkerEvent): void => {
+    if (event.type === 'active' || event.type === 'completed') refreshProjection()
     if (
       event.type === 'completed' &&
       event.job === 'walCheckpoint' &&
@@ -259,24 +400,34 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     }
   }
 
-  const supervisor: MaintenanceWorkerSupervisor = startMaintenanceWorkerSupervisor({
-    dbPath: options.dbPath,
-    migrationsFolder: options.migrationsFolder,
-    appHome: options.appHome,
-    sqlite: {
-      synchronous: currentConfig.sqliteSynchronous,
-      pageCacheMib: currentConfig.sqlitePageCacheMib,
-      mmapMib: currentConfig.sqliteMmapMib,
-      busyTimeoutMs: 50,
-    },
-    onDelta: consumeDelta,
-    onEvent: observeWorkerEvent,
-  })
+  const supervisor: MaintenanceWorkerSupervisor =
+    options.provider === 'postgresql'
+      ? startMaintenanceWorkerSupervisor({
+          provider: 'postgresql',
+          generationId: options.generationId,
+          database: options.database,
+          appHome: options.appHome,
+          onDelta: consumeDelta,
+          onEvent: observeWorkerEvent,
+        })
+      : startMaintenanceWorkerSupervisor({
+          dbPath: options.dbPath,
+          migrationsFolder: options.migrationsFolder,
+          appHome: options.appHome,
+          sqlite: {
+            synchronous: currentConfig.sqliteSynchronous,
+            pageCacheMib: currentConfig.sqlitePageCacheMib,
+            mmapMib: currentConfig.sqliteMmapMib,
+            busyTimeoutMs: 50,
+          },
+          onDelta: consumeDelta,
+          onEvent: observeWorkerEvent,
+        })
 
-  const payloadFor = (
+  const payloadFor = async (
     job: MaintenanceJobKey,
     scope?: { all: true } | { since: number },
-  ): unknown => {
+  ): Promise<unknown> => {
     const config = currentConfig
     switch (job) {
       case 'worktreeGc':
@@ -285,10 +436,10 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
           ...(config.gitCloneTimeoutMs === undefined
             ? {}
             : { gitCloneTimeoutMs: config.gitCloneTimeoutMs }),
-          activeTaskIds: activeTaskIdsSnapshot(),
+          activeTaskIds: await payloadSources.activeTaskIds(),
         }
       case 'workspaceRecovery':
-        return { activeTaskIds: activeTaskIdsSnapshot() }
+        return { activeTaskIds: await payloadSources.activeTaskIds() }
       case 'webhookDeliveryGc':
         return {
           bodyRetentionDays: config.webhookDeliveryBodyRetentionDays,
@@ -323,8 +474,8 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
         return { retentionDays: config.tokenAuditRetentionDays ?? 90 }
       case 'intentRecovery':
         return {
-          activeIntentApplyJournalIds: activeIntentApplyJournalIds(),
-          activeBundleApplyIds: activeResourceBundleApplyIds(),
+          activeIntentApplyJournalIds: await payloadSources.activeIntentApplyJournalIds(),
+          activeBundleApplyIds: await payloadSources.activeResourceBundleApplyIds(),
           recoverTurnIds: [],
           recoverTurns: false,
         }
@@ -339,8 +490,11 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     store,
     payloadFor,
     wake: supervisor.wake,
-    onDeferred: ({ job, attempt, delayMs, sqliteCode }) => {
-      log.warn('maintenance admission deferred', { job, attempt, delayMs, sqliteCode })
+    classifyRetryable:
+      options.provider === 'postgresql' ? postgresqlRetryableCode : retryableSqliteWriteErrorCode,
+    onAdmitted: refreshProjection,
+    onDeferred: ({ job, attempt, delayMs, contentionCode }) => {
+      log.warn('maintenance admission deferred', { job, attempt, delayMs, contentionCode })
     },
     onFailed: ({ job, error }) => {
       log.error('maintenance admission failed', {
@@ -364,6 +518,17 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     if ('bootDelayMs' in spec && spec.bootDelayMs !== undefined) {
       const timer = setTimeout(() => {
         const at = Date.now()
+        const payload =
+          spec.key === 'lifecycleInvariants'
+            ? payloadFor(spec.key, { all: true })
+            : spec.key === 'intentRecovery'
+              ? Promise.all([payloadFor(spec.key), bootIntentTurnIds]).then(
+                  ([base, bootIntentTurnIds]) => ({
+                    ...(base as Record<string, unknown>),
+                    recoverTurnIds: bootIntentTurnIds,
+                  }),
+                )
+              : undefined
         admit({
           job: spec.key,
           jobClass: spec.class,
@@ -372,16 +537,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
             slotKey: `boot:${at}`,
             cycleKey: `boot:${at}`,
           },
-          ...(spec.key === 'lifecycleInvariants'
-            ? { payload: payloadFor(spec.key, { all: true }) }
-            : spec.key === 'intentRecovery'
-              ? {
-                  payload: {
-                    ...(payloadFor(spec.key) as Record<string, unknown>),
-                    recoverTurnIds: bootIntentTurnIds,
-                  },
-                }
-              : {}),
+          ...(payload === undefined ? {} : { payload }),
         })
       }, spec.bootDelayMs)
       timer.unref?.()
@@ -412,7 +568,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     try {
       const intervalMs = currentConfig.walCheckpointIntervalMs
       if (intervalMs <= 0 || Date.now() - lastCheckpointSucceededAt < intervalMs) return
-      if (isDbSnapshotInProgress()) return
+      if (options.provider !== 'postgresql' && isDbSnapshotInProgress()) return
       const at = Date.now()
       admit({
         job: 'walCheckpoint',
@@ -458,13 +614,58 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     })
   }
 
+  const pause = (): Promise<void> => {
+    if (stopped || paused) return pausePromise ?? Promise.resolve()
+    paused = true
+    const pending = Promise.all([admission.pause(), supervisor.pause()])
+      .then(() => undefined)
+      .finally(() => {
+        if (pausePromise === pending) pausePromise = null
+      })
+    pausePromise = pending
+    return pending
+  }
+
+  const resume = async (): Promise<void> => {
+    if (stopped || !paused) return
+    await pausePromise
+    if (stopped || !paused) return
+    await supervisor.resume()
+    admission.resume()
+    paused = false
+  }
+
+  const stop = (): Promise<void> => {
+    if (stopPromise !== null) return stopPromise
+    stopped = true
+    paused = false
+    const pending = (async () => {
+      unregisterConfig()
+      scheduleCoordinator.stop()
+      for (const ticker of fixedTickers) ticker.stop()
+      for (const timer of bootTimers) clearTimeout(timer)
+      clearInterval(checkpointTimer)
+      clearInterval(eventLoopTimer)
+      await Promise.all([admission.stop(), supervisor.stop()])
+      await projectionRefresh?.catch(() => undefined)
+      ;(admissionDb as unknown as { $client?: { close(): void } } | null)?.$client?.close()
+    })()
+    stopPromise = pending
+    return pending
+  }
+
   return {
     reconfigure: scheduleCoordinator.reconfigure,
     runSoon,
+    pause,
+    resume,
     status() {
       const worker = supervisor.live()
-      const projection = store.readProjection()
-      const activeRow = worker.active === null ? null : store.read(worker.active.runId)
+      refreshProjection()
+      const activeRow =
+        worker.active !== null && projection.active?.id === worker.active.runId
+          ? projection.active
+          : null
       const lastJob =
         projection.last === null
           ? null
@@ -529,18 +730,6 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
         }),
       }
     },
-    async stop() {
-      if (stopped) return
-      stopped = true
-      unregisterConfig()
-      scheduleCoordinator.stop()
-      for (const ticker of fixedTickers) ticker.stop()
-      for (const timer of bootTimers) clearTimeout(timer)
-      clearInterval(checkpointTimer)
-      clearInterval(eventLoopTimer)
-      admission.stop()
-      await supervisor.drain()
-      ;(admissionDb as unknown as { $client: { close(): void } }).$client.close()
-    },
+    stop,
   }
 }

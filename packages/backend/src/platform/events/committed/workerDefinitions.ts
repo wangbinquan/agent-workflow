@@ -6,8 +6,7 @@ import {
   type ManagedWorkerDefinition,
 } from '@/platform/background/definitions'
 import type { CommittedEventDispatcher } from './dispatcherWorker'
-import { committedEventDeliveryHealth } from './sqliteStore'
-import type { DbClient } from '@/db/client'
+import type { CommittedEventDeliveryPersistencePort } from './persistence'
 
 interface WakeLatch {
   wait(ms: number, signal: AbortSignal): Promise<void>
@@ -46,7 +45,7 @@ export function createWakeLatch(): WakeLatch {
 }
 
 export function createCommittedEventDispatcherWorkerDefinition(input: {
-  readonly db: DbClient
+  readonly persistence: CommittedEventDeliveryPersistencePort
   readonly dispatcher: CommittedEventDispatcher
   readonly reconcileMs?: number
   readonly now?: () => number
@@ -97,8 +96,8 @@ export function createCommittedEventDispatcherWorkerDefinition(input: {
       latch.wake()
       readiness = 'stopped'
     },
-    health() {
-      const health = committedEventDeliveryHealth(input.db)
+    async health() {
+      const health = await input.persistence.health()
       const unhealthy = health.deadLetter > 0 || readiness === 'degraded'
       return {
         status: readiness === 'stopped' ? 'stopped' : unhealthy ? 'unhealthy' : 'healthy',

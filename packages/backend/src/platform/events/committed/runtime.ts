@@ -15,14 +15,14 @@ export function registerAfterCommitEventPump(pump: AfterCommitEventPump | null):
  * Project and nudge one already-committed receipt. An absent pump is valid
  * during boot and isolated tests: durable deliveries remain the recovery path.
  */
-export function publishCommittedEventsAfterCommit(
+export async function publishCommittedEventsAfterCommit(
   eventRefs: readonly CommittedEventRef[],
-): boolean {
+): Promise<boolean> {
   if (eventRefs.length === 0) return activePump !== null
   const pump = activePump
   if (pump === null) return false
   try {
-    pump.publishNow(eventRefs)
+    await pump.publishNow(eventRefs)
   } catch (error) {
     log.warn('post-commit event pump failed; durable delivery will retry', {
       eventIds: eventRefs.map((event) => event.eventId),

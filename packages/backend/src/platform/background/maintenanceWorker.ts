@@ -4,24 +4,94 @@
 
 import { MaintenanceJobKeySchema } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
+import { join } from 'node:path'
 
+import { createPostgresqlTokenCallAudit, createSqliteTokenCallAudit } from '@/auth/composition'
+import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { openDb, type DbClient } from '@/db/client'
 import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
-import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
-import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
 import {
-  createMaintenanceRunStore,
-  type ClaimedMaintenanceRun,
-  type MaintenanceRunStore,
-} from '@/platform/persistence/sqlite/maintenanceRunStore'
+  composePostgresqlIntentMaintenanceCommandsForAppHome,
+  composeSqliteIntentMaintenanceCommandsForAppHome,
+} from '@/modules/intent/composition/maintenance'
+import type { IntentMaintenanceCommands } from '@/modules/intent/public/commands'
+import {
+  composeDevelopmentAutomationMaintenanceCommands,
+  composePostgresqlDevelopmentAutomationMaintenanceCommands,
+} from '@/modules/development-automation/composition'
+import {
+  composeDigitalEmployeeMaintenanceCommands,
+  composePostgresqlDigitalEmployeeMaintenanceCommands,
+} from '@/modules/digital-employee/composition'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
+import {
+  createPostgresqlTaskArchiveMaintenanceCommand,
+  createSqliteTaskArchiveMaintenanceCommand,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createPostgresqlTaskExecutionPersistence,
+  createSqliteTaskExecutionPersistence,
+} from '@/modules/task-execution/composition/taskExecutionPersistence'
+import {
+  composePostgresqlPluginGenerationGcCommand,
+  composeSqlitePluginGenerationGcCommand,
+} from '@/modules/resource-catalog/composition/pluginGenerationGc'
+import {
+  composePostgresqlResourcePackageApplyMaintenance,
+  composeSqliteResourcePackageApplyMaintenance,
+} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import type {
+  PluginGenerationGcCommand,
+  ResourcePackageApplyMaintenanceCommand,
+} from '@/modules/resource-catalog/public/commands'
+import {
+  composePostgresqlWebhookDeliveryPersistence,
+  composeSqliteWebhookDeliveryPersistence,
+} from '@/modules/integration/composition/webhookDelivery'
+import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
+import type { IntegrationMaintenanceCommands } from '@/modules/integration/public/commands'
+import {
+  composePostgresqlWorkspaceMaintenanceCommand,
+  composeSqliteWorkspaceMaintenanceCommand,
+} from '@/modules/source-control/composition/workspaceMaintenance'
+import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
+import type { ClaimedMaintenanceRun, MaintenanceRunStore } from './maintenanceRunStorePort'
+import { createPostgresqlMaintenanceRunStore } from '@/platform/persistence/postgresqlMaintenanceRunStore'
+import {
+  createPostgresqlMaintenanceExecutionFence,
+  createSqliteMaintenanceExecutionFence,
+  type MaintenanceExecutionFence,
+} from '@/platform/persistence/maintenanceExecutionFence'
+import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
+import { runPostgresqlRetentionSweepSlice } from '@/platform/persistence/postgresqlMaintenanceRetention'
+import { createSqliteEventsArchiveStore } from '@/platform/persistence/sqlite/systemEventsArchive'
+import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
+import {
+  checkpointSqliteWal,
+  createSqliteMaintenanceRunStore,
+} from '@/platform/persistence/sqlite/systemMaintenanceOperations'
+import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  createPostgresqlDatabaseRuntime,
+  type PostgresqlDatabaseRuntime,
+} from '@/platform/persistence/postgresqlRuntime'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { activeResourceBundleApplyIds } from '@/services/bundle/apply'
+import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
+import { INTENT_SCRATCH_DIRNAME } from '@/services/intent/turnEngine'
+import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
+import { createLogger } from '@/util/log'
 import { MAINTENANCE_CATALOG_DIGEST } from './maintenanceCatalog'
-import { runMaintenanceJob } from './maintenanceJobRunner'
+import { runMaintenanceJob, type MaintenanceSystemOperations } from './maintenanceJobRunner'
+import { createEventsArchiveMaintenanceCommand } from './eventsArchiveMaintenance'
 import { installMaintenanceWorkerErrorBoundary } from './maintenanceWorkerErrorBoundary'
+import { MAINTENANCE_PROTOCOL_VERSION, type MaintenanceWorkerEvent } from './maintenanceProtocol'
 import {
-  MAINTENANCE_PROTOCOL_VERSION,
-  MaintenanceWorkerRequestSchema,
-  type MaintenanceWorkerEvent,
-} from './maintenanceProtocol'
+  routeMaintenanceWorkerRequest,
+  type MaintenanceWorkerInitRequest,
+} from './maintenanceWorkerMessageRouter'
 
 declare const self: Worker
 
@@ -30,20 +100,35 @@ const IDLE_POLL_MS = 1_000
 const HEARTBEAT_MS = 5_000
 const MAX_BUSY_BACKOFF_MS = 30_000
 const CLEANUP_COOLDOWN_MS = 25
+const MAINTENANCE_RETENTION_SLICE_ROWS = 1_000
 
 let db: DbClient | null = null
+let store: MaintenanceRunStore | null = null
+let postgresqlRuntime: PostgresqlDatabaseRuntime | null = null
+let systemOperations: MaintenanceSystemOperations | null = null
+let workspaceMaintenanceCommand: WorkspaceMaintenanceCommand | null = null
 let developmentAutomationMaintenance: ReturnType<
   typeof composeDevelopmentAutomationMaintenanceCommands
 > | null = null
 let digitalEmployeeMaintenance: ReturnType<
   typeof composeDigitalEmployeeMaintenanceCommands
 > | null = null
+let intentMaintenanceCommands: IntentMaintenanceCommands | null = null
+let integrationMaintenanceCommands: IntegrationMaintenanceCommands | null = null
+let taskRecoveryOperations: TaskRecoveryOperations | null = null
+let taskArchiveMaintenanceCommand: TaskArchiveMaintenanceCommand | null = null
+let tokenCallAudit: TokenCallAuditParticipant | null = null
+let pluginGenerationGcCommand: PluginGenerationGcCommand | null = null
+let maintenanceExecutionFence: MaintenanceExecutionFence | null = null
 let appHome = ''
 let processing = false
 let draining = false
+let initialising = false
+let initialised = false
 let active: { runId: string; leaseToken: string } | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+let heartbeatInFlight: Promise<void> | null = null
 let statementTimings: TimingHistogram | null = null
 let transactionTimings: TimingHistogram | null = null
 
@@ -108,6 +193,22 @@ function isSqliteBusy(error: unknown): boolean {
   return retryableSqliteWriteErrorCode(error) !== undefined
 }
 
+function postgresqlRetryCode(error: unknown): '40001' | '40P01' | undefined {
+  let current: unknown = error
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== 'object' || current === null) return undefined
+    const code = (current as { readonly code?: unknown }).code
+    if (code === '40001' || code === '40P01') return code
+    current = (current as { readonly cause?: unknown }).cause
+  }
+  return undefined
+}
+
+function retryableLedgerError(error: unknown): 'sqlite-busy' | 'postgresql-transient' | undefined {
+  if (isSqliteBusy(error)) return 'sqlite-busy'
+  return postgresqlRetryCode(error) === undefined ? undefined : 'postgresql-transient'
+}
+
 function parseJsonObject(value: string): Record<string, unknown> {
   const parsed = JSON.parse(value) as unknown
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
@@ -153,9 +254,9 @@ async function claimNextWithBusyBackoff(
   for (;;) {
     if (draining) return { claimed: null, busyDeferrals }
     try {
-      return { claimed: store.claimNext(input), busyDeferrals }
+      return { claimed: await store.claimNext(input), busyDeferrals }
     } catch (error) {
-      if (!isSqliteBusy(error)) throw error
+      if (retryableLedgerError(error) === undefined) throw error
       await delay(busyBackoffMs(busyDeferrals))
       busyDeferrals += 1
     }
@@ -175,30 +276,46 @@ async function settleWithBusyBackoff(
       busyDeferrals === 0 ? {} : { sqliteBusyDeferrals: busyDeferrals },
     )
     try {
-      return { settled: store.settle({ ...input, counters }), counters }
+      return { settled: await store.settle({ ...input, counters }), counters }
     } catch (error) {
-      if (!isSqliteBusy(error)) throw error
+      if (retryableLedgerError(error) === undefined) throw error
       await delay(busyBackoffMs(busyDeferrals))
       busyDeferrals += 1
     }
   }
 }
 
-function closeConnection(): void {
+async function closeConnection(): Promise<void> {
   if (pollTimer !== null) clearInterval(pollTimer)
   if (heartbeatTimer !== null) clearInterval(heartbeatTimer)
   pollTimer = null
   heartbeatTimer = null
+  await heartbeatInFlight?.catch(() => undefined)
+  heartbeatInFlight = null
   const current = db
+  const currentPostgresqlRuntime = postgresqlRuntime
   db = null
+  store = null
+  postgresqlRuntime = null
+  systemOperations = null
+  workspaceMaintenanceCommand = null
   developmentAutomationMaintenance = null
   digitalEmployeeMaintenance = null
+  intentMaintenanceCommands = null
+  integrationMaintenanceCommands = null
+  taskRecoveryOperations = null
+  taskArchiveMaintenanceCommand = null
+  tokenCallAudit = null
+  pluginGenerationGcCommand = null
+  maintenanceExecutionFence = null
+  initialised = false
   ;(current as unknown as { $client?: { close(): void } } | null)?.$client?.close()
+  await currentPostgresqlRuntime?.close()
 }
 
 async function drainIfReady(): Promise<void> {
   if (!draining || processing) return
-  closeConnection()
+  await closeConnection()
   emit({
     type: 'drained',
     version: MAINTENANCE_PROTOCOL_VERSION,
@@ -206,14 +323,52 @@ async function drainIfReady(): Promise<void> {
   })
 }
 
+function createWorkerWorkspaceMaintenanceCommand(
+  factory: (isMaterializingTask: (taskId: string) => boolean) => WorkspaceMaintenanceCommand,
+): WorkspaceMaintenanceCommand {
+  let protectedTaskIds = new Set<string>()
+  const command = factory((taskId) => protectedTaskIds.has(taskId))
+  return Object.freeze({
+    async runGcPhase(input: Parameters<WorkspaceMaintenanceCommand['runGcPhase']>[0]) {
+      protectedTaskIds = new Set(input.activeTaskIds)
+      try {
+        return await command.runGcPhase(input)
+      } finally {
+        protectedTaskIds.clear()
+      }
+    },
+    recover: (input: Parameters<WorkspaceMaintenanceCommand['recover']>[0]) =>
+      command.recover(input),
+  })
+}
+
 async function processQueue(): Promise<void> {
   const currentDb = db
+  const currentStore = store
   const currentDevelopmentAutomationMaintenance = developmentAutomationMaintenance
   const currentDigitalEmployeeMaintenance = digitalEmployeeMaintenance
+  const currentIntentMaintenanceCommands = intentMaintenanceCommands
+  const currentIntegrationMaintenanceCommands = integrationMaintenanceCommands
+  const currentWorkspaceMaintenanceCommand = workspaceMaintenanceCommand
+  const currentSystemOperations = systemOperations
+  const currentTaskRecoveryOperations = taskRecoveryOperations
+  const currentTaskArchiveMaintenanceCommand = taskArchiveMaintenanceCommand
+  const currentTokenCallAudit = tokenCallAudit
+  const currentPluginGenerationGcCommand = pluginGenerationGcCommand
+  const currentMaintenanceExecutionFence = maintenanceExecutionFence
   if (
-    currentDb === null ||
+    currentStore === null ||
+    currentIntegrationMaintenanceCommands === null ||
+    currentWorkspaceMaintenanceCommand === null ||
+    currentSystemOperations === null ||
     currentDevelopmentAutomationMaintenance === null ||
     currentDigitalEmployeeMaintenance === null ||
+    currentIntentMaintenanceCommands === null ||
+    currentTaskRecoveryOperations === null ||
+    currentTaskArchiveMaintenanceCommand === null ||
+    currentTokenCallAudit === null ||
+    currentPluginGenerationGcCommand === null ||
+    currentMaintenanceExecutionFence === null ||
     processing ||
     draining
   ) {
@@ -221,13 +376,16 @@ async function processQueue(): Promise<void> {
     return
   }
   processing = true
-  const store = createMaintenanceRunStore(currentDb)
   try {
     for (;;) {
       if (draining) break
       const now = Date.now()
       const leaseToken = ulid()
-      const claim = await claimNextWithBusyBackoff(store, { leaseToken, now, leaseMs: LEASE_MS })
+      const claim = await claimNextWithBusyBackoff(currentStore, {
+        leaseToken,
+        now,
+        leaseMs: LEASE_MS,
+      })
       const claimed = claim.claimed
       if (claimed === null) break
       const job = MaintenanceJobKeySchema.parse(claimed.row.jobKey)
@@ -247,11 +405,21 @@ async function processQueue(): Promise<void> {
         transactionTimings = emptyTimingHistogram()
         const sliceStartedAt = performance.now()
         const result = await runMaintenanceJob({
-          db: currentDb,
           appHome,
           ownerCommands: {
+            workspace: currentWorkspaceMaintenanceCommand,
             developmentAutomation: currentDevelopmentAutomationMaintenance,
             digitalEmployee: currentDigitalEmployeeMaintenance,
+            intent: currentIntentMaintenanceCommands,
+            integration: currentIntegrationMaintenanceCommands,
+            taskRecovery: currentTaskRecoveryOperations,
+            taskArchive: currentTaskArchiveMaintenanceCommand,
+            tokenAudit: currentTokenCallAudit,
+            pluginGenerationGc: {
+              command: currentPluginGenerationGcCommand,
+              executionFence: currentMaintenanceExecutionFence,
+            },
+            system: currentSystemOperations,
           },
           job,
           payload,
@@ -260,7 +428,11 @@ async function processQueue(): Promise<void> {
         const sliceMs = performance.now() - sliceStartedAt
         const sliceCounters = {
           ...result.counters,
-          ...(claim.busyDeferrals === 0 ? {} : { sqliteBusyDeferrals: claim.busyDeferrals }),
+          ...(claim.busyDeferrals === 0
+            ? {}
+            : currentDb === null
+              ? { postgresqlTransientDeferrals: claim.busyDeferrals }
+              : { sqliteBusyDeferrals: claim.busyDeferrals }),
           workerSliceCount: 1,
           workerSliceMsTotal: sliceMs,
           workerSliceMsMax: sliceMs,
@@ -273,7 +445,7 @@ async function processQueue(): Promise<void> {
         const counters = addCounters(parseCounters(claimed.row.countersJson), sliceCounters)
         const continuation = result.continuation
         const outcome = continuation === undefined ? 'succeeded' : 'deferred'
-        const settlement = await settleWithBusyBackoff(store, {
+        const settlement = await settleWithBusyBackoff(currentStore, {
           runId: claimed.row.id,
           leaseToken,
           now: finishedAt,
@@ -305,17 +477,27 @@ async function processQueue(): Promise<void> {
         transactionTimings = null
         const finishedAt = Date.now()
         const message = errorMessage(error)
-        const busy = isSqliteBusy(error)
+        const retryable = retryableLedgerError(error)
+        const busy = retryable !== undefined
         const backoff = Math.min(
           MAX_BUSY_BACKOFF_MS,
           250 * 2 ** Math.min(8, Math.max(0, claimed.row.attempt)),
         )
         const outcome = busy ? 'deferred' : 'failed'
-        const errorCode = busy ? 'sqlite-busy' : 'job-failed'
+        const errorCode =
+          retryable === 'sqlite-busy'
+            ? 'sqlite-busy'
+            : retryable === 'postgresql-transient'
+              ? 'postgresql-transient'
+              : 'job-failed'
         const counters = addCounters(parseCounters(claimed.row.countersJson), {
-          ...(busy ? { sqliteBusyDeferrals: 1 } : { workerFailures: 1 }),
+          ...(retryable === 'sqlite-busy'
+            ? { sqliteBusyDeferrals: 1 }
+            : retryable === 'postgresql-transient'
+              ? { postgresqlTransientDeferrals: 1 }
+              : { workerFailures: 1 }),
         })
-        const settlement = await settleWithBusyBackoff(store, {
+        const settlement = await settleWithBusyBackoff(currentStore, {
           runId: claimed.row.id,
           leaseToken,
           now: finishedAt,
@@ -356,58 +538,249 @@ async function processQueue(): Promise<void> {
   }
 }
 
-function initialise(value: unknown): void {
-  const parsed = MaintenanceWorkerRequestSchema.parse(value)
-  if (parsed.type !== 'init') throw new Error('maintenance-worker-first-message-must-be-init')
-  if (db !== null) throw new Error('maintenance-worker-already-initialised')
-  if (parsed.catalogDigest !== MAINTENANCE_CATALOG_DIGEST) {
-    throw new Error('maintenance-worker-catalog-digest-mismatch')
+async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
+  initialising = true
+  try {
+    if (parsed.catalogDigest !== MAINTENANCE_CATALOG_DIGEST) {
+      throw new Error('maintenance-worker-catalog-digest-mismatch')
+    }
+    appHome = parsed.appHome
+    if ('database' in parsed) {
+      // The maintenance Worker owns a dedicated, deliberately small pool. It
+      // cannot consume the foreground request pool and never opens db.sqlite.
+      const runtime = createPostgresqlDatabaseRuntime({
+        config: { ...parsed.database, poolMax: Math.min(2, parsed.database.poolMax) },
+        generationId: parsed.generationId,
+      })
+      postgresqlRuntime = runtime
+      const client = createPostgresqlDatabaseClient(runtime)
+      store = createPostgresqlMaintenanceRunStore(client)
+      integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
+        composePostgresqlWebhookDeliveryPersistence(client),
+      )
+      const taskExecution = createPostgresqlTaskExecutionPersistence(client)
+      taskRecoveryOperations = taskExecution.recoveryAdministration
+      taskArchiveMaintenanceCommand = createPostgresqlTaskArchiveMaintenanceCommand(client)
+      workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
+        composePostgresqlWorkspaceMaintenanceCommand({
+          db: client,
+          appHome,
+          terminalMaintenance: taskExecution.terminalMaintenance,
+          isMaterializingTask,
+          invalidateWorkspacePath: invalidateCallGraphIndex,
+        }),
+      )
+      tokenCallAudit = createPostgresqlTokenCallAudit(client)
+      pluginGenerationGcCommand = composePostgresqlPluginGenerationGcCommand(
+        client,
+        createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
+      )
+      maintenanceExecutionFence = createPostgresqlMaintenanceExecutionFence(client)
+      developmentAutomationMaintenance =
+        composePostgresqlDevelopmentAutomationMaintenanceCommands(client)
+      digitalEmployeeMaintenance = composePostgresqlDigitalEmployeeMaintenanceCommands(client)
+      const operational = createPostgresqlDatabaseOperationalAdapter({
+        runtime,
+        contract: buildLogicalSchemaContract(),
+      })
+      systemOperations = Object.freeze({
+        eventsArchive: createEventsArchiveMaintenanceCommand({
+          store: createPostgresqlEventsArchiveStore(client),
+          logsDir: join(appHome, 'logs'),
+        }),
+        retention: Object.freeze({
+          async runSlice(
+            input: Parameters<MaintenanceSystemOperations['retention']['runSlice']>[0],
+          ) {
+            const result = await runPostgresqlRetentionSweepSlice(
+              client,
+              input,
+              input.cursor,
+              Date.now(),
+              MAINTENANCE_RETENTION_SLICE_ROWS,
+            )
+            return {
+              counters: { ...result.counters },
+              delta: { kind: 'none' as const },
+              ...(result.done
+                ? {}
+                : {
+                    continuation: {
+                      cursor: result.cursor,
+                      resumeAfterMs: CLEANUP_COOLDOWN_MS,
+                    },
+                  }),
+            }
+          },
+        }),
+        storage: Object.freeze({
+          async run() {
+            return (await operational.runStorageMaintenance()).counters
+          },
+        }),
+      })
+
+      const resourcePackageMaintenance = composePostgresqlResourcePackageApplyMaintenance({
+        db: client,
+        appHome,
+        pluginsDir: join(appHome, 'plugins'),
+      })
+      const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =
+        resourcePackageMaintenance.command
+      const intentMaintenanceLog = createLogger('intentMaintenance')
+      intentMaintenanceCommands = composePostgresqlIntentMaintenanceCommandsForAppHome({
+        db: client,
+        appHome,
+        scratchDirectoryName: INTENT_SCRATCH_DIRNAME,
+        pluginsDir: join(appHome, 'plugins'),
+        resourcePackages: {
+          converge: ({ activeApplyIds }) =>
+            resourcePackageMaintenanceCommand.converge({ activeApplyIds }),
+        },
+        log: intentMaintenanceLog,
+      })
+    } else {
+      const sqliteDb = openDb({
+        path: parsed.dbPath,
+        migrationsFolder: parsed.migrationsFolder,
+        skipMigrations: true,
+        skipIntegrityCheck: true,
+        journalMode: 'preserve',
+        synchronous: parsed.sqlite.synchronous,
+        pageCacheMib: parsed.sqlite.pageCacheMib,
+        mmapMib: parsed.sqlite.mmapMib,
+        busyTimeoutMs: parsed.sqlite.busyTimeoutMs,
+        slowQueryMs: 0,
+        observeStatementMs: (ms) => recordTiming(statementTimings, ms),
+        observeTransactionMs: (ms) => recordTiming(transactionTimings, ms),
+      })
+      db = sqliteDb
+      developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(sqliteDb)
+      digitalEmployeeMaintenance = composeDigitalEmployeeMaintenanceCommands(sqliteDb)
+      integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
+        composeSqliteWebhookDeliveryPersistence(sqliteDb),
+      )
+      const taskExecution = createSqliteTaskExecutionPersistence(sqliteDb)
+      taskRecoveryOperations = taskExecution.recoveryAdministration
+      taskArchiveMaintenanceCommand = createSqliteTaskArchiveMaintenanceCommand(sqliteDb)
+      workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
+        composeSqliteWorkspaceMaintenanceCommand({
+          db: sqliteDb,
+          appHome,
+          terminalMaintenance: taskExecution.terminalMaintenance,
+          isMaterializingTask,
+          invalidateWorkspacePath: invalidateCallGraphIndex,
+        }),
+      )
+      systemOperations = Object.freeze({
+        eventsArchive: createEventsArchiveMaintenanceCommand({
+          store: createSqliteEventsArchiveStore(sqliteDb),
+          logsDir: join(appHome, 'logs'),
+        }),
+        retention: Object.freeze({
+          async runSlice(
+            input: Parameters<MaintenanceSystemOperations['retention']['runSlice']>[0],
+          ) {
+            const result = await runRetentionSweepSlice(
+              sqliteDb,
+              input,
+              input.cursor,
+              Date.now(),
+              MAINTENANCE_RETENTION_SLICE_ROWS,
+            )
+            return {
+              counters: { ...result.counters },
+              delta: { kind: 'none' as const },
+              ...(result.done
+                ? {}
+                : {
+                    continuation: {
+                      cursor: result.cursor,
+                      resumeAfterMs: CLEANUP_COOLDOWN_MS,
+                    },
+                  }),
+            }
+          },
+        }),
+        storage: Object.freeze({
+          async run() {
+            checkpointSqliteWal(sqliteDb)
+            return { checkpointed: 1 }
+          },
+        }),
+      })
+      const intentMaintenanceLog = createLogger('intentMaintenance')
+      const resourcePackageMaintenance = composeSqliteResourcePackageApplyMaintenance({
+        db: sqliteDb,
+        appHome,
+        pluginsDir: join(appHome, 'plugins'),
+        activitySource: { activeApplyIds: activeResourceBundleApplyIds },
+        log: intentMaintenanceLog,
+      })
+      const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =
+        resourcePackageMaintenance.command
+      intentMaintenanceCommands = composeSqliteIntentMaintenanceCommandsForAppHome({
+        db: sqliteDb,
+        appHome,
+        scratchDirectoryName: INTENT_SCRATCH_DIRNAME,
+        resourcePackages: {
+          converge: ({ activeApplyIds }) =>
+            resourcePackageMaintenanceCommand.converge({ activeApplyIds }),
+        },
+        log: intentMaintenanceLog,
+      })
+      tokenCallAudit = createSqliteTokenCallAudit(sqliteDb)
+      pluginGenerationGcCommand = composeSqlitePluginGenerationGcCommand(
+        sqliteDb,
+        createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
+      )
+      maintenanceExecutionFence = createSqliteMaintenanceExecutionFence(sqliteDb)
+      store = createSqliteMaintenanceRunStore(sqliteDb)
+    }
+    await store.recoverRunning(Date.now())
+    initialised = true
+  } finally {
+    initialising = false
   }
-  appHome = parsed.appHome
-  db = openDb({
-    path: parsed.dbPath,
-    migrationsFolder: parsed.migrationsFolder,
-    skipMigrations: true,
-    skipIntegrityCheck: true,
-    journalMode: 'preserve',
-    synchronous: parsed.sqlite.synchronous,
-    pageCacheMib: parsed.sqlite.pageCacheMib,
-    mmapMib: parsed.sqlite.mmapMib,
-    busyTimeoutMs: parsed.sqlite.busyTimeoutMs,
-    slowQueryMs: 0,
-    observeStatementMs: (ms) => recordTiming(statementTimings, ms),
-    observeTransactionMs: (ms) => recordTiming(transactionTimings, ms),
-  })
-  developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(db)
-  digitalEmployeeMaintenance = composeDigitalEmployeeMaintenanceCommands(db)
-  createMaintenanceRunStore(db).recoverRunning(Date.now())
+  // A drain requested while this init was in flight settles here: the
+  // generation never admits work, never arms its timers, and answers the
+  // supervisor's pause instead of announcing a readiness it is about to drop.
+  if (draining) {
+    await drainIfReady()
+    return
+  }
   pollTimer = setInterval(() => void processQueue(), IDLE_POLL_MS)
   pollTimer.unref?.()
   heartbeatTimer = setInterval(() => {
     const at = Date.now()
     const current = active
-    if (current !== null && db !== null) {
-      try {
-        createMaintenanceRunStore(db).heartbeat({
+    const currentStore = store
+    if (current !== null && currentStore !== null && heartbeatInFlight === null) {
+      const pending = currentStore
+        .heartbeat({
           runId: current.runId,
           leaseToken: current.leaseToken,
           now: at,
           leaseMs: LEASE_MS,
         })
-      } catch (error) {
-        // The one-hour lease easily covers a skipped heartbeat. Foreground
-        // write pressure must not turn a transient 50ms BUSY into a Worker
-        // restart; the next heartbeat retries on the same fenced lease.
-        if (!isSqliteBusy(error)) {
-          emit({
-            type: 'degraded',
-            version: MAINTENANCE_PROTOCOL_VERSION,
-            at,
-            error: errorMessage(error),
-          })
-          return
-        }
-      }
+        .then(() => undefined)
+        .catch((error: unknown) => {
+          // The one-hour lease easily covers a skipped heartbeat. Foreground
+          // SQLite contention and PostgreSQL serialization/deadlock retries
+          // both keep the same fenced lease for the next heartbeat.
+          if (retryableLedgerError(error) === undefined) {
+            emit({
+              type: 'degraded',
+              version: MAINTENANCE_PROTOCOL_VERSION,
+              at,
+              error: errorMessage(error),
+            })
+          }
+        })
+        .finally(() => {
+          if (heartbeatInFlight === pending) heartbeatInFlight = null
+        })
+      heartbeatInFlight = pending
     }
     emit({
       type: 'heartbeat',
@@ -428,21 +801,41 @@ function initialise(value: unknown): void {
 
 self.onmessage = (event: MessageEvent<unknown>) => {
   try {
-    if (db === null) {
-      initialise(event.data)
-      return
+    const action = routeMaintenanceWorkerRequest(
+      initialised ? 'ready' : initialising ? 'initialising' : 'idle',
+      event.data,
+    )
+    switch (action.kind) {
+      case 'initialise':
+        void initialise(action.request).catch(async (error: unknown) => {
+          await closeConnection()
+          emit({
+            type: 'degraded',
+            version: MAINTENANCE_PROTOCOL_VERSION,
+            at: Date.now(),
+            error: errorMessage(error),
+          })
+          // A drain requested while this init was failing still owes the
+          // supervisor its receipt; without it pause waits out its timeout.
+          await drainIfReady()
+        })
+        return
+      case 'wake':
+        void processQueue()
+        return
+      case 'drain':
+        draining = true
+        void drainIfReady()
+        return
+      case 'defer-drain':
+        draining = true
+        return
+      case 'ignore':
+        return
+      case 'fail':
+        // A misrouted frame is never a reason to tear down a live connection.
+        throw new Error(action.error)
     }
-    const request = MaintenanceWorkerRequestSchema.parse(event.data)
-    if (request.type === 'wake') {
-      void processQueue()
-      return
-    }
-    if (request.type === 'drain') {
-      draining = true
-      void drainIfReady()
-      return
-    }
-    throw new Error('maintenance-worker-init-after-ready')
   } catch (error) {
     emit({
       type: 'degraded',

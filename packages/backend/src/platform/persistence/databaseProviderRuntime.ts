@@ -2,7 +2,8 @@
 // generation. The durable pointer is authoritative; config only supplies the
 // selected provider's mechanism settings and may never silently override it.
 
-import type { DatabaseConfig } from '@agent-workflow/shared'
+import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
+import { openDb, type DbClient, type OpenDbOptions } from '@/db/client'
 import {
   createPostgresqlDatabaseOperationalAdapter,
   createSqliteDatabaseOperationalAdapter,
@@ -11,10 +12,14 @@ import {
 import { readDatabaseGeneration, type ResolvedDatabaseGeneration } from './generationStore'
 import {
   createPostgresqlDatabaseRuntime,
-  type PostgresqlDatabaseRuntime,
+  type InstrumentedPostgresqlDatabaseRuntime,
   type PostgresqlPoolOptions,
   type PostgresqlPool,
 } from './postgresqlRuntime'
+import {
+  createPostgresqlDatabaseClient,
+  type PostgresqlDatabaseClient,
+} from './postgresqlDatabaseClient'
 import type { LogicalSchemaContract } from './schemaContract'
 
 export class DatabaseProviderRuntimeError extends Error {
@@ -32,13 +37,19 @@ export type ResolvedDatabaseProviderRuntime =
       provider: 'sqlite'
       generation: ResolvedDatabaseGeneration
       operations: DatabaseOperationalAdapter
+      telemetry(): DatabaseRuntimeTelemetry
+      /** Bootstrap-only mechanism factory; application/transport never receives this handle. */
+      openClient(input: Omit<OpenDbOptions, 'path'>): DbClient
       close(): Promise<void>
     }>
   | Readonly<{
       provider: 'postgresql'
       generation: ResolvedDatabaseGeneration
-      runtime: PostgresqlDatabaseRuntime
+      runtime: InstrumentedPostgresqlDatabaseRuntime
       operations: DatabaseOperationalAdapter
+      telemetry(): DatabaseRuntimeTelemetry
+      /** Bootstrap-only mechanism factory; application/transport never receives this handle. */
+      openClient(): PostgresqlDatabaseClient
       close(): Promise<void>
     }>
 
@@ -79,6 +90,7 @@ export function resolveDatabaseProviderRuntime(
   const generation = resolveDatabaseProviderSelection(options)
 
   if (generation.payload.provider === 'sqlite') {
+    let client: DbClient | null = null
     return Object.freeze({
       provider: 'sqlite' as const,
       generation,
@@ -86,7 +98,17 @@ export function resolveDatabaseProviderRuntime(
         path: options.sqlitePath,
         generationId: generation.payload.generationId,
       }),
-      async close() {},
+      telemetry: () => Object.freeze({ version: 1, provider: 'sqlite', poolWait: null }),
+      openClient(input: Omit<OpenDbOptions, 'path'>) {
+        return (client ??= openDb({
+          ...input,
+          path: options.sqlitePath,
+        }))
+      },
+      async close() {
+        client?.$client.close()
+        client = null
+      },
     })
   }
 
@@ -103,6 +125,7 @@ export function resolveDatabaseProviderRuntime(
     env: options.env,
     poolFactory: options.postgresqlPoolFactory,
   })
+  let client: PostgresqlDatabaseClient | null = null
   return Object.freeze({
     provider: 'postgresql' as const,
     generation,
@@ -111,6 +134,8 @@ export function resolveDatabaseProviderRuntime(
       runtime,
       contract: options.contract,
     }),
+    telemetry: runtime.telemetry,
+    openClient: () => (client ??= createPostgresqlDatabaseClient(runtime)),
     close: () => runtime.close(),
   })
 }

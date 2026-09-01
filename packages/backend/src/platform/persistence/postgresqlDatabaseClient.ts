@@ -165,14 +165,18 @@ async function rawRows(
   })
 }
 
-function decorateDatabase(
-  base: SqliteRemoteDatabase<typeof schema>,
+type PostgresqlTransaction = Parameters<
+  Parameters<SqliteRemoteDatabase<typeof schema>['transaction']>[0]
+>[0]
+
+function decorateDatabase<TDatabase extends object>(
+  base: TDatabase,
   input: {
     readonly runtime: PostgresqlDatabaseRuntime
     readonly rawClient: PostgresqlPool | PostgresqlReservedConnection
     readonly transactional: boolean
   },
-): PostgresqlDatabaseClient {
+): TDatabase {
   return new Proxy(base, {
     get(target, property, receiver) {
       if (property === '$provider') return 'postgresql'
@@ -208,9 +212,7 @@ function decorateDatabase(
       }
       if (property === 'transaction' && !input.transactional) {
         return async <T>(
-          operation: (
-            transaction: Parameters<Parameters<typeof base.transaction>[0]>[0],
-          ) => Promise<T> | T,
+          operation: (transaction: PostgresqlTransaction) => Promise<T> | T,
         ): Promise<T> => {
           const connection = await input.runtime.providerPool().reserve()
           const transactionBase = createRemoteDatabase(
@@ -219,7 +221,14 @@ function decorateDatabase(
           )
           try {
             return await transactionBase.transaction(
-              async (transaction) => await operation(transaction),
+              async (transaction) =>
+                await operation(
+                  decorateDatabase(transaction, {
+                    runtime: input.runtime,
+                    rawClient: connection,
+                    transactional: true,
+                  }),
+                ),
             )
           } finally {
             connection.release()
@@ -228,7 +237,7 @@ function decorateDatabase(
       }
       return Reflect.get(target, property, receiver)
     },
-  }) as PostgresqlDatabaseClient
+  })
 }
 
 export function createPostgresqlDatabaseClient(
@@ -237,5 +246,9 @@ export function createPostgresqlDatabaseClient(
   selectDatabaseSchemaProvider('postgresql')
   const pool = runtime.providerPool()
   const base = createRemoteDatabase(callbackFor(runtime, pool, false), { schema })
-  return decorateDatabase(base, { runtime, rawClient: pool, transactional: false })
+  return decorateDatabase(base, {
+    runtime,
+    rawClient: pool,
+    transactional: false,
+  }) as PostgresqlDatabaseClient
 }

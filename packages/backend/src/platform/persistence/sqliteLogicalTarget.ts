@@ -12,7 +12,10 @@ import {
   type CanonicalLogicalValue,
   type LogicalTableChunk,
 } from './logicalDatabaseArtifact'
-import type { LogicalDatabaseRestoreTarget } from './logicalDatabaseRestore'
+import type {
+  LogicalDatabaseRestoreTarget,
+  LogicalTargetTableVerification,
+} from './logicalDatabaseRestore'
 import {
   canonicalSchemaJson,
   type LogicalSchemaContract,
@@ -189,7 +192,6 @@ export function createSqliteLogicalTarget(input: {
   readonly initialState?: 'empty' | 'fresh-migrated'
   readonly ownsDatabase?: boolean
 }): SqliteLogicalTarget {
-  const expectedRows = new Map<string, number>()
   const identityPath = join(input.checkpointRoot, 'sqlite-restore-target.json')
   let closed = false
 
@@ -200,7 +202,6 @@ export function createSqliteLogicalTarget(input: {
       if (closed) {
         throw new SqliteLogicalTargetError('sqlite-target-integrity', 'SQLite target is closed')
       }
-      expectedRows.clear()
       const quick = input.database.query('PRAGMA quick_check').all() as { quick_check: string }[]
       if (quick.length !== 1 || quick[0]?.quick_check !== 'ok') {
         throw new SqliteLogicalTargetError(
@@ -283,7 +284,6 @@ export function createSqliteLogicalTarget(input: {
         rowCount: chunk.payload.rows.length,
       }
       const checkpointExists = hasMatchingCheckpoint(checkpointPath, checkpoint, 'restore chunk')
-      expectedRows.set(table.id, (expectedRows.get(table.id) ?? 0) + chunk.payload.rows.length)
       input.database.exec('BEGIN IMMEDIATE')
       try {
         if (chunk.payload.rows.length > 0) {
@@ -307,12 +307,34 @@ export function createSqliteLogicalTarget(input: {
       }
     },
 
-    async finalizeSchema(now) {
+    async finalizeSchema(now, expectedTables) {
       input.database.exec('PRAGMA foreign_keys = ON')
+      const expectedByTable = new Map<string, LogicalTargetTableVerification>()
+      for (const expected of expectedTables) {
+        if (expectedByTable.has(expected.table)) {
+          throw new SqliteLogicalTargetError(
+            'sqlite-target-integrity',
+            `SQLite target verification repeats ${expected.table}`,
+          )
+        }
+        expectedByTable.set(expected.table, expected)
+      }
+      if (expectedByTable.size !== input.contract.tables.length) {
+        throw new SqliteLogicalTargetError(
+          'sqlite-target-integrity',
+          'SQLite target verification table roster is incomplete',
+        )
+      }
       for (const table of input.contract.tables) {
-        const expected =
-          table.disposition === 'ARCHIVE_THEN_OMIT' ? 0 : (expectedRows.get(table.id) ?? 0)
-        if (scalarCount(input.database, table.providerTables.sqlite!) !== expected) {
+        const expected = expectedByTable.get(table.id)
+        if (expected === undefined || expected.disposition !== table.disposition) {
+          throw new SqliteLogicalTargetError(
+            'sqlite-target-integrity',
+            `SQLite target verification contract differs for ${table.id}`,
+          )
+        }
+        const expectedRowCount = table.disposition === 'ARCHIVE_THEN_OMIT' ? 0 : expected.rowCount
+        if (scalarCount(input.database, table.providerTables.sqlite!) !== expectedRowCount) {
           throw new SqliteLogicalTargetError(
             'sqlite-target-integrity',
             `SQLite restored row count differs for ${table.id}`,

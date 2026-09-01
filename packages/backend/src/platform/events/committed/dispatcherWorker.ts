@@ -1,12 +1,7 @@
 // RFC-341 — bounded durable committed-event delivery driver.
 
-import type { DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
-import {
-  acceptCommittedEventDelivery,
-  claimNextCommittedEventDelivery,
-  rejectCommittedEventDelivery,
-} from './sqliteStore'
+import type { CommittedEventDeliveryPersistencePort } from './persistence'
 import {
   createCommittedEventProjectionLedger,
   type CommittedEventConsumerDefinition,
@@ -113,7 +108,7 @@ function errorCode(error: unknown): string {
 }
 
 export function createCommittedEventDispatcher(input: {
-  readonly db: DbClient
+  readonly persistence: CommittedEventDeliveryPersistencePort
   readonly workerId: string
   readonly codecs: CommittedEventCodecRegistry
   readonly consumers: readonly CommittedEventConsumerDefinition[]
@@ -128,6 +123,7 @@ export function createCommittedEventDispatcher(input: {
   }) => void
 }): CommittedEventDispatcher {
   assertCommittedEventRegistry({ codecs: input.codecs, consumers: input.consumers })
+  const persistence = input.persistence
   const now = input.now ?? Date.now
   const durableConsumers = new Map(
     input.consumers
@@ -138,7 +134,10 @@ export function createCommittedEventDispatcher(input: {
     (consumer) => consumer.deliveryClass === 'ephemeral',
   )
   const projectionLedger = input.projectionLedger ?? createCommittedEventProjectionLedger()
-  const projectEphemeral = (envelope: CommittedEventEnvelopeV1, payloadDigest: string): void => {
+  const projectEphemeral = async (
+    envelope: CommittedEventEnvelopeV1,
+    payloadDigest: string,
+  ): Promise<void> => {
     for (const projector of ephemeralProjectors) {
       if (!projector.eventTypes.includes(envelope.type)) continue
       try {
@@ -151,10 +150,7 @@ export function createCommittedEventDispatcher(input: {
         ) {
           continue
         }
-        const result = projector.handle(envelope)
-        if (result instanceof Promise) {
-          throw new Error(`ephemeral projector returned Promise: ${projector.id}`)
-        }
+        await projector.handle(envelope)
       } catch (error) {
         input.onProjectionError?.({ event: envelope, consumerId: projector.id, error })
         log.warn('committed event recovery projection failed', {
@@ -167,8 +163,7 @@ export function createCommittedEventDispatcher(input: {
   }
   return {
     async runOne() {
-      const claim = claimNextCommittedEventDelivery({
-        db: input.db,
+      const claim = await persistence.claimNext({
         workerId: input.workerId,
         now: now(),
         ...(input.leaseMs === undefined ? {} : { leaseMs: input.leaseMs }),
@@ -176,7 +171,7 @@ export function createCommittedEventDispatcher(input: {
       if (claim === null) return 'idle'
       try {
         const envelope = input.codecs.decode(claim.event.envelope)
-        projectEphemeral(envelope, claim.event.payloadDigest)
+        await projectEphemeral(envelope, claim.event.payloadDigest)
         const consumer = durableConsumers.get(claim.consumerId)
         if (consumer === undefined) {
           throw Object.assign(
@@ -193,11 +188,10 @@ export function createCommittedEventDispatcher(input: {
           )
         }
         await consumer.handle(envelope)
-        acceptCommittedEventDelivery({ db: input.db, claim, now: now() })
+        await persistence.accept({ claim, now: now() })
         return 'completed'
       } catch (error) {
-        return rejectCommittedEventDelivery({
-          db: input.db,
+        return await persistence.reject({
           claim,
           errorCode: errorCode(error),
           errorSummary: error instanceof Error ? error.message : String(error),

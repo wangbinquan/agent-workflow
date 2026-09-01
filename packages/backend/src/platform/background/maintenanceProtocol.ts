@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 export const MAINTENANCE_PROTOCOL_VERSION = 1 as const
 
-export const MaintenanceWorkerInitSchema = z
+const SqliteMaintenanceWorkerInitSchema = z
   .object({
     type: z.literal('init'),
     version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
@@ -22,7 +22,36 @@ export const MaintenanceWorkerInitSchema = z
   })
   .strict()
 
-export const MaintenanceWorkerRequestSchema = z.discriminatedUnion('type', [
+const PostgresqlMaintenanceWorkerInitSchema = z
+  .object({
+    type: z.literal('init'),
+    version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
+    catalogDigest: z.string().length(64),
+    provider: z.literal('postgresql'),
+    generationId: z.string().min(1),
+    appHome: z.string().min(1),
+    database: z
+      .object({
+        provider: z.literal('postgresql'),
+        urlEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+        poolMax: z.number().int().min(1).max(256),
+        connectTimeoutMs: z.number().int().min(100).max(300_000),
+        statementTimeoutMs: z.number().int().min(100).max(3_600_000),
+        idleTimeoutMs: z.number().int().min(1_000).max(3_600_000),
+      })
+      .strict(),
+  })
+  .strict()
+
+/** The legacy SQLite frame remains byte-compatible for compiled-worker
+ * upgrades. PostgreSQL carries only an environment-variable reference, never
+ * the connection URL/credential. */
+export const MaintenanceWorkerInitSchema = z.union([
+  SqliteMaintenanceWorkerInitSchema,
+  PostgresqlMaintenanceWorkerInitSchema,
+])
+
+export const MaintenanceWorkerRequestSchema = z.union([
   MaintenanceWorkerInitSchema,
   z
     .object({

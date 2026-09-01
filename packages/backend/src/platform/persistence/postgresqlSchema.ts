@@ -54,6 +54,26 @@ function qualifiedTable(table: string): string {
   return `${quote(POSTGRESQL_APPLICATION_SCHEMA)}.${quote(table)}`
 }
 
+function physicalTable(table: LogicalTableContract): string {
+  const name = table.providerTables.postgresql
+  if (name === undefined) {
+    throw new PostgresqlSchemaProjectionError(
+      `active PostgreSQL table mapping is missing for ${table.id}`,
+    )
+  }
+  return name
+}
+
+function referencedPhysicalTable(contract: LogicalSchemaContract, logicalTable: string): string {
+  const table = contract.tables.find((candidate) => candidate.id === logicalTable)
+  if (table === undefined) {
+    throw new PostgresqlSchemaProjectionError(
+      `foreign-key target is missing from the logical contract: ${logicalTable}`,
+    )
+  }
+  return physicalTable(table)
+}
+
 function columnSql(column: LogicalColumnContract): string {
   const pieces = [quote(column.name), column.providerType.postgresql.toUpperCase()]
   if (column.providerType.postgresql === 'text') pieces.push('COLLATE "C"')
@@ -159,7 +179,7 @@ function tableStatements(contract: LogicalSchemaContract): PostgresqlSchemaState
     .map((table) => ({
       kind: 'table' as const,
       logicalId: table.id,
-      sql: `CREATE TABLE ${qualifiedTable(table.id)} (\n  ${[
+      sql: `CREATE TABLE ${qualifiedTable(physicalTable(table))} (\n  ${[
         ...table.columns.map(columnSql),
         `CONSTRAINT ${quote(boundedIdentifier(`${table.id}_pkey`))} PRIMARY KEY (${table.primaryKey.map(quote).join(', ')})`,
       ].join(',\n  ')}\n)`,
@@ -176,14 +196,14 @@ function constraintStatements(contract: LogicalSchemaContract): PostgresqlSchema
       statements.push({
         kind: 'constraint',
         logicalId: `${table.id}:unique:${unique.name}`,
-        sql: `ALTER TABLE ${qualifiedTable(table.id)} ADD CONSTRAINT ${quote(boundedIdentifier(unique.name))} UNIQUE (${unique.columns.map(quote).join(', ')})`,
+        sql: `ALTER TABLE ${qualifiedTable(physicalTable(table))} ADD CONSTRAINT ${quote(boundedIdentifier(unique.name))} UNIQUE (${unique.columns.map(quote).join(', ')})`,
       })
     }
     for (const column of table.columns.filter((candidate) => candidate.uniqueName !== null)) {
       statements.push({
         kind: 'constraint',
         logicalId: `${table.id}:unique:${column.uniqueName}`,
-        sql: `ALTER TABLE ${qualifiedTable(table.id)} ADD CONSTRAINT ${quote(boundedIdentifier(column.uniqueName!))} UNIQUE (${quote(column.name)})`,
+        sql: `ALTER TABLE ${qualifiedTable(physicalTable(table))} ADD CONSTRAINT ${quote(boundedIdentifier(column.uniqueName!))} UNIQUE (${quote(column.name)})`,
       })
     }
     for (const check of table.checks) {
@@ -191,14 +211,14 @@ function constraintStatements(contract: LogicalSchemaContract): PostgresqlSchema
       statements.push({
         kind: 'constraint',
         logicalId: `${table.id}:check:${check.name}`,
-        sql: `ALTER TABLE ${qualifiedTable(table.id)} ADD CONSTRAINT ${quote(boundedIdentifier(check.name))} CHECK (${localExpression(table, check.expression)})`,
+        sql: `ALTER TABLE ${qualifiedTable(physicalTable(table))} ADD CONSTRAINT ${quote(boundedIdentifier(check.name))} CHECK (${localExpression(table, check.expression)})`,
       })
     }
     for (const foreignKey of table.foreignKeys) {
       statements.push({
         kind: 'constraint',
         logicalId: `${table.id}:fk:${foreignKey.name}`,
-        sql: `ALTER TABLE ${qualifiedTable(table.id)} ADD CONSTRAINT ${quote(boundedIdentifier(foreignKey.name))} FOREIGN KEY (${foreignKey.columns.map(quote).join(', ')}) REFERENCES ${qualifiedTable(foreignKey.foreignTable)} (${foreignKey.foreignColumns.map(quote).join(', ')}) ON UPDATE ${action(foreignKey.onUpdate)} ON DELETE ${action(foreignKey.onDelete)}`,
+        sql: `ALTER TABLE ${qualifiedTable(physicalTable(table))} ADD CONSTRAINT ${quote(boundedIdentifier(foreignKey.name))} FOREIGN KEY (${foreignKey.columns.map(quote).join(', ')}) REFERENCES ${qualifiedTable(referencedPhysicalTable(contract, foreignKey.foreignTable))} (${foreignKey.foreignColumns.map(quote).join(', ')}) ON UPDATE ${action(foreignKey.onUpdate)} ON DELETE ${action(foreignKey.onDelete)}`,
       })
     }
   }
@@ -214,7 +234,7 @@ function indexStatements(contract: LogicalSchemaContract): PostgresqlSchemaState
       statements.push({
         kind: 'index',
         logicalId: `${table.id}:index:${index.name}`,
-        sql: `CREATE ${index.unique ? 'UNIQUE ' : ''}INDEX ${quote(boundedIdentifier(index.name))} ON ${qualifiedTable(table.id)} (${index.columns.map((column) => renderIndexColumn(table, column)).join(', ')})${index.where === null ? '' : ` WHERE ${localExpression(table, index.where)}`}`,
+        sql: `CREATE ${index.unique ? 'UNIQUE ' : ''}INDEX ${quote(boundedIdentifier(index.name))} ON ${qualifiedTable(physicalTable(table))} (${index.columns.map((column) => renderIndexColumn(table, column)).join(', ')})${index.where === null ? '' : ` WHERE ${localExpression(table, index.where)}`}`,
       })
     }
   }

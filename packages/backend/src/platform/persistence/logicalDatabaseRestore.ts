@@ -39,7 +39,17 @@ export interface LogicalDatabaseRestoreTarget {
   readonly operationId: string
   prepare(now: number): Promise<void>
   copyChunk(table: LogicalTableContract, chunk: LogicalTableChunk, now: number): Promise<void>
-  finalizeSchema(now: number): Promise<void>
+  finalizeSchema(
+    now: number,
+    expectedTables: readonly LogicalTargetTableVerification[],
+  ): Promise<void>
+}
+
+export interface LogicalTargetTableVerification {
+  readonly table: string
+  readonly disposition: LogicalTableArtifactEntry['disposition']
+  readonly rowCount: number
+  readonly chunkCount: number
 }
 
 export interface LogicalDatabaseArtifactVerification {
@@ -497,7 +507,15 @@ export async function restoreLogicalDatabaseArtifact(input: {
       })
     }
   }
-  await input.target.finalizeSchema(now())
+  await input.target.finalizeSchema(
+    now(),
+    verified.manifest.payload.tables.map(({ table, disposition, rowCount, chunkCount }) => ({
+      table,
+      disposition,
+      rowCount,
+      chunkCount,
+    })),
+  )
   return Object.freeze({
     version: 1,
     operationId: input.restoreOperationId,

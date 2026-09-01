@@ -3,7 +3,7 @@
 // name and is never retained in status, errors, logs, manifests or receipts.
 
 import { SQL } from 'bun'
-import type { DatabaseConfig } from '@agent-workflow/shared'
+import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
 import { timeoutSignal } from '@/util/timeoutSignal'
 import type { DatabaseHealth, DatabaseRuntime } from './runtime'
@@ -52,6 +52,16 @@ export interface PostgresqlDatabaseRuntime extends DatabaseRuntime {
   providerPool(): PostgresqlPool
 }
 
+export interface PostgresqlRuntimeTelemetrySnapshot extends DatabaseRuntimeTelemetry {
+  readonly provider: 'postgresql'
+  readonly poolWait: NonNullable<DatabaseRuntimeTelemetry['poolWait']>
+}
+
+export interface InstrumentedPostgresqlDatabaseRuntime extends PostgresqlDatabaseRuntime {
+  /** Closed mechanism snapshot; never exposes the URL, SQL text, or pool handle. */
+  telemetry(): PostgresqlRuntimeTelemetrySnapshot
+}
+
 export class PostgresqlRuntimeError extends Error {
   constructor(
     public readonly code:
@@ -69,6 +79,79 @@ export class PostgresqlRuntimeError extends Error {
 
 function seconds(milliseconds: number): number {
   return Math.max(1, Math.ceil(milliseconds / 1000))
+}
+
+const POOL_WAIT_TELEMETRY_WINDOW_MS = 10 * 60_000
+const POOL_WAIT_TELEMETRY_SAMPLE_LIMIT = 100_000
+
+interface PoolWaitSample {
+  readonly at: number
+  readonly waitMs: number
+  readonly acquired: boolean
+}
+
+function percentile(sorted: readonly number[], ratio: number): number {
+  if (sorted.length === 0) return 0
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1))
+  return sorted[index] ?? 0
+}
+
+function createPoolWaitTelemetry(input: {
+  readonly wallNow: () => number
+  readonly monotonicNow: () => number
+}) {
+  const samples: PoolWaitSample[] = []
+
+  const prune = (now: number): void => {
+    const cutoff = now - POOL_WAIT_TELEMETRY_WINDOW_MS
+    let remove = 0
+    while (samples[remove]?.at !== undefined && samples[remove]!.at < cutoff) remove += 1
+    if (remove > 0) samples.splice(0, remove)
+    if (samples.length > POOL_WAIT_TELEMETRY_SAMPLE_LIMIT) {
+      samples.splice(0, samples.length - POOL_WAIT_TELEMETRY_SAMPLE_LIMIT)
+    }
+  }
+
+  return Object.freeze({
+    async reserve(
+      pool: PostgresqlPool,
+      options?: { readonly signal?: AbortSignal },
+    ): Promise<PostgresqlReservedConnection> {
+      const startedAt = input.monotonicNow()
+      let acquired = false
+      try {
+        const connection = await pool.reserve(options)
+        acquired = true
+        return connection
+      } finally {
+        const at = input.wallNow()
+        samples.push({
+          at,
+          waitMs: Math.max(0, input.monotonicNow() - startedAt),
+          acquired,
+        })
+        prune(at)
+      }
+    },
+    snapshot(): PostgresqlRuntimeTelemetrySnapshot {
+      prune(input.wallNow())
+      const waits = samples.map((sample) => sample.waitMs).sort((left, right) => left - right)
+      const acquiredCount = samples.reduce((count, sample) => count + (sample.acquired ? 1 : 0), 0)
+      return Object.freeze({
+        version: 1,
+        provider: 'postgresql',
+        poolWait: Object.freeze({
+          windowMs: POOL_WAIT_TELEMETRY_WINDOW_MS,
+          sampleCount: samples.length,
+          acquiredCount,
+          failedCount: samples.length - acquiredCount,
+          p50Ms: percentile(waits, 0.5),
+          p95Ms: percentile(waits, 0.95),
+          maxMs: waits.at(-1) ?? 0,
+        }),
+      })
+    },
+  })
 }
 
 function safeUrl(
@@ -161,17 +244,29 @@ export function createPostgresqlDatabaseRuntime(input: {
   readonly generationId: string
   readonly env?: Readonly<Record<string, string | undefined>>
   readonly poolFactory?: (options: PostgresqlPoolOptions) => PostgresqlPool
-}): PostgresqlDatabaseRuntime {
+  readonly telemetryWallNow?: () => number
+  readonly telemetryMonotonicNow?: () => number
+}): InstrumentedPostgresqlDatabaseRuntime {
   const url = safeUrl(input.config, input.env ?? process.env)
   const factory = input.poolFactory ?? defaultPoolFactory
   // Bun.SQL is lazy: constructing this object does not open a connection. The
   // URL is captured only by the native pool closure and never copied to an
   // observable DTO/error field owned by agent-workflow.
-  const pool = factory({
+  const physicalPool = factory({
     url: urlWithServerTimeouts(url, input.config),
     max: input.config.poolMax,
     idleTimeout: seconds(input.config.idleTimeoutMs),
     connectionTimeout: seconds(input.config.connectTimeoutMs),
+  })
+  const poolWaitTelemetry = createPoolWaitTelemetry({
+    wallNow: input.telemetryWallNow ?? Date.now,
+    monotonicNow: input.telemetryMonotonicNow ?? (() => performance.now()),
+  })
+  const pool: PostgresqlPool = Object.freeze({
+    reserve: (options: Parameters<PostgresqlPool['reserve']>[0]) =>
+      poolWaitTelemetry.reserve(physicalPool, options),
+    unsafe: physicalPool.unsafe.bind(physicalPool),
+    close: physicalPool.close.bind(physicalPool),
   })
   let closed = false
 
@@ -230,7 +325,7 @@ export function createPostgresqlDatabaseRuntime(input: {
     }
   }
 
-  const runtime: PostgresqlDatabaseRuntime = {
+  const runtime: InstrumentedPostgresqlDatabaseRuntime = {
     provider: 'postgresql',
     generationId: input.generationId,
     health,
@@ -326,6 +421,7 @@ export function createPostgresqlDatabaseRuntime(input: {
       }
       return pool
     },
+    telemetry: poolWaitTelemetry.snapshot,
     async close() {
       if (closed) return
       closed = true

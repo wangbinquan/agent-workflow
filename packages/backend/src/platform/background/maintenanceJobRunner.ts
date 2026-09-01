@@ -1,128 +1,24 @@
 import type { MaintenanceJobKey } from '@agent-workflow/shared'
-import { and, count, gt, lte, sql } from 'drizzle-orm'
 import { join } from 'node:path'
 
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents } from '@/db/schema'
+import type { TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import type { DevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/public/commands'
 import type { DigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/public/commands'
-import { checkpointWal, pruneBackups } from '@/services/backupScheduler'
-import { convergeResourceBundleApplies } from '@/services/bundle/apply'
-import { archiveEvents } from '@/services/eventsArchive'
-import {
-  recoverInterruptedWorkspaceGc,
-  runClaimedWebhookWorkspacePrunes,
-  runIsoWorktreeGc,
-  runPartialCloneGc,
-  runScratchOrphanGc,
-  runWorktreeGc,
-  runWorktreeOrphanGc,
-} from '@/services/gc'
-import { convergeIntentApplyJournal } from '@/services/intent/applyChangeset'
-import { listQueuedIntentWorkingSetSessionIds } from '@/services/intent/dispatcher'
-import { recoverIntentTurnsOnBoot, sweepIntentScratch } from '@/services/intent/maintenance'
+import type { IntegrationMaintenanceCommands } from '@/modules/integration/public/commands'
+import type { IntentMaintenanceCommands } from '@/modules/intent/public/commands'
+import type { PluginGenerationGcCommand } from '@/modules/resource-catalog/public/commands'
+import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
-import { runRetentionSweepSlice } from '@/services/maintenanceRetention'
 import { runPluginGenerationGc } from '@/services/pluginGenerationGc'
 import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
-import { runTaskArchiveSweep } from '@/services/taskArchive'
-import { pruneTokenAuditSlice } from '@/services/tokenAudit'
-import { runDeliveryGcSlice } from '@/services/webhook/webhookGc'
-import { createLogger } from '@/util/log'
+import { pruneBackups } from './providerBackupScheduler'
 import { parseMaintenanceJobPayload } from './maintenanceJobPayload'
 import type { MaintenanceWorkerDelta } from './maintenanceProtocol'
 
-const log = createLogger('maintenance-worker')
 const DB_WRITE_SLICE_ROWS = 1_000
-// Keep the mixed FS/SQLite archive body inside the RFC-338 wall budget on the
-// 4.5GB / 100-client tier. A 5k slice held the Worker hot for up to 2.23s and
-// produced 516ms statement outliers even though the durable cursor and the
-// foreground loop stayed healthy. The smaller slice preserves exact progress
-// and backlog semantics while yielding to the queue/cooldown five times as
-// often; no rows, jobs, or archive capabilities are skipped.
-const EVENT_ARCHIVE_SLICE_ROWS = 1_000
-/** One short primary-key range COUNT per Worker slice at large event scale. */
-const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000
-
-interface EventArchiveCountCursorV1 {
-  readonly version: 1
-  readonly phase: 'count'
-  readonly maxId: number
-  readonly scanFrom: number
-  readonly totalRows: number
-}
-
-interface EventArchiveRunCursorV1 {
-  readonly version: 1
-  readonly phase: 'archive'
-  readonly remainingRows: number
-}
-
-type EventArchiveCursorV1 = EventArchiveCountCursorV1 | EventArchiveRunCursorV1
-
-function eventArchiveCursor(value: unknown): EventArchiveCursorV1 | null {
-  if (value === undefined) return null
-  if (typeof value !== 'object' || value === null) {
-    throw new Error('maintenance-events-archive-cursor-invalid')
-  }
-  const cursor = value as Partial<EventArchiveCursorV1>
-  // A pre-RFC-338 continuation was only `{ version: 1 }`. Restarting the
-  // bounded count is safe and lets an in-flight deployment upgrade in place.
-  if (cursor.version === 1 && cursor.phase === undefined) return null
-  if (
-    cursor.version !== 1 ||
-    (cursor.phase !== 'count' && cursor.phase !== 'archive') ||
-    (cursor.phase === 'count' &&
-      (!Number.isSafeInteger(cursor.maxId) ||
-        cursor.maxId! < 0 ||
-        !Number.isSafeInteger(cursor.scanFrom) ||
-        cursor.scanFrom! < 0 ||
-        cursor.scanFrom! > cursor.maxId! ||
-        !Number.isSafeInteger(cursor.totalRows) ||
-        cursor.totalRows! < 0)) ||
-    (cursor.phase === 'archive' &&
-      (!Number.isSafeInteger(cursor.remainingRows) || cursor.remainingRows! < 0))
-  ) {
-    throw new Error('maintenance-events-archive-cursor-invalid')
-  }
-  return cursor as EventArchiveCursorV1
-}
-
-async function countEventArchiveRows(
-  db: DbClient,
-  cursor: EventArchiveCountCursorV1 | null,
-): Promise<
-  | { readonly done: true; readonly totalRows: number }
-  | {
-      readonly done: false
-      readonly cursor: EventArchiveCountCursorV1
-      readonly countedRows: number
-    }
-> {
-  const maxId =
-    cursor?.maxId ??
-    (
-      await db.select({ value: sql<number | null>`max(${nodeRunEvents.id})` }).from(nodeRunEvents)
-    )[0]?.value ??
-    0
-  const scanFrom = cursor?.scanFrom ?? 0
-  const priorRows = cursor?.totalRows ?? 0
-  if (scanFrom >= maxId) return { done: true, totalRows: priorRows }
-
-  const scanTo = Math.min(maxId, scanFrom + EVENT_ARCHIVE_COUNT_WINDOW_IDS)
-  const rows = await db
-    .select({ value: count(nodeRunEvents.id) })
-    .from(nodeRunEvents)
-    .where(and(gt(nodeRunEvents.id, scanFrom), lte(nodeRunEvents.id, scanTo)))
-  const countedRows = rows[0]?.value ?? 0
-  const totalRows = priorRows + countedRows
-  if (scanTo >= maxId) return { done: true, totalRows }
-  return {
-    done: false,
-    countedRows,
-    cursor: { version: 1, phase: 'count', maxId, scanFrom: scanTo, totalRows },
-  }
-}
+const DAY_MS = 86_400_000
 
 export interface MaintenanceJobExecutionResult {
   readonly counters: Readonly<Record<string, number>>
@@ -130,6 +26,80 @@ export interface MaintenanceJobExecutionResult {
   readonly continuation?: {
     readonly cursor: object
     readonly resumeAfterMs: number
+  }
+}
+
+interface WebhookDeliveryGcCursor {
+  readonly version: 1
+  readonly phase: 'bodies' | 'rows'
+  readonly bodyCutoff: number
+  readonly rowCutoff: number
+}
+
+export interface MaintenanceSystemOperations {
+  readonly eventsArchive: {
+    runSlice(input: {
+      readonly thresholds: {
+        readonly perNodeRunRows: number
+        readonly globalRows: number
+        readonly perNodeRunBytes: number
+        readonly globalBytes: number
+      }
+      readonly cursor?: unknown
+    }): Promise<MaintenanceJobExecutionResult>
+  }
+  readonly retention: {
+    runSlice(input: {
+      readonly eventStreamRetentionDays: number
+      readonly webhookTriggerFiresRetentionDays: number
+      readonly cursor?: unknown
+    }): Promise<MaintenanceJobExecutionResult>
+  }
+  readonly storage: {
+    run(): Promise<Readonly<Record<string, number>>>
+  }
+}
+
+function webhookDeliveryCursor(value: unknown): WebhookDeliveryGcCursor | null {
+  if (value === undefined || value === null) return null
+  if (
+    typeof value !== 'object' ||
+    (value as { readonly version?: unknown }).version !== 1 ||
+    !['bodies', 'rows'].includes(String((value as { readonly phase?: unknown }).phase)) ||
+    !Number.isSafeInteger((value as { readonly bodyCutoff?: unknown }).bodyCutoff) ||
+    !Number.isSafeInteger((value as { readonly rowCutoff?: unknown }).rowCutoff)
+  ) {
+    throw new Error('maintenance-webhook-delivery-cursor-invalid')
+  }
+  const cursor = value as WebhookDeliveryGcCursor
+  return {
+    version: 1,
+    phase: cursor.phase,
+    bodyCutoff: cursor.bodyCutoff,
+    rowCutoff: cursor.rowCutoff,
+  }
+}
+
+export async function runWebhookDeliveryMaintenanceJob(input: {
+  readonly commands: IntegrationMaintenanceCommands
+  readonly bodyRetentionDays: number
+  readonly rowRetentionDays: number
+  readonly cursor?: unknown
+  readonly now?: number
+}): Promise<MaintenanceJobExecutionResult> {
+  const result = await input.commands.gcWebhookDeliveries({
+    now: input.now ?? Date.now(),
+    retention: {
+      bodyRetentionMs: input.bodyRetentionDays * DAY_MS,
+      rowRetentionMs: input.rowRetentionDays * DAY_MS,
+    },
+    cursor: webhookDeliveryCursor(input.cursor),
+    batchSize: DB_WRITE_SLICE_ROWS,
+  })
+  return {
+    counters: { ...result.counters },
+    delta: NONE,
+    ...(result.done ? {} : { continuation: { cursor: result.cursor, resumeAfterMs: 25 } }),
   }
 }
 
@@ -155,11 +125,6 @@ function nextWorktreeGcPhase(phase: WorktreeGcPhase): WorktreeGcPhase | null {
   return WORKTREE_GC_PHASES[index + 1] ?? null
 }
 
-function activePredicate(ids: readonly string[]): (taskId: string) => boolean {
-  const active = new Set(ids)
-  return (taskId) => active.has(taskId)
-}
-
 function assertVersionOneCursor(value: unknown, code: string): void {
   if (
     value !== undefined &&
@@ -169,48 +134,122 @@ function assertVersionOneCursor(value: unknown, code: string): void {
   }
 }
 
+export async function runLifecycleInvariantsMaintenanceJob(input: {
+  readonly operations: TaskRecoveryOperations
+  readonly payload: unknown
+}): Promise<MaintenanceJobExecutionResult> {
+  const payload = parseMaintenanceJobPayload('lifecycleInvariants', input.payload)
+  const alerts: Array<{
+    taskId: string
+    rule: string
+    severity: 'warning' | 'error'
+    transition: 'new' | 'promoted'
+  }> = []
+  const resolvedTaskIds: string[] = []
+  const result = await runLifecycleInvariants({
+    operations: input.operations,
+    scope: payload.scope,
+    onAlert: (row, transition) => {
+      alerts.push({
+        taskId: row.taskId,
+        rule: row.rule,
+        severity: row.severity,
+        transition,
+      })
+    },
+    onResolved: (taskId) => resolvedTaskIds.push(taskId),
+  })
+  return {
+    counters: {
+      scanned: result.scanned,
+      newAlerts: result.newAlerts,
+      promotedAlerts: result.promotedAlerts,
+      resolvedAlerts: result.resolvedAlerts,
+      openAlerts: result.openAlerts.length,
+    },
+    delta: { kind: 'lifecycle-alerts', alerts, resolvedTaskIds },
+  }
+}
+
+export async function runStuckTaskDetectorMaintenanceJob(input: {
+  readonly operations: TaskRecoveryOperations
+  readonly payload: unknown
+}): Promise<MaintenanceJobExecutionResult> {
+  const payload = parseMaintenanceJobPayload('stuckTaskDetector', input.payload)
+  const alerts: Array<{
+    taskId: string
+    rule: string
+    severity: 'warning' | 'error'
+    transition: 'new' | 'promoted'
+  }> = []
+  const resolvedTaskIds: string[] = []
+  const result = await runStuckTaskDetector({
+    operations: input.operations,
+    ...(payload.stuckThresholdMs === undefined
+      ? {}
+      : { stuckThresholdMs: payload.stuckThresholdMs }),
+    ...(payload.pendingThresholdMs === undefined
+      ? {}
+      : { pendingThresholdMs: payload.pendingThresholdMs }),
+    onAlert: (row, transition) =>
+      alerts.push({
+        taskId: row.taskId,
+        rule: row.rule,
+        severity: row.severity,
+        transition,
+      }),
+    onResolved: (taskId) => resolvedTaskIds.push(taskId),
+  })
+  return {
+    counters: {
+      scanned: result.scanned,
+      newAlerts: result.newAlerts,
+      promotedAlerts: result.promotedAlerts,
+      resolvedAlerts: result.resolvedAlerts,
+      openAlerts: result.openAlerts.length,
+    },
+    delta: { kind: 'lifecycle-alerts', alerts, resolvedTaskIds },
+  }
+}
+
 export async function runMaintenanceJob(input: {
-  db: DbClient
   appHome: string
   ownerCommands: {
+    readonly workspace: WorkspaceMaintenanceCommand
     readonly developmentAutomation: DevelopmentAutomationMaintenanceCommands
     readonly digitalEmployee: DigitalEmployeeMaintenanceCommands
+    readonly intent: IntentMaintenanceCommands
+    readonly pluginGenerationGc: {
+      readonly command: PluginGenerationGcCommand
+      /** Task execution owns the live-node fence; the GC command owns catalog reads. */
+      readonly executionFence: () => Promise<'clear' | 'busy'>
+    }
+    readonly integration: IntegrationMaintenanceCommands
+    readonly taskRecovery: TaskRecoveryOperations
+    readonly taskArchive: TaskArchiveMaintenanceCommand
+    readonly tokenAudit: Pick<TokenCallAuditParticipant, 'pruneSlice'>
+    readonly system: MaintenanceSystemOperations
   }
   job: MaintenanceJobKey
   payload: unknown
   cursor?: unknown
 }): Promise<MaintenanceJobExecutionResult> {
-  const { db, appHome, job, ownerCommands } = input
+  const { appHome, job, ownerCommands } = input
 
   switch (job) {
     case 'worktreeGc': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const isTaskActive = activePredicate(payload.activeTaskIds)
       const phase = worktreeGcPhase(input.cursor)
-      let counters: Record<string, number>
-      if (phase === 'worktree') {
-        const result = await runWorktreeGc(db, payload, Date.now(), isTaskActive)
-        counters = {
-          scanned: result.scanned,
-          removed: result.removed.length,
-          skipped: result.skipped,
-        }
-      } else if (phase === 'iso') {
-        const result = await runIsoWorktreeGc(db, appHome, isTaskActive)
-        counters = { scanned: result.scanned, removed: result.removed.length }
-      } else if (phase === 'scratch') {
-        const result = await runScratchOrphanGc(db, appHome)
-        counters = { scanned: result.scanned, removed: result.removed.length }
-      } else if (phase === 'orphan') {
-        const result = await runWorktreeOrphanGc(db, appHome)
-        counters = { scanned: result.scanned, removed: result.removed.length }
-      } else {
-        const result = await runPartialCloneGc(appHome, Date.now(), payload.gitCloneTimeoutMs)
-        counters = { scanned: result.scanned, removed: result.removed.length }
-      }
+      const result = await ownerCommands.workspace.runGcPhase({
+        phase,
+        activeTaskIds: payload.activeTaskIds,
+        worktreeAutoGc: payload.worktreeAutoGc,
+        gitCloneTimeoutMs: payload.gitCloneTimeoutMs ?? 0,
+        now: Date.now(),
+      })
       const nextPhase = nextWorktreeGcPhase(phase)
       return {
-        counters,
+        counters: { scanned: result.scanned, removed: result.removed, skipped: result.skipped },
         delta: NONE,
         ...(nextPhase === null
           ? {}
@@ -224,99 +263,42 @@ export async function runMaintenanceJob(input: {
     }
     case 'workspaceRecovery': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const isTaskActive = activePredicate(payload.activeTaskIds)
-      const interrupted = await recoverInterruptedWorkspaceGc(db)
-      const webhook = await runClaimedWebhookWorkspacePrunes(db, {
-        isTaskActive,
-        staleOnly: true,
+      const result = await ownerCommands.workspace.recover({
+        activeTaskIds: payload.activeTaskIds,
+        now: Date.now(),
       })
       return {
-        counters: {
-          completed: interrupted.completed.length + webhook.removed.length,
-          failed: interrupted.failed.length + webhook.failed.length,
-          skipped: interrupted.skipped + webhook.skipped,
-        },
+        counters: { ...result },
         delta: NONE,
       }
     }
     case 'webhookDeliveryGc': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const result = await runDeliveryGcSlice(
-        db,
-        {
-          webhookDeliveryBodyRetentionDays: payload.bodyRetentionDays,
-          webhookDeliveryRowRetentionDays: payload.rowRetentionDays,
-        },
-        input.cursor,
-        DB_WRITE_SLICE_ROWS,
-      )
-      return {
-        counters: { ...result.counters },
-        delta: NONE,
-        ...(result.done ? {} : { continuation: { cursor: result.cursor, resumeAfterMs: 25 } }),
-      }
+      return await runWebhookDeliveryMaintenanceJob({
+        commands: ownerCommands.integration,
+        bodyRetentionDays: payload.bodyRetentionDays,
+        rowRetentionDays: payload.rowRetentionDays,
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      })
     }
     case 'eventsArchive': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const cursor = eventArchiveCursor(input.cursor)
-      let knownGlobalRows: number
-      if (cursor?.phase === 'archive') {
-        knownGlobalRows = cursor.remainingRows
-      } else {
-        const counted = await countEventArchiveRows(db, cursor)
-        if (!counted.done) {
-          return {
-            counters: { countedRows: counted.countedRows },
-            delta: NONE,
-            continuation: { cursor: counted.cursor, resumeAfterMs: 25 },
-          }
-        }
-        knownGlobalRows = counted.totalRows
-      }
-      const result = await archiveEvents(db, payload, join(appHome, 'logs'), {
-        rowBudgetRows: EVENT_ARCHIVE_SLICE_ROWS,
-        knownGlobalRows,
+      return await ownerCommands.system.eventsArchive.runSlice({
+        thresholds: payload.eventsArchiveThresholds,
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
       })
-      const archived = result.perGroupArchived + result.globalArchived
-      return {
-        counters: {
-          perGroupArchived: result.perGroupArchived,
-          globalArchived: result.globalArchived,
-          files: result.files.length,
-        },
-        delta: NONE,
-        ...(archived < EVENT_ARCHIVE_SLICE_ROWS
-          ? {}
-          : {
-              continuation: {
-                cursor: {
-                  version: 1,
-                  phase: 'archive',
-                  remainingRows: result.remainingRows,
-                },
-                resumeAfterMs: 25,
-              },
-            }),
-      }
     }
     case 'retentionSweep': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const result = await runRetentionSweepSlice(
-        db,
-        payload,
-        input.cursor,
-        Date.now(),
-        DB_WRITE_SLICE_ROWS,
-      )
-      return {
-        counters: { ...result.counters },
-        delta: NONE,
-        ...(result.done ? {} : { continuation: { cursor: result.cursor, resumeAfterMs: 25 } }),
-      }
+      return await ownerCommands.system.retention.runSlice({
+        eventStreamRetentionDays: payload.eventStreamRetentionDays,
+        webhookTriggerFiresRetentionDays: payload.webhookTriggerFiresRetentionDays,
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      })
     }
     case 'taskArchive': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const result = await runTaskArchiveSweep(db, payload, {
+      const result = await ownerCommands.taskArchive.runSweep(payload, {
         archiveDir: join(appHome, 'archive', 'tasks'),
         runsDir: join(appHome, 'runs'),
         logsDir: join(appHome, 'logs'),
@@ -347,16 +329,17 @@ export async function runMaintenanceJob(input: {
     }
     case 'pluginGenerationGc': {
       parseMaintenanceJobPayload(job, input.payload)
+      const pluginGenerationGc = ownerCommands.pluginGenerationGc
       const removed = await runPluginGenerationGc({
-        db,
-        pluginsDir: join(appHome, 'plugins'),
+        command: pluginGenerationGc.command,
+        executionFence: await pluginGenerationGc.executionFence(),
       })
       return { counters: { removed: removed.length }, delta: NONE }
     }
     case 'developmentUploadGc': {
       parseMaintenanceJobPayload(job, input.payload)
       assertVersionOneCursor(input.cursor, 'maintenance-development-upload-cursor-invalid')
-      const swept = ownerCommands.developmentAutomation.sweepExpiredUploads(
+      const swept = await ownerCommands.developmentAutomation.sweepExpiredUploads(
         Date.now(),
         DB_WRITE_SLICE_ROWS,
       )
@@ -376,7 +359,7 @@ export async function runMaintenanceJob(input: {
     case 'employeeInputGc': {
       parseMaintenanceJobPayload(job, input.payload)
       assertVersionOneCursor(input.cursor, 'maintenance-employee-input-cursor-invalid')
-      const swept = ownerCommands.digitalEmployee.sweepExpiredInputUploads(
+      const swept = await ownerCommands.digitalEmployee.sweepExpiredInputUploads(
         Date.now(),
         DB_WRITE_SLICE_ROWS,
       )
@@ -390,12 +373,15 @@ export async function runMaintenanceJob(input: {
     }
     case 'intentScratchGc': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const removed = sweepIntentScratch(db, appHome, payload.retentionHours, log)
+      const { removed } = await ownerCommands.intent.scratch.sweep({
+        retentionHours: payload.retentionHours,
+      })
       return { counters: { removed }, delta: NONE }
     }
     case 'tokenAuditGc': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const result = await pruneTokenAuditSlice(db, payload.retentionDays, input.cursor)
+      const tokenAudit = ownerCommands.tokenAudit
+      const result = await tokenAudit.pruneSlice(payload.retentionDays, input.cursor)
       return {
         counters: result.counters,
         delta: NONE,
@@ -404,98 +390,36 @@ export async function runMaintenanceJob(input: {
     }
     case 'intentRecovery': {
       const payload = parseMaintenanceJobPayload(job, input.payload)
-      const orphanedTurns = recoverIntentTurnsOnBoot(db, log, payload.recoverTurnIds)
-      const intent = await convergeIntentApplyJournal(db, appHome, log, {
-        activeJournalIds: payload.activeIntentApplyJournalIds,
+      const result = await ownerCommands.intent.recovery.recover({
+        recoverTurnIds: payload.recoverTurnIds,
+        activeIntentApplyJournalIds: payload.activeIntentApplyJournalIds,
+        activeBundleApplyIds: payload.activeBundleApplyIds,
       })
-      const bundles = await convergeResourceBundleApplies(db, appHome, log, {
-        activeApplyIds: payload.activeBundleApplyIds,
-      })
-      const sessionIds = listQueuedIntentWorkingSetSessionIds(db)
       return {
         counters: {
-          failed: intent.failed + bundles.failed,
-          rolledForward: intent.rolledForward + bundles.rolledForward,
-          queuedWorkingSets: sessionIds.length,
-          orphanedTurns,
+          failed: result.failed,
+          rolledForward: result.rolledForward,
+          queuedWorkingSets: result.queuedWorkingSets,
+          orphanedTurns: result.orphanedTurns,
         },
-        delta: { kind: 'intent-queued', sessionIds },
+        delta: { kind: 'intent-queued', sessionIds: [...result.queuedSessionIds] },
       }
     }
     case 'lifecycleInvariants': {
-      const payload = parseMaintenanceJobPayload(job, input.payload)
-      const alerts: Array<{
-        taskId: string
-        rule: string
-        severity: 'warning' | 'error'
-        transition: 'new' | 'promoted'
-      }> = []
-      const resolvedTaskIds: string[] = []
-      const result = await runLifecycleInvariants({
-        db,
-        scope: payload.scope,
-        onAlert: (row, transition) => {
-          alerts.push({
-            taskId: row.taskId,
-            rule: row.rule,
-            severity: row.severity,
-            transition,
-          })
-        },
-        onResolved: (taskId) => resolvedTaskIds.push(taskId),
+      return runLifecycleInvariantsMaintenanceJob({
+        operations: ownerCommands.taskRecovery,
+        payload: input.payload,
       })
-      return {
-        counters: {
-          scanned: result.scanned,
-          newAlerts: result.newAlerts,
-          promotedAlerts: result.promotedAlerts,
-          resolvedAlerts: result.resolvedAlerts,
-          openAlerts: result.openAlerts.length,
-        },
-        delta: { kind: 'lifecycle-alerts', alerts, resolvedTaskIds },
-      }
     }
     case 'stuckTaskDetector': {
-      const payload = parseMaintenanceJobPayload(job, input.payload)
-      const alerts: Array<{
-        taskId: string
-        rule: string
-        severity: 'warning' | 'error'
-        transition: 'new' | 'promoted'
-      }> = []
-      const resolvedTaskIds: string[] = []
-      const result = await runStuckTaskDetector({
-        db,
-        ...(payload.stuckThresholdMs === undefined
-          ? {}
-          : { stuckThresholdMs: payload.stuckThresholdMs }),
-        ...(payload.pendingThresholdMs === undefined
-          ? {}
-          : { pendingThresholdMs: payload.pendingThresholdMs }),
-        onAlert: (row, transition) =>
-          alerts.push({
-            taskId: row.taskId,
-            rule: row.rule,
-            severity: row.severity,
-            transition,
-          }),
-        onResolved: (taskId) => resolvedTaskIds.push(taskId),
+      return runStuckTaskDetectorMaintenanceJob({
+        operations: ownerCommands.taskRecovery,
+        payload: input.payload,
       })
-      return {
-        counters: {
-          scanned: result.scanned,
-          newAlerts: result.newAlerts,
-          promotedAlerts: result.promotedAlerts,
-          resolvedAlerts: result.resolvedAlerts,
-          openAlerts: result.openAlerts.length,
-        },
-        delta: { kind: 'lifecycle-alerts', alerts, resolvedTaskIds },
-      }
     }
     case 'walCheckpoint': {
       parseMaintenanceJobPayload(job, input.payload)
-      checkpointWal(db)
-      return { counters: { checkpointed: 1 }, delta: NONE }
+      return { counters: await ownerCommands.system.storage.run(), delta: NONE }
     }
     case 'humanGateRecovery': {
       // Historical durable rows may survive an in-place upgrade. The active
