@@ -4,13 +4,6 @@
 
 import { join } from 'node:path'
 
-import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import type {
-  ResourceRequestContext,
-  TaskExecutionResourceSnapshotInTx,
-} from '@/modules/resource-catalog/public/participants'
 import type {
   FrozenTaskExecutionResourceSnapshot,
   TaskExecutionAgentSnapshot,
@@ -20,40 +13,35 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import type { ResolvedSkill } from '@/services/runtime/types'
 import { DomainError } from '@/util/errors'
+import type {
+  TaskExecutionResourceAuthority,
+  TaskExecutionResourceAuthorityPair,
+  TaskExecutionResourceBinding,
+} from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
 
 /**
  * Consumer-owned structural seam. Bootstrap composition may satisfy it, but
  * task execution never imports the Resource Catalog composition directory.
  */
-export interface TaskExecutionResourceAuthorityPair {
-  readonly authority: ResourceRequestContext
-  readonly actor: Actor
-}
+export type {
+  TaskExecutionResourceAuthority,
+  TaskExecutionResourceAuthorityPair,
+  TaskExecutionResourceBinding,
+} from '@/modules/task-execution/application/ports/taskExecutionResourceSnapshots'
+export { createSqliteTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots'
+export { createPostgresqlTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots'
 
-export interface TaskExecutionResourceBinding {
-  inTransaction(
-    tx: DbTxSync,
-    pair: TaskExecutionResourceAuthorityPair,
-  ): TaskExecutionResourceSnapshotInTx
-}
-
-export interface TaskExecutionResourceAuthority extends TaskExecutionResourceAuthorityPair {
-  readonly resources: TaskExecutionResourceBinding
-}
-
-export function loadTaskExecutionResourceSnapshot<K extends TaskExecutionResourceRequest['kind']>(
-  db: DbClient,
+export async function loadTaskExecutionResourceSnapshot<
+  K extends TaskExecutionResourceRequest['kind'],
+>(
   resourceAuthority: TaskExecutionResourceAuthority,
   request: Extract<TaskExecutionResourceRequest, { readonly kind: K }>,
-): Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: K }> {
-  const snapshot = dbTxSync(db, (tx): FrozenTaskExecutionResourceSnapshot => {
-    const participant = resourceAuthority.resources.inTransaction(tx, resourceAuthority)
-    const [loaded] = participant.loadAuthorized(resourceAuthority.authority, [request])
-    if (loaded === undefined || loaded.kind !== request.kind) {
-      throw new Error(`task-execution-resource-kind-mismatch:${request.kind}`)
-    }
-    return loaded
-  })
+): Promise<Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: K }>> {
+  const loaded = await resourceAuthority.resources.loadAuthorized(resourceAuthority, [request])
+  const snapshot = loaded[0]
+  if (loaded.length !== 1 || snapshot === undefined || snapshot.kind !== request.kind) {
+    throw new Error(`task-execution-resource-kind-mismatch:${request.kind}`)
+  }
   return snapshot as Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: K }>
 }
 
@@ -108,13 +96,12 @@ export function resolveSyntheticTaskExecutionInjection(
 
 /** Preserve the historical node-level typed failure boundary. */
 export async function resolveTaskExecutionInjection(
-  db: DbClient,
   resourceAuthority: TaskExecutionResourceAuthority,
   agentId: string,
   appHome: string,
 ): Promise<TaskExecutionInjectionResolution> {
   try {
-    const snapshot = loadTaskExecutionResourceSnapshot(db, resourceAuthority, {
+    const snapshot = await loadTaskExecutionResourceSnapshot(resourceAuthority, {
       kind: 'agent-injection',
       agentId,
     })
@@ -153,15 +140,16 @@ export async function resolveTaskExecutionInjection(
 
 /** One per-task cache: the first authorized snapshot is immutable for this run. */
 export function createTaskExecutionResourceSession(
-  db: DbClient,
-  resourceAuthority: TaskExecutionResourceAuthority,
+  resourceAuthority: TaskExecutionResourceAuthorityPair & {
+    readonly resources: TaskExecutionResourceBinding
+  },
   appHome: string,
 ) {
   const injections = new Map<string, Promise<TaskExecutionInjectionResolution>>()
   const injection = (agentId: string): Promise<TaskExecutionInjectionResolution> => {
     let found = injections.get(agentId)
     if (found === undefined) {
-      found = resolveTaskExecutionInjection(db, resourceAuthority, agentId, appHome)
+      found = resolveTaskExecutionInjection(resourceAuthority, agentId, appHome)
       injections.set(agentId, found)
     }
     return found

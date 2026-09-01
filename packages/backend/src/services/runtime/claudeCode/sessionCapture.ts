@@ -31,10 +31,10 @@ import {
   maskDiagnosticsText,
   type RuntimeConfigDirProfile,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents } from '@/db/schema'
-import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
-import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
+import type {
+  RuntimeSessionCaptureEvent,
+  RuntimeSessionCapturePersistence,
+} from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
 import type { Logger } from '@/util/log'
 import { parseEvent } from './events'
 
@@ -45,7 +45,7 @@ export interface CaptureClaudeSessionsOpts {
   logicalRootSessionId?: string
   nodeRunId: string
   taskId: string
-  db: DbClient
+  persistence: RuntimeSessionCapturePersistence
   log: Logger
   /** Candidate user-level config roots, priority order (`claudeUserConfigRoots`). */
   configRoots: readonly string[]
@@ -239,28 +239,25 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
     ]),
   ]
   const persistRows = async (
-    rows: Array<typeof nodeRunEvents.$inferInsert>,
+    rows: RuntimeSessionCaptureEvent[],
     operation: string,
   ): Promise<void> => {
     if (rows.length === 0) return
-    await retrySqliteWrite(
-      () =>
-        withTaskExecutionMutation({
-          db: opts.db,
-          taskId: opts.taskId,
-          run: (tx) => tx.insert(nodeRunEvents).values(rows).run(),
-        }),
-      {
-        onRetry: (retry) => {
-          opts.log.warn('sqlite-write-retry', {
-            nodeRunId: opts.nodeRunId,
-            runtime: 'claude-code',
-            operation,
-            ...retry,
-          })
-        },
-      },
-    )
+    try {
+      await opts.persistence.appendEvents({
+        taskId: opts.taskId,
+        nodeRunId: opts.nodeRunId,
+        events: rows,
+      })
+    } catch (error) {
+      opts.log.warn('runtime-session-capture-write-failed', {
+        nodeRunId: opts.nodeRunId,
+        runtime: 'claude-code',
+        operation,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw error
+    }
   }
   try {
     let captured = 0
@@ -277,7 +274,7 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
         }
       }
 
-      const rows: Array<typeof nodeRunEvents.$inferInsert> = []
+      const rows: RuntimeSessionCaptureEvent[] = []
       for (const transcript of transcripts) {
         const inferredParent =
           transcript.toolUseId === undefined
@@ -307,7 +304,6 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
           // 这个 enum 值。这条守卫把「不可能」变成编译器可核的事实。
           if (ev.kind === 'startup_inventory') continue
           rows.push({
-            nodeRunId: opts.nodeRunId,
             ts: ev.timestamp ?? Date.now(),
             kind: ev.kind,
             payload: ev.rawLine,
@@ -337,7 +333,10 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
       })
     }
   } catch (err) {
-    const detail = maskDiagnosticsText(sqliteWriteDiagnostic(err)).slice(0, 2000)
+    const detail = maskDiagnosticsText(err instanceof Error ? err.message : String(err)).slice(
+      0,
+      2000,
+    )
     opts.log.warn('claude-subagent-capture-failed', {
       nodeRunId: opts.nodeRunId,
       err: detail,
@@ -347,7 +346,6 @@ export async function captureClaudeSessions(opts: CaptureClaudeSessionsOpts): Pr
       await persistRows(
         [
           {
-            nodeRunId: opts.nodeRunId,
             ts: Date.now(),
             kind: 'subagent_capture_failed',
             payload: JSON.stringify({

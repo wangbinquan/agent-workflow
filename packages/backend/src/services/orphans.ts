@@ -16,11 +16,8 @@
 // it. Rows with pid NULL (pre-RFC-098 / never-spawned) take the old
 // flip-only path.
 
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, runtimeSessionLeases, taskExecutionIntents, tasks } from '@/db/schema'
-import { transitionNodeRunStatus, trySetTaskStatus } from '@/services/lifecycle'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   killStaleRunProcessTree,
@@ -28,10 +25,6 @@ import {
   type StaleRunKillOpts,
 } from '@/util/process'
 import { createLogger } from '@/util/log'
-import {
-  isLegacyTaskGateContinuationPayload,
-  terminalizeTaskExecutionIntentsTx,
-} from '@/services/taskExecutionParticipants'
 
 const log = createLogger('orphans')
 
@@ -48,7 +41,7 @@ export interface ReapOrphanRunsDependencies {
 }
 
 export async function reapOrphanRuns(
-  db: DbClient,
+  operations: TaskRecoveryOperations,
   dependencies: ReapOrphanRunsDependencies = {},
 ): Promise<ReapResult> {
   const now = Date.now()
@@ -58,61 +51,20 @@ export async function reapOrphanRuns(
   // CAS-claimed task pending with nobody attached — the gap5 task-side
   // asymmetry this closes, mirroring the node_runs branch below which always
   // reaped pending rows).
-  const runningTaskCandidates = await db
-    .select()
-    .from(tasks)
-    .where(inArray(tasks.status, ['running', 'pending'] as const))
-  const runningRunCandidates = await db
-    .select()
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.status, ['running', 'pending'] as const))
   // RFC-333: commit -> wake leaves a `pending` task and one canonical pending
   // gate-continuation intent. The previous owner may still have a `running`
   // node row when SIGKILL lands: reap that row, but preserve the task, its
   // pending anchors and the durable successor for the continuous worker.
   // Legacy workgroup/dynamic-workflow task gates remain request-owned and keep
   // the historical orphan-reap behavior.
-  const pendingGateContinuationTaskIds = new Set(
-    (
-      await db
-        .select({
-          taskId: taskExecutionIntents.taskId,
-          payloadJson: taskExecutionIntents.payloadJson,
-        })
-        .from(taskExecutionIntents)
-        .where(
-          and(
-            eq(taskExecutionIntents.kind, 'gate-continuation'),
-            eq(taskExecutionIntents.state, 'pending'),
-          ),
-        )
-    )
-      .filter((row) => !isLegacyTaskGateContinuationPayload(row.payloadJson))
-      .map((row) => row.taskId),
-  )
-  const runningTasks = runningTaskCandidates.filter(
-    (task) => !(task.status === 'pending' && pendingGateContinuationTaskIds.has(task.id)),
-  )
-  const runningRuns = runningRunCandidates.filter(
-    (run) => !(run.status === 'pending' && pendingGateContinuationTaskIds.has(run.taskId)),
-  )
+  const snapshot = await operations.loadBootOrphanSnapshot()
+  const runningTasks = snapshot.tasks
+  const runningRuns = snapshot.runs
   // A runner that exhausted TERM→KILL records a terminal row but deliberately
   // leaves its native-session lease held. Boot must prove that child gone too
   // before the subsequent lease repair can release/discard the holder.
-  const heldLeaseRunIds = [
-    ...new Set(
-      (
-        await db
-          .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
-          .from(runtimeSessionLeases)
-          .where(isNotNull(runtimeSessionLeases.leaseNodeRunId))
-      ).flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])),
-    ),
-  ]
-  const heldLeaseRuns =
-    heldLeaseRunIds.length === 0
-      ? []
-      : await db.select().from(nodeRuns).where(inArray(nodeRuns.id, heldLeaseRunIds))
+  const heldLeaseRunIds = snapshot.heldLeaseRunIds
+  const heldLeaseRuns = snapshot.heldLeaseRuns
 
   if (runningTasks.length === 0 && runningRuns.length === 0 && heldLeaseRuns.length === 0) {
     return { tasks: 0, runs: 0 }
@@ -122,32 +74,19 @@ export async function reapOrphanRuns(
     // RFC-097: CAS from the observed status; a loss means something else
     // already settled the row — skip and log, same net as the node_runs
     // branch below.
-    const won = await trySetTaskStatus({
-      db,
+    const won = await operations.interruptBootOrphanTask({
       taskId: t.id,
-      to: 'interrupted',
-      allowedFrom: [t.status as 'running' | 'pending'],
-      extra: {
-        finishedAt: now,
-        errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
-        errorMessage: 'daemon restarted while this task was running; please resume',
-      },
-      onTransitionTx: (tx) =>
-        terminalizeTaskExecutionIntentsTx({
-          tx,
-          taskId: t.id,
-          state: 'failed',
-          failureCode: DAEMON_RESTART_ERROR_SUMMARY,
-          now,
-        }),
-      reason: 'reapOrphanRuns',
+      from: t.status,
+      now,
+      failureCode: DAEMON_RESTART_ERROR_SUMMARY,
+      errorMessage: 'daemon restarted while this task was running; please resume',
     })
     if (!won) {
       log.warn('orphan task reap lost a race — skipping', { taskId: t.id })
       continue
     }
     // RFC-108 T3 (AR-11): durable audit of the boot reap.
-    await recordRecoveryEvent(db, {
+    await recordRecoveryEvent(operations, {
       taskId: t.id,
       kind: 'boot-reap',
       reason: DAEMON_RESTART_ERROR_SUMMARY,
@@ -193,13 +132,14 @@ export async function reapOrphanRuns(
     // caller repairs their still-held native lease after every row is safe.
     if (!activeRunIds.has(r.id)) continue
     try {
-      await transitionNodeRunStatus({
-        db,
+      const interrupted = await operations.interruptNodeRun({
         nodeRunId: r.id,
-        event: { kind: 'mark-interrupted' },
-        extra: { finishedAt: now },
+        now,
       })
-      runsReaped += 1
+      if (interrupted) runsReaped += 1
+      else {
+        log.warn('orphan-reap skipped row', { nodeRunId: r.id })
+      }
     } catch (err) {
       // CAS lost / row already terminal: another writer beat us (e.g.
       // graceful shutdown landed first). Skip silently — orphans reap is

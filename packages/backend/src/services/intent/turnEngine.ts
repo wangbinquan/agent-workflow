@@ -15,7 +15,6 @@
 
 import { z } from 'zod'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   INTENT_RESOURCE_TYPES,
@@ -30,10 +29,6 @@ import {
   type IntentQuestion,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { intentDraftResolutions, intentDrafts, intentSessions, intentTurns } from '@/db/schema'
-import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
@@ -45,23 +40,22 @@ import {
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
 import type { SystemAgentOutputEvidence } from '@/services/runtime/types'
-import type { ResolvedRuntime } from '@/services/runtimeRegistry'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
-import { mergeHandleWatermarks, parseHandleWatermark } from './manifest'
+import { parseHandleWatermark } from './manifest'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { buildIntentDoc, privilegesFromLens, type IntentDocTurn } from './intentDoc'
-import type { IntentPlatformInventory } from './platformInventory'
 import { validateDraftChangeset } from './resolveChangeset'
-import {
-  assertNoUnsettledApply,
-  sessionManifest,
-  type ReservedIntentTurn,
-  type IntentSessionRow,
-  type IntentTurnRow,
-} from './session'
+import { sessionManifest, type ReservedIntentTurn, type IntentTurnRow } from './session'
 import { sha256Hex } from '@/util/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '@/modules/intent/domain/workflowCreateLayout'
+import type { IntentResourceCatalogBinding } from './resourceCatalog'
+import type {
+  IntentDumpAuxiliaryQueries,
+  IntentPersistence,
+  IntentResolvedRuntime,
+  IntentTurnRuntimeResolver,
+} from '@/modules/intent/public/operations'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
 export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'
@@ -80,7 +74,7 @@ sentinel. When the intent is ambiguous, ask structured questions instead of
 guessing.`
 
 export interface IntentTurnConfig {
-  runtime: ResolvedRuntime
+  runtime: IntentResolvedRuntime
   /** Output-language directive text; null → mirror the user's input language. */
   lang: string | null
   timeoutMs: number
@@ -94,13 +88,13 @@ export interface IntentTurnConfig {
 }
 
 export interface RunIntentTurnDeps {
-  db: DbClient
+  persistence: IntentPersistence
   appHome: string
   config: IntentTurnConfig
+  readonly resourceCatalog: IntentResourceCatalogBinding
+  readonly dumpAuxiliary: IntentDumpAuxiliaryQueries
   /** Test seam — defaults to runSystemAgent. */
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
-  /** RFC-348 D3 — bootstrap-injected platform-only inventory port (default: DB-backed). */
-  platformInventory?: IntentPlatformInventory
   /** WS seam (T7 wires the broadcaster); default noop. */
   onSessionEvent?: (event: {
     type: string
@@ -142,16 +136,6 @@ export function classifyMissingEnvelope(
   if (evidence.terminalResult !== 'not-observed') return 'terminal-without-envelope'
   if (evidence.assistantTextSeen) return 'assistant-stopped-without-envelope'
   return 'runtime-shape-unknown'
-}
-
-interface SessionBudget {
-  generateRounds: number
-  questionRounds: number
-}
-
-function parseBudget(row: IntentSessionRow): SessionBudget {
-  const raw = JSON.parse(row.budgetJson) as Partial<SessionBudget>
-  return { generateRounds: raw.generateRounds ?? 0, questionRounds: raw.questionRounds ?? 0 }
 }
 
 /**
@@ -209,44 +193,16 @@ export function abortIntentTurn(sessionId: string): boolean {
  * installed its AbortController. Reservation-first generation deliberately
  * creates that short window; leaving the old map-only cancel here would show
  * an enabled Cancel action that returns false while the row remains running. */
-export function cancelIntentTurn(db: DbClient, actor: Actor, sessionId: string): boolean {
+export async function cancelIntentTurn(
+  persistence: IntentPersistence,
+  actor: Actor,
+  sessionId: string,
+): Promise<boolean> {
   if (abortIntentTurn(sessionId)) return true
-  const now = Date.now()
-  return dbTxSync(db, (tx) => {
-    const session = tx.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).get()
-    if (
-      session === undefined ||
-      session.ownerUserId !== actor.user.id ||
-      session.inFlightTurnId === null
-    ) {
-      return false
-    }
-    const turn = tx
-      .select()
-      .from(intentTurns)
-      .where(eq(intentTurns.id, session.inFlightTurnId))
-      .get()
-    if (
-      turn === undefined ||
-      turn.sessionId !== session.id ||
-      turn.role !== 'agent' ||
-      turn.kind !== 'running'
-    ) {
-      return false
-    }
-    tx.update(intentTurns)
-      .set({
-        kind: 'error',
-        contentJson: JSON.stringify({ code: 'intent-run-aborted' }),
-        captureState: 'complete',
-      })
-      .where(eq(intentTurns.id, turn.id))
-      .run()
-    tx.update(intentSessions)
-      .set({ inFlightTurnId: null, updatedAt: now })
-      .where(eq(intentSessions.id, session.id))
-      .run()
-    return true
+  return await persistence.cancelReservedTurn({
+    ownerUserId: actor.user.id,
+    sessionId,
+    now: Date.now(),
   })
 }
 
@@ -254,56 +210,23 @@ export function cancelIntentTurn(db: DbClient, actor: Actor, sessionId: string):
  * The user-visible running row already exists, so leaving it live would create
  * an unrecoverable phantom turn. Exact slot + nonce checks make a concurrent
  * cancel/supersede a no-op instead of overwriting its newer state. */
-export function settleReservedIntentTurnStartFailure(
-  db: DbClient,
+export async function settleReservedIntentTurnStartFailure(
+  persistence: IntentPersistence,
   input: {
     sessionId: string
     actor: Actor
     reservation: ReservedIntentTurn
     detail: string
   },
-): boolean {
-  const now = Date.now()
+): Promise<boolean> {
   const detail = maskDiagnosticsText(input.detail).slice(0, 2048)
-  const settled = dbTxSync(db, (tx) => {
-    const session = tx
-      .select()
-      .from(intentSessions)
-      .where(eq(intentSessions.id, input.sessionId))
-      .get()
-    const turn = tx
-      .select()
-      .from(intentTurns)
-      .where(eq(intentTurns.id, input.reservation.turnId))
-      .get()
-    if (
-      session === undefined ||
-      session.ownerUserId !== input.actor.user.id ||
-      session.inFlightTurnId !== input.reservation.turnId ||
-      turn === undefined ||
-      turn.sessionId !== session.id ||
-      turn.role !== 'agent' ||
-      turn.kind !== 'running' ||
-      turn.envelopeNonce !== input.reservation.envelopeNonce
-    ) {
-      return false
-    }
-    tx.update(intentTurns)
-      .set({
-        kind: 'error',
-        contentJson: JSON.stringify({
-          code: 'intent-runtime-config-unavailable',
-          ...(detail === '' ? {} : { detail }),
-        }),
-        captureState: 'complete',
-      })
-      .where(eq(intentTurns.id, turn.id))
-      .run()
-    tx.update(intentSessions)
-      .set({ inFlightTurnId: null, updatedAt: now })
-      .where(eq(intentSessions.id, session.id))
-      .run()
-    return true
+  const settled = await persistence.settleReservedTurnStartFailure({
+    ownerUserId: input.actor.user.id,
+    sessionId: input.sessionId,
+    turnId: input.reservation.turnId,
+    envelopeNonce: input.reservation.envelopeNonce,
+    detail,
+    now: Date.now(),
   })
   if (settled) liveTurnAborts.delete(input.sessionId)
   return settled
@@ -321,83 +244,29 @@ export async function runIntentTurn(
 
   // ── mint the running turn + take the in-flight slot (one tx; nonce persists
   // with the row — design-gate P2-1) ──
-  const minted = dbTxSync(deps.db, (tx) => {
-    const session = tx
-      .select()
-      .from(intentSessions)
-      .where(eq(intentSessions.id, input.sessionId))
-      .get()
-    if (session === undefined || session.ownerUserId !== input.actor.user.id) {
-      throw new NotFoundError(
-        'intent-session-not-found',
-        `intent session '${input.sessionId}' not found`,
-      )
-    }
-    if (session.status !== 'active') {
-      throw new ConflictError('intent-session-archived', 'session is archived')
-    }
-    if (input.reservation !== undefined) {
-      const reservedTurn = tx.select().from(intentTurns).where(eq(intentTurns.id, turnId)).get()
-      if (
-        session.inFlightTurnId !== turnId ||
-        reservedTurn === undefined ||
-        reservedTurn.sessionId !== session.id ||
-        reservedTurn.role !== 'agent' ||
-        reservedTurn.kind !== 'running' ||
-        reservedTurn.envelopeNonce !== envelopeNonce
-      ) {
-        throw new ConflictError(
-          'intent-reservation-invalid',
-          'the reserved generation turn is no longer current',
-        )
-      }
-      return {
-        session,
-        seq: reservedTurn.seq,
-        budget: input.reservation.budget,
-      }
-    }
-    if (session.inFlightTurnId !== null) {
-      throw new ConflictError('intent-turn-in-flight', 'a generation turn is already running')
-    }
-    // P1-1: no new generation while a commit is between claim and settlement.
-    assertNoUnsettledApply(tx, input.sessionId)
-    const budget = parseBudget(session)
-    if (budget.generateRounds + budget.questionRounds >= deps.config.maxGenerateRounds) {
-      throw new ConflictError(
-        'intent-budget-exhausted',
-        `session reached its generation budget (${deps.config.maxGenerateRounds}); raise intentBuilderMaxGenerateRounds or archive`,
-      )
-    }
-    const seq = session.turnSeq + 1
-    tx.insert(intentTurns)
-      .values({
-        id: turnId,
-        sessionId: session.id,
-        seq,
-        role: 'agent',
-        kind: 'running',
-        contentJson: '{}',
-        contextRevision: session.contextRevision,
-        envelopeNonce,
-        captureState: 'live',
-        captureLastEventSeq: 0,
-        captureEventBytes: 0,
-        createdAt: now,
-      })
-      .run()
-    tx.update(intentSessions)
-      .set({ inFlightTurnId: turnId, turnSeq: seq, updatedAt: now })
-      .where(eq(intentSessions.id, session.id))
-      .run()
-    return { session, seq, budget }
+  const minted = await deps.persistence.beginTurn({
+    ownerUserId: input.actor.user.id,
+    sessionId: input.sessionId,
+    turnId,
+    envelopeNonce,
+    now,
+    maxGenerateRounds: deps.config.maxGenerateRounds,
+    ...(input.reservation === undefined
+      ? {}
+      : {
+          reservation: {
+            turnId: input.reservation.turnId,
+            envelopeNonce: input.reservation.envelopeNonce,
+            budget: input.reservation.budget,
+          },
+        }),
   })
   deps.onSessionEvent?.({ type: 'intent.turn.started', sessionId: input.sessionId, turnId })
 
   const launchRevision = minted.session.contextRevision
   const controller = new AbortController()
   liveTurnAborts.set(input.sessionId, controller)
-  const sessionEventSink = new IntentTurnSessionEventSink(deps.db, turnId, (eventSeq) => {
+  const sessionEventSink = new IntentTurnSessionEventSink(deps.persistence, turnId, (eventSeq) => {
     deps.onSessionEvent?.({
       type: 'intent.turn.execution.updated',
       sessionId: input.sessionId,
@@ -422,106 +291,35 @@ export async function runIntentTurn(
     }
   }
 
-  const settle = (
+  const settle = async (
     kind: 'questions' | 'changeset' | 'error',
     content: Record<string, unknown>,
     opts: {
       runMeta?: Record<string, unknown>
       scratchRetained?: boolean
       draft?: { changesetJson: string; canonicalJson: string; validationJson: string }
-      budgetDelta?: Partial<SessionBudget>
+      budgetDelta?: { generateRounds?: number; questionRounds?: number }
     } = {},
-  ): IntentTurnOutcome => {
-    const settled = dbTxSync(deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(intentSessions)
-        .where(eq(intentSessions.id, input.sessionId))
-        .get()
-      if (session === undefined) {
-        throw new NotFoundError('intent-session-not-found', 'session vanished')
-      }
-      // Context-epoch CAS (design-gate P0-3): a turn whose slot was taken away
-      // (cancel) or whose epoch moved archives as superseded — its result may
-      // NOT become the current draft.
-      const superseded =
-        session.inFlightTurnId !== turnId || session.contextRevision !== launchRevision
-      const finalKind = superseded ? 'error' : kind
-      const finalContent = superseded
-        ? { code: 'intent-context-superseded', supersededResult: kind }
-        : content
-      let draftRevision: number | undefined
-      if (!superseded && kind === 'changeset' && opts.draft !== undefined) {
-        const prev = tx
-          .select({ revision: intentDrafts.revision })
-          .from(intentDrafts)
-          .where(eq(intentDrafts.sessionId, session.id))
-          .orderBy(intentDrafts.revision)
-          .all()
-        draftRevision = (prev[prev.length - 1]?.revision ?? 0) + 1
-        const draftId = ulid()
-        if (session.currentDraftId !== null && session.currentDraftId !== draftId) {
-          tx.insert(intentDraftResolutions)
-            .values({
-              draftId: session.currentDraftId,
-              sessionId: session.id,
-              reason: 'superseded',
-              createdAt: Date.now(),
-            })
-            .onConflictDoNothing()
-            .run()
-        }
-        tx.insert(intentDrafts)
-          .values({
-            id: draftId,
-            sessionId: session.id,
-            revision: draftRevision,
-            changesetJson: opts.draft.changesetJson,
-            validationJson: opts.draft.validationJson,
-            draftHash: `sha256:${sha256Hex(opts.draft.canonicalJson)}`,
-            producedByTurnId: turnId,
-            contextRevision: session.contextRevision,
-            createdAt: Date.now(),
-          })
-          .run()
-        tx.update(intentSessions)
-          .set({ currentDraftId: draftId })
-          .where(eq(intentSessions.id, session.id))
-          .run()
-        ;(finalContent as Record<string, unknown>).draftRevision = draftRevision
-      }
-      const budget = parseBudget(session)
-      const nextBudget: SessionBudget = superseded
-        ? budget
+  ): Promise<IntentTurnOutcome> => {
+    const settled = await deps.persistence.settleTurn({
+      sessionId: input.sessionId,
+      turnId,
+      launchRevision,
+      kind,
+      content,
+      ...(opts.runMeta === undefined ? {} : { runMetaJson: JSON.stringify(opts.runMeta) }),
+      scratchRetained: opts.scratchRetained === true,
+      ...(opts.budgetDelta === undefined ? {} : { budgetDelta: opts.budgetDelta }),
+      ...(opts.draft === undefined
+        ? {}
         : {
-            generateRounds: budget.generateRounds + (opts.budgetDelta?.generateRounds ?? 0),
-            questionRounds: budget.questionRounds + (opts.budgetDelta?.questionRounds ?? 0),
-          }
-      tx.update(intentTurns)
-        .set({
-          kind: finalKind,
-          contentJson: JSON.stringify(finalContent),
-          ...(opts.runMeta === undefined ? {} : { runMetaJson: JSON.stringify(opts.runMeta) }),
-          scratchRetained: opts.scratchRetained === true,
-        })
-        .where(eq(intentTurns.id, turnId))
-        .run()
-      tx.update(intentSessions)
-        .set({
-          ...(session.inFlightTurnId === turnId ? { inFlightTurnId: null } : {}),
-          budgetJson: JSON.stringify(nextBudget),
-          updatedAt: Date.now(),
-        })
-        .where(eq(intentSessions.id, session.id))
-        .run()
-      return {
-        turnId,
-        kind: finalKind,
-        ...(finalKind === 'error'
-          ? { errorCode: String((finalContent as { code?: unknown }).code ?? 'unknown') }
-          : {}),
-        ...(draftRevision === undefined ? {} : { draftRevision }),
-      } as IntentTurnOutcome
+            draft: {
+              changesetJson: opts.draft.changesetJson,
+              validationJson: opts.draft.validationJson,
+              draftHash: `sha256:${sha256Hex(opts.draft.canonicalJson)}`,
+            },
+          }),
+      now: Date.now(),
     })
     liveTurnAborts.delete(input.sessionId)
     deps.onSessionEvent?.({ type: 'intent.turn.finished', sessionId: input.sessionId, turnId })
@@ -535,8 +333,8 @@ export async function runIntentTurn(
       .filter((e) => e.root)
       .map((e) => ({ resourceType: e.resourceType, resourceId: e.resourceId }))
     const dump = await buildIntentDump({
-      db: deps.db,
       actor: input.actor,
+      resourceCatalog: deps.resourceCatalog,
       appHome: deps.appHome,
       mounts: roots,
       priorManifest: manifestBefore,
@@ -545,52 +343,27 @@ export async function runIntentTurn(
       // keeps a handle from being re-minted for a different resource.
       handleWatermark: parseHandleWatermark(minted.session.handleWatermarkJson),
       envelopeNonce,
+      runtimeInventory: deps.dumpAuxiliary.runtimeInventory,
+      loadAgentPorts: deps.dumpAuxiliary.loadAgentPorts,
+      platformInventory: deps.dumpAuxiliary.platformInventory,
       ...(deps.config.effectiveDefaultRuntime === undefined
         ? {}
         : { effectiveDefaultRuntime: deps.config.effectiveDefaultRuntime }),
-      ...(deps.platformInventory === undefined
-        ? {}
-        : { platformInventory: deps.platformInventory }),
     })
     // Persist the fresh manifest (fences captured now = the commit baseline
     // for whatever draft this turn produces).
-    dbTxSync(deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(intentSessions)
-        .where(eq(intentSessions.id, input.sessionId))
-        .get()
-      if (
-        session !== undefined &&
-        session.inFlightTurnId === turnId &&
-        session.contextRevision === launchRevision
-      ) {
-        tx.update(intentSessions)
-          .set({
-            contextManifestJson: JSON.stringify(dump.manifest),
-            // Merge against the row we are about to overwrite, not against the
-            // snapshot this turn started from: a concurrent writer may have
-            // raised the mark while the dump was running.
-            handleWatermarkJson: JSON.stringify(
-              mergeHandleWatermarks(
-                parseHandleWatermark(session.handleWatermarkJson),
-                dump.handleWatermark,
-              ),
-            ),
-            updatedAt: Date.now(),
-          })
-          .where(eq(intentSessions.id, session.id))
-          .run()
-      }
+    await deps.persistence.refreshTurnManifest({
+      sessionId: input.sessionId,
+      turnId,
+      launchRevision,
+      manifest: dump.manifest,
+      handleWatermarkJson: JSON.stringify(dump.handleWatermark),
+      updatedAt: Date.now(),
     })
 
-    const allTurns = (
-      await deps.db
-        .select()
-        .from(intentTurns)
-        .where(eq(intentTurns.sessionId, input.sessionId))
-        .orderBy(intentTurns.seq)
-    ).filter((t) => t.id !== turnId)
+    const allTurns = (await deps.persistence.listTurns(input.sessionId)).filter(
+      (candidate) => candidate.id !== turnId,
+    )
     const docTurns: IntentDocTurn[] = allTurns.map((t) => ({
       seq: t.seq,
       role: t.role,
@@ -606,13 +379,7 @@ export async function runIntentTurn(
     const currentDraft =
       minted.session.currentDraftId === null
         ? undefined
-        : (
-            await deps.db
-              .select()
-              .from(intentDrafts)
-              .where(eq(intentDrafts.id, minted.session.currentDraftId))
-              .limit(1)
-          )[0]
+        : ((await deps.persistence.findDraft(minted.session.currentDraftId)) ?? undefined)
     const validationErrors =
       currentDraft === undefined
         ? []
@@ -928,7 +695,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
 
 /** Resolve the per-turn runtime + knobs from config.json (design §5). */
 export async function resolveIntentTurnConfig(
-  db: DbClient,
+  runtimeResolver: IntentTurnRuntimeResolver,
   cfg: {
     intentBuilderRuntime?: string
     intentBuilderLang?: string
@@ -941,19 +708,13 @@ export async function resolveIntentTurnConfig(
     defaultRuntime?: string
   },
 ): Promise<IntentTurnConfig> {
-  const { resolveInternalAgentRuntime, resolveAgentRuntime } =
-    await import('@/services/runtimeRegistry')
-  const runtime = await resolveInternalAgentRuntime(db, {
+  const resolved = await runtimeResolver.resolve({
     runtimeName: cfg.intentBuilderRuntime ?? null,
     defaultRuntime: cfg.defaultRuntime ?? null,
   })
-  // RFC-348 D5b — what an agent WITHOUT `runtime` actually runs on (the Intent
-  // Builder's own runtime above may differ from it).
-  const agentDefault = await resolveAgentRuntime(db, null, cfg.defaultRuntime ?? null)
-  const effectiveDefaultRuntime = { name: agentDefault.name, protocol: agentDefault.protocol }
   return {
-    runtime,
-    effectiveDefaultRuntime,
+    runtime: resolved.runtime,
+    effectiveDefaultRuntime: resolved.effectiveDefaultRuntime,
     lang: cfg.intentBuilderLang ?? null,
     timeoutMs: cfg.intentBuilderTurnTimeoutMs ?? 600_000,
     stdoutCapBytes: cfg.intentBuilderStdoutCapBytes ?? 8 * 1024 * 1024,

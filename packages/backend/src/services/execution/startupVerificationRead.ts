@@ -4,38 +4,29 @@
 // NULL / 解析失败 → { available: false }（该 run 早于验证层、无声明注入、或
 // 写入损坏——UI 一律显示「无验证数据」，绝不猜测）。
 
-import { eq } from 'drizzle-orm'
 import {
   StartupVerificationRecordSchema,
   type StartupVerificationResponse,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
+import type { TaskStartupVerificationReadModel } from '@/modules/task-execution/public/types'
+import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
 
 export async function getStartupVerification(
-  db: DbClient,
+  source:
+    | TaskStartupVerificationReadModel
+    | Parameters<typeof createSqliteTaskExecutionReadModels>[0],
   taskId: string,
   nodeRunId: string,
 ): Promise<StartupVerificationResponse> {
-  const taskRows = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  if (taskRows.length === 0) {
+  const reader =
+    'find' in source ? source : createSqliteTaskExecutionReadModels(source).startupVerification
+  const snapshot = await reader.find(taskId, nodeRunId)
+  if (!snapshot.taskExists) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
-  const runRows = await db
-    .select({
-      taskId: nodeRuns.taskId,
-      startupVerificationJson: nodeRuns.startupVerificationJson,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const run = runRows[0]
-  if (run === undefined || run.taskId !== taskId) {
+  const run = snapshot.nodeRun
+  if (run === null || run.taskId !== taskId) {
     throw new NotFoundError(
       'node-run-not-found',
       `node_run '${nodeRunId}' not found under task '${taskId}'`,

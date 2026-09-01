@@ -42,25 +42,16 @@ import {
   SignalPortInPromptError,
   assertNoPromptSignalRefs,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { storeNodeRunPrompt } from '@/services/nodeRunPrompt'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
-import type { DbTxSync } from '@/db/txSync'
-import {
-  withTaskExecutionMutation,
-  withTaskExecutionTransaction,
-} from '@/services/taskExecutionParticipants'
 import {
   createProcessEffectAttemptObserver,
   type ProcessEffectAttemptObserver,
   type ProcessSettlement,
 } from '@/services/taskExecutionParticipants'
-import { retrySqliteWrite, sqliteWriteDiagnostic } from '@/db/sqliteWriteRetry'
 import { createLogger, type Logger } from '@/util/log'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,
@@ -89,7 +80,7 @@ import { renderUserPrompt } from './protocol'
 import { getRuntimeDriver, pluginFileSpec, type RuntimeKind } from './runtime'
 import {
   defaultConfigDirProfile,
-  resolveAgentRuntime,
+  type RuntimeRegistryOperations,
   type RuntimeProfile,
 } from '@/services/runtimeRegistry'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
@@ -115,17 +106,16 @@ import { FINAL_REAP_MARGIN_MS, MANAGED_PROCESS_MAX_LINE_CHARS } from './executio
 /** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000
 import { NOOP_HANDLE } from './runtime'
-import { setNodeRunStatus, transitionNodeRunStatus } from './lifecycle'
 import {
   formatMemoryBlockFromSnapshot,
   memoryFencingForNonce,
-  injectMemoryForRun,
-  loadInjectedSnapshotFromFirstAttempt,
   type ScopeBudget,
 } from './memoryInject'
+import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
-import { loadRunEnvelopeNonce } from '@/services/nodeRunMint'
+import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
+import type { NodeExecutionEventWrite } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import { resolveBoundaryMounts } from '@/services/execution/workspaceBoundary'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import {
@@ -137,6 +127,7 @@ import {
   preclaimRuntimeSessionResume,
   releaseRuntimeSessionLease,
   rotateRuntimeSessionLease,
+  type RuntimeSessionLeaseOperations,
   type RuntimeSessionLeaseToken,
 } from '@/services/runtimeSessionLease'
 import { sha256Hex } from '@/util/hash'
@@ -416,7 +407,13 @@ export interface RunNodeOptions {
    * legacy behavior, so direct-construction tests need no change.
    */
   runtimeConfigDir?: RuntimeConfigDirProfile
-  db: DbClient
+  /** Bootstrap-selected task execution persistence. No provider client crosses
+   * the runner boundary. */
+  persistence: TaskExecutionPersistence
+  /** Bootstrap-selected runtime registry operations. */
+  runtimeRegistry: RuntimeRegistryOperations
+  /** Bootstrap-selected durable ownership for native runtime conversations. */
+  runtimeSessionLeases: RuntimeSessionLeaseOperations
   log?: Logger
   /** When aborted, runner SIGTERMs the child and returns status='canceled'. */
   signal?: AbortSignal
@@ -469,6 +466,8 @@ export interface RunNodeOptions {
    * through; tests omit to use the design.md §3.3 defaults.
    */
   memoryInjectionBudget?: ScopeBudget
+  /** Provider-neutral memory read participant selected by daemon composition. */
+  memoryInjectionQueries: MemoryInjectionQueries
   /**
    * RFC-048: cadence + failure tolerance for the live subagent capture
    * poller. Omitted (or `pollMs === 0`) falls back to RFC-027 behavior —
@@ -566,7 +565,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // RFC-200: this persisted value is the single source for BOTH prompt emit
   // and stdout parse. Empty means a pre-upgrade in-flight row and preserves
   // the historical bare-envelope protocol byte-for-byte.
-  const envelopeNonce = await loadRunEnvelopeNonce(opts.db, opts.nodeRunId)
+  const envelopeNonce = await opts.persistence.nodeRuns.loadEnvelopeNonce(opts.nodeRunId)
 
   // RFC-111 D15: the runtime is frozen by the dispatcher into node_runs.runtime
   // and threaded here. opencode is the default and its spawn/pump path is
@@ -574,26 +573,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // The stdout pump is runtime-agnostic (driver.parseEvent normalizes events).
   const runtime: RuntimeKind = opts.runtime ?? 'opencode'
   const driver = getRuntimeDriver(runtime)
-  const persistRunnerWrite = async <T>(
-    operation: string,
-    write: () => T | Promise<T>,
-  ): Promise<T> => {
+  const persistRunnerWrite = async <T>(operation: string, write: () => Promise<T>): Promise<T> => {
     try {
-      return await retrySqliteWrite(write, {
-        onRetry: (retry) => {
-          log.warn('sqlite-write-retry', {
-            nodeRunId: opts.nodeRunId,
-            runtime,
-            operation,
-            ...retry,
-          })
-        },
-      })
+      return await write()
     } catch (error) {
-      // managedProcess retains Error.message only. Put the operation and SQLite
-      // code into that bounded hand-off; runner masks/caps it before logging or
-      // persisting, and the original stays attached for direct callers.
-      throw new Error(`${operation}: ${sqliteWriteDiagnostic(error)}`, { cause: error })
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(`${operation}: ${detail}`, { cause: error })
     }
   }
 
@@ -614,7 +599,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   resolvedParamsByAgent.set(opts.agent.name, opts.runtimeParams ?? EMPTY_RUNTIME_PROFILE)
   for (const dep of opts.dependents ?? []) {
     if (resolvedParamsByAgent.has(dep.name)) continue
-    const r = await resolveAgentRuntime(opts.db, dep.runtime, undefined)
+    const r = await opts.runtimeRegistry.resolveAgentRuntime(dep.runtime, undefined)
     resolvedParamsByAgent.set(dep.name, {
       model: r.model,
       variant: r.variant,
@@ -677,8 +662,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   let injectedMemoryBlock: string | null = null
   if (followupMode === undefined) {
     try {
-      const { block: memoryBlock, snapshot } = await injectMemoryForRun({
-        db: opts.db,
+      const { block: memoryBlock, snapshot } = await opts.memoryInjectionQueries.injectForRun({
         taskId: opts.taskId,
         primaryAgent: opts.agent,
         dependents: opts.dependents ?? [],
@@ -703,20 +687,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // in its transcript, so we copy that attempt's snapshot to the current
     // retry's row — the Session-tab card stays consistent across attempts.
     try {
-      const currentRunRow = (
-        await opts.db
-          .select({
-            nodeId: nodeRuns.nodeId,
-            iteration: nodeRuns.iteration,
-            shardKey: nodeRuns.shardKey,
-            reviewIteration: nodeRuns.reviewIteration,
-          })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, opts.nodeRunId))
-          .limit(1)
-      )[0]
-      if (currentRunRow !== undefined) {
-        injectedSnapshot = await loadInjectedSnapshotFromFirstAttempt(opts.db, {
+      const currentRunRow = await opts.persistence.nodeExecution.read(opts.nodeRunId)
+      if (currentRunRow !== null) {
+        injectedSnapshot = await opts.memoryInjectionQueries.loadFirstAttemptSnapshot({
           taskId: opts.taskId,
           nodeId: currentRunRow.nodeId,
           iteration: currentRunRow.iteration,
@@ -755,18 +728,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // here, while the row is still 'pending', made a refresh-on-receipt read a
   // status the DB didn't hold yet.
   try {
-    withTaskExecutionMutation({
-      db: opts.db,
-      taskId: opts.taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({
-            injectedMemoriesJson:
-              injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
-          })
-          .where(eq(nodeRuns.id, opts.nodeRunId))
-          .run(),
+    await opts.persistence.nodeExecution.patch({
+      nodeRunId: opts.nodeRunId,
+      values: {
+        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+      },
     })
     log.info('inject-snapshot-eager-write', {
       nodeRunId: opts.nodeRunId,
@@ -830,8 +796,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     } catch (err) {
       if (err instanceof SignalPortInPromptError) {
         const ports = err.violations.map((v) => v.port).join(',')
-        await setNodeRunStatus({
-          db: opts.db,
+        await opts.persistence.nodeRuns.set({
           nodeRunId: opts.nodeRunId,
           to: 'failed',
           allowedFrom: ['pending'],
@@ -943,19 +908,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // (prompt_text 平均 ~6KB、占 node_runs 表 57%,而它只在详情页/会话视图被读)。
   // 落盘失败会回落成写列——prompt 是执行事实,宁可行胖也不能丢。
   // rfc053-allow-direct-status-write -- writing non-status field
-  withTaskExecutionMutation({
-    db: opts.db,
-    taskId: opts.taskId,
-    run: (tx) =>
-      tx
-        .update(nodeRuns)
-        .set(storeNodeRunPrompt(opts.taskId, opts.nodeRunId, prompt, join(opts.appHome, 'runs')))
-        .where(eq(nodeRuns.id, opts.nodeRunId))
-        .run(),
+  await opts.persistence.nodeExecution.patch({
+    nodeRunId: opts.nodeRunId,
+    values: storeNodeRunPrompt(opts.taskId, opts.nodeRunId, prompt, join(opts.appHome, 'runs')),
   })
   // RFC-053: mark-running enforces pending → running.
-  await transitionNodeRunStatus({
-    db: opts.db,
+  await opts.persistence.nodeRuns.transition({
     nodeRunId: opts.nodeRunId,
     event: { kind: 'mark-running' },
     extra: { startedAt: Date.now() },
@@ -977,15 +935,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const runtimeLeaseNonceDigest = sha256Hex(randomBytes(32))
   let runtimeLeaseToken: RuntimeSessionLeaseToken | undefined
   let runtimeLeaseInvalidatedByReset = false
-  const releaseHeldRuntimeLease = (): void => {
+  const releaseHeldRuntimeLease = async (): Promise<void> => {
     if (runtimeLeaseToken === undefined) return
+    const token = runtimeLeaseToken
     const released = runtimeLeaseInvalidatedByReset
-      ? discardRuntimeSessionLease(opts.db, runtimeLeaseToken)
-      : releaseRuntimeSessionLease(opts.db, runtimeLeaseToken)
+      ? await discardRuntimeSessionLease(opts.runtimeSessionLeases, token)
+      : await releaseRuntimeSessionLease(opts.runtimeSessionLeases, token)
     if (!released) {
       log.warn('runtime-session-lease-release-cas-missed', {
         nodeRunId: opts.nodeRunId,
-        sessionId: runtimeLeaseToken.sessionId,
+        sessionId: token.sessionId,
       })
     }
     runtimeLeaseToken = undefined
@@ -994,34 +953,30 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
 
   if (effectiveResumeSessionId !== undefined && effectiveResumeSessionId !== '') {
     const requestedResumeSessionId = effectiveResumeSessionId
-    const owner = getRuntimeSessionLease(opts.db, runtime, requestedResumeSessionId)
+    const owner = await getRuntimeSessionLease(
+      opts.runtimeSessionLeases,
+      runtime,
+      requestedResumeSessionId,
+    )
     if (owner === undefined) {
       // Rows from before the natural-runtime cutover deliberately have no
       // neutral owner. Start a fresh native session and leave a durable,
       // human-readable reset event instead of pretending resume succeeded.
       try {
         await persistRunnerWrite('node-run-event/session-reset', () =>
-          withTaskExecutionMutation({
-            db: opts.db,
-            taskId: opts.taskId,
-            run: (tx) =>
-              tx
-                .insert(nodeRunEvents)
-                .values({
-                  nodeRunId: opts.nodeRunId,
-                  ts: Date.now(),
-                  kind: 'text',
-                  payload: JSON.stringify({
-                    code: 'runtime-session-reset',
-                    previousSessionUnavailable: true,
-                  }),
-                })
-                .run(),
+          opts.persistence.nodeExecution.appendEvent({
+            nodeRunId: opts.nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: JSON.stringify({
+              code: 'runtime-session-reset',
+              previousSessionUnavailable: true,
+            }),
           }),
         )
       } catch (error) {
         const detail = maskDiagnosticsText(
-          error instanceof Error ? error.message : sqliteWriteDiagnostic(error),
+          error instanceof Error ? error.message : String(error),
         ).slice(0, 2000)
         const errorMessage = `runtime-session-reset-persistence-failed: ${detail}`
         log.warn('runtime-session-reset-persistence-failed', {
@@ -1030,8 +985,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           err: detail,
         })
         try {
-          await setNodeRunStatus({
-            db: opts.db,
+          await opts.persistence.nodeRuns.set({
             nodeRunId: opts.nodeRunId,
             to: 'failed',
             allowedFrom: ['running'],
@@ -1041,7 +995,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         } catch (statusError) {
           log.warn('runtime-session-reset-failure-status-persist-failed', {
             nodeRunId: opts.nodeRunId,
-            err: maskDiagnosticsText(sqliteWriteDiagnostic(statusError)).slice(0, 2000),
+            err: maskDiagnosticsText(
+              statusError instanceof Error ? statusError.message : String(statusError),
+            ).slice(0, 2000),
           })
         }
         return {
@@ -1057,7 +1013,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     } else {
       try {
         const claimedToken = await persistRunnerWrite('runtime-session-lease/preclaim', () =>
-          preclaimRuntimeSessionResume(opts.db, {
+          preclaimRuntimeSessionResume(opts.runtimeSessionLeases, {
             protocol: runtime,
             sessionId: requestedResumeSessionId,
             taskId: opts.taskId,
@@ -1069,17 +1025,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         runtimeLeaseToken = claimedToken
         if (
           !(await persistRunnerWrite('runtime-session-lease/confirm', () =>
-            confirmRuntimeSessionResume(opts.db, claimedToken),
+            confirmRuntimeSessionResume(opts.runtimeSessionLeases, claimedToken),
           ))
         ) {
           throw new Error('runtime session could not be linked to the current run')
         }
       } catch (error) {
-        releaseHeldRuntimeLease()
+        await releaseHeldRuntimeLease()
         const errorMessage =
           error instanceof Error ? error.message : 'runtime session is already in use'
-        await setNodeRunStatus({
-          db: opts.db,
+        await opts.persistence.nodeRuns.set({
           nodeRunId: opts.nodeRunId,
           to: 'failed',
           allowedFrom: ['running'],
@@ -1158,9 +1113,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // of runNode and stranding the row at 'running'.
     const errorMessage = `spawn ${runtime} failed: ${err instanceof Error ? err.message : String(err)}`
     log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
-    releaseHeldRuntimeLease()
-    await setNodeRunStatus({
-      db: opts.db,
+    await releaseHeldRuntimeLease()
+    await opts.persistence.nodeRuns.set({
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running', 'pending'],
@@ -1346,7 +1300,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // WS 回放 / 详情页）**不需要任何 flush 屏障**，也不引入额外的崩溃丢失窗口。
     /** 单条多行 INSERT 的行数上限：6 列 × 100 行 = 600 个绑定参数，低于仓内 900 护栏线
      *  （SQLite 硬上限 32766；归档器曾因无界 IN 撞上它而每小时失败）。 */
-    type NodeRunEventInsert = typeof nodeRunEvents.$inferInsert
+    type NodeRunEventInsert = NodeExecutionEventWrite & { readonly nodeRunId: string }
     const EVENT_INSERT_MAX_ROWS = 100
     const makeEventBuffer = (
       operation: string,
@@ -1363,10 +1317,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           for (let i = 0; i < batch.length; i += EVENT_INSERT_MAX_ROWS) {
             const slice = batch.slice(i, i + EVENT_INSERT_MAX_ROWS)
             await persistRunnerWrite(operation, () =>
-              withTaskExecutionMutation({
-                db: opts.db,
-                taskId: opts.taskId,
-                run: (tx) => tx.insert(nodeRunEvents).values(slice).run(),
+              opts.persistence.nodeExecution.appendEvents({
+                nodeRunId: opts.nodeRunId,
+                events: slice,
               }),
             )
           }
@@ -1445,15 +1398,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         )
         try {
           await persistRunnerWrite('runtime-inventory/eager', () =>
-            withTaskExecutionMutation({
-              db: opts.db,
-              taskId: opts.taskId,
-              run: (tx) =>
-                tx
-                  .update(nodeRuns)
-                  .set({ runtimeInventoryJson })
-                  .where(eq(nodeRuns.id, opts.nodeRunId))
-                  .run(),
+            opts.persistence.nodeExecution.patch({
+              nodeRunId: opts.nodeRunId,
+              values: { runtimeInventoryJson },
             }),
           )
           startupInventoryPersistedLive = true
@@ -1522,7 +1469,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               sessionId = nativeSessionId
               if (runtimeLeaseToken === undefined) {
                 runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/claim', () =>
-                  claimNewRuntimeSession(opts.db, {
+                  claimNewRuntimeSession(opts.runtimeSessionLeases, {
                     protocol: runtime,
                     sessionId: nativeSessionId,
                     taskId: opts.taskId,
@@ -1554,7 +1501,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               // 孤儿桶里——正是那条回标要消灭的形态。所以先冲刷再轮换。
               await stdoutEvents.flush()
               runtimeLeaseToken = await persistRunnerWrite('runtime-session-lease/rotate', () =>
-                rotateRuntimeSessionLease(opts.db, heldLease, nextSessionId),
+                rotateRuntimeSessionLease(opts.runtimeSessionLeases, heldLease, nextSessionId),
               )
               runtimeLeaseInvalidatedByReset = false
               sessionId = nextSessionId
@@ -1575,7 +1522,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             if (
               heldLease === undefined ||
               !(await persistRunnerWrite('runtime-session-lease/reset-pending', () =>
-                markRuntimeSessionResetPending(opts.db, heldLease),
+                markRuntimeSessionResetPending(opts.runtimeSessionLeases, heldLease),
               ))
             ) {
               throw new Error('runtime conversation reset could not invalidate the old resume id')
@@ -1613,7 +1560,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             runtimeLeaseInvalidatedByReset = true
             try {
               await persistRunnerWrite('runtime-session-lease/protocol-invalid', () =>
-                markRuntimeSessionResetPending(opts.db, heldLease),
+                markRuntimeSessionResetPending(opts.runtimeSessionLeases, heldLease),
               )
             } catch (fenceError) {
               log.warn('runtime-session-protocol-fence-failed', {
@@ -1687,7 +1634,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         taskId: opts.taskId,
         nodeId: opts.nodeId,
         getRootSessionId: () => sessionId ?? null,
-        db: opts.db,
+        persistence: opts.persistence.runtimeSessionCapture,
         log: log.child('subagent-live-poll'),
         pollMs: livePollMs,
         consecutiveFailureLimit: liveFailureLimit,
@@ -1728,24 +1675,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       const decoded = detectPluginLoadFailure(line, opts.plugins ?? [])
       if (decoded !== null) {
         await persistRunnerWrite('node-run-event/plugin-load-failed', () =>
-          withTaskExecutionMutation({
-            db: opts.db,
-            taskId: opts.taskId,
-            run: (tx) =>
-              tx
-                .insert(nodeRunEvents)
-                .values({
-                  nodeRunId: opts.nodeRunId,
-                  ts: Date.now(),
-                  kind: 'text',
-                  payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
-                    rfc: 'RFC-031',
-                    code: 'plugin-load-failed',
-                    pluginName: decoded.pluginName,
-                    message: decoded.message,
-                  })}`,
-                })
-                .run(),
+          opts.persistence.nodeExecution.appendEvent({
+            nodeRunId: opts.nodeRunId,
+            ts: Date.now(),
+            kind: 'text',
+            payload: `[rfc031/plugin-load-failed] ${JSON.stringify({
+              rfc: 'RFC-031',
+              code: 'plugin-load-failed',
+              pluginName: decoded.pluginName,
+              message: decoded.message,
+            })}`,
           }),
         )
       }
@@ -1763,7 +1702,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         ? await captureGitControlSnapshot(opts.worktreePath)
         : undefined
     processEffect = createProcessEffectAttemptObserver({
-      db: opts.db,
+      persistence: opts.persistence.effects,
       taskId: opts.taskId,
       nodeRunId: opts.nodeRunId,
       processKind: 'agent',
@@ -1797,24 +1736,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // pid so the stale-process reaper can match a live pid against THIS
         // specific binary, not a fuzzy regex.
         //
-        const persist = (tx: DbTxSync | DbClient) =>
-          tx
-            .update(nodeRuns)
-            .set({
+        if (activeProcessEffect === undefined) {
+          await opts.persistence.nodeExecution.patch({
+            nodeRunId: opts.nodeRunId,
+            values: {
               pid: receipt.pid,
               spawnBinaryPath: receipt.spawnBinaryPath,
               spawnLaunchNonce: receipt.launchNonce ?? null,
-            })
-            .where(eq(nodeRuns.id, opts.nodeRunId))
-            .run()
-        if (activeProcessEffect === undefined) {
-          withTaskExecutionMutation({
-            db: opts.db,
-            taskId: opts.taskId,
-            run: persist,
+            },
           })
         } else {
-          activeProcessEffect.recordSpawnReceipt(receipt, persist)
+          await activeProcessEffect.recordSpawnReceipt(receipt)
         }
       },
       capture: {
@@ -1901,8 +1833,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // child) and the plan temp dir is cleaned by the finally.
       const errorMessage = `spawn ${runtime} failed: ${runResult.spawnError ?? 'unknown spawn failure'}`
       log.warn('runtime-spawn-failed', { nodeRunId: opts.nodeRunId, runtime, errorMessage })
-      await setNodeRunStatus({
-        db: opts.db,
+      await opts.persistence.nodeRuns.set({
         nodeRunId: opts.nodeRunId,
         to: 'failed',
         allowedFrom: ['running', 'pending'],
@@ -1934,7 +1865,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             logicalRootSessionId: sessionId,
             nodeRunId: opts.nodeRunId,
             taskId: opts.taskId,
-            db: opts.db,
+            persistence: opts.persistence.runtimeSessionCapture,
             log,
             worktreePath: opts.worktreePath,
             configDirEnv: configDir.env,
@@ -1951,31 +1882,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
       const supersededEpochIds = nativeSessionEpochIds.filter((id) => id !== sessionId)
       if (supersededEpochIds.length > 0) {
+        const logicalSessionId = sessionId
         await persistRunnerWrite('node-run-event/session-epoch-retag', () =>
-          withTaskExecutionMutation({
-            db: opts.db,
-            taskId: opts.taskId,
-            run: (tx) => {
-              tx.update(nodeRunEvents)
-                .set({ sessionId })
-                .where(
-                  and(
-                    eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
-                    inArray(nodeRunEvents.sessionId, supersededEpochIds),
-                    isNull(nodeRunEvents.parentSessionId),
-                  ),
-                )
-                .run()
-              tx.update(nodeRunEvents)
-                .set({ parentSessionId: sessionId })
-                .where(
-                  and(
-                    eq(nodeRunEvents.nodeRunId, opts.nodeRunId),
-                    inArray(nodeRunEvents.parentSessionId, supersededEpochIds),
-                  ),
-                )
-                .run()
-            },
+          opts.persistence.nodeExecution.retagSessionEpochs({
+            nodeRunId: opts.nodeRunId,
+            supersededSessionIds: supersededEpochIds,
+            logicalSessionId,
           }),
         )
       }
@@ -2406,47 +2318,25 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // persist=false 时归档引用同样不落库。
           if (status === 'done' && opts.persistDeclaredOutputs !== false) {
             try {
+              const inactiveSet = new Set(parsed.inactivePorts)
               await persistRunnerWrite('node-run-output/batch', () =>
-                withTaskExecutionTransaction({
-                  db: opts.db,
-                  taskId: opts.taskId,
-                  run: (tx) => {
-                    const inactiveSet = new Set(parsed.inactivePorts)
-                    for (const [name, content] of parsed.ports) {
-                      // RFC-072: persist the resolved output kind so the Outputs
-                      // tab can tell file-path ports from text. Keep every port in
-                      // one synchronous transaction: a later failure must roll
-                      // earlier upserts back instead of exposing partial outputs.
-                      const rawKind = outputKinds?.[name]
-                      const kind = rawKind !== undefined ? normalizeKindString(rawKind) : null
-                      const persisted = normalizedContent.get(name) ?? content
-                      const archiveJson = archiveJsonByPort.get(name) ?? null
-                      // RFC-306: `active` must be part of the UPSERT's `set` too —
-                      // a re-run of the same node_run (inline followup) may flip a
-                      // branch open again, and a set-list that omitted the column
-                      // would leave the previous round's closure in place.
-                      const active = !inactiveSet.has(name)
-                      tx.insert(nodeRunOutputs)
-                        .values({
-                          nodeRunId: opts.nodeRunId,
-                          portName: name,
-                          content: persisted,
-                          kind,
-                          archiveJson,
-                          active,
-                        })
-                        .onConflictDoUpdate({
-                          target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-                          set: { content: persisted, kind, archiveJson, active },
-                        })
-                        .run()
-                    }
-                  },
+                opts.persistence.nodeExecution.upsertOutputs({
+                  nodeRunId: opts.nodeRunId,
+                  outputs: [...parsed.ports].map(([name, content]) => ({
+                    portName: name,
+                    content: normalizedContent.get(name) ?? content,
+                    kind:
+                      outputKinds?.[name] === undefined
+                        ? null
+                        : normalizeKindString(outputKinds[name]!),
+                    archiveJson: archiveJsonByPort.get(name) ?? null,
+                    active: !inactiveSet.has(name),
+                  })),
                 }),
               )
             } catch (error) {
               const detail = maskDiagnosticsText(
-                error instanceof Error ? error.message : sqliteWriteDiagnostic(error),
+                error instanceof Error ? error.message : String(error),
               ).slice(0, 2000)
               log.warn('runtime-output-persistence-failed', {
                 nodeRunId: opts.nodeRunId,
@@ -2603,8 +2493,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       status === 'canceled' && opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
         ? 'interrupted'
         : status
-    await setNodeRunStatus({
-      db: opts.db,
+    await opts.persistence.nodeRuns.set({
       nodeRunId: opts.nodeRunId,
       to: persistedStatus,
       allowedFrom: ['running'],
@@ -2626,28 +2515,21 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // Runner-specific JSON fields not in NodeRunStatusUpdateExtra — write
     // them as a follow-up non-status update.
     // rfc053-allow-direct-status-write -- writing non-status fields
-    withTaskExecutionMutation({
-      db: opts.db,
-      taskId: opts.taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({
-            runtimeInventoryJson,
-            // RFC-280 T3: declared × observed × diff — the node-detail warning face.
-            startupVerificationJson,
-            // RFC-046: persist the post-budget-clip snapshot captured at inject
-            // time (or copied from attempt 0 on the envelope-followup path).
-            injectedMemoriesJson:
-              injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
-            // RFC-049: structured port-validation failure payload.
-            portValidationFailuresJson:
-              portValidationFailures.length > 0
-                ? serializePortValidationFailures(portValidationFailures)
-                : null,
-          })
-          .where(eq(nodeRuns.id, opts.nodeRunId))
-          .run(),
+    await opts.persistence.nodeExecution.patch({
+      nodeRunId: opts.nodeRunId,
+      values: {
+        runtimeInventoryJson,
+        // RFC-280 T3: declared × observed × diff — the node-detail warning face.
+        startupVerificationJson,
+        // RFC-046: persist the post-budget-clip snapshot captured at inject
+        // time (or copied from attempt 0 on the envelope-followup path).
+        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+        // RFC-049: structured port-validation failure payload.
+        portValidationFailuresJson:
+          portValidationFailures.length > 0
+            ? serializePortValidationFailures(portValidationFailures)
+            : null,
+      },
     })
 
     const result: RunResult = { status, exitCode, outputs, tokenUsage, prompt }
@@ -2693,7 +2575,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // lease and run plan cleanup.
     if (!preserveLiveRuntimeState) {
       try {
-        releaseHeldRuntimeLease()
+        await releaseHeldRuntimeLease()
       } catch (error) {
         log.warn('runtime-session-lease-release-failed', {
           nodeRunId: opts.nodeRunId,
@@ -2711,7 +2593,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // unresolved attempt for proof-backed recovery instead of a duplicate
     // automatic runtime launch.
     if (!postSpawnFailed && processSettlement !== null) {
-      processEffect?.settle(processSettlement)
+      await processEffect?.settle(processSettlement)
     }
   }
 
@@ -2727,8 +2609,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     : undefined
   const postSpawnErrorMessage = postSpawnFailureCode ?? 'runtime-spawn-failed'
   try {
-    await setNodeRunStatus({
-      db: opts.db,
+    await opts.persistence.nodeRuns.set({
       nodeRunId: opts.nodeRunId,
       to: 'failed',
       allowedFrom: ['running'],
@@ -2747,7 +2628,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       nodeRunId: opts.nodeRunId,
     })
   }
-  if (processSettlement !== null) processEffect?.settle(processSettlement)
+  if (processSettlement !== null) await processEffect?.settle(processSettlement)
   return {
     status: 'failed',
     exitCode: null,

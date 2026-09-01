@@ -11,7 +11,6 @@
 // daemon process, single in-process worker. Tests get full control by
 // driving `tick()` synchronously instead of starting the interval.
 
-import { and, asc, eq, inArray, lte } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Language,
@@ -21,13 +20,16 @@ import type {
   SourceContextBudget,
 } from '@agent-workflow/shared'
 import { QUARANTINED_SNAPSHOT_AGENT_ID, WorkgroupRuntimeConfigSchema } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { cachedRepos, memoryDistillJobs, tasks } from '@/db/schema'
 import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
-import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
+import type {
+  MemoryDistillReviewedArtifactReader,
+  MemoryDistillRuntimeResolver,
+  MemoryDistillWorkStore,
+} from '@/modules/memory/application/ports/distillWorkStore'
+import type { MemoryDistillJobRecord } from '@/modules/memory/application/ports/distillReadStore'
 
 const log = createLogger('memory-distill-scheduler')
 
@@ -88,11 +90,11 @@ export interface EnqueueResult {
 }
 
 export async function enqueueDistillJob(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
   input: EnqueueDistillJobInput,
 ): Promise<EnqueueResult> {
   const debounceKey = buildDebounceKey(input)
-  const scopeResolved = await computeEligibleScopes(db, input.taskId)
+  const scopeResolved = await computeEligibleScopes(store, input.taskId)
   const jobId = ulid()
   const now = Date.now()
   const debounceMs = input.debounceMs ?? DISTILL_DEBOUNCE_MS
@@ -101,15 +103,13 @@ export async function enqueueDistillJob(
   // means "use the runtime default" (currently 'en-US' / RFC-041 baseline).
   const outputLang: Language | null =
     input.outputLang !== undefined ? input.outputLang : memoryDistillLangProvider()
-  await db.insert(memoryDistillJobs).values({
+  await store.enqueue({
     id: jobId,
     debounceKey,
     sourceKind: input.sourceKind,
     sourceEventId: input.sourceEventId,
     taskId: input.taskId,
-    scopeResolvedJson: JSON.stringify(scopeResolved),
-    status: 'pending',
-    attempts: 0,
+    scope: scopeResolved,
     nextRunAt: now + debounceMs,
     createdAt: now,
     outputLang,
@@ -188,14 +188,14 @@ export function extractAgentIdsFromWorkgroupConfig(workgroupConfigJson: string |
 }
 
 export async function computeEligibleScopes(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
   taskId: string | null,
 ): Promise<ResolvedDistillScope> {
   if (taskId === null) {
     return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
   }
-  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
-  if (taskRow === undefined) {
+  const taskRow = await store.findTaskScope(taskId)
+  if (taskRow === null) {
     return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
   }
   const agentIds = [
@@ -209,16 +209,7 @@ export async function computeEligibleScopes(
   // so it missed private repos entirely and, once the credential column is
   // blanked, would have matched arbitrary rows on ''.
   let repoId: string | null = null
-  if (taskRow.cachedRepoId !== null) {
-    const repoRow = (
-      await db
-        .select({ id: cachedRepos.id })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, taskRow.cachedRepoId))
-        .limit(1)
-    )[0]
-    repoId = repoRow?.id ?? null
-  }
+  if (taskRow.cachedRepoId !== null && taskRow.cachedRepoExists) repoId = taskRow.cachedRepoId
   return {
     agentIds,
     workflowId: taskRow.workflowId,
@@ -232,7 +223,9 @@ export async function computeEligibleScopes(
 // ---------------------------------------------------------------------------
 
 export interface DistillTickOptions {
-  db: DbClient
+  store: MemoryDistillWorkStore
+  reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  runtimeResolver: MemoryDistillRuntimeResolver
   /** Inject a fake spawn for tests; production uses defaultDistillerSpawn. */
   spawnFn?: DistillerSpawnFn
   /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
@@ -251,23 +244,6 @@ export interface DistillTickOptions {
   now?: () => number
 }
 
-interface DistillJobRow {
-  id: string
-  debounceKey: string
-  sourceKind: 'clarify' | 'review' | 'feedback'
-  sourceEventId: string
-  taskId: string | null
-  scopeResolvedJson: string
-  status: 'pending' | 'running' | 'done' | 'failed' | 'canceled'
-  attempts: number
-  nextRunAt: number
-  lastError: string | null
-  createdAt: number
-  startedAt: number | null
-  finishedAt: number | null
-  outputLang?: string | null
-}
-
 /**
  * One tick of the worker: pull up to DISTILL_BATCH_LIMIT pending jobs whose
  * next_run_at has elapsed, merge siblings sharing each debounce_key, run
@@ -284,18 +260,13 @@ export async function distillTick(options: DistillTickOptions): Promise<{
   candidatesCreated: number
 }> {
   const now = (options.now ?? Date.now)()
-  const due = (await options.db
-    .select()
-    .from(memoryDistillJobs)
-    .where(and(eq(memoryDistillJobs.status, 'pending'), lte(memoryDistillJobs.nextRunAt, now)))
-    .orderBy(asc(memoryDistillJobs.nextRunAt))
-    .limit(DISTILL_BATCH_LIMIT)) as DistillJobRow[]
+  const due = await options.store.listDue(now, DISTILL_BATCH_LIMIT)
   if (due.length === 0) {
     return { picked: 0, succeeded: 0, failed: 0, candidatesCreated: 0 }
   }
   // De-dup by debounce_key so we don't process the same key twice in one tick.
   const seenKeys = new Set<string>()
-  const heads: DistillJobRow[] = []
+  const heads: MemoryDistillJobRecord[] = []
   for (const row of due) {
     if (seenKeys.has(row.debounceKey)) continue
     seenKeys.add(row.debounceKey)
@@ -307,31 +278,21 @@ export async function distillTick(options: DistillTickOptions): Promise<{
   // RFC-117: resolve the distiller runtime once per tick (per-feature profile
   // name → default → deprecated model fallback). Runtime config can't change
   // within a tick; resolving once keeps every merged bundle on the same runtime.
-  const rt = await resolveInternalAgentRuntime(options.db, {
+  const rt = await options.runtimeResolver.resolve({
     runtimeName: options.runtimeName,
     deprecatedModel: options.model,
     defaultRuntime: options.defaultRuntime,
   })
   for (const head of heads) {
     // Pull every pending sibling sharing this debounce_key in one shot.
-    const siblings = (await options.db
-      .select()
-      .from(memoryDistillJobs)
-      .where(
-        and(
-          eq(memoryDistillJobs.debounceKey, head.debounceKey),
-          eq(memoryDistillJobs.status, 'pending'),
-        ),
-      )) as DistillJobRow[]
+    const siblings = await options.store.listPendingSiblings(head.debounceKey)
     const ids = siblings.map((s) => s.id)
-    await options.db
-      .update(memoryDistillJobs)
-      .set({ status: 'running', startedAt: now })
-      .where(inArray(memoryDistillJobs.id, ids))
+    await options.store.markRunning(ids, now)
     publish({ type: 'distill.started', jobId: head.id })
     try {
       const result = await runDistill({
-        db: options.db,
+        store: options.store,
+        reviewedArtifacts: options.reviewedArtifacts,
         job: rowToDistillJob(head),
         siblings: siblings.map(rowToDistillJob),
         spawnFn: options.spawnFn,
@@ -341,10 +302,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         isSandbox: rt.isSandbox,
         sourceContextBudget: options.sourceContextBudget,
       })
-      await options.db
-        .update(memoryDistillJobs)
-        .set({ status: 'done', finishedAt: (options.now ?? Date.now)() })
-        .where(inArray(memoryDistillJobs.id, ids))
+      await options.store.markDone(ids, (options.now ?? Date.now)())
       publish({
         type: 'distill.done',
         jobId: head.id,
@@ -357,27 +315,23 @@ export async function distillTick(options: DistillTickOptions): Promise<{
       log.warn('distill failed', { jobId: head.id, error: message })
       const attempts = head.attempts + 1
       if (attempts >= DISTILL_MAX_ATTEMPTS) {
-        await options.db
-          .update(memoryDistillJobs)
-          .set({
-            status: 'failed',
-            attempts,
-            lastError: message.slice(0, 2000),
-            finishedAt: (options.now ?? Date.now)(),
-          })
-          .where(inArray(memoryDistillJobs.id, ids))
+        await options.store.markFailed({
+          ids,
+          attempts,
+          error: message.slice(0, 2000),
+          now: (options.now ?? Date.now)(),
+          retryAt: null,
+        })
       } else {
         const backoff = DISTILL_BACKOFF_BASE_MS * Math.pow(2, attempts - 1)
-        await options.db
-          .update(memoryDistillJobs)
-          .set({
-            status: 'pending',
-            attempts,
-            lastError: message.slice(0, 2000),
-            nextRunAt: (options.now ?? Date.now)() + backoff,
-            startedAt: null,
-          })
-          .where(inArray(memoryDistillJobs.id, ids))
+        const failedAt = (options.now ?? Date.now)()
+        await options.store.markFailed({
+          ids,
+          attempts,
+          error: message.slice(0, 2000),
+          now: failedAt,
+          retryAt: failedAt + backoff,
+        })
       }
       publish({ type: 'distill.failed', jobId: head.id, error: message.slice(0, 200) })
       failed += 1
@@ -391,7 +345,9 @@ export async function distillTick(options: DistillTickOptions): Promise<{
 // ---------------------------------------------------------------------------
 
 export interface StartLoopOptions {
-  db: DbClient
+  store: MemoryDistillWorkStore
+  reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  runtimeResolver: MemoryDistillRuntimeResolver
   spawnFn?: DistillerSpawnFn
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
   enabled?: boolean
@@ -423,7 +379,7 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
     return { stop: () => {} }
   }
   // Recover any rows left as 'running' from a crashed prior tick.
-  recoverRunning(options.db).catch((err) => {
+  recoverRunning(options.store).catch((err) => {
     log.warn('startup recovery failed', {
       error: err instanceof Error ? err.message : String(err),
     })
@@ -444,7 +400,9 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
     if (running) return
     running = true
     distillTick({
-      db: options.db,
+      store: options.store,
+      reviewedArtifacts: options.reviewedArtifacts,
+      runtimeResolver: options.runtimeResolver,
       spawnFn: options.spawnFn,
       runtimeName: options.runtimeName,
       defaultRuntime: options.defaultRuntime,
@@ -463,30 +421,19 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       clearInterval(handle)
       // Best-effort restore on stop too so a developer-side daemon restart
       // doesn't strand rows in 'running'.
-      recoverRunning(options.db).catch(() => {
+      recoverRunning(options.store).catch(() => {
         // ignore
       })
     },
   }
 }
 
-export async function recoverRunning(db: DbClient): Promise<{ recovered: number }> {
-  const rows = (await db
-    .select()
-    .from(memoryDistillJobs)
-    .where(eq(memoryDistillJobs.status, 'running'))) as DistillJobRow[]
-  if (rows.length === 0) return { recovered: 0 }
-  await db
-    .update(memoryDistillJobs)
-    .set({ status: 'pending', startedAt: null })
-    .where(
-      inArray(
-        memoryDistillJobs.id,
-        rows.map((r) => r.id),
-      ),
-    )
-  log.info('recovered running jobs', { count: rows.length })
-  return { recovered: rows.length }
+export async function recoverRunning(
+  store: MemoryDistillWorkStore,
+): Promise<{ recovered: number }> {
+  const recovered = await store.recoverRunning()
+  if (recovered > 0) log.info('recovered running jobs', { count: recovered })
+  return { recovered }
 }
 
 // ---------------------------------------------------------------------------
@@ -498,61 +445,29 @@ export async function recoverRunning(db: DbClient): Promise<{ recovered: number 
  * Resets attempts to 0 (admin's explicit "give it another full chance").
  * Returns false if the row is not in a re-tryable state.
  */
-export async function retryFailedJob(db: DbClient, jobId: string): Promise<boolean> {
-  const rows = await db
-    .select()
-    .from(memoryDistillJobs)
-    .where(eq(memoryDistillJobs.id, jobId))
-    .limit(1)
-  if (rows.length === 0) return false
-  const row = rows[0]!
-  if (row.status !== 'failed') return false
-  await db
-    .update(memoryDistillJobs)
-    .set({
-      status: 'pending',
-      attempts: 0,
-      lastError: null,
-      nextRunAt: Date.now(),
-      startedAt: null,
-      finishedAt: null,
-    })
-    .where(eq(memoryDistillJobs.id, jobId))
+export async function retryFailedJob(
+  store: MemoryDistillWorkStore,
+  jobId: string,
+): Promise<boolean> {
+  const row = await store.retryFailed(jobId, Date.now())
+  if (row === null) return false
   publish({ type: 'distill.queued', jobId: row.id, debounceKey: row.debounceKey })
   return true
 }
 
 /** Soft-cancel a pending row (still tracked, but never executes). */
-export async function cancelPendingJob(db: DbClient, jobId: string): Promise<boolean> {
-  const rows = await db
-    .select()
-    .from(memoryDistillJobs)
-    .where(eq(memoryDistillJobs.id, jobId))
-    .limit(1)
-  if (rows.length === 0) return false
-  const row = rows[0]!
-  if (row.status !== 'pending') return false
-  await db
-    .update(memoryDistillJobs)
-    .set({ status: 'canceled', finishedAt: Date.now() })
-    .where(eq(memoryDistillJobs.id, jobId))
-  return true
+export async function cancelPendingJob(
+  store: MemoryDistillWorkStore,
+  jobId: string,
+): Promise<boolean> {
+  return store.cancelPending(jobId, Date.now())
 }
 
 export async function listDistillJobs(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
   filter: { status?: string } = {},
 ): Promise<MemoryDistillJob[]> {
-  const where =
-    filter.status !== undefined
-      ? eq(memoryDistillJobs.status, filter.status as 'pending')
-      : undefined
-  const rows = (await (where !== undefined
-    ? db.select().from(memoryDistillJobs).where(where).orderBy(asc(memoryDistillJobs.createdAt))
-    : db
-        .select()
-        .from(memoryDistillJobs)
-        .orderBy(asc(memoryDistillJobs.createdAt)))) as DistillJobRow[]
+  const rows = await store.listJobs(filter.status)
   return rows.map(rowToDistillJob)
 }
 

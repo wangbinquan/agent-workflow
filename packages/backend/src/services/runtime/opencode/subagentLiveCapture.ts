@@ -21,11 +21,8 @@
 // (services/runner.ts) is responsible for translating that into a broadcast.
 // This keeps the live capture testable without booting the ws server.
 
-import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents } from '@/db/schema'
-import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
+import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
 import { createLogger, type Logger } from '@/util/log'
 import {
   loadSiblingsCapturedSessionIds,
@@ -33,6 +30,10 @@ import {
   transcodeOpencodeRowsToEvents,
 } from './sessionCapture'
 import { walkOpencodeSessions } from './sessionWalk'
+import {
+  openReadonlySqliteDatabase,
+  type ReadonlySqliteDatabase,
+} from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 
 export interface LivePollOptions {
   nodeRunId: string
@@ -45,7 +46,7 @@ export interface LivePollOptions {
    * circuits its tick while this is null (no point BFS'ing nothing).
    */
   getRootSessionId: () => string | null
-  db: DbClient
+  persistence: RuntimeSessionCapturePersistence
   log?: Logger
   /** Override the opencode SQLite path (tests). */
   opencodeDbPath?: string
@@ -110,7 +111,7 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
 
   // Shared mutable state — keep small so the closure stays cheap.
   const insertedPartIdsBySession = new Map<string, Set<string>>()
-  let opencodeDb: Database | null = null
+  let opencodeDb: ReadonlySqliteDatabase | null = null
   let siblingsCached: Set<string> | null = null
   let disabled = false
   let stopped = false
@@ -143,7 +144,7 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
         throw new Error(`opencode-db-not-found: ${dbPath}`)
       }
       if (opencodeDb === null) {
-        opencodeDb = new Database(dbPath, { readonly: true })
+        opencodeDb = openReadonlySqliteDatabase(dbPath)
       }
 
       // Sibling sessionId skip: load once on first successful tick. The set
@@ -152,7 +153,11 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
       // for correctness — at worst we double-write a part the sibling
       // wrote after us, which the per-nodeRun partId Set guards against).
       if (siblingsCached === null) {
-        siblingsCached = await loadSiblingsCapturedSessionIds(opts.db, opts.taskId, opts.nodeRunId)
+        siblingsCached = await loadSiblingsCapturedSessionIds(
+          opts.persistence,
+          opts.taskId,
+          opts.nodeRunId,
+        )
       }
 
       let tickInserted = 0
@@ -196,10 +201,10 @@ export function startLiveSubagentCapture(opts: LivePollOptions): LivePollerHandl
           sessionId: sess.id,
           parentSessionId: sess.parent_id,
         }))
-        withTaskExecutionMutation({
-          db: opts.db,
+        await opts.persistence.appendEvents({
           taskId: opts.taskId,
-          run: (tx) => tx.insert(nodeRunEvents).values(rows).run(),
+          nodeRunId: opts.nodeRunId,
+          events: rows,
         })
         if (writtenForSession === undefined) {
           writtenForSession = new Set<string>()

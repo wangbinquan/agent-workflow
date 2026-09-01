@@ -21,31 +21,38 @@
 // deriveFrontier's in-flight set and freeze the frontier. Violation throws
 // (pinned by node-run-mint.test.ts).
 
-import { randomBytes } from 'node:crypto'
-import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRuns } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { abandonSupersededMergeStates } from '@/services/lifecycle'
-import { isFresherNodeRun } from '@/services/freshness'
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
-import {
-  defaultConfigDirProfile,
-  resolveAgentRuntime,
-  type RuntimeProfile,
-} from '@/services/runtimeRegistry'
+import { defaultConfigDirProfile } from '@/services/runtimeRegistry'
+import type {
+  RuntimeProfile,
+  RuntimeRegistryOperations,
+} from '@/platform/runtime-registry/application/runtimeRegistryOperations'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
-import { sha256Hex } from '@/util/hash'
+import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
 import {
-  currentTaskExecutionContext,
-  taskExecutionModule,
-  withCurrentTaskExecutionMutation,
-  withTaskExecutionMutation,
-} from '@/services/taskExecutionParticipants'
+  buildNodeRunMintRecord,
+  generateNodeRunEnvelopeNonce,
+} from '@/modules/task-execution/application/buildNodeRunMintRecord'
+import type {
+  NodeRunLifecyclePersistence,
+  NodeRunMintInput,
+  NodeRunMintRecord,
+} from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
+import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
+import {
+  resolveSchedulerRunRow as resolveSchedulerRunRowWithPorts,
+  type SchedulerRunRowCandidate as ApplicationSchedulerRunRowCandidate,
+} from '@/modules/task-execution/application/resolveSchedulerRunRow'
+import {
+  createLegacySqliteNodeRunOperations,
+  mintLegacySqliteNodeRunInTx,
+  type LegacySqliteNodeRunDatabase,
+  type LegacySqliteNodeRunTransaction,
+} from '@/modules/task-execution/infrastructure/legacySqliteNodeRunOperations'
+export { nextRetryIndex }
 
 /**
  * Statuses a row may be BORN with. Everything else (canceled / interrupted /
@@ -190,7 +197,7 @@ export interface MintNodeRunArgs {
  * time-ordered id (ULID) would be guessable, so this must stay `randomBytes`.
  */
 export function generateEnvelopeNonce(): string {
-  return randomBytes(8).toString('hex')
+  return generateNodeRunEnvelopeNonce()
 }
 
 /**
@@ -198,109 +205,22 @@ export function generateEnvelopeNonce(): string {
  * NULL means the row was dispatched before migration 0097 (or is a legacy
  * direct-construction test), so callers deliberately fall back to bare tags.
  */
-export async function loadRunEnvelopeNonce(db: DbClient, nodeRunId: string): Promise<string> {
-  const row = (
-    await db
-      .select({ envelopeNonce: nodeRuns.envelopeNonce })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .limit(1)
-  )[0]
-  return row?.envelopeNonce ?? ''
+export async function loadRunEnvelopeNonce(
+  db: LegacySqliteNodeRunDatabase,
+  nodeRunId: string,
+): Promise<string> {
+  return await createLegacySqliteNodeRunOperations(db).lifecycle.loadEnvelopeNonce(nodeRunId)
 }
 
-export function buildMintNodeRunValues(args: MintNodeRunArgs): typeof nodeRuns.$inferInsert {
-  const id = args.id ?? ulid()
-  const now = Date.now()
-  const inherit = args.inheritFrom ?? null
-  const o = args.overrides ?? {}
-
-  const parentNodeRunId =
-    o.parentNodeRunId !== undefined ? o.parentNodeRunId : (inherit?.parentNodeRunId ?? null)
-  const shardKey = o.shardKey !== undefined ? o.shardKey : (inherit?.shardKey ?? null)
-  const reviewIteration =
-    o.reviewIteration !== undefined ? o.reviewIteration : (inherit?.reviewIteration ?? 0)
-  const preSnapshot = o.preSnapshot !== undefined ? o.preSnapshot : (inherit?.preSnapshot ?? null)
-  const stableSlotSeed = JSON.stringify({
-    nodeId: args.nodeId,
-    iteration: args.iteration ?? 0,
-    shardKey,
-  })
-  const continuationSlotKey =
-    o.continuationSlotKey !== undefined
-      ? o.continuationSlotKey
-      : (inherit?.continuationSlotKey ?? sha256Hex(stableSlotSeed))
-  const inheritedGeneration = inherit?.operationGeneration ?? 0
-  // Any newly minted reincarnation of the same causal slot is a new logical
-  // operation generation. This includes manual Resume, retry cascades,
-  // stale-upstream redispatch and post-restart revival. Wrapper/session
-  // continuation reuses its existing row and therefore does not pass here.
-  const operationGeneration =
-    o.operationGeneration ?? (inherit === null ? 0 : inheritedGeneration + 1)
-
-  // RFC-098 对抗检视修订 #10 — frontier invisibility invariant: a row born
-  // 'running' must be a CHILD row. deriveFrontier treats top-level running
-  // rows as in-flight, so a parentless running mint would freeze every
-  // downstream node until something else flips it. The only legal direct-
-  // running mint (commit&push container) is always parented to the
-  // triggering agent run.
-  if (args.status === 'running' && parentNodeRunId === null) {
-    throw new Error(
-      `mintNodeRun: refusing to mint a top-level 'running' row for node '${args.nodeId}' ` +
-        `(task ${args.taskId}) — born-running rows must carry parentNodeRunId ` +
-        `(frontier invisibility, RFC-098 revision #10)`,
-    )
-  }
-
-  return {
-    id,
-    taskId: args.taskId,
-    nodeId: args.nodeId,
-    status: args.status,
-    // RFC-098 WP-10 T-b: the cause column (migration 0044) — the single
-    // write point in the codebase.
-    rerunCause: args.cause,
-    retryIndex: args.retryIndex ?? 0,
-    iteration: args.iteration ?? 0,
-    reviewIteration,
-    shardKey,
-    parentNodeRunId,
-    preSnapshot,
-    shardValueHash: o.shardValueHash ?? null,
-    consumedUpstreamRunsJson: o.consumedUpstreamRunsJson ?? null,
-    errorMessage: o.errorMessage ?? null,
-    forceActivated: o.forceActivated ?? false,
-    startedAt: o.startedAt !== undefined ? o.startedAt : now,
-    finishedAt: o.finishedAt !== undefined ? o.finishedAt : args.status === 'done' ? now : null,
-    agentOverrideName: o.agentOverrideName ?? null,
-    agentOverrideId: o.agentOverrideId ?? null,
-    wgRound: o.wgRound ?? null,
-    // RFC-200 (T1b): generate a fresh per-run nonce by default; a caller may
-    // override it (inline-followup reuses the anchor round's nonce).
-    envelopeNonce: o.envelopeNonce ?? generateEnvelopeNonce(),
-    continuationSlotKey,
-    lineageSlotPathJson:
-      o.lineageSlotPathJson !== undefined
-        ? o.lineageSlotPathJson
-        : (inherit?.lineageSlotPathJson ?? null),
-    operationGeneration,
-  }
+export function buildMintNodeRunValues(args: MintNodeRunArgs): NodeRunMintRecord {
+  return buildNodeRunMintRecord(args)
 }
 
-export async function mintNodeRun(db: DbClient, args: MintNodeRunArgs): Promise<string> {
-  // RFC-144 D12 (stale-replay fix): abandoning the superseded generations'
-  // in-flight merge_state and inserting the successor MUST commit atomically —
-  // a crash between two separate statements would leave the old pending-merge
-  // row replayable at the next runTask entry (the exact bug this closes), or
-  // conversely a successor row whose predecessors were never retired.
-  const context = currentTaskExecutionContext(args.taskId)
-  if (context === undefined) return dbTxSync(db, (tx) => mintNodeRunTx(tx, args))
-  return taskExecutionModule.ownership.withOwnedTaskTx({
-    db,
-    token: context.token,
-    now: Date.now(),
-    run: (tx) => mintNodeRunTx(tx, args),
-  })
+export async function mintNodeRun(
+  db: LegacySqliteNodeRunDatabase,
+  args: MintNodeRunArgs,
+): Promise<string> {
+  return await createLegacySqliteNodeRunOperations(db).lifecycle.mint(args)
 }
 
 /**
@@ -308,22 +228,16 @@ export async function mintNodeRun(db: DbClient, args: MintNodeRunArgs): Promise<
  * hold a `dbTxSync` (the review decision mints its re-run rows together with the
  * rows it archives and retires). Same retire-then-insert pair, same values.
  */
-export function mintNodeRunTx(tx: DbTxSync, args: MintNodeRunArgs): string {
-  const values = buildMintNodeRunValues(args)
-  abandonSupersededMergeStates({
-    db: tx,
-    taskId: values.taskId,
-    nodeId: values.nodeId,
-    iteration: values.iteration ?? 0,
-    supersededByRunId: values.id,
-    // RFC-172b (Codex impl-gate P1): the factory is the PRIMARY member-rerun path (scheduler
-    // borrow-mint). Scope supersede retirement to THIS mint's shard so minting member B's next
-    // turn does not abandon member A's still-running run. null (non-member) → undefined =
-    // node-wide, byte-identical to today (golden-lock).
-    shardKey: values.shardKey === null ? undefined : values.shardKey,
-  })
-  tx.insert(nodeRuns).values(values).run()
-  return values.id
+export function mintNodeRunTx(tx: LegacySqliteNodeRunTransaction, args: MintNodeRunArgs): string {
+  return mintLegacySqliteNodeRunInTx(tx, args)
+}
+
+/** Provider-selected mint entry used by daemon/application composition. */
+export async function mintNodeRunWith(
+  lifecycle: NodeRunLifecyclePersistence,
+  args: NodeRunMintInput,
+): Promise<string> {
+  return await lifecycle.mint(args)
 }
 
 /**
@@ -534,7 +448,7 @@ function configBackedBinary(
 }
 
 export async function resolveFrozenRuntime(
-  db: DbClient,
+  db: LegacySqliteNodeRunDatabase,
   nodeRunId: string,
   agentRuntime: string | null | undefined,
   defaultRuntime: string | null | undefined,
@@ -557,17 +471,29 @@ export async function resolveFrozenRuntime(
    */
   binaryConfig?: { opencodePath?: string | null; claudeCodePath?: string | null },
 ): Promise<FrozenRuntime> {
-  const row = (
-    await db
-      .select({
-        runtime: nodeRuns.runtime,
-        runtimeBinary: nodeRuns.runtimeBinary,
-        runtimeParamsJson: nodeRuns.runtimeParamsJson,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .limit(1)
-  )[0]
+  const operations = createLegacySqliteNodeRunOperations(db)
+  return await resolveFrozenRuntimeWith(
+    operations.runtimes,
+    operations.runtimeRegistry,
+    nodeRunId,
+    agentRuntime,
+    defaultRuntime,
+    inheritFrom,
+    binaryConfig,
+  )
+}
+
+/** Provider-selected runtime freeze entry; no provider client crosses it. */
+export async function resolveFrozenRuntimeWith(
+  persistence: NodeRunRuntimePersistence,
+  runtimeRegistry: RuntimeRegistryOperations,
+  nodeRunId: string,
+  agentRuntime: string | null | undefined,
+  defaultRuntime: string | null | undefined,
+  inheritFrom?: FrozenRuntime | null,
+  binaryConfig?: { opencodePath?: string | null; claudeCodePath?: string | null },
+): Promise<FrozenRuntime> {
+  const row = await persistence.load(nodeRunId)
   if (row != null && isKnownRuntimeKind(row.runtime)) {
     // already frozen — return the self-contained snapshot, registry-independent.
     // Codex impl-gate P1-3 (RFC-282 收尾门): a NULL frozen binary means "no
@@ -608,7 +534,7 @@ export async function resolveFrozenRuntime(
           // the fresh-resolve branch below.
           binary: inheritFrom.binary ?? configBackedBinary(inheritFrom.protocol, binaryConfig),
         }
-      : await resolveAgentRuntime(db, agentRuntime, defaultRuntime).then((r) => ({
+      : await runtimeRegistry.resolveAgentRuntime(agentRuntime, defaultRuntime).then((r) => ({
           protocol: r.protocol,
           // Which config key backs which protocol is DRIVER knowledge
           // (defaultBinary); freeze the config-backed head only when config
@@ -626,20 +552,13 @@ export async function resolveFrozenRuntime(
           },
           configDir: r.configDir,
         }))
-  withCurrentTaskExecutionMutation({
-    db,
-    run: (tx) =>
-      tx
-        .update(nodeRuns)
-        .set({
-          runtime: frozen.protocol,
-          runtimeBinary: frozen.binary,
-          // RFC-154: __configDir rides inside the same JSON column (no new column);
-          // parseFrozenParams whitelists its keys so it never leaks into params.
-          runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
-        })
-        .where(eq(nodeRuns.id, nodeRunId))
-        .run(),
+  await persistence.freeze({
+    nodeRunId,
+    runtime: frozen.protocol,
+    runtimeBinary: frozen.binary,
+    // RFC-154: __configDir rides inside the same JSON column (no new column);
+    // parseFrozenParams whitelists its keys so it never leaks into params.
+    runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
   })
   return frozen
 }
@@ -651,20 +570,20 @@ export async function resolveFrozenRuntime(
  * row owns the session (then the caller resolves fresh).
  */
 export async function frozenRuntimeOfSession(
-  db: DbClient,
+  db: LegacySqliteNodeRunDatabase,
   sessionId: string,
 ): Promise<FrozenRuntime | null> {
-  const row = (
-    await db
-      .select({
-        runtime: nodeRuns.runtime,
-        runtimeBinary: nodeRuns.runtimeBinary,
-        runtimeParamsJson: nodeRuns.runtimeParamsJson,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.opencodeSessionId, sessionId))
-      .limit(1)
-  )[0]
+  return await frozenRuntimeOfSessionWith(
+    createLegacySqliteNodeRunOperations(db).runtimes,
+    sessionId,
+  )
+}
+
+export async function frozenRuntimeOfSessionWith(
+  persistence: NodeRunRuntimePersistence,
+  sessionId: string,
+): Promise<FrozenRuntime | null> {
+  const row = await persistence.findBySessionId(sessionId)
   if (row != null && isKnownRuntimeKind(row.runtime)) {
     return {
       protocol: row.runtime,
@@ -689,19 +608,6 @@ export async function frozenRuntimeOfSession(
  * 空集 → 0（与历史两种写法 reduce(…,-1)+1 / length===0?0:max()+1 同值）。
  * review.ts 的「latest 单行 +1」= 单元素集特例，经此函数语义不变。
  */
-export function nextRetryIndex(
-  rows: ReadonlyArray<{ retryIndex: number; parentNodeRunId?: string | null; iteration?: number }>,
-  opts: { topLevelOnly?: boolean; iteration?: number } = {},
-): number {
-  let max = -1
-  for (const row of rows) {
-    if (opts.topLevelOnly === true && (row.parentNodeRunId ?? null) !== null) continue
-    if (opts.iteration !== undefined && row.iteration !== opts.iteration) continue
-    if (row.retryIndex > max) max = row.retryIndex
-  }
-  return max + 1
-}
-
 // -----------------------------------------------------------------------------
 // RFC-287 T8（G2）—— 取行前奏的单一实现。
 //
@@ -725,23 +631,14 @@ export function nextRetryIndex(
 // -----------------------------------------------------------------------------
 
 /** 前奏读到的同节点同迭代行（只列被判据用到的列，便于四线共用）。 */
-export interface SchedulerRunRowCandidate {
+export interface SchedulerRunRowCandidate extends ApplicationSchedulerRunRowCandidate {
   id: string
-  status: NodeRunStatus
-  retryIndex: number
-  reviewIteration: number
-  shardKey: string | null
-  parentNodeRunId: string | null
-  preSnapshot?: string | null
-  continuationSlotKey?: string | null
-  lineageSlotPathJson?: string | null
-  operationGeneration?: number
   startedAt: number | null
   childTaskId?: string | null
 }
 
 export interface ResolveSchedulerRunRowArgs<R extends SchedulerRunRowCandidate> {
-  db: DbClient
+  db: LegacySqliteNodeRunDatabase
   taskId: string
   nodeId: string
   iteration: number
@@ -772,84 +669,19 @@ export interface ResolvedSchedulerRunRow<R> {
 export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>(
   args: ResolveSchedulerRunRowArgs<R>,
 ): Promise<ResolvedSchedulerRunRow<R>> {
-  const { db, taskId, nodeId, iteration, consumedUpstreamJson, rows } = args
-
-  // RFC-023: latest existing row drives clarify/review/shard inheritance for
-  // every fresh row minted below. isFresherNodeRun matches the comparator
-  // latestPerNode uses upstream, so the inherited round is always the one the
-  // scheduler is about to treat as authoritative.
-  let latestExisting: R | undefined
-  for (const r of rows) {
-    if (r.parentNodeRunId !== null) continue // skip fan-out children
-    if (isFresherNodeRun(r, latestExisting)) latestExisting = r
-  }
-
-  if (args.preResolve !== undefined) {
-    const adopted = await args.preResolve(latestExisting)
-    if (adopted !== null) {
-      return { nodeRunId: adopted.nodeRunId, retryIndex: 0, latestExisting, adopted: true }
-    }
-  }
-
-  const pendingExisting = rows.find((r) => r.status === 'pending' && r.parentNodeRunId === null)
-  if (pendingExisting !== undefined) {
-    // RFC-074: a reused pending row (e.g. minted by clarify rerun) runs now with
-    // the inputs just resolved — stamp its provenance to match what it reads.
-    withTaskExecutionMutation({
-      db,
-      taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({ consumedUpstreamRunsJson: consumedUpstreamJson })
-          .where(eq(nodeRuns.id, pendingExisting.id))
-          .run(),
-    })
-    if (args.broadcastPending !== null) args.broadcastPending(pendingExisting.id)
-    return {
-      nodeRunId: pendingExisting.id,
-      retryIndex: args.trackRetryIndex ? pendingExisting.retryIndex : 0,
-      latestExisting,
-      adopted: false,
-    }
-  }
-
-  // RFC-284 T21：rows 已限定节点+迭代，直接收编 nextRetryIndex。
-  const retryIndex = nextRetryIndex(rows)
-  // RFC-098 WP-10: the cause splits on what the freshest existing top-level row
-  // is — undefined→'initial', done/awaiting_*→'stale-redispatch',
-  // failed/interrupted/canceled/exhausted→'revival'（rfc098-rerun-cause-gates 锁）。
-  const nodeRunId = await mintNodeRun(db, {
-    taskId,
-    nodeId,
-    status: 'pending',
-    cause: schedulerMintCause(latestExisting),
-    retryIndex,
-    iteration,
-    inheritFrom:
-      latestExisting === undefined
-        ? null
-        : {
-            reviewIteration: latestExisting.reviewIteration,
-            shardKey: latestExisting.shardKey,
-            parentNodeRunId: latestExisting.parentNodeRunId,
-            preSnapshot: latestExisting.preSnapshot ?? null,
-            continuationSlotKey: latestExisting.continuationSlotKey ?? null,
-            lineageSlotPathJson: latestExisting.lineageSlotPathJson ?? null,
-            operationGeneration: latestExisting.operationGeneration ?? 0,
-          },
-    overrides: {
-      ...(args.inheritReviewIteration
-        ? { reviewIteration: latestExisting?.reviewIteration ?? 0 }
-        : {}),
-      shardKey: latestExisting?.shardKey ?? null,
-      parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
-      consumedUpstreamRunsJson: consumedUpstreamJson,
-      // RFC-132 ③: the borrow ledger is gone — a retry/revival row never carries
-      // an agent override anymore (the column stays as audit on old rows).
-      ...(args.clearAgentOverride ? { agentOverrideName: null } : {}),
-    },
+  const operations = createLegacySqliteNodeRunOperations(args.db)
+  return await resolveSchedulerRunRowWithPorts({
+    lifecycle: operations.lifecycle,
+    projections: operations.projections,
+    taskId: args.taskId,
+    nodeId: args.nodeId,
+    iteration: args.iteration,
+    consumedUpstreamJson: args.consumedUpstreamJson,
+    rows: args.rows,
+    inheritReviewIteration: args.inheritReviewIteration,
+    clearAgentOverride: args.clearAgentOverride,
+    trackRetryIndex: args.trackRetryIndex,
+    broadcastPending: args.broadcastPending,
+    ...(args.preResolve === undefined ? {} : { preResolve: args.preResolve }),
   })
-  if (args.broadcastPending !== null) args.broadcastPending(nodeRunId)
-  return { nodeRunId, retryIndex, latestExisting, adopted: false }
 }

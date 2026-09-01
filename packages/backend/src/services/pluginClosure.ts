@@ -10,22 +10,20 @@
 //                                            member's plugins[] ids into a
 //                                            deduped string[] in first-seen
 //                                            order.
-//   loadPluginsByIds(db, ids)             — single DB query (`inArray`)
-//                                            returning the matching plugins
-//                                            rows.
+//   loadPluginsByIds(query, ids)          — provider-neutral batch lookup.
 //
 // Composed in scheduler.ts as:
 //   const closure = await agentDeps.computeClosure(db, agent)
 //   const ids     = collectPluginIdsFromClosure(closure)
-//   const plugins = await loadPluginsByIds(db, ids)
+//   const plugins = await loadPluginsByIds(query, ids)
 //   await runNode({ ..., dependents: closure, plugins })
 
 import type { Agent, Plugin } from '@agent-workflow/shared'
-import { PluginSchema } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
-import { plugins as pluginsTable } from '@/db/schema'
+
+export interface PluginClosureQuery {
+  loadByIds(ids: readonly string[]): Promise<readonly Plugin[]>
+}
 
 /**
  * Union the `plugins[]` ids declared on every closure agent, preserving the
@@ -60,39 +58,13 @@ export function collectPluginIdsFromClosure(closure: readonly Agent[]): string[]
  *
  * Empty input returns `[]` without hitting the DB.
  */
-export async function loadPluginsByIds(db: DbClient, ids: readonly string[]): Promise<Plugin[]> {
+export async function loadPluginsByIds(
+  query: PluginClosureQuery,
+  ids: readonly string[],
+): Promise<Plugin[]> {
   if (ids.length === 0) return []
-  const rows = await db
-    .select()
-    .from(pluginsTable)
-    .where(inArray(pluginsTable.id, [...ids]))
-  // Re-parse via the public schema so we never hand the runner a malformed
-  // row (the same `plugin-row-corrupt` validation that services/plugin.ts uses).
-  const byId = new Map<string, Plugin>()
-  for (const row of rows) {
-    let options: unknown
-    try {
-      options = JSON.parse(row.optionsJson)
-    } catch {
-      options = {}
-    }
-    const parsed = PluginSchema.safeParse({
-      id: row.id,
-      name: row.name,
-      spec: row.spec,
-      options,
-      description: row.description,
-      enabled: row.enabled,
-      sourceKind: row.sourceKind,
-      cachedPath: row.cachedPath,
-      resolvedVersion: row.resolvedVersion,
-      installedAt: row.installedAt,
-      schemaVersion: row.schemaVersion,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    })
-    if (parsed.success) byId.set(row.id, parsed.data)
-  }
+  const rows = await query.loadByIds([...new Set(ids)])
+  const byId = new Map(rows.map((row) => [row.id, row]))
   // Preserve caller's id order (matches closure traversal order) so the
   // resulting inline JSON keys list is deterministic.
   const out: Plugin[] = []

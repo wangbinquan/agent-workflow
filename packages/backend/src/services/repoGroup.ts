@@ -19,11 +19,13 @@ import {
   normalizeMountPath,
   validateRepoGroupNodes,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, like, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { cachedRepos, memories, repoGroupNodes, repoGroups, scheduledTasks } from '@/db/schema'
+import type {
+  RepositoryGroupNodeRecord,
+  RepositoryGroupRecord,
+  RepositoryGroupSnapshot,
+  RepositoryWorkspaceStore,
+} from '@/modules/source-control/public/operations'
 import { resolveCachedRepo, type GitRepoCacheDeps } from '@/services/gitRepoCache'
 import {
   ConflictError,
@@ -34,12 +36,10 @@ import {
 } from '@/util/errors'
 
 export interface RepoGroupDeps {
-  db: DbClient
+  store: RepositoryWorkspaceStore
   cache?: GitRepoCacheDeps
   now?: () => number
 }
-
-const ARCHIVABLE_STATUSES = ['candidate', 'approved', 'superseded', 'rejected'] as const
 
 export class RepoGroupHasReferencesError extends DomainError {
   constructor(
@@ -60,27 +60,8 @@ export class RepoGroupHasReferencesError extends DomainError {
   }
 }
 
-interface RawGroupRow {
-  id: string
-  name: string
-  description: string
-  version: number
-  createdByUserId: string | null
-  createdAt: number
-  updatedAt: number
-  schemaVersion: number
-}
-
-interface RawNodeRow {
-  groupId: string
-  path: string
-  attachmentKind: 'repo' | 'group' | null
-  cachedRepoId: string | null
-  ref: string
-  subdir: string
-  childGroupId: string | null
-  readonly: boolean
-}
+type RawGroupRow = RepositoryGroupRecord
+type RawNodeRow = RepositoryGroupNodeRecord
 
 type RepoGroupWrite = CreateRepoGroup
 type RepoGroupPreviewWrite = { name?: string; nodes: readonly RepoGroupNodeInput[] }
@@ -92,21 +73,10 @@ function asValidation(error: unknown): never {
   throw error
 }
 
-function loadAllGroups(db: DbClient): Map<string, FlattenableGroup> {
-  const groups = db.select().from(repoGroups).all() as RawGroupRow[]
-  const nodes = db
-    .select()
-    .from(repoGroupNodes)
-    .orderBy(repoGroupNodes.groupId, repoGroupNodes.path)
-    .all() as RawNodeRow[]
-  const repoUrlById = new Map(
-    (
-      db
-        .select({ id: cachedRepos.id, urlRedacted: cachedRepos.urlRedacted })
-        .from(cachedRepos)
-        .all() as Array<{ id: string; urlRedacted: string | null }>
-    ).map((row) => [row.id, row.urlRedacted ?? '<url unavailable>']),
-  )
+function loadAllGroups(snapshot: RepositoryGroupSnapshot): Map<string, FlattenableGroup> {
+  const groups = snapshot.groups
+  const nodes = snapshot.nodes
+  const repoUrlById = snapshot.repoUrls
 
   const byId = new Map<string, FlattenableGroup>()
   for (const group of groups) byId.set(group.id, { id: group.id, name: group.name, nodes: [] })
@@ -135,16 +105,16 @@ function loadAllGroups(db: DbClient): Map<string, FlattenableGroup> {
   return byId
 }
 
-export function resolveRepoGroupLayout(
-  db: DbClient,
+export async function resolveRepoGroupLayout(
+  store: RepositoryWorkspaceStore,
   groupId: string,
-): {
+): Promise<{
   repos: PlannedRepo[]
   nodes: PlannedDirectoryNode[]
   maxDepth: number
   groupName: string
-} {
-  const all = loadAllGroups(db)
+}> {
+  const all = loadAllGroups(await store.readRepositoryGroupSnapshot())
   const root = all.get(groupId)
   if (root === undefined) {
     throw new NotFoundError('repo-group-not-found', `repo group ${groupId} not found`)
@@ -157,19 +127,13 @@ export function resolveRepoGroupLayout(
   }
 }
 
-export function previewRepoGroupLayout(
-  db: DbClient,
+export async function previewRepoGroupLayout(
+  store: RepositoryWorkspaceStore,
   input: RepoGroupPreviewWrite,
-): RepoGroupLayoutResponse & { pendingImports: number; pendingRepoPaths: string[] } {
-  const all = loadAllGroups(db)
-  const urlById = new Map(
-    (
-      db
-        .select({ id: cachedRepos.id, urlRedacted: cachedRepos.urlRedacted })
-        .from(cachedRepos)
-        .all() as Array<{ id: string; urlRedacted: string | null }>
-    ).map((row) => [row.id, row.urlRedacted ?? '<url unavailable>']),
-  )
+): Promise<RepoGroupLayoutResponse & { pendingImports: number; pendingRepoPaths: string[] }> {
+  const snapshot = await store.readRepositoryGroupSnapshot()
+  const all = loadAllGroups(snapshot)
+  const urlById = snapshot.repoUrls
 
   let normalized: Array<{ path: string; attachment: RepoGroupNodeInput['attachment'] }>
   try {
@@ -240,8 +204,11 @@ export function previewRepoGroupLayout(
   }
 }
 
-export function getRepoGroupLayoutResponse(db: DbClient, groupId: string): RepoGroupLayoutResponse {
-  const { repos, nodes, maxDepth, groupName } = resolveRepoGroupLayout(db, groupId)
+export async function getRepoGroupLayoutResponse(
+  store: RepositoryWorkspaceStore,
+  groupId: string,
+): Promise<RepoGroupLayoutResponse> {
+  const { repos, nodes, maxDepth, groupName } = await resolveRepoGroupLayout(store, groupId)
   return {
     groupId,
     groupName,
@@ -253,22 +220,11 @@ export function getRepoGroupLayoutResponse(db: DbClient, groupId: string): RepoG
   }
 }
 
-function boundMemoryCount(db: DbClient, groupId: string): number {
-  const rows = db
-    .select({ n: sql<number>`count(*)` })
-    .from(memories)
-    .where(
-      and(
-        eq(memories.scopeType, 'repo_group'),
-        eq(memories.scopeId, groupId),
-        inArray(memories.status, ARCHIVABLE_STATUSES),
-      ),
-    )
-    .all()
-  return Number(rows[0]?.n ?? 0)
-}
-
-function toDto(db: DbClient, row: RawGroupRow, all: Map<string, FlattenableGroup>): RepoGroup {
+function toDto(
+  snapshot: RepositoryGroupSnapshot,
+  row: RawGroupRow,
+  all: Map<string, FlattenableGroup>,
+): RepoGroup {
   const sourceNodes = all.get(row.id)?.nodes ?? []
   const nodes: RepoGroupNode[] = sourceNodes.map((node) => {
     const attachment = node.attachment
@@ -314,27 +270,35 @@ function toDto(db: DbClient, row: RawGroupRow, all: Map<string, FlattenableGroup
     nodes,
     directNodeCount: nodes.length,
     flatRepoCount,
-    boundMemories: boundMemoryCount(db, row.id),
+    boundMemories: snapshot.boundMemoryCounts.get(row.id) ?? 0,
   }
 }
 
-export function listRepoGroups(db: DbClient): RepoGroup[] {
-  const all = loadAllGroups(db)
-  const rows = db.select().from(repoGroups).all() as RawGroupRow[]
-  return rows.sort((a, b) => a.name.localeCompare(b.name)).map((row) => toDto(db, row, all))
+export async function listRepoGroups(store: RepositoryWorkspaceStore): Promise<RepoGroup[]> {
+  const snapshot = await store.readRepositoryGroupSnapshot()
+  const all = loadAllGroups(snapshot)
+  return [...snapshot.groups]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((row) => toDto(snapshot, row, all))
 }
 
-export function getRepoGroup(db: DbClient, id: string): RepoGroup {
-  const row = db.select().from(repoGroups).where(eq(repoGroups.id, id)).limit(1).all()[0] as
-    | RawGroupRow
-    | undefined
+export async function getRepoGroup(
+  store: RepositoryWorkspaceStore,
+  id: string,
+): Promise<RepoGroup> {
+  const snapshot = await store.readRepositoryGroupSnapshot()
+  const row = snapshot.groups.find((candidate) => candidate.id === id)
   if (row === undefined) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
-  return toDto(db, row, loadAllGroups(db))
+  return toDto(snapshot, row, loadAllGroups(snapshot))
 }
 
-async function materializeNodes(deps: RepoGroupDeps, input: RepoGroupWrite): Promise<RawNodeRow[]> {
+async function materializeNodes(
+  deps: RepoGroupDeps,
+  snapshot: RepositoryGroupSnapshot,
+  input: RepoGroupWrite,
+): Promise<RawNodeRow[]> {
   let normalized: Array<{ path: string; attachment: RepoGroupNodeInput['attachment'] }>
   try {
     normalized = validateRepoGroupNodes(input.nodes)
@@ -359,13 +323,7 @@ async function materializeNodes(deps: RepoGroupDeps, input: RepoGroupWrite): Pro
       continue
     }
     if (attachment.kind === 'group') {
-      const exists = deps.db
-        .select({ id: repoGroups.id })
-        .from(repoGroups)
-        .where(eq(repoGroups.id, attachment.childGroupId))
-        .limit(1)
-        .all()
-      if (exists.length === 0) {
+      if (!snapshot.groups.some((group) => group.id === attachment.childGroupId)) {
         throw new ValidationError(
           'repo-group-member-not-found',
           `referenced repo group ${attachment.childGroupId} not found`,
@@ -397,13 +355,7 @@ async function materializeNodes(deps: RepoGroupDeps, input: RepoGroupWrite): Pro
       const resolved = await resolveCachedRepo(deps.cache, { url: attachment.repoUrl! })
       cachedRepoId = resolved.cached.id
     } else {
-      const exists = deps.db
-        .select({ id: cachedRepos.id })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, cachedRepoId))
-        .limit(1)
-        .all()
-      if (exists.length === 0) {
+      if (!snapshot.repoUrls.has(cachedRepoId)) {
         throw new ValidationError(
           'repo-group-member-not-found',
           `referenced cached repo ${cachedRepoId} not found`,
@@ -440,8 +392,12 @@ async function materializeNodes(deps: RepoGroupDeps, input: RepoGroupWrite): Pro
   return output
 }
 
-function assertFlattenable(db: DbClient, groupId: string, requireRepo: boolean): void {
-  const all = loadAllGroups(db)
+function assertFlattenable(
+  snapshot: RepositoryGroupSnapshot,
+  groupId: string,
+  requireRepo: boolean,
+): void {
+  const all = loadAllGroups(snapshot)
   try {
     const result = flattenRepoGroup(groupId, (id) => all.get(id))
     if (requireRepo && result.repos.length === 0) {
@@ -456,17 +412,13 @@ function assertFlattenable(db: DbClient, groupId: string, requireRepo: boolean):
   }
 }
 
-function assertAncestorsStillFlattenable(db: DbClient, groupId: string): void {
-  const all = loadAllGroups(db)
+function assertAncestorsStillFlattenable(snapshot: RepositoryGroupSnapshot, groupId: string): void {
+  const all = loadAllGroups(snapshot)
   const ancestors = new Set<string>()
   const stack = [groupId]
   while (stack.length > 0) {
     const current = stack.pop()!
-    const parents = db
-      .select({ groupId: repoGroupNodes.groupId })
-      .from(repoGroupNodes)
-      .where(eq(repoGroupNodes.childGroupId, current))
-      .all()
+    const parents = snapshot.nodes.filter((node) => node.childGroupId === current)
     for (const parent of parents) {
       if (ancestors.has(parent.groupId)) continue
       ancestors.add(parent.groupId)
@@ -489,13 +441,11 @@ function assertAncestorsStillFlattenable(db: DbClient, groupId: string): void {
   }
 }
 
-function assertNameFree(db: DbClient, name: string, excludeId?: string): void {
-  const rows = db
-    .select({ id: repoGroups.id })
-    .from(repoGroups)
-    .where(sql`lower(${repoGroups.name}) = lower(${name})`)
-    .all()
-  if (rows.some((row) => row.id !== excludeId)) {
+function assertNameFree(snapshot: RepositoryGroupSnapshot, name: string, excludeId?: string): void {
+  const folded = name.toLocaleLowerCase()
+  if (
+    snapshot.groups.some((row) => row.id !== excludeId && row.name.toLocaleLowerCase() === folded)
+  ) {
     throw new ConflictError(
       'repo-group-name-conflict',
       `a repo group named '${name}' already exists`,
@@ -508,31 +458,38 @@ export async function createRepoGroup(
   input: RepoGroupWrite,
   actorUserId: string | null,
 ): Promise<RepoGroup> {
-  assertNameFree(deps.db, input.name)
-  const nodes = await materializeNodes(deps, input)
+  const snapshot = await deps.store.readRepositoryGroupSnapshot()
+  assertNameFree(snapshot, input.name)
+  const nodes = await materializeNodes(deps, snapshot, input)
   const id = ulid()
   const now = (deps.now ?? Date.now)()
-  dbTxSync(deps.db, (tx) => {
-    assertNameFree(tx as unknown as DbClient, input.name)
-    tx.insert(repoGroups)
-      .values({
-        id,
-        name: input.name,
-        description: input.description,
-        version: 1,
-        createdByUserId: actorUserId,
-        createdAt: now,
-        updatedAt: now,
-        schemaVersion: 2,
-      })
-      .run()
-    for (const node of nodes)
-      tx.insert(repoGroupNodes)
-        .values({ ...node, groupId: id })
-        .run()
-    assertFlattenable(tx as unknown as DbClient, id, true)
-  })
-  return getRepoGroup(deps.db, id)
+  const group: RepositoryGroupRecord = {
+    id,
+    name: input.name,
+    description: input.description,
+    version: 1,
+    createdByUserId: actorUserId,
+    createdAt: now,
+    updatedAt: now,
+    schemaVersion: 2,
+  }
+  const groupNodes = nodes.map((node) => ({ ...node, groupId: id }))
+  assertFlattenable(
+    {
+      ...snapshot,
+      groups: [...snapshot.groups, group],
+      nodes: [...snapshot.nodes, ...groupNodes],
+    },
+    id,
+    true,
+  )
+  if ((await deps.store.createRepositoryGroup(group, groupNodes)) === 'name-conflict') {
+    throw new ConflictError(
+      'repo-group-name-conflict',
+      `a repo group named '${input.name}' already exists`,
+    )
+  }
+  return await getRepoGroup(deps.store, id)
 }
 
 export async function updateRepoGroup(
@@ -541,17 +498,13 @@ export async function updateRepoGroup(
   input: RepoGroupWrite,
   expectedVersion?: number,
 ): Promise<RepoGroup> {
-  const existing = deps.db
-    .select({ id: repoGroups.id })
-    .from(repoGroups)
-    .where(eq(repoGroups.id, id))
-    .limit(1)
-    .all()
-  if (existing.length === 0) {
+  const snapshot = await deps.store.readRepositoryGroupSnapshot()
+  const existing = snapshot.groups.find((group) => group.id === id)
+  if (existing === undefined) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
-  assertNameFree(deps.db, input.name, id)
-  const nodes = await materializeNodes(deps, input)
+  assertNameFree(snapshot, input.name, id)
+  const nodes = await materializeNodes(deps, snapshot, input)
   const selfReference = nodes.find((node) => node.childGroupId === id)
   if (selfReference !== undefined) {
     throw new ValidationError('repo-group-cycle', 'a repo group cannot reference itself', {
@@ -559,42 +512,60 @@ export async function updateRepoGroup(
     })
   }
   const now = (deps.now ?? Date.now)()
-  dbTxSync(deps.db, (tx) => {
-    const fresh = tx
-      .select({ version: repoGroups.version })
-      .from(repoGroups)
-      .where(eq(repoGroups.id, id))
-      .limit(1)
-      .all()[0]
-    if (fresh === undefined) {
-      throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
-    }
-    if (expectedVersion !== undefined && fresh.version !== expectedVersion) {
-      throw staleConflictError(
-        'repo_group',
-        `repo group was modified concurrently (expected version ${expectedVersion}, found ${fresh.version})`,
-        { expectedVersion, actualVersion: fresh.version },
-      )
-    }
-    tx.delete(repoGroupNodes).where(eq(repoGroupNodes.groupId, id)).run()
-    for (const node of nodes)
-      tx.insert(repoGroupNodes)
-        .values({ ...node, groupId: id })
-        .run()
-    tx.update(repoGroups)
-      .set({
-        name: input.name,
-        description: input.description,
-        version: fresh.version + 1,
-        updatedAt: now,
-        schemaVersion: 2,
-      })
-      .where(eq(repoGroups.id, id))
-      .run()
-    assertFlattenable(tx as unknown as DbClient, id, true)
-    assertAncestorsStillFlattenable(tx as unknown as DbClient, id)
+  const groupNodes = nodes.map((node) => ({ ...node, groupId: id }))
+  const prospective: RepositoryGroupSnapshot = {
+    ...snapshot,
+    groups: snapshot.groups.map((group) =>
+      group.id === id
+        ? {
+            ...group,
+            name: input.name,
+            description: input.description,
+            version: group.version + 1,
+            updatedAt: now,
+            schemaVersion: 2,
+          }
+        : group,
+    ),
+    nodes: [...snapshot.nodes.filter((node) => node.groupId !== id), ...groupNodes],
+  }
+  assertFlattenable(prospective, id, true)
+  assertAncestorsStillFlattenable(prospective, id)
+  const written = await deps.store.updateRepositoryGroup({
+    id,
+    name: input.name,
+    description: input.description,
+    ...(expectedVersion === undefined ? {} : { expectedVersion }),
+    expectedGraphVersions: snapshot.groups.map((group) => ({
+      id: group.id,
+      version: group.version,
+    })),
+    updatedAt: now,
+    nodes: groupNodes,
   })
-  return getRepoGroup(deps.db, id)
+  if (written.status === 'missing') {
+    throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
+  }
+  if (written.status === 'name-conflict') {
+    throw new ConflictError(
+      'repo-group-name-conflict',
+      `a repo group named '${input.name}' already exists`,
+    )
+  }
+  if (written.status === 'stale') {
+    throw staleConflictError(
+      'repo_group',
+      `repo group was modified concurrently (expected version ${expectedVersion}, found ${written.actualVersion})`,
+      { expectedVersion, actualVersion: written.actualVersion },
+    )
+  }
+  if (written.status === 'graph-stale') {
+    throw staleConflictError(
+      'repo_group',
+      'repository group graph was modified concurrently; reload and retry',
+    )
+  }
+  return await getRepoGroup(deps.store, id)
 }
 
 export interface DeleteRepoGroupResult {
@@ -615,40 +586,27 @@ function scheduledPayloadRepoGroupId(payload: unknown): string | null {
   return null
 }
 
-export function deleteRepoGroup(
-  db: DbClient,
+export async function deleteRepoGroup(
+  store: RepositoryWorkspaceStore,
   id: string,
   options: { force?: boolean } = {},
-): DeleteRepoGroupResult {
-  const rows = db.select().from(repoGroups).where(eq(repoGroups.id, id)).limit(1).all()
-  if (rows.length === 0) {
+): Promise<DeleteRepoGroupResult> {
+  const snapshot = await store.readRepositoryGroupSnapshot()
+  if (!snapshot.groups.some((group) => group.id === id)) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
-  const referencing = db
-    .select({ id: repoGroups.id, name: repoGroups.name })
-    .from(repoGroupNodes)
-    .innerJoin(repoGroups, eq(repoGroups.id, repoGroupNodes.groupId))
-    .where(eq(repoGroupNodes.childGroupId, id))
-    .all()
+  const groupById = new Map(snapshot.groups.map((group) => [group.id, group]))
+  const referencing = snapshot.nodes.flatMap((node) => {
+    if (node.childGroupId !== id) return []
+    const group = groupById.get(node.groupId)
+    return group === undefined ? [] : [{ id: group.id, name: group.name }]
+  })
   const uniqueRefs = [...new Map(referencing.map((row) => [row.id, row])).values()]
-  const scheduleCandidates = db
-    .select({
-      id: scheduledTasks.id,
-      name: scheduledTasks.name,
-      payload: scheduledTasks.launchPayload,
-    })
-    .from(scheduledTasks)
-    .where(
-      and(
-        eq(scheduledTasks.enabled, true),
-        like(scheduledTasks.launchPayload, `%"repoGroupId":"${id}"%`),
-      ),
-    )
-    .all()
-  const refSchedules = scheduleCandidates
+  const refSchedules = snapshot.schedules
+    .filter((row) => row.enabled && row.launchPayload.includes(`"repoGroupId":"${id}"`))
     .filter((row) => {
       try {
-        return scheduledPayloadRepoGroupId(JSON.parse(row.payload)) === id
+        return scheduledPayloadRepoGroupId(JSON.parse(row.launchPayload)) === id
       } catch {
         return false
       }
@@ -658,105 +616,38 @@ export function deleteRepoGroup(
     throw new RepoGroupHasReferencesError(uniqueRefs, refSchedules)
   }
 
-  let archivedMemories = 0
-  let detachedReferences = 0
-  let disabledSchedules = 0
-  dbTxSync(db, (tx) => {
-    const bound = tx
-      .select({ id: memories.id })
-      .from(memories)
-      .where(
-        and(
-          eq(memories.scopeType, 'repo_group'),
-          eq(memories.scopeId, id),
-          inArray(memories.status, ARCHIVABLE_STATUSES),
-        ),
-      )
-      .all()
-    if (bound.length > 0) {
-      tx.update(memories)
-        .set({ status: 'archived' })
-        .where(
-          inArray(
-            memories.id,
-            bound.map((row) => row.id),
-          ),
-        )
-        .run()
-      archivedMemories = bound.length
-    }
-    const refs = tx
-      .select({ groupId: repoGroupNodes.groupId })
-      .from(repoGroupNodes)
-      .where(eq(repoGroupNodes.childGroupId, id))
-      .all()
-    detachedReferences = refs.length
-    if (refs.length > 0) {
-      tx.update(repoGroupNodes)
-        .set({
-          attachmentKind: null,
-          cachedRepoId: null,
-          childGroupId: null,
-          ref: '',
-          subdir: '',
-          readonly: false,
-        })
-        .where(eq(repoGroupNodes.childGroupId, id))
-        .run()
-    }
-    if (refSchedules.length > 0) {
-      tx.update(scheduledTasks)
-        .set({
-          enabled: false,
-          nextRunAt: null,
-          lastError: `repo group ${id} was deleted; re-point this schedule before re-enabling`,
-        })
-        .where(
-          inArray(
-            scheduledTasks.id,
-            refSchedules.map((row) => row.id),
-          ),
-        )
-        .run()
-      disabledSchedules = refSchedules.length
-    }
-    tx.delete(repoGroups).where(eq(repoGroups.id, id)).run()
+  const deleted = await store.deleteRepositoryGroup({
+    id,
+    scheduleIds: refSchedules.map((row) => row.id),
+    expectedGraphVersions: snapshot.groups.map((group) => ({
+      id: group.id,
+      version: group.version,
+    })),
   })
-  return { archivedMemories, detachedReferences, disabledSchedules }
+  if (deleted.status === 'graph-stale') {
+    throw staleConflictError(
+      'repo_group',
+      'repository group graph was modified concurrently; reload and retry',
+    )
+  }
+  return {
+    archivedMemories: deleted.archivedMemories,
+    detachedReferences: deleted.detachedReferences,
+    disabledSchedules: deleted.disabledSchedules,
+  }
 }
 
-export function groupsReferencingRepo(
-  db: DbClient,
+export async function groupsReferencingRepo(
+  store: RepositoryWorkspaceStore,
   cachedRepoId: string,
-): Array<{ id: string; name: string }> {
-  const rows = db
-    .select({ id: repoGroups.id, name: repoGroups.name })
-    .from(repoGroupNodes)
-    .innerJoin(repoGroups, eq(repoGroups.id, repoGroupNodes.groupId))
-    .where(eq(repoGroupNodes.cachedRepoId, cachedRepoId))
-    .all()
-  return [...new Map(rows.map((row) => [row.id, row])).values()]
+): Promise<Array<{ id: string; name: string }>> {
+  return [...(await store.groupsReferencingRepo(cachedRepoId))]
 }
 
 /** Force-delete a cached repo by detaching it while preserving its directory node/subtree. */
-export function detachRepoFromAllGroups(db: DbClient, cachedRepoId: string): number {
-  const rows = db
-    .select({ groupId: repoGroupNodes.groupId })
-    .from(repoGroupNodes)
-    .where(eq(repoGroupNodes.cachedRepoId, cachedRepoId))
-    .all()
-  if (rows.length > 0) {
-    db.update(repoGroupNodes)
-      .set({
-        attachmentKind: null,
-        cachedRepoId: null,
-        childGroupId: null,
-        ref: '',
-        subdir: '',
-        readonly: false,
-      })
-      .where(eq(repoGroupNodes.cachedRepoId, cachedRepoId))
-      .run()
-  }
-  return rows.length
+export async function detachRepoFromAllGroups(
+  store: RepositoryWorkspaceStore,
+  cachedRepoId: string,
+): Promise<number> {
+  return await store.detachRepoFromAllGroups(cachedRepoId)
 }

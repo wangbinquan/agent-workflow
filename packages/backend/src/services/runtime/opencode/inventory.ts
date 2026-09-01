@@ -9,20 +9,15 @@
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import {
   isAgentNodeKind,
   inventoryReasonCode,
   InventorySnapshotCapturedSchema,
   InventorySnapshotMissingSchema,
-  InventorySnapshotSchema,
   type InventoryReasonCode,
   type InventorySnapshot,
   normalizeInventoryRaw,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
-import { DomainError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
 /**
@@ -132,124 +127,4 @@ function errorMessage(err: unknown): string | null {
  */
 export function runRootFor(taskId: string, nodeRunId: string): string {
   return join(Paths.runsDir, taskId, nodeRunId)
-}
-
-/**
- * Look up a stored inventory snapshot by node_run id. Mirrors the route
- * layer's error contract (404 task / node-run not found, 410 non-agent
- * kind). Falls back to `{captured:false, reason:'file-missing'}` when the
- * column is NULL for an agent kind row (covers legacy rows from before
- * RFC-029) so the UI doesn't need a separate "no data yet" code path.
- */
-export async function getInventorySnapshot(
-  db: DbClient,
-  taskId: string,
-  nodeRunId: string,
-): Promise<InventorySnapshot> {
-  const taskRows = await db
-    .select({ snapshot: tasks.workflowSnapshot })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  if (taskRows.length === 0) {
-    throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  }
-  const runRows = await db
-    .select({
-      id: nodeRuns.id,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      inventorySnapshotJson: nodeRuns.inventorySnapshotJson,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const run = runRows[0]
-  if (run === undefined || run.taskId !== taskId) {
-    throw new NotFoundError(
-      'node-run-not-found',
-      `node_run '${nodeRunId}' not found under task '${taskId}'`,
-    )
-  }
-
-  const { nodeKind } = resolveNodeKindFromSnapshot(taskRows[0]!.snapshot, run.nodeId)
-  if (nodeKind !== null && !isAgentNodeKind(nodeKind)) {
-    throw new DomainError(
-      'node-kind-not-supported',
-      `node '${run.nodeId}' (kind=${nodeKind}) does not produce an opencode inventory`,
-      410,
-    )
-  }
-
-  // NULL → legacy / not-yet-captured agent run.
-  if (run.inventorySnapshotJson === null || run.inventorySnapshotJson === '') {
-    // RFC-062: dump plugin writes inventory.json at opencode-boot, but the
-    // runner only reads it (and fills this DB column) AFTER the child exits.
-    // For a still-running run, fall back to a fresh read from runRoot so the
-    // UI sees real data instead of the misleading "plugin may have failed"
-    // file-missing fallback. Terminal-state rows skip this branch — even if
-    // runRoot wasn't cleaned up, the DB NULL is authoritative.
-    if (run.status === 'running') {
-      const snap = await readSnapshotFromRunDir({
-        runDir: runRootFor(taskId, nodeRunId),
-        nodeKind: 'agent-single',
-        pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
-      })
-      if (snap.captured) return snap
-      // Plugin hasn't written the file yet (queueMicrotask race at session
-      // start). Upgrade file-missing → in-flight so the UI message names the
-      // actual situation instead of blaming the plugin. Other reasons
-      // (parse-failed, dump-plugin-internal-error, plugin-load-failed) are
-      // real diagnostics — surface them as-is.
-      if (snap.reason === 'file-missing') {
-        return { captured: false, reason: 'in-flight', message: null }
-      }
-      return snap
-    }
-    return { captured: false, reason: 'file-missing', message: null }
-  }
-
-  // The runner serialized a validated snapshot via `readSnapshotFromRunDir`,
-  // but corruption is still possible if the DB was hand-edited; degrade
-  // gracefully into `parse-failed`.
-  let parsedRaw: unknown
-  try {
-    parsedRaw = JSON.parse(run.inventorySnapshotJson)
-  } catch (err) {
-    return { captured: false, reason: 'parse-failed', message: errorMessage(err) }
-  }
-  const validated = InventorySnapshotSchema.safeParse(parsedRaw)
-  if (!validated.success) {
-    return {
-      captured: false,
-      reason: 'parse-failed',
-      message: validated.error.message.slice(0, 200),
-    }
-  }
-  return validated.data
-}
-
-interface SnapshotNode {
-  id?: unknown
-  kind?: unknown
-}
-
-function resolveNodeKindFromSnapshot(
-  snapshotJson: string,
-  nodeId: string,
-): { nodeKind: string | null } {
-  try {
-    const snap = JSON.parse(snapshotJson) as { nodes?: SnapshotNode[] }
-    const nodes = Array.isArray(snap.nodes) ? snap.nodes : []
-    for (const n of nodes) {
-      if (typeof n.id !== 'string' || n.id !== nodeId) continue
-      const kind = typeof n.kind === 'string' ? n.kind : null
-      return { nodeKind: kind }
-    }
-  } catch {
-    // Unreadable snapshot → null, route returns 200 with whatever the row
-    // carried (matches sessionView's permissive fallback).
-  }
-  return { nodeKind: null }
 }

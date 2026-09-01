@@ -13,13 +13,13 @@
 // 是任何人想知道「支持哪几种 scope」时第一眼看的地方。
 
 import { existsSync } from 'node:fs'
-import { asc, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRuns } from '@/db/schema'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { isGitWorkTree } from '@/util/git'
 import { computeSummary, type StructuralDiff, type StructuralScope } from '@agent-workflow/shared'
-import { getTask } from '@/services/task'
+import type {
+  CodeWorkspaceRead,
+  CodeWorkspaceTask,
+} from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import { readWrapperGitBaseline } from '@/modules/task-execution/public/queries'
 import { computeFromWorktree, computeBetweenRefs } from './gitBackend'
@@ -66,22 +66,22 @@ async function withDeep(
 }
 
 export async function getTaskStructuralDiff(
-  db: DbClient,
+  workspace: CodeWorkspaceRead,
   taskId: string,
   scope: StructuralScope = 'task',
   nodeRunId?: string,
   deepOpts?: DeepOpts,
 ): Promise<StructuralDiff> {
-  const task = await getTask(db, taskId)
+  const task = await workspace.findTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
 
   if (scope === 'node') {
-    return getNodeStructuralDiff(db, task, nodeRunId, deepOpts)
+    return getNodeStructuralDiff(workspace, task, nodeRunId, deepOpts)
   }
   if (scope === 'wrapper') {
-    return getWrapperStructuralDiff(db, task, nodeRunId, deepOpts)
+    return getWrapperStructuralDiff(workspace, task, nodeRunId, deepOpts)
   }
 
   if (task.repoCount === 1) {
@@ -209,11 +209,11 @@ function withContentDigest(diff: StructuralDiff): StructuralDiff {
   return { ...diff, contentDigest: computeContentDigest(diff) }
 }
 
-type ResolvedTask = NonNullable<Awaited<ReturnType<typeof getTask>>>
+type ResolvedTask = CodeWorkspaceTask
 
 /** Per-node structural diff: what did this specific node run change? */
 async function getNodeStructuralDiff(
-  db: DbClient,
+  workspace: CodeWorkspaceRead,
   task: ResolvedTask,
   nodeRunId: string | undefined,
   deepOpts?: DeepOpts,
@@ -224,17 +224,7 @@ async function getNodeStructuralDiff(
       `structural-diff scope 'node' requires a 'nodeRunId' query param`,
     )
   }
-  const rows = await db
-    .select({
-      id: nodeRuns.id,
-      preSnapshot: nodeRuns.preSnapshot,
-      preSnapshotReposJson: nodeRuns.preSnapshotReposJson,
-      startedAt: nodeRuns.startedAt,
-      wrapperProgressJson: nodeRuns.wrapperProgressJson,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, task.id))
-    .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id))
+  const rows = await workspace.listNodeRuns(task.id)
 
   // RFC-089 P3 — multi-repo node scope: resolve + compute per repo (reusing the
   // single-repo resolveNodeScope over each repo's column via perRepoNodeRuns),
@@ -252,7 +242,7 @@ async function getNodeStructuralDiff(
     let hadError = false
     const nodeLabels = canonicalRepoKeys(task.repos)
     for (const [repoIdx, repo] of task.repos.entries()) {
-      const res = resolveNodeScope(perRepoNodeRuns(rows, repo.worktreeDirName), nodeRunId)
+      const res = resolveNodeScope(perRepoNodeRuns([...rows], repo.worktreeDirName), nodeRunId)
       if (res.kind !== 'between' && res.kind !== 'to-worktree') continue // node didn't write this repo
       hadSnapshot = true
       if (!(await isGitWorkTree(repo.worktreePath))) {
@@ -310,10 +300,10 @@ async function getNodeStructuralDiff(
   // baseline (the wrapper's diff is baseline → worktree, not a snapshot pair).
   const target = rows.find((r) => r.id === nodeRunId)
   if (target !== undefined && parseWrapperGitBaseline(target.wrapperProgressJson) !== null) {
-    return getWrapperStructuralDiff(db, task, nodeRunId, deepOpts)
+    return getWrapperStructuralDiff(workspace, task, nodeRunId, deepOpts)
   }
 
-  const res = resolveNodeScope(rows, nodeRunId)
+  const res = resolveNodeScope([...rows], nodeRunId)
   if (res.kind === 'not-found') {
     throw new NotFoundError(
       'node-run-not-found',
@@ -391,7 +381,7 @@ export function parseWrapperGitBaseline(json: string | null): string | null {
 /** Per-wrapper structural diff: what did a git-wrapper's inner scope change?
  *  fromRef = the wrapper's recorded baseline commit; toRef = the worktree. */
 async function getWrapperStructuralDiff(
-  db: DbClient,
+  workspace: CodeWorkspaceRead,
   task: ResolvedTask,
   nodeRunId: string | undefined,
   deepOpts?: DeepOpts,
@@ -408,14 +398,8 @@ async function getWrapperStructuralDiff(
       `per-wrapper structural diff is single-repo only in v1`,
     )
   }
-  const row = (
-    await db
-      .select({ wrapperProgressJson: nodeRuns.wrapperProgressJson })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .limit(1)
-  )[0]
-  if (row === undefined) {
+  const row = await workspace.findNodeRun(nodeRunId)
+  if (row === null) {
     throw new NotFoundError(
       'node-run-not-found',
       `node run '${nodeRunId}' not found in task '${task.id}'`,

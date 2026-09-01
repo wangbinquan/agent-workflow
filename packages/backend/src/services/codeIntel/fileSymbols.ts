@@ -8,8 +8,10 @@ import { basename } from 'node:path'
 import { parseRepoKeyWire, type FileSymbolsResult, type SymbolNode } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readBlobAtRef } from '@/util/git'
-import type { DbClient } from '@/db/client'
-import { getTask } from '@/services/task'
+import type {
+  CodeWorkspaceRead,
+  CodeWorkspaceTask,
+} from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import { FILE_CONTENT_MAX_BYTES, openContainedFile } from '@/services/worktreeFileContent'
 import { resolveLang } from '@/services/structuralDiff/lang/grammars'
@@ -22,7 +24,7 @@ export interface FileSymbolsQuery {
   repo?: string
 }
 
-type LoadedTask = NonNullable<Awaited<ReturnType<typeof getTask>>>
+type LoadedTask = CodeWorkspaceTask
 
 /** Resolve the (worktreePath, baseCommit) pair the query targets. Mirrors
  *  getTaskFileContent's repo selection but keyed by the RFC-248 canonical
@@ -97,14 +99,14 @@ function toResult(
 }
 
 export async function getTaskFileSymbols(
-  db: DbClient,
+  workspace: CodeWorkspaceRead,
   taskId: string,
   q: FileSymbolsQuery,
 ): Promise<FileSymbolsResult> {
   if (q.path === '') {
     throw new ValidationError('file-symbols-missing-path', 'path query param required')
   }
-  const task = await getTask(db, taskId)
+  const task = await workspace.findTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }

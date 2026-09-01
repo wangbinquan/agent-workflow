@@ -6,32 +6,23 @@
 // all active work is the only cheap proof that an old cachedPath is not still
 // being imported by a child process. Uncertainty retains data.
 
-import { CANCELABLE_TASK_STATUSES } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
 import type { Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { DbClient } from '@/db/client'
-import { nodeRuns } from '@/db/schema'
+import type { PluginGenerationGcCommand } from '@/modules/resource-catalog/public/commands'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import { collectPluginGenerationGarbage } from './plugin'
+import { garbageCollectPluginGenerations } from './pluginInstaller'
 import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
 import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('plugin-generation-gc')
 const DEFAULT_GRACE_MS = 24 * 60 * 60_000
-// RFC-317 T51（LC-06）—— 从转移表派生，不再手抄。
-const NON_TERMINAL = CANCELABLE_TASK_STATUSES
 
 function missingDirectory(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    ((error as { code?: unknown }).code === 'ENOENT' ||
-      (error as { code?: unknown }).code === 'ENOTDIR')
-  )
+  if (typeof error !== 'object' || error === null) return false
+  const code = Reflect.get(error, 'code')
+  return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
 /**
@@ -62,29 +53,55 @@ export async function hasPluginGenerationGcCandidates(pluginsDir?: string): Prom
   return false
 }
 
+/**
+ * Filesystem half of the provider-neutral Resource Catalog maintenance
+ * command. Runtime execution fencing and provider reads are supplied by the
+ * command's owner at composition time; this compatibility surface no longer
+ * knows which database provider is active.
+ */
+export interface PluginGenerationFilesystemGcInput {
+  readonly referencedCachedPaths: ReadonlySet<string>
+  readonly graceMs?: number
+  readonly now?: number
+}
+
+export interface PluginGenerationFilesystemGcAdapter {
+  hasCandidates(): Promise<boolean>
+  collect(input: PluginGenerationFilesystemGcInput): Promise<readonly string[]>
+}
+
+export function createPluginGenerationFilesystemGcPort(
+  pluginsDir?: string,
+): PluginGenerationFilesystemGcAdapter {
+  return Object.freeze({
+    hasCandidates: () => hasPluginGenerationGcCandidates(pluginsDir),
+    collect: (input: PluginGenerationFilesystemGcInput) =>
+      garbageCollectPluginGenerations({
+        pluginsDir,
+        referencedCachedPaths: input.referencedCachedPaths,
+        graceMs: input.graceMs,
+        now: input.now,
+      }),
+  })
+}
+
 export async function runPluginGenerationGc(opts: {
-  db: DbClient
-  pluginsDir?: string
+  command: PluginGenerationGcCommand
+  executionFence: 'clear' | 'busy'
   graceMs?: number
   now?: number
 }): Promise<string[]> {
-  if (!(await hasPluginGenerationGcCandidates(opts.pluginsDir))) return []
-  const active = await opts.db
-    .select({ id: nodeRuns.id })
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.status, [...NON_TERMINAL]))
-    .limit(1)
-  if (active.length > 0) return []
-  return collectPluginGenerationGarbage(
-    opts.db,
-    { pluginsDir: opts.pluginsDir },
-    { graceMs: opts.graceMs ?? DEFAULT_GRACE_MS, now: opts.now },
-  )
+  const receipt = await opts.command.run({
+    executionFence: opts.executionFence,
+    graceMs: opts.graceMs ?? DEFAULT_GRACE_MS,
+    ...(opts.now === undefined ? {} : { now: opts.now }),
+  })
+  return [...receipt.removedGenerationPaths]
 }
 
 export function startPluginGenerationGc(opts: {
-  db: DbClient
-  pluginsDir?: string
+  command: PluginGenerationGcCommand
+  executionFence: () => Promise<'clear' | 'busy'>
   intervalMs?: number
   graceMs?: number
   /** RFC-322：错峰相位。 */
@@ -92,7 +109,11 @@ export function startPluginGenerationGc(opts: {
 }): { stop: () => void } {
   const tick = async (): Promise<void> => {
     try {
-      const removed = await runPluginGenerationGc(opts)
+      const removed = await runPluginGenerationGc({
+        command: opts.command,
+        executionFence: await opts.executionFence(),
+        ...(opts.graceMs === undefined ? {} : { graceMs: opts.graceMs }),
+      })
       if (removed.length > 0)
         log.info('removed unreferenced plugin generations', { count: removed.length })
     } catch (error) {

@@ -28,15 +28,16 @@ import {
   parseGitUrl,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { cachedRepos, scheduledTasks, taskRepos, tasks } from '@/db/schema'
+import type {
+  CachedRepositoryRecord,
+  RepositoryWorkspaceStore,
+} from '@/modules/source-control/public/operations'
+import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   classifyBaseRef,
@@ -52,8 +53,6 @@ import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/util/paths'
 import { getCachedGitCapabilities } from '@/services/gitVersion'
 import { detectSubmodules, syncSubmodules, type SubmoduleMode } from '@/services/gitSubmodule'
-// RFC-248 D13: 删仓的第二个拦截理由——被仓库组引用。
-import { detachRepoFromAllGroups, groupsReferencingRepo } from '@/services/repoGroup'
 // RFC-210 G9: config/index.ts only depends on shared + fs + errors + log, so this
 // adds no cycle. util/git.ts still never imports config directly — it reaches
 // resolveSubmoduleParams through the existing dynamic import.
@@ -276,7 +275,7 @@ async function fetchSanitizedOrigin(input: {
 }
 
 export interface GitRepoCacheDeps {
-  db: DbClient
+  store: RepositoryWorkspaceStore
   /** Override app home (tests). Defaults to Paths.root. */
   appHome?: string
   /** Mutex + clone/fetch wait budget in ms. Default 30 min. */
@@ -351,7 +350,7 @@ export interface FastForwardOutcome {
   warning: string | null
 }
 
-function rowToCached(row: typeof cachedRepos.$inferSelect, referencingTaskCount = 0): CachedRepo {
+function rowToCached(row: CachedRepositoryRecord, referencingTaskCount = 0): CachedRepo {
   return {
     id: row.id,
     // RFC-204: the original URL never leaves the daemon — cached_repos is a
@@ -564,37 +563,44 @@ export async function ensureCachedRepoIdentity(
   const cacheDir = join(appHome, 'repos', `${hash}-${slug}`)
   const redacted = redactGitUrl(input.url)
   return await withIdentityLock(hash, async () => {
-    const existing = deps.db
-      .select()
-      .from(cachedRepos)
-      .where(eq(cachedRepos.urlHash, hash))
-      .limit(1)
-      .all()[0]
-    if (existing !== undefined) {
+    const existing = await deps.store.findCachedRepoByHash(hash)
+    if (existing !== null) {
       return { cachedRepoId: existing.id, urlRedacted: existing.urlRedacted ?? redacted }
     }
     const id = ulid()
     const box = deps.secretBox
     // 新增仓会改 all / unused facet ⇒ 让缓存立刻失效。
-    invalidateRepoFacetsCache()
-    deps.db
-      .insert(cachedRepos)
-      .values({
-        id,
-        urlHash: hash,
-        urlEnc: box !== undefined ? box.seal(input.url) : null,
-        urlRedacted: redacted,
-        localPath: cacheDir,
-        defaultBranch: null,
-        // 哨兵：尚未取回内容。见上面的三重作用。
-        lastFetchedAt: 0,
-        createdAt: (deps.now ?? Date.now)(),
-        hasSubmodules: null,
-        lastSubmoduleSyncOk: null,
-        lastSubmoduleSyncError: null,
-      })
-      .run()
-    if (box === undefined) rememberVolatileRepoUrl(deps.db, id, input.url)
+    invalidateRepoFacetsCache(deps.store)
+    const inserted = await deps.store.insertCachedRepo({
+      id,
+      urlHash: hash,
+      urlEnc: box !== undefined ? box.seal(input.url) : null,
+      urlRedacted: redacted,
+      localPath: cacheDir,
+      defaultBranch: null,
+      // 哨兵：尚未取回内容。见上面的三重作用。
+      lastFetchedAt: 0,
+      createdAt: (deps.now ?? Date.now)(),
+      hasSubmodules: null,
+      lastSubmoduleSyncOk: null,
+      lastSubmoduleSyncError: null,
+      lastAutoRefreshAt: null,
+    })
+    if (!inserted) {
+      const concurrent = await deps.store.findCachedRepoByHash(hash)
+      if (concurrent !== null) {
+        return {
+          cachedRepoId: concurrent.id,
+          urlRedacted: concurrent.urlRedacted ?? redacted,
+        }
+      }
+      throw new DomainError(
+        'cached-repo-identity-race',
+        'cached repository identity changed concurrently; retry the request',
+        409,
+      )
+    }
+    if (box === undefined) rememberVolatileRepoUrl(deps.store, id, input.url)
     log.info('registered cached repo identity (no clone yet)', { url: redacted, hash })
     return { cachedRepoId: id, urlRedacted: redacted }
   })
@@ -624,13 +630,7 @@ export async function resolveCachedRepo(
   const submodule = resolveSubmoduleParams(deps.submoduleMode, deps.submoduleJobs)
 
   const work = withUrlLock(hash, async () => {
-    const existing = deps.db
-      .select()
-      .from(cachedRepos)
-      .where(eq(cachedRepos.urlHash, hash))
-      .limit(1)
-      .all()
-    let row = existing[0]
+    let row = (await deps.store.findCachedRepoByHash(hash)) ?? undefined
 
     // RFC-165 (F19-r4): file:// dual-read + verified lazy re-key. The pre-165
     // cache key folded case and the `.git` suffix, so file mirrors cached
@@ -644,24 +644,15 @@ export async function resolveCachedRepo(
       const legacy = gitUrlLegacyFileCacheKeyWith(parsed, sha1Hex)
       if (legacy !== null && legacy.hash !== hash) {
         row = await withUrlLock(legacy.hash, async () => {
-          const candidates = deps.db
-            .select()
-            .from(cachedRepos)
-            .where(eq(cachedRepos.urlHash, legacy.hash))
-            .limit(1)
-            .all()
-          const cand = candidates[0]
+          const cand = (await deps.store.findCachedRepoByHash(legacy.hash)) ?? undefined
           if (cand === undefined) return undefined
-          const candPlain = unsealRepoUrl(cand, deps.secretBox, deps.db)
+          const candPlain = unsealRepoUrl(cand, deps.secretBox, deps.store)
           const candParsed = candPlain === null ? null : parseGitUrl(candPlain)
           const candNewHash =
             candParsed !== null ? gitUrlCacheKeyWith(candParsed, sha1Hex).hash : null
           if (candNewHash !== hash) return undefined // lossy collision — NOT our repo
-          deps.db
-            .update(cachedRepos)
-            .set({ urlHash: hash })
-            .where(and(eq(cachedRepos.id, cand.id), eq(cachedRepos.urlHash, legacy.hash)))
-            .run()
+          const rekeyed = await deps.store.updateCachedRepo(cand.id, { urlHash: hash }, legacy.hash)
+          if (!rekeyed) return undefined
           log.info('re-keyed legacy file:// cache row', {
             url: redacted,
             from: legacy.hash,
@@ -789,20 +780,16 @@ export async function resolveCachedRepo(
           ? deps.secretBox.seal(input.url)
           : row.urlEnc
       if (fetchOnReuse && fetchOk && deps.secretBox === undefined) {
-        rememberVolatileRepoUrl(deps.db, row.id, input.url)
+        rememberVolatileRepoUrl(deps.store, row.id, input.url)
       }
-      deps.db
-        .update(cachedRepos)
-        .set({
-          urlEnc: refreshedUrlEnc,
-          urlRedacted: redacted,
-          lastFetchedAt: ts,
-          hasSubmodules: sub.hasGitmodules,
-          lastSubmoduleSyncOk: sub.ok,
-          lastSubmoduleSyncError: sub.error,
-        })
-        .where(eq(cachedRepos.id, row.id))
-        .run()
+      await deps.store.updateCachedRepo(row.id, {
+        urlEnc: refreshedUrlEnc,
+        urlRedacted: redacted,
+        lastFetchedAt: ts,
+        hasSubmodules: sub.hasGitmodules,
+        lastSubmoduleSyncOk: sub.ok,
+        lastSubmoduleSyncError: sub.error,
+      })
       const updated = {
         ...row,
         urlEnc: refreshedUrlEnc,
@@ -813,7 +800,7 @@ export async function resolveCachedRepo(
         lastSubmoduleSyncError: sub.error,
       }
       return {
-        cached: rowToCached(updated, await refTaskCount(deps.db, row.id)),
+        cached: rowToCached(updated, await deps.store.cachedRepoReferenceCount(row.id)),
         cold: false,
         fetchOk,
         fetchError,
@@ -855,11 +842,11 @@ export async function resolveCachedRepo(
         cachedRepoId: row.id,
       })
       if (row.lastFetchedAt !== 0) {
-        deps.db
-          .update(cachedRepos)
-          .set({ lastFetchedAt: 0, defaultBranch: null, hasSubmodules: null })
-          .where(eq(cachedRepos.id, row.id))
-          .run()
+        await deps.store.updateCachedRepo(row.id, {
+          lastFetchedAt: 0,
+          defaultBranch: null,
+          hasSubmodules: null,
+        })
       }
     }
 
@@ -973,27 +960,21 @@ export async function resolveCachedRepo(
     // 三轮门并发面实测复现：`UNIQUE constraint failed: cached_repos.url_hash`。
     // 触发面是「任一无身份行的冷 resolve」（管理员加仓 / 仓库组导入 / 批量导入 /
     // submoduleRefresh / eager 启动）与「同 URL 的 deferred JSON 启动」重叠。
-    const adoptId =
-      adoptIdentityRowId ??
-      deps.db
-        .select({ id: cachedRepos.id })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.urlHash, hash))
-        .limit(1)
-        .all()[0]?.id ??
-      null
+    const adoptId = adoptIdentityRowId ?? (await deps.store.findCachedRepoByHash(hash))?.id ?? null
     if (adoptId !== null) {
       // 就地补全：身份行此前只有 id/hash/url/localPath，克隆完才知道默认分支与
       // 子模块情况。`createdAt` 保持身份登记那一刻，不覆盖。
-      deps.db.update(cachedRepos).set(rowValues).where(eq(cachedRepos.id, adoptId)).run()
+      await deps.store.updateCachedRepo(adoptId, rowValues)
     } else {
-      deps.db
-        .insert(cachedRepos)
-        .values({ id, createdAt: ts, ...rowValues })
-        .run()
+      await deps.store.insertCachedRepo({
+        id,
+        createdAt: ts,
+        lastAutoRefreshAt: null,
+        ...rowValues,
+      })
     }
     // 克隆落库(新增或补全身份行)同样会动 facets。
-    invalidateRepoFacetsCache()
+    invalidateRepoFacetsCache(deps.store)
     // ⚠️ 后续一律用 `rowId` 而不是 `id`。
     //
     // 四轮门抓到的自伤:三轮门为修 UNIQUE 竞态加了「INSERT 前复读并领养」,`UPDATE`
@@ -1005,7 +986,7 @@ export async function resolveCachedRepo(
     // `cached-repo-not-found`,`refTaskCount` 对真行再次失明。
     // 修 UNIQUE 那一处只改了写、漏了读,是典型的「一半修复」。
     const rowId = adoptId ?? id
-    if (box === undefined) rememberVolatileRepoUrl(deps.db, rowId, input.url)
+    if (box === undefined) rememberVolatileRepoUrl(deps.store, rowId, input.url)
     log.info('cloned new cached repo', { url: redacted, hash, localPath: cacheDir })
     // RFC-165 (F19-r3): the COLD path must resolve requested refs to their
     // remote-tracking state too — the source may carry a non-default local
@@ -1063,7 +1044,7 @@ export async function resolveCachedRepo(
           lastAutoRefreshAt: null,
         },
         // 与返回的 `cached.id` 同源（`rowId`）——用 `id` 会对幽灵行计数，恒 0。
-        await refTaskCount(deps.db, rowId),
+        await deps.store.cachedRepoReferenceCount(rowId),
       ),
       cold: true,
       fetchOk: true,
@@ -1094,44 +1075,11 @@ export async function resolveCachedRepo(
  * `cachedRepoId`, so deleting the row out from under an enabled schedule would
  * make its next fire die with `cached-repo-not-found`.
  */
-async function refTaskCount(db: DbClient, cachedRepoId: string): Promise<number> {
-  // 按**任务**去重，不是两张表各数一遍相加（五轮门 Codex 数据完整性面实测 F8）：
-  // 回填成功后同一个任务**两边都有**——`tasks.cached_repo_id` 在占位时落定，
-  // `task_repos.cached_repo_id` 在回填时写入——于是一个任务被报成两个。
-  // 下面那段注释里「与 task_repos 的多行不重叠计数即可」是错的，正是这条的根因。
-  // UI 直接把这个数标成「N 个任务在用」，删除确认与 operations 过滤器都读它。
-  const r = db
-    .select({ count: sql<number>`count(distinct ${taskRepos.taskId})`.as('count') })
-    .from(taskRepos)
-    .where(eq(taskRepos.cachedRepoId, cachedRepoId))
-    .all()
-  let count = r[0]?.count ?? 0
-  // RFC-287 G7：`task_repos` 在**仓库准备完成之前是空的**（回填与路径回写同事务，
-  // 见 task.ts 的延后准备段），而 `tasks.cached_repo_id` 早在占位时就已指向
-  // `ensureCachedRepoIdentity` 落定的身份行。只数 task_repos 会让这道引用守卫在
-  // 整个准备窗口内**完全失明**——实测：不带 force 就能把一个正在被克隆/使用的镜像
-  // 连行带目录删掉，任务的 cached_repo_id 随即悬空。
-  //
-  // 这道守卫存在的理由（上面注释原话）正是「deleting the row out from under …
-  // a referencing task」，所以把 tasks 这一面补上。`distinct` 不必要：一个任务在
-  // tasks 上只有一个 cached_repo_id，与 task_repos 的多行不重叠计数即可。
-  // 只数那些**还没有 task_repos 行**的任务（准备窗口内），避免与上面重复计数。
-  const fromTasks = db
-    .select({ count: sql<number>`count(*)`.as('count') })
-    .from(tasks)
-    .where(
-      and(
-        eq(tasks.cachedRepoId, cachedRepoId),
-        sql`not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})`,
-      ),
-    )
-    .all()
-  count += fromTasks[0]?.count ?? 0
-  const needle = JSON.stringify(cachedRepoId)
-  for (const row of db.select().from(scheduledTasks).all()) {
-    if (row.launchPayload.includes(`"cachedRepoId":${needle}`)) count++
-  }
-  return count
+async function refTaskCount(
+  store: RepositoryWorkspaceStore,
+  cachedRepoId: string,
+): Promise<number> {
+  return await store.cachedRepoReferenceCount(cachedRepoId)
 }
 
 /**
@@ -1140,73 +1088,14 @@ async function refTaskCount(db: DbClient, cachedRepoId: string): Promise<number>
  * plain "how many repos" question does not need; the overview oracle test
  * locks `countCachedRepos == listCachedRepos().length`.
  */
-export async function countCachedRepos(db: DbClient): Promise<number> {
-  const r = db
-    .select({ count: sql<number>`count(*)`.as('count') })
-    .from(cachedRepos)
-    .all()
-  return r[0]?.count ?? 0
+export async function countCachedRepos(store: RepositoryWorkspaceStore): Promise<number> {
+  return await store.countCachedRepos()
 }
 
-export async function listCachedRepos(db: DbClient): Promise<CachedRepo[]> {
-  const rows = db.select().from(cachedRepos).all()
-  // RFC-311 (audit L2-6): the per-repo `refTaskCount` loop was 1+N with two
-  // full-table scans INSIDE each iteration — 280 repos × (tasks scan +
-  // scheduled_tasks fully materialized into JS for a substring test) ≈ tens of
-  // millions of row visits per /repos page load. Same three-source semantics
-  // (task_repos ∪ preparation-window tasks ∪ scheduled launch payloads, see
-  // refTaskCount's comments), computed once for ALL repos:
-  const counts = new Map<string, number>()
-  const bump = (repoId: string, n: number): void => {
-    counts.set(repoId, (counts.get(repoId) ?? 0) + n)
-  }
-  for (const r of db
-    .select({
-      cachedRepoId: taskRepos.cachedRepoId,
-      n: sql<number>`count(distinct ${taskRepos.taskId})`.as('n'),
-    })
-    .from(taskRepos)
-    .where(isNotNull(taskRepos.cachedRepoId))
-    .groupBy(taskRepos.cachedRepoId)
-    .all()) {
-    if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
-  }
-  for (const r of db
-    .select({ cachedRepoId: tasks.cachedRepoId, n: sql<number>`count(*)`.as('n') })
-    .from(tasks)
-    .where(
-      and(
-        isNotNull(tasks.cachedRepoId),
-        sql`not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})`,
-      ),
-    )
-    .groupBy(tasks.cachedRepoId)
-    .all()) {
-    if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
-  }
-  // One pass over scheduled_tasks (the old shape re-materialized this table
-  // once PER repo). A payload row contributes 1 per distinct mirror id it
-  // mentions — identical to the old `includes('"cachedRepoId":<json>')` probe,
-  // which also matched at most once per (row, repo) pair.
-  const knownIds = new Set(rows.map((row) => row.id))
-  const refPattern = /"cachedRepoId":"([^"\\]+)"/g
-  for (const schedRow of db
-    .select({ launchPayload: scheduledTasks.launchPayload })
-    .from(scheduledTasks)
-    .all()) {
-    const seen = new Set<string>()
-    for (const match of schedRow.launchPayload.matchAll(refPattern)) {
-      const id = match[1]!
-      if (knownIds.has(id)) seen.add(id)
-    }
-    for (const id of seen) bump(id, 1)
-  }
-  const out = rows.map((row) => rowToCached(row, counts.get(row.id) ?? 0))
-  // Most recently fetched first.
-  out.sort((a, b) =>
-    a.lastFetchedAt > b.lastFetchedAt ? -1 : a.lastFetchedAt < b.lastFetchedAt ? 1 : 0,
-  )
-  return out
+export async function listCachedRepos(store: RepositoryWorkspaceStore): Promise<CachedRepo[]> {
+  const rows = await store.listCachedRepos()
+  const counts = await store.cachedRepoReferenceCounts(rows.map((row) => row.id))
+  return rows.map((row) => rowToCached(row, counts.get(row.id) ?? 0))
 }
 
 // --- RFC-311 T28: O(页) 分页查询 ---------------------------------------------
@@ -1236,10 +1125,12 @@ export interface CachedRepoPageOptions {
 const REPO_PAGE_DEFAULT_LIMIT = 50
 const REPO_PAGE_MAX_LIMIT = 200
 
-const repoPageFlights = new WeakMap<object, InFlightCoalescer<string, CachedRepoPage>>()
+let repoPageFlights = new WeakMap<object, InFlightCoalescer<string, CachedRepoPage>>()
 
-function repoPageFlight(db: DbClient): InFlightCoalescer<string, CachedRepoPage> {
-  const owner = db as unknown as object
+function repoPageFlight(
+  store: RepositoryWorkspaceStore,
+): InFlightCoalescer<string, CachedRepoPage> {
+  const owner = store.runtimeIdentity
   const existing = repoPageFlights.get(owner)
   if (existing !== undefined) return existing
   const created = createInFlightCoalescer<string, CachedRepoPage>()
@@ -1268,234 +1159,45 @@ function decodeRepoCursor(raw: string): { lastFetchedAt: number; id: string } {
   return { lastFetchedAt: ts, id }
 }
 
-/** scheduled_tasks 引用面:整表单遍抽取 payload 里提到的镜像 id(与
- *  listCachedRepos 同一 regex 语义)。行数以十计,不参与分页缩放。 */
-/**
- * RFC-311 G4 —— `/repos` 每页都要付的两笔全量成本的短 TTL 缓存。
- *
- * 一笔是 `scheduledReferencedRepoIds`:它**全表扫 scheduled_tasks 并对每行的
- * launch payload 跑正则**;另一笔是 facets 的三条 count(其中 referenced 对每行
- * 做两次 EXISTS)。两者都与过滤条件无关、恒为全量视角,却按「每翻一页」重算——
- * 500 仓下 6.3ms 照不出来,十万仓下滚动哨兵自动翻页会把它放大成每屏一次。
- *
- * 语义代价:新增/删除仓、或新增引用某仓的定时任务后,facets 与 referenced 视图
- * 最多滞后一个 TTL。这是计数 chip 与视图归类,不是事实源,可接受;写路径(刷新/
- * 删除仓)显式失效,所以本进程自己的写立刻可见。
- */
-const REPO_FACETS_TTL_MS = 5_000
-interface RepoFacetsCacheEntry {
-  expiresAt: number
-  epoch: number
-  schedIds: Set<string>
-  facets: { all: number; referenced: number; attention: number; unused: number }
-}
-/** 按 **db 实例**键控,不是一个模块级单例:生产只有一个库、两种写法没差别,但测试
- *  里每个用例各建一个内存库,单例会让上一个库的计数泄漏进下一个库,变成「换个测试
- *  顺序就飘」的那类坑。WeakMap 顺带免掉生命周期管理。 */
-const repoFacetsCache = new WeakMap<object, RepoFacetsCacheEntry>()
-
 /** 写路径调用:让下一次读立刻重算(本进程内的写不该被自己的缓存挡住)。
- *  不传 db 时清空当前进程已知的那一份(测试用)。 */
-export function invalidateRepoFacetsCache(db?: DbClient): void {
-  if (db !== undefined) repoFacetsCache.delete(db as unknown as object)
-  else repoFacetsCacheEpoch += 1
-}
-/** 无参失效用的世代号:WeakMap 无法枚举,用世代号让所有既有条目一次性作废。 */
-let repoFacetsCacheEpoch = 0
-
-function scheduledReferencedRepoIds(db: DbClient): Set<string> {
-  const ids = new Set<string>()
-  const refPattern = /"cachedRepoId":"([^"\\]+)"/g
-  for (const row of db
-    .select({ launchPayload: scheduledTasks.launchPayload })
-    .from(scheduledTasks)
-    .all()) {
-    for (const match of row.launchPayload.matchAll(refPattern)) ids.add(match[1]!)
+ *  不传 store 时清空本进程的 in-flight 合并器(测试用)。 */
+export function invalidateRepoFacetsCache(store?: RepositoryWorkspaceStore): void {
+  if (store !== undefined) {
+    repoPageFlights.delete(store.runtimeIdentity)
+    store.invalidateCachedRepoFacets()
+  } else {
+    repoPageFlights = new WeakMap()
+    invalidateRepositoryWorkspaceFacetCaches()
   }
-  return ids
 }
-
-function escapeLike(term: string): string {
-  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-}
-
-/** referenced 视图的三源 OR(task_repos ∪ 无 task_repos 行的 tasks ∪
- *  scheduled payload 提及),前两源走索引 EXISTS,第三源用预抽取 id 集。 */
-function referencedCondition(schedIds: Set<string>): ReturnType<typeof sql> {
-  const schedLeg =
-    schedIds.size === 0
-      ? sql`0`
-      : sql`${cachedRepos.id} in (${sql.join(
-          [...schedIds].map((id) => sql`${id}`),
-          sql`, `,
-        )})`
-  return sql`(
-    exists (select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id})
-    or exists (
-      select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
-        and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
-    )
-    or ${schedLeg}
-  )`
-}
-
-const attentionCondition = sql`(${cachedRepos.hasSubmodules} = 1 and ${cachedRepos.lastSubmoduleSyncOk} = 0)`
 
 export async function listCachedReposPage(
-  db: DbClient,
+  store: RepositoryWorkspaceStore,
   options: CachedRepoPageOptions = {},
 ): Promise<CachedRepoPage> {
-  return repoPageFlight(db)(repoPageFlightKey(options), () => listCachedReposPageFresh(db, options))
-}
-
-async function listCachedReposPageFresh(
-  db: DbClient,
-  options: CachedRepoPageOptions,
-): Promise<CachedRepoPage> {
-  const limit = Math.max(1, Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT))
-  const cacheKey = db as unknown as object
-  const entry = repoFacetsCache.get(cacheKey)
-  const cachedFacets =
-    entry !== undefined && entry.expiresAt > Date.now() && entry.epoch === repoFacetsCacheEpoch
-      ? entry
-      : null
-  const schedIds = cachedFacets?.schedIds ?? scheduledReferencedRepoIds(db)
-
-  const conds: ReturnType<typeof sql>[] = []
-  const q = options.q?.trim() ?? ''
-  if (q !== '') {
-    const pattern = `%${escapeLike(q)}%`
-    // COALESCE 到 wire 上真正呈现的值:`url_redacted IS NULL` 的历史行(RFC-204
-    // 迁移前)在列表里显示为 `<url unavailable>`,旧的 JS 过滤能按它命中,而裸
-    // `LIKE` 对 NULL 恒为 NULL 会让这些行永远搜不到——实现门 P2-7。
-    conds.push(sql`(
-      coalesce(${cachedRepos.urlRedacted}, ${UNAVAILABLE_REPO_URL}) like ${pattern} escape '\\'
-      or ${cachedRepos.localPath} like ${pattern} escape '\\'
-      or ${cachedRepos.defaultBranch} like ${pattern} escape '\\'
-    )`)
-  }
-  if (options.submodules === 'with') conds.push(sql`${cachedRepos.hasSubmodules} = 1`)
-  if (options.submodules === 'without') conds.push(sql`${cachedRepos.hasSubmodules} = 0`)
-  if (options.autoRefresh === 'refreshed') {
-    conds.push(sql`${cachedRepos.lastAutoRefreshAt} is not null`)
-  }
-  if (options.autoRefresh === 'never') conds.push(sql`${cachedRepos.lastAutoRefreshAt} is null`)
-  const view = options.view ?? 'all'
-  if (view === 'referenced') conds.push(referencedCondition(schedIds))
-  if (view === 'unused') conds.push(sql`not ${referencedCondition(schedIds)}`)
-  if (view === 'attention') conds.push(attentionCondition)
-  if (options.cursor !== undefined) {
-    const c = decodeRepoCursor(options.cursor)
-    // 行值比较,不写展开的 `a < ? OR (a = ? AND id < ?)`:后者在**绑定参数**下
-    // 让 SQLite 选 MULTI-INDEX OR 并回落 `USE TEMP B-TREE FOR ORDER BY`(在
-    // task-operations catalog provider 上实测把翻页从 30ms 拖到 197ms)。500 仓的尺度照不出来,
-    // 但十万仓目标下是同一个坑——实现门 P2-4。
-    conds.push(
-      sql`(${cachedRepos.lastFetchedAt}, ${cachedRepos.id}) < (${c.lastFetchedAt}, ${c.id})`,
+  return await repoPageFlight(store)(repoPageFlightKey(options), async () => {
+    const limit = Math.max(
+      1,
+      Math.min(options.limit ?? REPO_PAGE_DEFAULT_LIMIT, REPO_PAGE_MAX_LIMIT),
     )
-  }
-
-  const rows = db
-    .select()
-    .from(cachedRepos)
-    .where(and(...conds))
-    .orderBy(sql`${cachedRepos.lastFetchedAt} desc`, sql`${cachedRepos.id} desc`)
-    .limit(limit + 1)
-    .all()
-  const pageRows = rows.slice(0, limit)
-  const nextCursor =
-    rows.length > limit && pageRows.length > 0
-      ? `${pageRows[pageRows.length - 1]!.lastFetchedAt}.${pageRows[pageRows.length - 1]!.id}`
-      : null
-
-  // 页内富化:三源 referencingTaskCount 只对 ≤ limit 个 id 计算。
-  const pageIds = pageRows.map((r) => r.id)
-  const counts = new Map<string, number>()
-  const bump = (repoId: string, n: number): void => {
-    counts.set(repoId, (counts.get(repoId) ?? 0) + n)
-  }
-  if (pageIds.length > 0) {
-    const idSet = sql.join(
-      pageIds.map((id) => sql`${id}`),
-      sql`, `,
-    )
-    for (const r of db
-      .select({
-        cachedRepoId: taskRepos.cachedRepoId,
-        n: sql<number>`count(distinct ${taskRepos.taskId})`.as('n'),
-      })
-      .from(taskRepos)
-      .where(sql`${taskRepos.cachedRepoId} in (${idSet})`)
-      .groupBy(taskRepos.cachedRepoId)
-      .all()) {
-      if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
-    }
-    for (const r of db
-      .select({ cachedRepoId: tasks.cachedRepoId, n: sql<number>`count(*)`.as('n') })
-      .from(tasks)
-      .where(
-        and(
-          sql`${tasks.cachedRepoId} in (${idSet})`,
-          sql`not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})`,
-        ),
-      )
-      .groupBy(tasks.cachedRepoId)
-      .all()) {
-      if (r.cachedRepoId !== null) bump(r.cachedRepoId, r.n)
-    }
-    const refPattern = /"cachedRepoId":"([^"\\]+)"/g
-    const pageIdSet = new Set(pageIds)
-    for (const schedRow of db
-      .select({ launchPayload: scheduledTasks.launchPayload })
-      .from(scheduledTasks)
-      .all()) {
-      const seen = new Set<string>()
-      for (const match of schedRow.launchPayload.matchAll(refPattern)) {
-        const id = match[1]!
-        if (pageIdSet.has(id)) seen.add(id)
-      }
-      for (const id of seen) bump(id, 1)
-    }
-  }
-
-  // facets 恒为全量视角(不受任何过滤影响)——镜像既有前端
-  // repoOperationsFacets(items) 对全量 items 计数的行为。
-  const countWhere = (cond?: ReturnType<typeof sql>): number => {
-    const r = db
-      .select({ count: sql<number>`count(*)`.as('count') })
-      .from(cachedRepos)
-      .where(cond)
-      .all()
-    return r[0]?.count ?? 0
-  }
-  const facets =
-    cachedFacets?.facets ??
-    (() => {
-      const all = countWhere()
-      const referenced = countWhere(referencedCondition(schedIds))
-      return {
-        all,
-        referenced,
-        attention: countWhere(attentionCondition),
-        unused: all - referenced,
-      }
-    })()
-  if (cachedFacets === null) {
-    repoFacetsCache.set(cacheKey, {
-      expiresAt: Date.now() + REPO_FACETS_TTL_MS,
-      epoch: repoFacetsCacheEpoch,
-      schedIds,
-      facets,
+    const page = await store.listCachedRepoPage({
+      ...(options.q === undefined ? {} : { q: options.q }),
+      ...(options.view === undefined ? {} : { view: options.view }),
+      ...(options.submodules === undefined ? {} : { submodules: options.submodules }),
+      ...(options.autoRefresh === undefined ? {} : { autoRefresh: options.autoRefresh }),
+      ...(options.cursor === undefined ? {} : { cursor: decodeRepoCursor(options.cursor) }),
+      limit,
     })
-  }
-
-  return {
-    items: pageRows.map((row) => rowToCached(row, counts.get(row.id) ?? 0)),
-    nextCursor,
-    facets,
-  }
+    const last = page.rows.at(-1)
+    return {
+      items: page.rows.map((row) => rowToCached(row, page.referenceCounts.get(row.id) ?? 0)),
+      nextCursor: page.hasMore && last !== undefined ? `${last.lastFetchedAt}.${last.id}` : null,
+      facets: page.facets,
+    }
+  })
 }
 
+// Provider-specific paging SQL lives behind RepositoryWorkspaceStore.
 export interface RefreshCachedRepoResult {
   item: CachedRepo
   fetchOk: boolean
@@ -1524,10 +1226,9 @@ export async function refreshCachedRepo(
   opts?: { touchRecency?: boolean },
 ): Promise<RefreshCachedRepoResult> {
   // 刷新会动 last_fetched_at / submodule 同步态 ⇒ attention facet 可能翻转。
-  invalidateRepoFacetsCache()
-  const rows = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()
-  const row = rows[0]
-  if (!row) {
+  invalidateRepoFacetsCache(deps.store)
+  const row = await deps.store.findCachedRepoById(id)
+  if (row === null) {
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
   }
   const now = deps.now ?? Date.now
@@ -1588,7 +1289,7 @@ export async function refreshCachedRepo(
     // Promise.race) was never applied here, and even where it is applied it only
     // rejects the caller: the git child keeps running and the per-URL queue
     // stays held. Bounding the child itself is what actually frees both.
-    const credentialUrl = unsealRepoUrl(row, deps.secretBox, deps.db) ?? redacted
+    const credentialUrl = unsealRepoUrl(row, deps.secretBox, deps.store) ?? redacted
     const r = await fetchSanitizedOrigin({
       repoPath: row.localPath,
       redactedUrl: redacted,
@@ -1627,16 +1328,12 @@ export async function refreshCachedRepo(
     // the recency window (see this function's doc + selectDueRepos). Everything
     // except last_fetched_at still reflects the fresh fetch either way.
     const touchRecency = opts?.touchRecency ?? true
-    deps.db
-      .update(cachedRepos)
-      .set({
-        ...(touchRecency ? { lastFetchedAt: ts } : {}),
-        hasSubmodules: sub.hasGitmodules,
-        lastSubmoduleSyncOk: sub.ok,
-        lastSubmoduleSyncError: sub.error,
-      })
-      .where(eq(cachedRepos.id, id))
-      .run()
+    await deps.store.updateCachedRepo(id, {
+      ...(touchRecency ? { lastFetchedAt: ts } : {}),
+      hasSubmodules: sub.hasGitmodules,
+      lastSubmoduleSyncOk: sub.ok,
+      lastSubmoduleSyncError: sub.error,
+    })
     const updated = {
       ...row,
       lastFetchedAt: touchRecency ? ts : row.lastFetchedAt,
@@ -1645,7 +1342,7 @@ export async function refreshCachedRepo(
       lastSubmoduleSyncError: sub.error,
     }
     return {
-      item: rowToCached(updated, await refTaskCount(deps.db, row.id)),
+      item: rowToCached(updated, await refTaskCount(deps.store, row.id)),
       fetchOk,
       fetchError,
       submoduleSyncOk: sub.ok,
@@ -1691,16 +1388,15 @@ export async function deleteCachedRepo(
   id: string,
   options: DeleteCachedRepoOptions = {},
 ): Promise<{ deletedLocalPath: string }> {
-  invalidateRepoFacetsCache()
-  const rows = deps.db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1).all()
-  const row = rows[0]
-  if (!row) {
+  invalidateRepoFacetsCache(deps.store)
+  const row = await deps.store.findCachedRepoById(id)
+  if (row === null) {
     throw new NotFoundError('cached-repo-not-found', `cached repo ${id} not found`)
   }
-  const count = await refTaskCount(deps.db, row.id)
+  const count = await refTaskCount(deps.store, row.id)
   // RFC-248 D13: 任务引用与仓库组引用是两个独立的拦截理由，一起报给用户，
   // 免得他解决了一个再撞另一个。
-  const groups = groupsReferencingRepo(deps.db, row.id)
+  const groups = await deps.store.groupsReferencingRepo(row.id)
   if ((count > 0 || groups.length > 0) && !options.force) {
     throw new CachedRepoHasReferencesError(count, row.urlRedacted ?? UNAVAILABLE_REPO_URL, groups)
   }
@@ -1728,16 +1424,8 @@ export async function deleteCachedRepo(
     // `withUrlLock(row.urlHash, async () => {\n    try {` 做源码切片锚点来证明
     // 缓存目录删除走的是异步 `rm`。在箭头与 `try` 之间插任何东西都会切空那段、
     // 把守卫弄哑——那条守卫本身是对的，不该为我的排版让路。
-    dbTxSync(deps.db, (tx) => {
-      // 锁内**重查**引用：等锁期间可能有人刚把这个仓加进一个组。用启动时的快照
-      // 去 detach 会漏掉新引用，随后删行被 FK 拒绝（或更糟——留下指向已消失
-      // localPath 的成员行）。
-      if (groupsReferencingRepo(deps.db, row.id).length > 0) {
-        detachRepoFromAllGroups(deps.db, row.id)
-      }
-      tx.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
-    })
-    forgetVolatileRepoUrl(deps.db, id)
+    await deps.store.deleteCachedRepoAndDetachGroups(id)
+    forgetVolatileRepoUrl(deps.store, id)
     return { deletedLocalPath: row.localPath }
   })
 }

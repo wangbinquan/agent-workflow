@@ -11,7 +11,6 @@
 import type { AclResourceType, BundleResourceType } from '@agent-workflow/shared'
 import type { BundleOp, BundleOpKind, ResourceBundle } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbTxSync } from '@/db/txSync'
 
 /** journal 的四态。 */
 export type BundleApplyState = 'prepared' | 'applying' | 'committed' | 'failed'
@@ -85,7 +84,7 @@ export type BundleArtifact =
   | { kind: 'skill-version-stage'; staged: StagedSkillVersionLike }
   | { kind: 'plugin-install'; pluginId: string; generationId: string; generationDir: string }
 
-export interface BundleApplyProvider {
+export interface BundleApplyProvider<TTransaction = unknown> {
   /** 幂等身份。配置包：`{scope:'package', key:importId}`，由客户端持有并重放。 */
   readonly idempotencyKey: { scope: string; key: string }
   /**
@@ -116,15 +115,15 @@ export interface BundleApplyProvider {
 
   // ── 事务钩子。三个都在**同一个** big tx 内被调用（I7 / I13）。 ──
   /** claim 事务内的场景特有校验（intent 的 draft revision/hash）。 */
-  claimInTx?(tx: DbTxSync): void
+  claimInTx?(tx: TTransaction): void
   /**
    * CAS `prepared→applying` **之后**、任何 commit 内核**之前**（I6）。
    * pre-stage 窗口（npm 安装 / 技能暂存）足够长，claim 期的校验会过期；配置包在
    * 这里做 reuse 目标的内容复核（selectedExternalFence）。
    */
-  revalidateInTx?(tx: DbTxSync): void
+  revalidateInTx?(tx: TTransaction): void
   /** 资源写之后、journal 置 committed **之前**，同事务（I7）。 */
-  finalizeInTx?(tx: DbTxSync, receipt: BundleReceipt): void
+  finalizeInTx?(tx: TTransaction, receipt: BundleReceipt): void
 }
 
 // --- T12b 依赖规划器 ---------------------------------------------------------
@@ -303,7 +302,7 @@ export function pendingSeamsFor(
 }
 
 /** 引擎入口的输入。 */
-export interface BundleApplyInput {
+export interface BundleApplyInput<TTransaction = unknown> {
   bundle: ResourceBundle
-  provider: BundleApplyProvider
+  provider: BundleApplyProvider<TTransaction>
 }

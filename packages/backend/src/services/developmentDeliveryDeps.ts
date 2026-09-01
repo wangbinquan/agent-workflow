@@ -1,41 +1,55 @@
-// RFC-310 PR-5 —— development-automation 发布链的装配点依赖（routes 与 cli
-// 共用，同 buildStartTaskDeps 先例）。
-//
-// 这里是唯一允许把平台横层能力（cachedRepos 凭据 URL 解封、RFC-269 code-host
-// connections）翻译成 DA 结构同形端口的地方：repoRemote（repositoryId →
-// remote URL + default branch）、repositoryPreparation（repositoryId →
-// credential-safe fetch + local mirror）与 mrEffects（repositoryId →
-// provider/project/call 绑定 → integration 的 ensure/observe）。模块内部不
-// import 这里。
+// RFC-310/RFC-349 — provider-neutral development delivery composition.
+// Database clients, schema objects and query builders live in provider adapters.
+
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { cachedRepos } from '@/db/schema'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import type {
   MergeRequestFactsCollectorPort,
   PipelineEvidencePort,
   RepoRemotePort,
 } from '@/modules/development-automation/application/ports/reconcilerPorts'
-import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
-import { collectMergeRequestFacts } from '@/modules/integration/application/mrFacts'
-import { developmentMissions, developmentMrClaims } from '@/db/schema'
-import { sha256Hex } from '@/util/hash'
-import { composePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
 import {
-  composeDevelopmentMrEffects,
-  matchRepoProvider,
-  type DevelopmentMrEffects,
-} from '@/modules/integration/composition/codeHostEffects'
-import { resolveCodeHostConnectionsFromKeyFile } from '@/services/codeHost/connections'
+  collectMergeRequestFacts,
+  replyMergeRequestThread,
+} from '@/modules/integration/application/mrFacts'
+import {
+  ensureMergeRequest,
+  observeMergeRequest,
+  type MrEnsureConnectionDeps,
+} from '@/modules/integration/application/mrEnsure'
+import type { DevelopmentMrEffects } from '@/modules/integration/composition/codeHostEffects'
+import type { PipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import { resolveCachedRepo } from '@/services/gitRepoCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { DomainError, NotFoundError } from '@/util/errors'
-import { Paths } from '@/util/paths'
-import { eq } from 'drizzle-orm'
+import { sha256Hex } from '@/util/hash'
+
+export interface DevelopmentWorkspaceRepositoryPreparation {
+  prepare(input: { readonly repositoryId: string }): Promise<{
+    readonly id: string
+    readonly localPath: string
+    readonly defaultBranch: string | null
+  }>
+}
+
+export interface DevelopmentDeliveryProvider {
+  resolveRepository(repositoryId: string): Promise<{
+    readonly remoteUrl: string
+    readonly defaultBranch: string | null
+  } | null>
+  resolveBinding(repositoryId: string): Promise<MrEnsureConnectionDeps | null>
+  readMrFactTarget(input: {
+    readonly missionId: string
+    readonly mrClaimId: string
+  }): Promise<{ readonly repositoryId: string; readonly mrIid: string } | null>
+  readonly pipeline: PipelineEvidenceExecution
+}
 
 export function assertDevelopmentWorkspaceRepositoryFreshness(input: {
   readonly repositoryId: string
@@ -71,54 +85,42 @@ export function assertDevelopmentWorkspaceRepositoryFreshness(input: {
   return defaultBranch
 }
 
-/**
- * Prepare the repository exactly once, immediately before a Digital Employee
- * Case freezes its baseline. Fetch failures are fatal: continuing from a stale
- * mirror would manufacture avoidable conflicts and make Issue intake depend on
- * the age of an unrelated earlier task's cache.
- */
 export function buildDevelopmentWorkspaceRepositoryPreparation(
-  db: DbClient,
-  secretBox: SecretBox | undefined,
-  appHome: string = Paths.root,
-): {
-  readonly prepare: (input: { readonly repositoryId: string }) => Promise<{
-    readonly id: string
-    readonly localPath: string
-    readonly defaultBranch: string | null
-  }>
-} {
-  return {
-    async prepare(input) {
-      const row = db
-        .select({
-          id: cachedRepos.id,
-          urlEnc: cachedRepos.urlEnc,
-          localPath: cachedRepos.localPath,
-          defaultBranch: cachedRepos.defaultBranch,
-        })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, input.repositoryId))
-        .get()
-      if (row === undefined) {
+  provider: DevelopmentWorkspaceRepositoryPreparation,
+): DevelopmentWorkspaceRepositoryPreparation {
+  return Object.freeze({
+    prepare: (input: { readonly repositoryId: string }) => provider.prepare(input),
+  })
+}
+
+/** Provider-neutral cache mechanics; bootstrap supplies the selected store. */
+export function createDevelopmentWorkspaceRepositoryPreparation(input: {
+  readonly store: RepositoryWorkspaceStore
+  readonly appHome: string
+  readonly secretBox?: SecretBox
+}): DevelopmentWorkspaceRepositoryPreparation {
+  return Object.freeze({
+    async prepare(request: { readonly repositoryId: string }) {
+      const row = await input.store.findCachedRepoById(request.repositoryId)
+      if (row === null) {
         throw new NotFoundError(
           'cached-repo-not-found',
-          `cached repo '${input.repositoryId}' not found`,
+          `cached repo '${request.repositoryId}' not found`,
         )
       }
-      const url = unsealRepoUrl(row, secretBox, db)
+      const url = unsealRepoUrl(row, input.secretBox, input.store)
       if (url === null) {
         throw new DomainError(
           'cached-repo-credential-unavailable',
-          `cached repo '${input.repositoryId}' has no readable URL (sealed with a different secret.key?)`,
+          `cached repo '${request.repositoryId}' has no readable URL (sealed with a different secret.key?)`,
           409,
         )
       }
       const prepared = await resolveCachedRepo(
         {
-          db,
-          appHome,
-          secretBox,
+          store: input.store,
+          appHome: input.appHome,
+          secretBox: input.secretBox,
           syncBranches:
             row.defaultBranch === null || row.defaultBranch.length === 0 ? [] : [row.defaultBranch],
         },
@@ -129,10 +131,7 @@ export function buildDevelopmentWorkspaceRepositoryPreparation(
           'repo-fetch-failed',
           `repository fetch failed for ${prepared.cached.urlRedacted}; refusing to freeze a stale Digital Employee baseline`,
           502,
-          {
-            url: prepared.cached.urlRedacted,
-            stderr: prepared.fetchError,
-          },
+          { url: prepared.cached.urlRedacted, stderr: prepared.fetchError },
         )
       }
       if (prepared.cached.id !== row.id) {
@@ -155,13 +154,40 @@ export function buildDevelopmentWorkspaceRepositoryPreparation(
         defaultBranch,
       }
     },
+  })
+}
+
+function createDevelopmentMrEffects(
+  provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
+): DevelopmentMrEffects {
+  const missing = (repositoryId: string) => ({
+    ok: false as const,
+    code: 'code-host-connection-missing',
+    detail: `no code-host binding for repository ${repositoryId}`,
+  })
+  return {
+    async ensure(repositoryId, input) {
+      const binding = await provider.resolveBinding(repositoryId)
+      if (binding === null) return missing(repositoryId)
+      const out = await ensureMergeRequest(binding, input)
+      return out.ok ? { ok: true, mr: out.mr } : out
+    },
+    async reply(repositoryId, input) {
+      const binding = await provider.resolveBinding(repositoryId)
+      if (binding === null) return missing(repositoryId)
+      const out = await replyMergeRequestThread(binding, input)
+      return out.ok ? { ok: true, noteRef: out.noteRef } : out
+    },
+    async observe(repositoryId, mrRef) {
+      const binding = await provider.resolveBinding(repositoryId)
+      if (binding === null) return missing(repositoryId)
+      const out = await observeMergeRequest(binding, mrRef)
+      return out.ok ? { ok: true, observation: out.mr } : out
+    },
   }
 }
 
-export function buildDevelopmentDeliveryDeps(
-  db: DbClient,
-  secretBox: SecretBox | undefined,
-): {
+export function buildDevelopmentDeliveryDeps(provider: DevelopmentDeliveryProvider): {
   readonly repoRemote: RepoRemotePort
   readonly mrEffects: DevelopmentMrEffects
   readonly pipelineEvidence: PipelineEvidencePort
@@ -206,28 +232,11 @@ export function buildDevelopmentDeliveryDeps(
   }
 } {
   const repoRemote: RepoRemotePort = {
-    resolve(repositoryId) {
-      const row = db
-        .select({
-          id: cachedRepos.id,
-          urlEnc: cachedRepos.urlEnc,
-          defaultBranch: cachedRepos.defaultBranch,
-        })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, repositoryId))
-        .get()
-      if (row === undefined) return null
-      const url = unsealRepoUrl(row, secretBox, db)
-      if (url === null) return null
-      return { remoteUrl: url, defaultBranch: row.defaultBranch }
-    },
+    resolve: (repositoryId) => provider.resolveRepository(repositoryId),
   }
-  const mrEffects = composeDevelopmentMrEffects({
-    binding: (repositoryId) => resolveDevelopmentRepoBinding(db, secretBox, repositoryId),
-  })
   const mrFacts = {
     async collect(repositoryId: string, mrRef: string, selfMarker: string) {
-      const binding = resolveDevelopmentRepoBinding(db, secretBox, repositoryId)
+      const binding = await provider.resolveBinding(repositoryId)
       if (binding === null) {
         return {
           ok: false as const,
@@ -235,9 +244,7 @@ export function buildDevelopmentDeliveryDeps(
           detail: `no code-host binding for repository ${repositoryId}`,
         }
       }
-      const result = await collectMergeRequestFacts(binding, mrRef, {
-        selfMarker,
-      })
+      const result = await collectMergeRequestFacts(binding, mrRef, { selfMarker })
       if (!result.ok) return result
       return {
         ok: true as const,
@@ -268,22 +275,17 @@ export function buildDevelopmentDeliveryDeps(
   }
   return {
     repoRemote,
-    mrEffects,
+    mrEffects: createDevelopmentMrEffects(provider),
     mrFacts,
-    pipelineEvidence: buildDevelopmentPipelineDeps(db).pipelineEvidence,
+    pipelineEvidence: buildDevelopmentPipelineDeps(provider.pipeline).pipelineEvidence,
   }
 }
 
-/**
- * PR-7b attach —— repositoryId → MR claim 键（provider + decoded project path，
- * 与 ensure-MR arm 从 correlationRef 拆出的键同形；attach 命令的缺省推导）。
- */
-export function resolveRepoClaimKey(
-  db: DbClient,
-  secretBox: SecretBox | undefined,
+export async function resolveRepoClaimKey(
+  provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
   repositoryId: string,
-): { readonly codeHostEndpointRef: string; readonly stableProjectRef: string } | null {
-  const binding = resolveDevelopmentRepoBinding(db, secretBox, repositoryId)
+): Promise<{ readonly codeHostEndpointRef: string; readonly stableProjectRef: string } | null> {
+  const binding = await provider.resolveBinding(repositoryId)
   if (binding === null) return null
   return {
     codeHostEndpointRef: binding.provider,
@@ -291,49 +293,15 @@ export function resolveRepoClaimKey(
   }
 }
 
-/** repositoryId → code-host connection binding（mrEffects 与 MR facts 共用）。 */
-export function resolveDevelopmentRepoBinding(
-  db: DbClient,
-  secretBox: SecretBox | undefined,
+export async function resolveDevelopmentRepoBinding(
+  provider: Pick<DevelopmentDeliveryProvider, 'resolveBinding'>,
   repositoryId: string,
-): ReturnType<Parameters<typeof composeDevelopmentMrEffects>[0]['binding']> {
-  const row = db
-    .select({
-      id: cachedRepos.id,
-      urlEnc: cachedRepos.urlEnc,
-      defaultBranch: cachedRepos.defaultBranch,
-    })
-    .from(cachedRepos)
-    .where(eq(cachedRepos.id, repositoryId))
-    .get()
-  if (row === undefined) return null
-  const url = unsealRepoUrl(row, secretBox, db)
-  if (url === null) return null
-  const connections = resolveCodeHostConnectionsFromKeyFile(db, Paths.secretKeyFile)
-  if (connections === null) return null
-  const candidates = (['gitlab', 'github'] as const)
-    .map((provider) => connections.resolve(provider))
-    .filter((connection) => connection !== null)
-  const matched = matchRepoProvider(url, candidates)
-  if (matched === null) return null
-  const connection = connections.resolve(matched.provider)
-  if (connection === null) return null
-  return {
-    provider: matched.provider,
-    project: matched.project,
-    call: { connection, ctx: { ports: {} } },
-  }
+): Promise<MrEnsureConnectionDeps | null> {
+  return await provider.resolveBinding(repositoryId)
 }
 
-/**
- * PR-7 T72 —— MR facts collector 的装配胶水：claim 行 → connection binding →
- * integration 三读 fence 采集 → DA 投影（cells）+ thread 明细（台账素材）。
- * selfMarker=missionId（与 reply 同源闭合 self 循环防护）。head race /
- * threads 截断按 loud throw 呈现——arm 不吞（collector 合同：采不到就抛）。
- */
 export function buildDevelopmentMrFactsDeps(
-  db: DbClient,
-  secretBox: SecretBox | undefined,
+  provider: Pick<DevelopmentDeliveryProvider, 'readMrFactTarget' | 'resolveBinding'>,
 ): { readonly mergeRequestFacts: MergeRequestFactsCollectorPort } {
   return {
     mergeRequestFacts: {
@@ -341,38 +309,20 @@ export function buildDevelopmentMrFactsDeps(
         if (input.mrClaimId === null) {
           throw new Error(`mission ${input.missionId} has no MR claim to collect facts for`)
         }
-        const claim = db
-          .select({
-            mrIid: developmentMrClaims.mrIid,
-            stableProjectRef: developmentMrClaims.stableProjectRef,
-          })
-          .from(developmentMrClaims)
-          .where(eq(developmentMrClaims.id, input.mrClaimId))
-          .get()
-        if (claim === undefined) {
-          throw new Error(`mr claim ${input.mrClaimId} not found`)
-        }
-        const missionRow = db
-          .select({ repositoryId: developmentMissions.repositoryId })
-          .from(developmentMissions)
-          .where(eq(developmentMissions.id, input.missionId))
-          .get()
-        if (missionRow === undefined) {
-          throw new Error(`mission ${input.missionId} not found`)
-        }
-        const binding = resolveDevelopmentRepoBinding(db, secretBox, missionRow.repositoryId)
+        const target = await provider.readMrFactTarget({
+          missionId: input.missionId,
+          mrClaimId: input.mrClaimId,
+        })
+        if (target === null) throw new Error(`mr claim ${input.mrClaimId} or mission not found`)
+        const binding = await provider.resolveBinding(target.repositoryId)
         if (binding === null) {
-          throw new Error(`no code-host binding for repository ${missionRow.repositoryId}`)
+          throw new Error(`no code-host binding for repository ${target.repositoryId}`)
         }
-        const out = await collectMergeRequestFacts(binding, claim.mrIid, {
+        const out = await collectMergeRequestFacts(binding, target.mrIid, {
           selfMarker: input.missionId,
         })
-        if (!out.ok) {
-          throw new Error(`mr facts collect failed: ${out.code}: ${out.detail}`)
-        }
+        if (!out.ok) throw new Error(`mr facts collect failed: ${out.code}: ${out.detail}`)
         const snapshot = out.snapshot
-        // headSha 缺席（provider 未暴露 head）时不投影 mr cells——facts 面
-        // indeterminate 让规则老实停（不伪造 head 锚定的事实）。
         const snapshotRef = canonicalDigest(snapshot)
         const now = Date.now()
         return {
@@ -398,24 +348,14 @@ export function buildDevelopmentMrFactsDeps(
   }
 }
 
-/**
- * PR-6 T63/T68 —— integration pipeline 执行面 → DA 结构同形端口的装配胶水：
- * sink 生命周期归平台（collect 的 cleanup 交给消费侧、trigger/rerun 即用即弃）、
- * AdapterFailureReceipt 以 consumer-owned closed failure shape 原样跨过装配缝；
- * retry policy 不解析 provider stderr。
- */
-export function buildDevelopmentPipelineDeps(db: DbClient): {
+export function buildDevelopmentPipelineDeps(runner: PipelineEvidenceExecution): {
   readonly pipelineEvidence: PipelineEvidencePort
 } {
-  const runner = composePipelineEvidenceRunner(db)
   type RunnerFailure = Extract<
     Awaited<ReturnType<typeof runner.collect>>,
     { readonly ok: false }
   >['failure']
-  const failed = (failure: RunnerFailure) => ({
-    ok: false as const,
-    failure,
-  })
+  const failed = (failure: RunnerFailure) => ({ ok: false as const, failure })
   return {
     pipelineEvidence: {
       async collect(input) {

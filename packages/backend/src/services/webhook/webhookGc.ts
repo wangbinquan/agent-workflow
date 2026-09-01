@@ -7,7 +7,7 @@
 // （测试/嵌入场景）回落 deliveryStore 常量。
 import type { Config } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
+import type { WebhookDeliveryPersistencePort } from '@/modules/integration/application/ports/webhookDeliveryPersistence'
 import {
   DELIVERY_BODY_RETENTION_MS,
   DELIVERY_ROW_RETENTION_MS,
@@ -39,26 +39,26 @@ export function retentionFromConfig(cfg: RetentionConfig): DeliveryRetention {
 /** 单次 sweep 体（独立导出可测——两次调用间改 getter 返回值即热生效，评审门
  *  P2-④）。retention 在**每次调用时**求值，不在 ticker 装配时冻结。 */
 export async function runDeliveryGcSweep(
-  db: DbClient,
+  persistence: WebhookDeliveryPersistencePort,
   getConfig?: () => RetentionConfig,
 ): Promise<{ bodiesCleared: number; rowsDeleted: number }> {
   const retention: DeliveryRetention = getConfig
     ? retentionFromConfig(getConfig())
     : { bodyRetentionMs: DELIVERY_BODY_RETENTION_MS, rowRetentionMs: DELIVERY_ROW_RETENTION_MS }
-  return gcDeliveries(db, Date.now(), retention)
+  return gcDeliveries(persistence, Date.now(), retention)
 }
 
 export function runDeliveryGcSlice(
-  db: DbClient,
+  persistence: WebhookDeliveryPersistencePort,
   config: RetentionConfig,
   cursor: unknown,
   batchSize?: number,
 ): Promise<DeliveryGcSliceResult> {
-  return gcDeliveriesSlice(db, Date.now(), retentionFromConfig(config), cursor, batchSize)
+  return gcDeliveriesSlice(persistence, Date.now(), retentionFromConfig(config), cursor, batchSize)
 }
 
 export function startWebhookDeliveryGc(
-  db: DbClient,
+  persistence: WebhookDeliveryPersistencePort,
   getConfig?: () => RetentionConfig,
   // RFC-322：相位偏移；再入闸（原「评审门 P1-②」那条：保留期收缩后的首次 sweep 可能
   // 超一小时，不允许下一 tick 叠加第二个 sweep）现由 startMaintenanceTicker 统一提供。
@@ -69,7 +69,7 @@ export function startWebhookDeliveryGc(
     intervalMs: HOUR_MS,
     phaseOffsetMs,
     onTick: () =>
-      runDeliveryGcSweep(db, getConfig)
+      runDeliveryGcSweep(persistence, getConfig)
         .then(({ bodiesCleared, rowsDeleted }) => {
           if (bodiesCleared > 0 || rowsDeleted > 0) {
             log.info('webhook delivery retention sweep', { bodiesCleared, rowsDeleted })

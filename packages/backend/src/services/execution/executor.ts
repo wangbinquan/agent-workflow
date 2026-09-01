@@ -14,8 +14,9 @@
 // fire path; 2026-08-12 审计对账修正，此前这里写成 "deliberately absent from
 // scheduled workflow fires"，与实际相反).
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
+import type { AgentLaunchResourceOperations } from '@/modules/task-execution/application/ports/agentLaunchResourceOperations'
+import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import type { Task } from '@agent-workflow/shared'
 import type { StartTaskDeps } from '@/services/task'
 import { cancelTask, startTask } from '@/services/task'
@@ -26,11 +27,19 @@ import type { ExecutionOutcome, StartExecutionRequest } from './types'
 import { getExecutionOutcome } from './outcome'
 import { watchTaskTerminal, type TerminalWatchResult } from './executionWatch'
 
+export interface StartExecutionDeps extends StartTaskDeps {
+  /** Provider-selected Resource Catalog participants for the Agent launch arm. */
+  readonly agentLaunchResources?: Readonly<{
+    resources: AgentLaunchResourceOperations
+    integrity: AgentLaunchResourceIntegrityParticipant
+  }>
+}
+
 function depsForInvoker(
   actor: Actor,
-  deps: StartTaskDeps,
+  deps: StartExecutionDeps,
   req: StartExecutionRequest,
-): StartTaskDeps {
+): StartExecutionDeps {
   const invoker = req.invoker
   if (deps.launchProvenance !== undefined) {
     throw new ValidationError(
@@ -99,10 +108,10 @@ function depsForInvoker(
  * created Task exactly as the underlying launch service produced it.
  */
 export async function startExecution(
-  db: DbClient,
+  db: StartTaskDeps['db'],
   actor: Actor,
   req: StartExecutionRequest,
-  deps: StartTaskDeps,
+  deps: StartExecutionDeps,
 ): Promise<Task> {
   // Preserve the established mismatch diagnostic before consulting actor/deps.
   if (req.kind === 'workflow' && req.payload.workflowId !== req.refId) {
@@ -120,8 +129,25 @@ export async function startExecution(
   // 换成 switch + `_exhaustive: never`（本仓既有写法，见 shared/src/lifecycle.ts）后，
   // 漏掉一个变体是**编译错误**，而不是运行期的静默错路。行为与改前逐字一致。
   switch (req.kind) {
-    case 'agent':
-      return await startAgentTask(db, actor, req.refId, req.payload, effectiveDeps, req.uploads)
+    case 'agent': {
+      if (effectiveDeps.agentLaunchResources === undefined) {
+        throw new ValidationError(
+          'agent-launch-operations-not-composed',
+          'the selected database provider did not compose Agent launch operations',
+        )
+      }
+      return await startAgentTask(
+        effectiveDeps.agentLaunchResources.resources,
+        actor,
+        req.refId,
+        req.payload,
+        {
+          ...effectiveDeps,
+          integrity: effectiveDeps.agentLaunchResources.integrity,
+        },
+        req.uploads,
+      )
+    }
     case 'workgroup':
       return await startWorkgroupTask(db, actor, req.refId, req.payload, effectiveDeps)
     case 'workflow':
@@ -136,7 +162,10 @@ export async function startExecution(
 }
 
 /** Unified cancel verb — delegates to cancelTask (PR-2 adds the child cascade there). */
-export async function cancelExecution(db: DbClient, taskId: string): ReturnType<typeof cancelTask> {
+export async function cancelExecution(
+  db: StartTaskDeps['db'],
+  taskId: string,
+): ReturnType<typeof cancelTask> {
   return await cancelTask(db, taskId)
 }
 
@@ -151,7 +180,7 @@ export type WatchExecutionResult =
  * the caller's signal fired first.
  */
 export async function watchExecutionTerminal(
-  db: DbClient,
+  db: StartTaskDeps['db'],
   taskId: string,
   opts: { signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<WatchExecutionResult> {

@@ -25,13 +25,12 @@
 // usable envelope, so this returns empty stdout and the guard reports
 // `envelope-missing` — the same verdict it would have reached itself.
 
-import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
-import { getAgentById } from '@/services/agent'
-import { mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
-import { runNode, type ResolvedSkill } from '@/services/runner'
 import type { Agent } from '@agent-workflow/shared'
+import type { ReviewerResolutionRead } from '@/modules/code-capability/application/ports/reviewerResolutionRead'
+import type {
+  ReviewAgentAttemptOperations,
+  ReviewAgentSkill,
+} from '@/modules/task-execution/application/ports/reviewAgentAttemptOperations'
 
 /**
  * The call shape the review stage's determinism guard drives.
@@ -66,27 +65,17 @@ export type ReviewerResolution = { ok: true; agent: Agent } | { ok: false; messa
  * deleted. A single message would send someone to the wrong screen.
  */
 export async function resolveReviewerAgent(
-  db: DbClient,
+  read: ReviewerResolutionRead,
   input: { repoId: string; capability: string; slot: string },
 ): Promise<ReviewerResolution> {
-  const [cell] = await db
-    .select({ templateId: repoCapabilityConfig.templateId })
-    .from(repoCapabilityConfig)
-    // BOTH keys. Filtering on `repoId` alone resolved the binding from
-    // whichever cell sorted first, so a repository running `mr-review` AND
-    // `mr-monitor` would silently run one capability's stage with the OTHER
-    // capability's agent — while every message below claimed it was reading
-    // "the '{capability}' cell". Every test seeds one capability per repo,
-    // which is exactly why this survived (fixed 2026-08-16).
-    .where(
-      and(
-        eq(repoCapabilityConfig.repoId, input.repoId),
-        eq(repoCapabilityConfig.capability, input.capability),
-      ),
-    )
-    .limit(1)
+  // BOTH keys are part of the provider port request. Filtering on repository
+  // alone once selected the first capability cell and ran the wrong agent.
+  const cell = await read.loadRepositoryCapability({
+    repositoryId: input.repoId,
+    capability: input.capability,
+  })
 
-  if (cell === undefined) {
+  if (cell === null) {
     return {
       ok: false,
       message: `no capability configuration exists for this repository, so '${input.capability}' has no agent to run its ${input.slot} stage`,
@@ -99,7 +88,7 @@ export async function resolveReviewerAgent(
     }
   }
 
-  return await resolveAgentForBinding(db, {
+  return await resolveAgentForBinding(read, {
     templateId: cell.templateId,
     slot: input.slot,
   })
@@ -115,16 +104,12 @@ export async function resolveReviewerAgent(
  * resolve only on the second, i.e. "press save twice", with no explanation.
  */
 export async function resolveAgentForBinding(
-  db: DbClient,
+  read: ReviewerResolutionRead,
   input: { templateId: string; slot: string },
 ): Promise<ReviewerResolution> {
-  const [binding] = await db
-    .select({ agentBySlotJson: capabilityTemplates.agentBySlotJson })
-    .from(capabilityTemplates)
-    .where(eq(capabilityTemplates.id, input.templateId))
-    .limit(1)
+  const binding = await read.loadTemplate(input.templateId)
 
-  if (binding === undefined) {
+  if (binding === null) {
     return {
       ok: false,
       message: `the binding selected for this repository no longer exists, so the '${input.slot}' slot cannot be resolved`,
@@ -151,7 +136,7 @@ export async function resolveAgentForBinding(
     }
   }
 
-  const agent = await getAgentById(db, agentId)
+  const agent = await read.loadAgent(agentId)
   if (agent === null) {
     // Distinct from "none bound": something WAS chosen and has since been
     // deleted, which is a dangling reference to repair rather than a blank to
@@ -165,7 +150,7 @@ export async function resolveAgentForBinding(
 }
 
 export interface ReviewAgentCallerDeps {
-  db: DbClient
+  attempts: ReviewAgentAttemptOperations
   taskId: string
   nodeId: string
   agent: Agent
@@ -177,7 +162,7 @@ export interface ReviewAgentCallerDeps {
   /** The run's envelope nonce — scopes the envelope this caller reconstructs. */
   nonce: string
   /** Resolved skills for this agent, as the scheduler resolves them. */
-  skills: ResolvedSkill[]
+  skills: ReviewAgentSkill[]
   appHome: string
   defaultRuntime?: string | null
   timeoutMs?: number
@@ -197,49 +182,20 @@ export function createReviewAgentCaller(
 ): (prompt: string) => ReviewCaller {
   return (prompt: string): ReviewCaller => {
     return async (call) => {
-      const nodeRunId = await mintNodeRun(deps.db, {
+      const result = await deps.attempts.run({
         taskId: deps.taskId,
         nodeId: deps.nodeId,
-        status: 'pending',
-        cause: 'process-retry',
         // The guard's own numbering, so a row can be traced to the attempt that
         // produced it rather than to a position in an opaque sequence.
         retryIndex: call.attemptSeq,
-      })
-
-      const frozen = await resolveFrozenRuntime(
-        deps.db,
-        nodeRunId,
-        deps.agent.runtime,
-        deps.defaultRuntime ?? null,
-      )
-
-      const result = await runNode({
-        db: deps.db,
-        appHome: deps.appHome,
-        skills: deps.skills,
-        taskId: deps.taskId,
-        nodeRunId,
-        nodeId: deps.nodeId,
         agent: deps.agent,
-        triggerContext: null,
-        runtime: frozen.protocol,
-        runtimeBinary: frozen.binary,
-        runtimeParams: frozen.params,
-        runtimeConfigDir: frozen.configDir,
-        inputs: {},
+        prompt,
         worktreePath: deps.worktreePath,
-        templateMeta: {
-          repoPath: deps.repoPath,
-          baseBranch: deps.baseBranch,
-          taskId: deps.taskId,
-          nodeId: deps.nodeId,
-        },
-        // The prompt is already complete: the review stage composed the diff,
-        // the instructions and the protocol block. Expanding it again would
-        // treat a diff's literal `{{...}}` text as a template token.
-        promptTemplate: prompt,
-        expandPromptTemplate: false,
+        repoPath: deps.repoPath,
+        baseBranch: deps.baseBranch,
+        skills: deps.skills,
+        appHome: deps.appHome,
+        defaultRuntime: deps.defaultRuntime ?? null,
         ...(deps.timeoutMs !== undefined ? { timeoutMs: deps.timeoutMs } : {}),
       })
 

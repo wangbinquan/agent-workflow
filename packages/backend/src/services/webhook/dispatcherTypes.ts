@@ -1,11 +1,10 @@
-// RFC-257 — dispatcher 契约类型。放在 services 层（depcheck no-services-to-routes：
-// webhookDispatch 是 services，不得 import routes；路由与装配层反向引用这里）。
-import type { webhookEndpoints } from '@/db/schema'
+// RFC-257 — provider-neutral dispatcher contract.
+import type { WebhookEndpointRecord } from '@/modules/integration/application/ports/webhookDispatchPersistence'
 import type { CodeHostEvent, TriggerContext } from '@agent-workflow/shared'
 import type { EventResponseTarget } from '@/modules/event-center/public/types'
 import type { WorkStartReceipt } from '@/modules/integration/public/participants'
 
-export type WebhookEndpointRow = typeof webhookEndpoints.$inferSelect
+export type WebhookEndpointRow = WebhookEndpointRecord
 
 export interface WebhookSubscriptionDispatchInput {
   readonly deliveryId: string

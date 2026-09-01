@@ -6,9 +6,8 @@
 // than the general task lifecycle writer: wrapping every setTaskStatus call
 // would make review paths re-enter their own lock when they resume a task.
 
-import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRuns } from '@/db/schema'
+import type { ReviewMutationScopeResolver } from '@/modules/collaboration/application/ports/reviewMutationScope'
+import { SqliteReviewMutationScopeResolver } from '@/modules/collaboration/infrastructure/sqliteReviewMutationScope'
 import { NotFoundError } from '@/util/errors'
 
 const taskTails = new Map<string, Promise<void>>()
@@ -47,21 +46,24 @@ export async function withTaskReviewMutationLock<T>(
 
 /** Resolve the immutable task owner, then join that task's mutation queue. */
 export function withReviewNodeMutationLock<T>(
-  db: DbClient,
+  source:
+    | ReviewMutationScopeResolver
+    | ConstructorParameters<typeof SqliteReviewMutationScopeResolver>[0],
   nodeRunId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  // Bun SQLite is synchronous.  Resolving with `.all()` also registers the
-  // task queue before this function returns, which gives concurrent callers a
-  // deterministic FIFO linearization point.
-  const owner = db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-    .all()[0]
-  if (owner === undefined) {
-    throw new NotFoundError('review-not-found', `review run ${nodeRunId} not found`)
+  const enter = (taskId: string | null): Promise<T> => {
+    if (taskId === null) {
+      throw new NotFoundError('review-not-found', `review run ${nodeRunId} not found`)
+    }
+    return withTaskReviewMutationLock(taskId, fn)
   }
-  return withTaskReviewMutationLock(owner.taskId, fn)
+  if ('findTaskId' in source) return source.findTaskId(nodeRunId).then(enter)
+
+  // The legacy SQLite compatibility path can resolve the immutable scope
+  // synchronously. Enter its FIFO in this call stack so a following membership
+  // mutation cannot overtake a review request merely because Promise.resolve
+  // inserted a microtask between invocation and queue registration. Provider
+  // implementations remain Promise-only and join after their async lookup.
+  return enter(new SqliteReviewMutationScopeResolver(source).findTaskIdSync(nodeRunId))
 }

@@ -8,9 +8,9 @@ import {
   canonicalHumanGateValueJson,
   composeTaskExecutionHumanGateAdapter as composeTaskExecutionHumanGateAdapterInternal,
   createCollaborationCommandContext as createCollaborationCommandContextInternal,
-  decodeCollaborationCommittedEvent,
   decodeClarifyDecisionManifest,
   decodeClarifyDecisionReceipt,
+  decodeCollaborationCommittedEvent,
   decodeQuestionDispatchManifest,
   decodeQuestionDispatchReceipt,
   decodeReviewDecisionManifest,
@@ -27,8 +27,6 @@ import {
 } from '@/modules/collaboration/composition'
 import { parkPreparedHumanGate as parkPreparedHumanGateInternal } from '@/modules/task-execution/public/commands'
 import { bindTaskDecisionParticipantInTx as bindTaskDecisionParticipantInTxInternal } from '@/modules/task-execution/public/participants'
-import type { DbTxSync } from '@/db/txSync'
-import { transitionHumanGateTaskTx } from '@/services/lifecycle'
 
 export const humanGateComposition = {
   createCollaborationCommandContext: createCollaborationCommandContextInternal,
@@ -61,10 +59,10 @@ export const humanGateComposition = {
       inspector: new GitWorkspaceRollbackSnapshotInspector(),
     })
   },
-  bindTaskDecisionParticipantInTx(tx: DbTxSync) {
-    return bindTaskDecisionParticipantInTxInternal(tx, {
-      transitionTx: transitionHumanGateTaskTx,
-    })
+  bindTaskDecisionParticipantInTx(
+    tx: Parameters<typeof bindTaskDecisionParticipantInTxInternal>[0],
+  ) {
+    return bindTaskDecisionParticipantInTxInternal(tx)
   },
   parkPreparedHumanGate(
     input: Omit<Parameters<typeof parkPreparedHumanGateInternal>[0], 'humanGates'>,

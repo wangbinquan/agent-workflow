@@ -27,45 +27,82 @@
 // for an operator; remediation stays on the per-incident fixup script
 // pattern that RFC-052 established (see scripts/fixup-rfc052-*).
 
-import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
-
 import {
   TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES,
+  TERMINAL_TASK_STATUSES as SHARED_TERMINAL_TASK_STATUSES,
   nodeKindSettlesWithoutRow,
-  CANCELABLE_TASK_STATUSES,
   taskWorkspacePhase,
   type TaskWorkspacePhase,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import { isWorkgroupTask } from '@agent-workflow/shared'
-import {
-  clarifyRounds,
-  docVersions,
-  nodeRunEvents,
-  nodeRuns,
-  taskCollaborators,
-  tasks,
-  users,
-} from '@/db/schema'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import type {
+  TaskRecoveryOperations,
+  TaskRecoveryStuckRunSnapshot,
+} from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger } from '@/util/log'
 
-import {
-  logAlertSummary,
-  reconcileLifecycleAlerts,
-  STUCK_RULES,
-  summarizeOpenAlerts,
-  type LifecycleAlertFinding,
-  type LifecycleAlertRow,
-  type StuckRule,
-} from './lifecycleInvariants'
-import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
 import { DAEMON_CADENCE } from './daemonCadence'
 
 const log = createLogger('lifecycle.stuck')
 
 const MIN_MS = 60_000
+const ALERT_PROMOTION_MS = 24 * 60 * MIN_MS
+const STUCK_RULES = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'] as const
+type StuckRule = (typeof STUCK_RULES)[number]
+
+interface LifecycleAlertFinding {
+  taskId: string
+  rule: StuckRule
+  detail: Record<string, unknown>
+}
+
+export interface StuckTaskLifecycleAlertRow {
+  id: string
+  taskId: string
+  rule: StuckRule
+  severity: 'warning' | 'error'
+  detail: Record<string, unknown>
+  detectedAt: number
+  resolvedAt: number | null
+}
+
+type LifecycleAlertRow = StuckTaskLifecycleAlertRow
+
+function logOpenAlertSummary(
+  openAlerts: readonly LifecycleAlertRow[],
+  statusByTask: ReadonlyMap<string, string>,
+  promotedThisScan: number,
+  stateChanged: boolean,
+): void {
+  if (!stateChanged) return
+  const byRule: Record<string, number> = {}
+  let errorCount = 0
+  let liveErrorCount = 0
+  const terminal = new Set<string>(SHARED_TERMINAL_TASK_STATUSES)
+  for (const alert of openAlerts) {
+    byRule[alert.rule] = (byRule[alert.rule] ?? 0) + 1
+    if (alert.severity !== 'error') continue
+    errorCount += 1
+    const status = statusByTask.get(alert.taskId)
+    if (status === undefined || !terminal.has(status)) liveErrorCount += 1
+  }
+  if (liveErrorCount > 0) {
+    log.error('stuck tasks detected', {
+      open: openAlerts.length,
+      errorCount,
+      liveErrorCount,
+      promotedThisScan,
+      byRule,
+    })
+  } else if (errorCount > 0) {
+    log.warn('stuck tasks: historic findings on terminal tasks (benign)', {
+      open: openAlerts.length,
+      errorCount,
+      byRule,
+      hint: 'all on terminal tasks (done/failed/canceled/interrupted) — delete or repair via the Diagnose panel to clear',
+    })
+  }
+}
 
 /** Default freshness threshold for S1/S2/S3 — 30 minutes. */
 export const DEFAULT_STUCK_THRESHOLD_MS = 30 * MIN_MS
@@ -80,7 +117,7 @@ const DEFAULT_REPO_PREP_PENDING_THRESHOLD_MS = 45 * 60_000
 export const DEFAULT_CHILD_PENDING_THRESHOLD_MS = 30 * MIN_MS
 
 export interface RunStuckTaskDetectorArgs {
-  db: DbClient
+  operations: TaskRecoveryOperations
   /** Override Date.now() — used by tests. */
   now?: () => number
   /** Default 30 minutes; overridable for tests. */
@@ -122,125 +159,41 @@ interface StuckCandidate {
   ownerUserId: string | null
   /** RFC-164: non-null = workgroup task (S1/S2 exempt — engine-owned parking). */
   workgroupId: string | null
+  latestEventTs: number | null
+  hasPendingDocVersion: boolean
+  hasOpenClarifySession: boolean
+  hasUndispatchedDesignerQuestions: boolean
+  hasNoActiveHumanMember: boolean
+  workflowSnapshot: string
+  runs: readonly TaskRecoveryStuckRunSnapshot[]
 }
 
-async function loadCandidates(db: DbClient, filter?: readonly string[]): Promise<StuckCandidate[]> {
-  // Only non-terminal task statuses are candidates. Terminal tasks
-  // (done/failed/canceled/interrupted) never "stick" in the operational
-  // sense — they're a final state.
-  const baseWhere = and(
-    isNull(tasks.deletedAt),
-    // RFC-317 T51（LC-06）—— 从转移表派生，不再内联手抄。
-    inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]),
-  )
-  const rows = await db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      startedAt: tasks.startedAt,
-      ownerUserId: tasks.ownerUserId,
-      workgroupId: tasks.workgroupId,
-      parentTaskId: tasks.parentTaskId,
-      worktreePath: tasks.worktreePath,
-      // RFC-317 T50（LC-05）—— 补上 `workspacePruningAt` 与准备行：此前少这两条判定，
-      // 与 assertWorktreePresentForResume 对同一行给出不同结论。
-      workspacePruningAt: tasks.workspacePruningAt,
-      workspacePrunedAt: tasks.workspacePrunedAt,
-    })
-    .from(tasks)
-    .where(
-      filter === undefined || filter.length === 0
-        ? baseWhere
-        : and(baseWhere, inArray(tasks.id, filter as string[])),
-    )
-  const prepRowTaskIds = taskIdsWithRepoPrepRow(
-    db,
-    rows.map((r) => r.id),
-  )
-  return rows.map((r) => ({
-    taskId: r.id,
-    status: r.status,
-    startedAt: r.startedAt,
-    parentTaskId: r.parentTaskId,
+async function loadCandidates(
+  operations: TaskRecoveryOperations,
+  filter?: readonly string[],
+): Promise<StuckCandidate[]> {
+  const rows = await operations.loadStuckTaskSnapshots(filter)
+  return rows.map((row) => ({
+    taskId: row.taskId,
+    status: row.status,
+    startedAt: row.startedAt,
+    parentTaskId: row.parentTaskId,
     workspacePhase: taskWorkspacePhase({
-      worktreePath: r.worktreePath,
-      workspacePruningAt: r.workspacePruningAt,
-      workspacePrunedAt: r.workspacePrunedAt,
-      hasRepoPrepRow: prepRowTaskIds.has(r.id),
+      worktreePath: row.worktreePath,
+      workspacePruningAt: row.workspacePruningAt,
+      workspacePrunedAt: row.workspacePrunedAt,
+      hasRepoPrepRow: row.hasRepoPrepRow,
     }),
-    ownerUserId: r.ownerUserId,
-    workgroupId: r.workgroupId,
+    ownerUserId: row.ownerUserId,
+    workgroupId: row.workgroupId,
+    latestEventTs: row.latestEventTs,
+    hasPendingDocVersion: row.hasPendingDocVersion,
+    hasOpenClarifySession: row.hasOpenClarifySession,
+    hasUndispatchedDesignerQuestions: row.hasUndispatchedDesignerQuestions,
+    hasNoActiveHumanMember: row.hasNoActiveHumanMember,
+    workflowSnapshot: row.workflowSnapshot,
+    runs: row.runs,
   }))
-}
-
-/**
- * Returns the timestamp of the latest node_run_events row across any
- * node_run of `taskId`. Returns `null` when the task has none — e.g.
- * pending tasks that haven't spawned a runner yet.
- */
-async function latestEventTsForTask(db: DbClient, taskId: string): Promise<number | null> {
-  // RFC-311 (audit L3-5): `max(ts)` had no supporting index — every 5min scan
-  // walked EVERY event row of every non-terminal task (row lookups included,
-  // since ts is not in idx_events_node). Event ids are the write order, so
-  // "the newest row's ts per run" answers the same wedge question with one
-  // O(log n) reverse seek per run; parked tasks no longer cost seconds a tick.
-  const runIds = await db
-    .select({ id: nodeRuns.id })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
-  let best: number | null = null
-  for (const run of runIds) {
-    const ts = await latestEventTsForRun(db, run.id)
-    if (ts !== null && (best === null || ts > best)) best = ts
-  }
-  return best
-}
-
-/**
- * RFC-098 WP-8: per-run flavor of `latestEventTsForTask` — the S5 detail
- * reports each wedged run's own last event so the operator can tell which
- * pid went quiet when.
- */
-async function latestEventTsForRun(db: DbClient, nodeRunId: string): Promise<number | null> {
-  // RFC-311: reverse seek on idx_events_node instead of an unindexed max(ts)
-  // over the run's whole event set (see latestEventTsForTask).
-  const row = (
-    await db
-      .select({ ts: nodeRunEvents.ts })
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-      .orderBy(desc(nodeRunEvents.id))
-      .limit(1)
-  )[0]
-  return row?.ts ?? null
-}
-
-async function hasPendingDocVersion(db: DbClient, taskId: string): Promise<boolean> {
-  const row = (
-    await db
-      .select({ id: docVersions.id })
-      .from(docVersions)
-      .where(and(eq(docVersions.taskId, taskId), eq(docVersions.decision, 'pending')))
-      .limit(1)
-  )[0]
-  return row !== undefined
-}
-
-async function hasOpenClarifySession(db: DbClient, taskId: string): Promise<boolean> {
-  // RFC-108 T8 (AR-16): read the UNIFIED clarify_rounds table, not the legacy
-  // clarify_sessions. RFC-058 dual-writes BOTH self-clarify (clarify.ts) and
-  // cross-clarify (crossClarify.ts) as an 'awaiting_human' round here, but
-  // cross-clarify NEVER writes clarify_sessions — so the old query made S2
-  // false-fire on a genuinely-answerable cross-clarify task, and the only repair
-  // (S2.demote-task) then demoted it, destroying an in-flight cross round.
-  const row = (
-    await db
-      .select({ id: clarifyRounds.id })
-      .from(clarifyRounds)
-      .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')))
-      .limit(1)
-  )[0]
-  return row !== undefined
 }
 
 // flag-audit W0：终态集合改引 shared 单源（原为手抄副本；NODE_RUN_STATUS 扩
@@ -253,84 +206,32 @@ interface NodeRunCounts {
   active: number
   /** RFC-098 WP-8 (S5): the non-terminal rows with the fields the alert
    *  detail surfaces ({nodeRunId,nodeId,pid} + per-run lastEventTs later). */
-  activeRows: Array<{
-    id: string
-    nodeId: string
-    status: string
-    pid: number | null
-    childTaskId: string | null
-  }>
+  activeRows: TaskRecoveryStuckRunSnapshot[]
 }
 
 /** RFC-243 §4.1 — is a call row's child task legitimately quiet? True when the
  *  child sits on a human gate (awaiting_*) or its own events are fresh. A
  *  missing / terminal-but-unfinalized child is NOT healthy — the call row's
  *  silence is then a real signal. */
-export async function childDelegationIsHealthy(
-  db: DbClient,
-  childTaskId: string,
+export function childDelegationIsHealthy(
+  child: TaskRecoveryStuckRunSnapshot['child'],
   now: number,
   stuckThresholdMs: number,
-): Promise<boolean> {
-  const child = await db
-    .select({ status: tasks.status, startedAt: tasks.startedAt })
-    .from(tasks)
-    .where(eq(tasks.id, childTaskId))
-    .get()
-  if (child === undefined) return false
+): boolean {
+  if (child === null) return false
   if (child.status === 'awaiting_review' || child.status === 'awaiting_human') return true
-  const childEventTs = await latestEventTsForTask(db, childTaskId)
-  const lastActivity = childEventTs ?? child.startedAt
+  const lastActivity = child.lastEventTs ?? child.startedAt
   return now - lastActivity <= stuckThresholdMs
 }
 
-async function nodeRunCounts(db: DbClient, taskId: string): Promise<NodeRunCounts> {
-  const rows = await db
-    .select({
-      id: nodeRuns.id,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      pid: nodeRuns.pid,
-      childTaskId: nodeRuns.childTaskId,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
+function nodeRunCounts(rows: readonly TaskRecoveryStuckRunSnapshot[]): NodeRunCounts {
   let terminal = 0
   const activeRows: NodeRunCounts['activeRows'] = []
   for (const r of rows) {
     if (TERMINAL_NODE_RUN_SET.has(r.status)) terminal++
     else activeRows.push(r)
   }
-  return { total: rows.length, terminal, active: rows.length - terminal, activeRows }
-}
-
-/**
- * RFC-108 T14 (AR-06): does this task have NO active member who could answer a
- * review/clarify? True only when the task HAS a human membership boundary (owner
- * and/or collaborators, excluding the __system__ sentinel) and EVERY such member
- * is non-active — disabled, or a dangling id with no users row. A system-owned /
- * no-auth task (no human members) returns false: there's no membership boundary
- * to deadlock.
- */
-async function taskHasNoActiveMember(db: DbClient, c: StuckCandidate): Promise<boolean> {
-  const collabRows = await db
-    .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
-    .from(taskCollaborators)
-    .where(eq(taskCollaborators.taskId, c.taskId))
-  const collaboratorIds = collabRows.filter((r) => r.role === 'collaborator').map((r) => r.userId)
-  const memberIds = [
-    ...new Set([
-      ...(c.ownerUserId !== null && c.ownerUserId !== SYSTEM_USER_ID ? [c.ownerUserId] : []),
-      ...collaboratorIds,
-    ]),
-  ]
-  if (memberIds.length === 0) return false // no human membership boundary
-  const userRows = await db
-    .select({ status: users.status })
-    .from(users)
-    .where(inArray(users.id, memberIds))
-  // A member id with no users row (deleted) counts as non-active.
-  return !userRows.some((u) => u.status === 'active')
+  return { total: rows.length, terminal, active: activeRows.length, activeRows }
 }
 
 interface StuckTaskFinding extends LifecycleAlertFinding {
@@ -338,7 +239,6 @@ interface StuckTaskFinding extends LifecycleAlertFinding {
 }
 
 async function checkOne(
-  db: DbClient,
   c: StuckCandidate,
   now: number,
   stuckThresholdMs: number,
@@ -399,7 +299,7 @@ async function checkOne(
   // it parks, regardless of recent activity. Emitted alongside any S1/S2 finding
   // (different concern). reconcileLifecycleAlerts dedups to one open S6 per task.
   if (c.status === 'awaiting_review' || c.status === 'awaiting_human') {
-    if (await taskHasNoActiveMember(db, c)) {
+    if (c.hasNoActiveHumanMember) {
       out.push({
         taskId: c.taskId,
         rule: 'S6',
@@ -414,8 +314,7 @@ async function checkOne(
 
   // S1/S2/S3 share the freshness gate: only flag tasks that have gone
   // quiet for `stuckThresholdMs`.
-  const latestEventTs = await latestEventTsForTask(db, c.taskId)
-  const lastActivityTs = latestEventTs ?? c.startedAt
+  const lastActivityTs = c.latestEventTs ?? c.startedAt
   const inactiveForMs = now - lastActivityTs
   if (inactiveForMs <= stuckThresholdMs) return out // still active
 
@@ -428,9 +327,8 @@ async function checkOne(
   }
 
   if (c.status === 'awaiting_review') {
-    const hasPending = await hasPendingDocVersion(db, c.taskId)
-    if (!hasPending) {
-      const hint = await findRepairHint(db, c.taskId, 'review-awaiting')
+    if (!c.hasPendingDocVersion) {
+      const hint = findRepairHint(c, 'review-awaiting')
       out.push({
         taskId: c.taskId,
         rule: 'S1',
@@ -444,15 +342,13 @@ async function checkOne(
       })
     }
   } else if (c.status === 'awaiting_human') {
-    const hasOpen = await hasOpenClarifySession(db, c.taskId)
     // RFC-120 T9 (model A): a deferred-dispatch task parks awaiting_human on
     // undispatched designer task_questions, NOT an open clarify_session (the cross
     // round is already `answered`). That park is legitimate — not stuck. (Self-gated
     // on the deferred flag → always false for non-deferred tasks, so S2 fires as
     // before for them.)
-    const hasUndispatchedDesigner = await hasUndispatchedDesignerQuestions(db, c.taskId)
-    if (!hasOpen && !hasUndispatchedDesigner) {
-      const hint = await findRepairHint(db, c.taskId, 'clarify-awaiting')
+    if (!c.hasOpenClarifySession && !c.hasUndispatchedDesignerQuestions) {
+      const hint = findRepairHint(c, 'clarify-awaiting')
       out.push({
         taskId: c.taskId,
         rule: 'S2',
@@ -466,13 +362,13 @@ async function checkOne(
       })
     }
   } else if (c.status === 'running') {
-    const counts = await nodeRunCounts(db, c.taskId)
+    const counts = nodeRunCounts(c.runs)
     // "All node_runs terminal" = no active rows AND at least one row exists
     // (an empty node_runs table for a running task is also wedge-y but
     // belongs to a different layer — scheduler bootstrap — so we require
     // counts.total > 0 here to be conservative).
     if (counts.total > 0 && counts.active === 0) {
-      const hint = await findRepairHint(db, c.taskId, 'terminal-non-done')
+      const hint = findRepairHint(c, 'terminal-non-done')
       out.push({
         taskId: c.taskId,
         rule: 'S3',
@@ -507,17 +403,14 @@ async function checkOne(
         lastEventTs: number | null
       }> = []
       for (const r of counts.activeRows) {
-        if (
-          r.childTaskId !== null &&
-          (await childDelegationIsHealthy(db, r.childTaskId, now, stuckThresholdMs))
-        ) {
+        if (r.childTaskId !== null && childDelegationIsHealthy(r.child, now, stuckThresholdMs)) {
           continue
         }
         activeRuns.push({
           nodeRunId: r.id,
           nodeId: r.nodeId,
           pid: r.pid,
-          lastEventTs: await latestEventTsForRun(db, r.id),
+          lastEventTs: r.lastEventTs,
         })
       }
       if (activeRuns.length === 0) return out
@@ -540,20 +433,13 @@ async function checkOne(
 // RFC-057: pick the most-recent review or clarify node_run that fits the
 // requested shape so the Diagnose Panel can prepopulate the repair option
 // preview. Best-effort: returns `null` when no candidate is found.
-async function findRepairHint(
-  db: DbClient,
-  taskId: string,
+function findRepairHint(
+  candidate: StuckCandidate,
   mode: 'review-awaiting' | 'clarify-awaiting' | 'terminal-non-done',
-): Promise<{ kind: 'review' | 'clarify'; nodeRunId: string } | null> {
-  const snapRows = await db
-    .select({ snap: tasks.workflowSnapshot })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  if (snapRows.length === 0) return null
+): { kind: 'review' | 'clarify'; nodeRunId: string } | null {
   let nodes: Array<{ id?: string; kind?: string }> = []
   try {
-    const parsed = JSON.parse(snapRows[0]!.snap) as { nodes?: unknown }
+    const parsed = JSON.parse(candidate.workflowSnapshot) as { nodes?: unknown }
     if (Array.isArray(parsed?.nodes)) nodes = parsed.nodes as typeof nodes
   } catch {
     return null
@@ -571,46 +457,24 @@ async function findRepairHint(
   if (reviewIds.size === 0 && clarifyIds.size === 0) return null
 
   if (mode === 'review-awaiting' && reviewIds.size > 0) {
-    const rows = await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.status, 'awaiting_review'),
-          inArray(nodeRuns.nodeId, [...reviewIds]),
-        ),
-      )
-      .limit(1)
-    if (rows.length > 0) return { kind: 'review', nodeRunId: rows[0]!.id }
+    const row = candidate.runs.find(
+      (run) => run.status === 'awaiting_review' && reviewIds.has(run.nodeId),
+    )
+    if (row !== undefined) return { kind: 'review', nodeRunId: row.id }
   }
   if (mode === 'clarify-awaiting' && clarifyIds.size > 0) {
-    const rows = await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          eq(nodeRuns.status, 'awaiting_human'),
-          inArray(nodeRuns.nodeId, [...clarifyIds]),
-        ),
-      )
-      .limit(1)
-    if (rows.length > 0) return { kind: 'clarify', nodeRunId: rows[0]!.id }
+    const row = candidate.runs.find(
+      (run) => run.status === 'awaiting_human' && clarifyIds.has(run.nodeId),
+    )
+    if (row !== undefined) return { kind: 'clarify', nodeRunId: row.id }
   }
   if (mode === 'terminal-non-done') {
     const targetSet = new Set<string>([...reviewIds, ...clarifyIds])
     if (targetSet.size === 0) return null
-    const rows = await db
-      .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, taskId),
-          inArray(nodeRuns.status, ['failed', 'canceled', 'interrupted', 'exhausted']),
-          inArray(nodeRuns.nodeId, [...targetSet]),
-        ),
-      )
+    const terminalNonDoneStatuses = new Set(['failed', 'canceled', 'interrupted', 'exhausted'])
+    const rows = candidate.runs.filter(
+      (run) => terminalNonDoneStatuses.has(run.status) && targetSet.has(run.nodeId),
+    )
     if (rows.length === 0) return null
     const row = rows.find((r) => reviewIds.has(r.nodeId)) ?? rows[0]!
     return {
@@ -627,23 +491,45 @@ export async function runStuckTaskDetector(
   const now = (args.now ?? Date.now)()
   const stuckMs = args.stuckThresholdMs ?? DEFAULT_STUCK_THRESHOLD_MS
   const pendingMs = args.pendingThresholdMs ?? DEFAULT_PENDING_THRESHOLD_MS
-  const candidates = await loadCandidates(args.db, args.taskIdFilter)
+  const candidates = await loadCandidates(args.operations, args.taskIdFilter)
   if (candidates.length === 0) {
     return { scanned: 0, newAlerts: 0, promotedAlerts: 0, resolvedAlerts: 0, openAlerts: [] }
   }
   const findings: StuckTaskFinding[] = []
   for (const c of candidates) {
-    findings.push(...(await checkOne(args.db, c, now, stuckMs, pendingMs)))
+    findings.push(...(await checkOne(c, now, stuckMs, pendingMs)))
   }
-  const reconciled = await reconcileLifecycleAlerts({
-    db: args.db,
+  const reconciled = await args.operations.reconcileStuckAlerts({
     taskIds: candidates.map((c) => c.taskId),
     findings,
     now,
     ownedRules: STUCK_RULES,
-    onAlert: args.onAlert,
-    onResolved: args.onResolved,
+    promotionAfterMs: ALERT_PROMOTION_MS,
   })
+  const openAlerts: LifecycleAlertRow[] = reconciled.openAlerts.map((row) => ({
+    id: row.id,
+    taskId: row.taskId,
+    rule: row.rule as StuckRule,
+    severity: row.severity,
+    detail: { ...row.detail },
+    detectedAt: row.detectedAt,
+    resolvedAt: row.resolvedAt,
+  }))
+  for (const transition of reconciled.transitions) {
+    args.onAlert?.(
+      {
+        id: transition.row.id,
+        taskId: transition.row.taskId,
+        rule: transition.row.rule as StuckRule,
+        severity: transition.row.severity,
+        detail: { ...transition.row.detail },
+        detectedAt: transition.row.detectedAt,
+        resolvedAt: transition.row.resolvedAt,
+      },
+      transition.kind,
+    )
+  }
+  for (const taskId of reconciled.resolvedTaskIds) args.onResolved?.(taskId)
   log.info('scan complete', {
     scanned: candidates.length,
     findings: findings.length,
@@ -654,17 +540,14 @@ export async function runStuckTaskDetector(
   const statusByTask = new Map(candidates.map((c) => [c.taskId, c.status]))
   const stateChanged =
     reconciled.newAlerts > 0 || reconciled.promotedAlerts > 0 || reconciled.resolvedAlerts > 0
-  logAlertSummary(
-    log,
-    {
-      actionable: 'stuck tasks detected',
-      benign: 'stuck tasks: historic findings on terminal tasks (benign)',
-    },
-    summarizeOpenAlerts(reconciled.openAlerts, statusByTask),
-    reconciled.promotedAlerts,
-    stateChanged,
-  )
-  return { scanned: candidates.length, ...reconciled }
+  logOpenAlertSummary(openAlerts, statusByTask, reconciled.promotedAlerts, stateChanged)
+  return {
+    scanned: candidates.length,
+    newAlerts: reconciled.newAlerts,
+    promotedAlerts: reconciled.promotedAlerts,
+    resolvedAlerts: reconciled.resolvedAlerts,
+    openAlerts,
+  }
 }
 
 /**
@@ -675,7 +558,7 @@ export async function runStuckTaskDetector(
  * still show up on the second tick.
  */
 export function startStuckTaskDetectorLoop(opts: {
-  db: DbClient
+  operations: TaskRecoveryOperations
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
   onResolved?: (taskId: string) => void
   intervalMs?: number
@@ -686,7 +569,7 @@ export function startStuckTaskDetectorLoop(opts: {
     if (running) return
     running = true
     void runStuckTaskDetector({
-      db: opts.db,
+      operations: opts.operations,
       onAlert: opts.onAlert,
       onResolved: opts.onResolved,
     })

@@ -16,7 +16,7 @@
 // `scheduled` invoker stamps `tasks.scheduled_task_id` for run-history
 // attribution (previously a hand-spread deps field).
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { LegacySqliteTaskDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTaskDatabase'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { StartTaskDeps } from '@/services/task'
@@ -34,7 +34,7 @@ import type {
  * and threads the `scheduled` invoker for run-history attribution.
  */
 export function buildScheduleLaunch(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   schedulerDriver: SchedulerDriverPort,
   configPath: string,
   identityAccess: NonNullable<StartTaskDeps['identityAccess']>,

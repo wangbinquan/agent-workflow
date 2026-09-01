@@ -7,10 +7,12 @@
 // so it is an explicit parameter (design.md R2-e).
 import { loadConfig } from '@/config'
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
+import type { LegacySqliteTaskDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTaskDatabase'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import type { StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
+import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
+import { createSqliteRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/sqliteRuntimeSessionLeaseOperations'
 
 /**
  * RFC-048 — subagent live-capture cadence from live config (moved verbatim from
@@ -34,7 +36,7 @@ export function resolveSubagentLiveCapture(
  * (multipart's `preCreatedWorktree` / `preResolvedSource`) spread them on top.
  */
 export function buildStartTaskDeps(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   schedulerDriver: SchedulerDriverPort,
   configPath: string,
   actorUserId: string,
@@ -47,6 +49,8 @@ export function buildStartTaskDeps(
   return {
     db,
     schedulerDriver,
+    repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
+    runtimeSessionLeases: createSqliteRuntimeSessionLeaseOperations(db),
     actorUserId,
     ...(identityAccess === undefined ? {} : { identityAccess }),
     ...(secretBox !== undefined ? { secretBox } : {}),

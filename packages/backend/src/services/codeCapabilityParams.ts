@@ -15,9 +15,7 @@
 // somewhere deep, on somebody's merge request. Checking here turns it into a
 // readiness problem, which the matrix already knows how to show.
 
-import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { capabilityTemplates, repoCapabilityConfig } from '@/db/schema'
+import type { CapabilityParamRead } from '@/modules/code-capability/application/ports/capabilityParamRead'
 import {
   parseCapabilityParamTable,
   resolveCapabilityParams,
@@ -51,35 +49,12 @@ function parseObject(raw: string): Record<string, unknown> {
  * problem would point the operator at the wrong field.
  */
 export async function resolveCellParams(
-  db: DbClient,
+  source: CapabilityParamRead,
   input: { repoId: string; capability: string },
 ): Promise<ResolvedCapabilityParams> {
-  const [cell] = await db
-    .select({ templateId: repoCapabilityConfig.templateId })
-    .from(repoCapabilityConfig)
-    .where(
-      // `and(...)`, never `&&`: a JS `&&` between two drizzle conditions
-      // evaluates to the second, so the repo filter would vanish and one team's
-      // parameters would resolve from another team's cell.
-      and(
-        eq(repoCapabilityConfig.repoId, input.repoId),
-        eq(repoCapabilityConfig.capability, input.capability),
-      ),
-    )
-  if (cell?.templateId == null) return { ok: true, table: [], params: {} }
-
-  // RFC-309 — one hop. The declared table and the chosen values used to live on
-  // two rows that could disagree about which framework was in play; now they
-  // are columns of the same row and cannot.
-  const [framework] = await db
-    .select({
-      paramSchemaJson: capabilityTemplates.paramSchemaJson,
-      paramDefaultsJson: capabilityTemplates.paramDefaultsJson,
-      paramsJson: capabilityTemplates.paramsJson,
-    })
-    .from(capabilityTemplates)
-    .where(eq(capabilityTemplates.id, cell.templateId))
+  const framework = await source.find(input)
   if (framework === undefined) return { ok: true, table: [], params: {} }
+  if (framework === null) return { ok: true, table: [], params: {} }
   const binding = framework
 
   const parsed = parseCapabilityParamTable(framework.paramSchemaJson)

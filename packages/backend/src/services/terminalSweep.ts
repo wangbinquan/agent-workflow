@@ -1,169 +1,21 @@
-// RFC-202 T2 — terminal-task sweep: seal every open human gate (clarify
-// rounds / review parks) of a task that reached an UNREVIVABLE terminal
-// status (done / canceled).
-//
-// Why: the 2026-07-16 UX audit (design/ux-functional-audit-2026-07-16.md §1
-// R8) found dead tasks' clarify rounds and review parks lingering forever in
-// the inbox / badges as「待回答 / 待评审」— answering was pointless (or worse,
-// the answer committed and then errored). cancelTaskRow / failTask only flip
-// the TASK row; the gate rows stayed awaiting (services/task.ts documents the
-// per-view suppression patches this replaces at the source).
-//
-// Semantics (design.md §1):
-//   - HARD seal only for done/canceled — failed/interrupted tasks are
-//     revivable (resume allowedFrom includes them), their gates are hidden by
-//     the read-path terminal filter (T6) instead and reappear on resume.
-//   - clarify rounds seal BY KIND: self → 'canceled'; cross → 'abandoned'
-//     (+ abandonedAt). Migration 0031's CHECK enforces exactly this split —
-//     writing 'canceled' to a cross round would roll back the whole sweep.
-//   - review: awaiting_review node_runs → canceled. doc_versions stay
-//     'pending' on purpose: listReviewSummaries' pending predicate is bound
-//     to the RUN status, and the decision audit trail must not be forged.
-//
-// Wiring: registered as the lifecycle terminal-task hook at daemon assembly
-// (cli/start.ts) — lifecycle.ts cannot import this module directly (cycle).
-// The workgroup autonomous-flip dismissal (workgroupLifecycle.ts) stays a
-// separate NARROW implementation on purpose: it runs on a LIVE task, must
-// not touch review/completion gates, and needs its assignment requeue inside
-// the same transaction (Codex design-gate P1).
+// RFC-349 — provider-neutral terminal human-gate sweep orchestrator.
 
-import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { clarifyRounds, nodeRuns } from '@/db/schema'
+import type {
+  HumanGateTerminalSweepCommand,
+  HumanGateTerminalSweepResult,
+} from '@/modules/collaboration/application/ports/humanGateTerminalSweep'
 import { createLogger } from '@/util/log'
-import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
-import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
 
 const log = createLogger('terminal-sweep')
 
-export interface TerminalSweepResult {
-  sealedSelfRounds: number
-  abandonedCrossRounds: number
-  canceledRuns: { nodeRunId: string; nodeId: string }[]
-}
+export type TerminalSweepResult = HumanGateTerminalSweepResult
 
-/**
- * Seal all open human gates of `taskId` in ONE synchronous transaction.
- * Idempotent: every UPDATE is guarded on the awaiting status, so re-running
- * on an already-swept task is a no-op.
- */
-export function sealOpenHumanGatesForTask(
-  db: DbClient,
+export async function sealOpenHumanGatesForTask(
+  command: HumanGateTerminalSweepCommand,
   taskId: string,
   cause: string,
-): TerminalSweepResult {
-  const result: TerminalSweepResult = {
-    sealedSelfRounds: 0,
-    abandonedCrossRounds: 0,
-    canceledRuns: [],
-  }
-  const now = Date.now()
-  let eventRef: CommittedEventRef | null = null
-  dbTxSync(db, (tx) => {
-    // 1) Legacy self-clarify session rows (clarify_sessions is still the
-    //    read model for parts of the self flow).
-    // 2) Authoritative clarify rounds, split by kind (migration 0031 CHECK:
-    //    self never 'abandoned', cross never 'canceled').
-    const openRounds = tx
-      .select({
-        id: clarifyRounds.id,
-        kind: clarifyRounds.kind,
-        intermediaryNodeId: clarifyRounds.intermediaryNodeId,
-        intermediaryNodeRunId: clarifyRounds.intermediaryNodeRunId,
-      })
-      .from(clarifyRounds)
-      .where(and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')))
-      .all()
-    for (const r of openRounds) {
-      if (r.kind === 'cross') {
-        tx.update(clarifyRounds)
-          .set({ status: 'abandoned', abandonedAt: now })
-          .where(and(eq(clarifyRounds.id, r.id), eq(clarifyRounds.status, 'awaiting_human')))
-          .run()
-        result.abandonedCrossRounds++
-      } else {
-        tx.update(clarifyRounds)
-          .set({ status: 'canceled' })
-          .where(and(eq(clarifyRounds.id, r.id), eq(clarifyRounds.status, 'awaiting_human')))
-          .run()
-        result.sealedSelfRounds++
-      }
-      // Park-carrier run for this round (self: the clarify intermediary;
-      // cross: the questioner's run). Same-tx guarded write — the shared
-      // transition table's `mark-canceled` edge covers awaiting_human.
-      //
-      // RFC-317 T66 —— 这里原本写的理由是「async lifecycle helpers cannot join a
-      // sync transaction」。那句话在写下时（30b296055，2026-07-16）是真的，
-      // 三天后就不再是：`setNodeRunStatusTx`（services/lifecycle.ts）正是
-      // 同步事务版的内核入口，cafc80ee4（2026-07-19）落地，今天已被
-      // services/task.ts 与 services/workgroup/taskActions.ts 使用。
-      // 真实现状是**这两处还没迁**，不是迁不了——债记在
-      // architecture/commons-debt.json 的 LC-12。留着一个已经失效的技术理由
-      // 比留着债更坏：它让下一个 reviewer 问「能不能走内核」时得到「不能」。
-      // rfc053-allow-direct-status-write -- RFC-202 T2 atomic terminal sweep
-      const parked = tx
-        .update(nodeRuns)
-        .set({ status: 'canceled', finishedAt: now, errorMessage: cause })
-        .where(and(eq(nodeRuns.id, r.intermediaryNodeRunId), eq(nodeRuns.status, 'awaiting_human')))
-        .returning({ id: nodeRuns.id })
-        .all()
-      if (parked.length > 0) {
-        result.canceledRuns.push({
-          nodeRunId: r.intermediaryNodeRunId,
-          nodeId: r.intermediaryNodeId,
-        })
-      } else {
-        // RFC-328 terminal control projects every live node run to canceled in
-        // the task-status transaction, before this post-commit sweep runs. An
-        // open round proves that its historical seal has not happened yet, so
-        // preserve the already-committed status/finishedAt while replacing the
-        // generic control reason with the transition-time seal cause consumed
-        // by clarify detail (`task-canceled` / `task-done`). A second sweep sees
-        // no open round and remains a no-op.
-        tx.update(nodeRuns)
-          .set({ errorMessage: cause })
-          .where(and(eq(nodeRuns.id, r.intermediaryNodeRunId), eq(nodeRuns.status, 'canceled')))
-          .run()
-      }
-    }
-    // 3) Legacy cross session rows (RFC-056 read model).
-    // 4) Any remaining awaiting_human node_runs the round rows didn't cover
-    //    (defensive: legacy rows without a round), and review parks. The
-    //    shared table's `mark-canceled` edge covers both awaiting statuses.
-    // rfc053-allow-direct-status-write -- RFC-202 T2 atomic terminal sweep
-    const strays = tx
-      .update(nodeRuns)
-      .set({ status: 'canceled', finishedAt: now, errorMessage: cause })
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'awaiting_human')))
-      .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-      .all()
-    for (const s of strays) result.canceledRuns.push({ nodeRunId: s.id, nodeId: s.nodeId })
-    // rfc053-allow-direct-status-write -- RFC-202 T2 atomic terminal sweep
-    const reviews = tx
-      .update(nodeRuns)
-      .set({ status: 'canceled', finishedAt: now, errorMessage: cause })
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'awaiting_review')))
-      .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-      .all()
-    for (const s of reviews) result.canceledRuns.push({ nodeRunId: s.id, nodeId: s.nodeId })
-    if (result.canceledRuns.length > 0) {
-      eventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
-        taskId,
-        reason: 'terminal-reconcile',
-        nodeChanges: result.canceledRuns.map((run) => ({
-          nodeRunId: run.nodeRunId,
-          nodeId: run.nodeId,
-          status: 'canceled',
-          cause,
-        })),
-        occurredAt: now,
-        identity: { operationRef: `terminal-sweep:${taskId}:${cause}` },
-      })
-    }
-  })
-  publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
+): Promise<TerminalSweepResult> {
+  const result = await command.run({ taskId, cause })
   if (
     result.sealedSelfRounds > 0 ||
     result.abandonedCrossRounds > 0 ||

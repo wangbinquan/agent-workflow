@@ -17,22 +17,16 @@
 // 扫描;另有 admin 手动入口。删除复用 taskDelete 的语义(FK 级联 + 显式非 FK 表),
 // 但 runs/logs 改为**挪移**而不是删除。
 
-import { and, asc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
-import { join } from 'node:path'
-import { ulid } from 'ulid'
-
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+  dbTxSync,
   clarifyRounds,
   collaborationGateArtifacts,
   collaborationGateOperations,
@@ -64,7 +58,20 @@ import {
   workgroupMemberCursors,
   workgroupMessages,
   workgroupTaskState,
-} from '@/db/schema'
+  type LegacySqliteTaskDatabase,
+} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { join } from 'node:path'
+import { ulid } from 'ulid'
+
 import {
   taskExecutionModule,
   type TerminalMaintenanceClaim,
@@ -79,6 +86,7 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
+import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/application/ports/taskArchiveMaintenanceCommand'
 
 const log = createLogger('task-archive')
 
@@ -122,7 +130,7 @@ export interface ArchiveSweepResult {
  *  没有任何事后价值,归档它等于归档一把过期的锁。 */
 interface ExportSpec {
   name: string
-  load: (db: DbClient, ids: readonly string[]) => Promise<unknown[]>
+  load: (db: LegacySqliteTaskDatabase, ids: readonly string[]) => Promise<unknown[]>
 }
 
 const TASK_SCOPED: readonly ExportSpec[] = [
@@ -316,7 +324,7 @@ interface ExecutionLedgerExport {
  * possible task/effect anchor instead of relying on FK traversal.
  */
 async function loadExecutionLedgers(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskIds: readonly string[],
 ): Promise<ExecutionLedgerExport> {
   const owners = await chunkedAll(taskIds, (chunk) =>
@@ -402,7 +410,10 @@ export const ARCHIVED_TABLES: readonly string[] = [
 export const ARCHIVE_EXEMPT_TABLES: readonly string[] = ['runtime_session_leases']
 
 /** 一棵树的全部任务 id(root 优先,深度受 MAX_TREE_DEPTH 同款上限约束)。 */
-export async function collectTree(db: DbClient, rootTaskId: string): Promise<string[]> {
+export async function collectTree(
+  db: LegacySqliteTaskDatabase,
+  rootTaskId: string,
+): Promise<string[]> {
   const out: string[] = [rootTaskId]
   let frontier = [rootTaskId]
   for (let depth = 0; frontier.length > 0 && depth < 64; depth += 1) {
@@ -423,7 +434,7 @@ interface TreeCandidate {
 
 /** 可归档的树:整树全终态,且 max(finishedAt) 早于 cutoff。 */
 export async function findArchivableTrees(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   cutoff: number,
   limit: number,
 ): Promise<TreeCandidate[]> {
@@ -470,7 +481,7 @@ function writeJsonl(file: string, rows: readonly unknown[]): void {
 }
 
 async function exportTable(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   dir: string,
   name: string,
   rows: readonly unknown[],
@@ -489,7 +500,7 @@ async function exportTable(
  * only reproducible DB JSONL files are rebuilt.
  */
 async function archiveClaimedTree(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   rootTaskId: string,
   taskIds: readonly string[],
   initialClaim: TerminalMaintenanceClaim,
@@ -626,7 +637,7 @@ async function archiveClaimedTree(
  * exact claim 与 cleanup plan，boot/sweeper 可从同一 revision 继续。
  */
 export async function archiveTaskTree(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   rootTaskId: string,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchivedTree> {
@@ -657,7 +668,7 @@ export async function archiveTaskTree(
 
 /** 删库:一个事务、子先父后(FK 级联仍然生效,这里显式删非 FK 的软链接行)。 */
 function deleteTreeRows(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   rootTaskId: string,
   taskIds: readonly string[],
   claim: TerminalMaintenanceClaim,
@@ -744,7 +755,7 @@ function restoreLegacyMovedDirectories(
  * its runs/logs directories have been restored.
  */
 export async function recoverInterruptedArchives(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   opts: TaskArchiveOptions = {},
 ): Promise<{ promoted: string[]; discarded: string[] }> {
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
@@ -913,7 +924,7 @@ export interface TaskArchiveConfig {
  * 删掉,审计必须活得比它们久,否则「谁归档了多少」随归档一起消失。
  */
 async function writeArchiveAudit(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   row: {
     source: ArchiveSource
     actorUserId: string | null
@@ -937,7 +948,7 @@ async function writeArchiveAudit(
 
 /** 一轮归档扫描。默认关闭;`enabled=false` 或 `retentionDays<=0` 直接返回。 */
 export async function runTaskArchiveSweep(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   config: TaskArchiveConfig,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchiveSweepResult> {
@@ -997,7 +1008,7 @@ export interface ManualArchiveRequest {
  * 且带操作者。
  */
 export async function runManualTaskArchive(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   req: ManualArchiveRequest,
   opts: TaskArchiveOptions = {},
 ): Promise<ArchiveSweepResult> {
@@ -1021,7 +1032,7 @@ export async function runManualTaskArchive(
  * `MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS`。
  */
 export function startTaskArchiveSweeper(
-  db: DbClient,
+  command: TaskArchiveMaintenanceCommand,
   loadConfig: () => TaskArchiveConfig,
   intervalMs: number = HOUR_MS,
   bootDelayMs: number = MAINTENANCE_BOOT_FIRST_PASS_DELAY_MS,
@@ -1034,15 +1045,19 @@ export function startTaskArchiveSweeper(
     phaseOffsetMs,
     bootDelayMs,
     onTick: () =>
-      runTaskArchiveSweep(db, loadConfig()).catch((err) =>
-        log.warn('archive sweep threw', { error: (err as Error).message }),
-      ),
+      command
+        .runSweep(loadConfig(), {
+          archiveDir: Paths.taskArchiveDir,
+          runsDir: Paths.runsDir,
+          logsDir: Paths.logsDir,
+        })
+        .catch((err) => log.warn('archive sweep threw', { error: (err as Error).message })),
   })
 }
 
 /** 供 CLI / admin API 使用:按条件预览可归档的树,不动任何数据。 */
 export async function previewArchivableTrees(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   retentionDays: number,
   limit: number = 50,
   now: number = Date.now(),

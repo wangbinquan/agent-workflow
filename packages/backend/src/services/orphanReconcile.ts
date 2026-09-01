@@ -27,24 +27,14 @@
 // unit-testable without real processes; startOrphanReconcileLoop wires the real
 // isProcessAlive + binary-identity check and the real activeTasks registry.
 
-import { and, eq, inArray, lt } from 'drizzle-orm'
-
 import { loadConfig } from '@/config'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, runtimeSessionLeases, tasks } from '@/db/schema'
-import {
-  isTerminalTaskStatus,
-  transitionNodeRunStatus,
-  trySetTaskStatus,
-} from '@/services/lifecycle'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import {
   type LivenessReason,
   type LivenessRunRow,
   resolveRunLiveness,
 } from '@/services/runLiveness'
-import { isTaskActive } from '@/services/task'
 import {
   isProcessAlive,
   killStaleRunProcessTree,
@@ -53,7 +43,11 @@ import {
   type StaleRunKillOpts,
 } from '@/util/process'
 import { createLogger } from '@/util/log'
-import { WorkflowDefinitionSchema, migrateWorkflowDefinitionToLatest } from '@agent-workflow/shared'
+import {
+  isTerminalTaskStatus,
+  WorkflowDefinitionSchema,
+  migrateWorkflowDefinitionToLatest,
+} from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { DAEMON_CADENCE } from './daemonCadence'
 import { registerConfigAppliedListener } from './configAppliedListeners'
@@ -88,13 +82,13 @@ export function probeRunProcessAlive(pid: number, spawnBinaryPath: string | null
 }
 
 export interface ReconcileDeps {
-  db: DbClient
+  operations: TaskRecoveryOperations
   /** Only reconcile runs whose startedAt is older than now-graceMs (anti-race). */
   graceMs: number
   /** Injected process probe. Defaults to the real one. */
   probeProcessAlive?: (pid: number, spawnBinaryPath: string | null) => boolean
-  /** Injected driver gate — is an in-process scheduler attached? Defaults to isTaskActive. */
-  taskHasDriver?: (taskId: string) => boolean
+  /** Required provider-neutral driver gate — is an in-process scheduler attached? */
+  taskHasDriver: (taskId: string) => boolean
   /**
    * A boolean liveness miss cannot distinguish a dead PID from a live recycled
    * or command-mismatched PID. A held native-session lease needs the stronger
@@ -120,25 +114,12 @@ export interface ReconcileResult {
  * `interrupted` too. Records a `periodic-reap` recovery_event per task.
  */
 export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<ReconcileResult> {
-  const { db } = deps
+  const { operations } = deps
   const now = deps.now ?? Date.now()
   const probeProcess = deps.probeProcessAlive ?? probeRunProcessAlive
-  const hasDriver = deps.taskHasDriver ?? isTaskActive
+  const hasDriver = deps.taskHasDriver
   const out: ReconcileResult = { reapedRuns: [], reapedTasks: [], reasons: {} }
-  const candidates = await db
-    .select({
-      id: nodeRuns.id,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      pid: nodeRuns.pid,
-      spawnBinaryPath: nodeRuns.spawnBinaryPath,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-      childTaskId: nodeRuns.childTaskId,
-      startedAt: nodeRuns.startedAt,
-    })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.status, 'running'), lt(nodeRuns.startedAt, now - deps.graceMs)))
+  const candidates = await operations.listPeriodicReconcileCandidates(now - deps.graceMs)
 
   const byTask = new Map<string, ReconcileRun[]>()
   for (const run of candidates) {
@@ -153,7 +134,8 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
     // every row under it has a live owner; a background sweep has no business
     // pronouncing them dead (RFC-097 audit S-23's rule, now applied here too).
     if (hasDriver(taskId)) continue
-    const definition = await loadTaskDefinition(db, taskId)
+    const snapshot = await operations.loadPeriodicReconcileSnapshot(taskId)
+    const definition = loadTaskDefinition(snapshot?.workflowSnapshot ?? null)
     if (definition === null) {
       // The ONE remaining conservative-alive case (RFC-230 §2.3 after the Codex
       // P1-1 revision): with an unparseable snapshot we cannot even classify a
@@ -162,34 +144,22 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
       log.warn('orphan reconcile: task snapshot unresolvable — refusing to judge', { taskId })
       continue
     }
-    const rows: LivenessRunRow[] = await db
-      .select({
-        id: nodeRuns.id,
-        nodeId: nodeRuns.nodeId,
-        status: nodeRuns.status,
-        pid: nodeRuns.pid,
-        spawnBinaryPath: nodeRuns.spawnBinaryPath,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
-        childTaskId: nodeRuns.childTaskId,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
+    const rows: LivenessRunRow[] = (snapshot?.runs ?? []).map((run) => ({
+      id: run.id,
+      nodeId: run.nodeId,
+      status: run.status,
+      pid: run.pid,
+      spawnBinaryPath: run.spawnBinaryPath,
+      parentNodeRunId: run.parentNodeRunId,
+      childTaskId: run.childTaskId,
+    }))
 
     // RFC-243 §4.1 — cross-task delegation probe: batch-read the child tasks
     // referenced by this task's call rows once per tick. Terminal AND missing
     // both map to 'settled' (evidence lapses; the parent's resume replay owns
     // the finalize).
-    const childIds = [...new Set(rows.flatMap((r) => (r.childTaskId ? [r.childTaskId] : [])))]
-    const childStatus = new Map<string, string>()
-    if (childIds.length > 0) {
-      const childRows = await db
-        .select({ id: tasks.id, status: tasks.status })
-        .from(tasks)
-        .where(inArray(tasks.id, childIds))
-      for (const c of childRows) childStatus.set(c.id, c.status)
-    }
     const probeChildTask = (childTaskId: string): 'active' | 'settled' => {
-      const st = childStatus.get(childTaskId)
+      const st = snapshot?.childTaskStatuses[childTaskId]
       if (st === undefined) return 'settled'
       return isTerminalTaskStatus(st) ? 'settled' : 'active'
     }
@@ -203,12 +173,8 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
         probeChildTask,
       })
       if (verdict.alive) continue
-      const heldNativeLease = db
-        .select({ sessionId: runtimeSessionLeases.sessionId })
-        .from(runtimeSessionLeases)
-        .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id))
-        .get()
-      if (heldNativeLease !== undefined) {
+      const heldNativeLeaseId = await operations.findHeldRuntimeSessionId(run.id)
+      if (heldNativeLeaseId !== null) {
         const reapOutcome = await (deps.reapHeldNativeSessionProcess ?? killStaleRunProcessTree)(
           run,
           { now },
@@ -221,7 +187,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
           // reap proves the child gone.
           log.error('periodic reap could not prove held native-session child gone', {
             nodeRunId: run.id,
-            sessionId: heldNativeLease.sessionId,
+            sessionId: heldNativeLeaseId,
             reason: verdict.reason,
             reapOutcome,
           })
@@ -236,23 +202,20 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
       // ownership epoch shared with startTask/resumeKick; recorded as a residual
       // in design §5 rather than half-built here.
       if (hasDriver(taskId)) continue
-      const ok = await transitionNodeRunStatus({
-        db,
+      const ok = await operations.interruptNodeRun({
         nodeRunId: run.id,
-        event: { kind: 'mark-interrupted' },
-        extra: { finishedAt: now, errorMessage: 'orphan-reconcile' },
+        now,
+        errorMessage: 'orphan-reconcile',
       })
-        .then(() => true)
-        .catch(() => false)
       if (!ok) continue
-      repairRuntimeSessionLeasesAfterOrphanReap(db, true, run.id)
+      await operations.repairRuntimeSessionLeaseAfterOrphanReap(run.id)
       out.reapedRuns.push(run.id)
       out.reasons[run.id] = verdict.reason
       affectedTasks.add(run.taskId)
       // RFC-230 AC2 (Codex 设计门 P2-4): audit the REAP ITSELF, not only the
       // task flip. A wrapper reaped while sibling work stays pending never
       // flips the task, and the old code left no trace of it at all.
-      await recordRecoveryEvent(db, {
+      await recordRecoveryEvent(operations, {
         taskId: run.taskId,
         nodeRunId: run.id,
         kind: 'periodic-reap',
@@ -268,23 +231,14 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
     // The driver gate applies to the task row too: a live scheduler's task must
     // never be pronounced interrupted underneath it.
     if (hasDriver(taskId)) continue
-    const stillActive = await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, ['running', 'pending'])))
-      .limit(1)
-    if (stillActive.length > 0) continue // task still has live work
-    const flipped = await trySetTaskStatus({
-      db,
+    const flipped = await operations.interruptPeriodicTaskIfIdle({
       taskId,
-      to: 'interrupted',
-      allowedFrom: ['running'],
-      extra: { finishedAt: now, errorSummary: 'orphan-reconcile' },
-      reason: 'reconcileDeadRunningRuns',
+      now,
+      failureCode: 'orphan-reconcile',
     })
     if (!flipped) continue
     out.reapedTasks.push(taskId)
-    await recordRecoveryEvent(db, {
+    await recordRecoveryEvent(operations, {
       taskId,
       kind: 'periodic-reap',
       // RFC-230: state WHY, per run — 'process-gone' vs 'inner-all-terminal'
@@ -313,16 +267,7 @@ function summarizeReasons(
   return [...counts].map(([reason, n]) => `${reason}×${n}`).join(', ')
 }
 
-async function loadTaskDefinition(
-  db: DbClient,
-  taskId: string,
-): Promise<WorkflowDefinition | null> {
-  const rows = await db
-    .select({ snapshot: tasks.workflowSnapshot })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  const snapshot = rows[0]?.snapshot
+function loadTaskDefinition(snapshot: string | null): WorkflowDefinition | null {
   if (typeof snapshot !== 'string' || snapshot.length === 0) return null
   try {
     const parsed = WorkflowDefinitionSchema.safeParse(JSON.parse(snapshot))
@@ -339,14 +284,19 @@ export interface OrphanReconcileLoopHandle {
 
 /** Periodic reconciler ticker. `periodicOrphanReconcileMs <= 0` disables it. */
 export function startOrphanReconcileLoop(opts: {
-  db: DbClient
+  operations: TaskRecoveryOperations
+  taskHasDriver: (taskId: string) => boolean
   configPath: string
   graceMs?: number
 }): OrphanReconcileLoopHandle {
   const graceMs = opts.graceMs ?? 60_000
   const tick = async (): Promise<void> => {
     try {
-      await reconcileDeadRunningRuns({ db: opts.db, graceMs })
+      await reconcileDeadRunningRuns({
+        operations: opts.operations,
+        taskHasDriver: opts.taskHasDriver,
+        graceMs,
+      })
     } catch (err) {
       log.warn('orphan reconcile tick failed', {
         error: err instanceof Error ? err.message : String(err),

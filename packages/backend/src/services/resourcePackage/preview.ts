@@ -15,21 +15,18 @@
 // **用户的「选择」是自由的，但可选项与它们的基线是签死的。**
 
 import type { PackagePreview as SharedPackagePreviewWire } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
 import { z } from 'zod'
-import { users } from '@/db/schema'
 import type { SecretBox } from '@/auth/secretBox'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import { canonicalJson, type BundleOp, type BundleResourceType } from '@agent-workflow/shared'
-import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
-import { listSqlitePackageResourceRowsByNames } from '@/modules/resource-catalog/public/operations'
+import { isVisibleRow } from '@/services/resourceAcl'
 import { ValidationError } from '@/util/errors'
 import { mcpOperationConfigHashOf } from '@/services/mcpOperationRevision'
 import { pluginOperationConfigHashOf } from '@/services/pluginOperationRevision'
 import { resourceTypeOfOp, opSlug } from '@/services/bundle/provider'
 import type { PackageManifest, ParsedPackage } from './parse'
 import { missingImportPermissions } from './importPermissions'
+import { resourcePackageDocumentOf, type ResourcePackageReadPort } from './providerReadPort'
 
 /**
  * built-in 存在性查询的分块大小。
@@ -305,7 +302,7 @@ function rowToPluginLike(
  * `builtin` 是 false，绑上去等于把别人的资源当框架件用。
  */
 async function findMissingBuiltins(
-  db: DbClient,
+  reads: ResourcePackageReadPort,
   declared: readonly { type: string; name: string }[],
 ): Promise<Array<{ type: string; name: string }>> {
   // ⚠️ **按类型批量查一次**，不要逐项查。第一版是逐个 built-in 串行一条 SQL：一个合法
@@ -335,11 +332,7 @@ async function findMissingBuiltins(
     // 服务端错误。
     const all = [...names]
     for (let i = 0; i < all.length; i += BUILTIN_LOOKUP_CHUNK) {
-      const rows = await listSqlitePackageResourceRowsByNames(
-        db,
-        type,
-        all.slice(i, i + BUILTIN_LOOKUP_CHUNK),
-      )
+      const rows = await reads.listByNames(type, all.slice(i, i + BUILTIN_LOOKUP_CHUNK))
       // 判据必须与导入期 `resolveIdentityRef` 的 built-in 分支一致：同名 **且**
       // `builtin = true`。只按名字查会绑上用户自建的同名资源。
       for (const row of rows.filter((row) => row.builtin === true)) present.add(String(row.name))
@@ -358,8 +351,8 @@ async function findMissingBuiltins(
   ]
 }
 
-export async function buildPackagePreview(
-  db: DbClient,
+export async function buildPackagePreviewFromReadPort(
+  reads: ResourcePackageReadPort,
   actor: Actor,
   pkg: ParsedPackage,
   opts: {
@@ -380,7 +373,7 @@ export async function buildPackagePreview(
   //
   // 在此之前它要到 commit 才由 `resolveIdentityRef` 抛 `bundle-builtin-missing`：用户
   // 已经逐条选完动作、填完凭据、点了提交，才被告知这个包在本实例根本装不了。
-  const missingBuiltins = await findMissingBuiltins(db, pkg.manifest.builtins)
+  const missingBuiltins = await findMissingBuiltins(reads, pkg.manifest.builtins)
   if (missingBuiltins.length > 0) {
     // ⚠️ 错误载荷**取样**，不要把全部缺失项塞进 message + details。
     // 两处都放全量时，65536 个缺失项让 `DomainError.toPayload()` 的 JSON 达 437 万字符
@@ -406,8 +399,8 @@ export async function buildPackagePreview(
     if (slug === null) continue // 包里只应有 create op（导出侧只产 create）
     const type = resourceTypeOfOp(op as BundleOp)
     const name = String((op.payload as { name?: unknown }).name ?? '')
-    const grants = new Set(await listGrantedResourceIds(db, actor, type))
-    const rows = await listSqlitePackageResourceRowsByNames(db, type, [name])
+    const grants = await reads.listGrantedResourceIds(actor, type)
+    const rows = (await reads.listByNames(type, [name])).map(resourcePackageDocumentOf)
     const visible = rows.filter((r) => isVisibleRow(actor, r as never, grants))
     const candidates: PreviewCandidate[] = visible.map((r) => ({
       id: String(r.id),
@@ -461,7 +454,11 @@ export async function buildPackagePreview(
     })
   }
 
-  const humanMembers = await collectHumanMemberSlots(db, pkg, actor.permissions.has('users:search'))
+  const humanMembers = await collectHumanMemberSlots(
+    reads,
+    pkg,
+    actor.permissions.has('users:search'),
+  )
 
   const expiresAt = now + PREVIEW_TTL_MS
   const baseline = previewBaselineOf(entries)
@@ -500,7 +497,7 @@ export async function buildPackagePreview(
  * 一个可通过「必填 human 映射」修复的状态，预检直接拒绝；合法 human 槽均可跳过。
  */
 async function collectHumanMemberSlots(
-  db: DbClient,
+  reads: ResourcePackageReadPort,
   pkg: ParsedPackage,
   canSuggestUsers: boolean,
 ): Promise<HumanMemberSlot[]> {
@@ -537,13 +534,9 @@ async function collectHumanMemberSlots(
   // match here would turn guessed source usernames into an existence + internal UUID oracle.
   // Skip the lookup entirely when the actor lacks that point so hit/miss have the same result.
   if (canSuggestUsers) {
-    const rows = await db
-      .select({ id: users.id, username: users.username, status: users.status })
-      .from(users)
-      .where(inArray(users.username, [...wanted]))
+    const rows = await reads.findActiveUsersByUsername([...wanted])
     for (const u of rows) {
-      // 停用的人不是可选映射目标——把成员绑到一个不能登录的主体上毫无意义。
-      if (u.status === 'active') localByUsername.set(u.username, u.id)
+      localByUsername.set(u.username, u.userId)
     }
   }
 

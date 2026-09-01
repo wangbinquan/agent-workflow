@@ -5,23 +5,18 @@
 // status helpers, W5 commit-push mechanics and a few source-compatible exports
 // until their separately authorized waves cut over.
 
-import { resolveRepositoryPublicationTransportFromKeyFile } from '@/modules/source-control/composition'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {
   buildWorkflowScopeParentMap,
   DAEMON_RESTART_ERROR_SUMMARY,
   DAEMON_SHUTDOWN_ABORT_REASON,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
 // RFC-253 — script node execution.
 import { loadConfig } from '@/config'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, taskRepos } from '@/db/schema'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
-import { trySetTaskStatus } from '@/services/lifecycle'
-import { loadRunEnvelopeNonce, mintNodeRun, resolveFrozenRuntime } from '@/services/nodeRunMint'
+import { resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
 
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
@@ -37,8 +32,6 @@ import { runCommitPush } from '@/services/commitPushRunner'
 import { pickFreshestRun } from '@/services/freshness'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { runNode } from '@/services/runner'
-import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
-import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
 import { createLogger, type Logger } from '@/util/log'
 import {
   DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
@@ -52,13 +45,14 @@ import { runGit } from '@/util/git'
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
-import type { LegacyTaskMechanicsState as SchedulerState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState as SchedulerState } from '@/services/execution/taskMechanicsState'
 import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import {
   INHERITABLE_RUN_CONFIG_KEYS,
   pickInheritableRunConfig,
 } from '@/modules/task-execution/public/commands'
 import type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
+import type { TaskRuntimeLifecyclePersistence } from '@/modules/task-execution/application/ports/taskRuntimeLifecyclePersistence'
 
 // Compatibility exports for the existing scheduler test contract. The owner is
 // task-execution/public/commands; production consumers import that exact surface.
@@ -99,15 +93,14 @@ export async function inspectReadonlyRepos(state: SchedulerState, log: Logger): 
     if (!repo.readonly) continue
     const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
     const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
-    withTaskExecutionMutation({
-      db: state.db,
+    await state.opts.persistence.scheduler.recordReadonlyDirty({
       taskId: state.task.id,
-      run: (tx) =>
-        tx
-          .update(taskRepos)
-          .set({ readonlyDirtyCount: changed.length })
-          .where(and(eq(taskRepos.taskId, state.task.id), eq(taskRepos.repoIndex, repo.repoIndex)))
-          .run(),
+      repoIndex: repo.repoIndex,
+      changedCount: changed.length,
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { execution: state.opts.executionContext }),
+      now: Date.now(),
     })
     if (changed.length > 0) {
       log.warn('[rfc248/readonly-dirty] read-only repo was modified; NOT committed or pushed', {
@@ -138,29 +131,23 @@ export async function maybeRunCommitPush(
   iteration: number,
   log: Logger,
 ): Promise<{ processUnreaped?: true }> {
-  const { db, task } = state
+  const { task } = state
   // The triggering node's latest done run at this iteration → parent of the
   // commit row, so the detail page can group it under the agent.
   // RFC-096: freshest-by-id pick (was desc(startedAt) — a S-13 ordering fork;
   // attribution semantics unchanged, the rows are done-only).
-  const parentRows = await db
-    .select({ id: nodeRuns.id, parentNodeRunId: nodeRuns.parentNodeRunId, status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, task.id),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-        eq(nodeRuns.status, 'done'),
-      ),
-    )
+  const parentRows = await state.opts.persistence.scheduler.listDoneNodeRuns({
+    taskId: task.id,
+    nodeId: node.id,
+    iteration,
+  })
   const parentNodeRunId = pickFreshestRun(parentRows, { topLevelOnly: true })?.id ?? null
   const agentLabel: string =
     node.kind === 'agent-single' && typeof node.agentName === 'string' ? node.agentName : node.id
   const branch = task.branch
   // RFC-117: resolve the commit agent's runtime once for this task (profile name →
   // defaultRuntime → deprecated commitPushModel fallback); frozen per session below.
-  const rt = await resolveInternalAgentRuntime(db, {
+  const rt = await state.opts.runtimeRegistry.resolveInternalAgentRuntime({
     runtimeName: state.opts.commitPushRuntime,
     deprecatedModel: state.opts.commitPushModel,
     defaultRuntime: state.opts.defaultRuntime,
@@ -179,6 +166,10 @@ export async function maybeRunCommitPush(
     // 任务永远不会被检查（实现门 P1）。
     if (repo.readonly) continue
     if (status.stdout.trim() === '') continue // nothing changed in this repo
+    const publicationTransport = state.opts.repositoryPublicationTransport
+    if (publicationTransport === undefined) {
+      throw new Error('repository-publication-transport-not-composed')
+    }
     const repoSlug = repo.worktreeDirName
     const nodeId = commitPushNodeId(node.id, repoSlug || undefined)
     const baseRef = repo.baseBranch || task.baseBranch
@@ -196,7 +187,7 @@ export async function maybeRunCommitPush(
       // its mark-running transition. The child's parent is the container, so
       // the detail page groups the captured session(s) under the commit row.
       try {
-        const sessionRunId = await mintNodeRun(db, {
+        const sessionRunId = await state.opts.persistence.nodeRuns.mint({
           taskId: task.id,
           nodeId,
           status: 'pending',
@@ -208,8 +199,9 @@ export async function maybeRunCommitPush(
         // inheritFrom — its source is config.commitPushRuntime / deprecated model
         // (not an agent.runtime row), so we pre-resolved `rt` above and freeze it
         // here, getting the same node_runs snapshot the other 3 dispatch points do.
-        const frozen = await resolveFrozenRuntime(
-          db,
+        const frozen = await resolveFrozenRuntimeWith(
+          state.opts.persistence.nodeRunRuntime,
+          state.opts.runtimeRegistry,
           sessionRunId,
           null,
           null,
@@ -230,7 +222,7 @@ export async function maybeRunCommitPush(
           // to reach this spawn via opts.opencodeCmd; fold it into the freeze.
           freezeBinaryConfig(state.opts.configPath),
         )
-        const envelopeNonce = await loadRunEnvelopeNonce(db, sessionRunId)
+        const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
         const commitAgent = buildCommitAgent()
         // RFC-282 B2 — the 6th/5th entries also go through the ONE resolver.
         // writeSem is held here: thread the scope signal (design §9-5).
@@ -270,7 +262,10 @@ export async function maybeRunCommitPush(
           mcps: commitInjection.spec.mcps,
           plugins: commitInjection.spec.plugins,
           appHome: state.opts.appHome,
-          db,
+          memoryInjectionQueries: state.opts.memoryInjectionQueries,
+          runtimeSessionLeases: state.opts.runtimeSessionLeases,
+          runtimeRegistry: state.opts.runtimeRegistry,
+          persistence: state.opts.persistence,
           log: log.child('commit'),
           gitUserName: task.gitUserName,
           gitUserEmail: task.gitUserEmail,
@@ -350,14 +345,11 @@ export async function maybeRunCommitPush(
           ),
       },
       {
-        db,
+        nodeRuns: state.opts.persistence.nodeRuns,
+        nodeExecution: state.opts.persistence.nodeExecution,
+        effects: state.opts.persistence.effects,
         log: log.child('commit'),
-        publicationTransport:
-          state.opts.repositoryPublicationTransport ??
-          resolveRepositoryPublicationTransportFromKeyFile({
-            db,
-            appHome: state.opts.appHome,
-          }),
+        publicationTransport,
       },
     )
     if (commitResult.processUnreaped === true) return { processUnreaped: true }
@@ -370,7 +362,7 @@ export async function maybeRunCommitPush(
 
 export async function failTask(
   topology: SchedulerRuntimeTopology,
-  db: DbClient,
+  lifecycle: TaskRuntimeLifecyclePersistence,
   taskId: string,
   errorSummary: string,
   errorMessage: string,
@@ -380,8 +372,7 @@ export async function failTask(
   // RFC-097: callers sit either before mark-running (snapshot-invalid /
   // unsupported-kind → from=pending) or inside the running scope. A canceled
   // winner is respected (cancel outranks fail).
-  const won = await trySetTaskStatus({
-    db,
+  const won = await lifecycle.trySet({
     taskId,
     to: 'failed',
     allowedFrom: ['pending', 'running'],
@@ -392,6 +383,7 @@ export async function failTask(
       ...(failedNodeId !== undefined ? { failedNodeId } : {}),
     },
     ...(executionContext !== undefined ? { executionContext } : {}),
+    now: Date.now(),
     reason: `failTask: ${errorSummary}`,
   })
   if (!won) {
@@ -405,20 +397,20 @@ export async function failTask(
 
 export async function cancelTaskRow(
   topology: SchedulerRuntimeTopology,
-  db: DbClient,
+  lifecycle: TaskRuntimeLifecyclePersistence,
   taskId: string,
   failedNodeId?: string,
   abortReason?: unknown,
   executionContext?: TaskExecutionContextRef,
 ): Promise<void> {
   return withTaskReviewMutationLock(taskId, () =>
-    cancelTaskRowUnlocked(topology, db, taskId, failedNodeId, abortReason, executionContext),
+    cancelTaskRowUnlocked(topology, lifecycle, taskId, failedNodeId, abortReason, executionContext),
   )
 }
 
 async function cancelTaskRowUnlocked(
   topology: SchedulerRuntimeTopology,
-  db: DbClient,
+  lifecycle: TaskRuntimeLifecyclePersistence,
   taskId: string,
   failedNodeId?: string,
   abortReason?: unknown,
@@ -434,8 +426,8 @@ async function cancelTaskRowUnlocked(
   // interrupted + DAEMON_RESTART_ERROR_SUMMARY so both the Resume button and
   // boot auto-resume (autoResume.ts matches exactly that summary) cover them.
   if (abortReason === DAEMON_SHUTDOWN_ABORT_REASON) {
-    await trySetTaskStatus({
-      db,
+    const now = Date.now()
+    await lifecycle.trySet({
       taskId,
       to: 'interrupted',
       allowedFrom: ['running'],
@@ -446,6 +438,7 @@ async function cancelTaskRowUnlocked(
         ...(failedNodeId !== undefined ? { failedNodeId } : {}),
       },
       ...(executionContext !== undefined ? { executionContext } : {}),
+      now,
       reason: 'cancelTaskRow-shutdown',
     })
     return
@@ -454,8 +447,8 @@ async function cancelTaskRowUnlocked(
   const projection = taskStopProjection(structuredCause ?? { kind: 'user' })
   // RFC-097: idempotent — cancelTask's fallback (or a failTask that raced
   // first) may already have landed a terminal status; respect the winner.
-  const won = await trySetTaskStatus({
-    db,
+  const now = Date.now()
+  const won = await lifecycle.trySet({
     taskId,
     to: 'canceled',
     allowedFrom: ['running'],
@@ -471,6 +464,7 @@ async function cancelTaskRowUnlocked(
       ...(failedNodeId !== undefined ? { failedNodeId } : {}),
     },
     ...(executionContext !== undefined ? { executionContext } : {}),
+    now,
     reason: 'cancelTaskRow',
   })
   if (!won) {

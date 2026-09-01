@@ -1,47 +1,31 @@
-// RFC-345 T2 compatibility facade.
-//
-// Resource ACL policy, application use cases and SQLite repositories are now
-// owned by modules/resource-catalog. Existing callers keep this import path
-// while their named consumer/aggregate cohorts move; this file contains only
-// re-exports and the legacy WebSocket composition callback.
+// RFC-345 T9 — exact compatibility facade for consumers owned by successor
+// waves. Policy and provider mechanics live under modules/resource-catalog;
+// this file contains no database, ORM or transaction implementation.
 
-import type {
-  AclResourceType,
-  ResourceAcl,
-  ResourceVisibility,
-  UpdateResourceAclBody,
-} from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import {
-  getResourceAcl as getResourceAclComposition,
-  updateResourceAcl as updateResourceAclComposition,
-  type AclRow,
-  type ResourceAclIdentityPersistence,
-} from '@/modules/resource-catalog/public/operations'
+import { updateResourceAcl as updateResourceAclComposition } from '@/modules/resource-catalog/composition/resourceAcl'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 
-export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/public/operations'
+export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 export {
   assertInitialResourceOwner,
-  canAuditIntentSessions,
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
   resolveTaskRole,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/application/resourceDefaults'
+export { canAuditIntentSessions } from '@/modules/intent/public/operations'
 export {
   canEditResource,
   canViewResource,
   canViewResourceInTx,
   discloseRefs,
   filterVisibleRows,
+  getResourceAcl,
   projectVisibleRowsWithAccess,
   requireResourceEdit,
   requireResourceGovern,
   resolveResourceAccessFor,
   resolveResourceAccessForInTx,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/composition/resourceAcl'
 export {
   canEditAccess,
   canEditRow,
@@ -54,7 +38,7 @@ export {
   isVisibleToAudienceSnapshot,
   resourceAclAudienceAuthority,
   type AclRow,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/domain/resourceAccess'
 export {
   getAclResourceAccessRow,
   getAclResourceAccessRowInTx,
@@ -67,7 +51,7 @@ export {
   listAclResourceIdentityRowsByNamesInTx,
   listOwnedAclResourceNames,
   loadAclResourceNamesByIds,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 export {
   grantsOfResourceWhere,
   listGrantedResourceIds,
@@ -78,47 +62,16 @@ export {
   loadGrantLevel,
   visibleRowsCondition,
   type AclColumnRef,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+export type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/application/ports/resourceAclPersistence'
 
-export type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/public/operations'
-
-export function getResourceAcl(
-  db: DbClient,
-  actor: Actor,
-  type: AclResourceType,
-  row: AclRow,
-  identityPersistence?: ResourceAclIdentityPersistence,
-): Promise<ResourceAcl> {
-  return getResourceAclComposition(db, actor, type, row, identityPersistence)
-}
-
-/**
- * Legacy facade wrapper. Resource persistence is bound by module composition;
- * the old service path supplies only the existing post-commit WebSocket hook.
- */
-export async function updateResourceAcl(
-  db: DbClient,
-  actor: Actor,
-  type: AclResourceType,
-  row: AclRow,
-  body: UpdateResourceAclBody,
-  options: {
-    readonly identityPersistence?: ResourceAclIdentityPersistence
-    readonly updatedAt?: number
-    readonly afterWriteInTx?: (
-      tx: DbTxSync,
-      change: {
-        readonly resourceId: string
-        readonly ownerUserId: string | null
-        readonly visibility: ResourceVisibility
-        readonly grantedUserIds: ReadonlySet<string>
-        readonly now: number
-      },
-    ) => void
-  } = {},
-): Promise<ResourceAcl> {
+/** Preserve the legacy WebSocket post-commit notification without owning DB logic. */
+export function updateResourceAcl(
+  ...args: Parameters<typeof updateResourceAclComposition>
+): ReturnType<typeof updateResourceAclComposition> {
+  const [db, actor, type, row, body, options = {}] = args
   return updateResourceAclComposition(db, actor, type, row, body, {
     ...options,
-    afterCommit: (client) => triggerRevalidation(client, 'resource-acl-changed'),
+    afterCommit: () => triggerRevalidation('resource-acl-changed'),
   })
 }

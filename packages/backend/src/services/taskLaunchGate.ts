@@ -9,7 +9,7 @@
 // Deliberately NOT folded into `startTask`: service-layer callers (fusion) launch
 // built-in / not-route-visible workflows and must bypass the route guard.
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type { LegacySqliteTaskDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTaskDatabase'
 import { canViewResource } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { getWorkflow } from '@/services/workflow'
@@ -25,7 +25,7 @@ type LaunchableWorkflow = NonNullable<Awaited<ReturnType<typeof getWorkflow>>>
  * 403 via `assertNotBuiltin` (the row IS visible).
  */
 export async function assertWorkflowLaunchable(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   workflowId: string,
 ): Promise<LaunchableWorkflow> {
@@ -44,7 +44,7 @@ export async function assertWorkflowLaunchable(
  * enforced visibility + built-in policy inside its transaction.
  */
 export async function assertWorkflowSnapshotLaunchable(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   wf: TaskExecutionWorkflowSnapshot,
 ): Promise<void> {
   // RFC-243 实现门 P1-2: launch is the ENFORCEMENT point of the call-node

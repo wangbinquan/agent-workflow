@@ -10,15 +10,16 @@
 // tree client-side from raw event rows. Here we just do the IO and
 // pass-through.
 
-import { and, asc, desc, eq } from 'drizzle-orm'
 import {
   isAgentNodeKind,
   parseSessionTree,
   type ParseSessionInputEvent,
   type SessionTree,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRuns, tasks } from '@/db/schema'
+import type {
+  TaskSessionReadModel,
+  TaskSessionRunSource,
+} from '@/modules/task-execution/public/types'
 import { readArchivedEvents } from '@/services/eventsArchive'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { DomainError, NotFoundError } from '@/util/errors'
@@ -46,46 +47,33 @@ const SESSION_TAIL_CAP = 20_000
 // RFC-060 PR-E: agent-multi removed; agent-single is the only prompt-capable kind.
 
 export async function getSessionTree(
-  db: DbClient,
+  readModel: TaskSessionReadModel,
   taskId: string,
   nodeRunId: string,
   /** 测试注入:把两段上限调到几十条，才测得出「超限时根还对不对」。 */
   caps: { rootPrefix?: number; tail?: number } = {},
 ): Promise<{ tree: SessionTree }> {
-  const taskRows = await db
-    .select({ snapshot: tasks.workflowSnapshot })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  if (taskRows.length === 0) {
+  const prefixCap = caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP
+  const tailCap = caps.tail ?? SESSION_TAIL_CAP
+  const source = await readModel.find({
+    taskId,
+    nodeRunId,
+    rootPrefixCap: prefixCap,
+    tailCap,
+  })
+  if (source.status === 'task-not-found') {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
-
-  const runRows = await db
-    .select({
-      id: nodeRuns.id,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      promptText: nodeRuns.promptText,
-      // RFC-311 T21:新行正文在文件里,取路径供双读还原。
-      promptPath: nodeRuns.promptPath,
-      startedAt: nodeRuns.startedAt,
-      opencodeSessionId: nodeRuns.opencodeSessionId,
-      retryIndex: nodeRuns.retryIndex,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const run = runRows[0]
-  if (run === undefined || run.taskId !== taskId) {
+  if (source.status === 'node-run-not-found') {
     throw new NotFoundError(
       'node-run-not-found',
       `node_run '${nodeRunId}' not found under task '${taskId}'`,
     )
   }
+  const run = source.run
 
   const { nodeKind, primaryAgentName } = resolveNodeMetaFromSnapshot(
-    taskRows[0]!.snapshot,
+    source.workflowSnapshot,
     run.nodeId,
   )
   if (nodeKind !== null && !isAgentNodeKind(nodeKind)) {
@@ -100,7 +88,7 @@ export async function getSessionTree(
   // session_id with sibling node_runs in this task (RFC-026 inline
   // clarify reruns), unify their events + treat each round's promptText
   // as a separate user message in the merged conversation flow.
-  const inlineSiblings = await loadInlineSiblings(db, taskId, run)
+  const inlineSiblings = source.siblings.map(materializeInlineSibling)
   const targetNodeRunIds = inlineSiblings.map((s) => s.id)
   const promptText = inlineSiblings[0]!.promptBody
   const startedAt = inlineSiblings[0]!.startedAt
@@ -121,14 +109,6 @@ export async function getSessionTree(
   // 整棵树就以子代理为根渲染——不是少了历史，是渲染出**错误结构**。
   // 所以取两段：**最早 PREFIX 条**（定根用，必须在）+ **最新 TAIL 条**（近期内容），
   // 中间那段在超限时舍弃。两条查询各自有界，合并后按 (ts, id) 去重排序。
-  const columns = {
-    id: nodeRunEvents.id,
-    ts: nodeRunEvents.ts,
-    kind: nodeRunEvents.kind,
-    sessionId: nodeRunEvents.sessionId,
-    parentSessionId: nodeRunEvents.parentSessionId,
-    payload: nodeRunEvents.payload,
-  }
   // RFC-314 D2：窗口**按 id 取**，且**逐 node_run** 查询。两处都不是可有可无的：
   //   ① `ORDER BY ts` 与 `idx_events_node (node_run_id, id)` 不匹配 ⇒ USE TEMP B-TREE：
   //      为了挑出 2 万条，SQLite 先把该 run 的全部事件**连 payload** 灌进排序器。生产量级
@@ -138,27 +118,9 @@ export async function getSessionTree(
   // 输出顺序不变——下面那次 (ts, id) 排序本来就在，语义差异只落在「哪些行进窗口」
   // （proposal §4 B2）。定根用的 prefix 按 id 取反而更贴合用途：root 会话的事件本就是
   // 最先写入的那批。
-  const prefixCap = caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP
-  const tailCap = caps.tail ?? SESSION_TAIL_CAP
-  type EventRow = Awaited<ReturnType<typeof loadEventWindow>>[number]
-  async function loadEventWindow(runId: string, direction: 'prefix' | 'tail') {
-    return await db
-      .select(columns)
-      .from(nodeRunEvents)
-      .where(eq(nodeRunEvents.nodeRunId, runId))
-      .orderBy(direction === 'prefix' ? asc(nodeRunEvents.id) : desc(nodeRunEvents.id))
-      .limit(direction === 'prefix' ? prefixCap : tailCap)
-  }
-  const byId = new Map<number, EventRow>()
-  for (const runId of targetNodeRunIds) {
-    const [prefix, tailDesc] = await Promise.all([
-      loadEventWindow(runId, 'prefix'),
-      loadEventWindow(runId, 'tail'),
-    ])
-    for (const row of prefix) byId.set(row.id, row)
-    for (const row of tailDesc) byId.set(row.id, row)
-  }
-  const rows = [...byId.values()].sort((a, b) => (a.ts === b.ts ? a.id - b.id : a.ts - b.ts))
+  // The selected provider adapter owns the bounded SQL windows; this service
+  // only merges the closed rows with the filesystem archive projection.
+  const rows = source.events
 
   // 实现门 P1-4:RFC-311 的字节水位把事件归档从「生产从未触发」变成长会话常态,
   // 而这条路径此前只读 DB——归档掉的前半段会话一旦消失,deriveRootSessionId 会
@@ -220,61 +182,13 @@ interface InlineSiblingRow {
  * (legacy / isolated mode), returns just [run] so the rest of
  * getSessionTree degrades to the pre-merge single-attempt query.
  */
-async function loadInlineSiblings(
-  db: DbClient,
-  taskId: string,
-  run: {
-    id: string
-    promptText: string | null
-    promptPath: string | null
-    startedAt: number | null
-    opencodeSessionId: string | null
-    retryIndex: number
-  },
-): Promise<InlineSiblingRow[]> {
-  if (run.opencodeSessionId === null) {
-    return [
-      {
-        id: run.id,
-        promptBody: readNodeRunPrompt(run),
-        startedAt: run.startedAt,
-        retryIndex: run.retryIndex,
-      },
-    ]
+function materializeInlineSibling(run: TaskSessionRunSource): InlineSiblingRow {
+  return {
+    id: run.id,
+    promptBody: readNodeRunPrompt(run),
+    startedAt: run.startedAt,
+    retryIndex: run.retryIndex,
   }
-  const rows = await db
-    .select({
-      id: nodeRuns.id,
-      promptText: nodeRuns.promptText,
-      promptPath: nodeRuns.promptPath,
-      startedAt: nodeRuns.startedAt,
-      retryIndex: nodeRuns.retryIndex,
-    })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.opencodeSessionId, run.opencodeSessionId)))
-  if (rows.length === 0) {
-    return [
-      {
-        id: run.id,
-        promptBody: readNodeRunPrompt(run),
-        startedAt: run.startedAt,
-        retryIndex: run.retryIndex,
-      },
-    ]
-  }
-  // RFC-074 PR-C: chronological ordering is pure ULID id-order (creation
-  // order) — the first sibling is round 0 (smallest id, the original ask) and
-  // later clarify rounds / retries (minted later, larger id) append in order.
-  // This replaces the retired (clarifyIteration, retryIndex, startedAt) sort.
-  rows.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  // RFC-311 T21:行里带的是列或路径,统一在出口处双读还原成正文,调用方(会话
-  // 视图把首条当主 prompt、其余当追加轮次)看到的形状不变。
-  return rows.map((r) => ({
-    id: r.id,
-    promptBody: readNodeRunPrompt(r),
-    startedAt: r.startedAt,
-    retryIndex: r.retryIndex,
-  }))
 }
 
 interface SnapshotNode {

@@ -14,7 +14,6 @@
 // Design gate (design/RFC-213-disaster-recovery/design.md §3.1) mandated this
 // split from createBackup (services/backup.ts, VACUUM INTO — healthy DB only).
 
-import { Database } from 'bun:sqlite'
 import {
   closeSync,
   cpSync,
@@ -26,7 +25,7 @@ import {
   statSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { quickCheckDbFile } from '@/db/integrity'
+import { sqliteRawDbSnapshotMechanisms } from '@/platform/persistence/sqlite/rawDbSnapshotMechanisms'
 import { tarGz } from '@/util/archive'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -34,7 +33,6 @@ import {
   type BackupKind,
   type BackupManifest,
   currentAppVersion,
-  readDbMigrationIdentity,
   writeManifest,
 } from './backupManifest'
 
@@ -109,20 +107,14 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
   // db.sqlite alone is self-contained. Silently skipped on a DB we can't open.
   let checkpointed = false
   if (opts.checkpoint !== false) {
-    let ck: Database | null = null
-    try {
-      ck = new Database(dbPath, { readwrite: true })
-      ck.exec('PRAGMA wal_checkpoint(TRUNCATE);')
-      checkpointed = true
-    } catch {
-      // corrupt / locked / missing — copy the raw files as-is.
-    } finally {
-      ck?.close()
-    }
+    checkpointed = sqliteRawDbSnapshotMechanisms.checkpoint(dbPath)
   }
 
   // Read migration identity BEFORE copy (best-effort; null on corrupt).
-  const identity = readDbMigrationIdentity(dbPath) ?? { lastHash: null, lastCreatedAt: null }
+  const identity = sqliteRawDbSnapshotMechanisms.readMigrationIdentity(dbPath) ?? {
+    lastHash: null,
+    lastCreatedAt: null,
+  }
 
   const copied = { db: false, wal: false, shm: false, skills: false }
   try {
@@ -139,7 +131,7 @@ export async function rawCopyDb(opts: RawCopyOptions): Promise<RawCopyResult> {
         throw new Error(`raw db copy verification failed (src=${srcSize}B copy=${copySize}B)`)
       }
       if (checkpointed) {
-        const chk = quickCheckDbFile(join(stagingDir, 'db.sqlite'))
+        const chk = sqliteRawDbSnapshotMechanisms.quickCheck(join(stagingDir, 'db.sqlite'))
         if (!chk.ok) {
           log.warn('raw db copy fails quick_check (copying anyway — may be the point)', {
             errors: chk.errors.slice(0, 3),

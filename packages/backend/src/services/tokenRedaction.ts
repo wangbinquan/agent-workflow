@@ -26,17 +26,16 @@
 
 import {
   maskWorkflowScriptEnv,
-  redactGitUrl,
   redactPrivilegedNodes,
   type PrivilegedNodeLens,
 } from '@agent-workflow/shared'
 import type { Task } from '@agent-workflow/shared'
 import type { Actor, ActorSource } from '@/auth/actor'
+import { REDACTED, redactMcpRecord, redactRepoUrl } from '@/auth/application/tokenSnapshotRedaction'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { redactSensitiveString } from '@/util/redact'
 
-/** The placeholder a redacted value collapses to. Keys survive; values do not. */
-export const REDACTED = '***'
+export { REDACTED, redactMcpRecord, redactRepoUrl }
 
 /**
  * The CHANNEL axis. Token callers get MCP/plugin/stdout secrets masked; session
@@ -96,38 +95,6 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /** Replace every value of a string map, keeping the keys. */
-function maskValues(v: unknown): unknown {
-  if (!isPlainObject(v)) return v
-  const out: Record<string, unknown> = {}
-  for (const k of Object.keys(v)) out[k] = REDACTED
-  return out
-}
-
-/**
- * Mask the secret-bearing fields of one MCP server record, in place-free form.
- *
- * The three fields are the ones that actually hold credentials today:
- *   config.env     — the stdio child's environment; API keys live here
- *   config.headers — remote servers put `Authorization` here
- *   config.oauth.clientSecret
- *
- * `GET /api/mcps/:id` returns all three verbatim (services/mcp.ts performs no
- * redaction of any kind), so before RFC-247 any credential-bearing read was one
- * request away for anyone who could see the resource.
- */
-export function redactMcpRecord<T>(record: T): T {
-  if (!isPlainObject(record)) return record
-  const config = record.config
-  if (!isPlainObject(config)) return record
-  const nextConfig: Record<string, unknown> = { ...config }
-  if ('env' in nextConfig) nextConfig.env = maskValues(nextConfig.env)
-  if ('headers' in nextConfig) nextConfig.headers = maskValues(nextConfig.headers)
-  if (isPlainObject(nextConfig.oauth) && 'clientSecret' in nextConfig.oauth) {
-    nextConfig.oauth = { ...nextConfig.oauth, clientSecret: REDACTED }
-  }
-  return { ...record, config: nextConfig } as T
-}
-
 /**
  * Serialize one MCP record for a specific caller.
  *
@@ -275,13 +242,6 @@ export function redactEventPayload(payload: unknown, source: ActorSource): unkno
  * credentials in the QUERY STRING, so `https://user:token@host/repo.git` is
  * accepted, stored and handed back.
  */
-export function redactRepoUrl(url: string | null | undefined): string | null {
-  // Absent and empty both collapse to null: an empty string on the wire is a
-  // value the client has to special-case, and there is no repo it could name.
-  if (url === null || url === undefined || url === '') return null
-  return redactGitUrl(url)
-}
-
 /**
  * Redact free-form agent output. Best-effort by nature — this is a text stream,
  * not a typed field — but it uses the same helper `pluginInstaller.ts` already

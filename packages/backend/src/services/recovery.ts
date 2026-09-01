@@ -6,32 +6,18 @@
 // heartbeat-kill / quarantine) leave a durable, queryable trail instead of just
 // a `log.warn`. lifecycle_repair_audit is the MANUAL (human-click) counterpart.
 
-import { desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
-import { recoveryEvents } from '@/db/schema'
+import type {
+  TaskRecoveryEventKind,
+  TaskRecoveryEventRecord,
+  TaskRecoveryOperations,
+} from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('recovery')
 
-export type RecoveryEventKind =
-  | 'boot-reap'
-  | 'periodic-reap'
-  | 'shutdown-flip'
-  | 'limit-cancel'
-  | 'snapshot-lost'
-  | 'live-child-survived'
-  | 'auto-resume'
-  | 'auto-repair'
-  | 'heartbeat-kill'
-  | 'quarantine'
-  // RFC-213 disaster-recovery. `restore` is written on the db reopened AFTER the
-  // swap (the pre-swap db may be gone/corrupt); `pre-migration` after the fresh
-  // db opens; `worktree-skip` when a task's worktree capture exceeds the cap.
-  | 'restore'
-  | 'pre-migration'
-  | 'worktree-skip'
+export type RecoveryEventKind = TaskRecoveryEventKind
 
 export interface RecordRecoveryEventArgs {
   taskId?: string | null
@@ -71,12 +57,12 @@ export function __resetRecoveryCountersForTest(): void {
  * audit insert did. Also bumps the in-process counter for the kind.
  */
 export async function recordRecoveryEvent(
-  db: DbClient,
+  operations: TaskRecoveryOperations,
   args: RecordRecoveryEventArgs,
 ): Promise<void> {
   bumpRecoveryCounter(args.kind)
   try {
-    await db.insert(recoveryEvents).values({
+    await operations.recordEvent({
       id: ulid(),
       taskId: args.taskId ?? null,
       nodeRunId: args.nodeRunId ?? null,
@@ -97,14 +83,9 @@ export async function recordRecoveryEvent(
 
 /** Recent recovery events for a task, newest first (UI history). */
 export async function listRecoveryEventsForTask(
-  db: DbClient,
+  operations: TaskRecoveryOperations,
   taskId: string,
   limit = 50,
-): Promise<Array<typeof recoveryEvents.$inferSelect>> {
-  return db
-    .select()
-    .from(recoveryEvents)
-    .where(eq(recoveryEvents.taskId, taskId))
-    .orderBy(desc(recoveryEvents.createdAt))
-    .limit(limit)
+): Promise<readonly TaskRecoveryEventRecord[]> {
+  return operations.listEventsForTask(taskId, limit)
 }

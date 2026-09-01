@@ -12,7 +12,6 @@
 // （services/webhook/triggerValidation.ts 注释）；创建/更新时以**保存者身份**跑
 // 「彩排渲染 + assertScheduledTargetUsable」——launch 目标对保存者不可见即拒绝
 // （对齐 services/resourceRefs.ts 的新增引用校验惯例）。
-import { and, desc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
@@ -25,27 +24,32 @@ import {
   type WebhookTrigger,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import {
-  webhookEndpoints,
-  webhookTriggerFires,
-  webhookTriggers,
-  webhookTriggerStreams,
-} from '@/db/schema'
 import { migrateTriggerRowTemplateToV2, parseTriggerRow } from '@/services/webhook/webhookDispatch'
-import { assertTriggerSaveable } from '@/services/webhook/triggerValidation'
-import { loadConfig } from '@/config'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import type { IntegrationTriggerResourceAuthority } from '@/services/scheduledTasks'
+import type {
+  WebhookDispatchPersistencePort,
+  WebhookTriggerRecord,
+} from '@/modules/integration/application/ports/webhookDispatchPersistence'
+import type {
+  WebhookTriggerAdministrationPort,
+  WebhookTriggerFireRecord,
+} from '@/modules/integration/application/ports/webhookTriggerAdministration'
+import type { WebhookTriggerSaveCandidate } from '@/services/webhook/triggerValidation'
 
 export interface WebhookTriggerServiceDeps {
-  db: DbClient
-  configPath: string
+  administration: WebhookTriggerAdministrationPort
+  dispatchPersistence: WebhookDispatchPersistencePort
+  validateSaveable(
+    actor: Actor,
+    resourceAuthority: IntegrationTriggerResourceAuthority,
+    candidate: WebhookTriggerSaveCandidate,
+  ): Promise<void>
 }
 
-type Row = typeof webhookTriggers.$inferSelect
+type Row = WebhookTriggerRecord
 
-export type WebhookTriggerFireRow = typeof webhookTriggerFires.$inferSelect
+export type WebhookTriggerFireRow = WebhookTriggerFireRecord
 
 /**
  * RFC-260 D1/D5：读路径不再做行级过滤（触发器全量只读，用户拍板——规则本身
@@ -144,22 +148,17 @@ async function assertSaveable(
   deps: WebhookTriggerServiceDeps,
   actor: Actor,
   resourceAuthority: IntegrationTriggerResourceAuthority,
-  candidate: Parameters<typeof assertTriggerSaveable>[3],
+  candidate: WebhookTriggerSaveCandidate,
 ): Promise<void> {
-  let defaultRuntime: string | null | undefined
-  try {
-    defaultRuntime = loadConfig(deps.configPath).defaultRuntime
-  } catch {
-    defaultRuntime = undefined
-  }
-  await assertTriggerSaveable(deps.db, actor, resourceAuthority, candidate, defaultRuntime)
+  await deps.validateSaveable(actor, resourceAuthority, candidate)
 }
 
-async function loadRowOrThrow(db: DbClient, id: string): Promise<Row> {
-  const row = (
-    await db.select().from(webhookTriggers).where(eq(webhookTriggers.id, id)).limit(1)
-  )[0]
-  if (!row) {
+async function loadRowOrThrow(
+  administration: WebhookTriggerAdministrationPort,
+  id: string,
+): Promise<Row> {
+  const row = await administration.get(id)
+  if (row === null) {
     throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
   }
   return row
@@ -168,10 +167,10 @@ async function loadRowOrThrow(db: DbClient, id: string): Promise<Row> {
 export async function listWebhookTriggers(
   deps: WebhookTriggerServiceDeps,
 ): Promise<WebhookTrigger[]> {
-  const rows = await deps.db.select().from(webhookTriggers).orderBy(desc(webhookTriggers.createdAt))
+  const rows = await deps.administration.list()
   // RFC-260 D1：全量只读——不再按 owner 过滤。
   const canonicalRows = await Promise.all(
-    rows.map((row) => migrateTriggerRowTemplateToV2(deps.db, row)),
+    rows.map((row) => migrateTriggerRowTemplateToV2(deps.dispatchPersistence, row)),
   )
   return canonicalRows.map(toWire)
 }
@@ -180,8 +179,8 @@ export async function getWebhookTrigger(
   deps: WebhookTriggerServiceDeps,
   id: string,
 ): Promise<WebhookTrigger> {
-  const row = await loadRowOrThrow(deps.db, id)
-  return toWire(await migrateTriggerRowTemplateToV2(deps.db, row))
+  const row = await loadRowOrThrow(deps.administration, id)
+  return toWire(await migrateTriggerRowTemplateToV2(deps.dispatchPersistence, row))
 }
 
 export async function createWebhookTrigger(
@@ -214,14 +213,7 @@ export async function createWebhookTrigger(
       'code-round triggers were retired by RFC-310; use development missions',
     )
   }
-  const endpoint = (
-    await deps.db
-      .select({ id: webhookEndpoints.id })
-      .from(webhookEndpoints)
-      .where(eq(webhookEndpoints.id, body.endpointId))
-      .limit(1)
-  )[0]
-  if (!endpoint) {
+  if (!(await deps.administration.endpointExists(body.endpointId))) {
     throw new ValidationError('webhook-endpoint-not-found', 'endpoint does not exist')
   }
   await assertSaveable(deps, actor, resourceAuthority, {
@@ -232,9 +224,8 @@ export async function createWebhookTrigger(
     autoRegisterRepos: body.autoRegisterRepos,
   })
   const id = ulid()
-  const rows = await deps.db
-    .insert(webhookTriggers)
-    .values({
+  return toWire(
+    await deps.administration.create({
       id,
       name: body.name,
       endpointId: body.endpointId,
@@ -252,9 +243,8 @@ export async function createWebhookTrigger(
       maxConsecutiveFires: body.maxConsecutiveFires,
       autoRegisterRepos: body.autoRegisterRepos,
       cancelOnMrTerminal: body.cancelOnMrTerminal,
-    })
-    .returning()
-  return toWire(rows[0]!)
+    }),
+  )
 }
 
 export async function updateWebhookTrigger(
@@ -264,10 +254,10 @@ export async function updateWebhookTrigger(
   id: string,
   rawBody: unknown,
 ): Promise<WebhookTrigger> {
-  const storedRow = await loadRowOrThrow(deps.db, id)
+  const storedRow = await loadRowOrThrow(deps.administration, id)
   // RFC-310 T104：capability trigger 行已是历史遗留（writer 删除），允许用户
   // 正常编辑/删除以清理。
-  const row = await migrateTriggerRowTemplateToV2(deps.db, storedRow)
+  const row = await migrateTriggerRowTemplateToV2(deps.dispatchPersistence, storedRow)
   requireWrite(actor, row)
   const parsed = UpdateWebhookTriggerSchema.safeParse(rawBody)
   if (!parsed.success) {
@@ -320,9 +310,9 @@ export async function updateWebhookTrigger(
     patch.eventTypes !== undefined ||
     patch.autoRegisterRepos !== undefined ||
     patch.cancelOnMrTerminal !== undefined
-  const rows = await deps.db
-    .update(webhookTriggers)
-    .set({
+  const updated = await deps.administration.update({
+    triggerId: row.id,
+    patch: {
       // A successful PUT is also the repair path for an invalid historical
       // v1 payload. The validated candidate is canonical even when the
       // read-time migration could not parse the stored bytes.
@@ -350,73 +340,67 @@ export async function updateWebhookTrigger(
         ? { cancelOnMrTerminal: patch.cancelOnMrTerminal }
         : {}),
       updatedAt: Date.now(),
-    })
-    .where(
-      launchConfigTouched
-        ? and(
-            eq(webhookTriggers.id, row.id),
-            eq(webhookTriggers.templateSyntaxVersion, row.templateSyntaxVersion),
-            eq(webhookTriggers.launchRefId, row.launchRefId),
-            eq(webhookTriggers.launchPayload, row.launchPayload),
-            eq(webhookTriggers.eventTypes, row.eventTypes),
-            eq(webhookTriggers.autoRegisterRepos, row.autoRegisterRepos),
-            eq(webhookTriggers.cancelOnMrTerminal, row.cancelOnMrTerminal),
-          )
-        : eq(webhookTriggers.id, row.id),
-    )
-    .returning()
-  if (launchConfigTouched && rows.length === 0) {
+    },
+    ...(launchConfigTouched
+      ? {
+          expectedLaunchConfiguration: {
+            templateSyntaxVersion: row.templateSyntaxVersion,
+            launchRefId: row.launchRefId,
+            launchPayload: row.launchPayload,
+            eventTypes: row.eventTypes,
+            autoRegisterRepos: row.autoRegisterRepos,
+            cancelOnMrTerminal: row.cancelOnMrTerminal,
+          },
+        }
+      : {}),
+  })
+  if (launchConfigTouched && updated === null) {
     throw new ConflictError(
       'webhook-trigger-update-conflict',
       'trigger launch configuration changed; reload and retry',
     )
   }
-  return toWire(rows[0]!)
+  if (updated === null) {
+    throw new NotFoundError('webhook-trigger-not-found', 'trigger not found')
+  }
+  return toWire(updated)
 }
 
 export async function deleteWebhookTrigger(
-  deps: Pick<WebhookTriggerServiceDeps, 'db'>,
+  deps: Pick<WebhookTriggerServiceDeps, 'administration'>,
   actor: Actor,
   id: string,
 ): Promise<void> {
-  const row = await loadRowOrThrow(deps.db, id)
+  const row = await loadRowOrThrow(deps.administration, id)
   requireWrite(actor, row)
-  await deps.db.delete(webhookTriggers).where(eq(webhookTriggers.id, row.id))
+  await deps.administration.delete(row.id)
 }
 
 export async function listWebhookTriggerFires(
-  deps: Pick<WebhookTriggerServiceDeps, 'db'>,
+  deps: Pick<WebhookTriggerServiceDeps, 'administration'>,
   id: string,
   limit: number,
 ): Promise<WebhookTriggerFireRow[]> {
-  const row = await loadRowOrThrow(deps.db, id)
-  return deps.db
-    .select()
-    .from(webhookTriggerFires)
-    .where(eq(webhookTriggerFires.triggerId, row.id))
-    .orderBy(desc(webhookTriggerFires.firedAt))
-    .limit(limit)
+  const row = await loadRowOrThrow(deps.administration, id)
+  return [...(await deps.administration.listFires(row.id, limit))]
 }
 
 export async function resetWebhookTriggerStream(
-  deps: Pick<WebhookTriggerServiceDeps, 'db'>,
+  deps: Pick<WebhookTriggerServiceDeps, 'administration'>,
   actor: Actor,
   id: string,
   rawBody: unknown,
 ): Promise<void> {
-  const row = await loadRowOrThrow(deps.db, id)
+  const row = await loadRowOrThrow(deps.administration, id)
   requireWrite(actor, row)
   const body = z.object({ streamKey: z.string().min(1).max(1000) }).safeParse(rawBody)
   if (!body.success) {
     throw new ValidationError('webhook-stream-invalid', 'streamKey required')
   }
-  await deps.db
-    .update(webhookTriggerStreams)
-    .set({ consecutiveFires: 0, resetAt: Date.now(), resetBy: actor.user.id })
-    .where(
-      and(
-        eq(webhookTriggerStreams.triggerId, row.id),
-        eq(webhookTriggerStreams.streamKey, body.data.streamKey),
-      ),
-    )
+  await deps.administration.resetStream({
+    triggerId: row.id,
+    streamKey: body.data.streamKey,
+    resetAt: Date.now(),
+    resetBy: actor.user.id,
+  })
 }

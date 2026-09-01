@@ -6,14 +6,15 @@ import {
 } from '@agent-workflow/shared'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { DbClient } from '@/db/client'
 import {
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,
   developmentBuiltinAgentConfigurationV2,
 } from '@/modules/development-automation/public/participants'
+import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import { ConflictError } from '@/util/errors'
-import { createAgent, getAgentById, renameAgent, updateAgent } from './agent'
+
+export type DigitalEmployeeAgentTemplatePersistence = DigitalEmployeeAgentTemplateCatalogParticipant
 
 export const LEGACY_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS = [
   '00000000000000DECODEWRITER',
@@ -357,19 +358,19 @@ function builtinAgentContentSignature(definition: CreateAgent): string {
  * moved, so a body edit without a version bump stayed stale forever.
  */
 async function reconcileBuiltinAgentTemplate(
-  db: DbClient,
+  persistence: DigitalEmployeeAgentTemplatePersistence,
   existing: Agent,
   definition: CreateAgent,
 ): Promise<void> {
   if (existing.name !== definition.name) {
-    await renameAgent(db, existing.id, { newName: definition.name })
+    await persistence.renameBuiltin(existing.id, definition.name)
   }
   if (
     builtinAgentContentSignature(storedBuiltinAgentDefinition(existing)) !==
     builtinAgentContentSignature(definition)
   ) {
     const { name: _stableName, ...contentPatch } = definition
-    await updateAgent(db, existing.id, contentPatch, null)
+    await persistence.updateBuiltin(existing.id, contentPatch)
   }
 }
 
@@ -378,13 +379,15 @@ async function reconcileBuiltinAgentTemplate(
  * Migrations must leave an otherwise empty resource database empty; the daemon
  * owns business-resource initialization and can therefore validate collisions.
  */
-export async function ensureDigitalEmployeeAgentTemplates(db: DbClient): Promise<void> {
+export async function ensureDigitalEmployeeAgentTemplates(
+  persistence: DigitalEmployeeAgentTemplatePersistence,
+): Promise<void> {
   const templates: readonly { readonly id: string; readonly definition: CreateAgent }[] = [
     ...DIGITAL_EMPLOYEE_AGENT_TEMPLATES,
     ...DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
   ]
   for (const template of templates) {
-    const existing = await getAgentById(db, template.id)
+    const existing = await persistence.get(template.id)
     if (existing !== null) {
       // The one unrecoverable case: a row that is not ours squats the stable
       // id. Converging that would overwrite somebody's own Agent, so the
@@ -401,20 +404,18 @@ export async function ensureDigitalEmployeeAgentTemplates(db: DbClient): Promise
           `stable digital employee Agent id '${template.id}' is occupied`,
         )
       }
-      await reconcileBuiltinAgentTemplate(db, existing, template.definition)
+      await reconcileBuiltinAgentTemplate(persistence, existing, template.definition)
       continue
     }
-    await createAgent(db, template.definition, {
-      id: template.id,
-      ownerUserId: SYSTEM_USER_ID,
-      builtin: true,
-    })
+    await persistence.createBuiltin(template.id, template.definition)
   }
 }
 
-export async function listDigitalEmployeeAgentTemplates(db: DbClient): Promise<Agent[]> {
+export async function listDigitalEmployeeAgentTemplates(
+  persistence: DigitalEmployeeAgentTemplatePersistence,
+): Promise<Agent[]> {
   const resolved = await Promise.all(
-    DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2.map((id) => getAgentById(db, id)),
+    DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2.map((id) => persistence.get(id)),
   )
   return resolved.filter(
     (agent): agent is Agent =>

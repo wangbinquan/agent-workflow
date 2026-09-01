@@ -24,11 +24,12 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'
-import { and, eq, sql } from 'drizzle-orm'
 import { TextDecoder } from 'node:util'
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { cachedRepos, scheduledTasks, taskRepos, tasks } from '@/db/schema'
+import type {
+  RepositoryCredentialSealingMutation,
+  RepositoryWorkspaceStore,
+} from '@/modules/source-control/public/operations'
 import { createLogger } from '@/util/log'
 import { redactSensitiveString } from '@/util/redact'
 import { sha1Hex } from '@/util/hash'
@@ -37,7 +38,13 @@ const log = createLogger('repo-credentials')
 
 const LEGACY_URL_ESCROW_PREFIX = 'aw-legacy-url-hex-v1:'
 const utf8Fatal = new TextDecoder('utf-8', { fatal: true })
-const volatileRepoUrls = new WeakMap<DbClient, Map<string, string>>()
+const volatileRepoUrls = new WeakMap<object, Map<string, string>>()
+
+type VolatileRepositoryScope = object | Pick<RepositoryWorkspaceStore, 'runtimeIdentity'>
+
+function volatileScopeIdentity(scope: VolatileRepositoryScope): object {
+  return 'runtimeIdentity' in scope ? scope.runtimeIdentity : scope
+}
 
 /**
  * Key-less embeddings may keep using a just-created cache row in this process,
@@ -45,17 +52,22 @@ const volatileRepoUrls = new WeakMap<DbClient, Map<string, string>>()
  * scoped to the DbClient identity: a reopen creates a new client and therefore
  * cannot recover this volatile capability.
  */
-export function rememberVolatileRepoUrl(db: DbClient, id: string, url: string): void {
-  let byId = volatileRepoUrls.get(db)
+export function rememberVolatileRepoUrl(
+  scope: VolatileRepositoryScope,
+  id: string,
+  url: string,
+): void {
+  const identity = volatileScopeIdentity(scope)
+  let byId = volatileRepoUrls.get(identity)
   if (byId === undefined) {
     byId = new Map()
-    volatileRepoUrls.set(db, byId)
+    volatileRepoUrls.set(identity, byId)
   }
   byId.set(id, url)
 }
 
-export function forgetVolatileRepoUrl(db: DbClient, id: string): void {
-  volatileRepoUrls.get(db)?.delete(id)
+export function forgetVolatileRepoUrl(scope: VolatileRepositoryScope, id: string): void {
+  volatileRepoUrls.get(volatileScopeIdentity(scope))?.delete(id)
 }
 
 function decodeLegacyUrlEscrow(value: string): string {
@@ -95,7 +107,7 @@ export function sealRepoUrl(secretBox: SecretBox, url: string): string {
 export function unsealRepoUrl(
   row: { id?: string; urlEnc: string | null },
   secretBox: SecretBox | undefined,
-  db?: DbClient,
+  scope?: VolatileRepositoryScope,
 ): string | null {
   if (row.urlEnc !== null && row.urlEnc.length > 0) {
     if (row.urlEnc.startsWith(LEGACY_URL_ESCROW_PREFIX)) {
@@ -117,38 +129,10 @@ export function unsealRepoUrl(
       return null
     }
   }
-  if (db !== undefined && row.id !== undefined) {
-    return volatileRepoUrls.get(db)?.get(row.id) ?? null
+  if (scope !== undefined && row.id !== undefined) {
+    return volatileRepoUrls.get(volatileScopeIdentity(scope))?.get(row.id) ?? null
   }
   return null
-}
-
-/** Columns whose historical values may embed a `?access_token=` style secret. */
-interface ScrubTarget {
-  label: string
-  run: (db: DbClient) => number
-}
-
-function scrubColumn(
-  label: string,
-  select: (db: DbClient) => Array<{ id: unknown; value: string | null }>,
-  update: (db: DbClient, id: unknown, next: string) => void,
-): ScrubTarget {
-  return {
-    label,
-    run: (db) => {
-      let n = 0
-      for (const row of select(db)) {
-        if (row.value === null || row.value.length === 0) continue
-        const next = redactSensitiveString(row.value)
-        if (next !== row.value) {
-          update(db, row.id, next)
-          n++
-        }
-      }
-      return n
-    },
-  }
 }
 
 export interface SealResult {
@@ -171,12 +155,17 @@ export interface SealResult {
  * only the raw value hashes back to the cache row for a query-form URL. Doing
  * the scrub first would silently orphan exactly those rows.
  */
-export function ensureCredentialsSealed(
-  db: DbClient,
+export async function ensureCredentialsSealed(
+  store: RepositoryWorkspaceStore,
   secretBox: SecretBox | undefined,
   opts?: { blockOnCredentialedPath?: boolean },
-): SealResult {
+): Promise<SealResult> {
   const result: SealResult = { sealed: 0, linked: 0, scrubbed: 0 }
+  const snapshot = await store.readCredentialSealingSnapshot()
+  const cachedRepoUpdates: RepositoryCredentialSealingMutation['cachedRepoUpdates'][number][] = []
+  const taskRepoUpdates: RepositoryCredentialSealingMutation['taskRepoUpdates'][number][] = []
+  const taskUpdates: RepositoryCredentialSealingMutation['taskUpdates'][number][] = []
+  const scheduleUpdates: RepositoryCredentialSealingMutation['scheduleUpdates'][number][] = []
 
   // RFC-204 impl-gate P0-1 (Codex 2026-07-22): a cached repo onboarded from a
   // historical `?access_token=` URL slugged the token INTO cached_repos.local_path
@@ -188,11 +177,9 @@ export function ensureCredentialsSealed(
   // rather than ship a plaintext token in the tarball. (Startup does not pass the
   // flag, so the daemon still boots — the operator deletes + re-adds the repo.)
   if (opts?.blockOnCredentialedPath === true) {
-    const credentialed = db
-      .select()
-      .from(cachedRepos)
-      .all()
-      .filter((r) => hasQueryCredential(r.urlRedacted ?? ''))
+    const credentialed = snapshot.cachedRepos.filter((row) =>
+      hasQueryCredential(row.urlRedacted ?? ''),
+    )
     if (credentialed.length > 0) {
       throw new DomainError(
         'backup-credentialed-path',
@@ -209,7 +196,7 @@ export function ensureCredentialsSealed(
   // 1. Convert migration escrow to real ciphertext and repair a missing safe
   // display form from decryptable ciphertext. Ordinary readers never decode
   // the closed escrow prefix.
-  const pending = db.select().from(cachedRepos).all()
+  const pending = snapshot.cachedRepos
   const escrowPending = pending.some((row) => row.urlEnc?.startsWith(LEGACY_URL_ESCROW_PREFIX))
   if (escrowPending && secretBox === undefined) {
     throw new DomainError(
@@ -234,41 +221,42 @@ export function ensureCredentialsSealed(
           continue
         }
       }
-      db.update(cachedRepos)
-        .set({
+      cachedRepoUpdates.push({
+        id: row.id,
+        patch: {
           urlEnc: isEscrow ? sealRepoUrl(secretBox, plain) : row.urlEnc,
           urlRedacted: redactGitUrl(plain),
-        })
-        .where(eq(cachedRepos.id, row.id))
-        .run()
+        },
+      })
       result.sealed++
     }
   }
 
   // 2. Link task rows to their mirror — BEFORE step 3 rewrites repo_url.
   const hashToId = new Map<string, string>()
-  for (const row of db.select().from(cachedRepos).all()) hashToId.set(row.urlHash, row.id)
+  for (const row of snapshot.cachedRepos) hashToId.set(row.urlHash, row.id)
   const linkFromUrl = (repoUrl: string | null): string | null => {
     if (repoUrl === null || repoUrl.length === 0) return null
     const parsed = parseGitUrl(repoUrl)
     if (parsed === null) return null
     return hashToId.get(gitUrlCacheKeyWith(parsed, sha1Hex).hash) ?? null
   }
-  for (const row of db.select().from(taskRepos).all()) {
+  for (const row of snapshot.taskRepos) {
     if (row.cachedRepoId !== null) continue
     const id = linkFromUrl(row.repoUrl)
     if (id === null) continue
-    db.update(taskRepos)
-      .set({ cachedRepoId: id })
-      .where(and(eq(taskRepos.taskId, row.taskId), eq(taskRepos.repoIndex, row.repoIndex)))
-      .run()
+    taskRepoUpdates.push({
+      taskId: row.taskId,
+      repoIndex: row.repoIndex,
+      patch: { cachedRepoId: id },
+    })
     result.linked++
   }
-  for (const row of db.select().from(tasks).all()) {
+  for (const row of snapshot.tasks) {
     if (row.cachedRepoId !== null) continue
     const id = linkFromUrl(row.repoUrl)
     if (id === null) continue
-    db.update(tasks).set({ cachedRepoId: id }).where(eq(tasks.id, row.id)).run()
+    taskUpdates.push({ id: row.id, patch: { cachedRepoId: id } })
     result.linked++
   }
 
@@ -279,7 +267,8 @@ export function ensureCredentialsSealed(
   //     replayable while holding no secret. Rows with no matching mirror are
   //     left alone: they still need their URL to launch, and the read-side
   //     mapper redacts them on the way out.
-  for (const row of db.select().from(scheduledTasks).all()) {
+  const finalSchedulePayload = new Map(snapshot.schedules.map((row) => [row.id, row.launchPayload]))
+  for (const row of snapshot.schedules) {
     let payload: Record<string, unknown>
     try {
       const raw: unknown = JSON.parse(row.launchPayload)
@@ -306,10 +295,9 @@ export function ensureCredentialsSealed(
       }
     }
     if (changed) {
-      db.update(scheduledTasks)
-        .set({ launchPayload: JSON.stringify(payload) })
-        .where(eq(scheduledTasks.id, row.id))
-        .run()
+      const launchPayload = JSON.stringify(payload)
+      finalSchedulePayload.set(row.id, launchPayload)
+      scheduleUpdates.push({ id: row.id, launchPayload })
       result.scrubbed++
     }
   }
@@ -317,36 +305,24 @@ export function ensureCredentialsSealed(
   // 3. Re-redact history written before redactGitUrl learned about query
   //    credentials — these columns are returned by their row mappers, and a
   //    VACUUM would otherwise just carry the token into the backup.
-  const targets: ScrubTarget[] = [
-    scrubColumn(
-      'tasks.repo_url',
-      (d) => d.select({ id: tasks.id, value: tasks.repoUrl }).from(tasks).all(),
-      (d, id, next) =>
-        d
-          .update(tasks)
-          .set({ repoUrl: next })
-          .where(eq(tasks.id, id as string))
-          .run(),
-    ),
-    scrubColumn(
-      'cached_repos.last_submodule_sync_error',
-      (d) =>
-        d
-          .select({ id: cachedRepos.id, value: cachedRepos.lastSubmoduleSyncError })
-          .from(cachedRepos)
-          .all(),
-      (d, id, next) =>
-        d
-          .update(cachedRepos)
-          .set({ lastSubmoduleSyncError: next })
-          .where(eq(cachedRepos.id, id as string))
-          .run(),
-    ),
-  ]
-  for (const t of targets) result.scrubbed += t.run(db)
+  for (const row of snapshot.tasks) {
+    if (row.repoUrl === null || row.repoUrl.length === 0) continue
+    const next = redactSensitiveString(row.repoUrl)
+    if (next === row.repoUrl) continue
+    taskUpdates.push({ id: row.id, patch: { repoUrl: next } })
+    result.scrubbed++
+  }
+  for (const row of snapshot.cachedRepos) {
+    const value = row.lastSubmoduleSyncError
+    if (value === null || value.length === 0) continue
+    const next = redactSensitiveString(value)
+    if (next === value) continue
+    cachedRepoUpdates.push({ id: row.id, patch: { lastSubmoduleSyncError: next } })
+    result.scrubbed++
+  }
 
   // task_repos needs the composite key, so it is scrubbed inline.
-  for (const row of db.select().from(taskRepos).all()) {
+  for (const row of snapshot.taskRepos) {
     for (const [col, value] of [
       ['repoUrl', row.repoUrl],
       ['submoduleInitError', row.submoduleInitError],
@@ -354,10 +330,8 @@ export function ensureCredentialsSealed(
       if (value === null || value.length === 0) continue
       const next = redactSensitiveString(value)
       if (next === value) continue
-      db.update(taskRepos)
-        .set({ [col]: next })
-        .where(and(eq(taskRepos.taskId, row.taskId), eq(taskRepos.repoIndex, row.repoIndex)))
-        .run()
+      const patch: Partial<Pick<typeof row, 'repoUrl' | 'submoduleInitError'>> = { [col]: next }
+      taskRepoUpdates.push({ taskId: row.taskId, repoIndex: row.repoIndex, patch })
       result.scrubbed++
     }
   }
@@ -369,28 +343,24 @@ export function ensureCredentialsSealed(
   // context, refuse. (Startup doesn't set the flag; the operator re-saves the
   // schedule with a cachedRepoId source or a userinfo URL.)
   if (opts?.blockOnCredentialedPath === true) {
-    const scheduledCred = db
-      .select()
-      .from(scheduledTasks)
-      .all()
-      .filter((r) => {
-        let payload: unknown
-        try {
-          payload = JSON.parse(r.launchPayload)
-        } catch {
-          return false
+    const scheduledCred = snapshot.schedules.filter((row) => {
+      let payload: unknown
+      try {
+        payload = JSON.parse(finalSchedulePayload.get(row.id) ?? row.launchPayload)
+      } catch {
+        return false
+      }
+      if (payload === null || typeof payload !== 'object') return false
+      const p = payload as Record<string, unknown>
+      const urls: unknown[] = [p['repoUrl']]
+      if (Array.isArray(p['repos'])) {
+        for (const x of p['repos']) {
+          if (x !== null && typeof x === 'object')
+            urls.push((x as Record<string, unknown>)['repoUrl'])
         }
-        if (payload === null || typeof payload !== 'object') return false
-        const p = payload as Record<string, unknown>
-        const urls: unknown[] = [p['repoUrl']]
-        if (Array.isArray(p['repos'])) {
-          for (const x of p['repos']) {
-            if (x !== null && typeof x === 'object')
-              urls.push((x as Record<string, unknown>)['repoUrl'])
-          }
-        }
-        return urls.some((u) => typeof u === 'string' && u.length > 0 && redactGitUrl(u) !== u)
-      })
+      }
+      return urls.some((u) => typeof u === 'string' && u.length > 0 && redactGitUrl(u) !== u)
+    })
     if (scheduledCred.length > 0) {
       throw new DomainError(
         'backup-credentialed-path',
@@ -407,11 +377,23 @@ export function ensureCredentialsSealed(
   //    and freed pages keep the old bytes, which defeats the whole point for a
   //    stolen db.sqlite. secure_delete zeroes freed content, the checkpoint
   //    folds the WAL back in, VACUUM rewrites the file.
+  if (
+    cachedRepoUpdates.length > 0 ||
+    taskRepoUpdates.length > 0 ||
+    taskUpdates.length > 0 ||
+    scheduleUpdates.length > 0
+  ) {
+    await store.applyCredentialSealingMutation({
+      cachedRepoUpdates,
+      taskRepoUpdates,
+      taskUpdates,
+      scheduleUpdates,
+    })
+  }
+
   if (result.sealed > 0 || result.scrubbed > 0) {
     try {
-      db.run(sql`PRAGMA secure_delete = ON`)
-      db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
-      db.run(sql`VACUUM`)
+      await store.compactAfterCredentialScrub()
     } catch (err) {
       log.warn('post-seal compaction failed', { error: (err as Error).message })
     }

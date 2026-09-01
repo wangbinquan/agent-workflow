@@ -1,6 +1,5 @@
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import type { tasks } from '@/db/schema'
+import type { TaskEngineTaskSnapshot } from '@/modules/task-execution/application/ports/taskEngineApplicationPersistence'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
 import type {
   TaskScopeOutcome,
@@ -8,7 +7,7 @@ import type {
 } from '@/modules/task-execution/public/types'
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/util/semaphore'
-import type { RunTaskOptions } from './taskEngineRuntimeOptions'
+import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
 import type { TaskExecutionResourceSession } from './taskExecutionResources'
 
 export interface TaskScopeArgs {
@@ -19,7 +18,7 @@ export interface TaskScopeArgs {
   readonly log: Logger
 }
 
-export interface LegacyNodeResult {
+export interface NodeMechanicsResult {
   readonly kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
   readonly summary: string
   readonly message: string
@@ -32,14 +31,14 @@ export interface LegacyNodeResult {
  * never appears in an application port or public submission contract. Later
  * waves delete fields as those remaining mechanics migrate.
  */
-export interface LegacyTaskMechanicsState {
-  readonly db: DbClient
-  readonly task: typeof tasks.$inferSelect
+export interface TaskMechanicsState {
+  readonly task: TaskEngineTaskSnapshot
   readonly taskId: string
   readonly definition: WorkflowDefinition
-  readonly opts: RunTaskOptions
+  readonly opts: BoundRunTaskOptions
   /** One authority-bound, immutable resource snapshot cache for this task run. */
   readonly taskExecutionResources: TaskExecutionResourceSession
+  readonly collaboratorUserIds: readonly string[]
   readonly topology: SchedulerRuntimeTopology
   readonly log: Logger
   readonly inputsMap: Record<string, string>
@@ -52,10 +51,7 @@ export interface LegacyTaskMechanicsState {
   readonly containerOf: Map<string, string>
   readonly topLevelIds: Set<string>
   readonly wrapperScopes: WrapperExecutionScopeReadModel
-  readonly driveScope: (
-    state: LegacyTaskMechanicsState,
-    args: TaskScopeArgs,
-  ) => Promise<TaskScopeOutcome>
+  readonly driveScope: (state: TaskMechanicsState, args: TaskScopeArgs) => Promise<TaskScopeOutcome>
   readonly repos: Array<{
     readonly repoIndex: number
     readonly repoPath: string

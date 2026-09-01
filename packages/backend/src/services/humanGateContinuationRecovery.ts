@@ -1,17 +1,12 @@
-// RFC-333 T11 — a human-gate decision commits its exact continuation before
-// the post-commit wake. If the daemon exits in that window, boot replays only
-// those already-admitted refs; it never mints a replacement intent.
+// RFC-349 — provider-neutral recovery orchestrator for already-committed
+// human-gate continuations. Persistence is selected once by bootstrap.
 
-import { and, asc, eq } from 'drizzle-orm'
+import type {
+  HumanGateContinuationRecoveryQueries,
+  PendingHumanGateContinuation,
+} from '@/modules/collaboration/application/ports/humanGateContinuationRecovery'
 
-import type { DbClient } from '@/db/client'
-import { taskExecutionIntents } from '@/db/schema'
-import { isLegacyTaskGateContinuationPayload } from '@/modules/task-execution/public/participants'
-
-export type PendingHumanGateContinuation = Readonly<{
-  taskId: string
-  continuationRef: string
-}>
+export type { PendingHumanGateContinuation }
 
 export type HumanGateContinuationRecoveryResult = Readonly<{
   attempted: readonly PendingHumanGateContinuation[]
@@ -24,37 +19,16 @@ export type HumanGateContinuationRecoveryResult = Readonly<{
 }>
 
 export function listPendingHumanGateContinuations(
-  db: DbClient,
-): readonly PendingHumanGateContinuation[] {
-  return (
-    db
-      .select({
-        taskId: taskExecutionIntents.taskId,
-        continuationRef: taskExecutionIntents.id,
-        payloadJson: taskExecutionIntents.payloadJson,
-      })
-      .from(taskExecutionIntents)
-      .where(
-        and(
-          eq(taskExecutionIntents.kind, 'gate-continuation'),
-          eq(taskExecutionIntents.state, 'pending'),
-        ),
-      )
-      .orderBy(asc(taskExecutionIntents.createdAt), asc(taskExecutionIntents.id))
-      .all()
-      // Dynamic-workflow/workgroup gates keep request-owned drive and use this
-      // exact legacy payload. All other rows remain visible so malformed RFC-333
-      // payloads reach the canonical decoder and fail closed instead of vanishing.
-      .filter((row) => !isLegacyTaskGateContinuationPayload(row.payloadJson))
-      .map(({ taskId, continuationRef }) => ({ taskId, continuationRef }))
-  )
+  queries: HumanGateContinuationRecoveryQueries,
+): Promise<readonly PendingHumanGateContinuation[]> {
+  return queries.listPending()
 }
 
 export async function recoverPendingHumanGateContinuations(input: {
-  db: DbClient
+  queries: HumanGateContinuationRecoveryQueries
   wake: (continuation: PendingHumanGateContinuation) => Promise<void>
 }): Promise<HumanGateContinuationRecoveryResult> {
-  const pending = listPendingHumanGateContinuations(input.db)
+  const pending = await input.queries.listPending()
 
   const woken: PendingHumanGateContinuation[] = []
   const failed: Array<PendingHumanGateContinuation & { error: string }> = []

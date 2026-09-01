@@ -392,7 +392,7 @@ export const opencodeDriver: RuntimeDriver = {
       rootSessionId: ctx.rootSessionId,
       nodeRunId: ctx.nodeRunId,
       taskId: ctx.taskId,
-      db: ctx.db,
+      persistence: ctx.persistence,
       log: ctx.log,
       ...(ctx.alreadyInsertedPartIds !== undefined
         ? { alreadyInsertedPartIds: ctx.alreadyInsertedPartIds }

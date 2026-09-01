@@ -3,12 +3,9 @@
 // rule. Lifecycle owns the atomic status+claim write and GC/source-control owns
 // physical deletion.
 
-import { eq } from 'drizzle-orm'
-
 import type { SpaceKind, TaskStatus } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
+import type { WebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/application/ports/terminalWorkspaceAttribution'
 import type { TerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 
 export interface WebhookTerminalWorkspacePolicyInput {
@@ -58,21 +55,13 @@ export function shouldRequestWebhookWorkspacePrune(
  * 真正的并发防线仍是终态 CAS 里的三列墓碑条件（本策略同样要求它们为空）。
  */
 export function createWebhookTerminalWorkspacePrunePolicy(deps: {
-  readonly db: DbClient
+  readonly attribution: WebhookTerminalWorkspaceAttributionQueries
   /** 每次转移都重读，配置保持热更新（沿用 RFC-300 既有语义）。 */
   readonly enabled: () => boolean
 }): TerminalWorkspacePrunePolicy {
-  return (row, to) => {
-    const attribution = deps.db
-      .select({
-        webhookTriggerId: tasks.webhookTriggerId,
-        eventSubscriptionId: tasks.eventSubscriptionId,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, row.taskId))
-      .limit(1)
-      .all()[0]
-    if (attribution === undefined) return { prune: false }
+  return async (row, to) => {
+    const attribution = await deps.attribution.load(row.taskId)
+    if (attribution === null) return { prune: false }
     const prune = shouldRequestWebhookWorkspacePrune(deps.enabled(), {
       to,
       webhookTriggerId: attribution.webhookTriggerId,

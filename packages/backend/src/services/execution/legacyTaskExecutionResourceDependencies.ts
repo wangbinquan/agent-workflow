@@ -2,15 +2,15 @@
 // This is the only compatibility edge; task-execution consumers receive only
 // the named public participant and frozen data-only snapshots.
 
-import { canViewResourceInTx } from '@/services/resourceAcl'
-import { rowToAgent } from '@/services/agent'
-import { rowToMcp } from '@/services/mcp'
-import { rowToPlugin } from '@/services/plugin'
-import { rowToWorkflowDetail } from '@/services/workflow'
-import { rowToWorkgroup } from '@/services/workgroups'
+import { canViewResourceInTx } from '@/modules/resource-catalog/composition/resourceAcl'
+import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
+import { mcpFromPersistenceRow as rowToMcp } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
+import { pluginFromPersistenceRow as rowToPlugin } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
+import { rowToWorkflowDetail } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
+import { rowToWorkgroup } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { isSkillInjectableThisBoot } from '@/services/skillBootVerify'
-import { skillFilesRel } from '@/services/skillIdentityPaths'
+import { isSkillInjectableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { skillFilesRel } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,

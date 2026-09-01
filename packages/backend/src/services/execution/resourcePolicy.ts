@@ -52,14 +52,14 @@ export interface DisabledPolicyEntry {
 /** The one spelling of the fail-closed plugin error code. All five emitters
  *  import THIS (B3): the wire bytes are unchanged, but "where does this code
  *  come from" now has exactly one grep-able answer — this table. */
-export const PLUGIN_DISABLED_ERROR_CODE = 'plugin-disabled'
+export { PLUGIN_DISABLED_ERROR_CODE } from '@/modules/resource-catalog/public/types'
 
 /** The real `plugin-disabled` emitters (all preserved verbatim — v2 has zero
  *  product behavior change; four upstream launch gates consume them). */
 export const PLUGIN_DISABLED_SITES: readonly string[] = [
   'services/workflow.validator.ts',
   'services/agent.ts',
-  'services/agentResourceIntegrity.ts',
+  'modules/resource-catalog/application/agents/agentResourceIntegrity.ts',
   'services/execution/resolveInjection.ts',
 ]
 

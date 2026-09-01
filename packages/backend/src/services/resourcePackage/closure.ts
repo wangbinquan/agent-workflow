@@ -29,17 +29,11 @@ import {
   migrateWorkflowDefinitionToLatest,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { users, workgroupMembers } from '@/db/schema'
-import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
-import {
-  listSqlitePackageResourceRowsByIds,
-  listSqlitePackageResourceRowsByNames,
-} from '@/modules/resource-catalog/public/operations'
+import { isVisibleRow } from '@/services/resourceAcl'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { ValidationError } from '@/util/errors'
+import { resourcePackageDocumentOf, type ResourcePackageReadPort } from './providerReadPort'
 
 /** 闭包里的一条资源。`row` 是 canonical 行（未脱敏——脱敏在序列化段）。 */
 export interface ClosureResource {
@@ -92,70 +86,11 @@ export const rowName = (row: Record<string, unknown>): string =>
 
 /** 一次装载一层。**只返回对 actor 可见的行**——不可见的由 ① 号门报错。 */
 async function loadRows(
-  db: DbClient,
+  reads: ResourcePackageReadPort,
   type: BundleResourceType,
   ids: readonly string[],
 ): Promise<Record<string, unknown>[]> {
-  const out = await listSqlitePackageResourceRowsByIds(db, type, ids, { orderById: true })
-  if (type === 'workgroup') await attachWorkgroupMembers(db, out)
-  return out
-}
-
-/**
- * 工作组的成员在**独立表** `workgroup_members`，不是 `workgroups` 上的 JSON 列；
- * 开关（shareOutputs / directMessages / blackboard）也是各自独立的列。
- *
- * 在**装载层**把成员补进 `row.members`，让下游（`directRefsOf` / 序列化 /
- * requirements）只有一处知道它的来源——三处各查一遍是「两套实现」的起点。
- *
- * human 成员在表里只有 `user_id`；跨实例可移植的标识是 **username**，所以这里
- * 一并 join 出来。排序按 `(sortOrder, id)` 固定，导出要逐字节稳定。
- */
-export async function attachWorkgroupMembers(
-  db: DbClient,
-  groups: Record<string, unknown>[],
-): Promise<void> {
-  if (groups.length === 0) return
-  const groupIds = groups.map((g) => String(g.id))
-  const members = await db
-    .select()
-    .from(workgroupMembers)
-    .where(inArray(workgroupMembers.workgroupId, groupIds))
-    .orderBy(asc(workgroupMembers.sortOrder), asc(workgroupMembers.id))
-
-  const userIds = [
-    ...new Set(
-      members
-        .filter((m) => m.memberType === 'human' && typeof m.userId === 'string')
-        .map((m) => m.userId as string),
-    ),
-  ]
-  const usernameById = new Map<string, string>()
-  if (userIds.length > 0) {
-    const rows = await db
-      .select({ id: users.id, username: users.username })
-      .from(users)
-      .where(inArray(users.id, userIds))
-    for (const u of rows) usernameById.set(u.id, u.username)
-  }
-
-  const byGroup = new Map<string, Record<string, unknown>[]>()
-  for (const m of members) {
-    const list = byGroup.get(m.workgroupId) ?? []
-    list.push({
-      id: m.id,
-      memberType: m.memberType,
-      agentId: m.agentId,
-      agentName: m.agentName,
-      userId: m.userId,
-      username: m.userId === null ? null : (usernameById.get(m.userId) ?? null),
-      displayName: m.displayName,
-      roleDesc: m.roleDesc,
-      sortOrder: m.sortOrder,
-    })
-    byGroup.set(m.workgroupId, list)
-  }
-  for (const g of groups) g.members = byGroup.get(String(g.id)) ?? []
+  return (await reads.listByIds(type, ids, { orderById: true })).map(resourcePackageDocumentOf)
 }
 
 function parseJsonArray(value: unknown): unknown[] {
@@ -248,7 +183,7 @@ export function directRefsOf(
     return out
   }
   if (type === 'workgroup') {
-    // `row.members` 由 `attachWorkgroupMembers` 在装载层补上（成员是独立表）。
+    // `row.members` 由 provider read adapter 在装载层补上（成员是独立表）。
     for (const raw of parseJsonArray(row.members)) {
       const m = raw as { memberType?: string; agentId?: string }
       if (m.memberType === 'agent' && typeof m.agentId === 'string') {
@@ -271,16 +206,16 @@ export function directRefsOf(
  * 本身成了存在性预言机。
  */
 async function resolveCallTarget(
-  db: DbClient,
+  reads: ResourcePackageReadPort,
   actor: Actor,
   type: 'workflow' | 'workgroup',
   name: string,
   idHint: string | undefined,
   grants: ReadonlySet<string>,
 ): Promise<Record<string, unknown> | null> {
-  const rows = await listSqlitePackageResourceRowsByNames(db, type, [name], {
-    orderById: true,
-  })
+  const rows = (await reads.listByNames(type, [name], { orderById: true })).map(
+    resourcePackageDocumentOf,
+  )
   const visible = rows.filter((r) => isVisibleRow(actor, r as never, grants))
   if (visible.length === 0) return null
   if (idHint !== undefined) {
@@ -299,8 +234,8 @@ export interface ExportGateOptions {
  * 遍历闭包并跑前两道门（可见性 / 同名重复）。特权门与体积门需要序列化后的内容，
  * 由 `assertPrivilegedNodesExportable` / 序列化段各自负责。
  */
-export async function walkExportClosure(
-  db: DbClient,
+export async function walkExportClosureFromReadPort(
+  reads: ResourcePackageReadPort,
   actor: Actor,
   root: { type: BundleResourceType; id: string },
 ): Promise<ExportClosure> {
@@ -308,7 +243,7 @@ export async function walkExportClosure(
   const grantsOf = async (type: BundleResourceType): Promise<ReadonlySet<string>> => {
     const cached = grantsByType.get(type)
     if (cached !== undefined) return cached
-    const ids = new Set(await listGrantedResourceIds(db, actor, type))
+    const ids = await reads.listGrantedResourceIds(actor, type)
     grantsByType.set(type, ids)
     return ids
   }
@@ -340,7 +275,7 @@ export async function walkExportClosure(
 
     const next: Array<{ type: BundleResourceType; id: string; from: string | null }> = []
     for (const [type, ids] of wanted) {
-      const rows = await loadRows(db, type, [...ids])
+      const rows = await loadRows(reads, type, [...ids])
       const grants = await grantsOf(type)
       const foundIds = new Set(rows.map((r) => String(r.id)))
       for (const id of ids) {
@@ -378,7 +313,7 @@ export async function walkExportClosure(
           if (defn !== null) {
             for (const ref of collectWorkflowCallRefs(defn)) {
               const target = await resolveCallTarget(
-                db,
+                reads,
                 actor,
                 'workflow',
                 ref.workflowName,
@@ -399,7 +334,7 @@ export async function walkExportClosure(
             }
             for (const ref of collectWorkgroupCallRefs(defn)) {
               const target = await resolveCallTarget(
-                db,
+                reads,
                 actor,
                 'workgroup',
                 ref.workgroupName,

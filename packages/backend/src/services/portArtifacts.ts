@@ -28,11 +28,8 @@ import {
 } from 'node:fs'
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { checkLexicalThenRealpath } from '@/util/safePath'
-import { and, eq, isNotNull } from 'drizzle-orm'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitPortItems } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
-import { parseTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
+import type { TaskArtifactPathQueries } from '@/modules/task-execution/application/ports/taskArtifactPathQueries'
 import { createLogger } from '@/util/log'
 import { toPortableRelativePath } from '@/util/platformExec'
 import { sha256Hex } from '@/util/hash'
@@ -532,36 +529,9 @@ export function subsetArchiveJson(
  * per-node-run 短命对象，每次 dispatch 重建 ⇒ 清单天然最新（唯一长命例外
  * wrapper final 由调用方重聚合，design §4.5）。
  */
-export async function forcedPortPathsForTask(db: DbClient, taskId: string): Promise<string[]> {
-  const task = await db
-    .select({
-      spaceKind: tasks.spaceKind,
-      platformInputPathsJson: tasks.platformInputPathsJson,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .get()
-  const rows = await db
-    .select({ archiveJson: nodeRunOutputs.archiveJson })
-    .from(nodeRunOutputs)
-    .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
-    .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRunOutputs.archiveJson)))
-  const out = new Set<string>()
-  if (task?.platformInputPathsJson !== null && task?.platformInputPathsJson !== undefined) {
-    if (task.spaceKind !== 'internal') {
-      throw new Error('non-internal task carries a platform input path roster')
-    }
-    for (const path of parseTaskPlatformInputPaths(task.platformInputPathsJson)) out.add(path)
-  }
-  for (const r of rows) {
-    const arch = parseArchiveJson(r.archiveJson)
-    if (arch === null) continue
-    for (const it of arch.items) {
-      out.add(it.path)
-      // D19：symlink 目标随 item 持久化——重建的 roster 必须含目标，否则
-      // 下游 base 快照只带链接本体、目标被 ignore 时得到悬挂 symlink。
-      if (it.linkTarget !== undefined) out.add(it.linkTarget)
-    }
-  }
-  return [...out]
+export async function forcedPortPathsForTask(
+  queries: TaskArtifactPathQueries,
+  taskId: string,
+): Promise<string[]> {
+  return [...(await queries.forcedPaths(taskId))]
 }

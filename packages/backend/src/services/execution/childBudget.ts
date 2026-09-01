@@ -20,9 +20,8 @@
 // Bookkeeping is driven by the committed task-lifecycle consumer plus explicit
 // pre-insert holds around the launch window. Boot/lazy init rebuilds the counted
 // set from the DB so restarts cannot leak or double-count units.
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
+import type { ChildTaskBudgetQueries } from '@/modules/task-execution/application/ports/childTaskBudgetQueries'
+import { SqliteChildTaskBudgetQueries } from '@/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries'
 import { createLogger } from '@/util/log'
 import type { TaskStatus } from '@agent-workflow/shared'
 
@@ -48,6 +47,27 @@ type Waiter = {
   onAbort?: () => void
 }
 
+type LegacySqliteChildBudgetSource = ConstructorParameters<typeof SqliteChildTaskBudgetQueries>[0]
+
+function childBudgetQueries(
+  source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
+): ChildTaskBudgetQueries {
+  if (source === null) {
+    return {
+      async listCountedChildTaskIds() {
+        throw new Error('child-budget-query-source-not-composed')
+      },
+      async isChildTask() {
+        throw new Error('child-budget-query-source-not-composed')
+      },
+      async parentTaskId() {
+        throw new Error('child-budget-query-source-not-composed')
+      },
+    }
+  }
+  return 'listCountedChildTaskIds' in source ? source : new SqliteChildTaskBudgetQueries(source)
+}
+
 export class ChildTaskBudget {
   /** taskIds currently holding a unit (child tasks in pending/running). */
   private counted = new Set<string>()
@@ -56,20 +76,18 @@ export class ChildTaskBudget {
   private waiters: Waiter[] = []
   private warnTimer: ReturnType<typeof setInterval> | null = null
 
+  private readonly queries: ChildTaskBudgetQueries
+
   constructor(
-    private readonly db: DbClient,
+    source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
     private readonly capacity: () => number,
-  ) {}
+  ) {
+    this.queries = childBudgetQueries(source)
+  }
 
   /** Rebuild the counted set from the DB (boot / lazy init after restart). */
   async rebuildFromDb(): Promise<void> {
-    const rows = await this.db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(
-        and(isNotNull(tasks.parentTaskId), inArray(tasks.status, COUNTED_STATUSES as TaskStatus[])),
-      )
-    this.counted = new Set(rows.map((r) => r.id))
+    this.counted = new Set(await this.queries.listCountedChildTaskIds())
     this.scan()
   }
 
@@ -253,11 +271,11 @@ export function setChildTaskBudgetCapacity(capacity: number): void {
   singleton?.onCapacityChanged()
 }
 
-/** 单例当前绑定的 DbClient——换库时必须重建，见下。 */
-let singletonDb: DbClient | null = null
+/** 单例当前绑定的 provider query identity——换 provider 时必须重建。 */
+let singletonSource: object | null = null
 
 export async function ensureChildTaskBudget(
-  db: DbClient,
+  source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
   capacity: () => number,
 ): Promise<ChildTaskBudget> {
   // 冷启动播种：daemon 起来后第一个走到这里的任务用自己的 opts 定初值；之后一律
@@ -267,10 +285,10 @@ export async function ensureChildTaskBudget(
   // 拿着它去服务另一个库等于用甲的在跑数去限乙的并发。生产里 daemon 只有一个库，
   // 但并行用不同库的测试会静默串扰——那种串扰表现为「另一个用例的配额莫名其妙
   // 变了」，极难定位。（T14 实现门 P2。）
-  if (singleton !== null && singletonDb !== db) singleton = null
+  if (singleton !== null && singletonSource !== source) singleton = null
   if (singleton === null) {
-    singleton = new ChildTaskBudget(db, () => liveCapacity ?? capacity())
-    singletonDb = db
+    singleton = new ChildTaskBudget(childBudgetQueries(source), () => liveCapacity ?? capacity())
+    singletonSource = source
     await singleton.rebuildFromDb()
   }
   return singleton
@@ -284,7 +302,7 @@ export function registerKnownChildTask(taskId: string): void {
 /** Test-only: drop the singleton + childness cache. */
 export function resetChildTaskBudgetForTests(): void {
   singleton = null
-  singletonDb = null
+  singletonSource = null
   liveCapacity = null
   childness.clear()
 }
@@ -294,7 +312,11 @@ export function resetChildTaskBudgetForTests(): void {
  * until the budget singleton exists; unknown tasks are resolved through the
  * childness cache and, when unknown, a single lazy DB read.
  */
-export function notifyChildBudgetTaskStatus(db: DbClient, taskId: string, to: TaskStatus): void {
+export function notifyChildBudgetTaskStatus(
+  source: ChildTaskBudgetQueries | LegacySqliteChildBudgetSource,
+  taskId: string,
+  to: TaskStatus,
+): void {
   const budget = singleton
   if (budget === null) return
   const known = childness.get(taskId)
@@ -303,13 +325,9 @@ export function notifyChildBudgetTaskStatus(db: DbClient, taskId: string, to: Ta
     budget.onChildTaskStatus(taskId, to)
     return
   }
-  void db
-    .select({ parentTaskId: tasks.parentTaskId })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-    .then((rows) => {
-      const isChild = rows[0]?.parentTaskId != null
+  void childBudgetQueries(source)
+    .isChildTask(taskId)
+    .then((isChild) => {
       childness.set(taskId, isChild)
       if (isChild) budget.onChildTaskStatus(taskId, to)
     })

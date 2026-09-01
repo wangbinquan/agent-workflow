@@ -17,7 +17,6 @@ import {
   buildClarifyEdges,
   deriveAgentLaunchForm,
   migrateWorkflowDefinitionToLatest,
-  serializeWorkflowDefinitionStorageV1,
   StartTaskSchema,
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
@@ -28,9 +27,7 @@ import {
   type Task,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { canViewResource, initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { getAgentById } from '@/services/agent'
 import {
   cleanupMaterializedSpace,
   materializeSpace,
@@ -45,14 +42,12 @@ import {
   collectUploadInputDefs,
   type MultipartFilePart,
 } from '@/services/launchMultipart'
-import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { workflows } from '@/db/schema'
+import type { AgentLaunchResourceOperations } from '@/modules/task-execution/application/ports/agentLaunchResourceOperations'
+import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import { Paths } from '@/util/paths'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
-import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 
 export const AGENT_HOST_WORKFLOW_ID = '00000000000000AGENTHOST00'
 export const AGENT_HOST_WORKFLOW_NAME = '__agent_host__'
@@ -62,31 +57,6 @@ export const AGENT_HOST_AGENT_NODE_ID = '__agent_main__'
 export const AGENT_HOST_CLARIFY_NODE_ID = '__agent_clarify__'
 /** The single workflow input key; the launch `description` rides this port. */
 export const AGENT_HOST_INPUT_KEY = 'description'
-
-/**
- * Lazily seed the builtin host workflow row (FK anchor for single-agent
- * tasks). NOT a migration seed — a migration-seeded row would surface in
- * every fresh DB and break empty-fixture expectations; idempotent via
- * onConflictDoNothing (mirrors ensureWorkgroupHostWorkflow).
- */
-export async function ensureAgentHostWorkflow(db: DbClient): Promise<void> {
-  await db
-    .insert(workflows)
-    .values({
-      id: AGENT_HOST_WORKFLOW_ID,
-      name: AGENT_HOST_WORKFLOW_NAME,
-      description: 'RFC-165 single-agent host anchor — do not launch directly',
-      definition: serializeWorkflowDefinitionStorageV1({
-        $schema_version: WORKFLOW_SCHEMA_VERSION,
-        inputs: [],
-        nodes: [],
-        edges: [],
-      }),
-      ...initialBuiltinResourceAcl(null),
-      builtin: true,
-    })
-    .onConflictDoNothing({ target: workflows.id })
-}
 
 /**
  * Synthesize the frozen workflow snapshot for a single-agent task, plus —
@@ -321,15 +291,15 @@ export function validateAgentLaunchShape(
  * is display-only and may proceed without changing the launch target.
  */
 export async function startAgentTask(
-  db: DbClient,
+  resources: AgentLaunchResourceOperations,
   actor: Actor,
   agentId: string,
   input: StartAgentTask,
-  deps: StartTaskDeps,
+  deps: StartTaskDeps & { readonly integrity: AgentLaunchResourceIntegrityParticipant },
   uploads?: { parts: MultipartFilePart[]; limits: UploadLimits },
 ): Promise<Task> {
-  const agent = await getAgentById(db, agentId)
-  if (agent === null || !(await canViewResource(db, actor, 'agent', agent))) {
+  const agent = await resources.loadVisibleAgent(actor, agentId)
+  if (agent === null) {
     throw new NotFoundError('agent-not-found', 'agent not found')
   }
   assertNotBuiltin('agent', agent)
@@ -350,7 +320,7 @@ export async function startAgentTask(
     // Post-acquire re-verify by the SAME canonical id. No name fallback: a
     // delete + same-name recreate is a different resource and must never be
     // adopted by this launch.
-    const recheck = await getAgentById(db, agent.id)
+    const recheck = await resources.loadVisibleAgent(actor, agent.id)
     if (recheck === null) {
       throw new ConflictError(
         'agent-id-mismatch',
@@ -358,9 +328,9 @@ export async function startAgentTask(
       )
     }
 
-    await assertAgentResourceIntegrity(db, [recheck.id])
+    await deps.integrity.assertUsable({ rootAgentIds: [recheck.id] })
 
-    await ensureAgentHostWorkflow(db)
+    await resources.ensureHostWorkflow()
 
     // RFC-218: conditional shape matrix against the CURRENT (post-reservation)
     // agent row — description XOR inputs, unknown keys, required ports,
@@ -381,7 +351,7 @@ export async function startAgentTask(
         issues: err instanceof Error ? [{ message: err.message }] : [],
       })
     }
-    const validation = validateWorkflowDef(def, await buildWorkflowValidationContext(db))
+    const validation = await resources.validateHostWorkflow(def)
     if (!validation.ok) {
       const errors = validation.issues.filter((i) => (i.severity ?? 'error') === 'error')
       if (errors.length > 0) {

@@ -10,70 +10,61 @@
 //   4. Any survivor past the budget is flipped to 'interrupted' so the
 //      next startup's orphan reaper (P-4-07) doesn't have to do it.
 
-import { eq } from 'drizzle-orm'
-import { DAEMON_RESTART_ERROR_SUMMARY, DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
-import { markTaskExecutionShutdownSurvivor, shutdownActiveTaskExecutions } from '@/services/task'
+import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
+import type {
+  TaskExecutionShutdownController,
+  TaskExecutionShutdownOperations,
+} from '@/modules/task-execution/application/ports/taskExecutionShutdownOperations'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import { createLogger } from '@/util/log'
-import { setTaskStatus } from '@/services/lifecycle'
-import { terminalizeTaskExecutionIntentsTx } from '@/services/taskExecutionParticipants'
-import { ConflictError, NotFoundError } from '@/util/errors'
 
 const log = createLogger('shutdown')
 
-export async function gracefulShutdown(db: DbClient, budgetMs: number = 30_000): Promise<void> {
+export interface GracefulShutdownDependencies {
+  readonly controller: TaskExecutionShutdownController
+  readonly operations: TaskExecutionShutdownOperations
+  readonly recovery: TaskRecoveryOperations
+}
+
+export async function gracefulShutdown(
+  dependencies: GracefulShutdownDependencies,
+  budgetMs: number = 30_000,
+): Promise<void> {
   // RFC-202 T4: tag the abort so the scheduler writes interrupted +
   // daemon-restart (resumable / boot-auto-resumable) instead of
   // 'canceled by user' — a daemon restart is not a user decision.
-  await shutdownActiveTaskExecutions(DAEMON_SHUTDOWN_ABORT_REASON, budgetMs)
+  await dependencies.controller.shutdownActive(DAEMON_SHUTDOWN_ABORT_REASON, budgetMs)
 
   // Budget elapsed; flip any survivors to 'interrupted'.
-  const survivors = await db.select().from(tasks).where(eq(tasks.status, 'running'))
+  const survivors = await dependencies.operations.listRunningTaskIds()
   if (survivors.length === 0) return
   log.warn('graceful budget exceeded; marking survivors interrupted', {
     count: survivors.length,
   })
-  for (const t of survivors) {
+  for (const taskId of survivors) {
     // RFC-097: CAS from running; a task that settled inside the budget window
     // keeps its real terminal status.
-    let won = false
-    try {
-      await setTaskStatus({
-        db,
-        taskId: t.id,
-        to: 'interrupted',
-        allowedFrom: ['running'],
-        extra: {
-          finishedAt: Date.now(),
-          errorSummary: DAEMON_RESTART_ERROR_SUMMARY,
-          errorMessage: 'task did not exit within graceful shutdown budget',
-        },
-        onTransitionTx: (tx) => {
-          terminalizeTaskExecutionIntentsTx({
-            tx,
-            taskId: t.id,
-            state: 'failed',
-            failureCode: 'daemon-shutdown-survivor',
-            now: Date.now(),
-          })
-        },
-        reason: 'graceful-shutdown',
-      })
-      won = true
-    } catch (error) {
-      if (!(error instanceof ConflictError) && !(error instanceof NotFoundError)) throw error
-    }
+    const now = Date.now()
+    const won = await dependencies.operations.interruptSurvivor({
+      taskId,
+      now,
+      errorMessage: 'task did not exit within graceful shutdown budget',
+    })
     // RFC-108 T3 (AR-11): durable audit of the shutdown survivor flip.
     if (won) {
-      markTaskExecutionShutdownSurvivor(db, t.id)
-      await recordRecoveryEvent(db, {
-        taskId: t.id,
+      await dependencies.operations.markRecoveryRequired({
+        taskId,
+        now,
+        recoveryCode: 'daemon-shutdown-survivor',
+      })
+      await recordRecoveryEvent(dependencies.recovery, {
+        taskId,
         kind: 'shutdown-flip',
         reason: 'daemon-shutdown',
         before: { status: 'running' },
         after: { status: 'interrupted' },
+        now,
       })
     }
   }

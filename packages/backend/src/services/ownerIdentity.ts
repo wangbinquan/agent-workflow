@@ -4,46 +4,35 @@
 // bounded independently of row count. The caller still receives one complete
 // map: backend chunks are an implementation detail, never a truncated result.
 
-import { OwnerIdentitySchema, type OwnerIdentity } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
+import type { OwnerIdentity } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { users } from '@/db/schema'
+import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import {
+  OWNER_IDENTITY_SQL_BATCH_SIZE,
+  type OwnerIdentityQueries,
+} from '@/modules/identity-access/public/operations'
 
-export const OWNER_IDENTITY_SQL_BATCH_SIZE = 200
+export { OWNER_IDENTITY_SQL_BATCH_SIZE }
+
+type LegacySqliteOwnerIdentitySource = Parameters<typeof composeSqliteOwnerIdentityQueries>[0]
+
+function isOwnerIdentityQueries(
+  source: LegacySqliteOwnerIdentitySource | OwnerIdentityQueries,
+): source is OwnerIdentityQueries {
+  return (
+    typeof source === 'object' &&
+    source !== null &&
+    'loadOwnerIdentities' in source &&
+    typeof source.loadOwnerIdentities === 'function'
+  )
+}
 
 export async function loadOwnerIdentities(
-  db: DbClient,
+  source: LegacySqliteOwnerIdentitySource | OwnerIdentityQueries,
   ownerUserIds: ReadonlyArray<string | null | undefined>,
 ): Promise<Map<string, OwnerIdentity>> {
-  const wanted = [
-    ...new Set(
-      ownerUserIds.filter(
-        (id): id is string => id !== null && id !== undefined && id !== SYSTEM_USER_ID,
-      ),
-    ),
-  ]
-  const byId = new Map<string, OwnerIdentity>()
-
-  for (let offset = 0; offset < wanted.length; offset += OWNER_IDENTITY_SQL_BATCH_SIZE) {
-    const batch = wanted.slice(offset, offset + OWNER_IDENTITY_SQL_BATCH_SIZE)
-    const rows = await db
-      .select({
-        id: users.id,
-        username: users.username,
-        displayName: users.displayName,
-      })
-      .from(users)
-      .where(inArray(users.id, batch))
-
-    for (const row of rows) {
-      const parsed = OwnerIdentitySchema.safeParse(row)
-      // A malformed historic identity degrades to the stable owner id instead
-      // of taking down an otherwise healthy task list.
-      if (parsed.success) byId.set(parsed.data.id, parsed.data)
-    }
-  }
-
-  return byId
+  const queries = isOwnerIdentityQueries(source)
+    ? source
+    : composeSqliteOwnerIdentityQueries(source)
+  return new Map(await queries.loadOwnerIdentities(ownerUserIds))
 }

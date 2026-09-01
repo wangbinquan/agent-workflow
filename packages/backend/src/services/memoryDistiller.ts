@@ -18,7 +18,6 @@
 import { mkdir, rm } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -36,30 +35,21 @@ import {
   parseSessionTree,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { humanGateComposition } from '@/services/humanGateComposition'
-import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { getRuntimeDriver } from '@/services/runtime'
 import { runAgentProcess } from '@/services/execution/agentProcess'
 import { Paths } from '@/util/paths'
 import type { RuntimeKind } from '@/services/runtime/types'
-import {
-  clarifyRounds,
-  docVersions,
-  memories,
-  memoryDistillJobs,
-  nodeRunEvents,
-  nodeRuns,
-  reviewComments,
-  taskFeedback,
-} from '@/db/schema'
 import { extractLastEnvelope } from '@/services/envelope'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
-import { appHome } from '@/util/paths'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
+import type {
+  MemoryDistillClarifyWorkRecord,
+  MemoryDistillReviewedArtifactReader,
+  MemoryDistillWorkStore,
+} from '@/modules/memory/application/ports/distillWorkStore'
 
 const log = createLogger('memory-distiller')
 
@@ -200,7 +190,8 @@ export interface DistillResult {
 }
 
 export interface RunDistillOptions {
-  db: DbClient
+  store: MemoryDistillWorkStore
+  reviewedArtifacts: MemoryDistillReviewedArtifactReader
   job: MemoryDistillJob
   /**
    * Sibling jobs sharing the same debounce_key that the scheduler decided
@@ -329,7 +320,8 @@ export interface LoadedSourceEvents {
  * fidelity for that one source.
  */
 export async function loadSourceEvents(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
+  reviewedArtifacts: MemoryDistillReviewedArtifactReader,
   jobs: MemoryDistillJob[],
   budget: SourceContextBudget = DEFAULT_SOURCE_CONTEXT_BUDGET,
 ): Promise<LoadedSourceEvents> {
@@ -337,31 +329,14 @@ export async function loadSourceEvents(
   const reviewIds = jobs.filter((j) => j.sourceKind === 'review').map((j) => j.sourceEventId)
   const feedbackIds = jobs.filter((j) => j.sourceKind === 'feedback').map((j) => j.sourceEventId)
 
-  const clarifyRows =
-    clarifyIds.length > 0
-      ? await db
-          .select()
-          .from(clarifyRounds)
-          .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, clarifyIds)))
-      : []
-  const reviewRows =
-    reviewIds.length > 0
-      ? await db.select().from(docVersions).where(inArray(docVersions.id, reviewIds))
-      : []
-  const feedbackRows =
-    feedbackIds.length > 0
-      ? await db.select().from(taskFeedback).where(inArray(taskFeedback.id, feedbackIds))
-      : []
+  const [clarifyRows, reviewRows, feedbackRows] = await Promise.all([
+    store.listClarifySources(clarifyIds),
+    store.listReviewSources(reviewIds),
+    store.listFeedbackSources(feedbackIds),
+  ])
 
   // Comments are 1:N on doc_versions; one pass to fetch them all.
-  const commentRows =
-    reviewIds.length > 0
-      ? await db
-          .select()
-          .from(reviewComments)
-          .where(inArray(reviewComments.docVersionId, reviewIds))
-          .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-      : []
+  const commentRows = await store.listReviewComments(reviewIds)
   const commentsByDv = new Map<
     string,
     Array<{ body: string; anchorParagraphIdx: number; selectedText: string }>
@@ -373,14 +348,14 @@ export async function loadSourceEvents(
       commentsByDv.set(c.docVersionId, bucket)
     }
     bucket.push({
-      body: c.commentText,
+      body: c.body,
       anchorParagraphIdx: c.anchorParagraphIdx,
       selectedText: c.selectedText,
     })
   }
 
-  const transcriptsByClarifyId = await loadClarifyTranscripts(db, clarifyRows, budget)
-  const reviewBodiesByDvId = await loadReviewBodies(db, reviewRows, budget)
+  const transcriptsByClarifyId = await loadClarifyTranscripts(store, clarifyRows, budget)
+  const reviewBodiesByDvId = await loadReviewBodies(reviewedArtifacts, reviewRows, budget)
 
   return {
     clarify: clarifyRows.map((r) => {
@@ -438,8 +413,8 @@ interface SourceContextResult {
  *    budget.
  */
 async function loadClarifyTranscripts(
-  db: DbClient,
-  clarifyRows: Array<{ id: string; askingNodeRunId: string | null }>,
+  store: MemoryDistillWorkStore,
+  clarifyRows: readonly MemoryDistillClarifyWorkRecord[],
   budget: SourceContextBudget,
 ): Promise<Map<string, SourceContextResult>> {
   const out = new Map<string, SourceContextResult>()
@@ -448,35 +423,10 @@ async function loadClarifyTranscripts(
   const sourceRunIds = [
     ...new Set(clarifyRows.flatMap((r) => (r.askingNodeRunId !== null ? [r.askingNodeRunId] : []))),
   ]
-  const runRows = await db
-    .select({
-      id: nodeRuns.id,
-      promptText: nodeRuns.promptText,
-      // RFC-311 T21:新行的正文在文件里(见 services/nodeRunPrompt.ts 的双读)。
-      promptPath: nodeRuns.promptPath,
-      startedAt: nodeRuns.startedAt,
-      opencodeSessionId: nodeRuns.opencodeSessionId,
-    })
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.id, sourceRunIds))
+  const runRows = await store.listNodeRuns(sourceRunIds)
   const runById = new Map(runRows.map((r) => [r.id, r] as const))
 
-  const eventRows =
-    sourceRunIds.length > 0
-      ? await db
-          .select({
-            id: nodeRunEvents.id,
-            ts: nodeRunEvents.ts,
-            kind: nodeRunEvents.kind,
-            payload: nodeRunEvents.payload,
-            sessionId: nodeRunEvents.sessionId,
-            parentSessionId: nodeRunEvents.parentSessionId,
-            nodeRunId: nodeRunEvents.nodeRunId,
-          })
-          .from(nodeRunEvents)
-          .where(inArray(nodeRunEvents.nodeRunId, sourceRunIds))
-          .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
-      : []
+  const eventRows = await store.listNodeRunEvents(sourceRunIds)
   const eventsByRun = new Map<string, ParseSessionInputEvent[]>()
   for (const e of eventRows) {
     const list = eventsByRun.get(e.nodeRunId) ?? []
@@ -530,20 +480,15 @@ async function loadClarifyTranscripts(
  * placeholder line.
  */
 async function loadReviewBodies(
-  db: DbClient,
-  reviewRows: Array<{ id: string; bodyPath: string }>,
+  reviewedArtifacts: MemoryDistillReviewedArtifactReader,
+  reviewRows: readonly { id: string; bodyPath: string }[],
   budget: SourceContextBudget,
 ): Promise<Map<string, SourceContextResult>> {
   const out = new Map<string, SourceContextResult>()
   if (budget.reviewBodyMaxBytes === 0 || reviewRows.length === 0) return out
-  const home = appHome()
-  const collaboration = humanGateComposition.createCollaborationCommandContext({
-    db,
-    appHome: home,
-  })
   for (const r of reviewRows) {
     try {
-      const text = readCommittedReviewArtifactBody(collaboration, r.bodyPath)
+      const text = await reviewedArtifacts.read(r.bodyPath)
       out.set(r.id, { md: clipHeadTail(text, budget.reviewBodyMaxBytes), reason: null })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -570,44 +515,36 @@ export interface ScopeContext {
  * with many memories.
  */
 export async function loadScopeContexts(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
   scope: ResolvedDistillScope,
 ): Promise<ScopeContext[]> {
   const out: ScopeContext[] = []
   for (const agentId of scope.agentIds) {
-    out.push(await loadOne(db, 'agent', agentId))
+    out.push(await loadOne(store, 'agent', agentId))
   }
   if (scope.workflowId !== null) {
-    out.push(await loadOne(db, 'workflow', scope.workflowId))
+    out.push(await loadOne(store, 'workflow', scope.workflowId))
   }
   if (scope.repoId !== null) {
-    out.push(await loadOne(db, 'repo', scope.repoId))
+    out.push(await loadOne(store, 'repo', scope.repoId))
   }
   if (scope.includeGlobal) {
-    out.push(await loadOne(db, 'global', null))
+    out.push(await loadOne(store, 'global', null))
   }
   return out
 }
 
 async function loadOne(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
   scopeType: 'agent' | 'workflow' | 'repo' | 'global',
   scopeId: string | null,
 ): Promise<ScopeContext> {
-  const where =
-    scopeId === null
-      ? and(eq(memories.scopeType, scopeType), eq(memories.status, 'approved'))
-      : and(
-          eq(memories.scopeType, scopeType),
-          eq(memories.scopeId, scopeId),
-          eq(memories.status, 'approved'),
-        )
-  const rows = await db.select().from(memories).where(where!).orderBy(desc(memories.createdAt))
+  const rows = await store.listApprovedMemories(scopeType, scopeId)
   const tagBag = new Set<string>()
   const approved = rows.map((r) => {
     let tags: string[] = []
     try {
-      const parsed = JSON.parse(r.tags) as unknown
+      const parsed = JSON.parse(r.tagsJson) as unknown
       if (Array.isArray(parsed)) tags = parsed.filter((x): x is string => typeof x === 'string')
     } catch {
       tags = []
@@ -866,7 +803,7 @@ export interface PersistedCandidate {
  * fail the whole batch.
  */
 export async function validateAndPersistCandidate(
-  db: DbClient,
+  store: MemoryDistillWorkStore,
   raw: RawCandidate,
   job: MemoryDistillJob,
 ): Promise<PersistedCandidate | null> {
@@ -910,26 +847,7 @@ export async function validateAndPersistCandidate(
     return null
   }
 
-  await db.insert(memories).values({
-    id: memory.id,
-    scopeType: memory.scopeType,
-    scopeId: memory.scopeId,
-    title: memory.title,
-    bodyMd: memory.bodyMd,
-    tags: JSON.stringify(memory.tags),
-    status: 'candidate',
-    sourceKind: memory.sourceKind,
-    sourceEventId: memory.sourceEventId,
-    sourceTaskId: memory.sourceTaskId,
-    distillJobId: memory.distillJobId,
-    distillAction: memory.distillAction,
-    supersedesId: null,
-    supersededById: null,
-    approvedByUserId: null,
-    approvedAt: null,
-    createdAt: memory.createdAt,
-    version: 1,
-  })
+  await store.insertCandidate({ memory })
   memoryBroadcaster.broadcast(MEMORY_CHANNEL, {
     type: 'memory.candidate.created',
     memory: {
@@ -1066,8 +984,13 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   const scope = options.job.scopeResolved
   const sourceContextBudget = options.sourceContextBudget ?? DEFAULT_SOURCE_CONTEXT_BUDGET
   const [events, scopeContexts] = await Promise.all([
-    loadSourceEvents(options.db, options.siblings, sourceContextBudget),
-    loadScopeContexts(options.db, scope),
+    loadSourceEvents(
+      options.store,
+      options.reviewedArtifacts,
+      options.siblings,
+      sourceContextBudget,
+    ),
+    loadScopeContexts(options.store, scope),
   ])
   // RFC-050: read the language from the job row (snapshotted at enqueue
   // by the scheduler). We deliberately do NOT read `config.memoryDistillLang`
@@ -1095,10 +1018,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       snapshot: buildDedupSnapshotForPersist(scopeContexts),
     })
     try {
-      await options.db
-        .update(memoryDistillJobs)
-        .set({ userPromptMd: userPrompt, dedupSnapshotIdsJson: dedupSnapshotJson })
-        .where(eq(memoryDistillJobs.id, options.job.id))
+      await options.store.savePrompt(options.job.id, userPrompt, dedupSnapshotJson)
     } catch (err) {
       log.warn('rfc043/persist-prompt-failed', {
         jobId: options.job.id,
@@ -1136,14 +1056,11 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
     const sessionId = extractFirstSessionIdFromStdout(result.stdout)
     const stderrExcerpt = clipAndRedactStderr(result.stderr, 2048)
     try {
-      await options.db
-        .update(memoryDistillJobs)
-        .set({
-          opencodeSessionId: sessionId,
-          exitCode: result.exitCode,
-          stderrExcerpt,
-        })
-        .where(eq(memoryDistillJobs.id, options.job.id))
+      await options.store.saveSpawnResult(options.job.id, {
+        sessionId,
+        exitCode: result.exitCode,
+        stderrExcerpt,
+      })
     } catch (err) {
       log.warn('rfc043/persist-spawn-result-failed', {
         jobId: options.job.id,
@@ -1153,8 +1070,8 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
 
     if (sessionId !== null) {
       try {
-        await getRuntimeDriver(protocol).captureDistillSession?.({
-          db: options.db,
+        await options.store.captureSession({
+          protocol,
           distillJobId: options.job.id,
           attemptIndex: options.job.attempts,
           rootSessionId: sessionId,
@@ -1179,7 +1096,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
     )
     const persisted: string[] = []
     for (const raw of rawCandidates) {
-      const ok = await validateAndPersistCandidate(options.db, raw, options.job)
+      const ok = await validateAndPersistCandidate(options.store, raw, options.job)
       if (ok !== null) persisted.push(ok.memory.id)
     }
     distillOutcome = {
@@ -1355,5 +1272,3 @@ export function rowToDistillJob(row: DistillJobRow): MemoryDistillJob {
     outputLang,
   }
 }
-
-export type DistillerSchema = typeof memoryDistillJobs

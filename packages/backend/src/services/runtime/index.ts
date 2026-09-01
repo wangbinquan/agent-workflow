@@ -73,8 +73,9 @@ export function isKnownRuntimeKind(v: string | null | undefined): v is RuntimeKi
 export { probeOpencode } from './opencode/util'
 // Platform-owned claude flags (registry extraArgs validation).
 export { CLAUDE_PLATFORM_OWNED_FLAGS } from './claudeCode/spawn'
-// Startup-inventory snapshot read (routes/tasks detail face).
-export { getInventorySnapshot, runRootFor } from './opencode/inventory'
+// Startup-inventory run-root projection (the provider-neutral task read model
+// supplies stored rows; only the in-flight file fallback remains here).
+export { readSnapshotFromRunDir, runRootFor } from './opencode/inventory'
 // Live-capture null object (runner's no-capability fallback handle).
 export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
 // Distiller session sweep failure marker (memory distill session view).

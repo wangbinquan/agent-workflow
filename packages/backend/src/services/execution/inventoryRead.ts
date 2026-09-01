@@ -16,10 +16,11 @@
 // type/hint/plugins 一个不少（AC-2）；claude 本就只按名字报告，其 declaration
 // 已把那些字段声明为 unsupported，读端据此让前端整列不渲染，而不是渲染一排空白。
 
-import { eq } from 'drizzle-orm'
 import {
   INVENTORY_FACES,
   declaredNamesForFace,
+  InventorySnapshotSchema,
+  isAgentNodeKind,
   RuntimeInventoryObservationSchema,
   StartupVerificationRecordSchema,
   assembleFace,
@@ -33,17 +34,20 @@ import {
   type RuntimeInventoryResponse,
   type StartupObservation,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
+import type {
+  TaskRuntimeInventoryReadModel,
+  TaskRuntimeInventorySource,
+} from '@/modules/task-execution/public/types'
 // RFC-282 §4.2：per-runtime 模块只能经 `@/services/runtime` 索引访问——本读端
 // 是运行时无关层，直接 import opencode 内部会把它重新钉死在一个运行时上。
 import {
-  getInventorySnapshot,
   getRuntimeDriver,
   isKnownRuntimeKind,
+  readSnapshotFromRunDir,
+  runRootFor,
   type RuntimeKind,
 } from '@/services/runtime'
-import { NotFoundError } from '@/util/errors'
+import { DomainError, NotFoundError } from '@/util/errors'
 
 /** RFC-029 快照 → 统一观测形状。字段 1:1 搬运，一个都不许丢（AC-2）。 */
 export function facesFromOpencodeSnapshot(snap: InventorySnapshotCaptured): ObservedInventoryFaces {
@@ -121,29 +125,15 @@ export function assembleFaces(
 }
 
 export async function getRuntimeInventory(
-  db: DbClient,
+  reads: TaskRuntimeInventoryReadModel,
   taskId: string,
   nodeRunId: string,
 ): Promise<RuntimeInventoryResponse> {
-  const runRows = await db
-    .select({
-      taskId: nodeRuns.taskId,
-      runtime: nodeRuns.runtime,
-      runtimeInventoryJson: nodeRuns.runtimeInventoryJson,
-      startupVerificationJson: nodeRuns.startupVerificationJson,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, nodeRunId))
-    .limit(1)
-  const run = runRows[0]
-  if (run === undefined || run.taskId !== taskId) {
+  const source = await reads.find(taskId, nodeRunId)
+  const run = source.nodeRun
+  if (run === null || run.taskId !== taskId) {
     // 沿用既有读端的错误契约：task 不存在与 node_run 不属于它，是两个 404。
-    const taskRows = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    if (taskRows.length === 0) {
+    if (!source.taskExists) {
       throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
     }
     throw new NotFoundError(
@@ -173,7 +163,7 @@ export async function getRuntimeInventory(
       // 复用 RFC-029 既有读端：它承载了 RFC-062 的「运行中从 runRoot 实时读」、
       // reason 分类、非 agent kind 的 410 等一整套行为。在这里重写一遍就等于
       // 悄悄丢掉其中几条（本 RFC 实现期实测：重写版本第一稿就丢了 RFC-062）。
-      const snapshot = await getInventorySnapshot(db, taskId, nodeRunId)
+      const snapshot = await legacyInventorySnapshot(source, run, taskId, nodeRunId)
       if (snapshot.captured) {
         return {
           observation: {
@@ -205,7 +195,7 @@ export async function getRuntimeInventory(
       }
       // 非 agent kind 在这条路上同样要给 410——判据借既有读端（它读 workflow
       // 快照解析 nodeKind）；claude 行的 inventory 列恒 NULL 不影响该判定。
-      await getInventorySnapshot(db, taskId, nodeRunId)
+      await legacyInventorySnapshot(source, run, taskId, nodeRunId)
       if (verification === null) {
         return {
           observation: { state: 'unavailable', reason: 'no-observation-recorded' },
@@ -234,6 +224,75 @@ export async function getRuntimeInventory(
         declaration,
       }
   }
+}
+
+interface SnapshotNode {
+  readonly id?: unknown
+  readonly kind?: unknown
+}
+
+function resolveNodeKindFromSnapshot(snapshotJson: string | null, nodeId: string): string | null {
+  if (snapshotJson === null) return null
+  try {
+    const snapshot = JSON.parse(snapshotJson) as { nodes?: SnapshotNode[] }
+    const nodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : []
+    for (const node of nodes) {
+      if (node.id !== nodeId) continue
+      return typeof node.kind === 'string' ? node.kind : null
+    }
+  } catch {
+    // An unreadable legacy snapshot is permissive, matching the former read end.
+  }
+  return null
+}
+
+async function legacyInventorySnapshot(
+  source: TaskRuntimeInventorySource,
+  run: NonNullable<TaskRuntimeInventorySource['nodeRun']>,
+  taskId: string,
+  nodeRunId: string,
+) {
+  const nodeKind = resolveNodeKindFromSnapshot(source.workflowSnapshot, run.nodeId)
+  if (nodeKind !== null && !isAgentNodeKind(nodeKind)) {
+    throw new DomainError(
+      'node-kind-not-supported',
+      `node '${run.nodeId}' (kind=${nodeKind}) does not produce an opencode inventory`,
+      410,
+    )
+  }
+
+  if (run.inventorySnapshotJson === null || run.inventorySnapshotJson === '') {
+    if (run.status === 'running') {
+      const snapshot = await readSnapshotFromRunDir({
+        runDir: runRootFor(taskId, nodeRunId),
+        nodeKind: 'agent-single',
+        pureMode: process.env.OPENCODE_PURE === '1' || process.env.OPENCODE_PURE === 'true',
+      })
+      if (!snapshot.captured && snapshot.reason === 'file-missing') {
+        return { captured: false, reason: 'in-flight', message: null } as const
+      }
+      return snapshot
+    }
+    return { captured: false, reason: 'file-missing', message: null } as const
+  }
+
+  let parsedRaw: unknown
+  try {
+    parsedRaw = JSON.parse(run.inventorySnapshotJson)
+  } catch (error) {
+    return {
+      captured: false,
+      reason: 'parse-failed',
+      message: error instanceof Error ? error.message : String(error),
+    } as const
+  }
+  const validated = InventorySnapshotSchema.safeParse(parsedRaw)
+  if (validated.success) return validated.data
+  return {
+    captured: false,
+    reason: 'parse-failed',
+    message: validated.error.message.slice(0, 200),
+  } as const
 }
 
 /**

@@ -16,7 +16,7 @@
 // startLiveCapture? land in later PRs. Type-only imports below keep this a
 // compile-time module (no runtime edge into db/log/shared).
 
-import type { DbClient } from '@/db/client'
+import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
 import type { Logger } from '@/util/log'
 import type {
   Agent,
@@ -338,7 +338,7 @@ export interface SessionCaptureContext {
   logicalRootSessionId?: string
   nodeRunId: string
   taskId: string
-  db: DbClient
+  persistence: RuntimeSessionCapturePersistence
   log: Logger
   /** Subprocess cwd (worktree) — claude's `/`→`-` slug is the projects subdir. */
   worktreePath: string
@@ -355,13 +355,35 @@ export interface SessionCaptureContext {
   opencodeDbPath?: string
 }
 
+export interface DistillSessionCapturedEvent {
+  readonly distillJobId: string
+  readonly attemptIndex: number
+  readonly ts: number
+  readonly kind: string
+  readonly payload: string
+  readonly sessionId: string
+  readonly parentSessionId: string | null
+}
+
+/** Provider-neutral event sink supplied by the Memory infrastructure adapter. */
+export interface DistillSessionCaptureSink {
+  append(events: readonly DistillSessionCapturedEvent[]): Promise<void>
+  markFailed(input: {
+    readonly rootSessionId: string
+    readonly distillJobId: string
+    readonly attemptIndex: number
+    readonly reason: string
+  }): Promise<void>
+}
+
 /** Optional post-run transcript capture for memory-distiller jobs. */
 export interface DistillSessionCaptureContext {
-  rootSessionId: string
-  distillJobId: string
-  attemptIndex: number
-  db: DbClient
-  log?: Logger
+  readonly rootSessionId: string
+  readonly distillJobId: string
+  readonly attemptIndex: number
+  readonly sink: DistillSessionCaptureSink
+  readonly log?: Logger
+  readonly opencodeDbPath?: string
 }
 
 /**

@@ -24,16 +24,7 @@
 // ban — binary-build incident). The conflict resolver (which mints child runs
 // and calls runNode directly) is injected by the scheduler as a callback.
 
-import type { DbClient } from '@/db/client'
-import {
-  createLocalEffectAttemptObserver,
-  withTaskExecutionMutation,
-} from '@/services/taskExecutionParticipants'
-// RFC-210: the pending-submodule-conflict write is a plain column update, not a
-// merge_state transition, so it goes direct rather than through lifecycle.
-import { nodeRuns } from '@/db/schema'
-import { eq } from 'drizzle-orm'
-import { transitionMergeState, tryTransitionMergeState } from '@/services/lifecycle'
+import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
 import {
   createNodeIso,
   mergeBackNodeIso,
@@ -43,9 +34,25 @@ import {
   type IsoRepo,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
-import { forcedPortPathsForTask, repoRelForcedPaths } from '@/services/portArtifacts'
+import { repoRelForcedPaths } from '@/services/portArtifacts'
 import type { Logger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
+import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
+import type { TaskExecutionContextRef } from '@/modules/task-execution/application/ports/taskExecutionTopology'
+
+export interface IsolatedAgentRunBinding {
+  readonly persistence: Pick<
+    TaskExecutionPersistence,
+    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'
+  >
+  readonly executionContext?: TaskExecutionContextRef
+}
+
+function contextInput(binding: IsolatedAgentRunBinding) {
+  return binding.executionContext === undefined
+    ? {}
+    : { executionContext: binding.executionContext }
+}
 
 /** The slice of the per-task write lock the primitives need (taskWriteLocks'
  *  TaskWriteSem shape — structural so tests can pass a plain stub). */
@@ -69,13 +76,13 @@ export async function createIsoUnderLock(args: {
   canonRepos: CanonRepo[]
   /** RFC-193 K1：必达清单在原语内部聚合（archive_json → 容器相对），调用方
    *  结构性无法忘带——base 快照缺清单会让 ignored 端口文件断在下游 iso 跳。 */
-  db: DbClient
+  binding: IsolatedAgentRunBinding
   log?: Logger
 }): Promise<IsoHandle> {
   // 聚合在锁外（纯读）；快照在锁内（防 sibling merge-back 推进 canonical）。
-  const forcedContainerPaths = await forcedPortPathsForTask(args.db, args.taskId)
+  const forcedContainerPaths = await args.binding.persistence.artifactPaths.forcedPaths(args.taskId)
   const effect = createLocalEffectAttemptObserver({
-    db: args.db,
+    persistence: args.binding.persistence.effects,
     taskId: args.taskId,
     nodeRunId: args.isoKeyRunId,
     kind: 'isolation-create',
@@ -108,17 +115,17 @@ export async function createIsoUnderLock(args: {
         taskId: args.taskId,
         nodeRunId: args.isoKeyRunId,
         canonRepos: args.canonRepos,
-        forcedContainerPaths,
+        forcedContainerPaths: [...forcedContainerPaths],
         ...(args.log !== undefined ? { log: args.log } : {}),
       })
-      effect?.succeed({
+      await effect?.succeed({
         passthrough: handle.passthrough,
         containerPathDigest: sha256Hex(handle.containerPath),
         repoCount: handle.repos.length,
       })
       return handle
     } catch (error) {
-      effect?.fail(error)
+      await effect?.fail(error)
       throw error
     }
   })
@@ -132,15 +139,14 @@ export async function createIsoUnderLock(args: {
  * iso base columns ride along atomically as transition extras.
  */
 export async function persistIsoBase(
-  db: DbClient,
+  binding: IsolatedAgentRunBinding,
   nodeRunId: string,
   repoCount: number,
   handle: IsoHandle,
 ): Promise<void> {
   if (handle.passthrough) return // in-place run — leave iso columns NULL (golden-lock)
   if (repoCount === 1) {
-    await transitionMergeState({
-      db,
+    await binding.persistence.mergeStates.transition({
       nodeRunId,
       event: { kind: 'begin-isolation' },
       extra: {
@@ -150,13 +156,13 @@ export async function persistIsoBase(
         isoSubmodulesJson: submodulesJsonFor(handle.repos[0]),
         isoSubmodulesReposJson: null,
       },
+      ...contextInput(binding),
     })
     return
   }
   const map: Record<string, string> = {}
   for (const r of handle.repos) map[r.worktreeDirName] = r.baseSnapshot
-  await transitionMergeState({
-    db,
+  await binding.persistence.mergeStates.transition({
     nodeRunId,
     event: { kind: 'begin-isolation' },
     extra: {
@@ -166,6 +172,7 @@ export async function persistIsoBase(
       isoSubmodulesJson: null,
       isoSubmodulesReposJson: submodulesReposJsonFor(handle),
     },
+    ...contextInput(binding),
   })
 }
 
@@ -212,7 +219,7 @@ function submodulesReposJsonFor(handle: IsoHandle): string | null {
  *  with the CREATION-time topology otherwise, and the new path's objects —
  *  though durable in their pool — would be invisible to the replay. */
 export async function persistIsoNodeTree(
-  db: DbClient,
+  binding: IsolatedAgentRunBinding,
   nodeRunId: string,
   repoCount: number,
   nodeTrees: Record<string, string>,
@@ -224,14 +231,14 @@ export async function persistIsoNodeTree(
       : repoCount === 1
         ? { isoSubmodulesJson: submodulesJsonFor(handle.repos[0]) }
         : { isoSubmodulesReposJson: submodulesReposJsonFor(handle) }
-  await transitionMergeState({
-    db,
+  await binding.persistence.mergeStates.transition({
     nodeRunId,
     event: { kind: 'mark-pending-merge' },
     extra:
       repoCount === 1
         ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null, ...topology }
         : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), ...topology },
+    ...contextInput(binding),
   })
 }
 
@@ -256,7 +263,7 @@ export interface MergeSettleOutcome {
  *   moving the agent out of the lock is the separately-RFC'd T5b.
  */
 export async function mergeBackAndSettle(args: {
-  db: DbClient
+  binding: IsolatedAgentRunBinding
   writeSem: WriteSemLike
   handle: IsoHandle
   nodeRunId: string
@@ -278,9 +285,9 @@ export async function mergeBackAndSettle(args: {
   ) => Promise<{ allResolved: boolean; detail: string }>
   log?: Logger
 }): Promise<MergeSettleOutcome> {
-  const { db, writeSem, handle, nodeRunId, via, log } = args
+  const { binding, writeSem, handle, nodeRunId, via, log } = args
   const effect = createLocalEffectAttemptObserver({
-    db,
+    persistence: binding.persistence.effects,
     taskId: handle.taskId,
     nodeRunId,
     kind: 'isolation-merge',
@@ -308,7 +315,7 @@ export async function mergeBackAndSettle(args: {
   // 报冲突）。此刻 sibling 的 INSERT 已落库（INSERT 先于 merge-back），重聚合
   // 能看到；并上 extra（本 run 自己的产出）后统一喂给 final 与 ours 两侧。
   if (!handle.passthrough) {
-    const fresh = await forcedPortPathsForTask(db, handle.taskId)
+    const fresh = await binding.persistence.artifactPaths.forcedPaths(handle.taskId)
     const union = [...new Set([...fresh, ...(args.extraForcedContainerPaths ?? [])])]
     for (const r of handle.repos) {
       r.forcedRepoRelPaths = repoRelForcedPaths(union, r.worktreeDirName)
@@ -317,7 +324,7 @@ export async function mergeBackAndSettle(args: {
   let nodeTrees = args.nodeTrees
   if (nodeTrees === undefined) {
     nodeTrees = await snapshotNodeIsoFinal(handle, log)
-    await persistIsoNodeTree(db, nodeRunId, args.repoCount, nodeTrees, handle)
+    await persistIsoNodeTree(binding, nodeRunId, args.repoCount, nodeTrees, handle)
   }
   const trees = nodeTrees
   // Snapshotting stays parallel in each private iso. Only the canonical merge
@@ -350,8 +357,12 @@ export async function mergeBackAndSettle(args: {
           ? ({ kind: 'merged' } as const)
           : ({ kind: 'conflict-human', detail: resolution.detail } as const)
       if (merge.kind === 'merged') {
-        await transitionMergeState({ db, nodeRunId, event: { kind: 'mark-merged', via } })
-        effect?.succeed({ outcome: 'merged', via, repoCount: handle.repos.length })
+        await binding.persistence.mergeStates.transition({
+          nodeRunId,
+          event: { kind: 'mark-merged', via },
+          ...contextInput(binding),
+        })
+        await effect?.succeed({ outcome: 'merged', via, repoCount: handle.repos.length })
         return { kind: 'merged' }
       }
       // RFC-210: persist which submodules are still unresolved BEFORE parking.
@@ -359,12 +370,16 @@ export async function mergeBackAndSettle(args: {
       // resume; without it a crash between park and resume would lose the fact that
       // a submodule conflict is open, and the parent-level re-probe would find the
       // parent clean and declare the repo resolved.
-      await persistPendingSubResolves(db, nodeRunId, args.repoCount, handle)
-      await transitionMergeState({ db, nodeRunId, event: { kind: 'park-conflict-human', via } })
-      effect?.succeed({ outcome: 'conflict-human', via, repoCount: handle.repos.length })
+      await persistPendingSubResolves(binding, nodeRunId, args.repoCount, handle)
+      await binding.persistence.mergeStates.transition({
+        nodeRunId,
+        event: { kind: 'park-conflict-human', via },
+        ...contextInput(binding),
+      })
+      await effect?.succeed({ outcome: 'conflict-human', via, repoCount: handle.repos.length })
       return { kind: 'conflict-human', detail: merge.detail }
     } catch (error) {
-      if (prepared) effect?.fail(error, { via, repoCount: handle.repos.length })
+      if (prepared) await effect?.fail(error, { via, repoCount: handle.repos.length })
       throw error
     }
   })
@@ -379,24 +394,15 @@ export async function mergeBackAndSettle(args: {
  * new information.
  */
 async function persistPendingSubResolves(
-  db: DbClient,
+  binding: IsolatedAgentRunBinding,
   nodeRunId: string,
   repoCount: number,
   handle: IsoHandle,
 ): Promise<void> {
   if (handle.passthrough) return
   if (!handle.repos.some((r) => r.pendingSubResolves.length > 0)) return
-  const row = (
-    await db
-      .select({
-        single: nodeRuns.isoSubmodulesJson,
-        multi: nodeRuns.isoSubmodulesReposJson,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .limit(1)
-  )[0]
-  if (row === undefined) return
+  const row = await binding.persistence.nodeExecution.read(nodeRunId)
+  if (row === null) return
 
   const withPending = (raw: string | null, repo: IsoRepo | undefined): string | null => {
     if (repo === undefined) return raw
@@ -413,22 +419,17 @@ async function persistPendingSubResolves(
   }
 
   if (repoCount === 1) {
-    withTaskExecutionMutation({
-      db,
-      taskId: handle.taskId,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({ isoSubmodulesJson: withPending(row.single, handle.repos[0]) })
-          .where(eq(nodeRuns.id, nodeRunId))
-          .run(),
+    await binding.persistence.nodeExecution.patch({
+      nodeRunId,
+      values: { isoSubmodulesJson: withPending(row.isoSubmodulesJson, handle.repos[0]) },
+      ...contextInput(binding),
     })
     return
   }
   let multi: Record<string, unknown> = {}
-  if (row.multi !== null && row.multi !== '') {
+  if (row.isoSubmodulesReposJson !== null && row.isoSubmodulesReposJson !== '') {
     try {
-      const parsed: unknown = JSON.parse(row.multi)
+      const parsed: unknown = JSON.parse(row.isoSubmodulesReposJson)
       if (parsed !== null && typeof parsed === 'object') multi = parsed as Record<string, unknown>
     } catch {
       /* rebuild below */
@@ -440,15 +441,10 @@ async function persistPendingSubResolves(
     const next = withPending(raw, r)
     if (next !== null) multi[r.worktreeDirName] = JSON.parse(next) as unknown
   }
-  withTaskExecutionMutation({
-    db,
-    taskId: handle.taskId,
-    run: (tx) =>
-      tx
-        .update(nodeRuns)
-        .set({ isoSubmodulesReposJson: JSON.stringify(multi) })
-        .where(eq(nodeRuns.id, nodeRunId))
-        .run(),
+  await binding.persistence.nodeExecution.patch({
+    nodeRunId,
+    values: { isoSubmodulesReposJson: JSON.stringify(multi) },
+    ...contextInput(binding),
   })
 }
 
@@ -459,15 +455,15 @@ async function persistPendingSubResolves(
  * deliberately does NOT call this (leave-for-replay, see module header).
  */
 export async function markMergeFailed(
-  db: DbClient,
+  binding: IsolatedAgentRunBinding,
   nodeRunId: string,
   reason: string,
   log?: Logger,
 ): Promise<void> {
-  const flipped = await tryTransitionMergeState({
-    db,
+  const flipped = await binding.persistence.mergeStates.tryTransition({
     nodeRunId,
     event: { kind: 'mark-merge-failed', reason },
+    ...contextInput(binding),
   })
   if (!flipped) log?.warn('merge_state flip to merge-failed lost/illegal', { nodeRunId })
 }

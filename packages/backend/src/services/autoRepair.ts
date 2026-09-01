@@ -17,9 +17,7 @@
 import { selectAutoApplyOption, type RepairOption } from '@agent-workflow/shared'
 
 import { loadConfig } from '@/config'
-import type { DbClient } from '@/db/client'
-import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
-import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -29,11 +27,15 @@ import {
 import { listAllOpenLifecycleAlerts, type OpenLifecycleAlert } from '@/services/taskAlerts'
 import { createLogger } from '@/util/log'
 import { DAEMON_CADENCE } from './daemonCadence'
+import type {
+  TaskLifecycleAutoRepairCommand,
+  TaskLifecycleAutoRepairResult,
+} from '@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand'
 
 const log = createLogger('auto-repair')
 
 export interface AutoRepairDeps {
-  db: DbClient
+  operations: TaskRecoveryOperations
   breaker: BreakerConfig
   /** config.autoRepair[rule] === true. */
   isRuleEnabled: (rule: string) => boolean
@@ -44,25 +46,22 @@ export interface AutoRepairDeps {
   now?: () => number
 }
 
-export interface AutoRepairResult {
-  repaired: Array<{ taskId: string; alertId: string; optionId: string; outcome: string }>
-  skipped: Array<{ taskId: string; alertId: string; reason: string }>
-}
+export type AutoRepairResult = TaskLifecycleAutoRepairResult
 
 export async function runAutoRepairOnce(deps: AutoRepairDeps): Promise<AutoRepairResult> {
-  const { db, breaker, isRuleEnabled, resolveOptions, applyOption } = deps
+  const { operations, breaker, isRuleEnabled, resolveOptions, applyOption } = deps
   const now = deps.now ?? Date.now
   const out: AutoRepairResult = { repaired: [], skipped: [] }
   const skip = (a: OpenLifecycleAlert, reason: string): void => {
     out.skipped.push({ taskId: a.taskId, alertId: a.id, reason })
   }
 
-  for (const alert of await listAllOpenLifecycleAlerts(db)) {
+  for (const alert of await listAllOpenLifecycleAlerts(operations)) {
     if (!isRuleEnabled(alert.rule)) {
       skip(alert, 'rule-disabled')
       continue
     }
-    if (await isAutoRecoverySuspended(db, alert.taskId)) {
+    if (await isAutoRecoverySuspended(operations, alert.taskId)) {
       skip(alert, 'quarantined')
       continue
     }
@@ -82,7 +81,7 @@ export async function runAutoRepairOnce(deps: AutoRepairDeps): Promise<AutoRepai
       skip(alert, 'no-single-eligible')
       continue
     }
-    const { suspended } = await recordAutoRecoveryAttempt(db, alert.taskId, breaker, now())
+    const { suspended } = await recordAutoRecoveryAttempt(operations, alert.taskId, breaker, now())
     if (suspended) {
       skip(alert, 'breaker-tripped')
       continue
@@ -90,7 +89,7 @@ export async function runAutoRepairOnce(deps: AutoRepairDeps): Promise<AutoRepai
     let result: { outcome: string } | null = null
     try {
       result = await applyOption(alert, chosen.id)
-      await recordRecoveryEvent(db, {
+      await recordRecoveryEvent(operations, {
         taskId: alert.taskId,
         nodeRunId: null,
         kind: 'auto-repair',
@@ -131,15 +130,8 @@ export interface AutoRepairLoopHandle {
  * static cycle (binary-build safety).
  */
 export function startAutoRepairLoop(opts: {
-  db: DbClient
-  appHome: string
+  command: TaskLifecycleAutoRepairCommand
   configPath: string
-  schedulerDriver: SchedulerDriverPort
-  onAlert?: (
-    row: { taskId: string; rule: string; severity: 'warning' | 'error' },
-    transition: 'new' | 'promoted',
-  ) => void
-  onResolved?: (taskId: string) => void
   intervalMs?: number
 }): AutoRepairLoopHandle {
   const intervalMs = opts.intervalMs ?? DAEMON_CADENCE.autoRepair
@@ -151,45 +143,12 @@ export function startAutoRepairLoop(opts: {
       const cfg = loadConfig(opts.configPath)
       const autoRepair = cfg.autoRepair ?? {}
       if (!Object.values(autoRepair).some((v) => v === true)) return // default: nothing enabled
-      const deps = {
-        db: opts.db,
-        schedulerDriver: opts.schedulerDriver,
-        configPath: opts.configPath,
-        ...(cfg.subagentLiveCapture !== undefined
-          ? { subagentLiveCapture: cfg.subagentLiveCapture }
-          : {}),
-        ...resolveLaunchRuntimeConfig(opts.configPath),
-      }
-      const { applyRepairOption, listRepairOptionsForAlert } =
-        await import('@/services/lifecycleRepair')
-      await runAutoRepairOnce({
-        db: opts.db,
-        breaker: {
-          maxPerWindow: cfg.maxAutoRecoveriesPerWindow,
-          windowMs: cfg.autoRecoveryWindowMs,
-        },
-        isRuleEnabled: (rule) => autoRepair[rule] === true,
-        resolveOptions: (alert) =>
-          listRepairOptionsForAlert({
-            db: opts.db,
-            taskId: alert.taskId,
-            alertId: alert.id,
-            actorUserId: null,
-            appHome: opts.appHome,
-            deps,
-          }).then((r) => r.options as RepairOption[]),
-        applyOption: (alert, optionId) =>
-          applyRepairOption({
-            db: opts.db,
-            taskId: alert.taskId,
-            alertId: alert.id,
-            optionId,
-            actorUserId: null,
-            appHome: opts.appHome,
-            deps,
-            onAlert: opts.onAlert,
-            onResolved: opts.onResolved,
-          }).then((r) => ({ outcome: r.outcome })),
+      await opts.command.run({
+        enabledRules: Object.entries(autoRepair)
+          .filter(([, enabled]) => enabled === true)
+          .map(([rule]) => rule),
+        maxPerWindow: cfg.maxAutoRecoveriesPerWindow,
+        windowMs: cfg.autoRecoveryWindowMs,
       })
     } catch (err) {
       log.warn('auto-repair tick failed', {

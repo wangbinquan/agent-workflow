@@ -63,33 +63,24 @@ import type {
 } from '@agent-workflow/shared'
 import {
   and,
+  agents,
   asc,
+  cachedRepos,
+  clarifyRounds,
   count,
   desc,
+  docVersions,
   eq,
   gt,
   inArray,
   isNotNull,
   isNull,
-  sql,
-  type SQL,
-} from 'drizzle-orm'
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
-import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import { insertWorkgroupTaskStateTx, setDwStateTx } from '@/services/workgroup/state'
-import {
-  agents,
-  cachedRepos,
-  clarifyRounds,
-  docVersions,
   lifecycleAlerts,
   nodeRunEvents,
   nodeRunOutputs,
   nodeRuns,
   runtimeSessionLeases,
+  sql,
   taskCollaborators,
   taskExecutionIntents,
   taskExecutionOwners,
@@ -98,8 +89,16 @@ import {
   tasks,
   users,
   workflows,
-} from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+  dbTxSync,
+  type SQL,
+  type LegacySqliteTaskDatabase,
+  type LegacySqliteTaskTransaction,
+} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { isAbsolute, join, relative } from 'node:path'
+import { ulid } from 'ulid'
+import { insertWorkgroupTaskStateTx, setDwStateTx } from '@/services/workgroup/state'
 import type { SecretBox } from '@/auth/secretBox'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { unsealRepoUrl } from '@/services/repoCredentials'
@@ -111,19 +110,23 @@ import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 import { finishClaimedWebhookWorkspacePrune, materializingSpaces } from '@/services/gc'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
-import { createGateContinuationPreDriveStep } from '@/services/humanGateContinuationEffects'
+import { createSqliteGateContinuationPreDriveStep } from '@/modules/task-execution/composition/sqliteGateContinuationPreDrive'
 import { WRAPPER_KINDS } from '@/services/dispatchFrontier'
 import type { RollbackOutcome } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
 import { sha256Hex } from '@/util/hash'
 import type { StaleRunKillOutcome } from '@/util/process'
 import type { SourceTerminationSnapshot } from '@/modules/task-execution/public/types'
+import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import {
   sourceTerminationRevivalError,
   type TaskStopCause,
 } from '@/modules/task-execution/domain/sourceTermination'
 import {
   createLocalEffectAttemptObserver,
+  currentTaskExecutionContext,
   submitTaskContinuationTx,
   taskExecutionModule,
   terminalizeTaskExecutionIntentsTx,
@@ -178,6 +181,10 @@ import { Paths } from '@/util/paths'
 import { createLogger, type Logger } from '@/util/log'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '@/modules/source-control/composition'
 import { parseInjectedSnapshotJson } from './memoryInject'
 import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
@@ -211,6 +218,7 @@ import {
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
+import { SqliteBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
 type RepositoryPreparationStep = taskDriveComposition.RepositoryPreparationStep
@@ -240,7 +248,7 @@ type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionConte
  * closed instead of returning to the legacy live-row resolver.
  */
 async function freezeClosureForLaunch(
-  deps: Pick<StartTaskDeps, 'db' | 'launchResources'>,
+  deps: Pick<StartTaskDeps, 'launchResources'>,
   workflowId: string,
   definition: WorkflowDefinition,
 ): Promise<string | null> {
@@ -252,11 +260,7 @@ async function freezeClosureForLaunch(
       'call-node launches require an authenticated resource authority for closure resolution',
     )
   }
-  return freezeTaskExecutionCallClosure(
-    deps.db,
-    { id: workflowId, definition },
-    deps.launchResources,
-  )
+  return await freezeTaskExecutionCallClosure({ id: workflowId, definition }, deps.launchResources)
 }
 
 /**
@@ -301,7 +305,7 @@ function continuationSource(
  * transaction so a lost CAS cannot leak an orphan wake or side effect.
  */
 function submitContinuationIntentTx(input: {
-  tx: DbTxSync
+  tx: LegacySqliteTaskTransaction
   taskId: string
   intentId: string
   kind: TaskExecutionIntentKind
@@ -398,7 +402,10 @@ export async function shutdownActiveTaskExecutions(
 }
 
 /** Move an exact same-daemon shutdown survivor behind durable recovery. */
-export function markTaskExecutionShutdownSurvivor(db: DbClient, taskId: string): void {
+export function markTaskExecutionShutdownSurvivor(
+  db: LegacySqliteTaskDatabase,
+  taskId: string,
+): void {
   const token = taskDriverRegistry.tokenForTask(taskId)
   if (token === null) return
   let owner = taskExecutionModule.ownership.read(db, taskId)
@@ -438,7 +445,7 @@ export function markTaskExecutionShutdownSurvivor(db: DbClient, taskId: string):
  * scheduler owner (pending/waiting or recovered row). In that case there is no
  * driver `finally` to complete RFC-300's already-claimed workspace prune. */
 export async function finalizeCanceledTaskWithoutDriver(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
 ): Promise<void> {
   await finishClaimedWebhookWorkspacePrune(db, taskId)
@@ -453,7 +460,21 @@ export interface StartTaskDeps {
    * IS sealed and this is missing, the launch fails closed rather than guessing.
    */
   secretBox?: SecretBox
-  db: DbClient
+  db: LegacySqliteTaskDatabase
+  /**
+   * RFC-349 provider-selected post-commit memory participant. Bootstrap must
+   * bind this for production launches; the optional shape keeps legacy tests
+   * that never converge a clarify continuation source-compatible.
+   */
+  memoryDistillEnqueuer?: MemoryDistillEnqueuer
+  /** Provider-selected recovery reads used by resume/retry preflight. The
+   * worktree admission path fails closed when bootstrap omitted it. */
+  taskRecoveryOperations?: TaskRecoveryOperations
+  /** Provider-selected cached repository/group persistence. Legacy direct
+   * fixtures may omit it and receive the explicit SQLite adapter below. */
+  repositoryWorkspace?: RepositoryWorkspaceStore
+  /** Provider-selected native runtime-session lease operations. */
+  runtimeSessionLeases?: RuntimeSessionLeaseOperations
   /** RFC-347 daemon-scoped identity query. Optional only for legacy test
    * fixtures, which use the runtime-neutral compatibility fallback. */
   identityAccess?: Readonly<{
@@ -761,6 +782,35 @@ export interface StartTaskDeps {
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
 }
 
+function repositoryWorkspaceFor(deps: Pick<StartTaskDeps, 'db' | 'repositoryWorkspace'>) {
+  return deps.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(deps.db)
+}
+
+/** Provider-neutral filesystem materialization dependencies. Database reads
+ * stay behind the selected RepositoryWorkspaceStore and the TaskExecution-owned
+ * frozen-layout loader; the materializer never needs a provider client. */
+export interface WorkspaceMaterializationDependencies extends Pick<
+  StartTaskDeps,
+  | 'secretBox'
+  | 'cloneTimeoutMs'
+  | 'internalSource'
+  | 'preResolvedSource'
+  | 'gitCommitIdentity'
+  | 'sourceTerminationLaunchSignal'
+  | 'workspaceCleanupHook'
+> {
+  readonly appHome: string
+  readonly repositoryWorkspace: RepositoryWorkspaceStore
+  readonly loadFrozenSpaceLayout: (sourceTaskId: string) => Promise<PlannedSpaceLayout>
+}
+
+function requireTaskRecoveryOperations(deps: StartTaskDeps): TaskRecoveryOperations {
+  if (deps.taskRecoveryOperations === undefined) {
+    throw new Error('task-recovery-operations-not-composed')
+  }
+  return deps.taskRecoveryOperations
+}
+
 /**
  * RFC-320 — the single task-creation identity resolver. Root user launches
  * read the creator profile once; call children inherit the immutable parent
@@ -1035,7 +1085,7 @@ export function normalizeStartTaskRepos(input: StartTask): RepoSourceSpec[] {
  * （`url_redacted` 为 NULL——密钥轮换等）就放行，交给后台那个唯一拒绝点解封后判。
  * 这样既不会分叉出两套判据，也不会为了报错去做解密。
  */
-function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTask): void {
+async function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTask): Promise<void> {
   const reject = (redacted: string): never => {
     throw new ValidationError(
       'repo-url-file-scheme-unsupported',
@@ -1072,16 +1122,16 @@ function assertLaunchSourceSchemeSync(deps: StartTaskDeps, input: StartTask): vo
   const groupId = (input as { repoGroupId?: unknown }).repoGroupId
   if (typeof groupId === 'string' && groupId.length > 0) {
     // 组的成员本就带 `repoUrlRedacted`，无需再逐个查库。
-    for (const m of resolveRepoGroupLayout(deps.db, groupId).repos) {
+    for (const m of (await resolveRepoGroupLayout(repositoryWorkspaceFor(deps), groupId)).repos) {
       if (isFileSchemeUrl(m.repoUrlRedacted)) reject(m.repoUrlRedacted)
     }
   }
 }
 
-export async function resolveRepoSourceSingle(
+export async function resolveRepoSourceSingleWithProvider(
   spec: RepoSourceSpec,
   input: StartTask,
-  deps: StartTaskDeps,
+  deps: WorkspaceMaterializationDependencies,
 ): Promise<ResolvedRepoSource> {
   if ('repoPath' in spec && spec.repoPath.length > 0) {
     // RFC-165: internal local-path face only (deps.internalSource / fusion /
@@ -1104,19 +1154,14 @@ export async function resolveRepoSourceSingle(
   let sourceCachedRepoId: string | null = null
   const specCachedRepoId = (spec as { cachedRepoId?: unknown }).cachedRepoId
   if (typeof specCachedRepoId === 'string' && specCachedRepoId.length > 0) {
-    const row = deps.db
-      .select()
-      .from(cachedRepos)
-      .where(eq(cachedRepos.id, specCachedRepoId))
-      .limit(1)
-      .all()[0]
-    if (row === undefined) {
+    const row = await deps.repositoryWorkspace.findCachedRepoById(specCachedRepoId)
+    if (row === null) {
       throw new NotFoundError(
         'cached-repo-not-found',
         `cached repo '${specCachedRepoId}' not found`,
       )
     }
-    const plain = unsealRepoUrl(row, deps.secretBox, deps.db)
+    const plain = unsealRepoUrl(row, deps.secretBox, deps.repositoryWorkspace)
     if (plain === null) {
       throw new DomainError(
         'cached-repo-credential-unavailable',
@@ -1157,7 +1202,7 @@ export async function resolveRepoSourceSingle(
       { url: redactGitUrl(sourceUrl) },
     )
   }
-  const appHome = deps.appHome ?? Paths.root
+  const appHome = deps.appHome
   // `spec` here is the url-or-id shape; read `ref` defensively for the same
   // reason as above (internal callers may carry the key with no value).
   const specRefRaw = (spec as { ref?: unknown }).ref
@@ -1165,7 +1210,7 @@ export async function resolveRepoSourceSingle(
   const syncCandidates = [specRef].filter((s): s is string => typeof s === 'string')
   const resolved = await resolveCachedRepo(
     {
-      db: deps.db,
+      store: deps.repositoryWorkspace,
       appHome,
       syncBranches: syncCandidates,
       secretBox: deps.secretBox,
@@ -1199,7 +1244,7 @@ export async function resolveRepoSourceSingle(
   ) {
     const second = await resolveCachedRepo(
       {
-        db: deps.db,
+        store: deps.repositoryWorkspace,
         appHome,
         syncBranches: [resolved.cached.defaultBranch],
         fetchOnReuse: false,
@@ -1224,6 +1269,31 @@ export async function resolveRepoSourceSingle(
     pathFetchError: null,
     ffWarnings,
   }
+}
+
+/** Legacy SQLite adapter retained for direct service callers. */
+export async function resolveRepoSourceSingle(
+  spec: RepoSourceSpec,
+  input: StartTask,
+  deps: StartTaskDeps,
+): Promise<ResolvedRepoSource> {
+  const appHome = deps.appHome ?? Paths.root
+  return await resolveRepoSourceSingleWithProvider(spec, input, {
+    appHome,
+    repositoryWorkspace: repositoryWorkspaceFor(deps),
+    loadFrozenSpaceLayout: async (sourceTaskId) => loadFrozenSpaceLayout(deps.db, sourceTaskId),
+    ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+    ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
+    ...(deps.internalSource === undefined ? {} : { internalSource: deps.internalSource }),
+    ...(deps.preResolvedSource === undefined ? {} : { preResolvedSource: deps.preResolvedSource }),
+    ...(deps.gitCommitIdentity === undefined ? {} : { gitCommitIdentity: deps.gitCommitIdentity }),
+    ...(deps.sourceTerminationLaunchSignal === undefined
+      ? {}
+      : { sourceTerminationLaunchSignal: deps.sourceTerminationLaunchSignal }),
+    ...(deps.workspaceCleanupHook === undefined
+      ? {}
+      : { workspaceCleanupHook: deps.workspaceCleanupHook }),
+  })
 }
 
 interface MaterializedRepo {
@@ -1423,6 +1493,15 @@ export function runtimeConfigOpts(
   }
 }
 
+const missingMemoryDistillEnqueuer: MemoryDistillEnqueuer = Object.freeze({
+  async enqueue() {
+    throw new TaskExecutionError(
+      'task-execution-recovery-required',
+      'memory distill enqueuer is not composed for clarify continuation convergence',
+    )
+  },
+})
+
 function createTaskDriveCoordinator(input: {
   readonly deps: StartTaskDeps
   readonly appHome: string
@@ -1459,7 +1538,11 @@ function createTaskDriveCoordinator(input: {
       ? {}
       : { admittedContinuation: input.admittedContinuation }),
     gateContinuationPreDrive:
-      input.gateContinuationPreDrive ?? createGateContinuationPreDriveStep(input.deps.db),
+      input.gateContinuationPreDrive ??
+      createSqliteGateContinuationPreDriveStep({
+        db: input.deps.db,
+        memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
+      }),
     repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
     engineOrchestrator: {
       async drive(context) {
@@ -1789,6 +1872,14 @@ export async function cleanupMaterializedSpace(
   }
 }
 
+/** Consume a successfully persisted materialization lease. Idempotent and
+ * intentionally non-throwing so a committed task can never be rolled back by
+ * post-commit workspace bookkeeping. */
+export function commitMaterializedSpace(space: MaterializedSpace): void {
+  if (space.cleanup.state === 'owned') space.cleanup.state = 'committed'
+  materializingSpaces.delete(space.taskId)
+}
+
 function withWorkspaceCleanupReport(error: unknown, report: WorkspaceCleanupReport): Error {
   if (report.complete) return error instanceof Error ? error : new Error(String(error))
   if (error instanceof DomainError) {
@@ -1853,9 +1944,9 @@ function workflowLaunchHookEvent(
  *    悄悄少物化一个仓。
  *  - **顺序按 repo_index**：与当初物化时一致，分支后缀（D14 同源多份）才对得上。
  */
-interface PlannedSpaceLayout {
-  repos: PlannedRepo[]
-  nodes: PlannedDirectoryNode[]
+export interface PlannedSpaceLayout {
+  readonly repos: PlannedRepo[]
+  readonly nodes: PlannedDirectoryNode[]
 }
 
 /** Old task snapshots only have repo mounts. Rebuild the smallest provable tree. */
@@ -1871,7 +1962,10 @@ function minimalNodePaths(mountPaths: readonly string[]): string[] {
   return [...paths.values()].sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
 }
 
-function loadFrozenSpaceLayout(db: DbClient, sourceTaskId: string): PlannedSpaceLayout {
+function loadFrozenSpaceLayout(
+  db: LegacySqliteTaskDatabase,
+  sourceTaskId: string,
+): PlannedSpaceLayout {
   const rows = db
     .select()
     .from(taskRepos)
@@ -2182,10 +2276,9 @@ async function materializeGroupSpace(opts: {
   }
 }
 
-export async function materializeSpace(
+export async function materializeSpaceWithProvider(
   input: StartTask,
-  deps: StartTaskDeps,
-  appHome: string,
+  deps: WorkspaceMaterializationDependencies,
   /**
    * RFC-287 G7 第一刀：让调用方能**先定 id、后物化**。
    *
@@ -2197,6 +2290,7 @@ export async function materializeSpace(
    */
   presetTaskId?: string,
 ): Promise<MaterializedSpace> {
+  const appHome = deps.appHome
   const taskId = presetTaskId ?? ulid()
 
   // RFC-165 (F4): the internal local-path face is mutually exclusive with
@@ -2318,9 +2412,9 @@ export async function materializeSpace(
     return layout
   }
 
-  const groupLayout: PlannedSpaceLayout | null = (() => {
+  const groupLayout: PlannedSpaceLayout | null = await (async () => {
     if (typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0) {
-      const layout = resolveRepoGroupLayout(deps.db, input.repoGroupId)
+      const layout = await resolveRepoGroupLayout(deps.repositoryWorkspace, input.repoGroupId)
       return assertNonEmptyLayout(
         { repos: layout.repos, nodes: layout.nodes },
         `repo group ${input.repoGroupId}`,
@@ -2330,7 +2424,7 @@ export async function materializeSpace(
       // RFC-249: replay BOTH frozen repos and explicit directories. Never read
       // the current repo-group definition, which may have changed or vanished.
       return assertNonEmptyLayout(
-        loadFrozenSpaceLayout(deps.db, input.sourceTaskId),
+        await deps.loadFrozenSpaceLayout(input.sourceTaskId),
         `source task ${input.sourceTaskId}`,
       )
     }
@@ -2359,7 +2453,7 @@ export async function materializeSpace(
     const r =
       deps.preResolvedSource !== undefined && repoSpecs.length === 1 && i === 0
         ? deps.preResolvedSource
-        : await resolveRepoSourceSingle(spec, input, deps)
+        : await resolveRepoSourceSingleWithProvider(spec, input, deps)
     if (r.pathFetchError !== null) {
       log.warn('rfc068/path-fetch-failed', {
         repoPath: r.repoPath,
@@ -2523,6 +2617,40 @@ export async function materializeSpace(
   throw new ValidationError(
     'start-task-source-required',
     'multi-repo launches must use repoGroupId (RFC-248); the legacy repos[] path is retired',
+  )
+}
+
+/** Existing SQLite service entry, now only a provider adapter around the
+ * shared materializer. */
+export async function materializeSpace(
+  input: StartTask,
+  deps: StartTaskDeps,
+  appHome: string,
+  presetTaskId?: string,
+): Promise<MaterializedSpace> {
+  return await materializeSpaceWithProvider(
+    input,
+    {
+      appHome,
+      repositoryWorkspace: repositoryWorkspaceFor(deps),
+      loadFrozenSpaceLayout: async (sourceTaskId) => loadFrozenSpaceLayout(deps.db, sourceTaskId),
+      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+      ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
+      ...(deps.internalSource === undefined ? {} : { internalSource: deps.internalSource }),
+      ...(deps.preResolvedSource === undefined
+        ? {}
+        : { preResolvedSource: deps.preResolvedSource }),
+      ...(deps.gitCommitIdentity === undefined
+        ? {}
+        : { gitCommitIdentity: deps.gitCommitIdentity }),
+      ...(deps.sourceTerminationLaunchSignal === undefined
+        ? {}
+        : { sourceTerminationLaunchSignal: deps.sourceTerminationLaunchSignal }),
+      ...(deps.workspaceCleanupHook === undefined
+        ? {}
+        : { workspaceCleanupHook: deps.workspaceCleanupHook }),
+    },
+    presetTaskId,
   )
 }
 
@@ -3025,7 +3153,7 @@ async function startTaskImpl(
     typeof (input as { sourceTaskId?: unknown }).sourceTaskId !== 'string'
   ) {
     // 同步段的地址格式校验（proposal §G7 明列）——见 assertLaunchSourceSchemeSync。
-    assertLaunchSourceSchemeSync(deps, input)
+    await assertLaunchSourceSchemeSync(deps, input)
     // RFC-287 G7：JSON-body 启动把仓库准备**推迟到任务行落库之后**。
     //
     // 今天物化在落行之前，于是「克隆超时 / 远端不可达」这类失败**不留任何记录**
@@ -3056,7 +3184,11 @@ async function startTaskImpl(
     // 组启动本就带 repoGroupId（可重建），无需此步。
     if (typeof input.repoUrl === 'string' && input.repoUrl.length > 0) {
       const identity = await ensureCachedRepoIdentity(
-        { db: deps.db, ...(appHome !== undefined ? { appHome } : {}), secretBox: deps.secretBox },
+        {
+          store: repositoryWorkspaceFor(deps),
+          ...(appHome !== undefined ? { appHome } : {}),
+          secretBox: deps.secretBox,
+        },
         { url: input.repoUrl },
       )
       deferredCachedRepoId = identity.cachedRepoId
@@ -3129,13 +3261,14 @@ async function startTaskImpl(
     head?.cachedRepoId ?? fallbackSource?.cachedRepoId ?? deferredCachedRepoId ?? null
   // RFC-248: 组身份快照。与 D8「启动时快照」一致——`task_repos` 本就是布局
   // 快照，这里只再存一份 id+名字供溯源、记忆注入与详情页 chip 使用。
-  const repoGroupSnapshot =
+  const repoGroupLayout =
     typeof input.repoGroupId === 'string' && input.repoGroupId.length > 0
-      ? {
-          id: input.repoGroupId,
-          name: resolveRepoGroupLayout(deps.db, input.repoGroupId).groupName,
-        }
+      ? await resolveRepoGroupLayout(repositoryWorkspaceFor(deps), input.repoGroupId)
       : null
+  const repoGroupSnapshot =
+    repoGroupLayout === null || input.repoGroupId === undefined
+      ? null
+      : { id: input.repoGroupId, name: repoGroupLayout.groupName }
   // 延后准备时 head/fallbackSource 都还空着，但**请求里就有 `ref`**——不存下来，
   // AC-11 的「重试准备仓库」就再也拿不到它(四轮门两路独立实测)：`retryRepoPreparation`
   // 手工重建启动输入，`ref` 不在其中；而基线分支的唯一来源是
@@ -3619,7 +3752,7 @@ async function startTaskImpl(
   }
 
   const task = (await getTask(deps.db, taskId)) as Task
-  publishCommittedEventsAfterCommit(createdEventRef === null ? [] : [createdEventRef])
+  await publishCommittedEventsAfterCommit(createdEventRef === null ? [] : [createdEventRef])
 
   if (earlyError !== null) {
     return task
@@ -3704,7 +3837,7 @@ async function startTaskImpl(
  * the old comment here misdescribed).
  */
 async function rollbackNodeRunForResume(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   task: Task,
   run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
   log: ReturnType<typeof createLogger>,
@@ -3732,7 +3865,11 @@ async function rollbackNodeRunForResume(
  * scheduler kick whose cwd no longer exists (a generic 500). Mirrors
  * getTaskDiff's worktree-missing guard (single vs multi-repo).
  */
-function assertWorktreePresentForResume(db: DbClient, task: Task, verb: string): void {
+async function assertWorktreePresentForResume(
+  operations: TaskRecoveryOperations,
+  task: Task,
+  verb: string,
+): Promise<void> {
   const gone = (msg: string): never => {
     throw new DomainError(
       'task-worktree-missing',
@@ -3769,7 +3906,7 @@ function assertWorktreePresentForResume(db: DbClient, task: Task, verb: string):
     worktreePath: task.worktreePath,
     workspacePruningAt: (task.workspaceState ?? 'available') === 'pruning' ? 1 : null,
     workspacePrunedAt: (task.workspaceState ?? 'available') === 'pruned' ? 1 : null,
-    hasRepoPrepRow: taskIdsWithRepoPrepRow(db, [task.id]).has(task.id),
+    hasRepoPrepRow: (await taskIdsWithRepoPrepRow(operations, [task.id])).has(task.id),
   })
   if (phase === 'preparing') {
     throw new ConflictError(
@@ -3806,7 +3943,8 @@ function assertWorktreePresentForResume(db: DbClient, task: Task, verb: string):
  * Returns `never`; throws ConflictError after the CAS.
  */
 async function escalateSnapshotLost(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
+  recovery: TaskRecoveryOperations,
   taskId: string,
   run: { id: string; nodeId: string },
   outcome: RollbackOutcome,
@@ -3831,7 +3969,7 @@ async function escalateSnapshotLost(
     },
     reason: `${reason}:snapshot-lost`,
   })
-  await recordRecoveryEvent(db, {
+  await recordRecoveryEvent(recovery, {
     taskId,
     nodeRunId: run.id,
     kind: 'snapshot-lost',
@@ -3854,7 +3992,8 @@ async function escalateSnapshotLost(
  * Mirrors escalateSnapshotLost's contract. Returns `never`.
  */
 async function escalateLiveChildSurvived(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
+  recovery: TaskRecoveryOperations,
   taskId: string,
   run: { id: string; nodeId: string; pid: number | null },
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
@@ -3873,7 +4012,7 @@ async function escalateLiveChildSurvived(
     },
     reason: `${reason}:live-child-survived`,
   })
-  await recordRecoveryEvent(db, {
+  await recordRecoveryEvent(recovery, {
     taskId,
     nodeRunId: run.id,
     kind: 'live-child-survived',
@@ -3888,7 +4027,7 @@ async function escalateLiveChildSurvived(
 }
 
 async function reapRunBeforeWorktreeReset(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   run: {
     id: string
@@ -3908,6 +4047,7 @@ async function reapRunBeforeWorktreeReset(
     .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id))
     .get()
   const killOutcome = await (deps.killStaleRunProcessTree ?? killStaleRunProcessTree)(run)
+  const recovery = requireTaskRecoveryOperations(deps)
   if (killOutcome === 'killed') {
     log.warn(`${reason}: stale runtime child group-killed before rollback`, {
       nodeRunId: run.id,
@@ -3916,21 +4056,27 @@ async function reapRunBeforeWorktreeReset(
   }
   if (heldNativeLease !== undefined) {
     if (killOutcome !== 'not-alive' && killOutcome !== 'killed') {
-      await escalateLiveChildSurvived(db, taskId, run, reason, killOutcome)
+      await escalateLiveChildSurvived(db, recovery, taskId, run, reason, killOutcome)
     }
     // A proven-dead terminal holder must be neutralized/discarded before the
     // scheduler can admit a replacement. The helper validates terminal state
     // and preserves reset/identity-invalid fail-closed semantics.
-    if (repairRuntimeSessionLeasesAfterOrphanReap(db, true, run.id) !== 1) {
-      await escalateLiveChildSurvived(db, taskId, run, reason, 'kill-failed')
+    if (deps.runtimeSessionLeases === undefined) {
+      throw new Error('runtime-session-lease-operations-not-composed')
+    }
+    if (
+      (await repairRuntimeSessionLeasesAfterOrphanReap(deps.runtimeSessionLeases, true, run.id)) !==
+      1
+    ) {
+      await escalateLiveChildSurvived(db, recovery, taskId, run, reason, 'kill-failed')
     }
   } else if (killOutcome === 'kill-failed') {
-    await escalateLiveChildSurvived(db, taskId, run, reason, killOutcome)
+    await escalateLiveChildSurvived(db, recovery, taskId, run, reason, killOutcome)
   }
 }
 
 async function reapHeldRuntimeSessionOwnersForTask(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
   deps: StartTaskDeps,
@@ -3956,6 +4102,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
     if (run === undefined) {
       await escalateLiveChildSurvived(
         db,
+        requireTaskRecoveryOperations(deps),
         taskId,
         { id: nodeRunId, nodeId: '(missing)', pid: null },
         reason,
@@ -3973,7 +4120,7 @@ async function reapHeldRuntimeSessionOwnersForTask(
 // pending/running-only gate predated the awaiting statuses.
 
 export async function cancelTask(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   id: string,
   opts: {
     /**
@@ -4151,7 +4298,9 @@ export async function cancelTask(
         )
     ).map((child) => child.id)
     return { task: current, childIds }
-  }).finally(() => publishCommittedEventsAfterCommit(deferredStatusEventRefs))
+  }).finally(async () => {
+    await publishCommittedEventsAfterCommit(deferredStatusEventRefs)
+  })
 
   const stopCause: TaskStopCause =
     opts.cascadeFromParent === true
@@ -4210,7 +4359,11 @@ export async function cancelTask(
  * allowed-from set (failed/interrupted/awaiting_review/awaiting_human) and
  * rollback targets (failed/interrupted) as before.
  */
-export async function resumeTask(db: DbClient, id: string, deps: StartTaskDeps): Promise<Task> {
+export async function resumeTask(
+  db: LegacySqliteTaskDatabase,
+  id: string,
+  deps: StartTaskDeps,
+): Promise<Task> {
   return resumeKick(db, id, deps, {
     intentKind: 'resume',
     event: { kind: 'resume' },
@@ -4312,10 +4465,13 @@ export function composeHumanGateContinuationDriver(
  * row remains unchanged and the user can retry the decision.
  */
 export async function resumeTaskWithAtomicSideEffects(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   id: string,
   deps: StartTaskDeps,
-  onClaimTx: (tx: DbTxSync, transition: { from: TaskStatus; to: TaskStatus }) => void,
+  onClaimTx: (
+    tx: LegacySqliteTaskTransaction,
+    transition: { from: TaskStatus; to: TaskStatus },
+  ) => void,
 ): Promise<Task> {
   return resumeKick(db, id, deps, {
     intentKind: 'gate-continuation',
@@ -4341,7 +4497,7 @@ export async function resumeTaskWithAtomicSideEffects(
  * `resumeKick`, mirroring syncTaskWorkflow.
  */
 export async function resumeDynamicWorkflowExecution(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   id: string,
   deps: StartTaskDeps,
   swap: { workflowSnapshot?: string; dw: DwState },
@@ -4371,7 +4527,7 @@ export async function resumeDynamicWorkflowExecution(
  * supply a candidate root+closure, but never a replacement trigger source.
  */
 async function assertFrozenTaskTriggerPreflight(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   candidate?: { workflowSnapshot: string; refClosureJson: string | null },
 ): Promise<void> {
@@ -4423,7 +4579,7 @@ async function assertFrozenTaskTriggerPreflight(
  * intent; only its durable owner claim authorizes subsequent execution effects.
  */
 async function resumeKick(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   id: string,
   deps: StartTaskDeps,
   opts: {
@@ -4444,7 +4600,7 @@ async function resumeKick(
      */
     worktreePreflight?: boolean
     onClaimTx?: (
-      tx: DbTxSync,
+      tx: LegacySqliteTaskTransaction,
       transition: {
         from: TaskStatus
         to: TaskStatus
@@ -4491,7 +4647,10 @@ async function resumeKick(
   // (gc reclaimed a resumable task) — never flip to pending then 500 on a
   // missing cwd. Gated per-caller (resumeTask opts in).
   if (opts.worktreePreflight === true) {
-    assertWorktreePresentForResume(db, task, opts.verb)
+    if (deps.taskRecoveryOperations === undefined) {
+      throw new Error('task-recovery-operations-not-composed')
+    }
+    await assertWorktreePresentForResume(deps.taskRecoveryOperations, task, opts.verb)
   }
 
   // RFC-097 command admission — the pending CAS moves BEFORE the git rollback
@@ -4572,7 +4731,14 @@ async function resumeKick(
       for (const r of toRollback) {
         const probe = await rollbackNodeRunForResume(db, task, r, log, { checkOnly: true })
         if (probe.failures.some((f) => f.code === 'snapshot-missing')) {
-          await escalateSnapshotLost(db, id, r, probe, opts.reason) // throws 409
+          await escalateSnapshotLost(
+            db,
+            requireTaskRecoveryOperations(deps),
+            id,
+            r,
+            probe,
+            opts.reason,
+          ) // throws 409
         }
       }
 
@@ -4596,7 +4762,14 @@ async function resumeKick(
         // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
         // Other failure codes keep the historical warn-and-continue net below.
         if (outcome.failures.some((f) => f.code === 'snapshot-missing')) {
-          await escalateSnapshotLost(db, id, r, outcome, opts.reason)
+          await escalateSnapshotLost(
+            db,
+            requireTaskRecoveryOperations(deps),
+            id,
+            r,
+            outcome,
+            opts.reason,
+          )
         }
         // The scheduler creates a new node_run with retry_index = max+1 on its
         // own when it sees no pending run for the node, so we just leave the
@@ -4733,7 +4906,7 @@ export function buildSyncRunSummary(
  * checks live in the route (mirrors resume — service is actor-agnostic).
  */
 export async function syncTaskWorkflow(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   id: string,
   deps: StartTaskDeps & { expectedVersion: number },
 ): Promise<Task> {
@@ -4900,7 +5073,7 @@ export async function syncTaskWorkflow(
  * definition currently fails static validation.
  */
 export async function computeWorkflowSyncPreview(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   task: Task,
   workflow: Workflow,
   resourceAuthority: TaskExecutionResourceAuthority,
@@ -4927,7 +5100,7 @@ export async function computeWorkflowSyncPreview(
   const closureIssues: Array<{ code: string; message: string }> = []
   try {
     candidateClosureJson = await freezeClosureForLaunch(
-      { db, launchResources: resourceAuthority },
+      { launchResources: resourceAuthority },
       workflow.id,
       newDef,
     )
@@ -5052,7 +5225,7 @@ export async function computeWorkflowSyncPreview(
  * call row (dirty data) fails open to the pre-RFC-243 behavior.
  */
 async function assertChildTaskDrivable(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   task: { id: string; parentTaskId?: string | null; parentNodeRunId?: string | null },
   verb: string,
 ): Promise<void> {
@@ -5086,7 +5259,11 @@ async function assertChildTaskDrivable(
  * 只在**重试**这条路径上做,不动全仓共用的 `createWorktree` 语义(用户在两个候选里
  * 选了这条)。全部失败都只记 warn:清理是尽力而为,真正的判据是紧随其后的建树本身。
  */
-async function reclaimStalePrepArtifacts(db: DbClient, appHome: string, task: Task): Promise<void> {
+async function reclaimStalePrepArtifacts(
+  db: LegacySqliteTaskDatabase,
+  appHome: string,
+  task: Task,
+): Promise<void> {
   // ① 候选镜像:单仓来自 tasks.cached_repo_id;组来自成员的 cachedRepoId。
   const mirrorIds = new Set<string>()
   if (typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0) {
@@ -5094,7 +5271,9 @@ async function reclaimStalePrepArtifacts(db: DbClient, appHome: string, task: Ta
   }
   if (typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0) {
     try {
-      for (const m of resolveRepoGroupLayout(db, task.repoGroupId).repos) {
+      for (const m of (
+        await resolveRepoGroupLayout(composeSqliteRepositoryWorkspaceStore(db), task.repoGroupId)
+      ).repos) {
         if (m.cachedRepoId.length > 0) mirrorIds.add(m.cachedRepoId)
       }
     } catch {
@@ -5191,7 +5370,11 @@ async function reclaimStalePrepArtifacts(db: DbClient, appHome: string, task: Ta
  *     此刻能找回来（`tasks.repo_url` 是脱敏存的，按设计不能驱动重跑）。
  * 两者都没有 = 这行任务的来源确实无从重建，响亮拒绝，让用户去重新启动。
  */
-async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDeps): Promise<Task> {
+async function retryRepoPreparation(
+  db: LegacySqliteTaskDatabase,
+  task: Task,
+  deps: StartTaskDeps,
+): Promise<Task> {
   const hasGroup = typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0
   const hasCached = typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0
   if (!hasGroup && !hasCached) {
@@ -5272,7 +5455,7 @@ async function retryRepoPreparation(db: DbClient, task: Task, deps: StartTaskDep
 
 /** Boot/application recovery adapter for the persisted phase-0 descriptor. */
 export async function retryRepositoryPreparation(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   deps: StartTaskDeps,
 ): Promise<Task> {
@@ -5374,33 +5557,38 @@ async function runDeferredRepoPreparation(args: {
     reason: 'repo-prep-start',
     extra: {},
   })
-  const prepEffect = createLocalEffectAttemptObserver({
-    db: deps.db,
-    taskId,
-    nodeRunId: prepRunId,
-    kind: 'workspace-prepare',
-    stableActionOrdinal: 'workspace-prepare:task-root',
-    candidateId: 'deferred-repository-preparation',
-    request: {
-      v: 1,
-      taskId,
-      workflowId: input.workflowId,
-      repositorySource:
-        input.repoGroupId !== undefined
-          ? 'group'
-          : input.repoUrl !== undefined || input.cachedRepoId !== undefined
-            ? 'single'
-            : input.sourceTaskId !== undefined
-              ? 'source-task'
-              : 'scratch',
-      spaceKind: space.spaceKind,
-    },
-    resourceKeys: [`workspace-prepare:${taskId}`],
-  })
+  const executionContext = currentTaskExecutionContext(taskId)
+  const prepEffect =
+    executionContext === undefined
+      ? undefined
+      : createLocalEffectAttemptObserver({
+          persistence: executionContext.persistence.effects,
+          taskId,
+          nodeRunId: prepRunId,
+          kind: 'workspace-prepare',
+          stableActionOrdinal: 'workspace-prepare:task-root',
+          candidateId: 'deferred-repository-preparation',
+          request: {
+            v: 1,
+            taskId,
+            workflowId: input.workflowId,
+            repositorySource:
+              input.repoGroupId !== undefined
+                ? 'group'
+                : input.repoUrl !== undefined || input.cachedRepoId !== undefined
+                  ? 'single'
+                  : input.sourceTaskId !== undefined
+                    ? 'source-task'
+                    : 'scratch',
+            spaceKind: space.spaceKind,
+          },
+          resourceKeys: [`workspace-prepare:${taskId}`],
+          context: executionContext,
+        })
   await prepEffect?.beforeAct()
-  const settlePrepFailure = (error: unknown, phase: string): void => {
+  const settlePrepFailure = async (error: unknown, phase: string): Promise<void> => {
     try {
-      prepEffect?.fail(error, { phase })
+      await prepEffect?.fail(error, { phase })
     } catch (settleError) {
       log.warn('repository preparation effect failure receipt was fenced', {
         taskId,
@@ -5500,7 +5688,7 @@ async function runDeferredRepoPreparation(args: {
     // 处置：合成行落 canceled（不能留在 running——恢复扫描会把它当还在跑），任务
     // 状态**不碰**，交给 cancelTask 按它自己的流程终结；租约照常释放，否则取消之后
     // 这行任务的每次重试都撞 `task-still-running`。
-    settlePrepFailure(new Error(prepared.earlyError), 'aborted')
+    await settlePrepFailure(new Error(prepared.earlyError), 'aborted')
     try {
       await setNodeRunStatus({
         db: deps.db,
@@ -5538,7 +5726,7 @@ async function runDeferredRepoPreparation(args: {
     //
     // 我原先那句注释「CAS 失败即放弃，不覆写」把语义写反了：不覆写是对的，但它
     // 是**靠抛出**实现的，不是靠静默返回。（T14 实现门）
-    settlePrepFailure(new Error(prepared.earlyError), 'failed')
+    await settlePrepFailure(new Error(prepared.earlyError), 'failed')
     try {
       // 合成行先落 failed，且 errorMessage 是 git 的原话——时间线上点开这一步能
       // 看到「fatal: unable to access …」，而不是一句无从下手的「启动失败」。
@@ -5643,7 +5831,7 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    settlePrepFailure(new Error('task left repository preparation window'), 'discarded')
+    await settlePrepFailure(new Error('task left repository preparation window'), 'discarded')
     // 三轮门并发面抓到的两条，同一个出口上：
     //
     // **F4——准备行不能留在 running**。本分支此前只清物化产物就返回，那条合成行永远
@@ -5694,7 +5882,7 @@ async function runDeferredRepoPreparation(args: {
   // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
   // 丢失远端 URL / cache id / base branch。
   const preparedHead = prepared.repos[0]
-  const persistPreparedProjection = (tx: DbTxSync): void => {
+  const persistPreparedProjection = (tx: LegacySqliteTaskTransaction): void => {
     tx.update(tasks)
       .set({
         worktreePath: prepared.worktreePath,
@@ -5746,18 +5934,12 @@ async function runDeferredRepoPreparation(args: {
       extra: { finishedAt: Date.now() },
     })
   }
-  if (prepEffect === undefined) {
-    dbTxSync(deps.db, persistPreparedProjection)
-  } else {
-    prepEffect.succeed(
-      {
-        phase: 'prepared',
-        repoCount: prepared.repos.length,
-        spaceKind: prepared.spaceKind,
-      },
-      persistPreparedProjection,
-    )
-  }
+  dbTxSync(deps.db, persistPreparedProjection)
+  await prepEffect?.succeed({
+    phase: 'prepared',
+    repoCount: prepared.repos.length,
+    spaceKind: prepared.spaceKind,
+  })
   // 响应体重读一次：它是在准备之前、用占位值构造的，直接返回会让调用方拿到空
   // worktreePath——前端据此显示空路径，脚本据此写文件会写到错地方（实测：HTTP
   // 契约测试往空路径写文件，diff 自然为空）。回填已落库，重读即得真实值，比在
@@ -5766,7 +5948,7 @@ async function runDeferredRepoPreparation(args: {
 }
 
 export async function retryNode(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   nodeRunId: string,
   opts: { cascade?: boolean; deps: StartTaskDeps },
@@ -6068,7 +6250,14 @@ export async function retryNode(
       // scheduler is kicked when the promised baseline no longer exists.
       const rollbackOutcome = await rollbackNodeRunForResume(db, task, runRow, log)
       if (rollbackOutcome.failures.some((f) => f.code === 'snapshot-missing')) {
-        await escalateSnapshotLost(db, taskId, runRow, rollbackOutcome, 'retryNode')
+        await escalateSnapshotLost(
+          db,
+          requireTaskRecoveryOperations(opts.deps),
+          taskId,
+          runRow,
+          rollbackOutcome,
+          'retryNode',
+        )
       }
 
       // Flip target + downstream node_runs from done → failed so the resumer
@@ -6203,7 +6392,7 @@ function parseSnapshot(v: unknown): Record<string, unknown> | null {
   return null
 }
 
-export async function getTask(db: DbClient, id: string): Promise<Task | null> {
+export async function getTask(db: LegacySqliteTaskDatabase, id: string): Promise<Task | null> {
   const rows = await db
     .select({
       task: tasks,
@@ -6294,7 +6483,7 @@ export interface ListTasksFilters {
 
 const taskListFlights = new WeakMap<object, InFlightCoalescer<string, TaskSummary[]>>()
 
-function taskListFlight(db: DbClient): InFlightCoalescer<string, TaskSummary[]> {
+function taskListFlight(db: LegacySqliteTaskDatabase): InFlightCoalescer<string, TaskSummary[]> {
   const owner = db as unknown as object
   const existing = taskListFlights.get(owner)
   if (existing !== undefined) return existing
@@ -6325,7 +6514,7 @@ function taskListFlightKey(filters: ListTasksFilters): string {
  * never drift.
  */
 export function taskVisibilityCondition(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   visibility: { actorUserId: string; scope: 'mine' | 'shared' },
 ): SQL<unknown> {
   return taskOwnershipScopeCondition(
@@ -6342,7 +6531,7 @@ interface TaskSummaryRow {
 }
 
 async function listTaskSummaryRows(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   filters: ListTasksFilters = {},
 ): Promise<TaskSummaryRow[]> {
   const conditions = []
@@ -6436,7 +6625,7 @@ async function listTaskSummaryRows(
 }
 
 export async function listTasks(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   filters: ListTasksFilters = {},
 ): Promise<TaskSummary[]> {
   return taskListFlight(db)(taskListFlightKey(filters), async () =>
@@ -6454,7 +6643,7 @@ export async function listTasks(
  * produce an arrow that opens onto an empty list.
  */
 async function loadChildCounts(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   parentIds: readonly string[],
   filters: Pick<ListTasksFilters, 'visibility' | 'catalogVisibility'>,
 ): Promise<Map<string, number>> {
@@ -6477,7 +6666,7 @@ async function loadChildCounts(
 
 /** RFC-232 — list-only owner projection over the canonical summary pipeline. */
 export async function listTaskItems(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   filters: ListTasksFilters = {},
 ): Promise<TaskListItem[]> {
   const rows = await listTaskSummaryRows(db, filters)
@@ -6523,7 +6712,7 @@ function parseCommitPushJson(raw: string | null): CommitPushMeta | null {
  * failures) resolve to null.
  */
 export async function loadTaskFailureCodes(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
 ): Promise<Map<string, FailureCode | null>> {
   const out = new Map<string, FailureCode | null>()
@@ -6559,7 +6748,10 @@ export async function loadTaskFailureCodes(
  * timeline. node_runs that haven't started yet (`pending`) tail the list
  * sorted by id.
  */
-export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<TaskNodeRuns> {
+export async function getTaskNodeRuns(
+  db: LegacySqliteTaskDatabase,
+  taskId: string,
+): Promise<TaskNodeRuns> {
   const task = await getTask(db, taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
@@ -6789,7 +6981,7 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
   // RFC-306: the run trace rides this response — the task detail already fetches
   // it and already invalidates it on every node-status WS event. Absent when the
   // task took no branch decisions at all.
-  const branchTrace = await branchTraceForTask(db, taskId)
+  const branchTrace = await branchTraceForTask(new SqliteBranchTraceSnapshotReader(db), taskId)
   return { runs, outputs, ...(branchTrace !== undefined ? { branchTrace } : {}) }
 }
 
@@ -6801,7 +6993,7 @@ export async function getTaskNodeRuns(db: DbClient, taskId: string): Promise<Tas
  * just verify the node_run belongs to the task to avoid cross-task leakage.
  */
 export async function getNodeRunEvents(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   nodeRunId: string,
   opts: { since?: number; limit?: number; logsDir?: string } = {},
@@ -6888,7 +7080,7 @@ export const STDOUT_OMITTED_MARKER =
   '[… earlier output omitted: this view shows the most recent 1 MiB …]'
 
 export async function getNodeRunStdout(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   taskId: string,
   nodeRunId: string,
   opts: { logsDir?: string } = {},
@@ -7002,7 +7194,7 @@ export async function getNodeRunStdout(
  */
 const TASK_DIFF_MAX_BYTES = 1024 * 1024 // 1 MiB — same cap as worktreeDiff.
 
-export async function getTaskDiff(db: DbClient, taskId: string): Promise<TaskDiff> {
+export async function getTaskDiff(db: LegacySqliteTaskDatabase, taskId: string): Promise<TaskDiff> {
   const task = await getTask(db, taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)

@@ -4,11 +4,10 @@
 // aggregate writers move, this service-side provider binds their existing
 // implementations without introducing infrastructure -> services edges.
 
-import {
-  commitTemplateInTx,
-  prepareTemplateFromBundle,
-  type PreparedTemplateWrite,
-} from '@/services/capabilityTemplates'
+import { prepareTemplateFromBundle } from '@/services/capabilityTemplates'
+import type { PreparedCapabilityTemplateWrite } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
+import { createSqliteCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/sqliteCapabilityTemplatePersistence'
+import { createSqliteCapabilityTemplatePackageCommitSync } from '@/modules/code-capability/infrastructure/capabilityTemplatePackageCommit'
 import {
   commitAgentCreateInTx,
   commitAgentUpdateInTx,
@@ -17,37 +16,43 @@ import {
   prepareAgentUpdate,
   type PreparedAgentCreate,
   type PreparedAgentUpdate,
-} from '@/services/agent'
+} from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {
-  commitMcpCreateInTx,
-  commitMcpUpdateInTx,
-  getMcpById,
-  prepareMcpCreate,
-  type PreparedMcpCreate,
-  type PreparedMcpUpdate,
-} from '@/services/mcp'
-import { commitPluginCreateInTx, commitPluginPublishInTx } from '@/services/plugin'
+  commitLegacyMcpCreateInTx,
+  commitLegacyMcpUpdateInTx,
+  loadLegacyMcpById,
+  prepareLegacyMcpCreate,
+  type LegacyPreparedMcpCreate,
+  type LegacyPreparedMcpUpdate,
+} from '@/modules/resource-catalog/infrastructure/mcpPersistence'
+import {
+  commitLegacyPluginCreateInTx,
+  commitLegacyPluginPublishInTx,
+  type LegacyPreparedPluginCreate,
+  type PluginPersistenceRow,
+} from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
-import { getAclResourceOwnerInTx, initialPrivateResourceAcl } from '@/services/resourceAcl'
+import { initialPrivateResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
+import { getAclResourceOwnerInTx } from '@/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 import {
   assertRefsUsableInTx,
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
-} from '@/services/resourceRefs'
+} from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import {
   commitSkillReadyInTx,
   compensateManagedSkillStage,
   stageManagedSkill,
-} from '@/services/skill'
-import { unmarkSkillBootVerified } from '@/services/skillBootVerify'
-import { finishOperation } from '@/services/skillOperations'
+} from '@/modules/resource-catalog/infrastructure/legacy/skill'
+import { unmarkSkillBootVerified } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { finishOperation } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import {
   abortStagedSkillVersion,
   commitSkillVersionInTx,
   publishStagedSkillVersion,
   stageSkillVersion,
   type StagedSkillVersion,
-} from '@/services/skillVersion'
+} from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
   broadcastWorkflowCreated,
   commitWorkflowSaveInTx,
@@ -55,7 +60,7 @@ import {
   prepareWorkflowSave,
   rowToWorkflowDetail,
   type PreparedWorkflowSave,
-} from '@/services/workflow'
+} from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import {
   broadcastWorkgroupCreated,
   commitWorkgroupCreateInTx,
@@ -64,21 +69,26 @@ import {
   prepareWorkgroupSave,
   type PreparedWorkgroupCreate,
   type PreparedWorkgroupSave,
-} from '@/services/workgroups'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import type { WorkgroupDetail } from '@agent-workflow/shared'
-import type { workflows } from '@/db/schema'
 import {
   createLegacyResourcePackageMutationAdapter,
   type LegacyResourcePackageMutationDependencies,
-} from '@/modules/resource-catalog/public/operations'
+} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants'
 import type { ResourcePackageMutationRuntime, ResourcePackageMutationRuntimeFactory } from './apply'
-
-type WorkflowRow = typeof workflows.$inferSelect
 
 export const legacyResourcePackageMutationDependencies = Object.freeze({
   prepareTemplateFromBundle: (db, payload, actor, existingId) =>
-    prepareTemplateFromBundle(db, payload as never, actor, existingId),
-  commitTemplateInTx: (tx, prepared) => commitTemplateInTx(tx, prepared as PreparedTemplateWrite),
+    prepareTemplateFromBundle(
+      createSqliteCapabilityTemplatePersistence(db),
+      payload as never,
+      actor,
+      existingId,
+    ),
+  commitTemplateInTx: (tx, prepared) =>
+    createSqliteCapabilityTemplatePackageCommitSync(tx).commit(
+      prepared as PreparedCapabilityTemplateWrite,
+    ),
   prepareAgentCreate,
   getAgentById,
   prepareAgentUpdate,
@@ -87,15 +97,18 @@ export const legacyResourcePackageMutationDependencies = Object.freeze({
   commitAgentUpdateInTx: (tx, prepared) =>
     commitAgentUpdateInTx(tx, prepared as PreparedAgentUpdate),
   prepareMcpCreate: async (db, input, options, resourceId) => ({
-    ...(await prepareMcpCreate(db, input, options)),
+    ...(await prepareLegacyMcpCreate(db, input, options)),
     id: resourceId,
   }),
-  getMcpById,
-  commitMcpCreateInTx: (tx, prepared) => commitMcpCreateInTx(tx, prepared as PreparedMcpCreate),
-  commitMcpUpdateInTx: (tx, prepared) => commitMcpUpdateInTx(tx, prepared as PreparedMcpUpdate),
-  commitPluginCreateInTx: (tx, input) => commitPluginCreateInTx(tx, input as never),
+  getMcpById: loadLegacyMcpById,
+  commitMcpCreateInTx: (tx, prepared) =>
+    commitLegacyMcpCreateInTx(tx, prepared as LegacyPreparedMcpCreate),
+  commitMcpUpdateInTx: (tx, prepared) =>
+    commitLegacyMcpUpdateInTx(tx, prepared as LegacyPreparedMcpUpdate),
+  commitPluginCreateInTx: (tx, input) =>
+    commitLegacyPluginCreateInTx(tx, input as LegacyPreparedPluginCreate),
   commitPluginPublishInTx: (tx, captured, input) =>
-    commitPluginPublishInTx(tx, captured as never, input as never),
+    commitLegacyPluginPublishInTx(tx, captured as PluginPersistenceRow, input as never),
   plannedGenerationDir,
   installPlugin: (pluginId, spec, options) => installPlugin(pluginId, spec, options),
   getAclResourceOwnerInTx,
@@ -122,7 +135,8 @@ export const legacyResourcePackageMutationDependencies = Object.freeze({
   insertWorkflowInTx: (tx, input) => insertWorkflowInTx(tx, input as never),
   commitWorkflowSaveInTx: (tx, prepared) =>
     commitWorkflowSaveInTx(tx, prepared as PreparedWorkflowSave),
-  rowToWorkflowDetail: (row) => rowToWorkflowDetail(row as WorkflowRow),
+  rowToWorkflowDetail: (row) =>
+    rowToWorkflowDetail(row as Parameters<typeof rowToWorkflowDetail>[0]),
   broadcastWorkflowCreated: (workflow) => broadcastWorkflowCreated(workflow as never),
   prepareWorkgroupCreate: async (db, input, options, resourceId) => ({
     ...(await prepareWorkgroupCreate(db, input, options as never)),

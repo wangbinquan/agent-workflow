@@ -5,7 +5,7 @@
 // DB writes; no inline-config building. Callers compose with the rest of the
 // services layer.
 //
-//   resolveDependsClosure(db, root, { call })
+//   resolveDependsClosure(lookup, root, { call })
 //     BFS over agent.dependsOn. Returns ok:true with agents in BFS order
 //     (root first) or ok:false with the offending cycle path. Missing ids
 //     either throw `agent-dependency-not-found` or are silently skipped, per
@@ -13,27 +13,30 @@
 //     validation fails, tolerant UI preview skips. The policy is REQUIRED:
 //     "什么都不传" 曾经默认成硬失败，读起来像是域的固有语义，实际是调用点的选择。
 //
-//   validateDependsOn(db, selfName, dependsOn)
+//   validateDependsOn(lookup, selfId, dependsOn)
 //     Save-time guard chained from agent.ts createAgent / updateAgent. Runs
 //     dedupe → self-check → existence-check → closure (cycle) and throws
 //     DomainError with one of the four RFC-022 codes on the first failure.
 //     Safe to call before the row exists (new agent path) — the synthetic
-//     root carries the proposed dependsOn list rather than reading the DB
-//     row.
+//     root carries the proposed dependsOn list rather than requiring a row.
 //
-//   findAgentsDependingOn(db, id)
-//     Reverse index used by delete guards. Pre-filters with LIKE
-//     (rough — substring match), then JSON.parse + Array.includes to defend
-//     against false positives (e.g. agent 'foo' matching 'foobar' in some
-//     other row's dependsOn).
+//   findAgentsDependingOn(lookup, id)
+//     Reverse index used by compatibility consumers. The injected provider
+//     owns its exact storage predicate and returns closed identity rows.
 
 import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
 import { resourceRefKey, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { agents } from '@/db/schema'
-import { findAgentsReferencingIdInJsonColumn } from './resourceRefs'
 import { DomainError } from '@/util/errors'
-import { getAgentById } from './agent'
+
+export interface AgentDependencyLookup {
+  get(id: string): Promise<Agent | null>
+}
+
+export interface AgentReverseDependencyLookup {
+  findDependents(
+    agentId: string,
+  ): Promise<readonly { readonly id: string; readonly name: string }[]>
+}
 
 export type DependsClosureResult =
   | { ok: true; agents: Agent[] }
@@ -63,7 +66,7 @@ export interface ResolveClosureOpts {
  * `↑ see above` regardless).
  */
 export async function resolveDependsClosure(
-  db: DbClient,
+  lookup: AgentDependencyLookup,
   root: Agent,
   opts: ResolveClosureOpts,
 ): Promise<DependsClosureResult> {
@@ -111,7 +114,7 @@ export async function resolveDependsClosure(
       return { ok: false, cyclePath: [...path.slice(cycleIdx), id] }
     }
     if (visited.has(keyOf(id))) continue
-    const agent = await getAgentById(db, id)
+    const agent = await lookup.get(id)
     if (agent === null) {
       if (allowMissing) continue
       throw new DomainError('agent-dependency-not-found', `agent '${id}' not found`, 400, {
@@ -139,7 +142,7 @@ export async function resolveDependsClosure(
  * detected against stable ids rather than names.
  */
 export async function validateDependsOn(
-  db: DbClient,
+  lookup: AgentDependencyLookup,
   selfId: string,
   dependsOn: readonly string[],
 ): Promise<void> {
@@ -166,7 +169,7 @@ export async function validateDependsOn(
   //    which only reports the first missing dep on its traversal path.
   const missing: string[] = []
   for (const n of unique) {
-    const a = await getAgentById(db, n)
+    const a = await lookup.get(n)
     if (a === null) missing.push(n)
   }
   if (missing.length > 0) {
@@ -179,7 +182,7 @@ export async function validateDependsOn(
   }
 
   // 4. closure cycle check via BFS over the synthetic root.
-  const existing = await getAgentById(db, selfId)
+  const existing = await lookup.get(selfId)
   const syntheticRoot: Agent = existing
     ? { ...existing, dependsOn: unique }
     : ({
@@ -200,7 +203,7 @@ export async function validateDependsOn(
         createdAt: 0,
         updatedAt: 0,
       } satisfies Agent)
-  const closure = await resolveDependsClosure(db, syntheticRoot, {
+  const closure = await resolveDependsClosure(lookup, syntheticRoot, {
     call: VALIDATE_CALL_POLICY,
   })
   if (closure.ok === false) {
@@ -221,26 +224,18 @@ export async function validateDependsOn(
  * names. Callers MUST continue to bind disclosure/filtering by id: names are
  * not unique across owners after RFC-223.
  *
- * Implementation: SQL `LIKE` is fast but coarse (substring match). After the
- * pre-filter we re-parse the JSON column and exact-match with Array.includes
- * to reject false positives (an id being a JSON substring of another value).
+ * The provider owns its storage-specific prefilter and exact membership check;
+ * this facade exposes only closed dependent identities.
  */
 export async function findAgentsDependingOn(
-  db: DbClient,
+  lookup: AgentReverseDependencyLookup,
   agentId: string,
 ): Promise<Array<{ id: string; name: string }>> {
-  // RFC-284 T9：LIKE 预过滤 + parse 精确判定收编 resourceRefs 泛型；
-  // 本域 matcher = dependsOn 字符串数组 includes。
-  const rows = await findAgentsReferencingIdInJsonColumn(db, {
-    column: agents.dependsOn,
-    id: agentId,
-    matches: (parsed, id) => Array.isArray(parsed) && parsed.includes(id),
-  })
-  return rows.map(({ id, name }) => ({ id, name }))
+  return [...(await lookup.findDependents(agentId))]
 }
 
 /** Pure core of findAgentsDependingOn — RFC-165 (F17-r3): the agent
- *  rename/delete guards re-run it on rows read INSIDE their dbTxSync. Matches
+ *  rename/delete guards re-run it inside their owning persistence transaction. Matches
  *  by `agentId` (RFC-223 PR-1) against the id-valued dependsOn column and
  *  returns the exact matching ROWS, preserving stable referencing ids. */
 export function agentsDependingOnIn<T extends { id: string; dependsOn: string }>(

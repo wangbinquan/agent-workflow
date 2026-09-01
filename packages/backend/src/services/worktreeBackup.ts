@@ -16,11 +16,8 @@
 // the backup excludes.
 
 import { LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
-import { eq, inArray } from 'drizzle-orm'
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join, sep } from 'node:path'
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
 import { extractTarGz, tarGz } from '@/util/archive'
 import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
@@ -145,33 +142,25 @@ export async function captureWorktreeRows(
   return { captured, skipped }
 }
 
-/**
- * SQLite compatibility entrypoint: select non-terminal tasks with the
- * historical Drizzle query, then delegate to the provider-neutral archive
- * mechanism above.
- */
-export async function captureWorktrees(
-  db: DbClient,
-  stagingDir: string,
-  opts?: { maxBytes?: number },
-): Promise<WorktreeCaptureResult> {
-  const rows = db
-    .select({
-      id: tasks.id,
-      worktreePath: tasks.worktreePath,
-      branch: tasks.branch,
-      repoPath: tasks.repoPath,
-      baseCommit: tasks.baseCommit,
-    })
-    .from(tasks)
-    .where(inArray(tasks.status, [...LIVE_WORKTREE_TASK_STATUSES]))
-    .all()
-  return await captureWorktreeRows(rows, stagingDir, opts)
-}
-
 export interface WorktreeReconstructResult {
   reconstructed: string[]
   skipped: { taskId: string; reason: string }[]
+}
+
+/** Provider-neutral row returned by the active database adapter. Archive
+ * metadata never supplies these filesystem paths or the lifecycle status. */
+export interface WorktreeReconstructionRow {
+  readonly id: string
+  readonly status: string
+  readonly worktreePath: string
+  readonly branch: string
+  readonly repoPath: string
+}
+
+export interface WorktreeReconstructionRows {
+  findById(
+    taskId: string,
+  ): WorktreeReconstructionRow | undefined | Promise<WorktreeReconstructionRow | undefined>
 }
 
 /**
@@ -180,8 +169,8 @@ export interface WorktreeReconstructResult {
  * MISSING on disk. `git worktree add <path> <branch>` from the mirror, then
  * overlay the captured working state. Never overwrites an existing worktree.
  */
-export async function reconstructWorktrees(
-  db: DbClient,
+export async function reconstructWorktreeRows(
+  rows: WorktreeReconstructionRows,
   extractedDir: string,
 ): Promise<WorktreeReconstructResult> {
   const wtDir = join(extractedDir, 'worktrees')
@@ -210,12 +199,12 @@ export async function reconstructWorktrees(
       skipped.push({ taskId: String(meta.taskId), reason: 'invalid task id in worktree meta' })
       continue
     }
-    const row = db.select().from(tasks).where(eq(tasks.id, meta.taskId)).get()
+    const row = await rows.findById(meta.taskId)
     if (row === undefined) {
       skipped.push({ taskId: meta.taskId, reason: 'task no longer in DB' })
       continue
     }
-    if (!LIVE_WORKTREE_TASK_STATUSES.includes(row.status)) {
+    if (!LIVE_WORKTREE_TASK_STATUSES.some((status) => status === row.status)) {
       skipped.push({ taskId: meta.taskId, reason: `terminal (${row.status})` })
       continue
     }

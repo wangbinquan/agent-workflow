@@ -1,14 +1,16 @@
 // RFC-293 — one dispatcher for HTTP-triggered turns and queued boot recovery.
 
-import { eq } from 'drizzle-orm'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
+import type {
+  IntentDumpAuxiliaryQueries,
+  IntentPersistence,
+  IntentTurnRuntimeResolver,
+} from '@/modules/intent/public/operations'
 import type {
   CurrentSubjectAccessResolver,
   LegacyActorProjectionFactory,
 } from '@/modules/identity-access/public/participants'
-import { intentSessions, intentWorkingSetChanges } from '@/db/schema'
 import type { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
@@ -19,17 +21,22 @@ import {
 } from './turnEngine'
 import type { ReservedIntentTurn } from './session'
 import { activateIntentWorkingSetChange } from './workingSet'
+import { intentResourceVisibility, type IntentResourceCatalogBinding } from './resourceCatalog'
 
 const log = createLogger('intentDispatcher')
 
 export interface IntentDispatchDeps {
-  db: DbClient
+  persistence: IntentPersistence
   identityAccess: Readonly<{
     resolveAuthority: CurrentSubjectAccessResolver
     legacyProjection: LegacyActorProjectionFactory
   }>
   appHome: string
   configSnapshot: ReturnType<typeof loadConfig>
+  runtimeResolver: IntentTurnRuntimeResolver
+  dumpAuxiliary: IntentDumpAuxiliaryQueries
+  /** Bootstrap-selected Resource Catalog query/context for this exact actor. */
+  resourceCatalogFor(actor: Actor): IntentResourceCatalogBinding
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
 }
 
@@ -87,12 +94,14 @@ export async function dispatchIntentTurn(
   }
 
   try {
-    const config = await resolveIntentTurnConfig(deps.db, deps.configSnapshot)
+    const config = await resolveIntentTurnConfig(deps.runtimeResolver, deps.configSnapshot)
     await runIntentTurn(
       {
-        db: deps.db,
+        persistence: deps.persistence,
         appHome: deps.appHome,
         config,
+        resourceCatalog: deps.resourceCatalogFor(actor),
+        dumpAuxiliary: deps.dumpAuxiliary,
         onSessionEvent: (event) => {
           if (
             event.type === 'intent.turn.execution.updated' &&
@@ -122,7 +131,7 @@ export async function dispatchIntentTurn(
     )
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
-    const settled = settleReservedIntentTurnStartFailure(deps.db, {
+    const settled = await settleReservedIntentTurnStartFailure(deps.persistence, {
       sessionId,
       actor,
       reservation,
@@ -140,8 +149,9 @@ export async function dispatchIntentTurn(
   } finally {
     if (executionTimer !== undefined) clearTimeout(executionTimer)
     flushExecution()
-    const next = activateIntentWorkingSetChange(
-      deps.db,
+    const next = await activateIntentWorkingSetChange(
+      deps.persistence,
+      intentResourceVisibility(deps.resourceCatalogFor(actor)),
       actor,
       sessionId,
       deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,
@@ -154,26 +164,22 @@ export async function dispatchIntentTurn(
 }
 
 /** Claim queued rows left by a dead process or a lost completion wake-up. */
-export function listQueuedIntentWorkingSetSessionIds(db: DbClient): string[] {
-  return db
-    .select({ sessionId: intentWorkingSetChanges.sessionId })
-    .from(intentWorkingSetChanges)
-    .where(eq(intentWorkingSetChanges.state, 'queued'))
-    .all()
-    .map((row) => row.sessionId)
+export async function listQueuedIntentWorkingSetSessionIds(
+  persistence: IntentPersistence,
+): Promise<readonly string[]> {
+  return await persistence.listQueuedWorkingSetSessionIds()
 }
 
 export async function resumeQueuedIntentWorkingSets(
   deps: IntentDispatchDeps,
-  sessionIds: readonly string[] = listQueuedIntentWorkingSetSessionIds(deps.db),
+  sessionIds?: readonly string[],
 ): Promise<number> {
-  const queued = sessionIds.map((sessionId) => ({ sessionId }))
+  const queuedIds = sessionIds ?? (await listQueuedIntentWorkingSetSessionIds(deps.persistence))
+  const queued = queuedIds.map((sessionId) => ({ sessionId }))
   let resumed = 0
   for (const { sessionId } of queued) {
-    const session = (
-      await deps.db.select().from(intentSessions).where(eq(intentSessions.id, sessionId)).limit(1)
-    )[0]
-    if (session === undefined) continue
+    const session = await deps.persistence.findSession(sessionId)
+    if (session === null) continue
     const current = await deps.identityAccess.resolveAuthority.resolveCurrentSubject(
       session.ownerUserId,
     )
@@ -182,8 +188,9 @@ export async function resumeQueuedIntentWorkingSets(
         ? null
         : (deps.identityAccess.legacyProjection.fromResolvedSubject(current) as unknown as Actor)
     if (actor === null) continue
-    const next = activateIntentWorkingSetChange(
-      deps.db,
+    const next = await activateIntentWorkingSetChange(
+      deps.persistence,
+      intentResourceVisibility(deps.resourceCatalogFor(actor)),
       actor,
       sessionId,
       deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,

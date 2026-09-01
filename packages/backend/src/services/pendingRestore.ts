@@ -24,6 +24,7 @@ import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { restoreBackup, RestorePostSwapError } from './restore'
+import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
 
 const log = createLogger('pendingRestore')
 
@@ -159,6 +160,7 @@ export interface ApplyPendingRestoreOptions {
   appHome?: string
   dbPath?: string
   migrationsFolder: string
+  postOpenRecovery: SqlitePostRestoreRecovery
   now?: number
   /** Test-only: forwarded to restoreBackup's post-swap fault seam so a test can
    *  exercise the fail-closed rethrow path (P0-1). Never set in production. */
@@ -201,6 +203,7 @@ export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions)
       noSafetyBackup: marker.noSafetyBackup,
       noMigrate: marker.noMigrate,
       skipIntegrityCheck: marker.skipIntegrityCheck,
+      postOpenRecovery: opts.postOpenRecovery,
       now: opts.now,
       __afterSwapForTest: opts.__afterSwapForTest,
     })

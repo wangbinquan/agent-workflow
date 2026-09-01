@@ -1291,7 +1291,7 @@ export async function discardNodeIso(
     context === undefined
       ? undefined
       : createLocalEffectAttemptObserver({
-          db: context.db,
+          persistence: context.persistence.effects,
           taskId: handle.taskId,
           nodeRunId: handle.nodeRunId,
           kind: 'workspace-cleanup',

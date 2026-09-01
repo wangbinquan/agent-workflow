@@ -10,11 +10,9 @@
 // without a daemon restart, and errors that are logged rather than thrown —
 // a background refresh must never be able to take the daemon down.
 
-import { and, eq, gte, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { isFileSchemeUrl, type Config } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
 import type { SecretBox } from '@/auth/secretBox'
-import { cachedRepos } from '@/db/schema'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { refreshCachedRepo } from '@/services/gitRepoCache'
 import { createLogger } from '@/util/log'
 import { createManagedPeriodicJob } from '@/services/managedPeriodicJob'
@@ -45,21 +43,12 @@ type RefreshConfig = Pick<Config, 'submoduleAutoRefresh'>
  * user traffic.
  */
 export async function selectDueRepos(
-  db: DbClient,
+  store: RepositoryWorkspaceStore,
   opts: { now: number; intervalMs: number; onlyRecentDays: number },
 ): Promise<Array<{ id: string; urlRedacted: string | null }>> {
   const dueBefore = opts.now - opts.intervalMs
   const freshAfter = opts.now - opts.onlyRecentDays * 24 * HOUR_MS
-  const rows = await db
-    .select({ id: cachedRepos.id, urlRedacted: cachedRepos.urlRedacted })
-    .from(cachedRepos)
-    .where(
-      and(
-        gte(cachedRepos.lastFetchedAt, freshAfter),
-        or(isNull(cachedRepos.lastAutoRefreshAt), lt(cachedRepos.lastAutoRefreshAt, dueBefore)),
-        isNotNull(cachedRepos.localPath),
-      ),
-    )
+  const rows = await store.listDueCachedRepos({ dueBefore, freshAfter })
   // RFC-287 G5：`file://` 存量镜像**不再自动保鲜**。
   //
   // 启动面已按非法参数拒了它（schemas/task.ts 的 refineRepoSourceFields），但后台
@@ -96,7 +85,7 @@ export async function selectDueRepos(
  * the rest of the sweep.
  */
 export async function refreshDueRepos(
-  db: DbClient,
+  store: RepositoryWorkspaceStore,
   cfg: RefreshConfig,
   opts?: { now?: () => number; appHome?: string; secretBox?: SecretBox },
 ): Promise<{ refreshed: number; failed: number }> {
@@ -106,7 +95,7 @@ export async function refreshDueRepos(
   const intervalMs = cfg.submoduleAutoRefresh?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
   const onlyRecentDays = cfg.submoduleAutoRefresh?.onlyRecentDays ?? DEFAULT_ONLY_RECENT_DAYS
 
-  const due = await selectDueRepos(db, { now: now(), intervalMs, onlyRecentDays })
+  const due = await selectDueRepos(store, { now: now(), intervalMs, onlyRecentDays })
   if (due.length === 0) return { refreshed: 0, failed: 0 }
 
   let refreshed = 0
@@ -119,7 +108,7 @@ export async function refreshDueRepos(
         // internal `now` — shares a single source. In production `now` is
         // Date.now, so behaviour is unchanged; tests can drive time deterministically.
         {
-          db,
+          store,
           now,
           ...(opts?.appHome !== undefined ? { appHome: opts.appHome } : {}),
           ...(opts?.secretBox !== undefined ? { secretBox: opts.secretBox } : {}),
@@ -153,8 +142,7 @@ export async function refreshDueRepos(
     }
   }
   // Stamp AFTER the sweep so a crash mid-sweep leaves the untouched repos due.
-  await stampRefreshed(
-    db,
+  await store.stampAutoRefreshed(
     due.map((r) => r.id),
     now(),
   )
@@ -162,18 +150,12 @@ export async function refreshDueRepos(
   return { refreshed, failed }
 }
 
-async function stampRefreshed(db: DbClient, ids: string[], at: number): Promise<void> {
-  for (const id of ids) {
-    await db.update(cachedRepos).set({ lastAutoRefreshAt: at }).where(eq(cachedRepos.id, id))
-  }
-}
-
 /**
  * Start the background refresh ticker. `loadConfig` runs each tick so a settings
  * change applies without restarting the daemon, matching the other tickers.
  */
 export function startSubmoduleRefreshLoop(
-  db: DbClient,
+  store: RepositoryWorkspaceStore,
   loadConfig: () => RefreshConfig,
   intervalMs: number = HOUR_MS,
   appHome?: string,
@@ -181,7 +163,7 @@ export function startSubmoduleRefreshLoop(
 ): { stop: () => void; reconfigure: () => boolean } {
   const job = createManagedPeriodicJob({
     run: async () => {
-      await refreshDueRepos(db, loadConfig(), {
+      await refreshDueRepos(store, loadConfig(), {
         ...(appHome !== undefined ? { appHome } : {}),
         ...(secretBox !== undefined ? { secretBox } : {}),
       })

@@ -14,11 +14,8 @@
 // findStalledRuns / killChild are injected so the loop is unit-testable;
 // startHeartbeatKillLoop wires the real query + killStaleRunProcessTree.
 
-import { and, desc, eq, isNotNull } from 'drizzle-orm'
-
 import { loadConfig } from '@/config'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRuns } from '@/db/schema'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -64,20 +61,6 @@ const STALL_TS_WINDOW_ROWS = 200
  * 一个 run 最近一次活动的时间戳：按 id 反向取 `STALL_TS_WINDOW_ROWS` 行（走
  * `idx_events_node`，EXPLAIN 无排序器），在窗口内取 max(ts)。无事件返回 null。
  */
-async function latestEventTsWithinWindow(db: DbClient, nodeRunId: string): Promise<number | null> {
-  const rows = await db
-    .select({ ts: nodeRunEvents.ts })
-    .from(nodeRunEvents)
-    .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-    .orderBy(desc(nodeRunEvents.id))
-    .limit(STALL_TS_WINDOW_ROWS)
-  let latest: number | null = null
-  for (const row of rows) {
-    if (latest === null || row.ts > latest) latest = row.ts
-  }
-  return latest
-}
-
 /**
  * Running node_runs with a live pid whose latest event (or startedAt when it has
  * none yet) is older than `now - stallMs` — i.e. the child has gone quiet.
@@ -87,32 +70,29 @@ async function latestEventTsWithinWindow(db: DbClient, nodeRunId: string): Promi
  * 的逐 run 查询一致。
  */
 export async function findStalledRunningChildren(
-  db: DbClient,
+  operations: TaskRecoveryOperations,
   stallMs: number,
   now: number,
 ): Promise<StalledRun[]> {
-  const runs = await db
-    .select({
-      id: nodeRuns.id,
-      taskId: nodeRuns.taskId,
-      pid: nodeRuns.pid,
-      startedAt: nodeRuns.startedAt,
-      spawnBinaryPath: nodeRuns.spawnBinaryPath,
-      spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
+  return (
+    await operations.listStalledRunningChildren({
+      stallMs,
+      now,
+      eventWindowRows: STALL_TS_WINDOW_ROWS,
     })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.status, 'running'), isNotNull(nodeRuns.pid)))
-  const cutoff = now - stallMs
-  const stalled: StalledRun[] = []
-  for (const run of runs) {
-    const lastTs = await latestEventTsWithinWindow(db, run.id)
-    if ((lastTs ?? run.startedAt ?? 0) < cutoff) stalled.push({ ...run, lastTs })
-  }
-  return stalled
+  ).map((run) => ({
+    id: run.id,
+    taskId: run.taskId,
+    pid: run.pid,
+    startedAt: run.startedAt,
+    spawnBinaryPath: run.spawnBinaryPath,
+    spawnLaunchNonce: run.spawnLaunchNonce,
+    lastTs: run.lastEventTs ?? null,
+  }))
 }
 
 export interface HeartbeatKillDeps {
-  db: DbClient
+  operations: TaskRecoveryOperations
   breaker: BreakerConfig
   enabled: boolean
   findStalledRuns: () => Promise<StalledRun[]>
@@ -129,24 +109,24 @@ export interface HeartbeatKillResult {
 export async function runHeartbeatKillOnce(deps: HeartbeatKillDeps): Promise<HeartbeatKillResult> {
   const out: HeartbeatKillResult = { killed: [], skipped: [] }
   if (!deps.enabled) return out
-  const { db, breaker, findStalledRuns, killChild } = deps
+  const { operations, breaker, findStalledRuns, killChild } = deps
   const now = deps.now ?? Date.now
   const skip = (r: StalledRun, reason: string): void => {
     out.skipped.push({ taskId: r.taskId, nodeRunId: r.id, reason })
   }
 
   for (const run of await findStalledRuns()) {
-    if (await isAutoRecoverySuspended(db, run.taskId)) {
+    if (await isAutoRecoverySuspended(operations, run.taskId)) {
       skip(run, 'quarantined')
       continue
     }
-    const { suspended } = await recordAutoRecoveryAttempt(db, run.taskId, breaker, now())
+    const { suspended } = await recordAutoRecoveryAttempt(operations, run.taskId, breaker, now())
     if (suspended) {
       skip(run, 'breaker-tripped')
       continue
     }
     const outcome = await killChild(run)
-    await recordRecoveryEvent(db, {
+    await recordRecoveryEvent(operations, {
       taskId: run.taskId,
       nodeRunId: run.id,
       kind: 'heartbeat-kill',
@@ -169,7 +149,7 @@ export interface HeartbeatKillLoopHandle {
  * `autoKillStalledChild` is false (the default), so it's free until enabled.
  */
 export function startHeartbeatKillLoop(opts: {
-  db: DbClient
+  operations: TaskRecoveryOperations
   configPath: string
   intervalMs?: number
 }): HeartbeatKillLoopHandle {
@@ -183,13 +163,14 @@ export function startHeartbeatKillLoop(opts: {
       if (cfg.autoKillStalledChild !== true) return
       const now = Date.now()
       await runHeartbeatKillOnce({
-        db: opts.db,
+        operations: opts.operations,
         enabled: true,
         breaker: {
           maxPerWindow: cfg.maxAutoRecoveriesPerWindow,
           windowMs: cfg.autoRecoveryWindowMs,
         },
-        findStalledRuns: () => findStalledRunningChildren(opts.db, cfg.heartbeatStallMs, now),
+        findStalledRuns: () =>
+          findStalledRunningChildren(opts.operations, cfg.heartbeatStallMs, now),
         killChild: (run) =>
           killStaleRunProcessTree({
             pid: run.pid,

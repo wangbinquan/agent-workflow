@@ -34,13 +34,20 @@
 // their next poll / reconnect. The workflow-style audience-context fast-path
 // for cold connections is a documented follow-up.
 
-import { eq, inArray, sql } from 'drizzle-orm'
+import {
+  dbTxSync,
+  eq,
+  inArray,
+  sql,
+  taskCollaborators,
+  taskFeedback,
+  taskRepos,
+  tasks,
+  type LegacySqliteTaskDatabase,
+} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { taskCollaborators, taskFeedback, taskRepos, tasks } from '@/db/schema'
 import { isTaskActive } from '@/services/task'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -165,7 +172,10 @@ async function cleanupDeletedTaskResources(plan: DeleteCleanupPlanV2): Promise<'
  * Hard-delete a terminal task. Throws NotFoundError (404) if absent, or
  * ConflictError (409) for a non-terminal / active / fusion-internal task.
  */
-export async function deleteTask(db: DbClient, taskId: string): Promise<DeleteTaskResult> {
+export async function deleteTask(
+  db: LegacySqliteTaskDatabase,
+  taskId: string,
+): Promise<DeleteTaskResult> {
   const row = await db
     .select({
       id: tasks.id,
@@ -454,7 +464,9 @@ export interface DeleteRecoveryResult {
 }
 
 /** Resume exact RFC-328 delete claims left by a daemon/process crash. */
-export async function recoverInterruptedTaskDeletes(db: DbClient): Promise<DeleteRecoveryResult> {
+export async function recoverInterruptedTaskDeletes(
+  db: LegacySqliteTaskDatabase,
+): Promise<DeleteRecoveryResult> {
   const completed: string[] = []
   const cleanupPending: string[] = []
   const recoveryRequired: string[] = []
@@ -633,7 +645,7 @@ export async function recoverInterruptedTaskDeletes(db: DbClient): Promise<Delet
  * against dirty data via a visited set.
  */
 async function findNonTerminalDescendant(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   rootId: string,
 ): Promise<{ id: string; status: string } | null> {
   const visited = new Set<string>([rootId])

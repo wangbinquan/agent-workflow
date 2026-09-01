@@ -8,14 +8,13 @@
 // write in the claim).
 import type { Config } from '@agent-workflow/shared'
 import { computeNextRunAt, ScheduleSpecSchema } from '@agent-workflow/shared'
-import { and, asc, eq, isNotNull, lte, sql } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
-import { scheduledTasks } from '@/db/schema'
 import {
   fireSchedule,
   type BuildScheduleLaunch,
+  type Row,
   type ScheduleAuthorityRuntime,
+  type ScheduledTaskOperations,
 } from '@/services/scheduledTasks'
 import { createLogger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
@@ -28,8 +27,6 @@ export const SCHEDULE_FIRE_CONCURRENCY = 4 // actual parallel launches
 export const SCHEDULE_MAX_IN_FLIGHT = 32 // R2-a: dispatched-but-not-done cap = backlog bound
 export const DEFAULT_MAX_CONSECUTIVE_FAILURES = 10
 
-type Row = typeof scheduledTasks.$inferSelect
-
 function msgOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -41,87 +38,44 @@ function msgOf(err: unknown): string {
  * pre-advance `next_run_at` = the fired slot). NEVER writes `last_run_at` here
  * (R4-1 — that would self-block the firedAt-guarded display writes).
  */
-export async function pollAndClaim(db: DbClient, now: number, limit: number): Promise<Row[]> {
-  if (limit <= 0) return []
-  const due = await db
-    .select()
-    .from(scheduledTasks)
-    .where(
-      and(
-        eq(scheduledTasks.enabled, true),
-        isNotNull(scheduledTasks.nextRunAt),
-        lte(scheduledTasks.nextRunAt, now),
-      ),
-    )
-    .orderBy(asc(scheduledTasks.nextRunAt))
-    .limit(limit)
-
-  const claimed: Row[] = []
-  for (const row of due) {
-    if (row.nextRunAt === null) continue
-    let next: number
-    try {
-      next = computeNextRunAt(
-        ScheduleSpecSchema.parse(JSON.parse(row.scheduleSpec)),
-        now,
-        row.nextRunAt,
-      )
-    } catch (err) {
-      // Corrupt / uncomputable spec — disable so we don't hot-loop on it.
-      await db
-        .update(scheduledTasks)
-        .set({
-          enabled: false,
-          lastStatus: 'failed',
-          lastError: `schedule-spec-invalid: ${msgOf(err)}`,
-          updatedAt: now,
-        })
-        .where(eq(scheduledTasks.id, row.id))
-      continue
-    }
-    const res = await db
-      .update(scheduledTasks)
-      .set({ nextRunAt: next, updatedAt: now })
-      .where(
-        and(
-          eq(scheduledTasks.id, row.id),
-          eq(scheduledTasks.nextRunAt, row.nextRunAt),
-          eq(scheduledTasks.enabled, true),
-        ),
-      )
-      .returning({ id: scheduledTasks.id })
-    if (res.length > 0) claimed.push(row)
-  }
-  return claimed
+export async function pollAndClaim(
+  operations: ScheduledTaskOperations,
+  now: number,
+  limit: number,
+): Promise<readonly Row[]> {
+  return await operations.persistence.pollAndClaim({
+    now,
+    limit,
+    decide(row) {
+      try {
+        return {
+          kind: 'claim',
+          nextRunAt: computeNextRunAt(
+            ScheduleSpecSchema.parse(JSON.parse(row.scheduleSpec)),
+            now,
+            row.nextRunAt ?? now,
+          ),
+        }
+      } catch (err) {
+        return { kind: 'disable', error: `schedule-spec-invalid: ${msgOf(err)}` }
+      }
+    },
+  })
 }
 
 /** Success: reset the streak (unconditional) + write display fields under the firedAt guard. */
 async function recordSuccess(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   id: string,
   taskId: string,
   firedAt: number,
 ): Promise<void> {
-  const now = Date.now()
-  await db
-    .update(scheduledTasks)
-    .set({ consecutiveFailures: 0, updatedAt: now })
-    .where(eq(scheduledTasks.id, id))
-  await db
-    .update(scheduledTasks)
-    .set({
-      lastStatus: 'launched',
-      lastError: null,
-      lastTaskId: taskId,
-      lastRunAt: firedAt,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(scheduledTasks.id, id),
-        sql`(${scheduledTasks.lastRunAt} IS NULL OR ${scheduledTasks.lastRunAt} <= ${firedAt})`,
-      ),
-    )
+  await operations.persistence.recordSuccess({
+    id,
+    taskId,
+    firedAt,
+    recordedAt: Date.now(),
+  })
 }
 
 /**
@@ -131,37 +85,25 @@ async function recordSuccess(
  * crosses the threshold sees enabled=1 → 0. Display fields are firedAt-guarded.
  */
 async function recordFailure(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   id: string,
   message: string,
   firedAt: number,
   maxFailures: number,
   onAutoDisable?: (id: string) => void,
 ): Promise<void> {
-  const now = Date.now()
-  const res = await db
-    .update(scheduledTasks)
-    .set({
-      consecutiveFailures: sql`${scheduledTasks.consecutiveFailures} + 1`,
-      enabled: sql`CASE WHEN ${scheduledTasks.consecutiveFailures} + 1 >= ${maxFailures} THEN 0 ELSE ${scheduledTasks.enabled} END`,
-      updatedAt: now,
-    })
-    .where(and(eq(scheduledTasks.id, id), eq(scheduledTasks.enabled, true)))
-    .returning({ enabled: scheduledTasks.enabled })
-  if (res.length > 0 && res[0]!.enabled === false) onAutoDisable?.(id)
-  await db
-    .update(scheduledTasks)
-    .set({ lastStatus: 'failed', lastError: message, lastRunAt: firedAt, updatedAt: now })
-    .where(
-      and(
-        eq(scheduledTasks.id, id),
-        sql`(${scheduledTasks.lastRunAt} IS NULL OR ${scheduledTasks.lastRunAt} <= ${firedAt})`,
-      ),
-    )
+  const result = await operations.persistence.recordFailure({
+    id,
+    message,
+    firedAt,
+    maxFailures,
+    recordedAt: Date.now(),
+  })
+  if (result.autoDisabled) onAutoDisable?.(id)
 }
 
 async function fireClaimed(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   row: Row,
   buildLaunch: BuildScheduleLaunch,
   identityAccess: ScheduleAuthorityRuntime,
@@ -172,7 +114,7 @@ async function fireClaimed(
   const firedAt = row.nextRunAt ?? Date.now() // the claimed slot (pre-advance)
   try {
     const { taskId } = await fireSchedule(
-      db,
+      operations,
       row,
       buildLaunch,
       Date.now(),
@@ -180,14 +122,14 @@ async function fireClaimed(
       { kind: 'automatic', occurrenceAt: firedAt },
       defaultRuntime,
     )
-    await recordSuccess(db, row.id, taskId, firedAt)
+    await recordSuccess(operations, row.id, taskId, firedAt)
     scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
       type: 'scheduled.fired',
       id: row.id,
       ownerUserId: row.ownerUserId,
     })
   } catch (err) {
-    await recordFailure(db, row.id, msgOf(err), firedAt, maxFailures, onAutoDisable)
+    await recordFailure(operations, row.id, msgOf(err), firedAt, maxFailures, onAutoDisable)
     // A failure changed last_status (and possibly auto-disabled) — refresh the UI.
     scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
       type: 'scheduled.updated',
@@ -199,7 +141,7 @@ async function fireClaimed(
 
 /** Deterministic single pass (poll+claim+fire, awaiting every fire). Used by tests + run-now. */
 export async function runDueSchedulesOnce(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   opts: {
     buildLaunch: BuildScheduleLaunch
     identityAccess: ScheduleAuthorityRuntime
@@ -209,15 +151,15 @@ export async function runDueSchedulesOnce(
     onAutoDisable?: (id: string) => void
     defaultRuntime?: string | null
   },
-): Promise<Row[]> {
+): Promise<readonly Row[]> {
   const claimed = await pollAndClaim(
-    db,
+    operations,
     opts.now ?? Date.now(),
     opts.limit ?? SCHEDULE_MAX_IN_FLIGHT,
   )
   for (const row of claimed) {
     await fireClaimed(
-      db,
+      operations,
       row,
       opts.buildLaunch,
       opts.identityAccess,
@@ -231,7 +173,7 @@ export async function runDueSchedulesOnce(
 
 /** Start the background ticker. Returns `{ stop }`. */
 export function startScheduledTaskLoop(opts: {
-  db: DbClient
+  operations: ScheduledTaskOperations
   loadConfig: () => Config
   buildLaunch: BuildScheduleLaunch
   identityAccess: ScheduleAuthorityRuntime
@@ -249,7 +191,9 @@ export function startScheduledTaskLoop(opts: {
     const capacity = Math.max(0, SCHEDULE_MAX_IN_FLIGHT - inFlight)
     const maxFailures = cfg.scheduledTasksMaxFailures
     const poll =
-      capacity === 0 ? Promise.resolve([] as Row[]) : pollAndClaim(opts.db, Date.now(), capacity)
+      capacity === 0
+        ? Promise.resolve([] as readonly Row[])
+        : pollAndClaim(opts.operations, Date.now(), capacity)
     poll
       .then((claimed) => {
         for (const row of claimed) {
@@ -257,7 +201,7 @@ export function startScheduledTaskLoop(opts: {
           void sem
             .run(() =>
               fireClaimed(
-                opts.db,
+                opts.operations,
                 row,
                 opts.buildLaunch,
                 opts.identityAccess,

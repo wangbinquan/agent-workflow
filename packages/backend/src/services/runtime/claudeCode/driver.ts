@@ -562,7 +562,7 @@ export const claudeCodeDriver: RuntimeDriver = {
       logicalRootSessionId: ctx.logicalRootSessionId,
       nodeRunId: ctx.nodeRunId,
       taskId: ctx.taskId,
-      db: ctx.db,
+      persistence: ctx.persistence,
       log: ctx.log,
       // Transcripts live under claude's USER-level config root, resolved from the
       // RFC-154 profile the runner threads (omitted → protocol default). NOT

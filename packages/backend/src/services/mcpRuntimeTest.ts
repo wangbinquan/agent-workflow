@@ -8,7 +8,6 @@ import { Buffer } from 'node:buffer'
 import { existsSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   McpRuntimeTestSessionDtoSchema,
@@ -28,19 +27,16 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { loadConfig } from '@/config'
-import type { DbClient } from '@/db/client'
-import {
-  mcpRuntimeTestCreateReceipts,
-  mcpRuntimeTestEvents,
-  mcpRuntimeTestSessions,
-  mcpRuntimeTestTurns,
-} from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import type {
+  McpRuntimeTestPersistence,
+  McpRuntimeTestSessionRecord,
+  McpRuntimeTestTurnRecord,
+} from '@/modules/resource-catalog/application/mcps/runtimeTestPersistence'
 import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
 import type { RuntimeDriver } from '@/services/runtime/types'
 import type { SpawnPlan } from '@/services/runtime/types'
-import { getRuntime, type RuntimeRow } from '@/services/runtimeRegistry'
+import type { RuntimeRow } from '@/services/runtimeRegistry'
 import {
   emptySystemAgentOutputEvidence,
   runSystemAgent,
@@ -70,6 +66,7 @@ import {
   releaseMcpRuntimeTestSessionLease,
   repairMcpRuntimeTestSessionLeaseAfterReap,
   rotateMcpRuntimeTestSessionLease,
+  type McpRuntimeTestLeaseOperations,
   type McpRuntimeTestLeaseToken,
 } from '@/services/mcpRuntimeTestLease'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
@@ -91,11 +88,20 @@ const SYSTEM_PROMPT =
 const STDERR_TAIL_BYTES = 256 * 1024
 const DEFAULT_CAPACITY = 2
 
-type SessionRow = typeof mcpRuntimeTestSessions.$inferSelect
-type TurnRow = typeof mcpRuntimeTestTurns.$inferSelect
+type SessionRow = McpRuntimeTestSessionRecord
+type TurnRow = McpRuntimeTestTurnRecord
 
 export interface McpRuntimeTestDependencies {
-  db: DbClient
+  persistence: McpRuntimeTestPersistence
+  leaseOperations: McpRuntimeTestLeaseOperations
+  /**
+   * Reload the selected MCP immediately before a queued turn starts. The
+   * bootstrap owns identity admission and catalog composition; this daemon
+   * worker receives only the closed async query and never forges a synchronous
+   * system authority.
+   */
+  loadMcp: (mcpId: string) => Promise<Mcp | null>
+  loadRuntime: (name: string) => Promise<RuntimeRow | null>
   configPath: string
   appHome: string
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
@@ -110,7 +116,7 @@ export interface McpRuntimeTestDependencies {
 const SERVICE_INSTANCES = new WeakMap<object, McpRuntimeTestService>()
 
 export function getMcpRuntimeTestService(deps: McpRuntimeTestDependencies): McpRuntimeTestService {
-  const key = deps.db as object
+  const key = deps.persistence.identity
   const existing = SERVICE_INSTANCES.get(key)
   if (existing !== undefined) return existing
   const created = new McpRuntimeTestService(deps)
@@ -146,7 +152,7 @@ interface EventSinkOwner {
 function stableJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
-  return `{${Object.entries(value as Record<string, unknown>)
+  return `{${Object.entries(value)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
     .join(',')}}`
@@ -182,10 +188,6 @@ function ensureMessage(message: string): void {
       `message must not exceed ${MCP_RUNTIME_TEST_MESSAGE_BYTES} UTF-8 bytes`,
     )
   }
-}
-
-function isTerminalTurn(status: TurnRow['status']): boolean {
-  return !['queued', 'running'].includes(status)
 }
 
 function canResumeNativeSession(
@@ -271,41 +273,29 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     | undefined
 
   constructor(
-    private readonly db: DbClient,
+    private readonly persistence: McpRuntimeTestPersistence,
     private readonly owner: EventSinkOwner,
     private readonly notify?: () => void,
-    private readonly claimNativeSession?: (sessionId: string, previousSessionId?: string) => void,
+    private readonly claimNativeSession?: (
+      sessionId: string,
+      previousSessionId?: string,
+    ) => Promise<void>,
   ) {}
 
   append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
     if (this.stopped) return Promise.resolve()
-    return this.enqueue(() => {
+    return this.enqueue(async () => {
       if (this.stopped) return
-      dbTxSync(this.db, (tx) => {
-        const turn = tx
-          .select({
-            captureState: mcpRuntimeTestTurns.captureState,
-            lastEventSeq: mcpRuntimeTestTurns.captureLastEventSeq,
-            eventBytes: mcpRuntimeTestTurns.captureEventBytes,
-            firstEventSeq: mcpRuntimeTestTurns.captureFirstEventSeq,
-          })
-          .from(mcpRuntimeTestTurns)
-          .where(
-            and(
-              eq(mcpRuntimeTestTurns.id, this.owner.turnId),
-              eq(mcpRuntimeTestTurns.sessionId, this.owner.sessionId),
-            ),
-          )
-          .get()
-        if (turn === undefined) {
-          throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
-        }
-        if (turn.captureState !== 'live') {
-          this.stopped = true
-          return
-        }
-
-        const externalEventKey =
+      const result = await this.persistence.appendEvent({
+        sessionId: this.owner.sessionId,
+        turnId: this.owner.turnId,
+        ts: event.ts,
+        kind: event.kind,
+        payload: event.payload,
+        runtimeSessionId: event.sessionId,
+        parentSessionId: event.parentSessionId,
+        source: event.source,
+        externalEventKey:
           event.externalEventId === undefined
             ? null
             : sha256(
@@ -313,220 +303,67 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
                   runtimeSessionId: event.sessionId,
                   externalEventId: event.externalEventId,
                 }),
-              )
-        if (externalEventKey !== null) {
-          const duplicate = tx
-            .select({ id: mcpRuntimeTestEvents.id })
-            .from(mcpRuntimeTestEvents)
-            .where(
-              and(
-                eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId),
-                eq(mcpRuntimeTestEvents.externalEventKey, externalEventKey),
               ),
-            )
-            .get()
-          if (duplicate !== undefined) return
-        }
-
-        const payloadBytes = Buffer.byteLength(event.payload, 'utf8')
-        const sessionEventCount =
-          tx
-            .select({ count: sql<number>`count(*)` })
-            .from(mcpRuntimeTestEvents)
-            .where(eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId))
-            .get()?.count ?? 0
-        const sessionBytes =
-          tx
-            .select({
-              bytes: sql<number>`coalesce(sum(${mcpRuntimeTestTurns.captureEventBytes}), 0)`,
-            })
-            .from(mcpRuntimeTestTurns)
-            .where(eq(mcpRuntimeTestTurns.sessionId, this.owner.sessionId))
-            .get()?.bytes ?? 0
-        if (
-          payloadBytes > MCP_RUNTIME_TEST_SINGLE_EVENT_BYTES ||
-          sessionEventCount >= MCP_RUNTIME_TEST_EVENT_ROWS ||
-          sessionBytes + payloadBytes > MCP_RUNTIME_TEST_EVENT_BYTES
-        ) {
-          tx.update(mcpRuntimeTestTurns)
-            .set({ captureState: 'truncated', captureIncompleteReason: null })
-            .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
-            .run()
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              continuationBlockedReason: sql`CASE
-                WHEN ${mcpRuntimeTestSessions.continuationBlockedReason} IN ('mcp-config-changed', 'runtime-profile-changed')
-                  THEN ${mcpRuntimeTestSessions.continuationBlockedReason}
-                ELSE 'capture-truncated'
-              END`,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-            .run()
-          this.stopped = true
-          return
-        }
-
-        const lastSessionEvent = tx
-          .select({ seq: mcpRuntimeTestEvents.eventSeq })
-          .from(mcpRuntimeTestEvents)
-          .where(eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId))
-          .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
-          .limit(1)
-          .get()
-        const eventSeq = (lastSessionEvent?.seq ?? 0) + 1
-        tx.insert(mcpRuntimeTestEvents)
-          .values({
-            testSessionId: this.owner.sessionId,
-            firstSeenTurnId: this.owner.turnId,
-            eventSeq,
-            ts: event.ts,
-            kind: event.kind,
-            payload: event.payload,
-            sessionId: event.sessionId,
-            parentSessionId: event.parentSessionId,
-            source: event.source,
-            externalEventKey,
-          })
-          .run()
-        tx.update(mcpRuntimeTestTurns)
-          .set({
-            captureFirstEventSeq: turn.firstEventSeq ?? eventSeq,
-            captureLastEventSeq: eventSeq,
-            captureEventBytes: turn.eventBytes + payloadBytes,
-          })
-          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
-          .run()
+        payloadBytes: Buffer.byteLength(event.payload, 'utf8'),
+        maxSingleEventBytes: MCP_RUNTIME_TEST_SINGLE_EVENT_BYTES,
+        maxSessionRows: MCP_RUNTIME_TEST_EVENT_ROWS,
+        maxSessionBytes: MCP_RUNTIME_TEST_EVENT_BYTES,
       })
+      if (result === 'stopped' || result === 'truncated') this.stopped = true
       this.notify?.()
     })
   }
 
   setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void> {
-    return this.enqueue(() => {
-      const before = this.db
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-        .get()
+    return this.enqueue(async () => {
+      const before = await this.persistence.loadRuntimeSessionId(this.owner.sessionId)
       if (before === undefined) {
         throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
       }
       if (previousSessionId !== undefined) {
-        if (before.runtimeSessionId !== previousSessionId) {
+        if (before !== previousSessionId) {
           throw new ConflictError(
             'mcp-test-runtime-session-changed',
             'runtime conversation reset did not match the persisted native session',
           )
         }
-        this.claimNativeSession?.(sessionId, previousSessionId)
-      } else if (before.runtimeSessionId === null) {
-        this.claimNativeSession?.(sessionId)
+        await this.claimNativeSession?.(sessionId, previousSessionId)
+      } else if (before === null) {
+        await this.claimNativeSession?.(sessionId)
       }
-      dbTxSync(this.db, (tx) => {
-        const row = tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-          .get()
-        if (row === undefined) {
-          throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
-        }
-        const turn = tx
-          .select({ captureState: mcpRuntimeTestTurns.captureState })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
-          .get()
-        if (turn === undefined) {
-          throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
-        }
-        if (row.runtimeSessionId !== null && row.runtimeSessionId !== sessionId) {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              nativeSessionState: 'unusable',
-            })
-            .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
-          throw new ConflictError(
-            'mcp-test-runtime-session-changed',
-            'runtime returned a different native session id',
-          )
-        }
-        if (row.runtimeSessionId === null) {
-          tx.update(mcpRuntimeTestSessions)
-            .set({ runtimeSessionId: sessionId })
-            .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
-        }
-        if (previousSessionId !== undefined) {
-          // The service-backed claim callback rotates lease, pointer and root
-          // evidence atomically. Keep a defensive retag for direct sink tests
-          // and custom callers that own no native lease.
-          tx.update(mcpRuntimeTestEvents)
-            .set({ sessionId })
-            .where(
-              and(
-                eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId),
-                eq(mcpRuntimeTestEvents.sessionId, previousSessionId),
-                isNull(mcpRuntimeTestEvents.parentSessionId),
-              ),
-            )
-            .run()
-          tx.update(mcpRuntimeTestEvents)
-            .set({ parentSessionId: sessionId })
-            .where(
-              and(
-                eq(mcpRuntimeTestEvents.testSessionId, this.owner.sessionId),
-                eq(mcpRuntimeTestEvents.parentSessionId, previousSessionId),
-              ),
-            )
-            .run()
-          tx.update(mcpRuntimeTestSessions)
-            .set({ nativeSessionState: 'ready' })
-            .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-            .run()
-          if (this.resetPendingFrom === previousSessionId) {
-            this.resetPendingFrom = undefined
-          }
-          // Native identity recovery does not erase an independently reached
-          // capture cap/failure or its continuation block.
-          this.stopped = turn.captureState !== 'live'
-        }
+      // The production lease participant rotates the lease key, durable
+      // session pointer and root-event identities atomically. Once it returns,
+      // persistence must observe the new id rather than attempting the old-id
+      // CAS a second time. A standalone sink without a lease participant keeps
+      // the legacy persistence-owned rotation path for focused fixtures.
+      const persistencePreviousSessionId =
+        previousSessionId !== undefined && this.claimNativeSession === undefined
+          ? previousSessionId
+          : undefined
+      const result = await this.persistence.setRootSession({
+        sessionId: this.owner.sessionId,
+        turnId: this.owner.turnId,
+        runtimeSessionId: sessionId,
+        ...(persistencePreviousSessionId === undefined
+          ? {}
+          : { previousRuntimeSessionId: persistencePreviousSessionId }),
       })
+      if (previousSessionId !== undefined) {
+        if (this.resetPendingFrom === previousSessionId) this.resetPendingFrom = undefined
+        this.stopped = !result.captureLive
+      }
       this.notify?.()
     })
   }
 
   markRootSessionResetPending(sessionId: string): Promise<void> {
-    return this.enqueue(() => {
-      dbTxSync(this.db, (tx) => {
-        const row = tx
-          .select({ runtimeSessionId: mcpRuntimeTestSessions.runtimeSessionId })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-          .get()
-        if (row?.runtimeSessionId !== sessionId) {
-          throw new ConflictError(
-            'mcp-test-runtime-session-changed',
-            'runtime conversation reset did not match the persisted native session',
-          )
-        }
-        const turn = tx
-          .select({ captureState: mcpRuntimeTestTurns.captureState })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
-          .get()
-        if (turn === undefined) {
-          throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
-        }
-        // Capture remains live while waiting for the replacement so the reset
-        // frame and following epoch are not dropped. The native identity is
-        // fenced immediately; EOF/pump failure settles capture incomplete.
-        tx.update(mcpRuntimeTestSessions)
-          .set({ nativeSessionState: 'unusable' })
-          .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-          .run()
-        if (turn.captureState === 'live') this.resetPendingFrom = sessionId
+    return this.enqueue(async () => {
+      const result = await this.persistence.markRootSessionResetPending({
+        sessionId: this.owner.sessionId,
+        turnId: this.owner.turnId,
+        runtimeSessionId: sessionId,
       })
+      if (result.captureLive) this.resetPendingFrom = sessionId
       this.notify?.()
     })
   }
@@ -539,44 +376,18 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
       this.resetPendingFrom === undefined ? state : 'incomplete',
       this.resetPendingFrom === undefined ? reason : 'stream-persist-failed',
     )
-    return this.enqueue(() => {
+    return this.enqueue(async () => {
       const finalState =
         terminal.state === 'truncated'
           ? 'truncated'
           : terminal.state === 'incomplete'
             ? 'incomplete'
             : 'complete'
-      dbTxSync(this.db, (tx) => {
-        const turn = tx
-          .select({ captureState: mcpRuntimeTestTurns.captureState })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
-          .get()
-        if (turn === undefined) return
-        if (turn.captureState === 'incomplete') return
-        if (turn.captureState === 'truncated' && finalState !== 'incomplete') return
-        tx.update(mcpRuntimeTestTurns)
-          .set({
-            captureState: finalState,
-            captureIncompleteReason: finalState === 'incomplete' ? (terminal.reason ?? null) : null,
-          })
-          .where(eq(mcpRuntimeTestTurns.id, this.owner.turnId))
-          .run()
-        if (finalState !== 'complete') {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              continuationBlockedReason: sql`CASE
-                WHEN ${mcpRuntimeTestSessions.continuationBlockedReason} IN ('mcp-config-changed', 'runtime-profile-changed')
-                  THEN ${mcpRuntimeTestSessions.continuationBlockedReason}
-                WHEN ${finalState === 'incomplete'} THEN 'capture-incomplete'
-                WHEN ${mcpRuntimeTestSessions.continuationBlockedReason} IS NULL
-                  THEN 'capture-truncated'
-                ELSE ${mcpRuntimeTestSessions.continuationBlockedReason}
-              END`,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, this.owner.sessionId))
-            .run()
-        }
+      await this.persistence.markCaptureTerminal({
+        sessionId: this.owner.sessionId,
+        turnId: this.owner.turnId,
+        state: finalState,
+        reason: finalState === 'incomplete' ? (terminal.reason ?? null) : null,
       })
       this.stopped = true
       this.notify?.()
@@ -598,7 +409,7 @@ export class McpRuntimeTestEventSink implements SystemAgentEventSinkV1 {
     return this.terminalIntent
   }
 
-  private enqueue(work: () => void): Promise<void> {
+  private enqueue(work: () => void | Promise<void>): Promise<void> {
     const next = this.tail.then(work, work)
     this.tail = next.catch(() => {})
     return next
@@ -621,6 +432,7 @@ export class McpRuntimeTestService {
   private reconcileTimer: ReturnType<typeof setInterval> | null = null
   private startPromise: Promise<void> | null = null
   private accepting = true
+  private paused = false
   private shuttingDown = false
 
   constructor(private readonly deps: McpRuntimeTestDependencies) {
@@ -635,16 +447,7 @@ export class McpRuntimeTestService {
     const attempt = (async () => {
       await this.bootRecover()
       await this.reconcileCore()
-      if (!this.shuttingDown && this.reconcileTimer === null) {
-        this.reconcileTimer = setInterval(() => {
-          void this.reconcile().catch((error: unknown) => {
-            this.log.warn('mcp-test-periodic-reconcile-failed', {
-              error: error instanceof Error ? error.message : String(error),
-            })
-          })
-        }, 60_000)
-        this.reconcileTimer.unref?.()
-      }
+      this.installReconcileTimer()
     })()
     this.startPromise = attempt.catch((error: unknown) => {
       this.startPromise = null
@@ -657,100 +460,64 @@ export class McpRuntimeTestService {
     await this.start()
     if (this.shuttingDown) return
     this.shuttingDown = true
+    this.paused = true
     this.accepting = false
+    this.clearBackgroundTimers()
+    await this.drainRunningTurns(budgetMs)
+  }
+
+  /** Reversible provider-session admission fence. Existing turns are drained,
+   * while a failed provider switch may resume this same service instance. */
+  async pause(budgetMs = 30_000): Promise<void> {
+    await this.start()
+    if (this.shuttingDown || this.paused) return
+    this.paused = true
+    this.accepting = false
+    this.clearBackgroundTimers()
+    await this.drainRunningTurns(budgetMs)
+  }
+
+  async resume(): Promise<void> {
+    await this.start()
+    if (this.shuttingDown || !this.paused) return
+    await this.reconcileCore()
+    this.paused = false
+    this.accepting = true
+    this.installReconcileTimer()
+    this.scheduleIdleTimer()
+  }
+
+  async stop(budgetMs = 30_000): Promise<void> {
+    await this.shutdown(budgetMs)
+  }
+
+  private installReconcileTimer(): void {
+    if (this.shuttingDown || this.paused || this.reconcileTimer !== null) return
+    this.reconcileTimer = setInterval(() => {
+      void this.reconcile().catch((error: unknown) => {
+        this.log.warn('mcp-test-periodic-reconcile-failed', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    }, 60_000)
+    this.reconcileTimer.unref?.()
+  }
+
+  private clearBackgroundTimers(): void {
     if (this.idleTimer !== null) clearTimeout(this.idleTimer)
     if (this.reconcileTimer !== null) clearInterval(this.reconcileTimer)
     this.idleTimer = null
     this.reconcileTimer = null
+  }
 
+  private async drainRunningTurns(budgetMs: number): Promise<void> {
     const now = this.now()
-    const affected = dbTxSync(this.deps.db, (tx) => {
-      const sessions = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
-        .all()
-      const rows: Array<{ sessionId: string; turnId: string | null }> = []
-      for (const session of sessions) {
-        if (session.inFlightTurnId === null) continue
-        const turn = tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId))
-          .get()
-        if (turn?.status === 'queued') {
-          const timedOut = turn.hardDeadlineAt <= now
-          tx.update(mcpRuntimeTestTurns)
-            .set({
-              status: timedOut ? 'timed_out' : 'interrupted',
-              cancelRequestedAt: timedOut ? turn.cancelRequestedAt : now,
-              captureState: 'complete',
-              captureIncompleteReason: null,
-              failureCode: timedOut ? 'mcp-test-turn-timeout' : 'mcp-test-daemon-shutdown',
-              finishedAt: now,
-              durationMs: Math.max(0, now - turn.createdAt),
-            })
-            .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
-          const resumable = session.status === 'active' && canResumeNativeSession(session)
-          tx.update(mcpRuntimeTestSessions)
-            .set(
-              resumable
-                ? {
-                    inFlightTurnId: null,
-                    idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-                    sessionVersion: session.sessionVersion + 1,
-                    updatedAt: now,
-                  }
-                : {
-                    status: 'ending',
-                    endReason: session.endReason ?? 'session-unusable',
-                    inFlightTurnId: null,
-                    idleDeadlineAt: null,
-                    sessionVersion: session.sessionVersion + 1,
-                    updatedAt: now,
-                    ...(session.status === 'active'
-                      ? {
-                          nativeSessionState: 'unusable' as const,
-                          continuationBlockedReason: session.continuationBlockedReason,
-                        }
-                      : {}),
-                  },
-            )
-            .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
-          rows.push({ sessionId: session.id, turnId: null })
-          continue
-        }
-        if (turn?.status === 'running') {
-          tx.update(mcpRuntimeTestTurns)
-            .set({
-              cancelRequestedAt: turn.cancelRequestedAt ?? now,
-              failureCode:
-                turn.failureCode ??
-                (turn.hardDeadlineAt <= now ? 'mcp-test-turn-timeout' : 'mcp-test-daemon-shutdown'),
-            })
-            .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              sessionVersion: session.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
-          rows.push({ sessionId: session.id, turnId: turn.id })
-          continue
-        }
-        rows.push({ sessionId: session.id, turnId: null })
-      }
-      return rows
-    })
+    const affected = await this.deps.persistence.shutdown(now, now + MCP_RUNTIME_TEST_IDLE_MS)
 
     this.queue.splice(0)
     this.queued.clear()
     for (const row of affected) {
-      this.broadcastSession(row.sessionId)
+      await this.broadcastSession(row.sessionId)
       if (row.turnId !== null) this.controllers.get(row.turnId)?.abort()
     }
 
@@ -771,17 +538,8 @@ export class McpRuntimeTestService {
       if (timer !== undefined) clearTimeout(timer)
     }
 
-    const cleanup = this.deps.db
-      .select({ id: mcpRuntimeTestSessions.id })
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.status, 'ending'),
-          isNull(mcpRuntimeTestSessions.inFlightTurnId),
-        ),
-      )
-      .all()
-    for (const row of cleanup) await this.finishEndingSession(row.id)
+    const cleanup = await this.deps.persistence.listEndingWithoutInFlight()
+    for (const sessionId of cleanup) await this.finishEndingSession(sessionId)
   }
 
   private assertAccepting(): void {
@@ -816,18 +574,12 @@ export class McpRuntimeTestService {
   ): Promise<McpRuntimeTestCreateReceipt> {
     ensureMessage(input.message)
     const digest = requestDigest(input)
-    const replay = this.deps.db
-      .select()
-      .from(mcpRuntimeTestCreateReceipts)
-      .where(
-        and(
-          eq(mcpRuntimeTestCreateReceipts.mcpId, mcp.id),
-          eq(mcpRuntimeTestCreateReceipts.ownerUserId, actor.user.id),
-          eq(mcpRuntimeTestCreateReceipts.clientCreateId, input.clientCreateId),
-        ),
-      )
-      .get()
-    if (replay !== undefined) {
+    const replay = await this.deps.persistence.findCreateReceipt({
+      mcpId: mcp.id,
+      ownerUserId: actor.user.id,
+      clientCreateId: input.clientCreateId,
+    })
+    if (replay !== null) {
       if (replay.requestDigest !== digest) {
         throw new ConflictError(
           'mcp-test-idempotency-mismatch',
@@ -857,145 +609,28 @@ export class McpRuntimeTestService {
     const scratchRoot = join(this.deps.appHome, 'mcp-runtime-tests', sessionId)
     const runtimeSessionId = runtime.driver.createMcpTestNativeSessionId?.() ?? null
 
-    const receipt = dbTxSync(this.deps.db, (tx) => {
-      const racedReplay = tx
-        .select()
-        .from(mcpRuntimeTestCreateReceipts)
-        .where(
-          and(
-            eq(mcpRuntimeTestCreateReceipts.mcpId, mcp.id),
-            eq(mcpRuntimeTestCreateReceipts.ownerUserId, actor.user.id),
-            eq(mcpRuntimeTestCreateReceipts.clientCreateId, input.clientCreateId),
-          ),
-        )
-        .get()
-      if (racedReplay !== undefined) {
-        if (racedReplay.requestDigest !== digest) {
-          throw new ConflictError(
-            'mcp-test-idempotency-mismatch',
-            'clientCreateId was already used with different inputs',
-          )
-        }
-        return {
-          sessionId: racedReplay.sessionId,
-          acceptedTurnId: racedReplay.acceptedTurnId,
-          shouldQueue: false,
-        }
-      }
-
-      const live = tx
-        .select({
-          id: mcpRuntimeTestSessions.id,
-          status: mcpRuntimeTestSessions.status,
-        })
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.mcpId, mcp.id),
-            eq(mcpRuntimeTestSessions.ownerUserId, actor.user.id),
-            inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
-          ),
-        )
-        .get()
-      if (live !== undefined) {
-        throw new ConflictError(
-          'mcp-test-session-exists',
-          'an MCP test session is already active',
-          {
-            sessionId: live.id,
-            status: live.status,
-          },
-        )
-      }
-      const quarantined = tx
-        .select({ id: mcpRuntimeTestSessions.id })
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.mcpId, mcp.id),
-            eq(mcpRuntimeTestSessions.ownerUserId, actor.user.id),
-            eq(mcpRuntimeTestSessions.cleanupState, 'quarantined'),
-          ),
-        )
-        .get()
-      if (quarantined !== undefined) {
-        throw new ConflictError(
-          'mcp-test-cleanup-quarantined',
-          'a previous MCP test could not be safely cleaned up',
-          { sessionId: quarantined.id },
-        )
-      }
-      const replaceable = tx
-        .select({ id: mcpRuntimeTestSessions.id })
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.mcpId, mcp.id),
-            eq(mcpRuntimeTestSessions.ownerUserId, actor.user.id),
-            eq(mcpRuntimeTestSessions.status, 'ended'),
-            eq(mcpRuntimeTestSessions.cleanupState, 'complete'),
-          ),
-        )
-        .all()
-      for (const previous of replaceable) {
-        tx.delete(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, previous.id)).run()
-      }
-
-      tx.insert(mcpRuntimeTestSessions)
-        .values({
-          id: sessionId,
-          mcpId: mcp.id,
-          ownerUserId: actor.user.id,
-          clientCreateId: input.clientCreateId,
-          clientCreateDigest: digest,
-          status: 'active',
-          endReason: null,
-          mcpConfigHash: currentHash,
-          runtimeRowId: runtime.row.id,
-          runtimeName: runtime.row.name,
-          runtimeProtocol: runtime.row.protocol,
-          runtimeSnapshotJson: runtime.snapshotJson,
-          runtimeBinaryPath: runtime.binary,
-          runtimeSessionId,
-          nativeSessionState: 'pending',
-          inFlightTurnId: turnId,
-          turnSeq: 1,
-          sessionVersion: 1,
-          idleDeadlineAt: null,
-          scratchRoot,
-          cleanupState: 'not-started',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .run()
-      tx.insert(mcpRuntimeTestTurns)
-        .values({
-          id: turnId,
-          sessionId,
-          seq: 1,
-          clientMessageId: input.clientMessageId,
-          promptText: input.message,
-          status: 'queued',
-          hardDeadlineAt: now + MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
-          captureState: 'live',
-          createdAt: now,
-        })
-        .run()
-      tx.insert(mcpRuntimeTestCreateReceipts)
-        .values({
-          mcpId: mcp.id,
-          ownerUserId: actor.user.id,
-          clientCreateId: input.clientCreateId,
-          requestDigest: digest,
-          sessionId,
-          acceptedTurnId: turnId,
-          createdAt: now,
-          expiresAt: now + MCP_RUNTIME_TEST_RECEIPT_MS,
-        })
-        .run()
-      return { sessionId, acceptedTurnId: turnId, shouldQueue: true }
+    const receipt = await this.deps.persistence.create({
+      mcpId: mcp.id,
+      ownerUserId: actor.user.id,
+      clientCreateId: input.clientCreateId,
+      requestDigest: digest,
+      sessionId,
+      turnId,
+      mcpConfigHash: currentHash,
+      runtimeRowId: runtime.row.id,
+      runtimeName: runtime.row.name,
+      runtimeProtocol: runtime.row.protocol,
+      runtimeSnapshotJson: runtime.snapshotJson,
+      runtimeBinaryPath: runtime.binary,
+      runtimeSessionId,
+      scratchRoot,
+      message: input.message,
+      clientMessageId: input.clientMessageId,
+      now,
+      hardDeadlineAt: now + MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
+      receiptExpiresAt: now + MCP_RUNTIME_TEST_RECEIPT_MS,
     })
-    this.broadcastSession(receipt.sessionId)
+    await this.broadcastSession(receipt.sessionId)
     if (receipt.shouldQueue) this.enqueue({ sessionId, turnId })
     return { sessionId: receipt.sessionId, acceptedTurnId: receipt.acceptedTurnId }
   }
@@ -1009,19 +644,13 @@ export class McpRuntimeTestService {
     await this.start()
     this.assertAccepting()
     ensureMessage(input.message)
-    const session = this.requireSession(sessionId, mcp.id)
+    const session = await this.requireSession(sessionId, mcp.id)
     assertSessionActor(session, actor)
-    const replay = this.deps.db
-      .select()
-      .from(mcpRuntimeTestTurns)
-      .where(
-        and(
-          eq(mcpRuntimeTestTurns.sessionId, sessionId),
-          eq(mcpRuntimeTestTurns.clientMessageId, input.clientMessageId),
-        ),
-      )
-      .get()
-    if (replay !== undefined) {
+    const replay = await this.deps.persistence.findTurnByClientMessage(
+      sessionId,
+      input.clientMessageId,
+    )
+    if (replay !== null) {
       if (replay.promptText !== input.message) {
         throw new ConflictError(
           'mcp-test-idempotency-mismatch',
@@ -1055,112 +684,23 @@ export class McpRuntimeTestService {
 
     const now = this.now()
     const turnId = ulid()
-    const accepted = dbTxSync(this.deps.db, (tx) => {
-      const exactReplay = tx
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(
-          and(
-            eq(mcpRuntimeTestTurns.sessionId, sessionId),
-            eq(mcpRuntimeTestTurns.clientMessageId, input.clientMessageId),
-          ),
-        )
-        .get()
-      if (exactReplay !== undefined) {
-        if (exactReplay.promptText !== input.message) {
-          throw new ConflictError(
-            'mcp-test-idempotency-mismatch',
-            'clientMessageId was already used with a different message',
-          )
-        }
-        const replaySession = tx
-          .select({ version: mcpRuntimeTestSessions.sessionVersion })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, sessionId))
-          .get()
-        return {
-          turnId: exactReplay.id,
-          version: replaySession?.version ?? input.expectedSessionVersion,
-          shouldQueue: false,
-        }
-      }
-      const current = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .get()
-      if (current === undefined || current.mcpId !== mcp.id) {
-        throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
-      }
-      if (
-        current.status !== 'active' ||
-        current.inFlightTurnId !== null ||
-        current.nativeSessionState !== 'ready' ||
-        current.continuationBlockedReason !== null
-      ) {
-        throw new ConflictError(
-          'mcp-test-session-not-ready',
-          'the MCP test session cannot accept another message',
-          { sessionId, status: current.status, inFlightTurnId: current.inFlightTurnId },
-        )
-      }
-      if (current.idleDeadlineAt === null || current.idleDeadlineAt <= now) {
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason: 'idle-timeout',
-            idleDeadlineAt: null,
-            sessionVersion: current.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(eq(mcpRuntimeTestSessions.id, sessionId))
-          .run()
-        return { turnId: null, version: current.sessionVersion + 1, shouldQueue: false }
-      }
-      if (current.sessionVersion !== input.expectedSessionVersion) {
-        throw new ConflictError(
-          'mcp-test-session-version-stale',
-          'the MCP test session changed; reload before sending',
-          { currentSessionVersion: current.sessionVersion },
-        )
-      }
-      if (current.turnSeq >= MCP_RUNTIME_TEST_MAX_TURNS) {
-        throw new ConflictError(
-          'mcp-test-turn-limit',
-          `an MCP test session supports at most ${MCP_RUNTIME_TEST_MAX_TURNS} turns`,
-        )
-      }
-      const seq = current.turnSeq + 1
-      tx.insert(mcpRuntimeTestTurns)
-        .values({
-          id: turnId,
-          sessionId,
-          seq,
-          clientMessageId: input.clientMessageId,
-          promptText: input.message,
-          status: 'queued',
-          hardDeadlineAt: now + MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
-          captureState: 'live',
-          createdAt: now,
-        })
-        .run()
-      tx.update(mcpRuntimeTestSessions)
-        .set({
-          inFlightTurnId: turnId,
-          idleDeadlineAt: null,
-          turnSeq: seq,
-          sessionVersion: current.sessionVersion + 1,
-          updatedAt: now,
-        })
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .run()
-      return { turnId, version: current.sessionVersion + 1, shouldQueue: true }
+    const accepted = await this.deps.persistence.acceptMessage({
+      mcpId: mcp.id,
+      sessionId,
+      turnId,
+      clientMessageId: input.clientMessageId,
+      message: input.message,
+      expectedSessionVersion: input.expectedSessionVersion,
+      now,
+      hardDeadlineAt: now + MCP_RUNTIME_TEST_TURN_TIMEOUT_MS,
+      idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
+      maxTurns: MCP_RUNTIME_TEST_MAX_TURNS,
     })
     if (accepted.turnId === null) {
       await this.finishEndingSession(sessionId)
       throw new ConflictError('mcp-test-session-expired', 'the MCP test session expired')
     }
-    this.broadcastSession(sessionId)
+    await this.broadcastSession(sessionId)
     if (accepted.shouldQueue) this.enqueue({ sessionId, turnId: accepted.turnId })
     return {
       sessionId,
@@ -1176,83 +716,19 @@ export class McpRuntimeTestService {
     input: McpRuntimeTestCancelRequest,
   ): Promise<McpRuntimeTestMutationReceipt> {
     await this.start()
-    const initial = this.requireSession(sessionId, mcpId)
+    const initial = await this.requireSession(sessionId, mcpId)
     assertSessionActor(initial, actor)
     const now = this.now()
-    const result = dbTxSync(this.deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .get()
-      const turn = tx
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(
-          and(
-            eq(mcpRuntimeTestTurns.id, input.turnId),
-            eq(mcpRuntimeTestTurns.sessionId, sessionId),
-          ),
-        )
-        .get()
-      if (session === undefined || turn === undefined) {
-        throw new NotFoundError('mcp-test-turn-not-found', 'MCP test turn not found')
-      }
-      if (isTerminalTurn(turn.status)) return { abort: false, cleanup: false }
-      if (session.inFlightTurnId !== turn.id) {
-        throw new ConflictError('mcp-test-turn-not-current', 'the requested turn is not current')
-      }
-      if (turn.status === 'queued') {
-        tx.update(mcpRuntimeTestTurns)
-          .set({
-            status: 'canceled',
-            cancelRequestedAt: now,
-            captureState: 'complete',
-            finishedAt: now,
-            durationMs: 0,
-          })
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
-        if (canResumeNativeSession(session)) {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              inFlightTurnId: null,
-              idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-              sessionVersion: session.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .run()
-          return { abort: false, cleanup: false }
-        }
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason: 'session-unusable',
-            inFlightTurnId: null,
-            idleDeadlineAt: null,
-            nativeSessionState: 'unusable',
-            sessionVersion: session.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
-        return { abort: false, cleanup: true }
-      }
-      tx.update(mcpRuntimeTestTurns)
-        .set({ cancelRequestedAt: turn.cancelRequestedAt ?? now })
-        .where(eq(mcpRuntimeTestTurns.id, turn.id))
-        .run()
-      tx.update(mcpRuntimeTestSessions)
-        .set({ sessionVersion: session.sessionVersion + 1, updatedAt: now })
-        .where(eq(mcpRuntimeTestSessions.id, session.id))
-        .run()
-      return { abort: true, cleanup: false }
+    const result = await this.deps.persistence.cancel({
+      sessionId,
+      turnId: input.turnId,
+      now,
+      idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
     })
     if (result.abort) this.controllers.get(input.turnId)?.abort()
     if (result.cleanup) await this.finishEndingSession(sessionId)
     this.scheduleIdleTimer()
-    this.broadcastSession(sessionId)
+    await this.broadcastSession(sessionId)
     return { session: await this.get(actor, mcpId, sessionId) }
   }
 
@@ -1262,63 +738,10 @@ export class McpRuntimeTestService {
     sessionId: string,
   ): Promise<McpRuntimeTestMutationReceipt> {
     await this.start()
-    const initial = this.requireSession(sessionId, mcpId)
+    const initial = await this.requireSession(sessionId, mcpId)
     assertSessionActor(initial, actor)
     const now = this.now()
-    const transitioned = dbTxSync(this.deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .get()
-      if (session === undefined) {
-        throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
-      }
-      if (session.status === 'ended') return { turnId: null, cleanup: false }
-      if (session.status === 'ending') {
-        return { turnId: session.inFlightTurnId, cleanup: session.inFlightTurnId === null }
-      }
-      const turn =
-        session.inFlightTurnId === null
-          ? undefined
-          : tx
-              .select()
-              .from(mcpRuntimeTestTurns)
-              .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId))
-              .get()
-      let inFlightTurnId = session.inFlightTurnId
-      if (turn?.status === 'queued') {
-        tx.update(mcpRuntimeTestTurns)
-          .set({
-            status: 'interrupted',
-            cancelRequestedAt: now,
-            captureState: 'complete',
-            failureCode: 'mcp-test-ended',
-            finishedAt: now,
-            durationMs: 0,
-          })
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
-        inFlightTurnId = null
-      } else if (turn?.status === 'running') {
-        tx.update(mcpRuntimeTestTurns)
-          .set({ cancelRequestedAt: turn.cancelRequestedAt ?? now })
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
-      }
-      tx.update(mcpRuntimeTestSessions)
-        .set({
-          status: 'ending',
-          endReason: 'user',
-          inFlightTurnId,
-          idleDeadlineAt: null,
-          sessionVersion: session.sessionVersion + 1,
-          updatedAt: now,
-        })
-        .where(eq(mcpRuntimeTestSessions.id, session.id))
-        .run()
-      return { turnId: inFlightTurnId, cleanup: inFlightTurnId === null }
-    })
+    const transitioned = await this.deps.persistence.end({ sessionId, now })
     if (transitioned.turnId !== null) {
       this.controllers.get(transitioned.turnId)?.abort()
       await this.turnPromises.get(transitioned.turnId)
@@ -1326,70 +749,33 @@ export class McpRuntimeTestService {
     if (transitioned.cleanup || transitioned.turnId !== null) {
       await this.finishEndingSession(sessionId)
     }
-    this.broadcastSession(sessionId)
+    await this.broadcastSession(sessionId)
     return { session: await this.get(actor, mcpId, sessionId) }
   }
 
   async latest(actor: Actor, mcpId: string): Promise<McpRuntimeTestSessionDto | null> {
     await this.start()
     await this.reconcile()
-    const live = this.deps.db
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.mcpId, mcpId),
-          eq(mcpRuntimeTestSessions.ownerUserId, actor.user.id),
-          inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
-        ),
-      )
-      .orderBy(desc(mcpRuntimeTestSessions.updatedAt))
-      .limit(1)
-      .get()
-    const row =
-      live ??
-      this.deps.db
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.mcpId, mcpId),
-            eq(mcpRuntimeTestSessions.ownerUserId, actor.user.id),
-            eq(mcpRuntimeTestSessions.status, 'ended'),
-          ),
-        )
-        .orderBy(desc(mcpRuntimeTestSessions.updatedAt))
-        .limit(1)
-        .get()
-    return row === undefined ? null : this.project(row)
+    const row = await this.deps.persistence.findLatestSession(mcpId, actor.user.id)
+    return row === null ? null : this.project(row)
   }
 
   async get(actor: Actor, mcpId: string, sessionId: string): Promise<McpRuntimeTestSessionDto> {
     await this.start()
     await this.reconcile()
-    const row = this.requireSession(sessionId, mcpId)
+    const row = await this.requireSession(sessionId, mcpId)
     assertSessionActor(row, actor, true)
     return this.project(row)
   }
 
   async sessionView(actor: Actor, mcpId: string, sessionId: string): Promise<SessionViewResponse> {
     await this.start()
-    const session = this.requireSession(sessionId, mcpId)
+    const session = await this.requireSession(sessionId, mcpId)
     assertSessionActor(session, actor, true)
-    const turns = this.deps.db
-      .select()
-      .from(mcpRuntimeTestTurns)
-      .where(eq(mcpRuntimeTestTurns.sessionId, sessionId))
-      .orderBy(asc(mcpRuntimeTestTurns.seq))
-      .all()
-    const events = this.deps.db
-      .select()
-      .from(mcpRuntimeTestEvents)
-      .where(eq(mcpRuntimeTestEvents.testSessionId, sessionId))
-      .orderBy(asc(mcpRuntimeTestEvents.eventSeq))
-      .all()
+    const turns = await this.deps.persistence.listTurns(sessionId)
+    const events = await this.deps.persistence.listEvents(sessionId)
     const inputEvents: ParseSessionInputEvent[] = events.map((event) => ({
-      id: event.eventSeq,
+      id: event.id,
       ts: event.ts,
       kind: event.kind,
       payload: event.payload,
@@ -1417,35 +803,8 @@ export class McpRuntimeTestService {
   async invalidateMcp(mcpId: string, reason: McpRuntimeTestEndReason): Promise<void> {
     await this.start()
     const now = this.now()
-    const running = dbTxSync(this.deps.db, (tx) => {
-      const rows = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.mcpId, mcpId),
-            inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
-          ),
-        )
-        .all()
-      for (const row of rows) {
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason:
-              reason === 'mcp-deleted' || row.status === 'active'
-                ? reason
-                : (row.endReason ?? reason),
-            idleDeadlineAt: null,
-            sessionVersion: row.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(eq(mcpRuntimeTestSessions.id, row.id))
-          .run()
-      }
-      return rows.map((row) => ({ sessionId: row.id, turnId: row.inFlightTurnId }))
-    })
-    for (const row of running) this.broadcastSession(row.sessionId)
+    const running = await this.deps.persistence.invalidateMcp({ mcpId, reason, now })
+    for (const row of running) await this.broadcastSession(row.sessionId)
     await Promise.all(
       running.map(async ({ sessionId, turnId }) => {
         if (turnId !== null) {
@@ -1463,32 +822,8 @@ export class McpRuntimeTestService {
   ): Promise<void> {
     await this.start()
     const now = this.now()
-    const running = dbTxSync(this.deps.db, (tx) => {
-      const rows = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.ownerUserId, ownerUserId),
-            eq(mcpRuntimeTestSessions.status, 'active'),
-          ),
-        )
-        .all()
-      for (const row of rows) {
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason: reason,
-            idleDeadlineAt: null,
-            sessionVersion: row.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(eq(mcpRuntimeTestSessions.id, row.id))
-          .run()
-      }
-      return rows.map((row) => ({ sessionId: row.id, turnId: row.inFlightTurnId }))
-    })
-    for (const row of running) this.broadcastSession(row.sessionId)
+    const running = await this.deps.persistence.invalidateOwner({ ownerUserId, reason, now })
+    for (const row of running) await this.broadcastSession(row.sessionId)
     await Promise.all(
       running.map(async ({ sessionId, turnId }) => {
         if (turnId !== null) {
@@ -1508,110 +843,17 @@ export class McpRuntimeTestService {
   async markMcpConfigChanged(mcpId: string): Promise<void> {
     await this.start()
     const now = this.now()
-    const idleSessionIds = dbTxSync(this.deps.db, (tx) => {
-      const rows = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(eq(mcpRuntimeTestSessions.mcpId, mcpId), eq(mcpRuntimeTestSessions.status, 'active')),
-        )
-        .all()
-      const idle: string[] = []
-      for (const row of rows) {
-        if (row.inFlightTurnId === null) {
-          idle.push(row.id)
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              status: 'ending',
-              endReason: 'mcp-config-changed',
-              continuationBlockedReason: 'mcp-config-changed',
-              idleDeadlineAt: null,
-              sessionVersion: row.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
-        } else {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              continuationBlockedReason: 'mcp-config-changed',
-              sessionVersion: row.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
-        }
-      }
-      return idle
-    })
-    const changedSessionIds = this.deps.db
-      .select({ id: mcpRuntimeTestSessions.id })
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.mcpId, mcpId),
-          inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
-        ),
-      )
-      .all()
-    for (const row of changedSessionIds) this.broadcastSession(row.id)
-    for (const sessionId of idleSessionIds) await this.finishEndingSession(sessionId)
+    const changed = await this.deps.persistence.markMcpConfigChanged({ mcpId, now })
+    for (const sessionId of changed.changedSessionIds) await this.broadcastSession(sessionId)
+    for (const sessionId of changed.idleSessionIds) await this.finishEndingSession(sessionId)
   }
 
   async markRuntimeProfileChanged(runtimeName: string): Promise<void> {
     await this.start()
     const now = this.now()
-    const idleSessionIds = dbTxSync(this.deps.db, (tx) => {
-      const rows = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.runtimeName, runtimeName),
-            eq(mcpRuntimeTestSessions.status, 'active'),
-          ),
-        )
-        .all()
-      const idle: string[] = []
-      for (const row of rows) {
-        if (row.inFlightTurnId === null) {
-          idle.push(row.id)
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              status: 'ending',
-              endReason: 'runtime-profile-changed',
-              continuationBlockedReason: 'runtime-profile-changed',
-              idleDeadlineAt: null,
-              sessionVersion: row.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
-        } else {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              continuationBlockedReason: 'runtime-profile-changed',
-              sessionVersion: row.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, row.id))
-            .run()
-        }
-      }
-      return idle
-    })
-    const changedSessionIds = this.deps.db
-      .select({ id: mcpRuntimeTestSessions.id })
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.runtimeName, runtimeName),
-          inArray(mcpRuntimeTestSessions.status, ['active', 'ending']),
-        ),
-      )
-      .all()
-    for (const row of changedSessionIds) this.broadcastSession(row.id)
-    for (const sessionId of idleSessionIds) await this.finishEndingSession(sessionId)
+    const changed = await this.deps.persistence.markRuntimeProfileChanged({ runtimeName, now })
+    for (const sessionId of changed.changedSessionIds) await this.broadcastSession(sessionId)
+    for (const sessionId of changed.idleSessionIds) await this.finishEndingSession(sessionId)
   }
 
   async invalidateRuntime(
@@ -1620,35 +862,8 @@ export class McpRuntimeTestService {
   ): Promise<void> {
     await this.start()
     const now = this.now()
-    const rows = dbTxSync(this.deps.db, (tx) => {
-      const sessions = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.runtimeName, runtimeName),
-            eq(mcpRuntimeTestSessions.status, 'active'),
-          ),
-        )
-        .all()
-      for (const session of sessions) {
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason: reason,
-            idleDeadlineAt: null,
-            sessionVersion: session.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
-      }
-      return sessions.map((session) => ({
-        sessionId: session.id,
-        turnId: session.inFlightTurnId,
-      }))
-    })
-    for (const row of rows) this.broadcastSession(row.sessionId)
+    const rows = await this.deps.persistence.invalidateRuntime({ runtimeName, reason, now })
+    for (const row of rows) await this.broadcastSession(row.sessionId)
     for (const row of rows) {
       if (row.turnId !== null) {
         this.controllers.get(row.turnId)?.abort()
@@ -1666,23 +881,7 @@ export class McpRuntimeTestService {
   async prepareMcpDelete(mcpId: string): Promise<void> {
     await this.start()
     await this.invalidateMcp(mcpId, 'mcp-deleted')
-    const unsafe = this.deps.db
-      .select({
-        id: mcpRuntimeTestSessions.id,
-        status: mcpRuntimeTestSessions.status,
-        cleanupState: mcpRuntimeTestSessions.cleanupState,
-      })
-      .from(mcpRuntimeTestSessions)
-      .where(eq(mcpRuntimeTestSessions.mcpId, mcpId))
-      .all()
-      .find((session) => session.status !== 'ended' || session.cleanupState !== 'complete')
-    if (unsafe !== undefined) {
-      throw new ConflictError(
-        'mcp-test-cleanup-incomplete',
-        'an MCP runtime test could not be safely stopped',
-        { sessionId: unsafe.id },
-      )
-    }
+    await this.deps.persistence.assertMcpDeleteReady(mcpId)
   }
 
   async reconcile(): Promise<void> {
@@ -1704,104 +903,28 @@ export class McpRuntimeTestService {
     await this.reconcileDurableIntentsCore()
     await this.reconcileExpiredTurns()
     const now = this.now()
-    const expired = dbTxSync(this.deps.db, (tx) => {
-      const rows = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(
-          and(
-            eq(mcpRuntimeTestSessions.status, 'active'),
-            isNull(mcpRuntimeTestSessions.inFlightTurnId),
-            lte(mcpRuntimeTestSessions.idleDeadlineAt, now),
-          ),
-        )
-        .all()
-      for (const row of rows) {
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason: 'idle-timeout',
-            idleDeadlineAt: null,
-            sessionVersion: row.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(mcpRuntimeTestSessions.id, row.id),
-              eq(mcpRuntimeTestSessions.status, 'active'),
-              isNull(mcpRuntimeTestSessions.inFlightTurnId),
-            ),
-          )
-          .run()
-      }
-      return rows.map((row) => row.id)
-    })
+    const expired = await this.deps.persistence.expireIdle(now)
     for (const sessionId of expired) {
-      this.broadcastSession(sessionId)
+      await this.broadcastSession(sessionId)
       await this.finishEndingSession(sessionId)
     }
     await this.reconcileQuarantinedSessions()
-    const cleanupCandidates = this.deps.db
-      .select({ id: mcpRuntimeTestSessions.id })
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.status, 'ended'),
-          eq(mcpRuntimeTestSessions.cleanupState, 'pending'),
-        ),
-      )
-      .all()
-    for (const row of cleanupCandidates) await this.finishEndingSession(row.id)
+    const cleanupCandidates = await this.deps.persistence.listCleanupCandidates()
+    for (const sessionId of cleanupCandidates) await this.finishEndingSession(sessionId)
 
-    const expiredReceipts = this.deps.db
-      .select({
-        mcpId: mcpRuntimeTestCreateReceipts.mcpId,
-        ownerUserId: mcpRuntimeTestCreateReceipts.ownerUserId,
-        clientCreateId: mcpRuntimeTestCreateReceipts.clientCreateId,
-      })
-      .from(mcpRuntimeTestCreateReceipts)
-      .where(lte(mcpRuntimeTestCreateReceipts.expiresAt, now))
-      .all()
+    const expiredReceipts = await this.deps.persistence.listExpiredReceipts(now)
     for (const receipt of expiredReceipts) {
       const key = `${receipt.mcpId}\0${receipt.ownerUserId}\0${receipt.clientCreateId}`
       if (this.activeReceiptAttempts.has(key)) continue
-      this.deps.db
-        .delete(mcpRuntimeTestCreateReceipts)
-        .where(
-          and(
-            eq(mcpRuntimeTestCreateReceipts.mcpId, receipt.mcpId),
-            eq(mcpRuntimeTestCreateReceipts.ownerUserId, receipt.ownerUserId),
-            eq(mcpRuntimeTestCreateReceipts.clientCreateId, receipt.clientCreateId),
-            lte(mcpRuntimeTestCreateReceipts.expiresAt, now),
-          ),
-        )
-        .run()
+      await this.deps.persistence.deleteExpiredReceipt(receipt, now)
     }
     this.scheduleIdleTimer()
   }
 
   private async reconcileQuarantinedSessions(): Promise<void> {
-    const candidates = this.deps.db
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.status, 'ended'),
-          eq(mcpRuntimeTestSessions.cleanupState, 'quarantined'),
-        ),
-      )
-      .all()
-    for (const session of candidates) {
-      const turn = this.deps.db
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(
-          and(eq(mcpRuntimeTestTurns.sessionId, session.id), isNotNull(mcpRuntimeTestTurns.pid)),
-        )
-        .orderBy(desc(mcpRuntimeTestTurns.seq))
-        .limit(1)
-        .get()
-      if (turn === undefined || turn.pid === null) continue
+    const candidates = await this.deps.persistence.listQuarantinedCandidates()
+    for (const { session, turn } of candidates) {
+      if (turn === null || turn.pid === null) continue
       const outcome = await this.killStaleRunProcessTree(
         {
           pid: turn.pid,
@@ -1811,167 +934,54 @@ export class McpRuntimeTestService {
         { now: this.now() },
       )
       if (!['not-alive', 'killed'].includes(outcome)) continue
-      const recovered = dbTxSync(this.deps.db, (tx) => {
-        const currentSession = tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .get()
-        const currentTurn = tx
-          .select({ pid: mcpRuntimeTestTurns.pid })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .get()
-        if (
-          currentSession?.status !== 'ended' ||
-          currentSession.cleanupState !== 'quarantined' ||
-          currentTurn?.pid !== turn.pid
-        ) {
-          return false
-        }
-        tx.update(mcpRuntimeTestTurns)
-          .set({ pid: null })
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            cleanupState: 'pending',
-            cleanupErrorCode: null,
-            sessionVersion: currentSession.sessionVersion + 1,
-            updatedAt: this.now(),
-          })
-          .where(eq(mcpRuntimeTestSessions.id, currentSession.id))
-          .run()
-        return true
+      const recovered = await this.deps.persistence.recoverQuarantined({
+        sessionId: session.id,
+        turnId: turn.id,
+        expectedPid: turn.pid,
+        now: this.now(),
       })
       if (!recovered) continue
-      repairMcpRuntimeTestSessionLeaseAfterReap(this.deps.db, session.id, turn.id, true)
-      this.broadcastSession(session.id)
+      await repairMcpRuntimeTestSessionLeaseAfterReap(
+        this.deps.leaseOperations,
+        session.id,
+        turn.id,
+        true,
+      )
+      await this.broadcastSession(session.id)
       await this.finishEndingSession(session.id)
     }
   }
 
   private async reconcileExpiredTurns(): Promise<void> {
     const now = this.now()
-    const expired = dbTxSync(this.deps.db, (tx) => {
-      const turns = tx
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(
-          and(
-            inArray(mcpRuntimeTestTurns.status, ['queued', 'running']),
-            lte(mcpRuntimeTestTurns.hardDeadlineAt, now),
-          ),
-        )
-        .all()
-      const settled: Array<{ sessionId: string; turnId: string; end: boolean }> = []
-      const abort: Array<{ sessionId: string; turnId: string }> = []
-      for (const turn of turns) {
-        const session = tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, turn.sessionId))
-          .get()
-        if (session?.status !== 'active' || session.inFlightTurnId !== turn.id) {
-          continue
-        }
-        if (turn.status === 'running') {
-          if (turn.cancelRequestedAt === null || turn.failureCode !== 'mcp-test-turn-timeout') {
-            tx.update(mcpRuntimeTestTurns)
-              .set({
-                cancelRequestedAt: turn.cancelRequestedAt ?? now,
-                failureCode: 'mcp-test-turn-timeout',
-              })
-              .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .run()
-            tx.update(mcpRuntimeTestSessions)
-              .set({
-                sessionVersion: session.sessionVersion + 1,
-                updatedAt: now,
-              })
-              .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .run()
-          }
-          abort.push({ sessionId: session.id, turnId: turn.id })
-          continue
-        }
-
-        tx.update(mcpRuntimeTestTurns)
-          .set({
-            status: 'timed_out',
-            captureState: 'complete',
-            captureIncompleteReason: null,
-            failureCode: 'mcp-test-turn-timeout',
-            finishedAt: now,
-            durationMs: Math.max(0, now - turn.createdAt),
-          })
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
-        const resumable = canResumeNativeSession(session)
-        tx.update(mcpRuntimeTestSessions)
-          .set(
-            resumable
-              ? {
-                  inFlightTurnId: null,
-                  idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-                  sessionVersion: session.sessionVersion + 1,
-                  updatedAt: now,
-                }
-              : {
-                  status: 'ending',
-                  endReason: 'session-unusable',
-                  nativeSessionState: 'unusable',
-                  continuationBlockedReason: session.continuationBlockedReason,
-                  inFlightTurnId: null,
-                  idleDeadlineAt: null,
-                  sessionVersion: session.sessionVersion + 1,
-                  updatedAt: now,
-                },
-          )
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
-        settled.push({ sessionId: session.id, turnId: turn.id, end: !resumable })
-      }
-      return { settled, abort }
-    })
+    const expired = await this.deps.persistence.expireTurns(now, now + MCP_RUNTIME_TEST_IDLE_MS)
 
     for (const row of expired.settled) {
       this.queued.delete(row.turnId)
       const index = this.queue.findIndex((item) => item.turnId === row.turnId)
       if (index >= 0) this.queue.splice(index, 1)
-      this.broadcastSession(row.sessionId)
+      await this.broadcastSession(row.sessionId)
       if (row.end) await this.finishEndingSession(row.sessionId)
     }
     for (const row of expired.abort) {
-      this.broadcastSession(row.sessionId)
+      await this.broadcastSession(row.sessionId)
       this.controllers.get(row.turnId)?.abort()
     }
   }
 
   private async reconcileDurableIntentsCore(awaitRunning = false): Promise<void> {
-    const candidates = this.deps.db
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
-      .all()
-      .filter(
-        (session) => session.status === 'ending' || session.continuationBlockedReason !== null,
-      )
+    const candidates = await this.deps.persistence.listDurableIntentCandidates()
 
     for (const snapshot of candidates) {
-      this.broadcastSession(snapshot.id)
+      await this.broadcastSession(snapshot.id)
       if (snapshot.status !== 'ending') continue
       if (snapshot.inFlightTurnId === null) {
         await this.finishEndingSession(snapshot.id)
         continue
       }
 
-      const turn = this.deps.db
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, snapshot.inFlightTurnId))
-        .get()
-      if (turn === undefined) {
+      const turn = await this.deps.persistence.loadTurn(snapshot.inFlightTurnId)
+      if (turn === null) {
         this.log.error('mcp-test-durable-intent-missing-turn', {
           sessionId: snapshot.id,
           turnId: snapshot.inFlightTurnId,
@@ -1984,58 +994,19 @@ export class McpRuntimeTestService {
         const queuedIndex = this.queue.findIndex((item) => item.turnId === turn.id)
         if (queuedIndex >= 0) this.queue.splice(queuedIndex, 1)
         const now = this.now()
-        dbTxSync(this.deps.db, (tx) => {
-          const currentSession = tx
-            .select()
-            .from(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, snapshot.id))
-            .get()
-          const currentTurn = tx
-            .select()
-            .from(mcpRuntimeTestTurns)
-            .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .get()
-          if (
-            currentSession?.status !== 'ending' ||
-            currentSession.inFlightTurnId !== turn.id ||
-            currentTurn?.status !== 'queued'
-          ) {
-            return
-          }
-          tx.update(mcpRuntimeTestTurns)
-            .set({
-              status: 'interrupted',
-              cancelRequestedAt: now,
-              captureState: 'complete',
-              failureCode: `mcp-test-${currentSession.endReason ?? 'invalidated'}`,
-              finishedAt: now,
-              durationMs: 0,
-            })
-            .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .run()
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              inFlightTurnId: null,
-              sessionVersion: currentSession.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, currentSession.id))
-            .run()
+        await this.deps.persistence.settleQueuedDurableIntent({
+          sessionId: snapshot.id,
+          turnId: turn.id,
+          now,
         })
-        this.broadcastSession(snapshot.id)
+        await this.broadcastSession(snapshot.id)
         await this.finishEndingSession(snapshot.id)
         continue
       }
 
       if (turn.status === 'running') {
         const now = this.now()
-        this.deps.db
-          .update(mcpRuntimeTestTurns)
-          .set({ cancelRequestedAt: turn.cancelRequestedAt ?? now })
-          .where(
-            and(eq(mcpRuntimeTestTurns.id, turn.id), eq(mcpRuntimeTestTurns.status, 'running')),
-          )
-          .run()
+        await this.deps.persistence.requestRunningTurnCancel(turn.id, now)
         const promise = this.turnPromises.get(turn.id)
         this.controllers.get(turn.id)?.abort()
         if (promise !== undefined && awaitRunning) {
@@ -2051,48 +1022,27 @@ export class McpRuntimeTestService {
       }
 
       const now = this.now()
-      dbTxSync(this.deps.db, (tx) => {
-        const current = tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, snapshot.id))
-          .get()
-        if (current?.status !== 'ending' || current.inFlightTurnId !== turn.id) {
-          return
-        }
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            inFlightTurnId: null,
-            sessionVersion: current.sessionVersion + 1,
-            updatedAt: now,
-          })
-          .where(eq(mcpRuntimeTestSessions.id, current.id))
-          .run()
+      await this.deps.persistence.clearTerminalDurableIntent({
+        sessionId: snapshot.id,
+        turnId: turn.id,
+        now,
       })
-      this.broadcastSession(snapshot.id)
+      await this.broadcastSession(snapshot.id)
       await this.finishEndingSession(snapshot.id)
     }
   }
 
   private async bootRecover(): Promise<void> {
-    const sessions = this.deps.db
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(inArray(mcpRuntimeTestSessions.status, ['active', 'ending']))
-      .all()
+    const sessions = await this.deps.persistence.listBootSessions()
     for (const session of sessions) {
       const capability = getRuntimeDriver(session.runtimeProtocol).mcpTestSessionReference
       if (session.inFlightTurnId === null) {
         if (session.status === 'ending') await this.finishEndingSession(session.id)
         continue
       }
-      const turn = this.deps.db
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId))
-        .get()
+      const turn = await this.deps.persistence.loadTurn(session.inFlightTurnId)
       let reapOutcome: StaleRunKillOutcome | 'missing-turn' = 'no-pid'
-      if (turn === undefined) {
+      if (turn === null) {
         reapOutcome = 'missing-turn'
       } else if (turn.status === 'running' || turn.pid !== null) {
         reapOutcome = await this.killStaleRunProcessTree(
@@ -2114,7 +1064,7 @@ export class McpRuntimeTestService {
         reapOutcome === 'kill-failed' ||
         (!queuedWithoutChild && !childReapProven)
       const captureComplete =
-        queuedWithoutChild || (turn !== undefined && turn.captureState === 'complete')
+        queuedWithoutChild || (turn !== null && turn.captureState === 'complete')
       const resumable =
         capability !== undefined &&
         !quarantine &&
@@ -2123,83 +1073,24 @@ export class McpRuntimeTestService {
         captureComplete &&
         existsSync(session.scratchRoot)
       const now = this.now()
-      dbTxSync(this.deps.db, (tx) => {
-        const current = tx
-          .select()
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .get()
-        if (
-          current === undefined ||
-          current.inFlightTurnId !== session.inFlightTurnId ||
-          !['active', 'ending'].includes(current.status)
-        ) {
-          return
-        }
-        const currentTurn = tx
-          .select()
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, session.inFlightTurnId!))
-          .get()
-        if (currentTurn !== undefined && !isTerminalTurn(currentTurn.status)) {
-          tx.update(mcpRuntimeTestTurns)
-            .set({
-              status: 'interrupted',
-              captureState:
-                currentTurn.status === 'queued' || currentTurn.captureState === 'complete'
-                  ? 'complete'
-                  : 'incomplete',
-              captureIncompleteReason:
-                currentTurn.status === 'queued' || currentTurn.captureState === 'complete'
-                  ? null
-                  : 'post-exit-flush-timeout',
-              failureCode: 'mcp-test-daemon-restarted',
-              pid: quarantine ? currentTurn.pid : null,
-              finishedAt: now,
-              durationMs:
-                currentTurn.startedAt === null ? 0 : Math.max(0, now - currentTurn.startedAt),
-            })
-            .where(eq(mcpRuntimeTestTurns.id, currentTurn.id))
-            .run()
-        }
-        if (resumable) {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              inFlightTurnId: null,
-              idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-              sessionVersion: current.sessionVersion + 1,
-              updatedAt: now,
-            })
-            .where(eq(mcpRuntimeTestSessions.id, current.id))
-            .run()
-        } else {
-          tx.update(mcpRuntimeTestSessions)
-            .set({
-              status: 'ending',
-              endReason: current.endReason ?? 'session-unusable',
-              nativeSessionState: 'unusable',
-              continuationBlockedReason:
-                current.continuationBlockedReason ??
-                (current.nativeSessionState === 'ready' ? 'capture-incomplete' : null),
-              inFlightTurnId: null,
-              idleDeadlineAt: null,
-              sessionVersion: current.sessionVersion + 1,
-              updatedAt: now,
-              ...(quarantine
-                ? {
-                    cleanupState: 'quarantined' as const,
-                    cleanupErrorCode: `mcp-test-boot-reap-${reapOutcome}`,
-                  }
-                : {}),
-            })
-            .where(eq(mcpRuntimeTestSessions.id, current.id))
-            .run()
-        }
+      await this.deps.persistence.recoverBootSession({
+        sessionId: session.id,
+        expectedTurnId: session.inFlightTurnId,
+        resumable,
+        quarantine,
+        reapOutcome,
+        now,
+        idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
       })
-      if (turn !== undefined && childReapProven) {
-        repairMcpRuntimeTestSessionLeaseAfterReap(this.deps.db, session.id, turn.id, true)
+      if (turn !== null && childReapProven) {
+        await repairMcpRuntimeTestSessionLeaseAfterReap(
+          this.deps.leaseOperations,
+          session.id,
+          turn.id,
+          true,
+        )
       }
-      this.broadcastSession(session.id)
+      await this.broadcastSession(session.id)
       if (quarantine) {
         this.log.error('mcp-test-boot-reap-unproven', {
           sessionId: session.id,
@@ -2219,7 +1110,7 @@ export class McpRuntimeTestService {
   private async resolveRuntime(name: string | null): Promise<ResolvedTestRuntime> {
     const config = loadConfig(this.deps.configPath)
     const selected = name ?? config.defaultRuntime ?? 'opencode'
-    const row = await getRuntime(this.deps.db, selected)
+    const row = await this.deps.loadRuntime(selected)
     if (row === null) {
       throw new ValidationError(
         'mcp-test-runtime-not-found',
@@ -2263,33 +1154,17 @@ export class McpRuntimeTestService {
     return { row, driver, binary, snapshotJson }
   }
 
-  private requireSession(sessionId: string, mcpId: string): SessionRow {
-    const row = this.deps.db
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(and(eq(mcpRuntimeTestSessions.id, sessionId), eq(mcpRuntimeTestSessions.mcpId, mcpId)))
-      .get()
-    if (row === undefined) {
+  private async requireSession(sessionId: string, mcpId: string): Promise<SessionRow> {
+    const row = await this.deps.persistence.loadSession(sessionId, mcpId)
+    if (row === null) {
       throw new NotFoundError('mcp-test-session-not-found', 'MCP test session not found')
     }
     return row
   }
 
-  private project(row: SessionRow): McpRuntimeTestSessionDto {
-    const turns = this.deps.db
-      .select()
-      .from(mcpRuntimeTestTurns)
-      .where(eq(mcpRuntimeTestTurns.sessionId, row.id))
-      .orderBy(asc(mcpRuntimeTestTurns.seq))
-      .all()
-    const cursor =
-      this.deps.db
-        .select({ seq: mcpRuntimeTestEvents.eventSeq })
-        .from(mcpRuntimeTestEvents)
-        .where(eq(mcpRuntimeTestEvents.testSessionId, row.id))
-        .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
-        .limit(1)
-        .get()?.seq ?? 0
+  private async project(row: SessionRow): Promise<McpRuntimeTestSessionDto> {
+    const turns = await this.deps.persistence.listTurns(row.id)
+    const cursor = await this.deps.persistence.latestEventSequence(row.id)
     return McpRuntimeTestSessionDtoSchema.parse({
       id: row.id,
       mcpId: row.mcpId,
@@ -2324,42 +1199,9 @@ export class McpRuntimeTestService {
     })
   }
 
-  private broadcastSession(sessionId: string): void {
-    const session = this.deps.db
-      .select({
-        ownerUserId: mcpRuntimeTestSessions.ownerUserId,
-        sessionVersion: mcpRuntimeTestSessions.sessionVersion,
-        inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-      })
-      .from(mcpRuntimeTestSessions)
-      .where(eq(mcpRuntimeTestSessions.id, sessionId))
-      .get()
-    if (session === undefined) return
-    const turn = this.deps.db
-      .select({
-        status: mcpRuntimeTestTurns.status,
-        captureState: mcpRuntimeTestTurns.captureState,
-      })
-      .from(mcpRuntimeTestTurns)
-      .where(
-        session.inFlightTurnId === null
-          ? eq(mcpRuntimeTestTurns.sessionId, sessionId)
-          : and(
-              eq(mcpRuntimeTestTurns.sessionId, sessionId),
-              eq(mcpRuntimeTestTurns.id, session.inFlightTurnId),
-            ),
-      )
-      .orderBy(desc(mcpRuntimeTestTurns.seq))
-      .limit(1)
-      .get()
-    const eventCursor =
-      this.deps.db
-        .select({ seq: mcpRuntimeTestEvents.eventSeq })
-        .from(mcpRuntimeTestEvents)
-        .where(eq(mcpRuntimeTestEvents.testSessionId, sessionId))
-        .orderBy(desc(mcpRuntimeTestEvents.eventSeq))
-        .limit(1)
-        .get()?.seq ?? 0
+  private async broadcastSession(sessionId: string): Promise<void> {
+    const session = await this.deps.persistence.loadBroadcastSnapshot(sessionId)
+    if (session === null) return
     mcpRuntimeTestsBroadcaster.broadcast(
       MCP_RUNTIME_TESTS_CHANNEL,
       {
@@ -2367,9 +1209,9 @@ export class McpRuntimeTestService {
         sessionId,
         sessionVersion: session.sessionVersion,
         inFlightTurnId: session.inFlightTurnId,
-        turnStatus: turn?.status ?? null,
-        eventCursor,
-        captureState: turn?.captureState ?? null,
+        turnStatus: session.turnStatus,
+        eventCursor: session.eventCursor,
+        captureState: session.captureState,
       },
       {
         kind: 'mcp-runtime-test-owner',
@@ -2412,84 +1254,22 @@ export class McpRuntimeTestService {
 
   private async executeTurn(item: QueueItem): Promise<void> {
     const now = this.now()
-    const admitted = dbTxSync(this.deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, item.sessionId))
-        .get()
-      const turn = tx
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, item.turnId))
-        .get()
-      if (
-        session === undefined ||
-        turn === undefined ||
-        session.status !== 'active' ||
-        session.inFlightTurnId !== turn.id ||
-        turn.status !== 'queued'
-      ) {
-        return null
-      }
-      if (turn.hardDeadlineAt <= now) {
-        const resumable = canResumeNativeSession(session)
-        tx.update(mcpRuntimeTestTurns)
-          .set({
-            status: 'timed_out',
-            captureState: 'complete',
-            failureCode: 'mcp-test-turn-timeout',
-            finishedAt: now,
-            durationMs: now - turn.createdAt,
-          })
-          .where(eq(mcpRuntimeTestTurns.id, turn.id))
-          .run()
-        tx.update(mcpRuntimeTestSessions)
-          .set(
-            resumable
-              ? {
-                  inFlightTurnId: null,
-                  idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-                  sessionVersion: session.sessionVersion + 1,
-                  updatedAt: now,
-                }
-              : {
-                  status: 'ending',
-                  endReason: 'session-unusable',
-                  inFlightTurnId: null,
-                  idleDeadlineAt: null,
-                  nativeSessionState: 'unusable',
-                  sessionVersion: session.sessionVersion + 1,
-                  updatedAt: now,
-                },
-          )
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
-        return null
-      }
-      tx.update(mcpRuntimeTestTurns)
-        .set({ status: 'running', startedAt: now })
-        .where(eq(mcpRuntimeTestTurns.id, turn.id))
-        .run()
-      return { session, turn: { ...turn, status: 'running' as const } }
+    const admitted = await this.deps.persistence.admitTurn({
+      sessionId: item.sessionId,
+      turnId: item.turnId,
+      now,
+      idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
     })
     if (admitted === null) {
-      const current = this.deps.db
-        .select({
-          status: mcpRuntimeTestSessions.status,
-          inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-        })
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, item.sessionId))
-        .get()
+      const current = await this.deps.persistence.loadSession(item.sessionId)
       if (current?.status === 'ending') await this.finishEndingSession(item.sessionId)
       else if (current?.status === 'active' && current.inFlightTurnId === null) {
-        this.broadcastSession(item.sessionId)
+        await this.broadcastSession(item.sessionId)
         this.scheduleIdleTimer()
       }
       return
     }
-    this.broadcastSession(item.sessionId)
+    await this.broadcastSession(item.sessionId)
 
     const controller = new AbortController()
     this.controllers.set(item.turnId, controller)
@@ -2522,10 +1302,10 @@ export class McpRuntimeTestService {
       stableJson({ sessionId: session.id, turnId: turn.id, nonce: ulid() }),
     )
     let nativeLease: McpRuntimeTestLeaseToken | undefined
-    const claimNativeSession = (
+    const claimNativeSession = async (
       runtimeSessionId: string,
       previousRuntimeSessionId?: string,
-    ): void => {
+    ): Promise<void> => {
       if (previousRuntimeSessionId !== undefined) {
         if (
           nativeLease === undefined ||
@@ -2533,7 +1313,11 @@ export class McpRuntimeTestService {
         ) {
           throw new Error('runtime conversation reset did not match the held native session')
         }
-        nativeLease = rotateMcpRuntimeTestSessionLease(this.deps.db, nativeLease, runtimeSessionId)
+        nativeLease = await rotateMcpRuntimeTestSessionLease(
+          this.deps.leaseOperations,
+          nativeLease,
+          runtimeSessionId,
+        )
         return
       }
       if (nativeLease !== undefined) {
@@ -2542,7 +1326,7 @@ export class McpRuntimeTestService {
         }
         return
       }
-      nativeLease = claimNewMcpRuntimeTestSessionLease(this.deps.db, {
+      nativeLease = await claimNewMcpRuntimeTestSessionLease(this.deps.leaseOperations, {
         protocol: session.runtimeProtocol,
         runtimeSessionId,
         testSessionId: session.id,
@@ -2554,14 +1338,14 @@ export class McpRuntimeTestService {
       if (session.runtimeSessionId !== null) {
         nativeLease =
           turn.seq === 1
-            ? claimNewMcpRuntimeTestSessionLease(this.deps.db, {
+            ? await claimNewMcpRuntimeTestSessionLease(this.deps.leaseOperations, {
                 protocol: session.runtimeProtocol,
                 runtimeSessionId: session.runtimeSessionId,
                 testSessionId: session.id,
                 turnId: turn.id,
                 leaseNonceDigest,
               })
-            : preclaimMcpRuntimeTestSessionLease(this.deps.db, {
+            : await preclaimMcpRuntimeTestSessionLease(this.deps.leaseOperations, {
                 protocol: session.runtimeProtocol,
                 runtimeSessionId: session.runtimeSessionId,
                 testSessionId: session.id,
@@ -2575,40 +1359,19 @@ export class McpRuntimeTestService {
     }
 
     const sink = new McpRuntimeTestEventSink(
-      this.deps.db,
+      this.deps.persistence,
       item,
-      () => this.broadcastSession(item.sessionId),
+      () => void this.broadcastSession(item.sessionId),
       claimNativeSession,
     )
     const timeoutMs = Math.max(1, turn.hardDeadlineAt - this.now())
     let result: SystemAgentRunResult
     try {
-      const assertSpawnAllowed = (): void => {
-        const allowed = dbTxSync(this.deps.db, (tx) => {
-          const currentSession = tx
-            .select({
-              status: mcpRuntimeTestSessions.status,
-              inFlightTurnId: mcpRuntimeTestSessions.inFlightTurnId,
-            })
-            .from(mcpRuntimeTestSessions)
-            .where(eq(mcpRuntimeTestSessions.id, session.id))
-            .get()
-          const currentTurn = tx
-            .select({
-              status: mcpRuntimeTestTurns.status,
-              cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-              hardDeadlineAt: mcpRuntimeTestTurns.hardDeadlineAt,
-            })
-            .from(mcpRuntimeTestTurns)
-            .where(eq(mcpRuntimeTestTurns.id, turn.id))
-            .get()
-          return (
-            currentSession?.status === 'active' &&
-            currentSession.inFlightTurnId === turn.id &&
-            currentTurn?.status === 'running' &&
-            currentTurn.cancelRequestedAt === null &&
-            currentTurn.hardDeadlineAt > this.now()
-          )
+      const assertSpawnAllowed = async (): Promise<void> => {
+        const allowed = await this.deps.persistence.isSpawnAllowed({
+          sessionId: session.id,
+          turnId: turn.id,
+          now: this.now(),
         })
         if (!allowed) throw new Error('mcp-test-spawn-no-longer-admitted')
       }
@@ -2638,7 +1401,6 @@ export class McpRuntimeTestService {
           ? {
               // In-process fake runs (fixture runFn): no real assembly.
               testPlanOverride: (): SpawnPlan => {
-                assertSpawnAllowed()
                 return {
                   cmd: [runtime.binary],
                   env: {},
@@ -2655,7 +1417,6 @@ export class McpRuntimeTestService {
                 worktreePath: string
                 runDir: string
               }): AgentSpawnContext => {
-                assertSpawnAllowed()
                 const turnRunRoot = join(runDir, 'turns', turn.id)
                 // RFC-284 T13（审计 N4）：手写二元 cast 会绕开 shared 的
                 // RuntimeKind 完备性设计（新增第三 kind 编译照过、运行时
@@ -2714,51 +1475,19 @@ export class McpRuntimeTestService {
                 },
                 beforeSpawn: async () => {
                   await basePlan.beforeSpawn?.()
-                  assertSpawnAllowed()
+                  await assertSpawnAllowed()
                 },
               }),
             }),
         onSpawned: async (receipt) => {
           const spawnedFenceAt = this.now()
-          const admittedForPrompt = dbTxSync(this.deps.db, (tx) => {
-            const currentSession = tx
-              .select()
-              .from(mcpRuntimeTestSessions)
-              .where(eq(mcpRuntimeTestSessions.id, session.id))
-              .get()
-            const currentTurn = tx
-              .select()
-              .from(mcpRuntimeTestTurns)
-              .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .get()
-            if (currentSession === undefined || currentTurn === undefined) {
-              throw new Error('mcp-test-spawn-receipt-owner-missing')
-            }
-            tx.update(mcpRuntimeTestTurns)
-              .set({
-                pid: receipt.pid,
-                spawnedAt: receipt.spawnedAt,
-                spawnBinaryPath: receipt.spawnBinaryPath,
-              })
-              .where(eq(mcpRuntimeTestTurns.id, turn.id))
-              .run()
-            const expired = currentTurn.hardDeadlineAt <= spawnedFenceAt
-            if (expired) {
-              tx.update(mcpRuntimeTestTurns)
-                .set({
-                  cancelRequestedAt: currentTurn.cancelRequestedAt ?? spawnedFenceAt,
-                  failureCode: 'mcp-test-turn-timeout',
-                })
-                .where(eq(mcpRuntimeTestTurns.id, turn.id))
-                .run()
-            }
-            return (
-              currentSession.status === 'active' &&
-              currentSession.inFlightTurnId === turn.id &&
-              currentTurn.status === 'running' &&
-              currentTurn.cancelRequestedAt === null &&
-              !expired
-            )
+          const admittedForPrompt = await this.deps.persistence.recordSpawn({
+            sessionId: session.id,
+            turnId: turn.id,
+            pid: receipt.pid,
+            spawnedAt: receipt.spawnedAt,
+            spawnBinaryPath: receipt.spawnBinaryPath,
+            fenceAt: spawnedFenceAt,
           })
           if (!admittedForPrompt) throw new Error('mcp-test-spawn-canceled-before-prompt')
         },
@@ -2808,7 +1537,10 @@ export class McpRuntimeTestService {
       verification = verifyStartup(result.declared, observation)
     }
     if (nativeLease !== undefined && result.status !== 'unreaped') {
-      const released = releaseMcpRuntimeTestSessionLease(this.deps.db, nativeLease)
+      const released = await releaseMcpRuntimeTestSessionLease(
+        this.deps.leaseOperations,
+        nativeLease,
+      )
       if (!released) {
         this.log.warn('mcp runtime test session lease release missed', {
           sessionId: session.id,
@@ -2820,8 +1552,7 @@ export class McpRuntimeTestService {
   }
 
   private async loadMcpForRun(mcpId: string): Promise<Mcp | null> {
-    const { getMcpById } = await import('@/services/mcp')
-    return getMcpById(this.deps.db, mcpId)
+    return this.deps.loadMcp(mcpId)
   }
 
   private async failBeforeRun(
@@ -2830,36 +1561,12 @@ export class McpRuntimeTestService {
     endReason: McpRuntimeTestEndReason,
   ): Promise<void> {
     const now = this.now()
-    dbTxSync(this.deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, item.sessionId))
-        .get()
-      if (session === undefined) return
-      if (session.status === 'ended') return
-      const ending = session.status === 'ending'
-      tx.update(mcpRuntimeTestTurns)
-        .set({
-          status: ending ? 'interrupted' : 'failed',
-          captureState: 'complete',
-          failureCode:
-            ending && session.endReason !== null ? `mcp-test-${session.endReason}` : failureCode,
-          finishedAt: now,
-        })
-        .where(eq(mcpRuntimeTestTurns.id, item.turnId))
-        .run()
-      tx.update(mcpRuntimeTestSessions)
-        .set({
-          status: 'ending',
-          endReason: session.endReason ?? endReason,
-          inFlightTurnId: null,
-          idleDeadlineAt: null,
-          sessionVersion: session.sessionVersion + 1,
-          updatedAt: now,
-        })
-        .where(eq(mcpRuntimeTestSessions.id, item.sessionId))
-        .run()
+    await this.deps.persistence.failBeforeRun({
+      sessionId: item.sessionId,
+      turnId: item.turnId,
+      failureCode,
+      endReason,
+      now,
     })
     await this.finishEndingSession(item.sessionId)
   }
@@ -2871,129 +1578,38 @@ export class McpRuntimeTestService {
     verification?: StartupVerificationResult,
   ): Promise<void> {
     const now = this.now()
-    const shouldCleanup = dbTxSync(this.deps.db, (tx) => {
-      const session = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, originalSession.id))
-        .get()
-      const turn = tx
-        .select()
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, originalTurn.id))
-        .get()
-      if (session === undefined || turn === undefined || isTerminalTurn(turn.status)) {
-        return session?.status === 'ending'
-      }
-
-      let nativeState = session.nativeSessionState
-      let nativeSessionId = session.runtimeSessionId
-      let blocked = session.continuationBlockedReason
-      const childUnreaped = result.status === 'unreaped'
-      const captured = result.capturedSessionId
-      if (result.nativeSessionIntegrityFailed === true) {
-        nativeState = 'unusable'
-        blocked ??= 'capture-incomplete'
-      } else if (captured !== undefined) {
-        if (nativeSessionId !== null && nativeSessionId !== captured) {
-          nativeState = 'unusable'
-        } else {
-          nativeSessionId = captured
-          nativeState = 'ready'
-        }
-      } else if (originalTurn.seq === 1) {
-        nativeState = 'unusable'
-      }
-      if (childUnreaped) {
-        nativeState = 'unusable'
-        blocked ??= 'capture-incomplete'
-      }
-      const verdict = applyPlaygroundVerification(
-        resultTurnStatus(
-          result,
-          turn.cancelRequestedAt !== null,
-          session.status === 'ending',
-          turn.failureCode,
-        ),
-        resultFailureCode(result, turn.failureCode),
-        verification,
-      )
-      const turnStatus = verdict.turnStatus
-      const turnFailureCode = verdict.failureCode
-      tx.update(mcpRuntimeTestTurns)
-        .set({
-          status: turnStatus,
-          exitCode: result.exitCode,
-          failureCode: turnFailureCode,
-          stderrTail:
-            result.stderrTail === ''
-              ? null
-              : result.stderrTail.slice(Math.max(0, result.stderrTail.length - STDERR_TAIL_BYTES)),
-          durationMs: result.durationMs,
-          finishedAt: now,
-          pid: childUnreaped ? turn.pid : null,
-        })
-        .where(eq(mcpRuntimeTestTurns.id, turn.id))
-        .run()
-
-      const captureBlocked = turn.captureState === 'truncated' || turn.captureState === 'incomplete'
-      const mustEnd =
-        session.status === 'ending' || nativeState !== 'ready' || blocked !== null || captureBlocked
-      if (mustEnd) {
-        const reasonFromBlock =
-          blocked === 'mcp-config-changed'
-            ? 'mcp-config-changed'
-            : blocked === 'runtime-profile-changed'
-              ? 'runtime-profile-changed'
-              : 'session-unusable'
-        // Identity integrity is an admission failure, while captureState
-        // describes evidence quality. Keep both facts, but do not present a
-        // native ownership contradiction as a generic capture interruption.
-        const reason =
-          session.endReason ??
-          (result.nativeSessionIntegrityFailed === true
-            ? 'session-unusable'
-            : captureBlocked
-              ? turn.captureState === 'truncated'
-                ? 'capture-truncated'
-                : 'capture-incomplete'
-              : reasonFromBlock)
-        tx.update(mcpRuntimeTestSessions)
-          .set({
-            status: 'ending',
-            endReason: reason,
-            runtimeSessionId: nativeSessionId,
-            nativeSessionState: nativeState,
-            continuationBlockedReason: blocked,
-            inFlightTurnId: null,
-            idleDeadlineAt: null,
-            sessionVersion: session.sessionVersion + 1,
-            updatedAt: now,
-            ...(childUnreaped
-              ? {
-                  cleanupState: 'quarantined' as const,
-                  cleanupErrorCode: 'mcp-test-child-unreaped',
-                }
-              : {}),
-          })
-          .where(eq(mcpRuntimeTestSessions.id, session.id))
-          .run()
-        return true
-      }
-      tx.update(mcpRuntimeTestSessions)
-        .set({
-          runtimeSessionId: nativeSessionId,
-          nativeSessionState: nativeState,
-          inFlightTurnId: null,
-          idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
-          sessionVersion: session.sessionVersion + 1,
-          updatedAt: now,
-        })
-        .where(eq(mcpRuntimeTestSessions.id, session.id))
-        .run()
-      return false
+    const currentSession = await this.deps.persistence.loadSession(originalSession.id)
+    const currentTurn = await this.deps.persistence.loadTurn(originalTurn.id)
+    const durableFailureCode = currentTurn?.failureCode ?? null
+    const verdict = applyPlaygroundVerification(
+      resultTurnStatus(
+        result,
+        currentTurn?.cancelRequestedAt != null,
+        currentSession?.status === 'ending',
+        durableFailureCode,
+      ),
+      resultFailureCode(result, durableFailureCode),
+      verification,
+    )
+    const shouldCleanup = await this.deps.persistence.settleTurn({
+      sessionId: originalSession.id,
+      turnId: originalTurn.id,
+      originalTurnSeq: originalTurn.seq,
+      status: verdict.turnStatus,
+      failureCode: verdict.failureCode,
+      exitCode: result.exitCode,
+      stderrTail:
+        result.stderrTail === ''
+          ? null
+          : result.stderrTail.slice(Math.max(0, result.stderrTail.length - STDERR_TAIL_BYTES)),
+      durationMs: result.durationMs,
+      capturedSessionId: result.capturedSessionId ?? null,
+      nativeSessionIntegrityFailed: result.nativeSessionIntegrityFailed === true,
+      childUnreaped: result.status === 'unreaped',
+      now,
+      idleDeadlineAt: now + MCP_RUNTIME_TEST_IDLE_MS,
     })
-    this.broadcastSession(originalSession.id)
+    await this.broadcastSession(originalSession.id)
     if (shouldCleanup) await this.finishEndingSession(originalSession.id)
     else this.scheduleIdleTimer()
   }
@@ -3003,61 +1619,15 @@ export class McpRuntimeTestService {
     reason: McpRuntimeTestEndReason,
   ): Promise<void> {
     const now = this.now()
-    const turnId = dbTxSync(this.deps.db, (tx) => {
-      const row = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .get()
-      if (row === undefined || row.status !== 'active') return row?.inFlightTurnId ?? null
-      tx.update(mcpRuntimeTestSessions)
-        .set({
-          status: 'ending',
-          endReason: reason,
-          idleDeadlineAt: null,
-          sessionVersion: row.sessionVersion + 1,
-          updatedAt: now,
-        })
-        .where(eq(mcpRuntimeTestSessions.id, row.id))
-        .run()
-      return row.inFlightTurnId
-    })
+    const turnId = await this.deps.persistence.invalidateSession({ sessionId, reason, now })
     if (turnId !== null) this.controllers.get(turnId)?.abort()
     else await this.finishEndingSession(sessionId)
   }
 
   private async finishEndingSession(sessionId: string): Promise<void> {
-    const row = this.deps.db
-      .select()
-      .from(mcpRuntimeTestSessions)
-      .where(eq(mcpRuntimeTestSessions.id, sessionId))
-      .get()
-    if (
-      row === undefined ||
-      row.inFlightTurnId !== null ||
-      (row.status !== 'ending' && !(row.status === 'ended' && row.cleanupState === 'pending'))
-    ) {
-      return
-    }
-    const running = this.deps.db
-      .select({ id: mcpRuntimeTestTurns.id })
-      .from(mcpRuntimeTestTurns)
-      .where(
-        and(
-          eq(mcpRuntimeTestTurns.sessionId, sessionId),
-          inArray(mcpRuntimeTestTurns.status, ['queued', 'running']),
-        ),
-      )
-      .get()
-    if (running !== undefined) return
+    const row = await this.deps.persistence.prepareCleanup(sessionId, this.now())
+    if (row === null) return
     const alreadyQuarantined = row.cleanupState === 'quarantined'
-    if (!alreadyQuarantined) {
-      this.deps.db
-        .update(mcpRuntimeTestSessions)
-        .set({ cleanupState: 'pending', updatedAt: this.now() })
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .run()
-    }
 
     const base = resolve(join(this.deps.appHome, 'mcp-runtime-tests'))
     const target = resolve(row.scratchRoot)
@@ -3079,93 +1649,28 @@ export class McpRuntimeTestService {
       }
     }
     const endedAt = this.now()
-    dbTxSync(this.deps.db, (tx) => {
-      const current = tx
-        .select()
-        .from(mcpRuntimeTestSessions)
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .get()
-      if (
-        current === undefined ||
-        current.inFlightTurnId !== null ||
-        (current.status !== 'ending' &&
-          !(current.status === 'ended' && current.cleanupState === 'pending'))
-      ) {
-        return
-      }
-      tx.update(mcpRuntimeTestSessions)
-        .set({
-          status: 'ended',
-          cleanupState,
-          cleanupErrorCode,
-          endedAt: current.endedAt ?? endedAt,
-          updatedAt: endedAt,
-          sessionVersion: current.sessionVersion + 1,
-        })
-        .where(eq(mcpRuntimeTestSessions.id, sessionId))
-        .run()
+    await this.deps.persistence.finishCleanup({
+      sessionId,
+      cleanupState,
+      cleanupErrorCode,
+      now: endedAt,
     })
-    this.broadcastSession(sessionId)
+    await this.broadcastSession(sessionId)
     this.scheduleIdleTimer()
   }
 
   private scheduleIdleTimer(): void {
     if (this.idleTimer !== null) clearTimeout(this.idleTimer)
     this.idleTimer = null
-    if (this.shuttingDown) return
-    const earliestIdle = this.deps.db
-      .select({ deadline: mcpRuntimeTestSessions.idleDeadlineAt })
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.status, 'active'),
-          isNull(mcpRuntimeTestSessions.inFlightTurnId),
-        ),
-      )
-      .orderBy(asc(mcpRuntimeTestSessions.idleDeadlineAt))
-      .limit(1)
-      .get()?.deadline
-    const activeInFlight = this.deps.db
-      .select({ turnId: mcpRuntimeTestSessions.inFlightTurnId })
-      .from(mcpRuntimeTestSessions)
-      .where(
-        and(
-          eq(mcpRuntimeTestSessions.status, 'active'),
-          sql`${mcpRuntimeTestSessions.inFlightTurnId} IS NOT NULL`,
-        ),
-      )
-      .all()
-    let earliestTurn: number | null = null
-    for (const row of activeInFlight) {
-      if (row.turnId === null) continue
-      const turn = this.deps.db
-        .select({
-          deadline: mcpRuntimeTestTurns.hardDeadlineAt,
-          cancelRequestedAt: mcpRuntimeTestTurns.cancelRequestedAt,
-          status: mcpRuntimeTestTurns.status,
-        })
-        .from(mcpRuntimeTestTurns)
-        .where(eq(mcpRuntimeTestTurns.id, row.turnId))
-        .get()
-      if (
-        turn === undefined ||
-        !['queued', 'running'].includes(turn.status) ||
-        turn.cancelRequestedAt !== null
-      ) {
-        continue
-      }
-      earliestTurn = earliestTurn === null ? turn.deadline : Math.min(earliestTurn, turn.deadline)
-    }
-    const deadlines = [earliestIdle, earliestTurn].filter(
-      (deadline): deadline is number => typeof deadline === 'number',
-    )
-    if (deadlines.length === 0) return
-    const earliest = Math.min(...deadlines)
-    const delay = Math.max(0, Math.min(earliest - this.now(), 2_147_483_647))
-    this.idleTimer = setTimeout(() => {
-      this.idleTimer = null
-      void this.reconcile()
-    }, delay)
-    this.idleTimer.unref?.()
+    if (this.shuttingDown || this.paused) return
+    void this.deps.persistence.nextDeadline().then((earliest) => {
+      if (earliest === null || this.shuttingDown || this.paused) return
+      const delay = Math.max(0, Math.min(earliest - this.now(), 2_147_483_647))
+      this.idleTimer = setTimeout(() => {
+        this.idleTimer = null
+        void this.reconcile()
+      }, delay)
+      this.idleTimer.unref?.()
+    })
   }
 }

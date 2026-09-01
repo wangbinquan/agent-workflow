@@ -1,5 +1,4 @@
 import { Buffer } from 'node:buffer'
-import { and, asc, eq } from 'drizzle-orm'
 import {
   SessionViewResponseSchema,
   parseSessionTree,
@@ -7,9 +6,10 @@ import {
   type ParseSessionInputEvent,
   type SessionViewResponse,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { intentTurnEvents, intentTurns } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import type {
+  IntentTurnEventPersistence,
+  IntentTurnRecord,
+} from '@/modules/intent/application/ports/intentPersistence'
 import type {
   SessionCaptureIncompleteReason,
   SessionCaptureTerminalState,
@@ -21,7 +21,7 @@ export const INTENT_TURN_EVENT_ROW_LIMIT = 10_000
 export const INTENT_TURN_EVENT_BYTE_LIMIT = 8 * 1024 * 1024
 
 type IntentTurnExecutionRow = Pick<
-  typeof intentTurns.$inferSelect,
+  IntentTurnRecord,
   | 'kind'
   | 'captureState'
   | 'captureLastEventSeq'
@@ -31,7 +31,7 @@ type IntentTurnExecutionRow = Pick<
 >
 
 function effectiveCaptureState(
-  row: Pick<typeof intentTurns.$inferSelect, 'kind' | 'captureState'>,
+  row: Pick<IntentTurnRecord, 'kind' | 'captureState'>,
 ): IntentTurnExecutionDto['captureState'] | null {
   // Capture is auxiliary, so a transient failure may prevent every terminal
   // marker while the following business settlement still succeeds. Once the
@@ -81,184 +81,67 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
     | undefined
 
   constructor(
-    private readonly db: DbClient,
+    private readonly persistence: IntentTurnEventPersistence,
     private readonly turnId: string,
     private readonly onUpdated?: (eventSeq: number) => void,
   ) {}
 
   append(event: Parameters<SystemAgentEventSinkV1['append']>[0]): Promise<void> {
     if (this.stopped) return Promise.resolve()
-    return this.enqueue(() => {
+    return this.enqueue(async () => {
       if (this.stopped) return
-      const result = dbTxSync(this.db, (tx) => {
-        const turn = tx
-          .select({
-            captureState: intentTurns.captureState,
-            lastEventSeq: intentTurns.captureLastEventSeq,
-            eventBytes: intentTurns.captureEventBytes,
-          })
-          .from(intentTurns)
-          .where(eq(intentTurns.id, this.turnId))
-          .get()
-        if (turn === undefined || turn.captureState === null) {
-          throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
-        }
-        if (turn.captureState !== 'live') {
-          return { eventSeq: turn.lastEventSeq, stop: true }
-        }
-
-        if (event.externalEventId !== undefined) {
-          const duplicate = tx
-            .select({ id: intentTurnEvents.id })
-            .from(intentTurnEvents)
-            .where(
-              and(
-                eq(intentTurnEvents.turnId, this.turnId),
-                eq(intentTurnEvents.source, event.source),
-                eq(intentTurnEvents.externalEventId, event.externalEventId),
-              ),
-            )
-            .get()
-          if (duplicate !== undefined) return { eventSeq: turn.lastEventSeq, stop: false }
-        }
-
-        const payloadBytes = Buffer.byteLength(event.payload, 'utf8')
-        if (
-          turn.lastEventSeq >= INTENT_TURN_EVENT_ROW_LIMIT ||
-          turn.eventBytes + payloadBytes > INTENT_TURN_EVENT_BYTE_LIMIT
-        ) {
-          tx.update(intentTurns)
-            .set({ captureState: 'truncated', captureIncompleteReason: null })
-            .where(eq(intentTurns.id, this.turnId))
-            .run()
-          return { eventSeq: turn.lastEventSeq, stop: true }
-        }
-
-        const eventSeq = turn.lastEventSeq + 1
-        tx.insert(intentTurnEvents)
-          .values({
-            turnId: this.turnId,
-            eventSeq,
-            ts: event.ts,
-            kind: event.kind,
-            payload: event.payload,
-            sessionId: event.sessionId,
-            parentSessionId: event.parentSessionId,
-            source: event.source,
-            ...(event.externalEventId === undefined
-              ? {}
-              : { externalEventId: event.externalEventId }),
-          })
-          .run()
-        tx.update(intentTurns)
-          .set({
-            captureLastEventSeq: eventSeq,
-            captureEventBytes: turn.eventBytes + payloadBytes,
-          })
-          .where(eq(intentTurns.id, this.turnId))
-          .run()
-        return { eventSeq, stop: false }
+      const result = await this.persistence.appendTurnEvent({
+        turnId: this.turnId,
+        ts: event.ts,
+        kind: event.kind,
+        payload: event.payload,
+        sessionId: event.sessionId,
+        parentSessionId: event.parentSessionId,
+        source: event.source,
+        externalEventId: event.externalEventId ?? null,
+        byteLength: Buffer.byteLength(event.payload, 'utf8'),
+        rowLimit: INTENT_TURN_EVENT_ROW_LIMIT,
+        byteLimit: INTENT_TURN_EVENT_BYTE_LIMIT,
       })
-      if (result.stop) this.stopped = true
+      if (result.stopped) this.stopped = true
       this.notify(result.eventSeq)
     })
   }
 
   setRootSessionId(sessionId: string, previousSessionId?: string): Promise<void> {
-    return this.enqueue(() => {
-      const eventSeq = dbTxSync(this.db, (tx) => {
-        const turn = tx
-          .select({
-            captureState: intentTurns.captureState,
-            rootSessionId: intentTurns.captureRootSessionId,
-            lastEventSeq: intentTurns.captureLastEventSeq,
-          })
-          .from(intentTurns)
-          .where(eq(intentTurns.id, this.turnId))
-          .get()
-        if (turn === undefined || turn.captureState === null) {
-          throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
-        }
-        if (turn.rootSessionId === sessionId) return turn.lastEventSeq
-        if (
-          turn.rootSessionId !== null &&
-          (previousSessionId === undefined || turn.rootSessionId !== previousSessionId)
-        ) {
-          tx.update(intentTurns)
-            .set({
-              captureState: 'incomplete',
-              captureIncompleteReason: 'stream-persist-failed',
-            })
-            .where(eq(intentTurns.id, this.turnId))
-            .run()
-          return turn.lastEventSeq
-        }
-        tx.update(intentTurns)
-          .set({ captureRootSessionId: sessionId })
-          .where(eq(intentTurns.id, this.turnId))
-          .run()
-        if (previousSessionId !== undefined) {
-          tx.update(intentTurnEvents)
-            .set({ sessionId })
-            .where(
-              and(
-                eq(intentTurnEvents.turnId, this.turnId),
-                eq(intentTurnEvents.sessionId, previousSessionId),
-              ),
-            )
-            .run()
-          tx.update(intentTurnEvents)
-            .set({ parentSessionId: sessionId })
-            .where(
-              and(
-                eq(intentTurnEvents.turnId, this.turnId),
-                eq(intentTurnEvents.parentSessionId, previousSessionId),
-              ),
-            )
-            .run()
-          if (this.resetPendingFrom === previousSessionId) {
-            this.resetPendingFrom = undefined
-            // Pending itself never changed the durable capture verdict. If a
-            // size cap or another terminal condition landed meanwhile, keep
-            // that verdict and the stopped latch monotonic.
-            this.stopped = turn.captureState !== 'live'
-          }
-        }
-        return turn.lastEventSeq
+    return this.enqueue(async () => {
+      const result = await this.persistence.replaceTurnRootSession({
+        turnId: this.turnId,
+        sessionId,
+        ...(previousSessionId === undefined ? {} : { previousSessionId }),
       })
-      this.notify(eventSeq)
+      if (previousSessionId !== undefined && this.resetPendingFrom === previousSessionId) {
+        this.resetPendingFrom = undefined
+        // Pending itself never changed the durable capture verdict. If a size
+        // cap or another terminal condition landed meanwhile, keep it monotonic.
+        this.stopped = result.captureState !== 'live'
+      }
+      this.notify(result.eventSeq)
     })
   }
 
   markRootSessionResetPending(sessionId: string): Promise<void> {
-    return this.enqueue(() => {
-      const eventSeq = dbTxSync(this.db, (tx) => {
-        const turn = tx
-          .select({
-            captureState: intentTurns.captureState,
-            rootSessionId: intentTurns.captureRootSessionId,
-            lastEventSeq: intentTurns.captureLastEventSeq,
-          })
-          .from(intentTurns)
-          .where(eq(intentTurns.id, this.turnId))
-          .get()
-        if (turn === undefined || turn.captureState === null) {
-          throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
-        }
-        if (turn.rootSessionId !== sessionId) {
-          throw new DomainError(
-            'intent-turn-runtime-session-changed',
-            'runtime conversation reset did not match the captured root session',
-            409,
-          )
-        }
-        // Pending is provisional, not a terminal capture verdict. Only a live
-        // capture enters this in-memory state; a prior cap/failure is monotonic
-        // and must never be restored by a later replacement id.
-        if (turn.captureState === 'live') this.resetPendingFrom = sessionId
-        return turn.lastEventSeq
-      })
-      this.notify(eventSeq)
+    return this.enqueue(async () => {
+      const turn = await this.persistence.readTurnCapture(this.turnId)
+      if (turn === null || turn.captureState === null) {
+        throw new NotFoundError('intent-turn-not-found', 'intent turn capture target not found')
+      }
+      if (turn.captureRootSessionId !== sessionId) {
+        throw new DomainError(
+          'intent-turn-runtime-session-changed',
+          'runtime conversation reset did not match the captured root session',
+          409,
+        )
+      }
+      // Pending is provisional, not a terminal capture verdict. Only a live
+      // capture enters this in-memory state; a prior cap/failure is monotonic.
+      if (turn.captureState === 'live') this.resetPendingFrom = sessionId
+      this.notify(turn.captureLastEventSeq)
     })
   }
 
@@ -270,38 +153,14 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
       this.resetPendingFrom === undefined ? state : 'incomplete',
       this.resetPendingFrom === undefined ? reason : 'stream-persist-failed',
     )
-    return this.enqueue(() => {
-      const eventSeq = dbTxSync(this.db, (tx) => {
-        const turn = tx
-          .select({
-            captureState: intentTurns.captureState,
-            lastEventSeq: intentTurns.captureLastEventSeq,
-          })
-          .from(intentTurns)
-          .where(eq(intentTurns.id, this.turnId))
-          .get()
-        if (turn === undefined || turn.captureState === null) return 0
-        // Terminal evidence is monotonic: complete cannot repaint truncation,
-        // while a later observed persistence/lifecycle failure is stronger
-        // than truncation and must retain its explicit incomplete reason.
-        if (
-          turn.captureState === 'incomplete' ||
-          (turn.captureState === 'truncated' && terminal.state !== 'incomplete')
-        ) {
-          return turn.lastEventSeq
-        }
-        tx.update(intentTurns)
-          .set({
-            captureState: terminal.state,
-            captureIncompleteReason:
-              terminal.state === 'incomplete' ? (terminal.reason ?? 'stream-persist-failed') : null,
-          })
-          .where(eq(intentTurns.id, this.turnId))
-          .run()
-        return turn.lastEventSeq
+    return this.enqueue(async () => {
+      const result = await this.persistence.settleTurnCapture({
+        turnId: this.turnId,
+        state: terminal.state,
+        ...(terminal.reason === undefined ? {} : { incompleteReason: terminal.reason }),
       })
       this.stopped = true
-      this.notify(eventSeq)
+      this.notify(result.eventSeq)
     })
   }
 
@@ -323,7 +182,7 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
     return current
   }
 
-  private enqueue(work: () => void): Promise<void> {
+  private enqueue(work: () => void | Promise<void>): Promise<void> {
     const next = this.tail.then(work, work)
     this.tail = next.catch(() => {})
     return next
@@ -339,26 +198,15 @@ export class IntentTurnSessionEventSink implements SystemAgentEventSinkV1 {
 }
 
 export async function getIntentTurnSession(
-  db: DbClient,
+  persistence: IntentTurnEventPersistence,
   sessionId: string,
   turnId: string,
 ): Promise<SessionViewResponse> {
-  const turn = db
-    .select({
-      id: intentTurns.id,
-      sessionId: intentTurns.sessionId,
-      role: intentTurns.role,
-      kind: intentTurns.kind,
-      createdAt: intentTurns.createdAt,
-      captureState: intentTurns.captureState,
-      rootSessionId: intentTurns.captureRootSessionId,
-    })
-    .from(intentTurns)
-    .where(and(eq(intentTurns.id, turnId), eq(intentTurns.sessionId, sessionId)))
-    .get()
-  if (turn === undefined) {
+  const capture = await persistence.readTurnSession(turnId)
+  if (capture === null || capture.turn.sessionId !== sessionId) {
     throw new NotFoundError('intent-session-not-found', 'intent session not found')
   }
+  const { turn } = capture
   if (turn.role !== 'agent' || turn.captureState === null) {
     throw new DomainError(
       'intent-turn-session-not-applicable',
@@ -367,22 +215,7 @@ export async function getIntentTurnSession(
     )
   }
 
-  const rows = db
-    .select({
-      id: intentTurnEvents.id,
-      eventSeq: intentTurnEvents.eventSeq,
-      ts: intentTurnEvents.ts,
-      kind: intentTurnEvents.kind,
-      payload: intentTurnEvents.payload,
-      sessionId: intentTurnEvents.sessionId,
-      parentSessionId: intentTurnEvents.parentSessionId,
-    })
-    .from(intentTurnEvents)
-    .where(eq(intentTurnEvents.turnId, turn.id))
-    .orderBy(asc(intentTurnEvents.eventSeq))
-    .all()
-
-  const events: ParseSessionInputEvent[] = rows.map((row) => ({
+  const events: ParseSessionInputEvent[] = capture.events.map((row) => ({
     id: row.eventSeq,
     ts: row.ts,
     kind: row.kind,
@@ -391,7 +224,7 @@ export async function getIntentTurnSession(
     parentSessionId: row.parentSessionId,
   }))
   const parsed = parseSessionTree({
-    rootSessionId: turn.rootSessionId,
+    rootSessionId: turn.captureRootSessionId,
     promptText: null,
     startedAt: turn.createdAt,
     primaryAgentName: 'aw-intent-builder',

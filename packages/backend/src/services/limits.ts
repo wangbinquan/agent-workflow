@@ -12,11 +12,11 @@
 // orphan logic (P-4-07) has already flipped the row to `interrupted`, this
 // tick is a no-op for that task.
 
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
-import { cancelTask } from '@/services/task'
-import { recordRecoveryEvent } from '@/services/recovery'
+import {
+  type ResourceLimitOperations,
+  type ResourceLimitPersistence,
+} from '@/modules/system-operations/public/operations'
+import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import { createLogger, type Logger } from '@/util/log'
 import { DAEMON_CADENCE } from './daemonCadence'
 
@@ -28,34 +28,47 @@ export interface EnforceLimitsResult {
   canceled: string[]
 }
 
+type LegacySqliteResourceLimitSource = Parameters<
+  typeof composeLegacySqliteResourceLimitOperations
+>[0]
+type ResourceLimitSource = LegacySqliteResourceLimitSource | ResourceLimitOperations
+
+function isResourceLimitOperations(source: ResourceLimitSource): source is ResourceLimitOperations {
+  return (
+    typeof source === 'object' &&
+    source !== null &&
+    'persistence' in source &&
+    'cancelTask' in source &&
+    typeof source.cancelTask === 'function'
+  )
+}
+
+function operationsFor(source: ResourceLimitSource): ResourceLimitOperations {
+  return isResourceLimitOperations(source)
+    ? source
+    : composeLegacySqliteResourceLimitOperations(source)
+}
+
 export async function enforceLimits(
-  db: DbClient,
+  source: ResourceLimitSource,
   now: number = Date.now(),
 ): Promise<EnforceLimitsResult> {
+  const operations = operationsFor(source)
   // RFC-311 (audit L1-9): this runs at 1Hz — checkOne consumes exactly five
   // scalar columns, but the former select() decoded every running task's
   // workflow_snapshot / inputs / ref_closure_json JSON once per second,
   // forever. (The token SUM below stays per-tick: it only fires for tasks
   // with a configured cap and walks idx_node_runs_task; deferring it would
   // delay the cancel, which is a behavior change this pass must not make.)
-  const running = await db
-    .select({
-      id: tasks.id,
-      maxDurationMs: tasks.maxDurationMs,
-      maxTotalTokens: tasks.maxTotalTokens,
-      runningMs: tasks.runningMs,
-      runningSince: tasks.runningSince,
-    })
-    .from(tasks)
-    .where(eq(tasks.status, 'running'))
+  const running = await operations.persistence.listRunningTasks()
   const canceled: string[] = []
 
   for (const t of running) {
-    const reason = await checkOne(db, t, now)
+    const reason = await checkOne(operations.persistence, t, now)
     if (reason === null) continue
 
     try {
-      await cancelTask(db, t.id)
+      await operations.cancelTask(t.id)
     } catch {
       // Already terminal between read and cancel; ignore.
     }
@@ -64,19 +77,17 @@ export async function enforceLimits(
     // on rows where the cancel actually landed — a task that reached
     // done/failed between the scan and the cancel keeps its real terminal
     // message instead of being painted over with limit copy.
-    await db
-      .update(tasks)
-      .set({ errorSummary: reason.summary, errorMessage: reason.message })
-      .where(and(eq(tasks.id, t.id), eq(tasks.status, 'canceled')))
+    await operations.persistence.writeLimitReason({
+      taskId: t.id,
+      summary: reason.summary,
+      message: reason.message,
+    })
     canceled.push(t.id)
     log.warn('limit exceeded', { taskId: t.id, summary: reason.summary })
     // RFC-108 T3 (AR-11): durable audit of the resource-limit cancel.
-    await recordRecoveryEvent(db, {
+    await operations.persistence.recordLimitCancellation({
       taskId: t.id,
-      kind: 'limit-cancel',
       reason: reason.summary,
-      before: { status: 'running' },
-      after: { status: 'canceled' },
       now,
     })
   }
@@ -85,11 +96,8 @@ export async function enforceLimits(
 }
 
 async function checkOne(
-  db: DbClient,
-  t: Pick<
-    typeof tasks.$inferSelect,
-    'id' | 'maxDurationMs' | 'maxTotalTokens' | 'runningMs' | 'runningSince'
-  >,
+  persistence: ResourceLimitPersistence,
+  t: Awaited<ReturnType<ResourceLimitPersistence['listRunningTasks']>>[number],
   now: number,
 ): Promise<{ summary: string; message: string } | null> {
   if (typeof t.maxDurationMs === 'number' && t.maxDurationMs > 0) {
@@ -109,7 +117,7 @@ async function checkOne(
       //     (covers the poll-granularity gap of the ledger) — alert only.
       // Both are no-ops for tasks without call rows (single cheap query only
       // on the over-limit path).
-      const wait = await callRowHumanWait(db, t.id, now)
+      const wait = await callRowHumanWait(persistence, t.id, now)
       const effective = elapsed - wait.waitMs
       if (effective > t.maxDurationMs) {
         if (wait.childAwaiting) {
@@ -131,7 +139,7 @@ async function checkOne(
     }
   }
   if (typeof t.maxTotalTokens === 'number' && t.maxTotalTokens > 0) {
-    const total = await sumTaskTokens(db, t.id)
+    const total = await persistence.sumTaskTokens(t.id)
     if (total > t.maxTotalTokens) {
       return {
         summary: 'task-token-limit-exceeded',
@@ -144,17 +152,11 @@ async function checkOne(
 
 /** RFC-243 §4.5 — the call rows' human-wait ledger + live awaiting probe. */
 async function callRowHumanWait(
-  db: DbClient,
+  persistence: ResourceLimitPersistence,
   taskId: string,
   now: number,
 ): Promise<{ waitMs: number; childAwaiting: boolean }> {
-  const callRows = await db
-    .select({
-      childTaskId: nodeRuns.childTaskId,
-      wrapperProgressJson: nodeRuns.wrapperProgressJson,
-    })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRuns.childTaskId)))
+  const callRows = await persistence.listCallRows(taskId)
   if (callRows.length === 0) return { waitMs: 0, childAwaiting: false }
   let waitMs = 0
   const childIds = new Set<string>()
@@ -162,12 +164,9 @@ async function callRowHumanWait(
     if (r.childTaskId !== null) childIds.add(r.childTaskId)
     waitMs += parseCallHumanWait(r.wrapperProgressJson, now)
   }
-  const children = await db
-    .select({ status: tasks.status })
-    .from(tasks)
-    .where(inArray(tasks.id, [...childIds]))
-  const childAwaiting = children.some(
-    (c) => c.status === 'awaiting_review' || c.status === 'awaiting_human',
+  const statuses = await persistence.listTaskStatuses([...childIds])
+  const childAwaiting = statuses.some(
+    (status) => status === 'awaiting_review' || status === 'awaiting_human',
   )
   return { waitMs, childAwaiting }
 }
@@ -191,39 +190,25 @@ export function parseCallHumanWait(json: string | null, now: number): number {
   }
 }
 
-async function sumTaskTokens(db: DbClient, taskId: string): Promise<number> {
-  // Only count parent runs (fan-out children's tok_total is already mirrored
-  // up into the parent by runFanOutNode aggregation in P-4-05).
-  const rows = await db
-    .select({ total: sql<number | null>`sum(${nodeRuns.tokTotal})` })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId)))
-  const v = rows[0]?.total
-  return typeof v === 'number' ? v : 0
-}
-
 /**
  * Terminal TaskExecution usage projection consumed by Digital Employee.
  * It intentionally reuses the same accumulated-running and durable human-wait
  * accounting as the live limit enforcer instead of deriving wall-clock time.
  */
 export async function readTaskResourceUsage(
-  db: DbClient,
+  source: ResourceLimitSource,
   taskId: string,
   now: number = Date.now(),
 ): Promise<{ readonly effectiveRunningMs: number; readonly totalTokens: number } | null> {
-  const task = await db
-    .select({ runningMs: tasks.runningMs, runningSince: tasks.runningSince })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .get()
-  if (task === undefined) return null
+  const persistence = operationsFor(source).persistence
+  const task = await persistence.readTaskClock(taskId)
+  if (task === null) return null
   const elapsed =
     task.runningMs + (task.runningSince === null ? 0 : Math.max(0, now - task.runningSince))
-  const wait = await callRowHumanWait(db, taskId, now)
+  const wait = await callRowHumanWait(persistence, taskId, now)
   return {
     effectiveRunningMs: Math.max(0, elapsed - wait.waitMs),
-    totalTokens: await sumTaskTokens(db, taskId),
+    totalTokens: await persistence.sumTaskTokens(taskId),
   }
 }
 
@@ -233,14 +218,14 @@ export async function readTaskResourceUsage(
  * enforceLimits directly.
  */
 export function startLimitsTicker(
-  db: DbClient,
+  source: ResourceLimitSource,
   intervalMs: number = DAEMON_CADENCE.resourceLimits,
 ): { stop: () => void } {
   let running = false
   const handle = setInterval(() => {
     if (running) return
     running = true
-    enforceLimits(db)
+    enforceLimits(source)
       .catch((err: unknown) => {
         log.error('enforceLimits failed', {
           error: err instanceof Error ? err.message : String(err),

@@ -4,7 +4,6 @@
 // 任何子进程环境、不进日志、不进任何响应（读路径只回尾 4 位）。
 
 import { existsSync, readFileSync } from 'node:fs'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   CodeHostConnectionWire,
@@ -20,9 +19,6 @@ import {
   RepositoryTransportMappingV1Schema,
 } from '@agent-workflow/shared'
 import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { codeHostConnections } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 
@@ -60,53 +56,64 @@ export interface CodeHostConnectionMutationConfirmation {
   readonly confirmCredentialRevocationDigest?: string
 }
 
-export interface RepositoryTransportConnectionCoordinator {
-  readonly participant: {
-    inspect(provider: CodeHostProvider): {
-      readonly personalCredentialCount: number
-      readonly currentConnectionGeneration: string | null
-      readonly currentEndpointBindingDigest: string | null
-    }
-    synchronize(input: RepositoryTransportConnectionProjection): void
-    removeConnection(provider: CodeHostProvider): boolean
-  }
-  readonly project: (input: {
-    readonly provider: CodeHostProvider
-    readonly connectionGeneration: string
-    readonly baseUrl: string
-    readonly rejectUnauthorized: boolean
-    readonly repositoryUrlPrefixesJson: string
-    readonly transportMappingsJson: string
-    readonly tokenEnc: string
-    readonly tokenHint: string
-    readonly updatedAt: number
-    readonly updatedBy: string | null
-  }) => RepositoryTransportConnectionProjection
-}
-
-interface RepositoryTransportConnectionProjection {
+interface RepositoryTransportAdminConnection {
   readonly provider: CodeHostProvider
+  readonly baseUrl: string
+  readonly repositoryUrlPrefixesJson: string
+  readonly transportMappingsJson: string
   readonly connectionGeneration: string
-  readonly endpointBindingDigest: string
-  readonly apiBaseUrl: string
   readonly rejectUnauthorized: boolean
-  readonly transportMappings: readonly RepositoryTransportMappingV1[]
-  readonly allowedHttpBaseUrls: readonly string[]
-  readonly globalTokenEnc: string
-  readonly globalTokenHint: string
+  readonly tokenEnc: string
+  readonly tokenHint: string
+  readonly lastTestJson: string | null
   readonly updatedAt: number
   readonly updatedBy: string | null
 }
 
+interface RepositoryTransportConnectionAdministrationParticipant {
+  listAdminConnections(): Promise<readonly RepositoryTransportAdminConnection[]>
+  findAdminConnection(
+    provider: CodeHostProvider,
+  ): Promise<RepositoryTransportAdminConnection | null>
+  inspectAdminConnection(provider: CodeHostProvider): Promise<{
+    readonly personalCredentialCount: number
+    readonly currentConnectionGeneration: string | null
+    readonly currentEndpointBindingDigest: string | null
+  }>
+  projectAdminConnection(input: RepositoryTransportAdminConnection): {
+    readonly endpointBindingDigest: string
+  }
+  synchronizeAdminConnection(
+    input: RepositoryTransportAdminConnection,
+    expected: {
+      readonly personalCredentialCount: number
+      readonly currentConnectionGeneration: string | null
+      readonly currentEndpointBindingDigest: string | null
+    },
+  ): Promise<boolean>
+  removeAdminConnection(
+    provider: CodeHostProvider,
+    expected: {
+      readonly personalCredentialCount: number
+      readonly currentConnectionGeneration: string | null
+      readonly currentEndpointBindingDigest: string | null
+    },
+  ): Promise<'removed' | 'missing' | 'stale'>
+  recordAdminConnectionTest(provider: CodeHostProvider, result: CodeHostTestResult): Promise<void>
+}
+
 export interface CodeHostConnectionsService {
   /** 供执行器使用：解封后的完整凭据；未配置返回 null。 */
-  resolve(provider: CodeHostProvider): ResolvedCodeHostConnection | null
+  resolve(provider: CodeHostProvider): Promise<ResolvedCodeHostConnection | null>
   /** 供 API 使用：两家各一行，未配置的也出现（configured:false）。 */
-  list(): CodeHostConnectionWire[]
-  get(provider: CodeHostProvider): CodeHostConnectionWire
-  upsert(provider: CodeHostProvider, input: UpsertInput): CodeHostConnectionWire
-  remove(provider: CodeHostProvider, confirmation?: CodeHostConnectionMutationConfirmation): boolean
-  recordTest(provider: CodeHostProvider, result: CodeHostTestResult): void
+  list(): Promise<CodeHostConnectionWire[]>
+  get(provider: CodeHostProvider): Promise<CodeHostConnectionWire>
+  upsert(provider: CodeHostProvider, input: UpsertInput): Promise<CodeHostConnectionWire>
+  remove(
+    provider: CodeHostProvider,
+    confirmation?: CodeHostConnectionMutationConfirmation,
+  ): Promise<boolean>
+  recordTest(provider: CodeHostProvider, result: CodeHostTestResult): Promise<void>
 }
 
 const PROVIDERS: readonly CodeHostProvider[] = ['gitlab', 'github']
@@ -145,7 +152,7 @@ function hintOf(token: string): string {
   return token.length >= 4 ? token.slice(-4) : ''
 }
 
-function repositoryUrlPrefixesOf(row: typeof codeHostConnections.$inferSelect): string[] {
+function repositoryUrlPrefixesOf(row: RepositoryTransportAdminConnection): string[] {
   if (row.provider !== 'gitlab') return []
   let raw: unknown
   try {
@@ -166,7 +173,7 @@ function repositoryUrlPrefixesOf(row: typeof codeHostConnections.$inferSelect): 
 }
 
 function transportMappingsOf(
-  row: typeof codeHostConnections.$inferSelect,
+  row: RepositoryTransportAdminConnection,
 ): RepositoryTransportMappingV1[] {
   let raw: unknown
   try {
@@ -286,7 +293,7 @@ function unconfigured(provider: CodeHostProvider): CodeHostConnectionWire {
  * 节点仍以 `code-host-not-configured` 收场，与自跳过语义一致。
  */
 export function resolveCodeHostConnectionsFromKeyFile(
-  db: DbClient,
+  repositoryTransport: RepositoryTransportConnectionAdministrationParticipant,
   keyPath: string,
 ): CodeHostConnectionsService | null {
   if (!existsSync(keyPath)) return null
@@ -296,25 +303,22 @@ export function resolveCodeHostConnectionsFromKeyFile(
   } catch {
     return null
   }
-  return createCodeHostConnectionsService({ db, secretBox })
+  return createCodeHostConnectionsService({ secretBox, repositoryTransport })
 }
 
 export function createCodeHostConnectionsService(deps: {
-  db: DbClient
   secretBox: SecretBox
-  repositoryTransport?: RepositoryTransportConnectionCoordinator
+  repositoryTransport: RepositoryTransportConnectionAdministrationParticipant
 }): CodeHostConnectionsService {
-  const { db, secretBox, repositoryTransport } = deps
+  const { secretBox, repositoryTransport } = deps
 
-  function rowOf(provider: CodeHostProvider): typeof codeHostConnections.$inferSelect | undefined {
-    return db
-      .select()
-      .from(codeHostConnections)
-      .where(eq(codeHostConnections.provider, provider))
-      .all()[0]
+  async function rowOf(
+    provider: CodeHostProvider,
+  ): Promise<RepositoryTransportAdminConnection | null> {
+    return await repositoryTransport.findAdminConnection(provider)
   }
 
-  function toWire(row: typeof codeHostConnections.$inferSelect): CodeHostConnectionWire {
+  async function toWire(row: RepositoryTransportAdminConnection): Promise<CodeHostConnectionWire> {
     let lastTest: CodeHostTestResult | null = null
     if (row.lastTestJson !== null) {
       try {
@@ -324,6 +328,7 @@ export function createCodeHostConnectionsService(deps: {
         lastTest = null
       }
     }
+    const impact = await repositoryTransport.inspectAdminConnection(row.provider)
     return {
       provider: row.provider,
       configured: true,
@@ -331,10 +336,8 @@ export function createCodeHostConnectionsService(deps: {
       repositoryUrlPrefixes: repositoryUrlPrefixesOf(row),
       transportMappings: transportMappingsOf(row),
       connectionGeneration: row.connectionGeneration,
-      endpointBindingDigest:
-        repositoryTransport?.participant.inspect(row.provider).currentEndpointBindingDigest ?? null,
-      personalPushCredentialCount:
-        repositoryTransport?.participant.inspect(row.provider).personalCredentialCount ?? 0,
+      endpointBindingDigest: impact.currentEndpointBindingDigest,
+      personalPushCredentialCount: impact.personalCredentialCount,
       rejectUnauthorized: normalizeCodeHostRejectUnauthorized(row.provider, row.rejectUnauthorized),
       tokenHint: row.tokenHint,
       updatedAt: row.updatedAt,
@@ -344,9 +347,9 @@ export function createCodeHostConnectionsService(deps: {
   }
 
   return {
-    resolve(provider) {
-      const row = rowOf(provider)
-      if (row === undefined) return null
+    async resolve(provider) {
+      const row = await rowOf(provider)
+      if (row === null) return null
       let token: string
       try {
         token = secretBox.unseal(row.tokenEnc)
@@ -366,19 +369,26 @@ export function createCodeHostConnectionsService(deps: {
       }
     },
 
-    list() {
-      return PROVIDERS.map((p) => {
-        const row = rowOf(p)
-        return row === undefined ? unconfigured(p) : toWire(row)
-      })
+    async list() {
+      const rows = new Map(
+        (await repositoryTransport.listAdminConnections()).map(
+          (row) => [row.provider, row] as const,
+        ),
+      )
+      return await Promise.all(
+        PROVIDERS.map((provider) => {
+          const row = rows.get(provider)
+          return row === undefined ? unconfigured(provider) : toWire(row)
+        }),
+      )
     },
 
-    get(provider) {
-      const row = rowOf(provider)
-      return row === undefined ? unconfigured(provider) : toWire(row)
+    async get(provider) {
+      const row = await rowOf(provider)
+      return row === null ? unconfigured(provider) : await toWire(row)
     },
 
-    upsert(provider, input) {
+    async upsert(provider, input) {
       const normalized = normalizeCodeHostBaseUrl(input.baseUrl, provider)
       if (!normalized.ok) {
         throw new ValidationError(
@@ -387,16 +397,16 @@ export function createCodeHostConnectionsService(deps: {
           { issue: normalized.issue, provider },
         )
       }
-      const existing = rowOf(provider)
+      const existing = await rowOf(provider)
       const repositoryUrlPrefixes =
         input.repositoryUrlPrefixes === undefined
-          ? existing === undefined
+          ? existing === null
             ? []
             : repositoryUrlPrefixesOf(existing)
           : normalizeRepositoryUrlPrefixes(provider, input.repositoryUrlPrefixes)
       const transportMappings =
         input.transportMappings === undefined
-          ? existing === undefined
+          ? existing === null
             ? []
             : transportMappingsOf(existing)
           : normalizeTransportMappings(input.transportMappings)
@@ -405,7 +415,7 @@ export function createCodeHostConnectionsService(deps: {
       if (input.token !== undefined) {
         tokenEnc = secretBox.seal(input.token)
         tokenHint = hintOf(input.token)
-      } else if (existing !== undefined) {
+      } else if (existing !== null) {
         tokenEnc = existing.tokenEnc
         tokenHint = existing.tokenHint
       } else {
@@ -436,11 +446,11 @@ export function createCodeHostConnectionsService(deps: {
         updatedAt: now,
         updatedBy: input.actorUserId ?? null,
       }
-      const nextProjection = repositoryTransport?.project(values)
-      const impact = repositoryTransport?.participant.inspect(provider)
+      const nextProjection = repositoryTransport.projectAdminConnection(values)
+      const impact = await repositoryTransport.inspectAdminConnection(provider)
       if (
         input.expectedConnectionGeneration !== undefined &&
-        impact?.currentConnectionGeneration !== input.expectedConnectionGeneration
+        impact.currentConnectionGeneration !== input.expectedConnectionGeneration
       ) {
         throw new ConflictError(
           'code-host-push-credential-stale',
@@ -448,8 +458,6 @@ export function createCodeHostConnectionsService(deps: {
         )
       }
       const endpointBindingChanged =
-        nextProjection !== undefined &&
-        impact !== undefined &&
         impact.currentEndpointBindingDigest !== null &&
         impact.currentEndpointBindingDigest !== nextProjection.endpointBindingDigest
       if (endpointBindingChanged && impact.personalCredentialCount > 0) {
@@ -488,22 +496,20 @@ export function createCodeHostConnectionsService(deps: {
           'the code-host connection impact changed; refresh before saving',
         )
       }
-      dbTxSync(db, () => {
-        db.insert(codeHostConnections)
-          .values(values)
-          .onConflictDoUpdate({ target: codeHostConnections.provider, set: values })
-          .run()
-        if (nextProjection !== undefined)
-          repositoryTransport?.participant.synchronize(nextProjection)
-      })
-      const row = rowOf(provider)
-      return row === undefined ? unconfigured(provider) : toWire(row)
+      if (!(await repositoryTransport.synchronizeAdminConnection(values, impact))) {
+        throw new ConflictError(
+          'code-host-push-credential-stale',
+          'the code-host connection impact changed; refresh before saving',
+        )
+      }
+      const row = await rowOf(provider)
+      return row === null ? unconfigured(provider) : await toWire(row)
     },
 
-    remove(provider, confirmation = {}) {
-      const existing = rowOf(provider)
-      if (existing === undefined) return false
-      const impact = repositoryTransport?.participant.inspect(provider)
+    async remove(provider, confirmation = {}) {
+      const existing = await rowOf(provider)
+      if (existing === null) return false
+      const impact = await repositoryTransport.inspectAdminConnection(provider)
       if (
         confirmation.expectedConnectionGeneration !== undefined &&
         confirmation.expectedConnectionGeneration !== existing.connectionGeneration
@@ -513,11 +519,7 @@ export function createCodeHostConnectionsService(deps: {
           'the code-host connection changed; refresh before deleting',
         )
       }
-      if (
-        impact !== undefined &&
-        impact.currentEndpointBindingDigest !== null &&
-        impact.personalCredentialCount > 0
-      ) {
+      if (impact.currentEndpointBindingDigest !== null && impact.personalCredentialCount > 0) {
         const required = revocationDigest({
           operation: 'delete',
           provider,
@@ -549,18 +551,18 @@ export function createCodeHostConnectionsService(deps: {
           'the code-host connection impact changed; refresh before deleting',
         )
       }
-      dbTxSync(db, () => {
-        db.delete(codeHostConnections).where(eq(codeHostConnections.provider, provider)).run()
-        repositoryTransport?.participant.removeConnection(provider)
-      })
-      return true
+      const removed = await repositoryTransport.removeAdminConnection(provider, impact)
+      if (removed === 'stale') {
+        throw new ConflictError(
+          'code-host-push-credential-stale',
+          'the code-host connection impact changed; refresh before deleting',
+        )
+      }
+      return removed === 'removed'
     },
 
-    recordTest(provider, result) {
-      db.update(codeHostConnections)
-        .set({ lastTestJson: JSON.stringify(result) })
-        .where(eq(codeHostConnections.provider, provider))
-        .run()
+    async recordTest(provider, result) {
+      await repositoryTransport.recordAdminConnectionTest(provider, result)
     },
   }
 }

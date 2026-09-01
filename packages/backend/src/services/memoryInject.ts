@@ -20,11 +20,12 @@
 //   - Token estimate is intentionally cheap (chars/4) — runs in the hot
 //     path of every node spawn, so the per-row cost must stay O(strlen).
 
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import type { Agent, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { fenceUntrusted, sanitizeInlineField } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { cachedRepos, memories, nodeRuns, tasks, taskRepos } from '@/db/schema'
+import type {
+  MemoryInjectionReadStore,
+  MemoryInjectionRecord,
+} from '@/modules/memory/application/ports/injectionReadStore'
 
 export interface ScopeBudget {
   agent: number
@@ -120,7 +121,7 @@ export interface LoadInjectableMemoriesOptions {
  * by the WHERE clause.
  */
 export async function loadInjectableMemories(
-  db: DbClient,
+  store: MemoryInjectionReadStore,
   opts: LoadInjectableMemoriesOptions,
 ): Promise<InjectableMemorySet> {
   const out: InjectableMemorySet = {
@@ -133,17 +134,10 @@ export async function loadInjectableMemories(
   // the agentIds set twice — defensive guard).
   const uniqueAgentIds = [...new Set(opts.agentIds)].filter((id) => id.length > 0)
   if (uniqueAgentIds.length > 0) {
-    const rows = await db
-      .select()
-      .from(memories)
-      .where(
-        and(
-          eq(memories.scopeType, 'agent'),
-          inArray(memories.scopeId, uniqueAgentIds),
-          eq(memories.status, 'approved'),
-        ),
-      )
-      .orderBy(desc(memories.createdAt))
+    const rows = await store.listApprovedMemories({
+      scopeType: 'agent',
+      scopeIds: uniqueAgentIds,
+    })
     const seen = new Set<string>()
     for (const r of rows) {
       if (seen.has(r.id)) continue
@@ -153,17 +147,10 @@ export async function loadInjectableMemories(
   }
 
   if (opts.workflowId !== null) {
-    const rows = await db
-      .select()
-      .from(memories)
-      .where(
-        and(
-          eq(memories.scopeType, 'workflow'),
-          eq(memories.scopeId, opts.workflowId),
-          eq(memories.status, 'approved'),
-        ),
-      )
-      .orderBy(desc(memories.createdAt))
+    const rows = await store.listApprovedMemories({
+      scopeType: 'workflow',
+      scopeIds: [opts.workflowId],
+    })
     out.byScope.workflow = rows.map(rowToInjectable)
   }
 
@@ -171,57 +158,31 @@ export async function loadInjectableMemories(
     // RFC-248: 组内 N 个成员仓的 repo 记忆共用 `budget.repo` 一档，按
     // createdAt DESC 统一排序后裁剪——不给每个仓单独配额，否则成员一多
     // 整块就撑爆了。
-    const rows = await db
-      .select()
-      .from(memories)
-      .where(
-        and(
-          eq(memories.scopeType, 'repo'),
-          inArray(memories.scopeId, [...opts.repoIds]),
-          eq(memories.status, 'approved'),
-        ),
-      )
-      .orderBy(desc(memories.createdAt))
+    const rows = await store.listApprovedMemories({
+      scopeType: 'repo',
+      scopeIds: opts.repoIds,
+    })
     out.byScope.repo = rows.map(rowToInjectable)
   }
 
   if (opts.repoGroupId !== null) {
-    const rows = await db
-      .select()
-      .from(memories)
-      .where(
-        and(
-          eq(memories.scopeType, 'repo_group'),
-          eq(memories.scopeId, opts.repoGroupId),
-          eq(memories.status, 'approved'),
-        ),
-      )
-      .orderBy(desc(memories.createdAt))
+    const rows = await store.listApprovedMemories({
+      scopeType: 'repo_group',
+      scopeIds: [opts.repoGroupId],
+    })
     out.byScope.repoGroup = rows.map(rowToInjectable)
   }
 
-  const globalRows = await db
-    .select()
-    .from(memories)
-    .where(and(eq(memories.scopeType, 'global'), eq(memories.status, 'approved')))
-    .orderBy(desc(memories.createdAt))
+  const globalRows = await store.listApprovedMemories({
+    scopeType: 'global',
+    scopeIds: null,
+  })
   out.byScope.global = globalRows.map(rowToInjectable)
 
   return out
 }
 
-function rowToInjectable(row: {
-  id: string
-  scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
-  scopeId: string | null
-  title: string
-  bodyMd: string
-  createdAt: number
-  version: number
-  tags: string
-  sourceKind: string
-  approvedAt: number | null
-}): InjectableMemoryRow {
+function rowToInjectable(row: MemoryInjectionRecord): InjectableMemoryRow {
   return {
     id: row.id,
     scopeType: row.scopeType,
@@ -230,7 +191,7 @@ function rowToInjectable(row: {
     bodyMd: row.bodyMd,
     createdAt: row.createdAt,
     version: row.version,
-    tags: parseTagsField(row.tags),
+    tags: parseTagsField(row.tagsJson),
     sourceKind: row.sourceKind,
     approvedAt: row.approvedAt,
   }
@@ -439,7 +400,7 @@ export interface InjectMemoryResult {
 }
 
 export async function injectMemoryForRun(deps: {
-  db: DbClient
+  store: MemoryInjectionReadStore
   taskId: string
   primaryAgent: Agent
   dependents: readonly Agent[]
@@ -447,10 +408,10 @@ export async function injectMemoryForRun(deps: {
   /** RFC-200 per-run nonce; absent preserves pre-upgrade rendering. */
   envelopeNonce?: string
 }): Promise<InjectMemoryResult> {
-  const taskRow = (await deps.db.select().from(tasks).where(eq(tasks.id, deps.taskId)).limit(1))[0]
+  const taskRow = await deps.store.findTaskContext(deps.taskId)
   // If the task vanished mid-run there is genuinely no scope context to
   // resolve — better to skip inject than to crash the run.
-  if (taskRow === undefined) return { block: null, snapshot: null }
+  if (taskRow === null) return { block: null, snapshot: null }
   const workflowId =
     typeof taskRow.workflowId === 'string' && taskRow.workflowId.length > 0
       ? taskRow.workflowId
@@ -465,14 +426,10 @@ export async function injectMemoryForRun(deps: {
   // `tasks.cached_repo_id`（那是 repos[0] 的镜像）。组任务有 N 个成员仓，每个仓
   // 自己的 repo 记忆都该注入。只读成员也算——它是「给 agent 看的参考资料」，
   // 关于它的经验同样有用。
-  const repoRows = await deps.db
-    .select({ cachedRepoId: taskRepos.cachedRepoId })
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, deps.taskId))
+  const repoRows = await deps.store.listTaskRepositoryIds(deps.taskId)
   const repoIdSet = new Set<string>()
-  for (const r of repoRows) {
-    if (typeof r.cachedRepoId === 'string' && r.cachedRepoId.length > 0)
-      repoIdSet.add(r.cachedRepoId)
+  for (const repositoryId of repoRows) {
+    if (repositoryId.length > 0) repoIdSet.add(repositoryId)
   }
   // 兜底：migration 0034 之前的老任务可能没有 task_repos 行。
   if (
@@ -485,14 +442,7 @@ export async function injectMemoryForRun(deps: {
   // 只保留仍然存在的镜像行——删仓之后那条 scope 已经没有锚，注入它等于把
   // 一个「关于已不存在的仓」的规则塞给 agent。
   const repoIds =
-    repoIdSet.size === 0
-      ? []
-      : (
-          await deps.db
-            .select({ id: cachedRepos.id })
-            .from(cachedRepos)
-            .where(inArray(cachedRepos.id, [...repoIdSet]))
-        ).map((r) => r.id)
+    repoIdSet.size === 0 ? [] : await deps.store.filterExistingRepositoryIds([...repoIdSet])
   // RFC-248 D4: 只有用组启动的任务才注入组记忆；单仓直启不注入它所属的组。
   const repoGroupId =
     typeof taskRow.repoGroupId === 'string' && taskRow.repoGroupId.length > 0
@@ -502,7 +452,7 @@ export async function injectMemoryForRun(deps: {
     deps.primaryAgent.id,
     ...deps.dependents.map((d) => d.id).filter((id) => id !== deps.primaryAgent.id),
   ]
-  const set = await loadInjectableMemories(deps.db, {
+  const set = await loadInjectableMemories(deps.store, {
     agentIds,
     workflowId,
     repoIds,
@@ -548,7 +498,7 @@ export async function injectMemoryForRun(deps: {
  *   - the JSON parses but is structurally invalid (degrade gracefully).
  */
 export async function loadInjectedSnapshotFromFirstAttempt(
-  db: DbClient,
+  store: MemoryInjectionReadStore,
   ctx: {
     taskId: string
     nodeId: string
@@ -558,36 +508,20 @@ export async function loadInjectedSnapshotFromFirstAttempt(
     runId: string
   },
 ): Promise<InjectedMemorySnapshot[] | null> {
-  const candidates = await db
-    .select({
-      id: nodeRuns.id,
-      status: nodeRuns.status,
-      json: nodeRuns.injectedMemoriesJson,
-    })
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, ctx.taskId),
-        eq(nodeRuns.nodeId, ctx.nodeId),
-        eq(nodeRuns.iteration, ctx.iteration),
-        ctx.shardKey === null ? isNull(nodeRuns.shardKey) : eq(nodeRuns.shardKey, ctx.shardKey),
-        eq(nodeRuns.reviewIteration, ctx.reviewIteration),
-        isNull(nodeRuns.parentNodeRunId),
-      ),
-    )
+  const candidates = await store.listRunRecords(ctx)
   // Walk the in-scope top-level rows up to runId in id-order; the anchor is the
   // LATEST generation start (first row, or a row whose predecessor was `done`).
   const upToRun = candidates
     .filter((r) => r.id <= ctx.runId)
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  let anchor: { id: string; json: string | null } | undefined
+  let anchor: { id: string; injectedMemoriesJson: string | null } | undefined
   let prevStatus: string | undefined
   for (const r of upToRun) {
     if (prevStatus === undefined || prevStatus === 'done') anchor = r
     prevStatus = r.status
   }
-  if (anchor?.json == null) return null
-  return parseInjectedSnapshotJson(anchor.json)
+  if (anchor?.injectedMemoriesJson == null) return null
+  return parseInjectedSnapshotJson(anchor.injectedMemoriesJson)
 }
 
 /**

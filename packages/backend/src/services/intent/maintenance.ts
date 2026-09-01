@@ -1,115 +1,64 @@
-// RFC-234 §1.2/§11 (T5) — intent maintenance: boot recovery for orphaned
-// in-flight turns + the deterministic scratch GC owner (design-gate P1-7).
+// RFC-234 §1.2/§11 — provider-neutral Intent recovery and scratch GC.
 
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { intentSessions, intentTurns } from '@/db/schema'
+
+import type { IntentPersistence } from '@/modules/intent/public/operations'
 import { createLogger, type Logger } from '@/util/log'
 import { INTENT_SCRATCH_DIRNAME } from './turnEngine'
 
-/** Capture the exact in-flight generation before this daemon accepts work. */
-export function listIntentTurnIdsForBootRecovery(db: DbClient): string[] {
-  return db
-    .select({ turnId: intentSessions.inFlightTurnId })
-    .from(intentSessions)
-    .where(isNotNull(intentSessions.inFlightTurnId))
-    .all()
-    .flatMap(({ turnId }) => (turnId === null ? [] : [turnId]))
+export async function listIntentTurnIdsForBootRecovery(
+  persistence: IntentPersistence,
+): Promise<readonly string[]> {
+  return await persistence.listTurnIdsForBootRecovery()
 }
 
-/** Daemon boot: settle only the captured previous-generation turns as a
- *  daemon-restart error and free their slots. The scratch dir (if any) is left
- *  for the GC sweep below. */
-export function recoverIntentTurnsOnBoot(
-  db: DbClient,
+export async function recoverIntentTurnsOnBoot(
+  persistence: IntentPersistence,
   log: Logger = createLogger('intent'),
-  turnIds: readonly string[] = listIntentTurnIdsForBootRecovery(db),
-): number {
-  if (turnIds.length === 0) return 0
-  return dbTxSync(db, (tx) => {
-    const orphaned = tx
-      .select()
-      .from(intentSessions)
-      .where(
-        and(
-          isNotNull(intentSessions.inFlightTurnId),
-          inArray(intentSessions.inFlightTurnId, [...turnIds]),
-        ),
-      )
-      .all()
-    for (const session of orphaned) {
-      const turnId = session.inFlightTurnId as string
-      const turn = tx
-        .select({ captureState: intentTurns.captureState })
-        .from(intentTurns)
-        .where(eq(intentTurns.id, turnId))
-        .get()
-      tx.update(intentTurns)
-        .set({
-          kind: 'error',
-          contentJson: JSON.stringify({ code: 'intent-run-daemon-restart' }),
-          scratchRetained: true,
-          // A process restart cannot prove that the stream and post-run store
-          // flush completed. Only an actually-live capture is downgraded:
-          // already-settled complete/truncated/incomplete evidence is immutable.
-          ...(turn?.captureState === 'live'
-            ? {
-                captureState: 'incomplete' as const,
-                captureIncompleteReason: 'post-exit-flush-timeout' as const,
-              }
-            : {}),
-        })
-        .where(eq(intentTurns.id, turnId))
-        .run()
-      tx.update(intentSessions)
-        .set({ inFlightTurnId: null, updatedAt: Date.now() })
-        .where(and(eq(intentSessions.id, session.id), eq(intentSessions.inFlightTurnId, turnId)))
-        .run()
-      log.warn('intent-orphan-turn-recovered', { sessionId: session.id, turnId })
-    }
-    return orphaned.length
+  turnIds?: readonly string[],
+): Promise<number> {
+  const captured = turnIds ?? (await listIntentTurnIdsForBootRecovery(persistence))
+  if (captured.length === 0) return 0
+  const recovered = await persistence.recoverTurnsOnBoot({
+    turnIds: captured,
+    now: Date.now(),
+    reason: 'intent-run-daemon-restart',
   })
+  if (recovered > 0) log.warn('intent-orphan-turns-recovered', { recovered })
+  return recovered
 }
 
-/** Hourly + boot sweep of `<appHome>/intent-scratch/`. A dir is removed when
- *  its turn is terminal (or unknown) AND older than the retention window;
- *  in-flight turns' dirs are never touched. */
-export function sweepIntentScratch(
-  db: DbClient,
+export async function sweepIntentScratch(
+  persistence: IntentPersistence,
   appHome: string,
   retentionHours: number,
   log: Logger = createLogger('intent'),
-): number {
+): Promise<number> {
   const root = join(appHome, INTENT_SCRATCH_DIRNAME)
   if (!existsSync(root)) return 0
   const cutoff = Date.now() - retentionHours * 3600_000
-  let removed = 0
+  const candidates: Array<{ readonly name: string; readonly dir: string }> = []
   for (const name of readdirSync(root)) {
     const dir = join(root, name)
-    let mtime: number
     try {
-      mtime = statSync(dir).mtimeMs
+      if (statSync(dir).mtimeMs <= cutoff) candidates.push({ name, dir })
     } catch {
-      continue
+      // A concurrent cleanup already won.
     }
-    if (mtime > cutoff) continue
-    const kind = db
-      .select({ kind: intentTurns.kind })
-      .from(intentTurns)
-      .where(eq(intentTurns.id, name))
-      .get()?.kind
-    if (kind === 'running') continue
+  }
+  const running = await persistence.listRunningTurnIds(candidates.map(({ name }) => name))
+  let removed = 0
+  for (const candidate of candidates) {
+    if (running.has(candidate.name)) continue
     try {
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(candidate.dir, { recursive: true, force: true })
       removed += 1
-      log.info('intent-scratch-swept', { dir: name, kind: kind ?? 'unknown' })
-    } catch (err) {
+      log.info('intent-scratch-swept', { dir: candidate.name })
+    } catch (error) {
       log.warn('intent-scratch-sweep-failed', {
-        dir: name,
-        err: err instanceof Error ? err.message : String(err),
+        dir: candidate.name,
+        err: error instanceof Error ? error.message : String(error),
       })
     }
   }

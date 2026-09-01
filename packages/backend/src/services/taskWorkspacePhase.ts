@@ -8,11 +8,7 @@
 // 这里给批量场景（autoResume / stuckTaskDetector 一次处理一批候选）提供一次查询，
 // 而不是每行一次；单行场景直接传 `[id]`。
 
-import { and, eq, inArray } from 'drizzle-orm'
-
-import type { DbClient } from '@/db/client'
-import { nodeRuns } from '@/db/schema'
-import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 
 /**
  * 这批任务里，哪些已经落下了 `__repo_prep__` 行。
@@ -20,21 +16,9 @@ import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
  * 空入参直接返回空集合——`inArray(x, [])` 在 SQLite 上是恒假，但显式短路省掉一次往返，
  * 也让「没有候选」这件事在读代码时是显然的。
  */
-export function taskIdsWithRepoPrepRow(
-  db: DbClient,
+export async function taskIdsWithRepoPrepRow(
+  operations: TaskRecoveryOperations,
   taskIds: readonly string[],
-): ReadonlySet<string> {
-  if (taskIds.length === 0) return new Set()
-  // `groupBy` + `limit`：一个任务可能有多条 `__repo_prep__` 行（重试各留一行），
-  // 而这里只要「有没有」。分组后每个 taskId 至多一行，于是行数被入参长度真实卡死——
-  // 不是靠 IN 子句"看起来"有界（RFC-311 的无界读棘轮按 `.limit(` 判，且它判得对：
-  // 一个只在子句里有界的查询，下次有人放宽子句时不会有任何东西提醒他）。
-  const rows = db
-    .select({ taskId: nodeRuns.taskId })
-    .from(nodeRuns)
-    .where(and(inArray(nodeRuns.taskId, [...taskIds]), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-    .groupBy(nodeRuns.taskId)
-    .limit(taskIds.length)
-    .all()
-  return new Set(rows.map((row) => row.taskId))
+): Promise<ReadonlySet<string>> {
+  return operations.taskIdsWithRepoPrepRow(taskIds)
 }

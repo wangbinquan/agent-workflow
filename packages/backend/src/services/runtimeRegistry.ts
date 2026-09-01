@@ -10,7 +10,6 @@
 
 import { readFileSync } from 'node:fs'
 import { isAbsolute, resolve as resolvePath } from 'node:path'
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   RUNTIME_NUMERIC_BOUNDS,
@@ -19,19 +18,19 @@ import {
   DEFAULT_CONFIG_DIR_PROFILE,
   type RuntimeConfigDirProfile,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { agents, runtimes } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { RuntimeKind } from '@/services/runtime'
 import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
 import { createLogger } from '@/util/log'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
-import {
-  transitionInheritedRuntimeTestsInTx,
-  transitionRuntimeTestsInTx,
-} from '@/services/mcpRuntimeTestTransitions'
 import { CLAUDE_PLATFORM_OWNED_FLAGS } from '@/services/runtime'
+import type {
+  RuntimeRegistryOperations,
+  RuntimeRegistryPersistence,
+  RuntimeUpdateRecord,
+} from '@/platform/runtime-registry/application/runtimeRegistryOperations'
+
+export type { RuntimeRegistryOperations }
 
 const log = createLogger('runtimeRegistry')
 
@@ -410,13 +409,17 @@ export function runtimeRowToView(
 
 // --- reads -----------------------------------------------------------------
 
-export async function listRuntimes(db: DbClient): Promise<RuntimeRow[]> {
-  return (await db.select().from(runtimes)) as RuntimeRow[]
+export async function listRuntimes(
+  persistence: RuntimeRegistryPersistence,
+): Promise<readonly RuntimeRow[]> {
+  return persistence.listRuntimes()
 }
 
-export async function getRuntime(db: DbClient, name: string): Promise<RuntimeRow | null> {
-  const row = (await db.select().from(runtimes).where(eq(runtimes.name, name)).limit(1))[0]
-  return (row as RuntimeRow | undefined) ?? null
+export async function getRuntime(
+  persistence: RuntimeRegistryPersistence,
+  name: string,
+): Promise<RuntimeRow | null> {
+  return persistence.getRuntime(name)
 }
 
 // --- resolution (name → protocol + binary) ---------------------------------
@@ -427,12 +430,12 @@ export async function getRuntime(db: DbClient, name: string): Promise<RuntimeRow
  * brick a dispatch. db-aware (custom names aren't derivable from the string).
  */
 export async function resolveRuntimeByName(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   name: string | null | undefined,
 ): Promise<ResolvedRuntime> {
   const n = typeof name === 'string' && name.length > 0 ? name : null
   if (n !== null) {
-    const row = await getRuntime(db, n)
+    const row = await getRuntime(persistence, n)
     if (row !== null)
       return {
         name: row.name,
@@ -470,13 +473,13 @@ export async function resolveRuntimeByName(
 
 /** agent.runtime ?? config.defaultRuntime ?? 'opencode', resolved to a row. */
 export async function resolveAgentRuntime(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   agentRuntime: string | null | undefined,
   defaultRuntime: string | null | undefined,
 ): Promise<ResolvedRuntime> {
   const pick = (v: string | null | undefined): string | undefined =>
     typeof v === 'string' && v.length > 0 ? v : undefined
-  return resolveRuntimeByName(db, pick(agentRuntime) ?? pick(defaultRuntime) ?? 'opencode')
+  return resolveRuntimeByName(persistence, pick(agentRuntime) ?? pick(defaultRuntime) ?? 'opencode')
 }
 
 /**
@@ -503,7 +506,7 @@ export async function resolveAgentRuntime(
  * those config fields.
  */
 export async function resolveInternalAgentRuntime(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   opts: {
     runtimeName?: string | null
     deprecatedModel?: string | null
@@ -513,7 +516,7 @@ export async function resolveInternalAgentRuntime(
   const pick = (v: string | null | undefined): string | null =>
     typeof v === 'string' && v.length > 0 ? v : null
   const runtimeName = pick(opts.runtimeName)
-  if (runtimeName !== null) return resolveRuntimeByName(db, runtimeName)
+  if (runtimeName !== null) return resolveRuntimeByName(persistence, runtimeName)
   const legacyModel = pick(opts.deprecatedModel)
   if (legacyModel !== null) {
     return {
@@ -525,7 +528,7 @@ export async function resolveInternalAgentRuntime(
       model: legacyModel,
     }
   }
-  return resolveAgentRuntime(db, null, opts.defaultRuntime)
+  return resolveAgentRuntime(persistence, null, opts.defaultRuntime)
 }
 
 // RFC-143: `runtimeHead` (RFC-112 PR-A) was a second copy of the per-protocol
@@ -668,7 +671,7 @@ export interface RuntimeProfileInput {
   isSandbox?: boolean
   /** 2026-08-04 — extra argv tokens; validated against the protocol in
    *  create/update (NOT in profilePatch, which has no protocol context). */
-  extraArgs?: string[] | null
+  extraArgs?: readonly string[] | null
 }
 
 /** Validate + normalize profile params into the row columns (only present keys).
@@ -763,7 +766,10 @@ export interface CreateRuntimeInput extends RuntimeProfileInput {
   createdBy?: string | null
 }
 
-export async function createRuntime(db: DbClient, input: CreateRuntimeInput): Promise<RuntimeRow> {
+export async function createRuntime(
+  persistence: RuntimeRegistryPersistence,
+  input: CreateRuntimeInput,
+): Promise<RuntimeRow> {
   validateName(input.name)
   validateProtocol(input.protocol)
   const profile = profilePatch(input)
@@ -772,10 +778,10 @@ export async function createRuntime(db: DbClient, input: CreateRuntimeInput): Pr
   const configDirName = validateConfigDirName(input.configDirName)
   const extraArgsJson = validateExtraArgs(input.protocol as RuntimeProtocol, input.extraArgs)
   const isSandbox = validateIsSandbox(input.protocol as RuntimeProtocol, input.isSandbox)
-  const existing = await getRuntime(db, input.name)
+  const existing = await getRuntime(persistence, input.name)
   if (existing !== null)
     throw new ConflictError('runtime-exists', `runtime '${input.name}' already exists`)
-  await db.insert(runtimes).values({
+  await persistence.insertRuntime({
     id: ulid(),
     name: input.name,
     protocol: input.protocol as RuntimeProtocol,
@@ -788,7 +794,7 @@ export async function createRuntime(db: DbClient, input: CreateRuntimeInput): Pr
     createdBy: input.createdBy ?? null,
     ...profile,
   })
-  const row = await getRuntime(db, input.name)
+  const row = await getRuntime(persistence, input.name)
   if (row === null) throw new Error('runtime insert vanished')
   return row
 }
@@ -801,6 +807,10 @@ export interface UpdateRuntimeInput extends RuntimeProfileInput {
   lastProbeJson?: string | null
 }
 
+type MutableRuntimeUpdateRecord = {
+  -readonly [Key in keyof RuntimeUpdateRecord]: RuntimeUpdateRecord[Key]
+}
+
 /**
  * Update a runtime's binary_path / profile params / cached probe. `name` and
  * `protocol` are IMMUTABLE (the reference key + the driver/session-format pin).
@@ -808,15 +818,19 @@ export interface UpdateRuntimeInput extends RuntimeProfileInput {
  * identity (name/protocol) + deletion stay locked (deleteRuntime guards those).
  */
 export async function updateRuntime(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   name: string,
   input: UpdateRuntimeInput,
 ): Promise<RuntimeRow> {
-  const row = await getRuntime(db, name)
+  const row = await getRuntime(persistence, name)
   if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
   const profile = profilePatch(input)
   const now = Date.now()
-  const patch: Record<string, unknown> = { updatedAt: now, ...profile }
+  const patch: MutableRuntimeUpdateRecord = {
+    updatedAt: now,
+    incrementProbeFence: false,
+    ...profile,
+  }
   let executionProfileChanged =
     (profile.model !== undefined && profile.model !== row.model) ||
     (profile.variant !== undefined && profile.variant !== row.variant) ||
@@ -853,22 +867,19 @@ export async function updateRuntime(
   // receipt attached to changed binary/model/config semantics.
   if (executionProfileChanged) {
     patch.lastProbeJson = null
-    patch.probeFence = sql`${runtimes.probeFence} + 1`
+    patch.incrementProbeFence = true
   }
   // Internal callers may deliberately persist a fresh receipt in the same
   // update; an explicit value wins over invalidation.
-  if (input.lastProbeJson !== undefined) patch.lastProbeJson = input.lastProbeJson
-  dbTxSync(db, (tx) => {
-    tx.update(runtimes).set(patch).where(eq(runtimes.name, name)).run()
-    if (executionProfileChanged) {
-      transitionRuntimeTestsInTx(tx, {
-        runtimeName: name,
-        reason: 'runtime-profile-changed',
-        now,
-      })
-    }
+  if (input.lastProbeJson !== undefined) {
+    patch.lastProbeJson = input.lastProbeJson
+  }
+  await persistence.updateRuntime({
+    name,
+    patch,
+    executionProfileChanged,
   })
-  const updated = await getRuntime(db, name)
+  const updated = await getRuntime(persistence, name)
   if (updated === null) throw new Error('runtime update vanished')
   // RFC-114 P3-6: a changed binary makes any cached `<binary> models` stale —
   // evict the old + new path so the next list re-runs the right binary.
@@ -890,41 +901,16 @@ export async function updateRuntime(
  * may truthfully return success.
  */
 export async function cacheRuntimeProbe(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   target: RuntimeProbeTarget,
   smoke: unknown,
 ): Promise<boolean> {
-  const f = target.fingerprint
   const receipt: RuntimeProbeReceipt = { codec: 1, target, smoke }
-  const lastProbeJson = JSON.stringify(receipt)
-  const updated = await db
-    .update(runtimes)
-    .set({ lastProbeJson, updatedAt: Date.now() })
-    .where(
-      and(
-        eq(runtimes.id, target.id),
-        eq(runtimes.name, target.name),
-        eq(runtimes.probeFence, target.probeFence),
-        eq(runtimes.protocol, f.protocol),
-        f.binaryPath === null ? isNull(runtimes.binaryPath) : eq(runtimes.binaryPath, f.binaryPath),
-        f.model === null ? isNull(runtimes.model) : eq(runtimes.model, f.model),
-        f.variant === null ? isNull(runtimes.variant) : eq(runtimes.variant, f.variant),
-        f.temperature === null
-          ? isNull(runtimes.temperature)
-          : eq(runtimes.temperature, f.temperature),
-        f.steps === null ? isNull(runtimes.steps) : eq(runtimes.steps, f.steps),
-        f.maxSteps === null ? isNull(runtimes.maxSteps) : eq(runtimes.maxSteps, f.maxSteps),
-        eq(runtimes.isSandbox, f.isSandbox),
-        f.configDirEnv === null
-          ? isNull(runtimes.configDirEnv)
-          : eq(runtimes.configDirEnv, f.configDirEnv),
-        f.configDirName === null
-          ? isNull(runtimes.configDirName)
-          : eq(runtimes.configDirName, f.configDirName),
-      ),
-    )
-    .returning({ id: runtimes.id })
-  return updated.length === 1
+  return persistence.cacheRuntimeProbe({
+    target,
+    lastProbeJson: JSON.stringify(receipt),
+    updatedAt: Date.now(),
+  })
 }
 
 /**
@@ -934,25 +920,11 @@ export async function cacheRuntimeProbe(
  * fails, the conservative false-negative is safe and a future probe repairs it.
  */
 export async function invalidateInheritedRuntimeProbeReceipts(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   protocols: readonly RuntimeProtocol[],
 ): Promise<number> {
   if (protocols.length === 0) return 0
-  const now = Date.now()
-  return dbTxSync(db, (tx) => {
-    const updated = tx
-      .update(runtimes)
-      .set({
-        probeFence: sql`${runtimes.probeFence} + 1`,
-        lastProbeJson: null,
-        updatedAt: now,
-      })
-      .where(and(inArray(runtimes.protocol, [...protocols]), isNull(runtimes.binaryPath)))
-      .returning({ id: runtimes.id })
-      .all()
-    transitionInheritedRuntimeTestsInTx(tx, { protocols, now })
-    return updated.length
-  })
+  return persistence.invalidateInheritedRuntimeProbeReceipts({ protocols, now: Date.now() })
 }
 
 /**
@@ -965,113 +937,65 @@ export async function invalidateInheritedRuntimeProbeReceipts(
  * dispatching — disabling only blocks NEW selections. Idempotent.
  */
 export async function setRuntimeEnabled(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   name: string,
   enabled: boolean,
   defaultRuntimeName: string | null | undefined,
 ): Promise<RuntimeRow> {
-  const now = Date.now()
-  const changed = dbTxSync(db, (tx) => {
-    const row = tx.select().from(runtimes).where(eq(runtimes.name, name)).get()
-    if (row === undefined) {
-      throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
-    }
-    if (!enabled && name === (defaultRuntimeName ?? 'opencode')) {
-      throw new ConflictError(
-        'runtime-default-cannot-disable',
-        `runtime '${name}' is the effective default and cannot be disabled; change the default first`,
-      )
-    }
-    if (row.enabled === enabled) return false
-    tx.update(runtimes).set({ enabled, updatedAt: now }).where(eq(runtimes.name, name)).run()
-    if (!enabled) {
-      transitionRuntimeTestsInTx(tx, {
-        runtimeName: name,
-        reason: 'runtime-disabled',
-        now,
-      })
-    }
-    return true
+  const result = await persistence.setRuntimeEnabled({
+    name,
+    enabled,
+    effectiveDefaultName: defaultRuntimeName ?? 'opencode',
+    now: Date.now(),
   })
-  if (!changed) {
-    const unchanged = await getRuntime(db, name)
-    if (unchanged === null) throw new Error('runtime enabled-toggle vanished')
-    return unchanged
+  if (result.status === 'not-found') {
+    throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
   }
-  const updated = await getRuntime(db, name)
+  if (result.status === 'default-cannot-disable') {
+    throw new ConflictError(
+      'runtime-default-cannot-disable',
+      `runtime '${name}' is the effective default and cannot be disabled; change the default first`,
+    )
+  }
+  const updated = await getRuntime(persistence, name)
   if (updated === null) throw new Error('runtime enabled-toggle vanished')
   return updated
 }
 
 export async function deleteRuntime(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   name: string,
   refs: RuntimeRefConfig,
 ): Promise<void> {
   // RFC-153 impl-gate (2nd pass): the existence check, last-row count, reference
-  // checks and delete MUST be ONE synchronous transaction. Split across awaited
-  // statements, two concurrent DELETEs of different unreferenced rows both observe
-  // count===2, both pass, and empty the table — which the next boot's empty-table
-  // seed would then resurrect. bun:sqlite async sequences aren't transactional (cf.
-  // RFC-144 dbTxSync guidance); the sync tx serializes them.
-  let binaryPath: string | null = null
-  dbTxSync(db, (tx) => {
-    const all = tx
-      .select({ name: runtimes.name, binaryPath: runtimes.binaryPath })
-      .from(runtimes)
-      .all() as { name: string; binaryPath: string | null }[]
-    const row = all.find((r) => r.name === name)
-    if (row === undefined) {
-      throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
-    }
-    // Never delete the LAST runtime — keeps dispatch with a live target AND keeps
-    // the empty-table seed gate from resurrecting "deleted" preseeded rows.
-    if (all.length <= 1) {
-      throw new ConflictError(
-        'runtime-last',
-        `runtime '${name}' is the only remaining runtime and cannot be deleted`,
-      )
-    }
-    // Effective default computed EXACTLY like dispatch (resolveRuntimeByName): a
-    // configured default is the effective default if it resolves to a real row OR is
-    // a built-in protocol name — a MISSING built-in name resolves to its OWN protocol
-    // fallback (e.g. missing 'claude-code' → claude-code, NOT opencode; 3rd-pass
-    // impl-gate). Only a truly unknown / unset name falls back to 'opencode', so a
-    // stale / dangling default still protects the opencode row it would resolve to.
-    const cfg = refs.defaultRuntime
-    const cfgResolves =
-      cfg != null && cfg.length > 0 && (all.some((r) => r.name === cfg) || BUILTIN_NAMES.has(cfg))
-    const effectiveDefault = cfgResolves ? cfg : 'opencode'
-    const configFields: string[] = []
-    if (effectiveDefault === name) configFields.push('config.defaultRuntime')
-    if (refs.memoryDistillRuntime === name) configFields.push('config.memoryDistillRuntime')
-    if (refs.commitPushRuntime === name) configFields.push('config.commitPushRuntime')
-    if (refs.mergeAgentRuntime === name) configFields.push('config.mergeAgentRuntime')
-    if (refs.intentBuilderRuntime === name) configFields.push('config.intentBuilderRuntime')
-    if (refs.changeNarrativeRuntime === name) configFields.push('config.changeNarrativeRuntime')
-    const refAgents = tx
-      .select({ name: agents.name })
-      .from(agents)
-      .where(eq(agents.runtime, name))
-      .all() as { name: string }[]
-    if (configFields.length > 0 || refAgents.length > 0) {
-      const by = [...configFields, ...refAgents.map((a) => `agent '${a.name}'`)]
-      throw new ConflictError(
-        'runtime-in-use',
-        `runtime '${name}' is in use by ${by.join(', ')}; re-point them first`,
-      )
-    }
-    transitionRuntimeTestsInTx(tx, {
-      runtimeName: name,
-      reason: 'runtime-deleted',
-      now: Date.now(),
-    })
-    tx.delete(runtimes).where(eq(runtimes.name, name)).run()
-    binaryPath = row.binaryPath
+  // checks and delete MUST be ONE provider-owned serializable transaction. Split
+  // across awaited statements, two concurrent DELETEs of different unreferenced
+  // rows both observe count===2, both pass, and empty the table — which the next
+  // boot's empty-table seed would then resurrect.
+  const result = await persistence.deleteRuntime({
+    name,
+    refs,
+    builtinNames: BUILTIN_NAMES,
+    now: Date.now(),
   })
+  if (result.status === 'not-found') {
+    throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
+  }
+  if (result.status === 'last-runtime') {
+    throw new ConflictError(
+      'runtime-last',
+      `runtime '${name}' is the only remaining runtime and cannot be deleted`,
+    )
+  }
+  if (result.status === 'in-use') {
+    throw new ConflictError(
+      'runtime-in-use',
+      `runtime '${name}' is in use by ${result.references.join(', ')}; re-point them first`,
+    )
+  }
   // RFC-114 P3-6: drop this binary's cached model list (outside the tx — the cache
   // is process-local, not DB state).
-  if (binaryPath !== null) evictDriverBinaryCaches(binaryPath)
+  if (result.binaryPath !== null) evictDriverBinaryCaches(result.binaryPath)
 }
 
 // --- seed ------------------------------------------------------------------
@@ -1085,14 +1009,10 @@ export async function deleteRuntime(
  * config binary backfill fills binary next; model stays NULL = opencode's own
  * default). Idempotent via the empty-table guard.
  */
-export async function seedBuiltinRuntimes(db: DbClient): Promise<void> {
-  const existing = await db.select({ id: runtimes.id }).from(runtimes).limit(1)
-  if (existing.length > 0) return
-  for (const b of BUILTIN_RUNTIMES) {
-    await db
-      .insert(runtimes)
-      .values({ id: ulid(), name: b.name, protocol: b.protocol, binaryPath: null })
-  }
+export async function seedBuiltinRuntimes(persistence: RuntimeRegistryPersistence): Promise<void> {
+  await persistence.seedBuiltinRuntimes(
+    BUILTIN_RUNTIMES.map((builtin) => ({ id: ulid(), ...builtin })),
+  )
 }
 
 // --- RFC-113 one-time startup migrations ------------------------------------
@@ -1107,7 +1027,7 @@ export async function seedBuiltinRuntimes(db: DbClient): Promise<void> {
  *  a user row that merely reused 'opencode' / 'claude-code' under a mismatched
  *  protocol. */
 export async function migrateConfigIntoBuiltins(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   config: {
     opencodePath?: string | null
     claudeCodePath?: string | null
@@ -1118,13 +1038,13 @@ export async function migrateConfigIntoBuiltins(
     protocol: RuntimeProtocol,
     binaryPath: string | null | undefined,
   ) => {
-    const row = await getRuntime(db, name)
-    if (row === null || row.protocol !== protocol || row.binaryPath !== null || binaryPath == null)
-      return
-    await db
-      .update(runtimes)
-      .set({ binaryPath, updatedAt: Date.now() })
-      .where(eq(runtimes.name, name))
+    if (binaryPath == null) return
+    await persistence.backfillBuiltinBinary({
+      name,
+      protocol,
+      binaryPath,
+      updatedAt: Date.now(),
+    })
   }
   await backfillBinary('opencode', 'opencode', config.opencodePath)
   await backfillBinary('claude-code', 'claude-code', config.claudeCodePath)
@@ -1146,7 +1066,7 @@ export async function migrateConfigIntoBuiltins(
  * installs (no legacy keys / no config file) pass through untouched.
  */
 export async function assertConfigDefaultsMigrated(
-  db: DbClient,
+  persistence: RuntimeRegistryPersistence,
   configPath: string,
 ): Promise<void> {
   let raw: Record<string, unknown>
@@ -1170,20 +1090,9 @@ export async function assertConfigDefaultsMigrated(
   // RFC-113 backfill ran — a user row that merely reused 'opencode' must not
   // count. (In the pre-RFC-113 first-upgrade case this guard serves, the table is
   // freshly seeded this boot, so there is no user row to confuse it with.)
-  const preseeded = (
-    await db
-      .select({
-        name: runtimes.name,
-        protocol: runtimes.protocol,
-        model: runtimes.model,
-        variant: runtimes.variant,
-        temperature: runtimes.temperature,
-        steps: runtimes.steps,
-        maxSteps: runtimes.maxSteps,
-      })
-      .from(runtimes)
-      .where(inArray(runtimes.name, [...BUILTIN_NAMES]))
-  ).filter((r) => r.protocol === r.name)
+  const preseeded = (await persistence.listBuiltinProfiles([...BUILTIN_NAMES])).filter(
+    (row) => row.protocol === row.name,
+  )
   const anyProfileSet = preseeded.some(
     (r) =>
       r.model !== null ||
@@ -1207,4 +1116,49 @@ export async function assertConfigDefaultsMigrated(
         `or remove these keys from config.json before upgrading.`,
     )
   }
+}
+
+/**
+ * Provider-neutral application surface. Bootstrap selects exactly one concrete
+ * persistence adapter and passes this frozen aggregate to every registry
+ * consumer; no route or caller receives a database client.
+ */
+export function composeRuntimeRegistryOperations(
+  persistence: RuntimeRegistryPersistence,
+): RuntimeRegistryOperations {
+  return Object.freeze({
+    listRuntimes: () => listRuntimes(persistence),
+    getRuntime: (name: string) => getRuntime(persistence, name),
+    resolveRuntimeByName: (name: string | null | undefined) =>
+      resolveRuntimeByName(persistence, name),
+    resolveAgentRuntime: (
+      agentRuntime: string | null | undefined,
+      defaultRuntime: string | null | undefined,
+    ) => resolveAgentRuntime(persistence, agentRuntime, defaultRuntime),
+    resolveInternalAgentRuntime: (input: {
+      readonly runtimeName?: string | null
+      readonly deprecatedModel?: string | null
+      readonly defaultRuntime?: string | null
+    }) => resolveInternalAgentRuntime(persistence, input),
+    createRuntime: (input: CreateRuntimeInput) => createRuntime(persistence, input),
+    updateRuntime: (name: string, input: UpdateRuntimeInput) =>
+      updateRuntime(persistence, name, input),
+    cacheRuntimeProbe: (target: RuntimeProbeTarget, smoke: unknown) =>
+      cacheRuntimeProbe(persistence, target, smoke),
+    invalidateInheritedRuntimeProbeReceipts: (protocols: readonly RuntimeProtocol[]) =>
+      invalidateInheritedRuntimeProbeReceipts(persistence, protocols),
+    setRuntimeEnabled: (
+      name: string,
+      enabled: boolean,
+      defaultRuntimeName: string | null | undefined,
+    ) => setRuntimeEnabled(persistence, name, enabled, defaultRuntimeName),
+    deleteRuntime: (name: string, refs: RuntimeRefConfig) => deleteRuntime(persistence, name, refs),
+    seedBuiltinRuntimes: () => seedBuiltinRuntimes(persistence),
+    migrateConfigIntoBuiltins: (config: {
+      readonly opencodePath?: string | null
+      readonly claudeCodePath?: string | null
+    }) => migrateConfigIntoBuiltins(persistence, config),
+    assertConfigDefaultsMigrated: (configPath: string) =>
+      assertConfigDefaultsMigrated(persistence, configPath),
+  })
 }

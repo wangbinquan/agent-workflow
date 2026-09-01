@@ -25,6 +25,7 @@ import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   DW_VALIDATION_CODES,
   DwGeneratedWorkflowSchema,
+  DwStateSchema,
   dwGeneratedToWorkflowDef,
   fenceUntrusted,
   parseTriggerContextJson,
@@ -37,12 +38,10 @@ import {
   type WorkgroupRuntimeConfig,
   type ParsedTriggerContext,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
-import { getAgentById } from '@/services/agent'
-import { setNodeRunStatus } from '@/services/lifecycle'
-import { loadRunEnvelopeNonce, mintNodeRun } from '@/services/nodeRunMint'
+import type { DynamicWorkflowPersistence } from '@/modules/task-execution/application/ports/dynamicWorkflowPersistence'
+import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
+import type { WorkgroupTurnHostOperations } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
+import type { TaskScopeOutcome } from '@/modules/task-execution/domain/taskEngine'
 import {
   buildDwPoolMembers,
   buildOrchestratorAgent,
@@ -52,10 +51,8 @@ import {
   ORCHESTRATOR_WORKFLOW_PORT,
   validateDynamicWorkflowDef,
 } from '@/services/orchestratorAgent'
-import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
+import { validateWorkflowDef } from '@/services/workflow.validator'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import { loadWorkgroupTaskState, setDwState } from '@/services/workgroup/state'
-import type { WorkgroupEngineHooks, WorkgroupEngineResult } from '@/services/workgroup/engine'
 import type { Logger } from '@/util/log'
 
 /** Total generation attempts per pass (bad JSON / schema / validation all count).
@@ -71,11 +68,18 @@ export const DW_GENERATE_CAUSE = 'dw-generate'
 export const DW_GATE_CAUSE = 'dw-gate'
 
 export interface DynamicWorkflowEngineArgs {
-  db: DbClient
+  persistence: DynamicWorkflowPersistence
+  nodeRuns: NodeRunLifecyclePersistence
+  validationContext: DynamicWorkflowValidationContextSource
   taskId: string
   log: Logger
   signal?: AbortSignal
-  hooks: WorkgroupEngineHooks
+  hooks: WorkgroupTurnHostOperations
+}
+
+/** Resource Catalog owns the provider-specific inventory projection. */
+export interface DynamicWorkflowValidationContextSource {
+  load(): Promise<Parameters<typeof validateWorkflowDef>[1]>
 }
 
 interface DwDbState {
@@ -84,9 +88,12 @@ interface DwDbState {
   triggerSource: ParsedTriggerContext
 }
 
-async function loadDwDbState(db: DbClient, taskId: string): Promise<DwDbState | null> {
-  const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
-  if (row === undefined || row.workgroupConfigJson === null) return null
+async function loadDwDbState(
+  persistence: DynamicWorkflowPersistence,
+  taskId: string,
+): Promise<DwDbState | null> {
+  const row = await persistence.loadTask(taskId)
+  if (row === null || row.workgroupConfigJson === null || row.dwStateJson === null) return null
   let rawConfig: Record<string, unknown>
   try {
     rawConfig = JSON.parse(row.workgroupConfigJson) as Record<string, unknown>
@@ -97,8 +104,14 @@ async function loadDwDbState(db: DbClient, taskId: string): Promise<DwDbState | 
   if (!config.success) return null
   // RFC-217 T2 — the dw checkpoint lives in workgroup_task_state (complete
   // DwState, zod-validated, single writer while the task runs).
-  const dw = (await loadWorkgroupTaskState(db, taskId)).dwState
-  if (dw === null) return null
+  let dw: DwState
+  try {
+    const parsed = DwStateSchema.safeParse(JSON.parse(row.dwStateJson))
+    if (!parsed.success) return null
+    dw = parsed.data
+  } catch {
+    return null
+  }
   return { config: config.data, dw, triggerSource: parseTriggerContextJson(row.triggerContextJson) }
 }
 
@@ -200,7 +213,10 @@ export function evaluateGeneratedWorkflow(
  * and is skipped — a fully unresolvable pool fails closed upstream. The pool
  * order here defines the deterministic `member#N` token assignment.
  */
-async function resolvePool(db: DbClient, config: WorkgroupRuntimeConfig): Promise<Agent[]> {
+async function resolvePool(
+  persistence: DynamicWorkflowPersistence,
+  config: WorkgroupRuntimeConfig,
+): Promise<Agent[]> {
   const seen = new Set<string>()
   const pool: Agent[] = []
   for (const m of config.members) {
@@ -208,22 +224,21 @@ async function resolvePool(db: DbClient, config: WorkgroupRuntimeConfig): Promis
     const agentId = typeof m.agentId === 'string' && m.agentId.length > 0 ? m.agentId : null
     if (agentId === null || seen.has(agentId)) continue
     seen.add(agentId)
-    const agent = await getAgentById(db, agentId)
+    const agent = await persistence.loadAgent(agentId)
     if (agent !== null) pool.push(agent)
   }
   return pool
 }
 
 /** Mint the confirm-gate holder run (task awaiting_review lifecycle invariant). */
-async function openDwGate(db: DbClient, taskId: string): Promise<void> {
-  const gateRunId = await mintNodeRun(db, {
+async function openDwGate(nodeRuns: NodeRunLifecyclePersistence, taskId: string): Promise<void> {
+  const gateRunId = await nodeRuns.mint({
     taskId,
     nodeId: DW_ORCHESTRATOR_NODE_ID,
     status: 'pending',
     cause: DW_GATE_CAUSE,
   })
-  await setNodeRunStatus({
-    db,
+  await nodeRuns.set({
     nodeRunId: gateRunId,
     to: 'awaiting_review',
     allowedFrom: ['pending'],
@@ -231,7 +246,7 @@ async function openDwGate(db: DbClient, taskId: string): Promise<void> {
   })
 }
 
-const AWAITING_CONFIRM_RESULT: WorkgroupEngineResult = {
+const AWAITING_CONFIRM_RESULT: TaskScopeOutcome = {
   kind: 'awaiting_review',
   detail: { summary: 'dynamic workflow awaiting confirmation', message: 'dw-gate' },
 }
@@ -243,10 +258,10 @@ const AWAITING_CONFIRM_RESULT: WorkgroupEngineResult = {
  */
 export async function runDynamicWorkflowGenerate(
   args: DynamicWorkflowEngineArgs,
-): Promise<WorkgroupEngineResult> {
-  const { db, taskId, log, hooks } = args
+): Promise<TaskScopeOutcome> {
+  const { persistence, nodeRuns, taskId, log, hooks } = args
 
-  const state = await loadDwDbState(db, taskId)
+  const state = await loadDwDbState(persistence, taskId)
   if (state === null) {
     return {
       kind: 'failed',
@@ -286,17 +301,13 @@ export async function runDynamicWorkflowGenerate(
   // re-park, not regenerate. The holder run usually survives; re-mint if a
   // crash lost it (the awaiting_review lifecycle invariant needs one).
   if (dw.phase === 'awaiting_confirm') {
-    const holders = await db
-      .select({ id: nodeRuns.id, status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.rerunCause, DW_GATE_CAUSE)))
-    if (!holders.some((h) => h.status === 'awaiting_review')) {
-      await openDwGate(db, taskId)
+    if (!(await persistence.hasAwaitingConfirmationRun(taskId, DW_GATE_CAUSE))) {
+      await openDwGate(nodeRuns, taskId)
     }
     return AWAITING_CONFIRM_RESULT
   }
 
-  const pool = await resolvePool(db, config)
+  const pool = await resolvePool(persistence, config)
   if (pool.length === 0) {
     return {
       kind: 'failed',
@@ -311,7 +322,7 @@ export async function runDynamicWorkflowGenerate(
   // returned token is converted back to a canonical agentId.
   const members = buildDwPoolMembers(pool)
   const tokenMap = dwPoolTokenMap(members)
-  const layer1Ctx = await buildWorkflowValidationContext(db)
+  const layer1Ctx = await args.validationContext.load()
   const orchestrator = buildOrchestratorAgent()
 
   // Codex impl-gate P2 (re-review): a task that failed 'dw-generate-exhausted'
@@ -327,29 +338,26 @@ export async function runDynamicWorkflowGenerate(
       priorAttempts: dw.generateAttempts,
     })
     dw = { ...dw, generateAttempts: 0 }
-    await setDwState(db, taskId, dw)
+    await persistence.saveState(taskId, dw)
   }
 
   let errorNotice: string | null = null
   while (dw.generateAttempts < DW_MAX_GENERATE_ATTEMPTS) {
     if (args.signal?.aborted === true) return { kind: 'canceled' }
 
-    const priorRuns = await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DW_ORCHESTRATOR_NODE_ID)))
-    const runId = await mintNodeRun(db, {
+    const priorRunCount = await persistence.countNodeRuns(taskId, DW_ORCHESTRATOR_NODE_ID)
+    const runId = await nodeRuns.mint({
       taskId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
       status: 'pending',
       cause: DW_GENERATE_CAUSE,
-      retryIndex: priorRuns.length,
+      retryIndex: priorRunCount,
       overrides: {
         agentOverrideName: orchestrator.name,
         agentOverrideId: orchestrator.id,
       },
     })
-    const envelopeNonce = await loadRunEnvelopeNonce(db, runId)
+    const envelopeNonce = await nodeRuns.loadEnvelopeNonce(runId)
 
     const prompt =
       buildOrchestratorPrompt({
@@ -378,7 +386,7 @@ export async function runDynamicWorkflowGenerate(
           )}\n\nRe-emit a CORRECTED workflow-output envelope with the FULL workflow JSON and the exact required nonce.`
         : '')
 
-    const result = await hooks.runHostNode({
+    const result = await hooks.runHost({
       nodeRunId: runId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
       agent: orchestrator,
@@ -436,8 +444,8 @@ export async function runDynamicWorkflowGenerate(
     if (evaluated !== null && evaluated.ok) {
       const { rejectionComment: _consumed, ...rest } = dw
       dw = { ...rest, phase: 'awaiting_confirm', generatedDef: evaluated.def }
-      await setDwState(db, taskId, dw)
-      await openDwGate(db, taskId)
+      await persistence.saveState(taskId, dw)
+      await openDwGate(nodeRuns, taskId)
       log.info('dynamic workflow generated — awaiting confirmation', {
         taskId,
         attempts: dw.generateAttempts,
@@ -449,7 +457,7 @@ export async function runDynamicWorkflowGenerate(
     const errors = failure ?? (evaluated as { ok: false; errors: string[] }).errors
     errorNotice = errors.map((e) => `- ${e}`).join('\n')
     dw = { ...dw, generateAttempts: dw.generateAttempts + 1 }
-    await setDwState(db, taskId, dw)
+    await persistence.saveState(taskId, dw)
     log.warn('dynamic workflow generation attempt failed', {
       taskId,
       attempt: dw.generateAttempts,

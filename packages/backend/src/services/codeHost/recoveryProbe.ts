@@ -45,14 +45,14 @@ export async function probeCodeHostMutation(input: {
   descriptor: CodeHostRecoveryDescriptor
   resolveConnection: (
     provider: CodeHostRecoveryDescriptor['provider'],
-  ) => ResolvedCodeHostConnection | null
+  ) => Promise<ResolvedCodeHostConnection | null>
   fetchImpl?: FetchLike
   timeoutMs?: number
 }): Promise<CodeHostProbeOutcome> {
   if (input.descriptor.probe.kind === 'actor-replay') {
     return unknown('actor-replay-required')
   }
-  const connection = input.resolveConnection(input.descriptor.provider)
+  const connection = await input.resolveConnection(input.descriptor.provider)
   if (connection === null || connection.provider !== input.descriptor.provider) {
     return unknown('probe-connection-unavailable')
   }

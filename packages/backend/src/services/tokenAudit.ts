@@ -1,48 +1,29 @@
-// RFC-247 D16 / §6 — the token call audit.
+// RFC-247 compatibility surface for token-call auditing.
 //
-// One row per call made with a token, on either channel. It answers the
-// questions an operator actually has after "a token did something unexpected":
-// which token, whose, what did it touch, did it work, and when.
-//
-// ## What is deliberately NOT stored
-//
-// The request body. `resource_write` payloads carry MCP `env` values and repo
-// credentials, so a table that kept them would be a new place for secrets to
-// live — a breach surface dressed up as a control. Metadata plus, for deletes,
-// a redacted snapshot of what was removed covers the real need without that.
-//
-// ## Never blocks the business call (F13)
-//
-// Auditing is a side channel. If the insert fails the call still succeeds and
-// the failure is logged: a daemon that refuses to serve because it could not
-// write a log row has turned an observability feature into an outage.
+// Provider SQL and retention mechanics now live behind the closed AUTH
+// participant. Existing SQLite callers keep their signatures until bootstrap
+// injects the participant directly; this file owns only request-local snapshot
+// capture plus thin delegation.
 
-import { desc, eq, sql } from 'drizzle-orm'
-import { ulid } from 'ulid'
 import type { Context } from 'hono'
+
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { tokenAudit, tokenDeleteSnapshot } from '@/db/schema'
-import { redactMcpRecord, redactRepoUrl } from '@/services/tokenRedaction'
-import { createLogger } from '@/util/log'
+import { legacySqliteTokenCallAudit } from '@/auth/composition'
 
-const log = createLogger('token-audit')
-
-export type TokenAuditChannel = 'rest' | 'mcp'
+export {
+  TOKEN_AUDIT_PRUNE_BATCH,
+  redactSnapshot,
+  type TokenAuditChannel,
+  type TokenAuditPruneCursorV1,
+  type TokenAuditPruneSliceResult,
+  type TokenAuditRecord,
+  type TokenCallAuditParticipant,
+  type TokenCallRecord,
+} from '@/auth/application/tokenCallAudit'
 
 /**
- * RFC-247 AC-20 — the row a DELETE is about to remove.
- *
- * The audit hook runs AFTER the response, by which time the row is gone; the
- * first version therefore recorded metadata and never once wrote a snapshot in
- * production, even though the table, the redactor and the tests all existed.
- * "Who deleted what" without "what was it" is the half of the question that
- * stops mattering the moment you need the other half.
- *
- * Keyed off the Hono context rather than `c.set`, for two reasons: it needs no
- * typed context variable (route handlers are not middleware), and it is
- * automatically collected with the request. Only PAT callers pay anything —
- * for everyone else this is a branch and a return.
+ * RFC-247 AC-20 — hold one pre-delete row until the post-response audit hook
+ * consumes it. Only PAT callers pay the allocation.
  */
 const pendingSnapshots = new WeakMap<object, unknown>()
 
@@ -59,263 +40,32 @@ export function takeDeleteSnapshot(c: Context): unknown {
   return row
 }
 
-export interface TokenCallRecord {
-  readonly actor: Actor
-  readonly channel: TokenAuditChannel
-  /** MCP only — which tool was invoked. */
-  readonly toolName?: string
-  readonly method?: string
-  readonly path?: string
-  readonly resourceKind?: string
-  readonly resourceId?: string
-  readonly statusCode: number
-  /** For deletes: the row as it was, before it went away. */
-  readonly deletedSnapshot?: unknown
+export function recordTokenCall(
+  ...args: Parameters<typeof legacySqliteTokenCallAudit.record>
+): ReturnType<typeof legacySqliteTokenCallAudit.record> {
+  return legacySqliteTokenCallAudit.record(...args)
 }
 
-/**
- * Record one token call. Returns the audit row id, or null when nothing was
- * written (a non-token actor, or a failure that must not surface).
- *
- * Non-token actors are skipped entirely rather than recorded with a null
- * `pat_id`: this table's whole purpose is per-token attribution, and rows that
- * cannot be attributed would dilute exactly the query it exists to serve.
- */
-export async function recordTokenCall(
-  db: DbClient,
-  record: TokenCallRecord,
-  now: number = Date.now(),
-): Promise<string | null> {
-  if (record.actor.source !== 'pat') return null
-  const patId = record.actor.patId
-  if (patId === undefined) return null
-
-  const id = ulid()
-  try {
-    await db.insert(tokenAudit).values({
-      id,
-      patId,
-      userId: record.actor.user.id,
-      channel: record.channel,
-      toolName: record.toolName ?? null,
-      method: record.method ?? null,
-      path: record.path ?? null,
-      resourceKind: record.resourceKind ?? null,
-      resourceId: record.resourceId ?? null,
-      statusCode: record.statusCode,
-      createdAt: now,
-    })
-  } catch (err) {
-    log.warn('audit insert failed (business call unaffected)', { error: String(err) })
-    return null
-  }
-
-  if (record.deletedSnapshot !== undefined) {
-    await writeDeleteSnapshot(db, id, record, now)
-  }
-  return id
+export function listTokenAuditForUser(
+  ...args: Parameters<typeof legacySqliteTokenCallAudit.listForUser>
+): ReturnType<typeof legacySqliteTokenCallAudit.listForUser> {
+  return legacySqliteTokenCallAudit.listForUser(...args)
 }
 
-/**
- * F14 — a snapshot that cannot be serialized must not lose the audit row that
- * points at it. The row stays; only the snapshot is missing, and the failure is
- * logged rather than thrown.
- */
-async function writeDeleteSnapshot(
-  db: DbClient,
-  auditId: string,
-  record: TokenCallRecord,
-  now: number,
-): Promise<void> {
-  try {
-    await db.insert(tokenDeleteSnapshot).values({
-      id: ulid(),
-      auditId,
-      resourceKind: record.resourceKind ?? 'unknown',
-      resourceId: record.resourceId ?? 'unknown',
-      snapshotJson: JSON.stringify(redactSnapshot(record.deletedSnapshot)),
-      createdAt: now,
-    })
-  } catch (err) {
-    log.warn('delete snapshot failed (audit row kept)', { auditId, error: String(err) })
-    // F14 — mark the row. A swallowed failure that leaves no trace turns "we
-    // could not capture the evidence" into "there was no evidence to capture",
-    // which is the reading an investigator would take.
-    try {
-      await db.update(tokenAudit).set({ snapshotFailed: true }).where(eq(tokenAudit.id, auditId))
-    } catch (markErr) {
-      // Still must not break the business call (F13). At this point the row
-      // exists and the snapshot does not; a lost marker is the least bad of
-      // the three outcomes.
-      log.warn('could not mark snapshot_failed', { auditId, error: String(markErr) })
-    }
-  }
+export function listTokenAudit(
+  ...args: Parameters<typeof legacySqliteTokenCallAudit.list>
+): ReturnType<typeof legacySqliteTokenCallAudit.list> {
+  return legacySqliteTokenCallAudit.list(...args)
 }
 
-/**
- * Snapshots go through the same redactor as every other token-facing payload.
- *
- * A snapshot is the one place where "we kept a copy of what was deleted" and
- * "we kept a copy of a credential" are the same sentence — an MCP row's `env`
- * would otherwise outlive the resource it belonged to, in a table nobody thinks
- * of as holding secrets.
- */
-export function redactSnapshot(value: unknown): unknown {
-  const masked = redactMcpRecord(value)
-  if (typeof masked === 'object' && masked !== null && 'repoUrl' in masked) {
-    const withUrl = masked as Record<string, unknown>
-    return { ...withUrl, repoUrl: redactRepoUrl(withUrl.repoUrl as string | null) }
-  }
-  return masked
+export function pruneTokenAudit(
+  ...args: Parameters<typeof legacySqliteTokenCallAudit.prune>
+): ReturnType<typeof legacySqliteTokenCallAudit.prune> {
+  return legacySqliteTokenCallAudit.prune(...args)
 }
 
-/**
- * Delete audit rows (and their snapshots) older than the retention window.
- *
- * Snapshots are removed by AGE rather than by joining their audit row: the two
- * tables share a retention clock and the same `created_at`, so an age sweep is
- * both simpler and immune to an orphan row left by a partial failure.
- */
-export async function pruneTokenAudit(
-  db: DbClient,
-  retentionDays: number,
-  now: number = Date.now(),
-): Promise<{ audits: number; snapshots: number }> {
-  let cursor: TokenAuditPruneCursorV1 | null = null
-  const total = { audits: 0, snapshots: 0 }
-  for (;;) {
-    const slice = await pruneTokenAuditSlice(db, retentionDays, cursor, now)
-    total.audits += slice.counters.audits
-    total.snapshots += slice.counters.snapshots
-    if (slice.done) return total
-    cursor = slice.cursor
-  }
-}
-
-export interface TokenAuditPruneCursorV1 {
-  readonly version: 1
-  readonly phase: 'snapshots' | 'audits'
-  readonly cutoff: number
-}
-
-export interface TokenAuditPruneSliceResult {
-  readonly done: boolean
-  readonly cursor: TokenAuditPruneCursorV1
-  readonly counters: { readonly audits: number; readonly snapshots: number }
-}
-
-export const TOKEN_AUDIT_PRUNE_BATCH = 1_000
-
-function tokenAuditCursor(value: unknown, cutoff: number): TokenAuditPruneCursorV1 {
-  if (value === null || value === undefined) return { version: 1, phase: 'snapshots', cutoff }
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    (value as { version?: unknown }).version !== 1 ||
-    !['snapshots', 'audits'].includes(String((value as { phase?: unknown }).phase)) ||
-    !Number.isSafeInteger((value as { cutoff?: unknown }).cutoff)
-  ) {
-    throw new Error('maintenance-token-audit-cursor-invalid')
-  }
-  return value as TokenAuditPruneCursorV1
-}
-
-/**
- * One bounded deletion statement. The versioned phase is persisted by the
- * maintenance run ledger between calls; replay after a crash is harmless
- * because each phase selects only rows that still exist.
- */
-export async function pruneTokenAuditSlice(
-  db: DbClient,
-  retentionDays: number,
-  cursorValue: unknown,
-  now: number = Date.now(),
-  batchSize: number = TOKEN_AUDIT_PRUNE_BATCH,
-): Promise<TokenAuditPruneSliceResult> {
-  if (!Number.isInteger(batchSize) || batchSize < 1) {
-    throw new Error('maintenance-token-audit-batch-invalid')
-  }
-  const cursor = tokenAuditCursor(cursorValue, now - retentionDays * 86_400_000)
-  const cutoff = cursor.cutoff
-  if (cursor.phase === 'snapshots') {
-    const deleted = await db.all<{ id: string }>(sql`
-      DELETE FROM token_delete_snapshot
-      WHERE rowid IN (
-        SELECT rowid FROM token_delete_snapshot
-        WHERE created_at < ${cutoff}
-        ORDER BY created_at, id
-        LIMIT ${batchSize}
-      )
-      RETURNING id
-    `)
-    return {
-      done: false,
-      cursor:
-        deleted.length < batchSize
-          ? { version: 1, phase: 'audits', cutoff }
-          : { version: 1, phase: 'snapshots', cutoff },
-      counters: { audits: 0, snapshots: deleted.length },
-    }
-  }
-  const deleted = await db.all<{ id: string }>(sql`
-    DELETE FROM token_audit
-    WHERE rowid IN (
-      SELECT rowid FROM token_audit
-      WHERE created_at < ${cutoff}
-      ORDER BY created_at, id
-      LIMIT ${batchSize}
-    )
-    RETURNING id
-  `)
-  return {
-    done: deleted.length < batchSize,
-    cursor: { version: 1, phase: 'audits', cutoff },
-    counters: { audits: deleted.length, snapshots: 0 },
-  }
-}
-
-/**
- * Ordering for both listings: newest first, ties broken by ULID ascending.
- *
- * The tie-breaker is not decoration. Both queries used to `select()` the whole
- * table and sort in JS, where `sort()` is stable and equal `createdAt` rows
- * therefore came back in insertion order. `ORDER BY created_at DESC` alone
- * makes that order undefined, so a same-millisecond pair could swap between
- * calls; `id ASC` restores insertion order exactly (ULIDs are monotonic within
- * a millisecond) and keeps the pushed-down query behaviourally identical to the
- * in-memory one it replaces.
- */
-const AUDIT_ORDER = [desc(tokenAudit.createdAt), tokenAudit.id] as const
-
-/**
- * Rows for one user, newest first. Used by the owner's self-audit view.
- *
- * Filter, sort and limit are pushed into SQL. They used to run in JS over a
- * full-table `select()`, which made the `(user_id, created_at)` index dead
- * weight and turned a 90-day retention window into unbounded latency and memory
- * the moment a token got chatty (RFC-247 impl-gate P2).
- */
-export async function listTokenAuditForUser(
-  db: DbClient,
-  userId: string,
-  limit = 200,
-): Promise<Array<typeof tokenAudit.$inferSelect>> {
-  return db
-    .select()
-    .from(tokenAudit)
-    .where(eq(tokenAudit.userId, userId))
-    .orderBy(...AUDIT_ORDER)
-    .limit(limit)
-}
-
-/** Every row, newest first. Administrator view (D8: read-only). */
-export async function listTokenAudit(
-  db: DbClient,
-  limit = 200,
-): Promise<Array<typeof tokenAudit.$inferSelect>> {
-  return db
-    .select()
-    .from(tokenAudit)
-    .orderBy(...AUDIT_ORDER)
-    .limit(limit)
+export function pruneTokenAuditSlice(
+  ...args: Parameters<typeof legacySqliteTokenCallAudit.pruneSlice>
+): ReturnType<typeof legacySqliteTokenCallAudit.pruneSlice> {
+  return legacySqliteTokenCallAudit.pruneSlice(...args)
 }

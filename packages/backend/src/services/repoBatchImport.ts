@@ -36,7 +36,7 @@ import {
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
@@ -107,7 +107,7 @@ export function __resetBatchImportForTests(): void {
 }
 
 export interface RepoBatchImportDeps {
-  db: DbClient
+  store: RepositoryWorkspaceStore
   appHome?: string
   /** Seal imported private-repo URLs so later refreshes survive a daemon reload. */
   secretBox?: SecretBox
@@ -470,7 +470,7 @@ async function runRow(
     const resolver = deps.resolveCachedRepo ?? defaultResolveCachedRepo
     const result = await resolver(
       {
-        db: deps.db,
+        store: deps.store,
         ...(deps.appHome === undefined ? {} : { appHome: deps.appHome }),
         ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
       },

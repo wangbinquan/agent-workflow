@@ -5,10 +5,7 @@
 // Returns rows ordered by detected_at ascending so the UI can group
 // "oldest first" without re-sorting.
 
-import { and, asc, eq, isNull } from 'drizzle-orm'
-
-import type { DbClient } from '@/db/client'
-import { lifecycleAlerts } from '@/db/schema'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { InvariantSeverity, LifecycleAlertRule } from '@/services/lifecycleInvariants'
 
 export interface OpenLifecycleAlert {
@@ -21,14 +18,10 @@ export interface OpenLifecycleAlert {
 }
 
 export async function listOpenLifecycleAlertsForTask(
-  db: DbClient,
+  operations: TaskRecoveryOperations,
   taskId: string,
 ): Promise<OpenLifecycleAlert[]> {
-  const rows = await db
-    .select()
-    .from(lifecycleAlerts)
-    .where(and(eq(lifecycleAlerts.taskId, taskId), isNull(lifecycleAlerts.resolvedAt)))
-    .orderBy(asc(lifecycleAlerts.detectedAt))
+  const rows = await operations.listOpenLifecycleAlerts(taskId)
   return rows.map((r) => ({
     id: r.id,
     taskId: r.taskId,
@@ -43,12 +36,10 @@ export async function listOpenLifecycleAlertsForTask(
  * RFC-108 T19: all open lifecycle alerts across every task (the auto-repair loop
  * scans globally, not per-task). Oldest first.
  */
-export async function listAllOpenLifecycleAlerts(db: DbClient): Promise<OpenLifecycleAlert[]> {
-  const rows = await db
-    .select()
-    .from(lifecycleAlerts)
-    .where(isNull(lifecycleAlerts.resolvedAt))
-    .orderBy(asc(lifecycleAlerts.detectedAt))
+export async function listAllOpenLifecycleAlerts(
+  operations: TaskRecoveryOperations,
+): Promise<OpenLifecycleAlert[]> {
+  const rows = await operations.listOpenLifecycleAlerts()
   return rows.map((r) => ({
     id: r.id,
     taskId: r.taskId,

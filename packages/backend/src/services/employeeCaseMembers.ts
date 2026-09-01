@@ -10,16 +10,9 @@
 // 与任务侧共用 `planMembersReplacement` / `assertMembersUsersActive`，不另写一份。
 // 判据只在路由层做一次（用户 2026-08-26 D21：不做事务内二次重验）。
 
-import type { CaseMembers, UpdateMembersBody, UserPublic } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { users } from '@/db/schema'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
-import { assertMembersUsersActive, planMembersReplacement } from '@/services/taskCollab'
+import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
 import { ForbiddenError, NotFoundError } from '@/util/errors'
-import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 
 /** 案例归属的窄行（`runtime.queries.getCaseAcl`）。 */
 export interface CaseAclRow {
@@ -43,9 +36,9 @@ export interface CaseMemberRow {
  */
 export interface EmployeeCaseRuntime {
   readonly queries: {
-    getCaseAcl(caseId: string): CaseAclRow | null
-    getCaseMemberRole(caseId: string, userId: string): CaseMemberRole | null
-    listCaseMembers(caseId: string): readonly CaseMemberRow[]
+    getCaseAcl(caseId: string): Promise<CaseAclRow | null>
+    getCaseMemberRole(caseId: string, userId: string): Promise<CaseMemberRole | null>
+    listCaseMembers(caseId: string): Promise<readonly CaseMemberRow[]>
   }
   readonly commands: {
     replaceCaseMembers(input: {
@@ -54,10 +47,10 @@ export interface EmployeeCaseRuntime {
       readonly members: readonly CaseMemberRow[]
       readonly addedBy: string
       readonly now: number
-    }): {
+    }): Promise<{
       readonly previousOwnerUserId: string | null
       readonly previousMemberUserIds: readonly string[]
-    }
+    }>
   }
 }
 
@@ -88,29 +81,29 @@ export function canManageCaseMembers(actor: Actor, row: CaseAclRow): boolean {
 }
 
 /** 不可见与不存在同形（RFC-248 H9 反枚举）：都是 404 `employee-case-not-found`。 */
-export function loadVisibleCase(
+export async function loadVisibleCase(
   runtime: EmployeeCaseRuntime,
   actor: Actor,
   caseId: string,
-): CaseAclRow {
-  const row = runtime.queries.getCaseAcl(caseId)
+): Promise<CaseAclRow> {
+  const row = await runtime.queries.getCaseAcl(caseId)
   if (row === null) {
     throw new NotFoundError('employee-case-not-found', 'employee case not found')
   }
-  const role = runtime.queries.getCaseMemberRole(caseId, actor.user.id)
+  const role = await runtime.queries.getCaseMemberRole(caseId, actor.user.id)
   if (!canViewCase(actor, row, role)) {
     throw new NotFoundError('employee-case-not-found', 'employee case not found')
   }
   return row
 }
 
-export function requireCaseOperator(
+export async function requireCaseOperator(
   runtime: EmployeeCaseRuntime,
   actor: Actor,
   caseId: string,
-): CaseAclRow {
-  const row = loadVisibleCase(runtime, actor, caseId)
-  const role = runtime.queries.getCaseMemberRole(caseId, actor.user.id)
+): Promise<CaseAclRow> {
+  const row = await loadVisibleCase(runtime, actor, caseId)
+  const role = await runtime.queries.getCaseMemberRole(caseId, actor.user.id)
   if (canOperateCase(actor, row, role)) return row
   throw new ForbiddenError(
     'employee-case-observer-read-only',
@@ -118,113 +111,15 @@ export function requireCaseOperator(
   )
 }
 
-export function requireCaseOwner(
+export async function requireCaseOwner(
   runtime: EmployeeCaseRuntime,
   actor: Actor,
   caseId: string,
-): CaseAclRow {
-  const row = loadVisibleCase(runtime, actor, caseId)
+): Promise<CaseAclRow> {
+  const row = await loadVisibleCase(runtime, actor, caseId)
   if (canManageCaseMembers(actor, row)) return row
   throw new ForbiddenError(
     'forbidden',
     'only the employee case owner or an actor with resource-acl:bypass can manage members',
   )
-}
-
-type UserRow = typeof users.$inferSelect
-
-function toUserPublic(row: UserRow): UserPublic {
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.displayName,
-    role: row.role,
-    status: row.status,
-  }
-}
-
-/** GET /api/employee-cases/:id/members —— 与 `getTaskMembers` 同形（`caseId` 变体）。 */
-export async function getCaseMembers(
-  db: DbClient,
-  actor: Actor,
-  runtime: EmployeeCaseRuntime,
-  row: CaseAclRow,
-): Promise<CaseMembers> {
-  const memberRows = runtime.queries.listCaseMembers(row.id)
-  const wanted = [
-    ...new Set([
-      ...(row.ownerUserId !== null ? [row.ownerUserId] : []),
-      ...memberRows.map((m) => m.userId),
-    ]),
-  ]
-  const userRows =
-    wanted.length === 0 ? [] : await db.select().from(users).where(inArray(users.id, wanted))
-  const byId = new Map(userRows.map((u) => [u.id, u]))
-  const ownerRow =
-    row.ownerUserId !== null && row.ownerUserId !== SYSTEM_USER_ID
-      ? (byId.get(row.ownerUserId) ?? null)
-      : null
-  const members = memberRows.flatMap((m) => {
-    const user = byId.get(m.userId)
-    return user === undefined ? [] : [{ user: toUserPublic(user), role: m.role }]
-  })
-  const canManage = canManageCaseMembers(actor, row)
-  const canOperate =
-    canManage || memberRows.some((m) => m.role === 'collaborator' && m.userId === actor.user.id)
-  return {
-    caseId: row.id,
-    ownerUserId: row.ownerUserId,
-    owner: ownerRow === null ? null : toUserPublic(ownerRow),
-    members,
-    canManage,
-    canOperate,
-  }
-}
-
-/**
- * PUT /api/employee-cases/:id/members —— owner / bypass；`members` 全量替换、
- * `ownerUserId` 转移（前任降为 collaborator，D20）。规范化与任务侧共用；写入由
- * digital-employee store 在一个事务内完成；随后向统一列表频道广播 before ∪ after 受众。
- */
-export async function updateCaseMembers(
-  db: DbClient,
-  actor: Actor,
-  runtime: EmployeeCaseRuntime,
-  row: CaseAclRow,
-  body: UpdateMembersBody,
-): Promise<CaseMembers> {
-  if (!canManageCaseMembers(actor, row)) {
-    throw new ForbiddenError(
-      'forbidden',
-      'only the employee case owner or an actor with resource-acl:bypass can manage members',
-    )
-  }
-  await assertMembersUsersActive(db, body)
-  const current = runtime.queries.listCaseMembers(row.id)
-  const plan = planMembersReplacement({
-    prevOwner: row.ownerUserId,
-    requestedOwner: body.ownerUserId,
-    requestedMembers: body.members,
-    currentMembers: current.map((m) => ({ userId: m.userId, role: m.role })),
-  })
-  const committed = runtime.commands.replaceCaseMembers({
-    caseId: row.id,
-    ownerUserId: plan.nextOwner,
-    members: [...plan.nextMembers].map(([userId, role]) => ({ userId, role })),
-    addedBy: actor.user.id,
-    now: Date.now(),
-  })
-
-  const visibleUserIds = new Set<string>()
-  if (committed.previousOwnerUserId !== null) visibleUserIds.add(committed.previousOwnerUserId)
-  if (plan.nextOwner !== null) visibleUserIds.add(plan.nextOwner)
-  for (const userId of committed.previousMemberUserIds) visibleUserIds.add(userId)
-  for (const userId of plan.nextMembers.keys()) visibleUserIds.add(userId)
-  tasksListBroadcaster.broadcast(
-    TASKS_LIST_CHANNEL,
-    { type: 'employee-case.members.changed', caseId: row.id },
-    { kind: 'employee-case.members-changed-audience', caseId: row.id, visibleUserIds },
-  )
-
-  return getCaseMembers(db, actor, runtime, { ...row, ownerUserId: plan.nextOwner })
 }

@@ -19,8 +19,7 @@ import {
   type SymbolResolution,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import type { DbClient } from '@/db/client'
-import { getTask } from '@/services/task'
+import type { CodeWorkspaceRead } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 import { getTaskFileSymbols, resolveRepoTarget } from './fileSymbols'
 import { worktreeSnapshotDigest } from './snapshot'
 import { readStoredDiff } from '@/services/structuralDiff/store'
@@ -90,7 +89,7 @@ function spanWidth(span: {
 }
 
 export async function getCodeIntel(
-  db: DbClient,
+  workspace: CodeWorkspaceRead,
   taskId: string,
   q: CodeIntelQuery,
   deps: CodeIntelDeps = {},
@@ -108,7 +107,7 @@ export async function getCodeIntel(
       'path, name and 1-based line/col query params are required',
     )
   }
-  const task = await getTask(db, taskId)
+  const task = await workspace.findTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
@@ -118,7 +117,15 @@ export async function getCodeIntel(
   if (q.mode === 'deep' && q.side === 'worktree') {
     const indexerId = indexerForPath(q.path)
     if (indexerId === null) {
-      return baseline(db, task.id, task.repoCount, repoKey, q, 'deep', 'no-indexer-for-language')
+      return baseline(
+        workspace,
+        task.id,
+        task.repoCount,
+        repoKey,
+        q,
+        'deep',
+        'no-indexer-for-language',
+      )
     }
     const cache = deps.cache ?? scipIndexCache()
     const snapshotDigest = await worktreeSnapshotDigest(worktreePath)
@@ -130,17 +137,25 @@ export async function getCodeIntel(
       worktreePath,
     })
     if (!answer.ok) {
-      return baseline(db, task.id, task.repoCount, repoKey, q, 'deep', answer.reason)
+      return baseline(workspace, task.id, task.repoCount, repoKey, q, 'deep', answer.reason)
     }
     const doc = answer.graph.documents.find((d) => d.relativePath === q.path)
     if (doc === undefined) {
-      return baseline(db, task.id, task.repoCount, repoKey, q, 'deep', 'document-not-indexed')
+      return baseline(
+        workspace,
+        task.id,
+        task.repoCount,
+        repoKey,
+        q,
+        'deep',
+        'document-not-indexed',
+      )
     }
     return deepResolve(answer.graph, doc.relativePath, repoKey, q)
   }
 
   const degraded = q.mode === 'deep' && q.side === 'base' ? 'base-side-not-indexed' : undefined
-  return baseline(db, task.id, task.repoCount, repoKey, q, q.mode, degraded)
+  return baseline(workspace, task.id, task.repoCount, repoKey, q, q.mode, degraded)
 }
 
 function deepResolve(
@@ -197,7 +212,7 @@ function deepResolve(
 }
 
 async function baseline(
-  db: DbClient,
+  workspace: CodeWorkspaceRead,
   taskId: string,
   repoCount: number,
   repoKey: string,
@@ -212,7 +227,7 @@ async function baseline(
 
   // Source 1 — the clicked file's own symbol table (both sides supported).
   try {
-    const fileSyms = await getTaskFileSymbols(db, taskId, {
+    const fileSyms = await getTaskFileSymbols(workspace, taskId, {
       path: q.path,
       side: q.side,
       ...(q.repo !== undefined ? { repo: q.repo } : {}),

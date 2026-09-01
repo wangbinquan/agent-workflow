@@ -8,10 +8,7 @@
 // human clears it with one action. The quarantine flag is a SOFT flag (never a
 // terminal status); the persistent recovery_events row makes the trip auditable.
 
-import { eq } from 'drizzle-orm'
-
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 
 export interface BreakerConfig {
@@ -20,13 +17,11 @@ export interface BreakerConfig {
 }
 
 /** Is the task currently quarantined (excluded from the auto loops)? */
-export async function isAutoRecoverySuspended(db: DbClient, taskId: string): Promise<boolean> {
-  const rows = await db
-    .select({ s: tasks.autoRecoverySuspended })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  return rows[0]?.s ?? false
+export async function isAutoRecoverySuspended(
+  operations: TaskRecoveryOperations,
+  taskId: string,
+): Promise<boolean> {
+  return operations.isAutoRecoverySuspended(taskId)
 }
 
 /**
@@ -36,43 +31,18 @@ export async function isAutoRecoverySuspended(db: DbClient, taskId: string): Pro
  * Returns the post-update {suspended, attempts}.
  */
 export async function recordAutoRecoveryAttempt(
-  db: DbClient,
+  operations: TaskRecoveryOperations,
   taskId: string,
   cfg: BreakerConfig,
   now: number = Date.now(),
 ): Promise<{ suspended: boolean; attempts: number }> {
-  const rows = await db
-    .select({
-      attempts: tasks.autoRecoveryAttempts,
-      windowStart: tasks.autoRecoveryWindowStartedAt,
-      suspended: tasks.autoRecoverySuspended,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  const row = rows[0]
-  if (row === undefined) return { suspended: false, attempts: 0 }
-  if (row.suspended) return { suspended: true, attempts: row.attempts }
-
-  let windowStart = row.windowStart
-  let attempts: number
-  if (windowStart === null || now - windowStart >= cfg.windowMs) {
-    windowStart = now
-    attempts = 1
-  } else {
-    attempts = row.attempts + 1
-  }
-  const suspended = attempts > cfg.maxPerWindow
-  await db
-    .update(tasks)
-    .set({
-      autoRecoveryAttempts: attempts,
-      autoRecoveryWindowStartedAt: windowStart,
-      autoRecoverySuspended: suspended,
-    })
-    .where(eq(tasks.id, taskId))
+  const { suspended, attempts } = await operations.recordAutoRecoveryAttempt({
+    taskId,
+    config: cfg,
+    now,
+  })
   if (suspended) {
-    await recordRecoveryEvent(db, {
+    await recordRecoveryEvent(operations, {
       taskId,
       kind: 'quarantine',
       reason: `auto-recovery attempts ${attempts} exceeded ${cfg.maxPerWindow} per ${cfg.windowMs}ms window`,
@@ -84,13 +54,9 @@ export async function recordAutoRecoveryAttempt(
 }
 
 /** Human one-click clear — resets the breaker so the auto loops may retry. */
-export async function clearAutoRecoverySuspension(db: DbClient, taskId: string): Promise<void> {
-  await db
-    .update(tasks)
-    .set({
-      autoRecoverySuspended: false,
-      autoRecoveryAttempts: 0,
-      autoRecoveryWindowStartedAt: null,
-    })
-    .where(eq(tasks.id, taskId))
+export async function clearAutoRecoverySuspension(
+  operations: TaskRecoveryOperations,
+  taskId: string,
+): Promise<void> {
+  await operations.clearAutoRecoverySuspension(taskId)
 }

@@ -19,12 +19,18 @@ import {
   type TaskOperationsPage,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  eq,
+  inArray,
+  sql,
+  tasks,
+  type SQL,
+  type LegacySqliteTaskDatabase,
+} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { z } from 'zod'
 
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
 import { loadOwnerIdentities } from '@/services/ownerIdentity'
 import {
   defaultTaskAuthorizationRef,
@@ -269,7 +275,7 @@ function catalogVisibilityCondition(alias: string, catalogVisibility?: TaskCatal
 }
 
 function nonViewCondition(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   filters: TaskOperationsFilters,
   // 旧管线在已物化的 `base b` 上求值；G1 的快路径直接打 `tasks t`，谓词逐字
@@ -481,7 +487,7 @@ function projectedRows(limit: number, cursor: TaskPageCursorV1 | undefined): SQL
 }
 
 function rootQuery(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   parsed: ParsedTaskOperationsQuery,
   catalogVisibility?: TaskCatalogVisibility,
@@ -539,7 +545,7 @@ function rootQuery(
 }
 
 async function assertVisibleParent(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   parentId: string,
   catalogVisibility?: TaskCatalogVisibility,
@@ -563,7 +569,7 @@ async function assertVisibleParent(
 }
 
 function childQuery(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   parsed: ParsedTaskOperationsQuery & { parentId: string },
   catalogVisibility?: TaskCatalogVisibility,
@@ -609,7 +615,7 @@ function childQuery(
 }
 
 async function loadAuthorizedChildCounts(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   parentIds: readonly string[],
   catalogVisibility?: TaskCatalogVisibility,
@@ -658,7 +664,7 @@ function requiredRow(row: OperationsSqlRow): asserts row is CompleteOperationsSq
 }
 
 async function mapRows(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   rawRows: OperationsSqlRow[],
   kind: 'root' | 'children',
@@ -772,7 +778,11 @@ export function isDefaultView(actor: Actor, filters: TaskOperationsFilters): boo
  * the authorized set). Wire shape, cursor encoding and item shape are
  * byte-identical; the rfc311 page oracle pins new === old on random forests.
  */
-function fastDefaultRootQuery(db: DbClient, actor: Actor, parsed: ParsedTaskOperationsQuery): SQL {
+function fastDefaultRootQuery(
+  db: LegacySqliteTaskDatabase,
+  actor: Actor,
+  parsed: ParsedTaskOperationsQuery,
+): SQL {
   const auth = taskAuthorizationCondition(
     db,
     { id: sql.raw('t.id'), ownerUserId: sql.raw('t.owner_user_id') },
@@ -930,7 +940,7 @@ export function canUseFilteredFastPath(actor: Actor): boolean {
  * 不可错。谓词与 `idx_tasks_root_missing` 的部分索引逐字一致，正常库上这是
  * 一次命中空集的索引探查。
  */
-export async function hasUnrootedTasks(db: DbClient): Promise<boolean> {
+export async function hasUnrootedTasks(db: LegacySqliteTaskDatabase): Promise<boolean> {
   const row = await db
     .select({ id: tasks.id })
     .from(tasks)
@@ -960,7 +970,7 @@ export async function hasUnrootedTasks(db: DbClient): Promise<boolean> {
  * 既不贡献 recency 也不计数），共享列答不了——与默认视图快路径同一条边界。
  */
 function fastFilteredRootQuery(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   parsed: ParsedTaskOperationsQuery,
   catalogVisibility?: TaskCatalogVisibility,
@@ -1107,7 +1117,7 @@ function fastFilteredRootQuery(
 }
 
 export async function listTaskOperationsPage(
-  db: DbClient,
+  db: LegacySqliteTaskDatabase,
   actor: Actor,
   rawQuery: TaskOperationsRawQuery,
   options: TaskOperationsPageOptions = {},

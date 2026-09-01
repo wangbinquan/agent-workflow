@@ -1,7 +1,7 @@
 // RFC-159 — scheduled-task CRUD + fire logic.
 //
-// Shape mirrors services/mcp.ts (DB is source of truth; JSON columns marshaled
-// at this boundary + re-validated with Zod on read). The launch gate
+// Persistence is provider-owned; JSON columns are marshaled at this application
+// boundary and re-validated with Zod on read. The launch gate
 // (assertWorkflowLaunchable) runs at CREATE/UPDATE time AND again at fire time —
 // access can be revoked in between (design.md §3/§5, R2-b/R3-1).
 import type {
@@ -28,45 +28,33 @@ import {
   wallClockAt,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { eq, inArray } from 'drizzle-orm'
 import { existsSync, realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { ulid } from 'ulid'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
-import { resourceGrants, scheduledTasks, users } from '@/db/schema'
-import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
-import {
-  canEditAccess,
-  canGovernAccess,
-  grantsOfResourceWhere,
-  listGrantedResourceIds,
-  listResourceGrants,
-  loadGrantLevel,
-} from '@/services/resourceAcl'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import { canEditAccess, canGovernAccess } from '@/services/resourceAcl'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { runGit } from '@/util/git'
 import { SCHEDULED_TASK_CHANNEL, scheduledTaskBroadcaster } from '@/ws/broadcaster'
-import { triggerRevalidation } from '@/ws/revalidationHook'
-import { assertAgentResourceIntegrity } from '@/services/agentResourceIntegrity'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
-import { loadOwnerIdentities } from '@/services/ownerIdentity'
-import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import type {
-  IntegrationTriggerResourceSnapshotInTx,
-  ResourceRequestContext,
-} from '@/modules/resource-catalog/public/participants'
+import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type {
   DigitalEmployeeTriggerSnapshot,
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
   TaskExecutionWorkflowSnapshot,
 } from '@/modules/resource-catalog/public/types'
+import type {
+  IntegrationTriggerResourceQueries,
+  ScheduledTaskCreateRecord,
+  ScheduledTaskMutablePatch,
+  ScheduledTaskPersistencePort,
+  ScheduledTaskRecord,
+} from '@/modules/integration/application/ports/scheduledTaskPersistence'
 
 /** Injected launch — `(body) => startTask(body, deps)`, closed over owner + scheduledTaskId. */
 /**
@@ -95,12 +83,7 @@ export type ScheduleAuthorityRuntime = Readonly<{
   taskExecutionResources: TaskExecutionResourceBinding
 }>
 
-export interface IntegrationTriggerResourceBinding {
-  inTransaction(
-    tx: DbTxSync,
-    pair: Readonly<{ readonly authority: ResourceRequestContext; readonly actor: Actor }>,
-  ): IntegrationTriggerResourceSnapshotInTx
-}
+export type IntegrationTriggerResourceBinding = IntegrationTriggerResourceQueries
 
 /** Exact opaque handle and the current actor projection admitted with it. */
 export interface IntegrationTriggerResourceAuthority {
@@ -110,7 +93,18 @@ export interface IntegrationTriggerResourceAuthority {
   readonly taskExecutionResources: TaskExecutionResourceBinding
 }
 
-type Row = typeof scheduledTasks.$inferSelect
+export interface IntegrationTriggerValidationRuntime {
+  assertWorkflowLaunchable(workflow: TaskExecutionWorkflowSnapshot): Promise<void>
+  assertAgentIntegrity(agentIds: readonly string[]): Promise<void>
+}
+
+export interface ScheduledTaskOperations {
+  readonly persistence: ScheduledTaskPersistencePort
+  readonly validation: IntegrationTriggerValidationRuntime
+  readonly resourceAclChanged: () => Promise<void> | void
+}
+
+export type Row = ScheduledTaskRecord
 type LaunchableWorkflow = TaskExecutionWorkflowSnapshot
 
 /**
@@ -249,8 +243,10 @@ function assertNoRequiredUploadInput(wf: LaunchableWorkflow): void {
   }
 }
 
-export async function listScheduledTasks(db: DbClient): Promise<ScheduledTask[]> {
-  const rows = await db.select().from(scheduledTasks)
+export async function listScheduledTasks(
+  operations: ScheduledTaskOperations,
+): Promise<ScheduledTask[]> {
+  const rows = await operations.persistence.list()
   return rows.map(rowToScheduledTask)
 }
 
@@ -278,14 +274,14 @@ export function resolveScheduleAccess(
 
 /** Async form: resolves this actor's grant on one schedule, then the ladder. */
 export async function resolveScheduleAccessFor(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   actor: Actor,
   row: Pick<ScheduledTask, 'id' | 'ownerUserId'>,
 ): Promise<ResourceAccess> {
   if (actor.permissions.has('resource-acl:bypass') || row.ownerUserId === actor.user.id) {
     return resolveScheduleAccess(actor, row, null)
   }
-  const grant = await loadGrantLevel(db, 'scheduled_task', row.id, actor.user.id)
+  const grant = await operations.persistence.loadGrantLevel(row.id, actor.user.id)
   return resolveScheduleAccess(actor, row, grant)
 }
 
@@ -304,18 +300,17 @@ export function canViewScheduledTask(
 
 /** RFC-232 — HTTP list rows after canonical mapping and visibility filtering. */
 export async function listScheduledTaskItems(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   actor: Actor,
 ): Promise<ScheduledTaskListItem[]> {
   // RFC-324 —— 一次取回本人在定时任务上的授权集合，逐行判定不再各查一次。
   const granted = actor.permissions.has('resource-acl:bypass')
     ? new Set<string>()
-    : await listGrantedResourceIds(db, actor, 'scheduled_task')
-  const visible = (await listScheduledTasks(db)).filter((row) =>
+    : await operations.persistence.listGrantedResourceIds(actor.user.id)
+  const visible = (await listScheduledTasks(operations)).filter((row) =>
     canViewScheduledTask(actor, row, granted.has(row.id) ? 'read' : null),
   )
-  const owners = await loadOwnerIdentities(
-    db,
+  const owners = await operations.persistence.loadOwnerIdentities(
     visible.map((row) => row.ownerUserId),
   )
   return visible.map((row) => ({
@@ -324,38 +319,30 @@ export async function listScheduledTaskItems(
   }))
 }
 
-export async function getScheduledTask(db: DbClient, id: string): Promise<ScheduledTask | null> {
-  const rows = await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1)
-  return rows[0] ? rowToScheduledTask(rows[0]) : null
+export async function getScheduledTask(
+  operations: ScheduledTaskOperations,
+  id: string,
+): Promise<ScheduledTask | null> {
+  const row = await operations.persistence.get(id)
+  return row === null ? null : rowToScheduledTask(row)
 }
 
 /** Raw DB row (unparsed JSON columns) — `fireSchedule` / run-now need it. */
-export async function getScheduledTaskRow(db: DbClient, id: string): Promise<Row | null> {
-  const rows = await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1)
-  return rows[0] ?? null
+export async function getScheduledTaskRow(
+  operations: ScheduledTaskOperations,
+  id: string,
+): Promise<Row | null> {
+  return await operations.persistence.get(id)
 }
 
-function loadIntegrationTriggerResourceSnapshotInTx(
-  tx: DbTxSync,
+export async function loadIntegrationTriggerResourceSnapshot(
   resourceAuthority: IntegrationTriggerResourceAuthority,
   request: IntegrationTriggerResourceRequest,
-): FrozenIntegrationTriggerResourceSnapshot {
-  const snapshots = resourceAuthority.resources
-    .inTransaction(tx, resourceAuthority)
-    .loadAuthorized(resourceAuthority.authority, [request])
+): Promise<FrozenIntegrationTriggerResourceSnapshot> {
+  const snapshots = await resourceAuthority.resources.loadAuthorized(resourceAuthority, [request])
   const snapshot = snapshots[0]
   if (snapshot === undefined) throw new Error('integration-trigger-snapshot-missing')
   return snapshot
-}
-
-export function loadIntegrationTriggerResourceSnapshot(
-  db: DbClient,
-  resourceAuthority: IntegrationTriggerResourceAuthority,
-  request: IntegrationTriggerResourceRequest,
-): FrozenIntegrationTriggerResourceSnapshot {
-  return dbTxSync(db, (tx) =>
-    loadIntegrationTriggerResourceSnapshotInTx(tx, resourceAuthority, request),
-  )
 }
 
 function assertDigitalEmployeeIntake(
@@ -397,7 +384,7 @@ function assertDigitalEmployeeIntake(
 }
 
 export async function assertIntegrationTriggerSnapshotUsable(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   resourceAuthority: IntegrationTriggerResourceAuthority,
   snapshot: FrozenIntegrationTriggerResourceSnapshot,
   body: Record<string, unknown>,
@@ -408,17 +395,15 @@ export async function assertIntegrationTriggerSnapshotUsable(
     // Preserve the RFC-159 schedule-specific incompatibility as the first
     // visible error after the participant's ACL/builtin gates.
     assertNoRequiredUploadInput(target)
-    const closureJson = freezeTaskExecutionCallClosure(
-      db,
-      { id: target.id, definition: target.definition },
+    const closureJson = await resourceAuthority.taskExecutionResources.freezeCallClosure(
       Object.freeze({
         authority: resourceAuthority.authority,
         actor: resourceAuthority.actor,
-        resources: resourceAuthority.taskExecutionResources,
       }),
+      { id: target.id, definition: target.definition },
     )
     assertTriggerPreflight({ root: target.definition, closureJson, source: triggerSource })
-    await assertWorkflowSnapshotLaunchable(db, target)
+    await operations.validation.assertWorkflowLaunchable(target)
     assertWorkflowLaunchInputs(
       target.definition.inputs,
       (body['inputs'] as Record<string, string> | undefined) ?? {},
@@ -426,7 +411,7 @@ export async function assertIntegrationTriggerSnapshotUsable(
     return
   }
   if (snapshot.kind === 'scheduled-agent') {
-    await assertAgentResourceIntegrity(db, [snapshot.agent.id])
+    await operations.validation.assertAgentIntegrity([snapshot.agent.id])
     body['agentName'] = snapshot.agent.name
     const { validateAgentLaunchShape } = await import('@/services/agentLaunch')
     validateAgentLaunchShape(
@@ -444,7 +429,7 @@ export async function assertIntegrationTriggerSnapshotUsable(
         ? [member.agentId]
         : [],
     )
-    await assertAgentResourceIntegrity(db, memberAgentIds)
+    await operations.validation.assertAgentIntegrity(memberAgentIds)
     body['workgroupName'] = snapshot.workgroup.name
     return
   }
@@ -471,7 +456,7 @@ function scheduledResourceRequest(
  * keeps a distinct request kind for exact consumer accounting.
  */
 export async function assertScheduledTargetUsable(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   resourceAuthority: IntegrationTriggerResourceAuthority,
   kind: ScheduledLaunchKind,
   body: Record<string, unknown>,
@@ -479,16 +464,21 @@ export async function assertScheduledTargetUsable(
   triggerSource: TriggerDependencySource = { kind: 'none' },
   source: 'schedule' | 'webhook' = 'schedule',
 ): Promise<void> {
-  const snapshot = loadIntegrationTriggerResourceSnapshot(
-    db,
+  const snapshot = await loadIntegrationTriggerResourceSnapshot(
     resourceAuthority,
     scheduledResourceRequest(kind, body, source),
   )
-  await assertIntegrationTriggerSnapshotUsable(db, resourceAuthority, snapshot, body, triggerSource)
+  await assertIntegrationTriggerSnapshotUsable(
+    operations,
+    resourceAuthority,
+    snapshot,
+    body,
+    triggerSource,
+  )
 }
 
 export async function createScheduledTask(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   input: CreateScheduledTask,
   opts: {
     actor: Actor
@@ -506,7 +496,7 @@ export async function createScheduledTask(
   // agent/workgroup rows get the LIGHT existence/visibility check here and
   // the full launch validation (host snapshot, readiness) at fire time.
   await assertScheduledTargetUsable(
-    db,
+    operations,
     opts.resourceAuthority,
     kind,
     body as unknown as Record<string, unknown>,
@@ -516,36 +506,38 @@ export async function createScheduledTask(
   const now = Date.now()
   const id = ulid()
   await opts.beforeWriteTx?.()
-  dbTxSync(db, (tx) => {
-    const target = loadIntegrationTriggerResourceSnapshotInTx(
-      tx,
-      opts.resourceAuthority,
-      scheduledResourceRequest(kind, body as unknown as Record<string, unknown>, 'schedule'),
-    )
-    if (target.kind === 'scheduled-agent') {
-      ;(body as unknown as Record<string, unknown>)['agentName'] = target.agent.name
-    }
-    if (target.kind === 'scheduled-workgroup') {
-      ;(body as unknown as Record<string, unknown>)['workgroupName'] = target.workgroup.name
-    }
-    tx.insert(scheduledTasks)
-      .values({
-        id,
-        name: input.name,
-        ownerUserId: opts.actor.user.id,
-        launchKind: kind,
-        launchPayload: JSON.stringify(body),
-        scheduleSpec: JSON.stringify(spec),
-        enabled: input.enabled,
-        nextRunAt: input.enabled ? computeNextRunAt(spec, now, now) : null,
-        consecutiveFailures: 0,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .run()
+  const request = scheduledResourceRequest(
+    kind,
+    body as unknown as Record<string, unknown>,
+    'schedule',
+  )
+  const record: ScheduledTaskCreateRecord = {
+    id,
+    name: input.name,
+    ownerUserId: opts.actor.user.id,
+    launchKind: kind,
+    launchPayload: JSON.stringify(body),
+    scheduleSpec: JSON.stringify(spec),
+    enabled: input.enabled,
+    nextRunAt: input.enabled ? computeNextRunAt(spec, now, now) : null,
+    consecutiveFailures: 0,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const createdRow = await operations.persistence.createAtomically({
+    record,
+    authority: opts.resourceAuthority,
+    request,
+    finish(target) {
+      const finalBody = { ...(body as unknown as Record<string, unknown>) }
+      if (target.kind === 'scheduled-agent') finalBody['agentName'] = target.agent.name
+      if (target.kind === 'scheduled-workgroup') {
+        finalBody['workgroupName'] = target.workgroup.name
+      }
+      return { ...record, launchPayload: JSON.stringify(finalBody) }
+    },
   })
-  const created = await getScheduledTask(db, id)
-  if (created === null) throw new Error('scheduled task disappeared right after insert')
+  const created = rowToScheduledTask(createdRow)
   scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
     type: 'scheduled.created',
     id: created.id,
@@ -555,7 +547,7 @@ export async function createScheduledTask(
 }
 
 export async function updateScheduledTask(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   id: string,
   patch: UpdateScheduledTask,
   opts: {
@@ -565,7 +557,7 @@ export async function updateScheduledTask(
     defaultRuntime?: string | null
   },
 ): Promise<ScheduledTask> {
-  const existing = await getScheduledTask(db, id)
+  const existing = await getScheduledTask(operations, id)
   if (existing === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
@@ -647,7 +639,7 @@ export async function updateScheduledTask(
   // deterministically fails every future fire and "save" still reports success.
   if ((enabled || patch.launchPayload !== undefined) && patchedPayload !== null) {
     await assertScheduledTargetUsable(
-      db,
+      operations,
       opts.resourceAuthority,
       existing.launchKind,
       patchedPayload as unknown as Record<string, unknown>,
@@ -659,100 +651,91 @@ export async function updateScheduledTask(
   const now = Date.now()
   // 实现门 P1 修复（arming TOCTOU）：权限判定若基于 stale 的 existing.enabled，
   // 与写入之间的窗口里另一请求可以先把行 enable——窄 PAT 的 spec-only 更新就
-  // 顺着旧快照绕过了 tasks:launch。判定 + 组 set + 写入收进 dbTxSync：对
+  // 顺着旧快照绕过了 tasks:launch。判定 + 组 set + 写入收进 provider transaction：对
   // FRESH 行重算 arming，越权即回滚整个更新。
-  dbTxSync(db, (tx) => {
-    const fresh = tx
-      .select({
-        enabled: scheduledTasks.enabled,
-        launchKind: scheduledTasks.launchKind,
-        launchPayload: scheduledTasks.launchPayload,
-      })
-      .from(scheduledTasks)
-      .where(eq(scheduledTasks.id, id))
-      .get()
-    if (fresh === undefined) {
-      throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
-    }
-    if (armsLaunchAgainst(fresh.enabled) && !opts.actor.permissions.has('tasks:execute')) {
-      throw new ForbiddenError('forbidden', 'missing permission: tasks:launch', {
-        requiredPermission: 'tasks:execute',
-      })
-    }
-    const resultEnabled = patch.enabled !== undefined ? patch.enabled : fresh.enabled
-    const finalKind = ScheduledLaunchKindSchema.safeParse(fresh.launchKind ?? 'workflow')
-    if (!finalKind.success) {
-      throw new ValidationError(
-        'scheduled-task-invalid',
-        `scheduled task '${id}' has an invalid launchKind`,
-      )
-    }
-    if (patch.launchKind !== undefined && patch.launchKind !== finalKind.data) {
-      throw new ValidationError(
-        'scheduled-kind-immutable',
-        `launchKind is immutable (existing '${finalKind.data}'); delete and recreate to change the subject`,
-      )
-    }
-    let finalPayload: typeof patchedPayload = null
-    if (patch.launchPayload !== undefined) {
-      finalPayload = patchedPayload
-    } else {
-      let raw: unknown
-      try {
-        raw = JSON.parse(fresh.launchPayload)
-      } catch {
-        raw = null
+  const updatedRow = await operations.persistence.updateAtomically({
+    id,
+    authority: opts.resourceAuthority,
+    decide(fresh) {
+      if (armsLaunchAgainst(fresh.enabled) && !opts.actor.permissions.has('tasks:execute')) {
+        throw new ForbiddenError('forbidden', 'missing permission: tasks:launch', {
+          requiredPermission: 'tasks:execute',
+        })
       }
-      const parsedFreshPayload = scheduledPayloadSchemaFor(finalKind.data).safeParse(raw)
-      if (parsedFreshPayload.success) finalPayload = parsedFreshPayload.data
-    }
-    if (resultEnabled || patch.launchPayload !== undefined) {
-      if (finalPayload === null) {
+      const resultEnabled = patch.enabled !== undefined ? patch.enabled : fresh.enabled
+      const finalKind = ScheduledLaunchKindSchema.safeParse(fresh.launchKind ?? 'workflow')
+      if (!finalKind.success) {
+        throw new ValidationError(
+          'scheduled-task-invalid',
+          `scheduled task '${id}' has an invalid launchKind`,
+        )
+      }
+      if (patch.launchKind !== undefined && patch.launchKind !== finalKind.data) {
+        throw new ValidationError(
+          'scheduled-kind-immutable',
+          `launchKind is immutable (existing '${finalKind.data}'); delete and recreate to change the subject`,
+        )
+      }
+      let finalPayload: typeof patchedPayload = null
+      if (patch.launchPayload !== undefined) {
+        finalPayload = patchedPayload
+      } else {
+        let raw: unknown
+        try {
+          raw = JSON.parse(fresh.launchPayload)
+        } catch {
+          raw = null
+        }
+        const parsedFreshPayload = scheduledPayloadSchemaFor(finalKind.data).safeParse(raw)
+        if (parsedFreshPayload.success) finalPayload = parsedFreshPayload.data
+      }
+      if ((resultEnabled || patch.launchPayload !== undefined) && finalPayload === null) {
         throw new ValidationError(
           'scheduled-task-needs-repair',
           `scheduled task '${id}' has an unreadable launchPayload — supply a full launchPayload to repair it`,
         )
       }
-      const target = loadIntegrationTriggerResourceSnapshotInTx(
-        tx,
-        opts.resourceAuthority,
-        scheduledResourceRequest(
-          finalKind.data,
-          finalPayload as Record<string, unknown>,
-          'schedule',
-        ),
-      )
-      if (target.kind === 'scheduled-agent') {
-        ;(finalPayload as Record<string, unknown>)['agentName'] = target.agent.name
+      const request =
+        resultEnabled || patch.launchPayload !== undefined
+          ? scheduledResourceRequest(
+              finalKind.data,
+              finalPayload as Record<string, unknown>,
+              'schedule',
+            )
+          : null
+      return {
+        request,
+        finish(target) {
+          const set: ScheduledTaskMutablePatch = { updatedAt: now }
+          if (patch.name !== undefined) set.name = patch.name
+          if (patch.launchPayload !== undefined && finalPayload !== null) {
+            const persistedPayload = { ...(finalPayload as Record<string, unknown>) }
+            if (target?.kind === 'scheduled-agent') {
+              persistedPayload['agentName'] = target.agent.name
+            }
+            if (target?.kind === 'scheduled-workgroup') {
+              persistedPayload['workgroupName'] = target.workgroup.name
+            }
+            set.launchPayload = JSON.stringify(persistedPayload)
+            // A successful full repair also clears the RFC-165 migration breadcrumb.
+            if (existing.launchPayload === null || existing.migrationNeeded) set.lastError = null
+          }
+          if (patch.scheduleSpec !== undefined && patchedSpec !== null) {
+            set.scheduleSpec = JSON.stringify(patchedSpec)
+          }
+          if (patch.enabled !== undefined) set.enabled = resultEnabled
+          if (!resultEnabled) {
+            set.nextRunAt = null
+          } else if (patch.scheduleSpec !== undefined || (resultEnabled && !fresh.enabled)) {
+            set.nextRunAt = computeNextRunAt(patchedSpec as ScheduleSpec, now, now)
+            set.consecutiveFailures = 0
+          }
+          return set
+        },
       }
-      if (target.kind === 'scheduled-workgroup') {
-        ;(finalPayload as Record<string, unknown>)['workgroupName'] = target.workgroup.name
-      }
-    }
-    const set: Partial<typeof scheduledTasks.$inferInsert> = { updatedAt: now }
-    if (patch.name !== undefined) set.name = patch.name
-    if (patch.launchPayload !== undefined && finalPayload !== null) {
-      set.launchPayload = JSON.stringify(finalPayload)
-      // A successful full repair also clears the RFC-165 migration lastError
-      // breadcrumb (best-effort UX; harmless when it was never set).
-      if (existing.launchPayload === null || existing.migrationNeeded) set.lastError = null
-    }
-    if (patch.scheduleSpec !== undefined && patchedSpec !== null) {
-      set.scheduleSpec = JSON.stringify(patchedSpec)
-    }
-    if (patch.enabled !== undefined) set.enabled = resultEnabled
-    if (!resultEnabled) {
-      set.nextRunAt = null
-    } else if (patch.scheduleSpec !== undefined || (resultEnabled && !fresh.enabled)) {
-      // resultEnabled ⇒ patchedSpec non-null (guarded above via `enabled`;
-      // a fresh row can only have flipped enabled, not nulled the spec).
-      set.nextRunAt = computeNextRunAt(patchedSpec as ScheduleSpec, now, now)
-      set.consecutiveFailures = 0
-    }
-    tx.update(scheduledTasks).set(set).where(eq(scheduledTasks.id, id)).run()
+    },
   })
-  const updated = await getScheduledTask(db, id)
-  if (updated === null) throw new Error('scheduled task disappeared right after update')
+  const updated = rowToScheduledTask(updatedRow)
   scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
     type: 'scheduled.updated',
     id: updated.id,
@@ -769,19 +752,16 @@ export async function updateScheduledTask(
  * 换执行身份，那是另一件事，本 RFC 不开这个口子。
  */
 export async function getScheduleAcl(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   actor: Actor,
   row: ScheduledTask,
 ): Promise<ScheduleAcl> {
-  const grantRows = await listResourceGrants(db, 'scheduled_task', row.id)
-  const wanted = [...new Set([row.ownerUserId, ...grantRows.map((g) => g.userId)])]
-  const userRows = await db.select().from(users).where(inArray(users.id, wanted))
-  const byId = new Map(userRows.map((u) => [u.id, toSchedulePublicUser(u)] as const))
-  const revRows = await db
-    .select({ aclRevision: scheduledTasks.aclRevision })
-    .from(scheduledTasks)
-    .where(eq(scheduledTasks.id, row.id))
-    .limit(1)
+  const snapshot = await operations.persistence.loadAcl(row.id)
+  if (snapshot === null) {
+    throw new NotFoundError('scheduled-task-not-found', `scheduled task '${row.id}' not found`)
+  }
+  const grantRows = snapshot.grants
+  const byId = new Map(snapshot.users.map((user) => [user.id, user] as const))
   const grants = grantRows
     .map((g) => ({ user: byId.get(g.userId), level: g.level }))
     .filter((g): g is { user: UserPublic; level: ResourceGrantLevel } => g.user !== undefined)
@@ -795,17 +775,7 @@ export async function getScheduleAcl(
     grants,
     canManage: canGovernAccess(access),
     canEdit: canEditAccess(access),
-    aclRevision: revRows[0]?.aclRevision ?? 0,
-  }
-}
-
-function toSchedulePublicUser(row: typeof users.$inferSelect): UserPublic {
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.displayName,
-    role: row.role,
-    status: row.status,
+    aclRevision: snapshot.aclRevision,
   }
 }
 
@@ -817,97 +787,47 @@ function toSchedulePublicUser(row: typeof users.$inferSelect): UserPublic {
  * 写回去。
  */
 export async function updateScheduleAcl(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   actor: Actor,
   row: ScheduledTask,
   body: UpdateScheduleAclBody,
 ): Promise<ScheduleAcl> {
-  const access = await resolveScheduleAccessFor(db, actor, row)
+  const access = await resolveScheduleAccessFor(operations, actor, row)
   if (!canGovernAccess(access)) {
     throw new ForbiddenError(
       'resource-govern-owner-only',
       'granting a scheduled task is reserved for its owner',
     )
   }
-  const referenced = new Set(body.grants.map((g) => g.userId))
   const now = Date.now()
-
-  dbTxSync(db, (tx) => {
-    const cur = tx
-      .select({ aclRevision: scheduledTasks.aclRevision, ownerUserId: scheduledTasks.ownerUserId })
-      .from(scheduledTasks)
-      .where(eq(scheduledTasks.id, row.id))
-      .get()
-    if (cur === undefined) {
-      throw new NotFoundError('scheduled-task-not-found', `scheduled task '${row.id}' not found`)
-    }
-    if (body.expectedResourceId !== row.id) {
-      throw new ConflictError('acl-resource-mismatch', 'resource id changed; reload')
-    }
-    if (cur.aclRevision !== body.expectedAclRevision) {
-      throw new ConflictError(
-        'acl-revision-conflict',
-        `acl revision is ${cur.aclRevision}, expected ${body.expectedAclRevision}; reload and retry`,
-      )
-    }
-    if (!actor.permissions.has('resource-acl:bypass') && cur.ownerUserId !== actor.user.id) {
-      throw new ForbiddenError(
-        'resource-govern-owner-only',
-        'granting a scheduled task is reserved for its owner',
-      )
-    }
-    if (referenced.size > 0) {
-      const urows = tx
-        .select({ id: users.id, status: users.status })
-        .from(users)
-        .where(inArray(users.id, [...referenced]))
-        .all()
-      const active = new Set(urows.filter((r) => r.status === 'active').map((r) => r.id))
-      const bad = [...referenced].filter((id) => id === SYSTEM_USER_ID || !active.has(id))
-      if (bad.length > 0) {
-        throw new ValidationError('acl-user-invalid', 'referenced user(s) not active', {
-          userIds: bad,
-        })
-      }
-    }
-    // Last entry wins on a duplicated userId, same as the resource ACL path.
-    const next = new Map(body.grants.map((g) => [g.userId, g.level] as const))
-    next.delete(cur.ownerUserId)
-    tx.delete(resourceGrants).where(grantsOfResourceWhere('scheduled_task', row.id)).run()
-    if (next.size > 0) {
-      tx.insert(resourceGrants)
-        .values(
-          [...next].map(([userId, level]) => ({
-            resourceType: 'scheduled_task' as const,
-            resourceId: row.id,
-            userId,
-            level,
-            addedBy: actor.user.id,
-            addedAt: now,
-          })),
-        )
-        .run()
-    }
-    tx.update(scheduledTasks)
-      .set({ aclRevision: cur.aclRevision + 1, updatedAt: now })
-      .where(eq(scheduledTasks.id, row.id))
-      .run()
+  await operations.persistence.replaceAclAtomically({
+    resourceId: row.id,
+    expectedResourceId: body.expectedResourceId,
+    expectedAclRevision: body.expectedAclRevision,
+    actorUserId: actor.user.id,
+    bypassOwner: actor.permissions.has('resource-acl:bypass'),
+    grants: body.grants,
+    systemUserId: SYSTEM_USER_ID,
+    updatedAt: now,
   })
 
-  triggerRevalidation(db, 'resource-acl-changed')
-  const fresh = await getScheduledTask(db, row.id)
+  await operations.resourceAclChanged()
+  const fresh = await getScheduledTask(operations, row.id)
   if (fresh === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${row.id}' not found`)
   }
-  return getScheduleAcl(db, actor, fresh)
+  return getScheduleAcl(operations, actor, fresh)
 }
 
-export async function deleteScheduledTask(db: DbClient, id: string): Promise<void> {
-  const existing = await getScheduledTask(db, id)
+export async function deleteScheduledTask(
+  operations: ScheduledTaskOperations,
+  id: string,
+): Promise<void> {
+  const existingRow = await operations.persistence.delete(id)
+  const existing = existingRow === null ? null : rowToScheduledTask(existingRow)
   if (existing === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
-  await db.delete(scheduledTasks).where(eq(scheduledTasks.id, id))
   scheduledTaskBroadcaster.broadcast(SCHEDULED_TASK_CHANNEL, {
     type: 'scheduled.deleted',
     id,
@@ -932,7 +852,7 @@ export function decorateTaskName(base: string, spec: ScheduleSpec, now: number):
  * (owner inactive / workflow gone / invisible / built-in); the caller records it.
  */
 export async function fireSchedule(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   row: Row,
   buildLaunch: BuildScheduleLaunch,
   now: number,
@@ -1013,7 +933,13 @@ export async function fireSchedule(
   // retain their own final gates, but this shared preflight also protects
   // injected ScheduleLaunch implementations and rejects before any launch
   // side effect.
-  await assertScheduledTargetUsable(db, resourceAuthority, kind, bodyWithName, defaultRuntime)
+  await assertScheduledTargetUsable(
+    operations,
+    resourceAuthority,
+    kind,
+    bodyWithName,
+    defaultRuntime,
+  )
 
   const launch = buildLaunch(row.ownerUserId, row.id)
   const task = await launch(
@@ -1067,18 +993,19 @@ export async function fireSchedule(
  * rows are skipped.
  */
 export async function healScheduledLaunchPayloads(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
 ): Promise<{ scanned: number; converted: number; disabled: number }> {
-  const rows = await db.select().from(scheduledTasks)
+  const rows = await operations.persistence.list()
   let converted = 0
   let disabled = 0
   const now = Date.now()
 
   const disable = async (row: Row, error: string): Promise<void> => {
-    await db
-      .update(scheduledTasks)
-      .set({ enabled: false, nextRunAt: null, lastError: error, updatedAt: now })
-      .where(eq(scheduledTasks.id, row.id))
+    await operations.persistence.updateHealedPayload({
+      id: row.id,
+      disableError: error,
+      updatedAt: now,
+    })
     disabled += 1
   }
   // Resolve a legacy path to the CLONABLE git root (P2 review fixes ×2):
@@ -1147,10 +1074,11 @@ export async function healScheduledLaunchPayloads(
     delete body['gitUserName']
     delete body['gitUserEmail']
     if (hadClientGitIdentity && rejectRetiredStartTaskKeys(body) === null) {
-      await db
-        .update(scheduledTasks)
-        .set({ launchPayload: JSON.stringify(body), updatedAt: now })
-        .where(eq(scheduledTasks.id, row.id))
+      await operations.persistence.updateHealedPayload({
+        id: row.id,
+        launchPayload: JSON.stringify(body),
+        updatedAt: now,
+      })
       converted += 1
       continue
     }
@@ -1217,10 +1145,11 @@ export async function healScheduledLaunchPayloads(
       // 单仓字段再删除——**必须删**，留着它 payload 永远不是 v2-clean，扫描会
       // 每轮把这行捡起来重写一次，计划则一直启用着反复 422。
       flattenSingleRepo(body)
-      await db
-        .update(scheduledTasks)
-        .set({ launchPayload: JSON.stringify(body), updatedAt: now })
-        .where(eq(scheduledTasks.id, row.id))
+      await operations.persistence.updateHealedPayload({
+        id: row.id,
+        launchPayload: JSON.stringify(body),
+        updatedAt: now,
+      })
       converted += 1
       continue
     }
@@ -1273,10 +1202,11 @@ export async function healScheduledLaunchPayloads(
     // `repos`，payload 才真正 v2-clean。
     flattenSingleRepo(body)
 
-    await db
-      .update(scheduledTasks)
-      .set({ launchPayload: JSON.stringify(body), updatedAt: now })
-      .where(eq(scheduledTasks.id, row.id))
+    await operations.persistence.updateHealedPayload({
+      id: row.id,
+      launchPayload: JSON.stringify(body),
+      updatedAt: now,
+    })
     converted += 1
   }
   return { scanned: rows.length, converted, disabled }
@@ -1304,18 +1234,18 @@ function flattenSingleRepo(body: Record<string, unknown>): void {
 }
 
 export async function runScheduleNow(
-  db: DbClient,
+  operations: ScheduledTaskOperations,
   id: string,
   buildLaunch: BuildScheduleLaunch,
   identityAccess: ScheduleAuthorityRuntime,
   defaultRuntime?: string | null,
 ): Promise<{ taskId: string }> {
-  const row = await getScheduledTaskRow(db, id)
+  const row = await getScheduledTaskRow(operations, id)
   if (row === null) {
     throw new NotFoundError('scheduled-task-not-found', `scheduled task '${id}' not found`)
   }
   const result = await fireSchedule(
-    db,
+    operations,
     row,
     buildLaunch,
     Date.now(),

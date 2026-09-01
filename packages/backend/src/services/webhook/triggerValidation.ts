@@ -6,19 +6,6 @@
 // assertScheduledTargetUsable（ACL/builtin/upload/launch-shape 全复用，等价于
 // 验证「一个典型事件到来时这个触发器能启动」）——fire 期跑的是同一个 gate，
 // 保存期彩排让配置错误在保存时暴露而不是 fire 后逐次失败。
-import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import {
-  assertIntegrationTriggerSnapshotUsable,
-  assertScheduledTargetUsable,
-  loadIntegrationTriggerResourceSnapshot,
-  type IntegrationTriggerResourceAuthority,
-} from '@/services/scheduledTasks'
-import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
-import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import { renderWebhookLaunch } from '@/services/webhook/webhookDispatch'
-import { ValidationError } from '@/util/errors'
-import type { FrozenIntegrationTriggerResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import type {
   CodeHostEvent,
   CodeHostEventType,
@@ -27,11 +14,7 @@ import type {
   WebhookLaunchPayloadTemplate,
   WorkflowDefinition,
 } from '@agent-workflow/shared'
-import {
-  WebhookWorkflowPayloadTemplateSchema,
-  webhookPayloadTemplateSchemaFor,
-  templateVarIssues,
-} from '@agent-workflow/shared'
+import { WebhookWorkflowPayloadTemplateSchema, templateVarIssues } from '@agent-workflow/shared'
 
 export type TriggerValidationIssue = {
   code:
@@ -46,6 +29,14 @@ export type TriggerValidationIssue = {
 }
 
 type DefInput = WorkflowDefinition['inputs'][number]
+
+export type WebhookTriggerSaveCandidate = Readonly<{
+  launchKind: WebhookLaunchKind
+  launchRefId: string
+  launchPayload: unknown
+  eventTypes: ReadonlyArray<CodeHostEventType>
+  autoRegisterRepos: boolean
+}>
 
 /** workflow 面：输入映射与 workflow 定义的 kind-aware 对账。 */
 export function validateWorkflowInputMappings(
@@ -105,145 +96,6 @@ export function staticTriggerIssues(
     issues.push(...validateWorkflowInputMappings(workflowInputs, parsed.inputs))
   }
   return issues
-}
-
-/**
- * 保存期全量校验（路由从 create/update 两处调用）：wire 封套 → 静态三层
- * （模板变量 / workflow 映射 kind-aware）→「彩排渲染 + assertScheduledTargetUsable」。
- * 彩排以**保存者身份**跑——launch 目标对保存者不可见即 404（resourceRefs 惯例）。
- */
-export async function assertTriggerSaveable(
-  db: DbClient,
-  actor: Actor,
-  resourceAuthority: IntegrationTriggerResourceAuthority,
-  candidate: {
-    launchKind: WebhookLaunchKind
-    launchRefId: string
-    launchPayload: unknown
-    eventTypes: ReadonlyArray<CodeHostEventType>
-    autoRegisterRepos: boolean
-  },
-  defaultRuntime: string | null | undefined,
-): Promise<void> {
-  if (actor !== resourceAuthority.actor) throw new Error('foreign-webhook-trigger-actor')
-  const parsedPayload = webhookPayloadTemplateSchemaFor(candidate.launchKind).safeParse(
-    candidate.launchPayload,
-  )
-  if (!parsedPayload.success) {
-    throw new ValidationError('webhook-trigger-invalid', 'invalid launch payload', {
-      issues: parsedPayload.error.issues,
-    })
-  }
-  const payload = parsedPayload.data
-  let workflowInputs: ReadonlyArray<DefInput> | null = null
-  let workflowDefinition: WorkflowDefinition | null = null
-  let workflowClosureJson: string | null = null
-  let resourceSnapshot: FrozenIntegrationTriggerResourceSnapshot | null = null
-  if (candidate.launchKind === 'workflow') {
-    // D1 顺序不变量：可见性门必须先于 definition 内容的任何读取与回显。
-    // 下面的静态校验层逐字回显 input key 与 kind（unknown-input /
-    // required-input-unmapped / input-kind-unmappable），若排在 ACL 之后，
-    // 一个不可见 workflow 的存在性与输入结构就会经 422 的 issue 泄漏出去
-    // ——彩排 gate 的 canViewResource 那时才跑，已经晚了。
-    // 用 ACL 专用行读：它不解析 definition，坏定义也能正确判 404（与
-    // getWorkflowAclRow 的既有用途一致）。完整 gate（builtin / upload /
-    // launch-shape）仍留在本函数末尾，这里只前置最小可见性门。
-    resourceSnapshot = loadIntegrationTriggerResourceSnapshot(db, resourceAuthority, {
-      kind: 'webhook-workflow',
-      workflowId: candidate.launchRefId,
-    })
-    if (resourceSnapshot.kind !== 'webhook-workflow') {
-      throw new Error('webhook-workflow-snapshot-kind-mismatch')
-    }
-    workflowDefinition = resourceSnapshot.workflow.definition
-    workflowInputs = workflowDefinition.inputs
-    workflowClosureJson = freezeTaskExecutionCallClosure(
-      db,
-      { id: candidate.launchRefId, definition: workflowDefinition },
-      Object.freeze({
-        authority: resourceAuthority.authority,
-        actor: resourceAuthority.actor,
-        resources: resourceAuthority.taskExecutionResources,
-      }),
-    )
-  }
-  if (candidate.launchKind === 'digital-employee') {
-    resourceSnapshot = loadIntegrationTriggerResourceSnapshot(db, resourceAuthority, {
-      kind: 'webhook-digital-employee',
-      employeeDefinitionId: candidate.launchRefId,
-    })
-  }
-  const issues = staticTriggerIssues(
-    candidate.launchKind,
-    payload,
-    candidate.eventTypes,
-    workflowInputs,
-  )
-  // `scratch` is a human-authored launch option; a code-round template has no
-  // such field (its space is decided by the capability contract, not here).
-  // Reading it off the union would be a lie about what the payload contains.
-  const payloadScratch = 'scratch' in payload && payload.scratch === true
-  if (payloadScratch && candidate.autoRegisterRepos !== false) {
-    issues.push({
-      code: 'scratch-auto-register-conflict',
-      detail: 'autoRegisterRepos must be false when launchPayload.scratch is true',
-    })
-  }
-  if (issues.length > 0) {
-    throw new ValidationError('webhook-trigger-invalid', 'trigger static validation failed', {
-      issues,
-    })
-  }
-  if (workflowDefinition !== null) {
-    assertTriggerPreflight({
-      root: workflowDefinition,
-      closureJson: workflowClosureJson,
-      source: { kind: 'event-types', eventTypes: candidate.eventTypes },
-    })
-  }
-  const rendered = renderWebhookLaunch(
-    {
-      launchKind: candidate.launchKind,
-      launchRefId: candidate.launchRefId,
-      payloadTemplate: payload,
-    },
-    'rehearsal',
-    rehearsalEvent(candidate.eventTypes[0] ?? 'push'),
-    payloadScratch
-      ? { kind: 'scratch' }
-      : { kind: 'url', repoUrl: 'https://rehearsal.invalid/repo.git' },
-  )
-  if (rendered.kind === 'digital-employee') {
-    if (resourceSnapshot === null) throw new Error('digital-employee-snapshot-missing')
-    await assertIntegrationTriggerSnapshotUsable(
-      db,
-      resourceAuthority,
-      resourceSnapshot,
-      payload as unknown as Record<string, unknown>,
-    )
-    return
-  }
-  if (rendered.kind === 'workflow') {
-    if (resourceSnapshot === null) throw new Error('webhook-workflow-snapshot-missing')
-    await assertIntegrationTriggerSnapshotUsable(
-      db,
-      resourceAuthority,
-      resourceSnapshot,
-      rendered.payload as unknown as Record<string, unknown>,
-      { kind: 'event-types', eventTypes: candidate.eventTypes },
-    )
-    return
-  }
-  await assertScheduledTargetUsable(
-    db,
-    resourceAuthority,
-    rendered.kind,
-    // 结构化 payload → gate 的宽记录形参（服务层内的唯一桥点）。
-    rendered.payload as unknown as Record<string, unknown>,
-    defaultRuntime,
-    { kind: 'event-types', eventTypes: candidate.eventTypes },
-    'webhook',
-  )
 }
 
 /**

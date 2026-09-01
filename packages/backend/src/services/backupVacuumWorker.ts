@@ -8,20 +8,14 @@
 // the daemon keeps serving; WAL isolates it from concurrent writers and the
 // periodic checkpoint loop absorbs the WAL growth afterwards.
 
-import { Database } from 'bun:sqlite'
+import { vacuumSqliteInto } from '@/platform/persistence/sqlite/systemBackupVacuum'
 
 declare const self: Worker
 
 self.onmessage = (event: MessageEvent<{ dbPath: string; dest: string }>) => {
   const { dbPath, dest } = event.data
   try {
-    const source = new Database(dbPath, { readonly: true })
-    try {
-      source.exec('PRAGMA busy_timeout = 30000;')
-      source.exec(`VACUUM INTO '${dest.replaceAll("'", "''")}'`)
-    } finally {
-      source.close()
-    }
+    vacuumSqliteInto({ dbPath, dest })
     postMessage({ ok: true as const })
   } catch (error) {
     postMessage({

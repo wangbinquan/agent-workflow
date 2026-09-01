@@ -29,8 +29,7 @@ import { basename, isAbsolute, join, resolve, sep } from 'node:path'
 import { parseRepoKeyWire } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { readBlobAtRef } from '@/util/git'
-import type { DbClient } from '@/db/client'
-import { getTask } from '@/services/task'
+import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import { MAX_ANALYZE_BYTES } from '@/services/structuralDiff/baseline'
 
@@ -180,7 +179,7 @@ export function openContainedFile(
  * carry); single-repo tasks may omit `repo`.
  */
 export async function getTaskFileContent(
-  db: DbClient,
+  store: RepositoryWorkspaceStore,
   taskId: string,
   q: { path: string; side: 'base' | 'worktree'; basePath?: string; repo?: string },
   hooks?: ContainedFileHooks,
@@ -188,14 +187,14 @@ export async function getTaskFileContent(
   if (q.path === '') {
     throw new ValidationError('file-content-missing-path', 'path query param required')
   }
-  const task = await getTask(db, taskId)
+  const task = await store.findWorktreeTask(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
 
   let worktreePath = task.worktreePath
   let baseCommit = task.baseCommit
-  if (task.repoCount > 1) {
+  if (task.repos.length > 1) {
     if (q.repo === undefined || q.repo === '') {
       throw new ValidationError(
         'file-content-repo-required',

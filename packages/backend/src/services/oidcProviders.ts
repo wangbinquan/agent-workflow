@@ -2,7 +2,6 @@
 // secret at rest (via auth/secretBox), discovery probe for the /test endpoint,
 // and a redacted-for-output view that never leaks the secret.
 
-import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   CreateOidcProviderBody,
@@ -12,14 +11,19 @@ import type {
 } from '@agent-workflow/shared'
 import { OidcProviderSchema } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { authLoginPolicy, oidcProviders, userIdentities } from '@/db/schema'
 import { resolveEndpoints, type EndpointSource } from '@/auth/oidc/endpoints'
+import {
+  SqliteOidcProviderRepository,
+  type OidcProviderRepository,
+} from '@/modules/identity-access/public/operations'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
-type Row = typeof oidcProviders.$inferSelect
+type SqliteOidcProviderDatabase = ConstructorParameters<typeof SqliteOidcProviderRepository>[0]
+type OidcProviderPersistenceRecord = NonNullable<
+  Awaited<ReturnType<OidcProviderRepository['findById']>>
+>
+type PatchOidcProviderRecord = Parameters<OidcProviderRepository['patch']>[0]['updates']
 
 // RFC-220 — admin diagnostic result for POST /:id/test (design §7). Always
 // carried on a 200: the per-field diagnosis is MOST valuable when the
@@ -59,13 +63,16 @@ export interface OidcProvidersService {
   probe(provider: OidcProvider, fetcher?: typeof fetch): Promise<ProbeResult>
 }
 
-export function createOidcProvidersService(deps: {
-  db: DbClient
-  secretBox: SecretBox
-}): OidcProvidersService {
-  const { db, secretBox } = deps
+export function createOidcProvidersService(
+  deps:
+    | { readonly repository: OidcProviderRepository; readonly secretBox: SecretBox }
+    | { readonly db: SqliteOidcProviderDatabase; readonly secretBox: SecretBox },
+): OidcProvidersService {
+  const repository =
+    'repository' in deps ? deps.repository : new SqliteOidcProviderRepository(deps.db)
+  const { secretBox } = deps
 
-  function materialize(row: Row): OidcProvider {
+  function materialize(row: OidcProviderPersistenceRecord): OidcProvider {
     return OidcProviderSchema.parse({
       id: row.id,
       slug: row.slug,
@@ -94,37 +101,29 @@ export function createOidcProvidersService(deps: {
 
   return {
     async list() {
-      const rows = await db.select().from(oidcProviders)
+      const rows = await repository.list()
       return rows.map(materialize)
     },
     async listPublic() {
-      const rows = await db.select().from(oidcProviders).where(eq(oidcProviders.enabled, true))
+      const rows = await repository.listEnabled()
       return rows.map((r) => ({ slug: r.slug, displayName: r.displayName, iconUrl: r.iconUrl }))
     },
     async findById(id) {
-      const rows = await db.select().from(oidcProviders).where(eq(oidcProviders.id, id)).limit(1)
-      return rows[0] ? materialize(rows[0]) : null
+      const row = await repository.findById(id)
+      return row === null ? null : materialize(row)
     },
     async findBySlug(slug) {
-      const rows = await db
-        .select()
-        .from(oidcProviders)
-        .where(eq(oidcProviders.slug, slug))
-        .limit(1)
-      return rows[0] ? materialize(rows[0]) : null
+      const row = await repository.findBySlug(slug)
+      return row === null ? null : materialize(row)
     },
     async resolveClientSecret(id) {
-      const rows = await db.select().from(oidcProviders).where(eq(oidcProviders.id, id)).limit(1)
-      if (!rows[0]) return null
-      return secretBox.unseal(rows[0].clientSecretEnc)
+      const row = await repository.findById(id)
+      if (row === null) return null
+      return secretBox.unseal(row.clientSecretEnc)
     },
     async create(body, now = Date.now()) {
-      const existing = await this.findBySlug(body.slug)
-      if (existing) {
-        throw new ConflictError('oidc-slug-taken', `slug '${body.slug}' already exists`)
-      }
       const id = ulid()
-      await db.insert(oidcProviders).values({
+      const result = await repository.insert({
         id,
         slug: body.slug,
         displayName: body.displayName,
@@ -150,45 +149,12 @@ export function createOidcProvidersService(deps: {
         updatedAt: now,
         schemaVersion: 1,
       })
-      return (await this.findById(id))!
+      if (!result.ok) throw providerWriteError(result.code, id, body.slug)
+      return materialize(result.value)
     },
     async patch(id, body, now = Date.now()) {
       const cur = await this.findById(id)
       if (!cur) throw new NotFoundError('oidc-provider-not-found', `provider ${id} not found`)
-      const updates: Partial<typeof oidcProviders.$inferInsert> = { updatedAt: now }
-      if (body.slug !== undefined && body.slug !== cur.slug) {
-        const dup = await this.findBySlug(body.slug)
-        if (dup) throw new ConflictError('oidc-slug-taken', `slug '${body.slug}' already exists`)
-        updates.slug = body.slug
-      }
-      if (body.displayName !== undefined) updates.displayName = body.displayName
-      if (body.issuerUrl !== undefined) updates.issuerUrl = body.issuerUrl
-      if (body.clientId !== undefined) updates.clientId = body.clientId
-      if (body.scopes !== undefined) updates.scopes = body.scopes
-      if (body.provisioning !== undefined) updates.provisioning = body.provisioning
-      if (body.allowedEmailDomains !== undefined) {
-        updates.allowedEmailDomainsJson = JSON.stringify(body.allowedEmailDomains)
-      }
-      if (body.iconUrl !== undefined) updates.iconUrl = body.iconUrl
-      if (body.enabled !== undefined) updates.enabled = body.enabled
-      if (body.authorizationEndpoint !== undefined) {
-        updates.authorizationEndpoint = body.authorizationEndpoint
-      }
-      if (body.tokenEndpoint !== undefined) updates.tokenEndpoint = body.tokenEndpoint
-      if (body.userinfoEndpoint !== undefined) updates.userinfoEndpoint = body.userinfoEndpoint
-      if (body.userinfoRequestStyle !== undefined) {
-        updates.userinfoRequestStyle = body.userinfoRequestStyle
-      }
-      if (body.jwksUri !== undefined) updates.jwksUri = body.jwksUri
-      if (body.trustEmailVerified !== undefined)
-        updates.trustEmailVerified = body.trustEmailVerified
-      if (body.usernameClaim !== undefined) updates.usernameClaim = body.usernameClaim
-      if (body.gitNameClaim !== undefined) updates.gitNameClaim = body.gitNameClaim
-      if (body.emailClaim !== undefined) updates.emailClaim = body.emailClaim
-      // Empty clientSecret in PATCH = keep existing; non-empty = re-seal.
-      if (typeof body.clientSecret === 'string' && body.clientSecret.length > 0) {
-        updates.clientSecretEnc = secretBox.seal(body.clientSecret)
-      }
       // RFC-220 — subject namespace lock. Changing subjectClaim re-keys future
       // identities; rows written under the old namespace could then miss
       // (duplicate accounts) or collide with another user's old subject (login
@@ -200,98 +166,49 @@ export function createOidcProvidersService(deps: {
       // provider-config-changed. Equal-value rewrites pass untouched.
       const subjectClaimChanges =
         body.subjectClaim !== undefined && body.subjectClaim !== cur.subjectClaim
-      if (subjectClaimChanges) updates.subjectClaim = body.subjectClaim
-      // RFC-221: the last enabled provider and the password-login switch form
-      // one database invariant. Funnel the final write through dbTxSync so a
-      // concurrent policy change cannot leave both login families disabled.
-      dbTxSync(db, (tx) => {
-        const fresh = tx
-          .select({ enabled: oidcProviders.enabled })
-          .from(oidcProviders)
-          .where(eq(oidcProviders.id, id))
-          .get()
-        if (fresh === undefined) {
-          throw new NotFoundError('oidc-provider-not-found', `provider ${id} not found`)
-        }
-        if (fresh.enabled && body.enabled === false) {
-          const policy = tx
-            .select()
-            .from(authLoginPolicy)
-            .where(eq(authLoginPolicy.id, 'global'))
-            .get()
-          const otherEnabled = tx
-            .select({ id: oidcProviders.id })
-            .from(oidcProviders)
-            .where(and(eq(oidcProviders.enabled, true), ne(oidcProviders.id, id)))
-            .limit(1)
-            .get()
-          if (policy?.passwordLoginEnabled === false && otherEnabled === undefined) {
-            throw new ConflictError(
-              'last-enabled-oidc-required',
-              'cannot disable the last enabled identity provider while password login is disabled',
-            )
-          }
-        }
-        if (subjectClaimChanges) {
-          const linked = tx
-            .select({ id: userIdentities.id })
-            .from(userIdentities)
-            .where(eq(userIdentities.providerId, id))
-            .limit(1)
-            .all()
-          if (linked.length > 0) {
-            throw new ConflictError(
-              'subject-claim-locked-by-identities',
-              'subjectClaim cannot change while identities are linked to this provider; delete and recreate the provider instead',
-            )
-          }
-        }
-        tx.update(oidcProviders).set(updates).where(eq(oidcProviders.id, id)).run()
-      })
-      return (await this.findById(id))!
+      // Persistence records deliberately expose readonly fields. Build one
+      // immutable patch value instead of mutating a DTO after construction;
+      // this keeps the same closed contract for SQLite and PostgreSQL.
+      const updates: PatchOidcProviderRecord = {
+        updatedAt: now,
+        ...(body.slug !== undefined && body.slug !== cur.slug ? { slug: body.slug } : {}),
+        ...(body.displayName === undefined ? {} : { displayName: body.displayName }),
+        ...(body.issuerUrl === undefined ? {} : { issuerUrl: body.issuerUrl }),
+        ...(body.clientId === undefined ? {} : { clientId: body.clientId }),
+        ...(body.scopes === undefined ? {} : { scopes: body.scopes }),
+        ...(body.provisioning === undefined ? {} : { provisioning: body.provisioning }),
+        ...(body.allowedEmailDomains === undefined
+          ? {}
+          : { allowedEmailDomainsJson: JSON.stringify(body.allowedEmailDomains) }),
+        ...(body.iconUrl === undefined ? {} : { iconUrl: body.iconUrl }),
+        ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
+        ...(body.authorizationEndpoint === undefined
+          ? {}
+          : { authorizationEndpoint: body.authorizationEndpoint }),
+        ...(body.tokenEndpoint === undefined ? {} : { tokenEndpoint: body.tokenEndpoint }),
+        ...(body.userinfoEndpoint === undefined ? {} : { userinfoEndpoint: body.userinfoEndpoint }),
+        ...(body.userinfoRequestStyle === undefined
+          ? {}
+          : { userinfoRequestStyle: body.userinfoRequestStyle }),
+        ...(body.jwksUri === undefined ? {} : { jwksUri: body.jwksUri }),
+        ...(body.trustEmailVerified === undefined
+          ? {}
+          : { trustEmailVerified: body.trustEmailVerified }),
+        ...(body.usernameClaim === undefined ? {} : { usernameClaim: body.usernameClaim }),
+        ...(body.gitNameClaim === undefined ? {} : { gitNameClaim: body.gitNameClaim }),
+        ...(body.emailClaim === undefined ? {} : { emailClaim: body.emailClaim }),
+        ...(typeof body.clientSecret === 'string' && body.clientSecret.length > 0
+          ? { clientSecretEnc: secretBox.seal(body.clientSecret) }
+          : {}),
+        ...(subjectClaimChanges ? { subjectClaim: body.subjectClaim } : {}),
+      }
+      const result = await repository.patch({ id, updates, subjectClaimChanges })
+      if (!result.ok) throw providerWriteError(result.code, id, body.slug, 'disable')
+      return materialize(result.value)
     },
     async remove(id, force = false) {
-      dbTxSync(db, (tx) => {
-        const cur = tx.select().from(oidcProviders).where(eq(oidcProviders.id, id)).get()
-        if (cur === undefined) {
-          throw new NotFoundError('oidc-provider-not-found', `provider ${id} not found`)
-        }
-        if (cur.enabled) {
-          const policy = tx
-            .select()
-            .from(authLoginPolicy)
-            .where(eq(authLoginPolicy.id, 'global'))
-            .get()
-          const otherEnabled = tx
-            .select({ id: oidcProviders.id })
-            .from(oidcProviders)
-            .where(and(eq(oidcProviders.enabled, true), ne(oidcProviders.id, id)))
-            .limit(1)
-            .get()
-          if (policy?.passwordLoginEnabled === false && otherEnabled === undefined) {
-            throw new ConflictError(
-              'last-enabled-oidc-required',
-              'cannot delete the last enabled identity provider while password login is disabled',
-            )
-          }
-        }
-        const linked = tx
-          .select({ id: userIdentities.id })
-          .from(userIdentities)
-          .where(eq(userIdentities.providerId, id))
-          .limit(1)
-          .get()
-        if (linked !== undefined && !force) {
-          throw new ConflictError(
-            'provider-still-linked',
-            'one or more users still have identities linked to this provider',
-          )
-        }
-        if (force) {
-          tx.delete(userIdentities).where(eq(userIdentities.providerId, id)).run()
-        }
-        tx.delete(oidcProviders).where(eq(oidcProviders.id, id)).run()
-      })
+      const result = await repository.remove({ id, force })
+      if (!result.ok) throw providerWriteError(result.code, id, undefined, 'delete')
     },
     async probe(provider, fetcher = globalThis.fetch) {
       // forceFresh: an admin pressing "Test connection" wants the IdP's
@@ -363,6 +280,40 @@ export function createOidcProvidersService(deps: {
         scopesSupported: eff.scopesSupported,
       }
     },
+  }
+}
+
+function providerWriteError(
+  code:
+    | 'oidc-provider-not-found'
+    | 'oidc-slug-taken'
+    | 'last-enabled-oidc-required'
+    | 'subject-claim-locked-by-identities'
+    | 'provider-still-linked',
+  id: string,
+  slug?: string,
+  lastProviderOperation?: 'disable' | 'delete',
+): Error {
+  switch (code) {
+    case 'oidc-provider-not-found':
+      return new NotFoundError(code, `provider ${id} not found`)
+    case 'oidc-slug-taken':
+      return new ConflictError(code, `slug '${slug ?? ''}' already exists`)
+    case 'last-enabled-oidc-required':
+      return new ConflictError(
+        code,
+        `cannot ${lastProviderOperation ?? 'disable'} the last enabled identity provider while password login is disabled`,
+      )
+    case 'subject-claim-locked-by-identities':
+      return new ConflictError(
+        code,
+        'subjectClaim cannot change while identities are linked to this provider; delete and recreate the provider instead',
+      )
+    case 'provider-still-linked':
+      return new ConflictError(
+        code,
+        'one or more users still have identities linked to this provider',
+      )
   }
 }
 

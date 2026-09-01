@@ -45,24 +45,8 @@ import { NotFoundError } from '@/util/errors'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
 import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
-import { inArray } from 'drizzle-orm'
-import { agents } from '@/db/schema'
-import type { DbClient } from '@/db/client'
-import { listRuntimes, resolveRuntimeByName } from '@/services/runtimeRegistry'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
-import {
-  createDefaultIntentPlatformInventory,
-  renderPlatformInventoryFile,
-  type IntentPlatformInventory,
-} from './platformInventory'
-import { getAgentById } from '@/services/agent'
-import { getMcpById } from '@/services/mcp'
-import { getPlugin } from '@/services/plugin'
-import { listSkillFiles, readSkillContent, readSkillFile } from '@/services/skill'
-import { getWorkflow } from '@/services/workflow'
-import { getWorkgroupById } from '@/services/workgroups'
-import { listAllVisibleResourceSummariesForActor } from '@/modules/resource-catalog/public/operations'
-import { resourceCatalogProjectionDependencies } from './resourceCatalogProjections'
+import { renderPlatformInventoryFile, type IntentPlatformInventory } from './platformInventory'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
 import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
 import {
@@ -81,6 +65,10 @@ import {
   type IntentHandleWatermark,
 } from './manifest'
 import { sha256Hex } from '@/util/hash'
+import {
+  listAllVisibleResourceSummaries,
+  type IntentResourceCatalogBinding,
+} from './resourceCatalog'
 
 export const INTENT_INVENTORY_CAP = 500
 const SKILL_DUMP_FILE_CAP_BYTES = 128 * 1024
@@ -91,8 +79,9 @@ export interface IntentMountRef {
 }
 
 export interface IntentDumpInput {
-  db: DbClient
   actor: Actor
+  /** Provider-neutral classic-six summary query composed once by bootstrap. */
+  resourceCatalog: IntentResourceCatalogBinding
   appHome: string
   mounts: readonly IntentMountRef[]
   /** Prior epoch's manifest — reused so handles stay stable across rebases. */
@@ -116,70 +105,43 @@ export interface IntentDumpInput {
   envelopeNonce?: string
   /**
    * RFC-348 D5b — the runtime an agent inherits when it omits `runtime`
-   * (resolved by the turn config from `config.defaultRuntime`). Absent ⇒ the
-   * registry's own fallback (`resolveRuntimeByName(db, null)`).
+   * (resolved by the turn config from `config.defaultRuntime`).
    */
   effectiveDefaultRuntime?: { name: string; protocol: string }
+  /** Provider-neutral runtime roster/default projection composed at bootstrap. */
+  runtimeInventory: IntentRuntimeInventory
   /**
    * RFC-348 D5c — port names for the agents that survive the inventory cap,
    * printed beside each inventory row so a workflow can be wired without
-   * mounting every agent. Default: one narrow select on `agents.inputs/outputs`.
+   * mounting every agent.
    */
-  loadAgentPorts?: (ids: readonly string[]) => Promise<Map<string, AgentPortNames>>
+  loadAgentPorts(ids: readonly string[]): Promise<ReadonlyMap<string, AgentPortNames>>
   /**
    * RFC-348 D3 — read-only rows of the platform-only ACL types
    * (`inventory/platform/<type>.md`). Default: the DB-backed loaders in
-   * ./platformInventory.ts; bootstrap may inject the composed-module port.
+   * The selected provider composes this once at bootstrap.
    */
-  platformInventory?: IntentPlatformInventory
+  platformInventory: IntentPlatformInventory
 }
 
 /** Locked sentence (design §4; mirrors `validateRuntimeReference`'s `runtime-disabled` rule). */
 export const RUNTIME_INVENTORY_RULE =
   'Choose an enabled row for a new or re-pointed agent; (disabled) rows are listed only so you can recognise an existing pin.'
 
-async function fallbackDefaultRuntime(db: DbClient): Promise<{ name: string; protocol: string }> {
-  const resolved = await resolveRuntimeByName(db, null)
-  return { name: resolved.name, protocol: resolved.protocol }
-}
-
 export interface AgentPortNames {
-  inputs: string[]
-  outputs: string[]
+  readonly inputs: readonly string[]
+  readonly outputs: readonly string[]
 }
 
-async function loadAgentPortsFromDb(
-  db: DbClient,
-  ids: readonly string[],
-): Promise<Map<string, AgentPortNames>> {
-  const out = new Map<string, AgentPortNames>()
-  if (ids.length === 0) return out
-  const rows = await db
-    .select({ id: agents.id, inputs: agents.inputs, outputs: agents.outputs })
-    .from(agents)
-    .where(inArray(agents.id, [...ids]))
-  const names = (raw: string): string[] => {
-    try {
-      const parsed = JSON.parse(raw) as unknown
-      if (!Array.isArray(parsed)) return []
-      return parsed
-        .map((entry) =>
-          typeof entry === 'string'
-            ? entry
-            : typeof entry === 'object' &&
-                entry !== null &&
-                typeof (entry as { name?: unknown }).name === 'string'
-              ? (entry as { name: string }).name
-              : null,
-        )
-        .filter((name): name is string => name !== null)
-    } catch {
-      return []
-    }
-  }
-  for (const row of rows)
-    out.set(row.id, { inputs: names(row.inputs), outputs: names(row.outputs) })
-  return out
+export interface IntentRuntimeInventory {
+  list(): Promise<
+    readonly {
+      readonly name: string
+      readonly protocol: string
+      readonly enabled: boolean
+    }[]
+  >
+  resolveDefault(): Promise<{ readonly name: string; readonly protocol: string }>
 }
 
 export interface IntentDumpResult {
@@ -239,7 +201,7 @@ function firstLine(text: string, cap = 160): string {
 }
 
 interface VisibleCatalog {
-  db: DbClient
+  binding: IntentResourceCatalogBinding
   agents: Map<string, CatalogItem>
   skills: Map<string, CatalogItem>
   mcps: Map<string, CatalogItem>
@@ -265,7 +227,9 @@ function summaryMap(): Map<string, CatalogItem> {
   return new Map()
 }
 
-async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCatalog> {
+async function loadVisibleCatalog(
+  resourceCatalog: IntentResourceCatalogBinding,
+): Promise<VisibleCatalog> {
   const maps: Record<CatalogSelectorKind, Map<string, CatalogItem>> = {
     agent: summaryMap(),
     skill: summaryMap(),
@@ -274,11 +238,7 @@ async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCa
     workflow: summaryMap(),
     workgroup: summaryMap(),
   }
-  for (const summary of await listAllVisibleResourceSummariesForActor(
-    db,
-    actor,
-    resourceCatalogProjectionDependencies,
-  )) {
+  for (const summary of await listAllVisibleResourceSummaries(resourceCatalog)) {
     maps[summary.kind].set(summary.ref.id, {
       id: summary.ref.id,
       name: summary.name,
@@ -286,7 +246,7 @@ async function loadVisibleCatalog(db: DbClient, actor: Actor): Promise<VisibleCa
     })
   }
   return {
-    db,
+    binding: resourceCatalog,
     agents: maps.agent,
     skills: maps.skill,
     mcps: maps.mcp,
@@ -316,19 +276,19 @@ function cachedDetail<T>(
 }
 
 const loadAgentDetail = (catalog: VisibleCatalog, id: string): Promise<Agent | null> =>
-  cachedDetail(catalog.details.agents, id, () => getAgentById(catalog.db, id))
+  cachedDetail(catalog.details.agents, id, () => catalog.binding.details.agents.get({ id }))
 
 const loadMcpDetail = (catalog: VisibleCatalog, id: string): Promise<Mcp | null> =>
-  cachedDetail(catalog.details.mcps, id, () => getMcpById(catalog.db, id))
+  cachedDetail(catalog.details.mcps, id, () => catalog.binding.details.mcps.get({ id }))
 
 const loadPluginDetail = (catalog: VisibleCatalog, id: string): Promise<Plugin | null> =>
-  cachedDetail(catalog.details.plugins, id, () => getPlugin(catalog.db, id))
+  cachedDetail(catalog.details.plugins, id, () => catalog.binding.details.plugins.get({ id }))
 
 const loadWorkflowDetail = (catalog: VisibleCatalog, id: string): Promise<Workflow | null> =>
-  cachedDetail(catalog.details.workflows, id, () => getWorkflow(catalog.db, id))
+  cachedDetail(catalog.details.workflows, id, () => catalog.binding.details.workflows.get({ id }))
 
 const loadWorkgroupDetail = (catalog: VisibleCatalog, id: string): Promise<Workgroup | null> =>
-  cachedDetail(catalog.details.workgroups, id, () => getWorkgroupById(catalog.db, id))
+  cachedDetail(catalog.details.workgroups, id, () => catalog.binding.details.workgroups.get({ id }))
 
 /** BFS the dependency closure of one mounted root. Returns VISIBLE members
  *  (typed ids) + the count of invisible ones (no identity recorded). */
@@ -478,9 +438,9 @@ async function outEdgesOf(
 }
 
 export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDumpResult> {
-  const { db, actor } = input
+  const { actor } = input
   const cap = input.inventoryCap ?? INTENT_INVENTORY_CAP
-  const catalog = await loadVisibleCatalog(db, actor)
+  const catalog = await loadVisibleCatalog(input.resourceCatalog)
   const alloc = createHandleAllocator(input.priorManifest, input.handleWatermark)
   const nonce = input.envelopeNonce
   const rawSeedFiles: SystemAgentSeedFile[] = []
@@ -630,7 +590,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         seedFiles.push({ path: `${base}.md`, content: doc })
         manifest.push({ ...entryBase, fence: buildAgentFence(agent), dumpHash: sha256(doc) })
       } else if (ref.resourceType === 'skill') {
-        const content = await readSkillContent(db, { appHome: input.appHome }, ref.resourceId)
+        const content = await input.resourceCatalog.details.skills.content({ id: ref.resourceId })
         const fmExtra = maskFreeJsonSecrets(content.frontmatterExtra)
         const skillMd = `---\n${stringifyYaml(
           {
@@ -642,7 +602,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
         )}---\n\n${content.bodyMd}\n`
         seedFiles.push({ path: `${base}/SKILL.md`, content: skillMd })
         let treeHash = skillMd
-        const nodes = await listSkillFiles(db, { appHome: input.appHome }, ref.resourceId)
+        const nodes = await input.resourceCatalog.details.skillFiles.list({ id: ref.resourceId })
         for (const node of nodes) {
           if (node.type !== 'file') continue
           if (node.path === 'SKILL.md') continue
@@ -653,12 +613,11 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
             })
             continue
           }
-          const fileContent = await readSkillFile(
-            db,
-            { appHome: input.appHome },
-            ref.resourceId,
-            node.path,
-          )
+          const file = await input.resourceCatalog.details.skillFiles.read({
+            id: ref.resourceId,
+            path: node.path,
+          })
+          const fileContent = file.content
           seedFiles.push({ path: `${base}/files/${node.path}`, content: fileContent })
           treeHash += `\n--- ${node.path} ---\n${fileContent}`
         }
@@ -829,9 +788,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
     // RFC-348 D5c — agent rows carry their port names (capped ids only, one select).
     const ports =
       type === 'agent'
-        ? await (input.loadAgentPorts ?? ((ids) => loadAgentPortsFromDb(db, ids)))(
-            kept.map((row) => row.id),
-          )
+        ? await input.loadAgentPorts(kept.map((row) => row.id))
         : new Map<string, AgentPortNames>()
     for (const row of kept) {
       const handle = handleFor(type, row.id)
@@ -860,9 +817,11 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   // ── RFC-348 D5b — inventory/runtimes.md: the names an agent `runtime` may pin.
   // Runtimes are not an ACL resource (no handle); names + protocol only — never
   // binaryPath / configDir / extraArgs. Format locked by design §4 / AC-6.
-  const runtimeRows = [...(await listRuntimes(db))].sort((a, b) => a.name.localeCompare(b.name))
+  const runtimeRows = [...(await input.runtimeInventory.list())].sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )
   const effectiveDefault: { name: string; protocol: string } =
-    input.effectiveDefaultRuntime ?? (await fallbackDefaultRuntime(db))
+    input.effectiveDefaultRuntime ?? (await input.runtimeInventory.resolveDefault())
   const runtimeLines: string[] = [
     `# runtimes (${runtimeRows.length})`,
     `Effective default: ${effectiveDefault.name} (${effectiveDefault.protocol})`,
@@ -887,11 +846,13 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
   // ── RFC-348 D3 — inventory/platform/<type>.md for the nine platform-only types.
   // A loader failure is a dump failure like any other read here (proposal §5):
   // the turn settles as a durable error rather than generating on a partial map.
-  const platformInventory = input.platformInventory ?? createDefaultIntentPlatformInventory(db)
   for (const type of platformOnlyResourceTypes()) {
     seedFiles.push({
       path: `inventory/platform/${type}.md`,
-      content: renderPlatformInventoryFile(type, await platformInventory.listRows(type, actor)),
+      content: renderPlatformInventoryFile(
+        type,
+        await input.platformInventory.listRows(type, actor),
+      ),
     })
   }
 

@@ -32,7 +32,6 @@
 // failures. `assertTemplateFieldsAllowed` compares against the stored row and
 // throws if a privileged field actually changed.
 
-import { and, eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   TEMPLATE_PRIVILEGED_FIELDS,
@@ -40,14 +39,17 @@ import {
   type CapabilityTemplateWrite,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import { capabilityTemplates } from '@/db/schema'
 import { canWriteFramework } from '@/modules/code-capability/domain/templateLayers'
+import type {
+  CapabilityTemplatePackageCommit,
+  CapabilityTemplatePersistence,
+  CapabilityTemplateRecord,
+  PreparedCapabilityTemplateWrite,
+} from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { ConflictError, ForbiddenError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 
-type TemplateRow = typeof capabilityTemplates.$inferSelect
+export type TemplateRow = CapabilityTemplateRecord
 
 function parseJson<T>(raw: string, fallback: T): T {
   try {
@@ -183,14 +185,17 @@ export function serializeTemplate(row: TemplateRow, actor: Actor): CapabilityTem
   }
 }
 
-export async function listTemplateRows(db: DbClient): Promise<TemplateRow[]> {
-  return await db.select().from(capabilityTemplates)
+export async function listTemplateRows(
+  persistence: CapabilityTemplatePersistence,
+): Promise<readonly TemplateRow[]> {
+  return persistence.list()
 }
 
-export async function getTemplateRow(db: DbClient, id: string): Promise<TemplateRow | null> {
-  return (
-    (await db.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id)))[0] ?? null
-  )
+export async function getTemplateRow(
+  persistence: CapabilityTemplatePersistence,
+  id: string,
+): Promise<TemplateRow | null> {
+  return persistence.load(id)
 }
 
 /**
@@ -238,7 +243,7 @@ export function assertTemplateFieldsAllowed(
 }
 
 async function assertNameFree(
-  db: DbClient,
+  persistence: CapabilityTemplatePersistence,
   ownerUserId: string | null,
   name: string,
   excludeId: string | null,
@@ -246,19 +251,7 @@ async function assertNameFree(
   // Owner-scoped uniqueness, matching the unique index on the table. Checked
   // here so the caller gets a named error rather than a raw SQLite constraint
   // message with the index name in it.
-  const clauses = [eq(capabilityTemplates.name, name)]
-  clauses.push(
-    ownerUserId === null
-      ? eq(capabilityTemplates.ownerUserId, '')
-      : eq(capabilityTemplates.ownerUserId, ownerUserId),
-  )
-  if (excludeId !== null) clauses.push(ne(capabilityTemplates.id, excludeId))
-  const clash = await db
-    .select({ id: capabilityTemplates.id })
-    .from(capabilityTemplates)
-    .where(and(...clauses))
-    .limit(1)
-  if (clash.length > 0) {
+  if (await persistence.ownerNameExists({ ownerUserId, name, excludeId })) {
     throw new ConflictError(
       'capability-template-name-taken',
       `you already have one named '${name}'`,
@@ -294,13 +287,13 @@ function rowFromInput(
 }
 
 export async function createTemplate(
-  db: DbClient,
+  persistence: CapabilityTemplatePersistence,
   input: CapabilityTemplateWrite,
   actor: Actor,
   now = Date.now(),
 ): Promise<TemplateRow> {
   assertTemplateFieldsAllowed(actor, true, input, null)
-  await assertNameFree(db, actor.user.id, input.name, null)
+  await assertNameFree(persistence, actor.user.id, input.name, null)
 
   const row = rowFromInput(
     input,
@@ -323,12 +316,12 @@ export async function createTemplate(
     },
     now,
   )
-  await db.insert(capabilityTemplates).values(row)
+  await persistence.insert(row)
   return row
 }
 
 export async function updateTemplate(
-  db: DbClient,
+  persistence: CapabilityTemplatePersistence,
   existing: TemplateRow,
   input: CapabilityTemplateWrite,
   actor: Actor,
@@ -336,7 +329,7 @@ export async function updateTemplate(
 ): Promise<TemplateRow> {
   assertBuiltinImmutable(existing.builtin)
   assertTemplateFieldsAllowed(actor, true, input, existing)
-  await assertNameFree(db, existing.ownerUserId, input.name, existing.id)
+  await assertNameFree(persistence, existing.ownerUserId, input.name, existing.id)
 
   const next = rowFromInput(
     input,
@@ -354,7 +347,7 @@ export async function updateTemplate(
     },
     now,
   )
-  await db.update(capabilityTemplates).set(next).where(eq(capabilityTemplates.id, existing.id))
+  await persistence.replace(next)
   return next
 }
 
@@ -374,14 +367,14 @@ export async function updateTemplate(
  * the daemon are still exactly the ones an authorised author wrote.
  */
 export async function copyTemplate(
-  db: DbClient,
+  persistence: CapabilityTemplatePersistence,
   source: TemplateRow,
   actor: Actor,
   name: string | undefined,
   now = Date.now(),
 ): Promise<TemplateRow> {
   const copyName = name ?? `${source.name} copy`
-  await assertNameFree(db, actor.user.id, copyName, null)
+  await assertNameFree(persistence, actor.user.id, copyName, null)
 
   const row: TemplateRow = {
     ...source,
@@ -406,18 +399,21 @@ export async function copyTemplate(
     createdAt: now,
     updatedAt: now,
   }
-  await db.insert(capabilityTemplates).values(row)
+  await persistence.insert(row)
   return row
 }
 
-export async function deleteTemplate(db: DbClient, row: TemplateRow): Promise<void> {
+export async function deleteTemplate(
+  persistence: CapabilityTemplatePersistence,
+  row: TemplateRow,
+): Promise<void> {
   assertBuiltinImmutable(row.builtin)
   // RFC-309: there is no dependent template layer to refuse for any more — the
   // old `capability-framework-in-use` guard existed because a binding pointed at
   // a framework. Matrix cells referencing this template are handled by the
   // readiness path, which reports `binding-missing` and offers a repair, rather
   // than by blocking the delete.
-  await db.delete(capabilityTemplates).where(eq(capabilityTemplates.id, row.id))
+  await persistence.delete(row.id)
 }
 
 function assertBuiltinImmutable(builtin: boolean): void {
@@ -440,11 +436,7 @@ function assertBuiltinImmutable(builtin: boolean): void {
 // package is another way to write the same row, and two writers that drift are
 // how an imported template ends up subtly unlike a created one.
 
-export interface PreparedTemplateWrite {
-  row: TemplateRow
-  /** Present for an update; the row being replaced. */
-  existing: TemplateRow | null
-}
+export type PreparedTemplateWrite = PreparedCapabilityTemplateWrite
 
 /**
  * Validate a template write from a package.
@@ -455,13 +447,13 @@ export interface PreparedTemplateWrite {
  * another way to use it.
  */
 export async function prepareTemplateFromBundle(
-  db: DbClient,
+  persistence: CapabilityTemplatePersistence,
   input: CapabilityTemplateWrite & { id: string },
   actor: Actor,
   existingId: string | null,
   now = Date.now(),
 ): Promise<PreparedTemplateWrite> {
-  const existing = existingId === null ? null : await getTemplateRow(db, existingId)
+  const existing = existingId === null ? null : await getTemplateRow(persistence, existingId)
   if (existingId !== null && existing === null) {
     throw new ValidationError(
       'capability-template-not-found',
@@ -470,7 +462,12 @@ export async function prepareTemplateFromBundle(
   }
   if (existing !== null) assertBuiltinImmutable(existing.builtin)
   assertTemplateFieldsAllowed(actor, true, input, existing)
-  await assertNameFree(db, existing?.ownerUserId ?? actor.user.id, input.name, existing?.id ?? null)
+  await assertNameFree(
+    persistence,
+    existing?.ownerUserId ?? actor.user.id,
+    input.name,
+    existing?.id ?? null,
+  )
 
   return {
     existing,
@@ -501,13 +498,9 @@ export async function prepareTemplateFromBundle(
   }
 }
 
-export function commitTemplateInTx(tx: DbTxSync, prepared: PreparedTemplateWrite): void {
-  if (prepared.existing === null) {
-    tx.insert(capabilityTemplates).values(prepared.row).run()
-    return
-  }
-  tx.update(capabilityTemplates)
-    .set(prepared.row)
-    .where(eq(capabilityTemplates.id, prepared.row.id))
-    .run()
+export async function commitPreparedTemplate(
+  participant: CapabilityTemplatePackageCommit,
+  prepared: PreparedTemplateWrite,
+): Promise<void> {
+  await participant.commit(prepared)
 }

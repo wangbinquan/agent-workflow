@@ -33,10 +33,6 @@
 // All seven invariants are read-only against the source tables; only
 // `lifecycle_alerts` is written.
 
-import { and, eq, gte, inArray, isNull, or } from 'drizzle-orm'
-import { chunkedAll } from '@/util/sqlChunk'
-import { ulid } from 'ulid'
-
 import type {
   LifecycleAlertRule as SharedLifecycleAlertRule,
   WorkflowDefinition,
@@ -44,9 +40,11 @@ import type {
 } from '@agent-workflow/shared'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
-import { clarifyRounds, docVersions, lifecycleAlerts, nodeRuns, tasks } from '@/db/schema'
-import { hasUndispatchedDesignerQuestions } from '@/services/taskQuestions'
+import type {
+  TaskLifecycleInvariantScope,
+  TaskLifecycleInvariantSnapshot,
+  TaskRecoveryOperations,
+} from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger, type Logger } from '@/util/log'
 import { DAEMON_CADENCE, MAINTENANCE_PHASE } from './daemonCadence'
 import { startMaintenanceTicker } from './maintenanceTicker'
@@ -153,10 +151,10 @@ export interface LifecycleAlertRow {
   resolvedAt: number | null
 }
 
-export type InvariantScope = { taskId: string } | { since: number } | { all: true }
+export type InvariantScope = TaskLifecycleInvariantScope
 
 export interface RunLifecycleInvariantsArgs {
-  db: DbClient
+  operations: TaskRecoveryOperations
   scope?: InvariantScope
   /** Injectable clock for tests / property checks. */
   now?: () => number
@@ -178,36 +176,6 @@ export interface RunLifecycleInvariantsResult {
   resolvedAlerts: number
   /** All currently-open alerts for the scanned scope (post-reconciliation). */
   openAlerts: LifecycleAlertRow[]
-}
-
-// =============================================================================
-// scope resolution
-// =============================================================================
-
-async function resolveScopeToTaskIds(db: DbClient, scope: InvariantScope): Promise<string[]> {
-  if ('taskId' in scope) {
-    const row = (
-      await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, scope.taskId)).limit(1)
-    )[0]
-    return row === undefined ? [] : [row.id]
-  }
-  if ('since' in scope) {
-    const since = scope.since
-    const rows = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(
-        and(
-          isNull(tasks.deletedAt),
-          // "active recently" = started since OR finished since OR still open
-          or(gte(tasks.startedAt, since), gte(tasks.finishedAt, since), isNull(tasks.finishedAt)),
-        ),
-      )
-    return rows.map((r) => r.id)
-  }
-  // { all: true }
-  const rows = await db.select({ id: tasks.id }).from(tasks).where(isNull(tasks.deletedAt))
-  return rows.map((r) => r.id)
 }
 
 // =============================================================================
@@ -246,31 +214,16 @@ function parseWorkflowSnapshot(snapshot: string): NodeKindMap {
 // per-invariant checks
 // =============================================================================
 
-interface TaskScanContext {
-  taskId: string
-  taskStatus: string
+interface TaskScanContext extends TaskLifecycleInvariantSnapshot {
   workflowKinds: NodeKindMap
 }
 
-async function checkR1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkR1(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // R1: any approved doc_version ⟹ its review node_run is done.
   const out: LifecycleInvariantFinding[] = []
-  const approved = await db
-    .select({
-      id: docVersions.id,
-      reviewNodeRunId: docVersions.reviewNodeRunId,
-      reviewNodeId: docVersions.reviewNodeId,
-      versionIndex: docVersions.versionIndex,
-    })
-    .from(docVersions)
-    .where(and(eq(docVersions.taskId, ctx.taskId), eq(docVersions.decision, 'approved')))
+  const approved = ctx.documentVersions.filter((version) => version.decision === 'approved')
   if (approved.length === 0) return out
-  const runIds = approved.map((d) => d.reviewNodeRunId)
-  const runRows = await db
-    .select({ id: nodeRuns.id, status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.id, runIds))
-  const statusOf = new Map(runRows.map((r) => [r.id, r.status]))
+  const statusOf = new Map(ctx.nodeRuns.map((run) => [run.id, run.status]))
   for (const d of approved) {
     const s = statusOf.get(d.reviewNodeRunId)
     if (s !== 'done') {
@@ -291,32 +244,20 @@ async function checkR1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   return out
 }
 
-async function checkR2(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkR2(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // R2: review node_run.status='done' ⟹ ∃ approved doc_version for it.
   const out: LifecycleInvariantFinding[] = []
   const reviewNodeIds = ctx.workflowKinds.byKind.get('review') ?? []
   if (reviewNodeIds.length === 0) return out
-  const doneReviewRuns = await db
-    .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, ctx.taskId),
-        eq(nodeRuns.status, 'done'),
-        inArray(nodeRuns.nodeId, reviewNodeIds),
-      ),
-    )
+  const reviewNodeIdSet = new Set(reviewNodeIds)
+  const doneReviewRuns = ctx.nodeRuns.filter(
+    (run) => run.status === 'done' && reviewNodeIdSet.has(run.nodeId),
+  )
   if (doneReviewRuns.length === 0) return out
-  const runIds = doneReviewRuns.map((r) => r.id)
-  const dvRows = await db
-    .select({
-      reviewNodeRunId: docVersions.reviewNodeRunId,
-      decision: docVersions.decision,
-    })
-    .from(docVersions)
-    .where(inArray(docVersions.reviewNodeRunId, runIds))
   const approvedRunIds = new Set(
-    dvRows.filter((d) => d.decision === 'approved').map((d) => d.reviewNodeRunId),
+    ctx.documentVersions
+      .filter((version) => version.decision === 'approved')
+      .map((version) => version.reviewNodeRunId),
   )
   for (const r of doneReviewRuns) {
     if (!approvedRunIds.has(r.id)) {
@@ -335,31 +276,15 @@ async function checkR2(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   return out
 }
 
-async function checkC1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkC1(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // C1: closed clarify_session (answered/canceled) ⟹ clarify node_run not awaiting_human.
   const out: LifecycleInvariantFinding[] = []
-  const closedSessions = await db
-    .select({
-      id: clarifyRounds.id,
-      status: clarifyRounds.status,
-      clarifyNodeRunId: clarifyRounds.intermediaryNodeRunId,
-      clarifyNodeId: clarifyRounds.intermediaryNodeId,
-    })
-    .from(clarifyRounds)
-    .where(
-      and(
-        eq(clarifyRounds.kind, 'self'),
-        eq(clarifyRounds.taskId, ctx.taskId),
-        inArray(clarifyRounds.status, ['answered', 'canceled']),
-      ),
-    )
+  const closedSessions = ctx.clarifyRounds.filter(
+    (round) =>
+      round.kind === 'self' && (round.status === 'answered' || round.status === 'canceled'),
+  )
   if (closedSessions.length === 0) return out
-  const runIds = closedSessions.map((s) => s.clarifyNodeRunId)
-  const runRows = await db
-    .select({ id: nodeRuns.id, status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.id, runIds))
-  const statusOf = new Map(runRows.map((r) => [r.id, r.status]))
+  const statusOf = new Map(ctx.nodeRuns.map((run) => [run.id, run.status]))
   for (const s of closedSessions) {
     const ns = statusOf.get(s.clarifyNodeRunId)
     if (ns === 'awaiting_human') {
@@ -381,17 +306,10 @@ async function checkC1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   return out
 }
 
-async function checkT1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkT1(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // T1: task awaiting_review ⟹ ∃ node_run awaiting_review.
   if (ctx.taskStatus !== 'awaiting_review') return []
-  const row = (
-    await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, ctx.taskId), eq(nodeRuns.status, 'awaiting_review')))
-      .limit(1)
-  )[0]
-  if (row !== undefined) return []
+  if (ctx.nodeRuns.some((run) => run.status === 'awaiting_review')) return []
   return [
     {
       taskId: ctx.taskId,
@@ -405,22 +323,15 @@ async function checkT1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   ]
 }
 
-async function checkT2(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkT2(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   if (ctx.taskStatus !== 'awaiting_human') return []
-  const row = (
-    await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, ctx.taskId), eq(nodeRuns.status, 'awaiting_human')))
-      .limit(1)
-  )[0]
-  if (row !== undefined) return []
+  if (ctx.nodeRuns.some((run) => run.status === 'awaiting_human')) return []
   // RFC-120 T9 (model A): a deferred-dispatch task legitimately parks awaiting_human
   // on undispatched designer task_questions — the designer's draft run is `done`
   // (NOT awaiting_human), so the scheduler bubbles the park from the frontier, not a
   // node_run. That is the deferred gate, not corruption. (Self-gated on the deferred
   // flag → always false for non-deferred tasks; T2 fires as before for them.)
-  if (await hasUndispatchedDesignerQuestions(db, ctx.taskId)) return []
+  if (ctx.hasUndispatchedDesignerQuestions) return []
   return [
     {
       taskId: ctx.taskId,
@@ -434,7 +345,7 @@ async function checkT2(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   ]
 }
 
-async function checkT3(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkT3(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // T3: done task ⟹ every output-kind node has a SETTLED node_run.
   //
   // RFC-306 widened "settled" from `done` to `done ∪ skipped`. A conditional
@@ -459,15 +370,8 @@ async function checkT3(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   // status set to `done ∪ skipped` without also pinning "freshest" would have
   // made that hole bigger, and design.md promises the opposite — that a latest
   // `failed` output node still reports.
-  const outputRuns = await db
-    .select({
-      id: nodeRuns.id,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-    })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, ctx.taskId), inArray(nodeRuns.nodeId, outputNodes)))
+  const outputNodeIdSet = new Set(outputNodes)
+  const outputRuns = ctx.nodeRuns.filter((run) => outputNodeIdSet.has(run.nodeId))
   const freshestByNode = new Map<string, { id: string; status: string }>()
   for (const r of outputRuns) {
     if (r.parentNodeRunId !== null) continue // shard/child rows never settle a node
@@ -492,7 +396,7 @@ async function checkT3(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   ]
 }
 
-async function checkU1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
+function checkU1(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // U1: per (task, nodeId, reviewIteration, shardKey) at most 1 row in
   //     {awaiting_review, awaiting_human}.
   // RFC-074 PR-C: the dedup key no longer carries the retired clarifyIteration
@@ -500,21 +404,9 @@ async function checkU1(db: DbClient, ctx: TaskScanContext): Promise<LifecycleInv
   // most one active row per (reviewIteration, shard) slot; two active rows there
   // is a genuine duplicate regardless of generation, so dropping the cci
   // dimension tightens the invariant to exactly the no-speculative-mint world.
-  const rows = await db
-    .select({
-      id: nodeRuns.id,
-      nodeId: nodeRuns.nodeId,
-      reviewIteration: nodeRuns.reviewIteration,
-      shardKey: nodeRuns.shardKey,
-      status: nodeRuns.status,
-    })
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, ctx.taskId),
-        inArray(nodeRuns.status, ['awaiting_review', 'awaiting_human']),
-      ),
-    )
+  const rows = ctx.nodeRuns.filter(
+    (run) => run.status === 'awaiting_review' || run.status === 'awaiting_human',
+  )
   if (rows.length < 2) return []
   const groups = new Map<string, typeof rows>()
   for (const r of rows) {
@@ -576,7 +468,7 @@ export interface ReconcileLifecycleAlertsResult {
  * first's findings as resolved.
  */
 export async function reconcileLifecycleAlerts(args: {
-  db: DbClient
+  operations: TaskRecoveryOperations
   taskIds: string[]
   findings: LifecycleAlertFinding[]
   now: number
@@ -584,114 +476,35 @@ export async function reconcileLifecycleAlerts(args: {
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
   onResolved?: (taskId: string) => void
 }): Promise<ReconcileLifecycleAlertsResult> {
-  const { db, taskIds, findings, now, ownedRules, onAlert, onResolved } = args
-  // Load currently-open alerts in scope whose rule is owned by this pass.
-  // RFC-311: chunked (same 32766-bound-parameter hazard as the scope query).
-  const openRows =
-    taskIds.length === 0 || ownedRules.length === 0
-      ? []
-      : await chunkedAll(taskIds, (chunk) =>
-          db
-            .select()
-            .from(lifecycleAlerts)
-            .where(
-              and(
-                inArray(lifecycleAlerts.taskId, chunk),
-                inArray(lifecycleAlerts.rule, ownedRules as string[]),
-                isNull(lifecycleAlerts.resolvedAt),
-              ),
-            ),
-        )
-
-  const openByKey = new Map<string, (typeof openRows)[number]>()
-  for (const r of openRows) openByKey.set(keyOf(r.taskId, r.rule), r)
-
-  const findingByKey = new Map<string, LifecycleAlertFinding>()
-  for (const f of findings) findingByKey.set(keyOf(f.taskId, f.rule), f)
-
-  let newCount = 0
-  let promotedCount = 0
-  let resolvedCount = 0
-  const open: LifecycleAlertRow[] = []
-  const resolvedTaskIds = new Set<string>()
-
-  // 1. Resolve open rows no longer in findings.
-  for (const r of openRows) {
-    const k = keyOf(r.taskId, r.rule)
-    if (!findingByKey.has(k)) {
-      await db.update(lifecycleAlerts).set({ resolvedAt: now }).where(eq(lifecycleAlerts.id, r.id))
-      resolvedCount++
-      resolvedTaskIds.add(r.taskId)
-    }
+  const reconciled = await args.operations.reconcileStuckAlerts({
+    taskIds: args.taskIds,
+    findings: args.findings,
+    ownedRules: args.ownedRules,
+    now: args.now,
+    promotionAfterMs: GRACE_MS,
+  })
+  const openAlerts = reconciled.openAlerts.map(
+    (row): LifecycleAlertRow => ({
+      id: row.id,
+      taskId: row.taskId,
+      rule: row.rule as LifecycleAlertRule,
+      severity: row.severity,
+      detail: { ...row.detail },
+      detectedAt: row.detectedAt,
+      resolvedAt: null,
+    }),
+  )
+  for (const transition of reconciled.transitions) {
+    const row = openAlerts.find((candidate) => candidate.id === transition.row.id)
+    if (row !== undefined) args.onAlert?.(row, transition.kind)
   }
-
-  // 2. For each finding: either update existing open row (maybe promote
-  // severity) or insert new row.
-  for (const f of findings) {
-    const k = keyOf(f.taskId, f.rule)
-    const existing = openByKey.get(k)
-    const detailJson = JSON.stringify(f.detail)
-    if (existing === undefined) {
-      const id = ulid()
-      await db.insert(lifecycleAlerts).values({
-        id,
-        taskId: f.taskId,
-        rule: f.rule,
-        severity: 'warning',
-        detail: detailJson,
-        detectedAt: now,
-        resolvedAt: null,
-      })
-      newCount++
-      const row: LifecycleAlertRow = {
-        id,
-        taskId: f.taskId,
-        rule: f.rule,
-        severity: 'warning',
-        detail: f.detail,
-        detectedAt: now,
-        resolvedAt: null,
-      }
-      open.push(row)
-      onAlert?.(row, 'new')
-    } else {
-      const sev = (
-        existing.severity === 'warning' && now - existing.detectedAt >= GRACE_MS
-          ? 'error'
-          : existing.severity
-      ) as InvariantSeverity
-      const promoted = sev !== existing.severity
-      await db
-        .update(lifecycleAlerts)
-        .set({ severity: sev, detail: detailJson })
-        .where(eq(lifecycleAlerts.id, existing.id))
-      if (promoted) promotedCount++
-      const row: LifecycleAlertRow = {
-        id: existing.id,
-        taskId: f.taskId,
-        rule: f.rule,
-        severity: sev,
-        detail: f.detail,
-        detectedAt: existing.detectedAt,
-        resolvedAt: null,
-      }
-      open.push(row)
-      if (promoted) onAlert?.(row, 'promoted')
-    }
-  }
-
-  for (const taskId of resolvedTaskIds) onResolved?.(taskId)
-
+  for (const taskId of reconciled.resolvedTaskIds) args.onResolved?.(taskId)
   return {
-    newAlerts: newCount,
-    promotedAlerts: promotedCount,
-    resolvedAlerts: resolvedCount,
-    openAlerts: open,
+    newAlerts: reconciled.newAlerts,
+    promotedAlerts: reconciled.promotedAlerts,
+    resolvedAlerts: reconciled.resolvedAlerts,
+    openAlerts,
   }
-}
-
-function keyOf(taskId: string, rule: string): string {
-  return `${taskId}\x00${rule}`
 }
 
 // =============================================================================
@@ -801,29 +614,16 @@ export async function runLifecycleInvariants(
   args: RunLifecycleInvariantsArgs,
 ): Promise<RunLifecycleInvariantsResult> {
   const now = (args.now ?? Date.now)()
-  const taskIds = await resolveScopeToTaskIds(args.db, args.scope ?? { all: true })
-  if (taskIds.length === 0) {
+  const snapshots = await args.operations.loadLifecycleInvariantSnapshots(
+    args.scope ?? { all: true },
+  )
+  if (snapshots.length === 0) {
     return { scanned: 0, newAlerts: 0, promotedAlerts: 0, resolvedAlerts: 0, openAlerts: [] }
   }
 
-  // Pre-fetch each task's status + workflow snapshot in one go.
-  // RFC-311 (audit L3-9): chunked — the boot `{all:true}` scope passed EVERY
-  // task id as one bound-parameter list, which exceeds SQLite's 32766 limit at
-  // scale (a hard error, not slowness — the invariants pass simply dies).
-  const taskRows = await chunkedAll(taskIds, (chunk) =>
-    args.db
-      .select({
-        id: tasks.id,
-        status: tasks.status,
-        snapshot: tasks.workflowSnapshot,
-      })
-      .from(tasks)
-      .where(inArray(tasks.id, chunk)),
-  )
-
   const findings: LifecycleInvariantFinding[] = []
   let processed = 0
-  for (const t of taskRows) {
+  for (const snapshot of snapshots) {
     // RFC-311: the boot-time full scan used to run its ~7 checks × N tasks as
     // one uninterrupted synchronous stretch (seconds of frozen HTTP/WS right
     // when users first open the UI). Yield the event loop between batches so
@@ -831,23 +631,22 @@ export async function runLifecycleInvariants(
     processed += 1
     if (processed % 50 === 0) await new Promise<void>((r) => setTimeout(r, 0))
     const ctx: TaskScanContext = {
-      taskId: t.id,
-      taskStatus: t.status,
-      workflowKinds: parseWorkflowSnapshot(t.snapshot),
+      ...snapshot,
+      workflowKinds: parseWorkflowSnapshot(snapshot.workflowSnapshot),
     }
-    findings.push(...(await checkR1(args.db, ctx)))
-    findings.push(...(await checkR2(args.db, ctx)))
-    findings.push(...(await checkC1(args.db, ctx)))
-    findings.push(...(await checkT1(args.db, ctx)))
-    findings.push(...(await checkT2(args.db, ctx)))
-    findings.push(...(await checkT3(args.db, ctx)))
-    findings.push(...(await checkU1(args.db, ctx)))
+    findings.push(...checkR1(ctx))
+    findings.push(...checkR2(ctx))
+    findings.push(...checkC1(ctx))
+    findings.push(...checkT1(ctx))
+    findings.push(...checkT2(ctx))
+    findings.push(...checkT3(ctx))
+    findings.push(...checkU1(ctx))
     // RFC-126: CR-1 retired (no longer abandons cross rounds — see note above).
   }
 
   const reconciled = await reconcileLifecycleAlerts({
-    db: args.db,
-    taskIds,
+    operations: args.operations,
+    taskIds: snapshots.map((snapshot) => snapshot.taskId),
     findings,
     now,
     ownedRules: INVARIANT_RULES,
@@ -856,13 +655,13 @@ export async function runLifecycleInvariants(
   })
 
   log.info('scan complete', {
-    scanned: taskIds.length,
+    scanned: snapshots.length,
     findings: findings.length,
     newAlerts: reconciled.newAlerts,
     promotedAlerts: reconciled.promotedAlerts,
     resolvedAlerts: reconciled.resolvedAlerts,
   })
-  const statusByTask = new Map(taskRows.map((t) => [t.id, t.status]))
+  const statusByTask = new Map(snapshots.map((snapshot) => [snapshot.taskId, snapshot.taskStatus]))
   const stateChanged =
     reconciled.newAlerts > 0 || reconciled.promotedAlerts > 0 || reconciled.resolvedAlerts > 0
   logAlertSummary(
@@ -875,7 +674,7 @@ export async function runLifecycleInvariants(
     reconciled.promotedAlerts,
     stateChanged,
   )
-  return { scanned: taskIds.length, ...reconciled }
+  return { scanned: snapshots.length, ...reconciled }
 }
 
 // =============================================================================
@@ -898,7 +697,7 @@ export async function runLifecycleInvariants(
  * importing the WS layer (keeps the service unit-testable in isolation).
  */
 export function startLifecycleInvariantsLoop(opts: {
-  db: DbClient
+  operations: TaskRecoveryOperations
   onAlert?: (row: LifecycleAlertRow, transition: 'new' | 'promoted') => void
   onResolved?: (taskId: string) => void
   bootDelayMs?: number
@@ -917,7 +716,7 @@ export function startLifecycleInvariantsLoop(opts: {
     if (running) return
     running = true
     void runLifecycleInvariants({
-      db: opts.db,
+      operations: opts.operations,
       scope,
       onAlert: opts.onAlert,
       onResolved: opts.onResolved,

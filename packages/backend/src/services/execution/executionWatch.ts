@@ -13,10 +13,9 @@
 // Module discipline: this file must import NOTHING from task/scheduler/
 // lifecycle services (lifecycle.ts imports US for the emission) — db schema and
 // shared only.
-import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
+import type { TaskStatusProjectionReadModel } from '@/modules/task-execution/public/types'
+import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
 
 export type TerminalWatchResult =
   | { kind: 'terminal'; status: TaskStatus }
@@ -50,15 +49,21 @@ export function resetTaskTerminalWatchersForTests(): void {
   watchers.clear()
 }
 
-async function readTerminal(db: DbClient, taskId: string): Promise<TerminalWatchResult | null> {
-  const rows = await db
-    .select({ status: tasks.status })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  const row = rows[0]
-  if (row === undefined) return { kind: 'missing' }
-  const status = row.status as TaskStatus
+type LegacySqliteTaskStatusSource = Parameters<typeof createSqliteTaskExecutionReadModels>[0]
+
+function statusReader(
+  source: TaskStatusProjectionReadModel | LegacySqliteTaskStatusSource,
+): TaskStatusProjectionReadModel {
+  return 'find' in source ? source : createSqliteTaskExecutionReadModels(source).statusProjection
+}
+
+async function readTerminal(
+  reader: TaskStatusProjectionReadModel,
+  taskId: string,
+): Promise<TerminalWatchResult | null> {
+  const row = await reader.find(taskId)
+  if (row === null) return { kind: 'missing' }
+  const status = row.status
   return isTerminalTaskStatus(status) ? { kind: 'terminal', status } : null
 }
 
@@ -68,12 +73,13 @@ async function readTerminal(db: DbClient, taskId: string): Promise<TerminalWatch
  * immediate read without registering anything.
  */
 export async function watchTaskTerminal(
-  db: DbClient,
+  source: TaskStatusProjectionReadModel | LegacySqliteTaskStatusSource,
   taskId: string,
   opts: { signal?: AbortSignal; pollMs?: number } = {},
 ): Promise<TerminalWatchResult> {
   const pollMs = opts.pollMs ?? 20_000
-  const immediate = await readTerminal(db, taskId)
+  const reader = statusReader(source)
+  const immediate = await readTerminal(reader, taskId)
   if (immediate !== null) return immediate
   if (opts.signal?.aborted === true) return { kind: 'aborted' }
 
@@ -94,7 +100,7 @@ export async function watchTaskTerminal(
     }
     set.add(entry)
     const timer = setInterval(() => {
-      void readTerminal(db, taskId)
+      void readTerminal(reader, taskId)
         .then((r) => {
           if (r !== null) finish(r)
         })
@@ -116,7 +122,7 @@ export async function watchTaskTerminal(
     // Second read AFTER registration: a transition that committed between the
     // first read and `set.add(entry)` fired its notify into an empty set — this
     // read closes that window deterministically instead of waiting for poll.
-    void readTerminal(db, taskId)
+    void readTerminal(reader, taskId)
       .then((r) => {
         if (r !== null) finish(r)
       })

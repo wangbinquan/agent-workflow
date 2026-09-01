@@ -17,12 +17,9 @@
 // launch machinery; start.ts passes a thunk that calls resumeTask with real deps.
 
 import { taskIdsWithRepoPrepRow } from '@/services/taskWorkspacePhase'
-import { and, eq, inArray } from 'drizzle-orm'
-import { DAEMON_RESTART_ERROR_SUMMARY, taskWorkspacePhase } from '@agent-workflow/shared'
+import { taskWorkspacePhase } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
-import { nodeRuns, tasks } from '@/db/schema'
-import { CLARIFY_RERUN_CAUSES } from '@/services/nodeRunMint'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
   type BreakerConfig,
@@ -34,7 +31,7 @@ import { createLogger } from '@/util/log'
 const log = createLogger('auto-resume')
 
 export interface AutoResumeOptions {
-  db: DbClient
+  operations: TaskRecoveryOperations
   breaker: BreakerConfig
   /** Resume one task. Throws on an unsafe/failed resume (counted by the breaker). */
   resume: (taskId: string) => Promise<void>
@@ -62,24 +59,8 @@ export interface AutoResumeResult {
 export async function autoResumeInterruptedTasks(
   opts: AutoResumeOptions,
 ): Promise<AutoResumeResult> {
-  const { db, breaker, resume, retryRepoPrep } = opts
+  const { operations, breaker, resume, retryRepoPrep } = opts
   const now = opts.now ?? Date.now
-  const rows = await db
-    .select({
-      id: tasks.id,
-      workgroupId: tasks.workgroupId,
-      workgroupConfigJson: tasks.workgroupConfigJson,
-      // RFC-287 G7 / AC-10：判「还没建出工作树」用（见下方 skip 分支）。
-      worktreePath: tasks.worktreePath,
-      // RFC-317 T50（LC-05）—— 补上 `workspacePruningAt`：此前只看 prunedAt，
-      // 于是「正在打墓碑」的任务会被当成「还在准备仓库」。
-      workspacePruningAt: tasks.workspacePruningAt,
-      workspacePrunedAt: tasks.workspacePrunedAt,
-    })
-    .from(tasks)
-    .where(
-      and(eq(tasks.status, 'interrupted'), eq(tasks.errorSummary, DAEMON_RESTART_ERROR_SUMMARY)),
-    )
   // RFC-187 T13 (Codex P1-7①) — a SECOND wedge shape this sweep must also catch: the
   // human answered a clarify, the answer + its pending continuation row committed, and the
   // daemon died before fire-and-forget `resumeTask` took over. The reaper flips that
@@ -89,27 +70,6 @@ export async function autoResumeInterruptedTasks(
   // continuation and the normal adoption drives it. Only tasks with a killed continuation
   // qualify — a task legitimately parked awaiting a human answer has no such row and MUST
   // stay parked.
-  const wedged = await db
-    .select({
-      id: tasks.id,
-      workgroupId: tasks.workgroupId,
-      workgroupConfigJson: tasks.workgroupConfigJson,
-      // RFC-287 G7 / AC-10：判「还没建出工作树」用（见下方 skip 分支）。
-      worktreePath: tasks.worktreePath,
-      // RFC-317 T50（LC-05）—— 补上 `workspacePruningAt`：此前只看 prunedAt，
-      // 于是「正在打墓碑」的任务会被当成「还在准备仓库」。
-      workspacePruningAt: tasks.workspacePruningAt,
-      workspacePrunedAt: tasks.workspacePrunedAt,
-    })
-    .from(tasks)
-    .innerJoin(nodeRuns, eq(nodeRuns.taskId, tasks.id))
-    .where(
-      and(
-        eq(tasks.status, 'awaiting_human'),
-        eq(nodeRuns.status, 'interrupted'),
-        inArray(nodeRuns.rerunCause, CLARIFY_RERUN_CAUSES),
-      ),
-    )
   // RFC-186 PR-2 (audit §5 F1): turn-engine workgroups (leader_worker /
   // free_collab) are NOW resumable — `resumeTask`→`runTask`→`runWorkgroupEngine`
   // re-derives everything from durable rows, adopts pending host runs, and (PR-2)
@@ -121,16 +81,13 @@ export async function autoResumeInterruptedTasks(
   // RFC-187 T13 — plus the awaiting_human-with-killed-continuation shape above. The join
   // can repeat a task (several killed continuations), and a task could in principle appear
   // in both sets, so merge by id.
-  const byId = new Map<string, (typeof rows)[number]>()
-  for (const r of rows) byId.set(r.id, r)
-  for (const w of wedged) if (!byId.has(w.id)) byId.set(w.id, w)
-  const candidates = [...byId.values()]
+  const candidates = await operations.listAutoResumeCandidates()
 
   // RFC-317 T50（LC-05）—— 一次查出这批候选里谁有 `__repo_prep__` 行。
   // 此前这里根本不看准备行，于是**存量**物化失败的任务行（空路径、无墓碑、也从来
   // 没有过准备行）会被路由去 `retryRepoPrep()`——而 AC-11 的重试入口对它不存在。
-  const prepRowTaskIds = taskIdsWithRepoPrepRow(
-    db,
+  const prepRowTaskIds = await taskIdsWithRepoPrepRow(
+    operations,
     candidates.map((candidate) => candidate.id),
   )
 
@@ -170,18 +127,18 @@ export async function autoResumeInterruptedTasks(
         skipped.push(t.id)
         continue
       }
-      if (await isAutoRecoverySuspended(db, t.id)) {
+      if (await isAutoRecoverySuspended(operations, t.id)) {
         skipped.push(t.id)
         continue
       }
-      if ((await recordAutoRecoveryAttempt(db, t.id, breaker, now())).suspended) {
+      if ((await recordAutoRecoveryAttempt(operations, t.id, breaker, now())).suspended) {
         skipped.push(t.id)
         continue
       }
       let ok = false
       try {
         await retryRepoPrep(t.id)
-        await recordRecoveryEvent(db, {
+        await recordRecoveryEvent(operations, {
           taskId: t.id,
           kind: 'auto-resume',
           reason: 'autoResumeOnBoot:repo-prep',
@@ -200,11 +157,11 @@ export async function autoResumeInterruptedTasks(
       else skipped.push(t.id)
       continue
     }
-    if (await isAutoRecoverySuspended(db, t.id)) {
+    if (await isAutoRecoverySuspended(operations, t.id)) {
       skipped.push(t.id)
       continue
     }
-    const { suspended } = await recordAutoRecoveryAttempt(db, t.id, breaker, now())
+    const { suspended } = await recordAutoRecoveryAttempt(operations, t.id, breaker, now())
     if (suspended) {
       skipped.push(t.id)
       continue
@@ -212,7 +169,7 @@ export async function autoResumeInterruptedTasks(
     let ran = false
     try {
       await resume(t.id)
-      await recordRecoveryEvent(db, {
+      await recordRecoveryEvent(operations, {
         taskId: t.id,
         kind: 'auto-resume',
         reason: 'autoResumeOnBoot',

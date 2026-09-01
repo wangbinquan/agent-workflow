@@ -25,8 +25,10 @@ import {
   type RefResult,
   type ResourceRefAst,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { getAgentById } from '@/services/agent'
+
+export interface RuntimeAgentLookup {
+  getById(agentId: string): Promise<Agent | null>
+}
 
 /** 从节点上读出 agent 引用。**这是唯一的读取点**——新增 NodeKind 不要再抄一份。 */
 export function agentRefOfNode(node: { agentId?: unknown }): ResourceRefAst | null {
@@ -42,7 +44,7 @@ export function agentRefOfNode(node: { agentId?: unknown }): ResourceRefAst | nu
  * 调用点。把它收进签名是为了让「这个调用点用的是哪种归属」在代码里可读、可测。
  */
 export async function resolveNodeAgentRef(
-  db: DbClient,
+  agents: RuntimeAgentLookup,
   node: { agentId?: unknown },
   call: RefCallPolicy,
 ): Promise<RefResult<Agent>> {
@@ -55,7 +57,7 @@ export async function resolveNodeAgentRef(
       ref: decodeRuntimeIdRef('agent', '<unstamped>'),
     }
   }
-  const agent = await getAgentById(db, ref.k === 'id' ? ref.id : '')
+  const agent = await agents.getById(ref.k === 'id' ? ref.id : '')
   if (agent === null) return { ok: false, reason: 'unreadable', ref }
   void call
   return { ok: true, value: agent }

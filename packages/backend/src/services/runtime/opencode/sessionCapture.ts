@@ -22,23 +22,23 @@
 // single `subagent_capture_failed` marker row + warn log. The parent
 // session's stdout-derived events are unaffected.
 
-import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
-import { and, eq, inArray, ne } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRunEvents, nodeRuns } from '@/db/schema'
-import { withTaskExecutionMutation } from '@/services/taskExecutionParticipants'
+import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
 import { createLogger, type Logger } from '@/util/log'
 import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import {
+  openReadonlySqliteDatabase,
+  type ReadonlySqliteDatabase,
+} from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 import { walkOpencodeSessions, type OpencodeMessageRow, type OpencodePartRow } from './sessionWalk'
 
 export interface CaptureChildSessionsOptions {
   rootSessionId: string
   nodeRunId: string
-  db: DbClient
+  persistence: RuntimeSessionCapturePersistence
   log?: Logger
   /** Override the opencode SQLite path (tests). */
   opencodeDbPath?: string
@@ -217,9 +217,9 @@ export async function captureOpencodeSessionsToSink(
     }
   }
 
-  let opencodeDb: Database | null = null
+  let opencodeDb: ReadonlySqliteDatabase | null = null
   try {
-    opencodeDb = new Database(dbPath, { readonly: true })
+    opencodeDb = openReadonlySqliteDatabase(dbPath)
     const captured: string[] = []
     let insertedRows = 0
     for (const { session: sess, messages, parts } of walkOpencodeSessions(
@@ -279,7 +279,13 @@ export async function captureChildSessions(
 
   if (!existsSync(dbPath)) {
     log.warn('opencode-db-not-found', { dbPath, nodeRunId: opts.nodeRunId })
-    await markCaptureFailed(opts.db, opts.nodeRunId, opts.rootSessionId, 'opencode-db-not-found')
+    await markCaptureFailed(
+      opts.persistence,
+      opts.nodeRunId,
+      opts.taskId,
+      opts.rootSessionId,
+      'opencode-db-not-found',
+    )
     return {
       capturedSessionIds: [],
       insertedEventRows: 0,
@@ -288,9 +294,9 @@ export async function captureChildSessions(
     }
   }
 
-  let opencodeDb: Database | null = null
+  let opencodeDb: ReadonlySqliteDatabase | null = null
   try {
-    opencodeDb = new Database(dbPath, { readonly: true })
+    opencodeDb = openReadonlySqliteDatabase(dbPath)
 
     // RFC-027 §UX merge / RFC-026 inline-mode dedup: when a sibling
     // node_run in this same task already captured rows for this
@@ -298,7 +304,7 @@ export async function captureChildSessions(
     // skip the re-import — otherwise every inline rerun would
     // duplicate every prior round's subagent events.
     const alreadyCaptured = opts.taskId
-      ? await loadSiblingsCapturedSessionIds(opts.db, opts.taskId, opts.nodeRunId)
+      ? await loadSiblingsCapturedSessionIds(opts.persistence, opts.taskId, opts.nodeRunId)
       : new Set<string>()
 
     let insertedRows = 0
@@ -343,18 +349,12 @@ export async function captureChildSessions(
         sessionId: sess.id,
         parentSessionId: sess.parent_id,
       }))
-      const taskId =
-        opts.taskId ??
-        opts.db
-          .select({ taskId: nodeRuns.taskId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, opts.nodeRunId))
-          .get()?.taskId
-      if (taskId === undefined) throw new Error(`node_run '${opts.nodeRunId}' no longer exists`)
-      withTaskExecutionMutation({
-        db: opts.db,
+      const taskId = opts.taskId ?? (await opts.persistence.resolveTaskId(opts.nodeRunId))
+      if (taskId === null) throw new Error(`node_run '${opts.nodeRunId}' no longer exists`)
+      await opts.persistence.appendEvents({
         taskId,
-        run: (tx) => tx.insert(nodeRunEvents).values(rows).run(),
+        nodeRunId: opts.nodeRunId,
+        events: rows,
       })
       insertedRows += rows.length
     }
@@ -370,7 +370,13 @@ export async function captureChildSessions(
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
     log.warn('subagent-capture-error', { nodeRunId: opts.nodeRunId, err: reason })
-    await markCaptureFailed(opts.db, opts.nodeRunId, opts.rootSessionId, reason)
+    await markCaptureFailed(
+      opts.persistence,
+      opts.nodeRunId,
+      opts.taskId,
+      opts.rootSessionId,
+      reason,
+    )
     return {
       capturedSessionIds: [],
       insertedEventRows: 0,
@@ -397,55 +403,37 @@ export async function captureChildSessions(
  * BFS in captureChildSessions.
  */
 export async function loadSiblingsCapturedSessionIds(
-  db: DbClient,
+  persistence: RuntimeSessionCapturePersistence,
   taskId: string,
   myNodeRunId: string,
 ): Promise<Set<string>> {
-  const siblings = await db
-    .select({ id: nodeRuns.id })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), ne(nodeRuns.id, myNodeRunId)))
-  const sibIds = siblings.map((r) => r.id)
-  if (sibIds.length === 0) return new Set()
-  const rows = await db
-    .selectDistinct({ sessionId: nodeRunEvents.sessionId })
-    .from(nodeRunEvents)
-    .where(inArray(nodeRunEvents.nodeRunId, sibIds))
-  const out = new Set<string>()
-  for (const r of rows) {
-    if (r.sessionId !== null && r.sessionId !== '') out.add(r.sessionId)
-  }
-  return out
+  return new Set(
+    await persistence.listSiblingCapturedSessionIds({ taskId, nodeRunId: myNodeRunId }),
+  )
 }
 
 async function markCaptureFailed(
-  db: DbClient,
+  persistence: RuntimeSessionCapturePersistence,
   nodeRunId: string,
+  knownTaskId: string | undefined,
   rootSessionId: string,
   reason: string,
 ): Promise<void> {
   try {
-    const taskId = db
-      .select({ taskId: nodeRuns.taskId })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .get()?.taskId
-    if (taskId === undefined) return
-    withTaskExecutionMutation({
-      db,
+    const taskId = knownTaskId ?? (await persistence.resolveTaskId(nodeRunId))
+    if (taskId === null) return
+    await persistence.appendEvents({
       taskId,
-      run: (tx) =>
-        tx
-          .insert(nodeRunEvents)
-          .values({
-            nodeRunId,
-            ts: Date.now(),
-            kind: 'subagent_capture_failed',
-            payload: JSON.stringify({ sessionID: rootSessionId, reason }),
-            sessionId: rootSessionId,
-            parentSessionId: null,
-          })
-          .run(),
+      nodeRunId,
+      events: [
+        {
+          ts: Date.now(),
+          kind: 'subagent_capture_failed',
+          payload: JSON.stringify({ sessionID: rootSessionId, reason }),
+          sessionId: rootSessionId,
+          parentSessionId: null,
+        },
+      ],
     })
   } catch {
     // If even the marker write fails, swallow — we already logged the

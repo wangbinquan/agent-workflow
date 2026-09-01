@@ -14,7 +14,6 @@
 // runtime imports imports fusion.ts back (only routes + the boot tick do), so
 // importing task/skill/skillVersion/memory here is acyclic.
 
-import { and, desc, eq, isNull } from 'drizzle-orm'
 import {
   cpSync,
   existsSync,
@@ -38,35 +37,28 @@ import {
   PLATFORM_FUSION_DIR,
   PLATFORM_FUSION_MANIFEST,
   PLATFORM_WORKSPACE_DIR,
-  planCanonicalWorkflowLayout,
   TERMINAL_TASK_STATUSES,
-  WorkflowDefinitionSchema,
   WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
-import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import {
   bindWorkspaceExcludeParticipant,
   ensureBoundPlatformWorkspaceDirectory,
 } from '@/modules/source-control/composition'
-import type { DbClient } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
-import { agents, fusions, memories, skills, skillVersions, workflows } from '@/db/schema'
-import { createAgent } from '@/services/agent'
-import {
-  canManageMemory,
-  fuseMemoriesTx,
-  getMemoryById,
-  type MemoryResourceScopeAuthority,
-} from '@/services/memory'
-import { canEditResource, canViewResource, hasResourceAclBypass } from '@/services/resourceAcl'
-import { getSkillById, getSkillPreconditionTokenById } from '@/services/skill'
-import { decodeSkillToken, encodeSkillToken } from '@/services/skillToken'
-import { commitSkillVersion, type SkillVersionFsOptions } from '@/services/skillVersion'
-import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
-import { createWorkflow } from '@/services/workflow'
+import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
+import type {
+  FusionBuiltinWorkflowSeed,
+  FusionDecisionRecoveryReceipt,
+  FusionEngineTaskOperations,
+  FusionOperations,
+  FusionPersistence,
+  FusionPersistencePatch,
+  FusionPersistenceRecord,
+  FusionProvenanceRepairReceipt,
+} from '@/modules/memory/public/fusion'
+import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
 
@@ -86,13 +78,12 @@ import { DAEMON_CADENCE } from './daemonCadence'
 const SCAFFOLD = PLATFORM_FUSION_DIR
 const MANIFEST_REL = PLATFORM_FUSION_MANIFEST
 
-type FusionRow = typeof fusions.$inferSelect
+type FusionRow = FusionPersistenceRecord
 
 /** Deps createFusion needs to launch the engine task (mirrors the tasks route). */
 export interface FusionDeps {
-  db: DbClient
+  operations: FusionOperations
   appHome: string
-  schedulerDriver: SchedulerDriverPort
   /** TEST-ONLY runtime-neutral command-head override; production passes configPath. */
   binaryOverride?: readonly string[]
   /** Daemon config path — threaded to the scheduler's single resolution point. */
@@ -185,11 +176,6 @@ function rowToFusion(row: FusionRow): Fusion {
     decisionReason: row.decisionReason,
     error: row.error,
   }
-}
-
-function loadFusionRow(db: DbClient, id: string): FusionRow | null {
-  const rows = db.select().from(fusions).where(eq(fusions.id, id)).all() as FusionRow[]
-  return rows[0] ?? null
 }
 
 // ---------------------------------------------------------------------------
@@ -285,198 +271,33 @@ function canonicalFusionWorkflowDefinition(): WorkflowDefinition {
   }
 }
 
-function repairFusionWorkflowAgentId(definition: string): {
-  definition: string
-  changed: boolean
-} {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(definition)
-  } catch {
-    throw new ConflictError(
-      'builtin-workflow-definition-invalid',
-      'the built-in fusion workflow definition is not valid JSON',
-    )
-  }
-  if (typeof parsed !== 'object' || parsed === null) {
-    throw new ConflictError(
-      'builtin-workflow-definition-invalid',
-      'the built-in fusion workflow definition is not an object',
-    )
-  }
-  const record = parsed as Record<string, unknown>
-  if (!Array.isArray(record['nodes'])) {
-    throw new ConflictError(
-      'builtin-workflow-definition-invalid',
-      'the built-in fusion workflow has no nodes array',
-    )
-  }
-  let mergerFound = false
-  let changed = false
-  for (const candidate of record['nodes']) {
-    if (typeof candidate !== 'object' || candidate === null) continue
-    const node = candidate as Record<string, unknown>
-    if (node['kind'] !== 'agent-single' || node['id'] !== 'merger') {
-      continue
-    }
-    mergerFound = true
-    if (node['agentId'] !== SKILL_MERGER_AGENT_ID) {
-      node['agentId'] = SKILL_MERGER_AGENT_ID
-      changed = true
-    }
-  }
-  if (!mergerFound) {
-    throw new ConflictError(
-      'builtin-workflow-definition-invalid',
-      'the built-in fusion workflow has no merger agent node',
-    )
-  }
-  const shape = WorkflowDefinitionSchema.safeParse(record)
-  if (!shape.success) {
-    throw new ConflictError(
-      'builtin-workflow-definition-invalid',
-      'the built-in fusion workflow definition does not match the workflow schema',
-    )
-  }
-  // Use the validated raw record rather than `shape.data`: workflow nodes are
-  // passthrough and the built-in repair contract also preserves historical
-  // top-level extensions (for example migration/customization markers).
-  const laidOut = planCanonicalWorkflowLayout(record as unknown as WorkflowDefinition).next
-  const nextDefinition = JSON.stringify(laidOut)
-  if (nextDefinition !== definition) changed = true
-  return { definition: changed ? nextDefinition : definition, changed }
-}
-
-export async function seedFusionResources(db: DbClient): Promise<void> {
-  // Stable id + builtin flag are the authority. A same-name user row is never
-  // adopted, and an occupied stable id with the wrong identity fails closed.
-  const mergerById = db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)).all()[0]
-  if (mergerById !== undefined) {
-    if (mergerById.name !== SKILL_MERGER_AGENT_NAME) {
-      throw new ConflictError(
-        'builtin-agent-id-collision',
-        `stable built-in agent id '${SKILL_MERGER_AGENT_ID}' is occupied`,
-      )
-    }
-    // 归一**改变了导出语义**：这一行从「用户资源」变成「框架内置件」之后，同一个包
-    // 从「创建一个 agent」变成「自动忽略、绑定对端自己的 built-in」。所以它必须推进
-    // exact-revision token，否则拿着旧 fence 的导出方会静默拿到一个语义完全不同的包。
-    //
-    // ⚠️ 只在**真的发生归一**时推进。`seedFusionResources` 每次启动都跑，无条件 bump
-    // 会让每次重启都作废所有在途 fence——那等于把一个安全机制变成噪音源，用户学会的
-    // 第一件事就是忽略 409。
-    const agentDrift =
-      mergerById.ownerUserId !== SYSTEM_USER_ID ||
-      mergerById.visibility !== 'public' ||
-      mergerById.builtin !== true
-    if (agentDrift) {
-      db.update(agents)
-        .set({
-          ownerUserId: SYSTEM_USER_ID,
-          visibility: 'public',
-          builtin: true,
-          updatedAt: Date.now(),
-          aclRevision: (mergerById.aclRevision ?? 0) + 1,
-        })
-        .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
-        .run()
-    }
-  } else {
-    await createAgent(
-      db,
-      {
-        name: SKILL_MERGER_AGENT_NAME,
-        description: MERGER_DESCRIPTION,
-        outputs: ['summary'],
-        inputs: [], // RFC-166
-        syncOutputsOnIterate: true,
-        permission: {},
-        skills: [],
-        dependsOn: [],
-        mcp: [],
-        plugins: [],
-        frontmatterExtra: {},
-        bodyMd: MERGER_BODY,
-      },
-      { id: SKILL_MERGER_AGENT_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
-    )
-  }
-
-  const workflowDefinition = canonicalFusionWorkflowDefinition()
-  const workflowById = db
-    .select()
-    .from(workflows)
-    .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-    .all()[0]
-  if (workflowById !== undefined) {
-    if (workflowById.name !== SKILL_FUSION_WORKFLOW_NAME) {
-      throw new ConflictError(
-        'builtin-workflow-id-collision',
-        `stable built-in workflow id '${SKILL_FUSION_WORKFLOW_ID}' is occupied`,
-      )
-    }
-    const repaired = repairFusionWorkflowAgentId(workflowById.definition)
-    // 归一改变**导出语义**（归一前产 create op、导入方新建一个；归一后不产 op、导入方
-    // 绑自己那一个），所以它必须让在途 fence 失效。
-    //
-    // ⚠️ 这里要推的是 **`version`**，不能只推 `aclRevision`：工作流的导出 fence 只看
-    // `version`（`expectTokenOf`），只推 ACL 维等于没推——实现门第四轮实测「归一前后
-    // ZIP 字节不同，而同一个 `expectedVersion=1` 两次都放行」。
-    //
-    // 与「稳态重启逐字不变」不冲突：`workflowDrift` 只在**真的**还没归一时为真，归一后
-    // 三个字段都已就位，后续启动不再进这个分支。
-    const workflowDrift =
-      workflowById.ownerUserId !== SYSTEM_USER_ID ||
-      workflowById.visibility !== 'public' ||
-      workflowById.builtin !== true
-    if (repaired.changed || workflowDrift) {
-      db.update(workflows)
-        .set({
-          definition: repaired.definition,
-          ...(repaired.changed || workflowDrift ? { version: workflowById.version + 1 } : {}),
-          ownerUserId: SYSTEM_USER_ID,
-          visibility: 'public',
-          builtin: true,
-          ...(workflowDrift
-            ? { aclRevision: (workflowById.aclRevision ?? 0) + 1, updatedAt: Date.now() }
-            : {}),
-        })
-        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-        .run()
-    }
-  } else {
-    await createWorkflow(
-      db,
-      {
-        name: SKILL_FUSION_WORKFLOW_NAME,
-        description: FUSION_WORKFLOW_DESCRIPTION,
-        definition: workflowDefinition,
-      },
-      { id: SKILL_FUSION_WORKFLOW_ID, ownerUserId: SYSTEM_USER_ID, builtin: true },
-    )
+function fusionBuiltinWorkflowSeed(): FusionBuiltinWorkflowSeed {
+  return {
+    id: SKILL_FUSION_WORKFLOW_ID,
+    name: SKILL_FUSION_WORKFLOW_NAME,
+    description: FUSION_WORKFLOW_DESCRIPTION,
+    definition: canonicalFusionWorkflowDefinition(),
+    mergerAgentId: SKILL_MERGER_AGENT_ID,
   }
 }
 
-async function fusionWorkflowId(db: DbClient): Promise<string> {
-  const row = db
-    .select({
-      id: workflows.id,
-      name: workflows.name,
-      ownerUserId: workflows.ownerUserId,
-      builtin: workflows.builtin,
-    })
-    .from(workflows)
-    .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-    .all()[0]
-  if (
-    row === undefined ||
-    row.name !== SKILL_FUSION_WORKFLOW_NAME ||
-    row.ownerUserId !== SYSTEM_USER_ID ||
-    row.builtin !== true
-  ) {
-    throw new Error('aw-skill-fusion canonical built-in workflow missing after seed')
-  }
-  return row.id
+export async function seedFusionResources(persistence: FusionPersistence): Promise<void> {
+  await persistence.seedResources({
+    ownerUserId: SYSTEM_USER_ID,
+    agent: {
+      id: SKILL_MERGER_AGENT_ID,
+      name: SKILL_MERGER_AGENT_NAME,
+      description: MERGER_DESCRIPTION,
+      outputs: ['summary'],
+      syncOutputsOnIterate: true,
+      bodyMd: MERGER_BODY,
+    },
+    workflow: fusionBuiltinWorkflowSeed(),
+  })
+}
+
+async function fusionWorkflowId(persistence: FusionPersistence): Promise<string> {
+  return await persistence.loadBuiltinWorkflowId(fusionBuiltinWorkflowSeed(), SYSTEM_USER_ID)
 }
 
 // ---------------------------------------------------------------------------
@@ -554,27 +375,25 @@ function serializeMemoriesForPrompt(
 export async function createFusion(
   input: LaunchFusion,
   deps: FusionDeps,
-  scopeAuthority: MemoryResourceScopeAuthority,
+  scopeAuthority: MemoryScopeAuthority,
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
-  const { db, appHome } = deps
+  const { operations, appHome } = deps
   const actor = scopeAuthority.actor
-  await seedFusionResources(db)
+  await seedFusionResources(operations.persistence)
 
   // 1. Target skill must exist, be visible (RFC-099 D1 existence isolation:
   //    invisible ⇒ identical 404 as missing, before any source-kind/owner
   //    error, so a guessed skillId can't probe a private skill's existence),
   //    be managed, and be writable by the actor.
-  const skill = await getSkillById(db, input.skillId)
-  if (skill === null || !(await canViewResource(db, actor, 'skill', skill))) {
+  const skillAccess = await operations.persistence.loadSkillAccess(actor, input.skillId)
+  if (skillAccess === null || skillAccess.access === 'none') {
     throw new NotFoundError('skill-not-found', `skill '${input.skillId}' not found`)
   }
-  if (skill.sourceKind !== 'managed') {
-    throw new ConflictError('fusion-skill-not-managed', 'can only fuse into a managed skill')
-  }
+  const skill = skillAccess.skill
   // RFC-324: fusion writes the target skill's content, so an edit grant reaches
   // it — same door as POST /api/skills/:id/save.
-  if (!(await canEditResource(db, actor, 'skill', skill))) {
+  if (skillAccess.access !== 'write' && skillAccess.access !== 'own') {
     throw new ConflictError('fusion-skill-forbidden', 'you cannot write this skill')
   }
 
@@ -584,7 +403,7 @@ export async function createFusion(
   // different (possibly private) skill B. If A was deleted/recreated since the auth
   // check, the by-id read returns null → the fusion is refused (F10-null) before any
   // worktree/task, so B's content never enters a task the original caller owns.
-  const preconditionToken = await getSkillPreconditionTokenById(db, skill.id)
+  const preconditionToken = skillAccess.preconditionToken
   // RFC-170 T6 (Codex re-review F10): a null token means the skill vanished / is
   // not published between the visibility check and here — refuse to create a
   // fusion (and any worktree/task) that could never be decided (legacy-null is
@@ -596,12 +415,12 @@ export async function createFusion(
   // 2. Every selected memory must be approved AND manageable by the actor (D14).
   const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
   for (const id of input.memoryIds) {
-    const got = await getMemoryById(db, id)
+    const got = await operations.memories.queries.getById(id)
     if (got === null) throw new NotFoundError('memory-not-found', `memory '${id}' not found`)
     if (got.memory.status !== 'approved') {
       throw new ConflictError('fusion-memory-not-approved', `memory '${id}' is not approved`)
     }
-    const manageable = await canManageMemory(db, scopeAuthority, {
+    const manageable = await operations.memories.queries.canManage(scopeAuthority, {
       scopeType: got.memory.scopeType,
       scopeId: got.memory.scopeId,
     })
@@ -630,43 +449,35 @@ export async function createFusion(
     mkdirSync(workDir, { recursive: true })
     // RFC-170 T6 (Codex F10/F11): seed from the token's immutable snapshot with a
     // generation (skillId) check; discard the worktree if it can't be seeded safely.
-    await seedFusionFromSnapshot(db, appHome, skill.id, preconditionToken, workDir)
+    await seedFusionFromSnapshot(
+      operations.persistence,
+      appHome,
+      skill.id,
+      skill.contentVersion,
+      preconditionToken,
+      workDir,
+    )
     const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
 
     // 4. Launch the engine task (preCreatedWorktree bypasses worktree creation;
     //    repoPath = the ephemeral repo so the StartTask schema is satisfied).
     const taskId = ulid()
-    const startDeps: StartTaskDeps = {
-      db,
-      schedulerDriver: deps.schedulerDriver,
-      appHome,
-      actorUserId: actor.user.id,
-      launchProvenance: { kind: 'fusion', initiator: launchInitiator },
-      preCreatedWorktree: {
-        taskId,
-        worktreePath: workDir,
-        branch: 'fusion',
-        baseCommit,
-        cleanup: { kind: 'owned-root', path: workDir },
-      },
-      // RFC-165 (F4): fusion is the framework-internal launch face — the local
-      // ephemeral repo travels via internalSource (space_kind='internal', GC
-      // excluded so the approval flow keeps its dirs), not via the retired
-      // public repoPath wire field.
-      internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
-      // RFC-319 B29 —— 结果清单必须能穿过逐节点隔离边界。
-      // merger 和其它 agent 节点一样跑在 `<home>/iso/<taskId>/<nodeRunId>` 里，
-      // 而 `MERGER_BODY` 让它把清单写进 `.agent-workflow/fusion/result.json`；
-      // 平台自己的排除档把整个 `.agent-workflow/` 写进了工作树 git ignore
-      // （modules/source-control/domain/workspaceExcludeProfile.ts），逐节点
-      // merge-back 又是 git 驱动的 —— 不登记进 force-include 名册，清单就永远
-      // 回不到 `task.worktreePath`，reconcile 每次判「agent did not write the
-      // fusion result manifest」，**任何一次真实融合都必然失败**。
+    await deps.beforeStartTaskHandoff?.({ phase: 'create', workDir })
+    const workflowId = await fusionWorkflowId(operations.persistence)
+    const taskLaunch = operations.tasks.launch({
+      taskId,
+      workflowId,
+      name: `fuse → ${skill.name}`,
+      inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) },
+      ...(input.collaboratorUserIds ? { collaboratorUserIds: input.collaboratorUserIds } : {}),
+      ownerUserId: actor.user.id,
+      initiator: launchInitiator,
+      worktreePath: workDir,
+      baseCommit,
       platformInputPaths: [MANIFEST_REL],
       ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
       ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
       ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-      // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
       ...(deps.defaultPerNodeTimeoutMs !== undefined
         ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
         : {}),
@@ -677,18 +488,7 @@ export async function createFusion(
         ? { defaultNodeRetries: deps.defaultNodeRetries }
         : {}),
       ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
-    }
-    await deps.beforeStartTaskHandoff?.({ phase: 'create', workDir })
-    const workflowId = await fusionWorkflowId(db)
-    const taskLaunch = startTask(
-      {
-        workflowId,
-        name: `fuse → ${skill.name}`,
-        inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) },
-        ...(input.collaboratorUserIds ? { collaboratorUserIds: input.collaboratorUserIds } : {}),
-      },
-      startDeps,
-    )
+    })
     // Calling startTask transfers the explicit owned-root lease. It cleans on
     // rejection and marks it committed on success, so our finally must not race
     // or double-delete either outcome.
@@ -701,24 +501,32 @@ export async function createFusion(
     //    concurrent skill edit is 409-rejected, not silently applied onto the wrong
     //    content.
     const now = Date.now()
-    db.insert(fusions)
-      .values({
-        id: fusionId,
-        skillId: skill.id,
-        skillName: skill.name,
-        baseSkillVersion: skill.contentVersion,
-        preconditionToken,
-        memoryIdsJson: JSON.stringify(input.memoryIds),
-        intent: input.intent,
-        status: 'running',
-        iteration: 1,
-        currentTaskId: taskId,
-        ownerUserId: actor.user.id,
-        createdAt: now,
-      })
-      .run()
+    await operations.persistence.create({
+      id: fusionId,
+      skillId: skill.id,
+      skillName: skill.name,
+      baseSkillVersion: skill.contentVersion,
+      preconditionToken,
+      memoryIdsJson: JSON.stringify(input.memoryIds),
+      intent: input.intent,
+      status: 'running',
+      iteration: 1,
+      currentTaskId: taskId,
+      proposedWorktreePath: null,
+      proposedDiff: null,
+      incorporatedMemoryIdsJson: null,
+      skippedJson: null,
+      changelog: null,
+      appliedSkillVersion: null,
+      ownerUserId: actor.user.id,
+      createdAt: now,
+      decidedByUserId: null,
+      decidedAt: null,
+      decisionReason: null,
+      error: null,
+    })
 
-    const fresh = loadFusionRow(db, fusionId)
+    const fresh = await operations.persistence.load(fusionId)
     if (!fresh) throw new Error('fusion row disappeared right after insert')
     return rowToFusion(fresh)
   } finally {
@@ -740,32 +548,38 @@ const FUSION_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['done', 'failed',
 
 /** Settle a running fusion against its engine task's terminal state. */
 export async function reconcileFusion(deps: FusionDeps, id: string): Promise<void> {
-  const { db } = deps
-  const row = loadFusionRow(db, id)
+  const { operations } = deps
+  const row = await operations.persistence.load(id)
   if (!row || row.status !== 'running' || row.currentTaskId === null) return
   // RFC-170 T6 (Codex F7): reconcile reads the task, then does async git/manifest
   // work, then writes back. A decision (approve/reject/cancel) can race in that
   // window and change status / currentTaskId. So EVERY reconcile write is a CAS on
   // (status='running', currentTaskId=taskId) — if it lost the race it no-ops.
   const taskId = row.currentTaskId
-  const reconcileFail = (error: string): void => {
-    casFusionStatus(db, id, ['running'], 'failed', {
+  const reconcileFail = async (error: string): Promise<void> => {
+    await casFusionStatus(operations.persistence, id, ['running'], 'failed', {
       expectCurrentTaskId: taskId,
       extra: { error, decidedAt: Date.now() },
     })
   }
-  const task = await getTask(db, taskId)
+  const task = await operations.tasks.load(taskId)
   if (task === null) {
-    reconcileFail('engine task vanished')
+    await reconcileFail('engine task vanished')
     return
   }
   if (!TERMINAL_TASK.has(task.status)) return // still running / awaiting clarify
 
   if (task.status !== 'done') {
-    casFusionStatus(db, id, ['running'], task.status === 'canceled' ? 'canceled' : 'failed', {
-      expectCurrentTaskId: taskId,
-      extra: { error: task.errorSummary ?? `engine task ${task.status}` },
-    })
+    await casFusionStatus(
+      operations.persistence,
+      id,
+      ['running'],
+      task.status === 'canceled' ? 'canceled' : 'failed',
+      {
+        expectCurrentTaskId: taskId,
+        extra: { error: task.errorSummary ?? `engine task ${task.status}` },
+      },
+    )
     return
   }
 
@@ -777,19 +591,19 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
     ensureBoundPlatformWorkspaceDirectory({ worktreePath: workDir, kind: 'fusion' })
     const manifestPath = join(workDir, MANIFEST_REL)
     if (!existsSync(manifestPath)) {
-      reconcileFail('agent did not write the fusion result manifest')
+      await reconcileFail('agent did not write the fusion result manifest')
       return
     }
     const manifestStat = lstatSync(manifestPath)
     if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
-      reconcileFail('fusion result manifest is not a plain file')
+      await reconcileFail('fusion result manifest is not a plain file')
       return
     }
     const parsed = FusionResultManifestSchema.safeParse(
       JSON.parse(readFileSync(manifestPath, 'utf-8')),
     )
     if (!parsed.success) {
-      reconcileFail('fusion result manifest is invalid')
+      await reconcileFail('fusion result manifest is invalid')
       return
     }
     const selected = new Set(jsonArray(row.memoryIdsJson))
@@ -805,12 +619,12 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
     const accounted = new Set([...incSet, ...skipped.map((s) => s.memoryId)])
     const unaccounted = [...selected].filter((m) => !accounted.has(m))
     if (unaccounted.length > 0) {
-      reconcileFail(
+      await reconcileFail(
         `agent manifest omitted ${unaccounted.length} selected memory id(s): ${unaccounted.join(', ')}`,
       )
       return
     }
-    casFusionStatus(db, id, ['running'], 'awaiting_approval', {
+    await casFusionStatus(operations.persistence, id, ['running'], 'awaiting_approval', {
       expectCurrentTaskId: taskId,
       extra: {
         proposedWorktreePath: workDir,
@@ -821,7 +635,7 @@ export async function reconcileFusion(deps: FusionDeps, id: string): Promise<voi
       },
     })
   } catch (err) {
-    reconcileFail(err instanceof Error ? err.message : String(err))
+    await reconcileFail(err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -834,22 +648,14 @@ export async function awaitingApprovalFusionOwners(
   deps: FusionDeps,
 ): Promise<Array<{ id: string; ownerUserId: string }>> {
   await reconcileRunningFusions(deps)
-  return deps.db
-    .select({ id: fusions.id, ownerUserId: fusions.ownerUserId })
-    .from(fusions)
-    .where(eq(fusions.status, 'awaiting_approval'))
-    .all() as Array<{ id: string; ownerUserId: string }>
+  return [...(await deps.operations.persistence.listAwaitingApprovalOwners())]
 }
 
 export async function reconcileRunningFusions(deps: FusionDeps): Promise<void> {
-  const rows = deps.db
-    .select({ id: fusions.id })
-    .from(fusions)
-    .where(eq(fusions.status, 'running'))
-    .all() as Array<{ id: string }>
-  for (const r of rows) {
+  const ids = await deps.operations.persistence.listIdsByStatus('running')
+  for (const id of ids) {
     try {
-      await reconcileFusion(deps, r.id)
+      await reconcileFusion(deps, id)
     } catch {
       // best-effort per fusion
     }
@@ -872,141 +678,10 @@ export async function reconcileRunningFusions(deps: FusionDeps): Promise<void> {
  * Names are never consulted. Memory provenance additionally requires the exact
  * (fusion_id, fused_into_skill_version, source='fusion') version row.
  */
-export function repairFusionProvenance(db: DbClient): {
-  repairedFusions: number
-  quarantinedFusions: number
-  terminalizedFusions: number
-  repairedMemories: number
-  quarantinedMemories: number
-} {
-  let repairedFusions = 0
-  let quarantinedFusions = 0
-  let terminalizedFusions = 0
-  let repairedMemories = 0
-  let quarantinedMemories = 0
-  const nonterminal = new Set<FusionStatus>(['running', 'awaiting_approval', 'applying'])
-
-  const fusionRows = db.select().from(fusions).all() as FusionRow[]
-  for (const row of fusionRows) {
-    const fusionVersions = (
-      db
-        .select({
-          skillId: skillVersions.skillId,
-          versionIndex: skillVersions.versionIndex,
-          source: skillVersions.source,
-        })
-        .from(skillVersions)
-        .where(eq(skillVersions.fusionId, row.id))
-        .all() as Array<{ skillId: string; versionIndex: number; source: string }>
-    ).filter((version) => version.source === 'fusion')
-    const token = row.preconditionToken === null ? null : decodeSkillToken(row.preconditionToken)
-    const tokenValid =
-      token !== null &&
-      token.skillId !== QUARANTINED_FUSION_SKILL_ID &&
-      token.contentVersion === row.baseSkillVersion
-    const soleVersion = fusionVersions.length === 1 ? fusionVersions[0] : undefined
-    const ledgerValid =
-      soleVersion !== undefined &&
-      soleVersion.skillId !== QUARANTINED_FUSION_SKILL_ID &&
-      (row.appliedSkillVersion === null || row.appliedSkillVersion === soleVersion.versionIndex)
-    let resolved = QUARANTINED_FUSION_SKILL_ID
-    if (row.preconditionToken === null || token === null) {
-      if (ledgerValid) resolved = soleVersion!.skillId
-    } else if (tokenValid) {
-      if (fusionVersions.length === 0 && row.appliedSkillVersion === null) {
-        resolved = token.skillId
-      } else if (ledgerValid && soleVersion!.skillId === token.skillId) {
-        resolved = token.skillId
-      }
-    }
-
-    const shouldTerminalize =
-      resolved === QUARANTINED_FUSION_SKILL_ID && nonterminal.has(row.status as FusionStatus)
-    if (row.skillId !== resolved || shouldTerminalize) {
-      db.update(fusions)
-        .set({
-          skillId: resolved,
-          ...(shouldTerminalize
-            ? {
-                status: 'failed' as const,
-                error:
-                  'fusion provenance could not be proven during upgrade; re-initiate the fusion',
-                decidedAt: Date.now(),
-              }
-            : {}),
-        })
-        .where(eq(fusions.id, row.id))
-        .run()
-      if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedFusions++
-      else repairedFusions++
-      if (shouldTerminalize) terminalizedFusions++
-    }
-  }
-
-  const resolvedFusions = new Map(
-    (
-      db.select({ id: fusions.id, skillId: fusions.skillId }).from(fusions).all() as Array<{
-        id: string
-        skillId: string
-      }>
-    ).map((row) => [row.id, row.skillId] as const),
-  )
-  const fusedRows = db
-    .select({
-      id: memories.id,
-      fusionId: memories.fusedFusionId,
-      skillId: memories.fusedIntoSkillId,
-      version: memories.fusedIntoSkillVersion,
-    })
-    .from(memories)
-    .where(eq(memories.status, 'fused'))
-    .all() as Array<{
-    id: string
-    fusionId: string | null
-    skillId: string | null
-    version: number | null
-  }>
-  for (const memory of fusedRows) {
-    const fusionSkillId =
-      memory.fusionId === null ? undefined : resolvedFusions.get(memory.fusionId)
-    const exactVersions =
-      memory.fusionId === null || memory.version === null
-        ? []
-        : (
-            db
-              .select({
-                skillId: skillVersions.skillId,
-                source: skillVersions.source,
-                version: skillVersions.versionIndex,
-              })
-              .from(skillVersions)
-              .where(eq(skillVersions.fusionId, memory.fusionId))
-              .all() as Array<{ skillId: string; source: string; version: number }>
-          ).filter((version) => version.source === 'fusion' && version.version === memory.version)
-    const exactId = exactVersions.length === 1 ? exactVersions[0]!.skillId : undefined
-    const resolved =
-      fusionSkillId !== undefined &&
-      fusionSkillId !== QUARANTINED_FUSION_SKILL_ID &&
-      exactId === fusionSkillId
-        ? fusionSkillId
-        : QUARANTINED_FUSION_SKILL_ID
-    if (memory.skillId !== resolved) {
-      db.update(memories)
-        .set({ fusedIntoSkillId: resolved })
-        .where(eq(memories.id, memory.id))
-        .run()
-      if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedMemories++
-      else repairedMemories++
-    }
-  }
-
-  return {
-    repairedFusions,
-    quarantinedFusions,
-    terminalizedFusions,
-    repairedMemories,
-    quarantinedMemories,
-  }
+export async function repairFusionProvenance(
+  persistence: FusionPersistence,
+): Promise<FusionProvenanceRepairReceipt> {
+  return await persistence.repairProvenance()
 }
 
 /**
@@ -1023,76 +698,10 @@ export function repairFusionProvenance(db: DbClient): {
  *       new task was never attached): `failed` (re-initiate). Any speculative task
  *       is unreachable from the fusion — a separate GC concern, never left linked.
  */
-export function recoverFusionDecisions(db: DbClient): {
-  rolledForward: number
-  rolledBack: number
-  rejectFailed: number
-} {
-  const now = Date.now()
-  let rolledForward = 0
-  let rolledBack = 0
-  let rejectFailed = 0
-
-  const applying = db
-    .select({
-      id: fusions.id,
-      skillId: fusions.skillId,
-      appliedSkillVersion: fusions.appliedSkillVersion,
-    })
-    .from(fusions)
-    .where(eq(fusions.status, 'applying'))
-    .all() as Array<{ id: string; skillId: string; appliedSkillVersion: number | null }>
-  for (const f of applying) {
-    const versions = db
-      .select({
-        skillId: skillVersions.skillId,
-        versionIndex: skillVersions.versionIndex,
-        source: skillVersions.source,
-      })
-      .from(skillVersions)
-      .where(eq(skillVersions.fusionId, f.id))
-      .orderBy(desc(skillVersions.versionIndex))
-      .all() as Array<{ skillId: string; versionIndex: number; source: string }>
-    const fusionVersions = versions.filter((version) => version.source === 'fusion')
-    const trustworthy =
-      f.skillId !== QUARANTINED_FUSION_SKILL_ID &&
-      fusionVersions.length === 1 &&
-      fusionVersions[0]!.skillId === f.skillId &&
-      (f.appliedSkillVersion === null || f.appliedSkillVersion === fusionVersions[0]!.versionIndex)
-    if (trustworthy && fusionVersions[0] !== undefined) {
-      if (
-        casFusionStatus(db, f.id, ['applying'], 'done', {
-          extra: { appliedSkillVersion: fusionVersions[0].versionIndex, decidedAt: now },
-        })
-      )
-        rolledForward++
-    } else if (
-      casFusionStatus(db, f.id, ['applying'], 'failed', {
-        extra: {
-          error: 'daemon restarted mid-apply; re-run on the latest version',
-          decidedAt: now,
-        },
-      })
-    ) {
-      rolledBack++
-    }
-  }
-
-  const rejectStuck = db
-    .select({ id: fusions.id })
-    .from(fusions)
-    .where(and(eq(fusions.status, 'running'), isNull(fusions.currentTaskId)))
-    .all() as Array<{ id: string }>
-  for (const f of rejectStuck) {
-    if (
-      casFusionStatus(db, f.id, ['running'], 'failed', {
-        expectCurrentTaskId: null,
-        extra: { error: 'daemon restarted mid-rerun; re-initiate the fusion', decidedAt: now },
-      })
-    )
-      rejectFailed++
-  }
-  return { rolledForward, rolledBack, rejectFailed }
+export async function recoverFusionDecisions(
+  persistence: FusionPersistence,
+): Promise<FusionDecisionRecoveryReceipt> {
+  return await persistence.recoverDecisions()
 }
 
 /**
@@ -1126,7 +735,7 @@ export function startFusionReconcileLoop(
 
 export async function getFusion(deps: FusionDeps, id: string): Promise<Fusion | null> {
   await reconcileFusion(deps, id)
-  const row = loadFusionRow(deps.db, id)
+  const row = await deps.operations.persistence.load(id)
   return row ? rowToFusion(row) : null
 }
 
@@ -1142,36 +751,8 @@ export async function listFusionSummaries(
   filter: { skillId?: string; status?: FusionStatus } = {},
 ): Promise<Fusion[]> {
   await reconcileRunningFusions(deps)
-  const conds = []
-  if (filter.skillId !== undefined) conds.push(eq(fusions.skillId, filter.skillId))
-  if (filter.status !== undefined) conds.push(eq(fusions.status, filter.status))
-  const base = deps.db
-    .select({
-      id: fusions.id,
-      skillId: fusions.skillId,
-      skillName: fusions.skillName,
-      baseSkillVersion: fusions.baseSkillVersion,
-      memoryIdsJson: fusions.memoryIdsJson,
-      intent: fusions.intent,
-      status: fusions.status,
-      iteration: fusions.iteration,
-      currentTaskId: fusions.currentTaskId,
-      incorporatedMemoryIdsJson: fusions.incorporatedMemoryIdsJson,
-      skippedJson: fusions.skippedJson,
-      changelog: fusions.changelog,
-      appliedSkillVersion: fusions.appliedSkillVersion,
-      ownerUserId: fusions.ownerUserId,
-      createdAt: fusions.createdAt,
-      decidedByUserId: fusions.decidedByUserId,
-      decidedAt: fusions.decidedAt,
-      decisionReason: fusions.decisionReason,
-      error: fusions.error,
-    })
-    .from(fusions)
-  const rows = (conds.length > 0 ? base.where(and(...conds)) : base).all()
-  return rows
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map((row) => rowToFusion({ ...row, proposedDiff: null } as FusionRow))
+  const rows = await deps.operations.persistence.listSummaries(filter)
+  return rows.map(rowToFusion)
 }
 
 // ---------------------------------------------------------------------------
@@ -1205,7 +786,7 @@ export async function listFusionSummaries(
  * otherwise the fusion owner could write into a skill they transferred away.
  */
 async function requireCurrentSkillWritable(
-  db: DbClient,
+  persistence: FusionPersistence,
   actor: Actor,
   skillId: string,
   token: string | null,
@@ -1222,21 +803,14 @@ async function requireCurrentSkillWritable(
       'this fusion predates snapshot protection; re-initiate it against the current skill',
     )
   }
-  const target = decodeSkillToken(token)
-  if (target === null || target.skillId !== skillId) {
+  const access = await persistence.loadSkillAccess(actor, skillId)
+  if (access === null || access.skill.id !== skillId || access.preconditionToken !== token) {
     throw new ConflictError(
       'fusion-precondition-stale',
-      'the target skill identity is invalid; re-initiate the fusion',
+      'the target skill changed or no longer exists; re-initiate the fusion',
     )
   }
-  const skill = await getSkillById(db, target.skillId)
-  if (skill === null) {
-    throw new ConflictError(
-      'fusion-precondition-stale',
-      'the target skill no longer exists; re-initiate the fusion',
-    )
-  }
-  if (!(await canEditResource(db, actor, 'skill', skill))) {
+  if (access.access !== 'write' && access.access !== 'own') {
     throw new ConflictError(
       'fusion-skill-forbidden',
       'you no longer have write access to the target skill',
@@ -1244,84 +818,15 @@ async function requireCurrentSkillWritable(
   }
 }
 
-function claimFusionDecision(
-  db: DbClient,
+async function claimFusionDecision(
+  persistence: FusionPersistence,
   id: string,
   actor: Actor,
   from: FusionStatus,
   to: FusionStatus,
-  extra: Partial<FusionRow> = {},
-): boolean {
-  return dbTxSync(db, (tx) => {
-    const cur = tx
-      .select({
-        status: fusions.status,
-        skillId: fusions.skillId,
-        baseSkillVersion: fusions.baseSkillVersion,
-        preconditionToken: fusions.preconditionToken,
-      })
-      .from(fusions)
-      .where(eq(fusions.id, id))
-      .get()
-    if (!cur || cur.status !== from) return false // lost the decision race
-    if (cur.preconditionToken === null) {
-      throw new ConflictError(
-        'fusion-precondition-legacy',
-        'this fusion predates snapshot protection; re-initiate it against the current skill',
-      )
-    }
-    const target = decodeSkillToken(cur.preconditionToken)
-    if (
-      target === null ||
-      cur.skillId === QUARANTINED_FUSION_SKILL_ID ||
-      target.skillId !== cur.skillId ||
-      target.contentVersion !== cur.baseSkillVersion
-    ) {
-      throw new ConflictError(
-        'fusion-precondition-stale',
-        'the target skill identity is invalid; re-initiate the fusion',
-      )
-    }
-    const live = tx
-      .select({
-        id: skills.id,
-        contentVersion: skills.contentVersion,
-        metaRevision: skills.metaRevision,
-        ownerUserId: skills.ownerUserId,
-      })
-      .from(skills)
-      .where(and(eq(skills.id, target.skillId), eq(skills.reservationState, 'ready')))
-      .get()
-    const liveToken =
-      live === undefined
-        ? null
-        : encodeSkillToken({
-            skillId: live.id,
-            contentVersion: live.contentVersion,
-            metaRevision: live.metaRevision,
-          })
-    if (liveToken === null || liveToken !== cur.preconditionToken) {
-      throw new ConflictError(
-        'fusion-precondition-stale',
-        'the target skill changed since this fusion started; re-initiate the fusion',
-      )
-    }
-    // RFC-170 T6 (Codex re-review F8): re-check the CURRENT owner IN this tx (a
-    // managed ACL transfer doesn't drift the token, so an owner check outside the
-    // claim is TOCTOU). The pre-claim `requireCurrentSkillWritable` is a fast-fail;
-    // this is the authoritative gate atomic with the status transition.
-    if (!hasResourceAclBypass(actor) && live!.ownerUserId !== actor.user.id) {
-      throw new ConflictError(
-        'fusion-skill-forbidden',
-        'you no longer have write access to the target skill',
-      )
-    }
-    tx.update(fusions)
-      .set({ status: to, ...extra })
-      .where(eq(fusions.id, id))
-      .run()
-    return true
-  })
+  patch: FusionPersistencePatch = {},
+): Promise<boolean> {
+  return await persistence.claimDecision({ id, actor, from, to, patch })
 }
 
 /**
@@ -1332,55 +837,22 @@ function claimFusionDecision(
  * so a writer that raced a concurrent decision does NOT clobber it. Returns whether
  * it applied. dbTxSync + bun:sqlite single-writer make the read+update atomic.
  */
-function casFusionStatus(
-  db: DbClient,
+async function casFusionStatus(
+  persistence: FusionPersistence,
   id: string,
   fromStatuses: readonly FusionStatus[],
   to: FusionStatus,
-  opts: { expectCurrentTaskId?: string | null; extra?: Partial<FusionRow> } = {},
-): boolean {
-  return dbTxSync(db, (tx) => {
-    const cur = tx
-      .select({ status: fusions.status, currentTaskId: fusions.currentTaskId })
-      .from(fusions)
-      .where(eq(fusions.id, id))
-      .get()
-    if (!cur || !fromStatuses.includes(cur.status as FusionStatus)) return false
-    if (opts.expectCurrentTaskId !== undefined && cur.currentTaskId !== opts.expectCurrentTaskId) {
-      return false
-    }
-    tx.update(fusions)
-      .set({ status: to, ...(opts.extra ?? {}) })
-      .where(eq(fusions.id, id))
-      .run()
-    return true
+  opts: { expectCurrentTaskId?: string | null; extra?: FusionPersistencePatch } = {},
+): Promise<boolean> {
+  return await persistence.casStatus({
+    id,
+    from: fromStatuses,
+    to,
+    ...(opts.expectCurrentTaskId !== undefined
+      ? { expectedCurrentTaskId: opts.expectCurrentTaskId }
+      : {}),
+    ...(opts.extra !== undefined ? { patch: opts.extra } : {}),
   })
-}
-
-/** Decode a fusion's captured token into the OCC components for commitSkillVersion. */
-function fusionTokenExpectations(token: string | null): {
-  expectedSkillId?: string
-  expectedVersion?: number
-  expectedMetaRevision?: number
-} {
-  const t = token === null ? null : decodeSkillToken(token)
-  if (t === null) return {}
-  return {
-    expectedSkillId: t.skillId,
-    expectedVersion: t.contentVersion,
-    expectedMetaRevision: t.metaRevision,
-  }
-}
-
-function requireFusionSkillId(skillId: string, token: string | null): string {
-  const decoded = token === null ? null : decodeSkillToken(token)
-  if (decoded === null || skillId === QUARANTINED_FUSION_SKILL_ID || decoded.skillId !== skillId) {
-    throw new ConflictError(
-      'fusion-precondition-stale',
-      'the target skill identity is invalid; re-initiate the fusion',
-    )
-  }
-  return decoded.skillId
 }
 
 /**
@@ -1395,32 +867,34 @@ function requireFusionSkillId(skillId: string, token: string | null): string {
  * seed). The caller discards `workDir` on throw.
  */
 async function seedFusionFromSnapshot(
-  db: DbClient,
+  persistence: FusionPersistence,
   appHome: string,
   skillId: string,
+  contentVersion: number,
   token: string | null,
   workDir: string,
 ): Promise<void> {
-  const t = token === null ? null : decodeSkillToken(token)
-  if (t === null || skillId === QUARANTINED_FUSION_SKILL_ID || t.skillId !== skillId) {
+  if (token === null || skillId === QUARANTINED_FUSION_SKILL_ID) {
     throw new ConflictError('fusion-precondition-stale', 'invalid precondition token; re-initiate')
   }
-  const matches = (s: Awaited<ReturnType<typeof getSkillById>>): boolean =>
-    s !== null && s.id === t.skillId && s.contentVersion === t.contentVersion
-  const seedDir = join(appHome, 'skills', t.skillId, 'versions', `v${t.contentVersion}`, 'files')
+  const matches = (
+    identity: Awaited<ReturnType<FusionPersistence['loadSkillIdentity']>>,
+  ): boolean =>
+    identity !== null && identity.id === skillId && identity.contentVersion === contentVersion
+  const seedDir = join(appHome, 'skills', skillId, 'versions', `v${contentVersion}`, 'files')
   if (!existsSync(seedDir)) {
     throw new ConflictError(
       'fusion-skill-unversioned',
-      `the target skill has no v${t.contentVersion} snapshot to fuse from; re-save it first`,
+      `the target skill has no v${contentVersion} snapshot to fuse from; re-save it first`,
     )
   }
   // Pre-copy: catch a delete→recreate that already repointed this name+version.
-  if (!matches(await getSkillById(db, t.skillId))) {
+  if (!matches(await persistence.loadSkillIdentity(skillId))) {
     throw new ConflictError('fusion-precondition-stale', 'the target skill changed; re-initiate')
   }
   copyWorktreeContent(seedDir, workDir)
   // Post-copy: catch a recreate that raced the copy (no task has started).
-  if (!matches(await getSkillById(db, t.skillId))) {
+  if (!matches(await persistence.loadSkillIdentity(skillId))) {
     throw new ConflictError(
       'fusion-precondition-stale',
       'the target skill changed during setup; re-initiate',
@@ -1429,9 +903,10 @@ async function seedFusionFromSnapshot(
 }
 
 export async function approveFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
-  const { db, appHome } = deps
+  const { operations, appHome } = deps
+  const persistence = operations.persistence
   await reconcileFusion(deps, id)
-  const row = loadFusionRow(db, id)
+  const row = await persistence.load(id)
   if (!row) throw new NotFoundError('fusion-not-found', `fusion '${id}' not found`)
   if (!canDecide(actor, row)) {
     throw new ConflictError(
@@ -1451,53 +926,30 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   // RFC-170 T6 (Codex F4): re-check write access to the CURRENT skill. A managed
   // ACL transfer does not change the token, so without this the fusion owner could
   // approve a write into a skill they no longer own after transferring it away.
-  await requireCurrentSkillWritable(db, actor, row.skillId, row.preconditionToken)
+  await requireCurrentSkillWritable(persistence, actor, row.skillId, row.preconditionToken)
   // RFC-170 T6 (Codex F4): atomically CLAIM awaiting_approval → applying with the
   // skill-token check in the SAME tx. Only the winner proceeds; a lost race or a
   // drifted skill aborts here with zero side effects (replaces the old
   // unconditional setFusionStatus('applying') that let a loser fail over a
   // winner's committed 'done').
-  if (!claimFusionDecision(db, id, actor, 'awaiting_approval', 'applying')) {
+  if (!(await claimFusionDecision(persistence, id, actor, 'awaiting_approval', 'applying'))) {
     throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
   }
   const incorporated = jsonArray(row.incorporatedMemoryIdsJson)
   const proposedDir = row.proposedWorktreePath
   const now = Date.now()
-  const fsOpts: SkillVersionFsOptions = { appHome }
   try {
-    const version = commitSkillVersion(
-      db,
-      fsOpts,
-      requireFusionSkillId(row.skillId, row.preconditionToken),
-      (staging) => {
-        for (const e of readdirSync(staging))
-          rmSync(join(staging, e), { recursive: true, force: true })
-        copyWorktreeContent(proposedDir, staging)
-      },
-      {
-        source: 'fusion',
-        authorUserId: actor.user.id,
-        summary: row.changelog ?? `Fused ${incorporated.length} memories`,
-        fusionId: row.id,
-        // RFC-170 (Codex F4): fence the FULL composite token IN the version-bump
-        // tx — skillId (delete→recreate ABA), contentVersion, and metaRevision —
-        // not just the version. Catches a drift between the claim and this write.
-        ...fusionTokenExpectations(row.preconditionToken),
-        txExtra: (tx, newVersion) => {
-          fuseMemoriesTx(tx, {
-            memoryIds: incorporated,
-            skillId: row.skillId,
-            skillName: row.skillName,
-            skillVersion: newVersion,
-            fusionId: row.id,
-            userId: actor.user.id,
-            now,
-          })
-        },
-      },
-    )
+    const version = await persistence.apply({
+      fusionId: row.id,
+      actor,
+      appHome,
+      proposedWorktreePath: proposedDir,
+      incorporatedMemoryIds: incorporated,
+      summary: row.changelog ?? `Fused ${incorporated.length} memories`,
+      now,
+    })
     // RFC-170 T6 (Codex F7): CAS from the 'applying' state we exclusively hold.
-    casFusionStatus(db, id, ['applying'], 'done', {
+    await casFusionStatus(persistence, id, ['applying'], 'done', {
       extra: {
         appliedSkillVersion: version.versionIndex,
         decidedByUserId: actor.user.id,
@@ -1515,13 +967,14 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
           : String(err)
     // The version write already committed durably iff it threw AFTER the DB tx;
     // fail only from 'applying' (we own it) so we never overwrite a done/canceled.
-    casFusionStatus(db, id, ['applying'], 'failed', {
+    await casFusionStatus(persistence, id, ['applying'], 'failed', {
       extra: { error: msg, decidedAt: Date.now() },
     })
     throw err instanceof Error ? err : new Error(msg)
   }
-  const fresh = loadFusionRow(db, id)
-  return rowToFusion(fresh!)
+  const fresh = await persistence.load(id)
+  if (!fresh) throw new Error(`fusion '${id}' disappeared after apply`)
+  return rowToFusion(fresh)
 }
 
 // ---------------------------------------------------------------------------
@@ -1535,9 +988,10 @@ export async function rejectFusion(
   actor: Actor,
   launchInitiator: DirectTaskInitiator,
 ): Promise<Fusion> {
-  const { db, appHome } = deps
+  const { operations, appHome } = deps
+  const persistence = operations.persistence
   await reconcileFusion(deps, id)
-  const row = loadFusionRow(db, id)
+  const row = await persistence.load(id)
   if (!row) throw new NotFoundError('fusion-not-found', `fusion '${id}' not found`)
   if (!canDecide(actor, row)) {
     throw new ConflictError(
@@ -1553,7 +1007,7 @@ export async function rejectFusion(
   }
   // RFC-170 T6 (Codex F5): re-check write access to the CURRENT skill before a
   // re-run (a managed ACL transfer doesn't drift the token).
-  await requireCurrentSkillWritable(db, actor, row.skillId, row.preconditionToken)
+  await requireCurrentSkillWritable(persistence, actor, row.skillId, row.preconditionToken)
   // RFC-170 T6 (Codex F5): atomically CLAIM awaiting_approval → running (with the
   // skill-token check in the SAME tx) BEFORE any side effect. `currentTaskId` is
   // nulled so a concurrent reconcile skips this fusion until the new task is set.
@@ -1561,7 +1015,9 @@ export async function rejectFusion(
   // or task creation — the "zero side effect on stale" guarantee now actually
   // holds (the old pre-check was TOCTOU vs the worktree/task creation below).
   if (
-    !claimFusionDecision(db, id, actor, 'awaiting_approval', 'running', { currentTaskId: null })
+    !(await claimFusionDecision(persistence, id, actor, 'awaiting_approval', 'running', {
+      currentTaskId: null,
+    }))
   ) {
     throw new ConflictError('fusion-not-awaiting', 'fusion is no longer awaiting approval')
   }
@@ -1570,7 +1026,7 @@ export async function rejectFusion(
     const memIds = jsonArray(row.memoryIdsJson)
     const loaded: Array<{ id: string; title: string; bodyMd: string; scopeType: string }> = []
     for (const mid of memIds) {
-      const got = await getMemoryById(db, mid)
+      const got = await operations.memories.queries.getById(mid)
       if (got !== null && got.memory.status === 'approved') {
         loaded.push({
           id: got.memory.id,
@@ -1594,7 +1050,14 @@ export async function rejectFusion(
       // RFC-170 T6 (Codex F10/F11): re-run baseline = the token's immutable snapshot,
       // with a generation (skillId) check (the claim above verified the token, but
       // re-verify around the copy for a same-name recreate). A throw is caught below.
-      await seedFusionFromSnapshot(db, appHome, row.skillId, row.preconditionToken, workDir)
+      await seedFusionFromSnapshot(
+        persistence,
+        appHome,
+        row.skillId,
+        row.baseSkillVersion,
+        row.preconditionToken,
+        workDir,
+      )
       const baseCommit = await seedWorktree(workDir, appHome, deps.seedGit)
       // Then overlay the PRIOR proposal as uncommitted working changes, so the
       // agent refines its last attempt while the diff vs baseline stays full.
@@ -1607,38 +1070,22 @@ export async function rejectFusion(
       }
 
       const taskId = ulid()
-      const startDeps: StartTaskDeps = {
-        db,
-        schedulerDriver: deps.schedulerDriver,
-        appHome,
-        actorUserId: actor.user.id,
-        launchProvenance: { kind: 'fusion', initiator: launchInitiator },
-        preCreatedWorktree: {
-          taskId,
-          worktreePath: workDir,
-          branch: 'fusion',
-          baseCommit,
-          cleanup: { kind: 'owned-root', path: workDir },
-        },
-        // RFC-165 (F4): fusion is the framework-internal launch face — the local
-        // ephemeral repo travels via internalSource (space_kind='internal', GC
-        // excluded so the approval flow keeps its dirs), not via the retired
-        // public repoPath wire field.
-        internalSource: { kind: 'local-path', repoPath: workDir, baseBranch: 'fusion' },
-        // RFC-319 B29 —— 结果清单必须能穿过逐节点隔离边界。
-        // merger 和其它 agent 节点一样跑在 `<home>/iso/<taskId>/<nodeRunId>` 里，
-        // 而 `MERGER_BODY` 让它把清单写进 `.agent-workflow/fusion/result.json`；
-        // 平台自己的排除档把整个 `.agent-workflow/` 写进了工作树 git ignore
-        // （modules/source-control/domain/workspaceExcludeProfile.ts），逐节点
-        // merge-back 又是 git 驱动的 —— 不登记进 force-include 名册，清单就永远
-        // 回不到 `task.worktreePath`，reconcile 每次判「agent did not write the
-        // fusion result manifest」，**任何一次真实融合都必然失败**。
+      const intentWithFeedback = `${row.intent}\n\n## Merger feedback on the previous attempt (revise accordingly)\n${feedback}`
+      await deps.beforeStartTaskHandoff?.({ phase: 'reject', workDir })
+      const workflowId = await fusionWorkflowId(persistence)
+      const taskLaunch = operations.tasks.launch({
+        taskId,
+        workflowId,
+        name: `fuse → ${row.skillName} (iter ${nextIter})`,
+        inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
+        ownerUserId: actor.user.id,
+        initiator: launchInitiator,
+        worktreePath: workDir,
+        baseCommit,
         platformInputPaths: [MANIFEST_REL],
         ...(deps.binaryOverride ? { binaryOverride: deps.binaryOverride } : {}),
         ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
-        ...(deps.configPath !== undefined ? { configPath: deps.configPath } : {}),
         ...(deps.awaitScheduler !== undefined ? { awaitScheduler: deps.awaitScheduler } : {}),
-        // RFC-108 T4 + RFC-115: thread per-node timeout / retry budget / default runtime.
         ...(deps.defaultPerNodeTimeoutMs !== undefined
           ? { defaultPerNodeTimeoutMs: deps.defaultPerNodeTimeoutMs }
           : {}),
@@ -1649,18 +1096,7 @@ export async function rejectFusion(
           ? { defaultNodeRetries: deps.defaultNodeRetries }
           : {}),
         ...(deps.defaultRuntime !== undefined ? { defaultRuntime: deps.defaultRuntime } : {}),
-      }
-      const intentWithFeedback = `${row.intent}\n\n## Merger feedback on the previous attempt (revise accordingly)\n${feedback}`
-      await deps.beforeStartTaskHandoff?.({ phase: 'reject', workDir })
-      const workflowId = await fusionWorkflowId(db)
-      const taskLaunch = startTask(
-        {
-          workflowId,
-          name: `fuse → ${row.skillName} (iter ${nextIter})`,
-          inputs: { intent: intentWithFeedback, memories: serializeMemoriesForPrompt(loaded) },
-        },
-        startDeps,
-      )
+      })
       ownershipTransferredToStartTask = true
       await taskLaunch
 
@@ -1669,7 +1105,7 @@ export async function rejectFusion(
       // that raced during seeding/startTask flips status to 'canceled', so this CAS
       // fails; we then cancel the speculative task we just started rather than
       // orphaning it on a canceled fusion.
-      const attached = casFusionStatus(db, id, ['running'], 'running', {
+      const attached = await casFusionStatus(persistence, id, ['running'], 'running', {
         expectCurrentTaskId: null,
         extra: {
           iteration: nextIter,
@@ -1688,14 +1124,16 @@ export async function rejectFusion(
         // RFC-170 T6 (Codex re-review F12): the speculative task may already be
         // parked in its mandatory clarify round — cancelFusionEngineTask covers
         // that (plain cancelTask would refuse it and orphan the worker/workspace).
-        await cancelFusionEngineTask(db, taskId)
+        await cancelFusionEngineTask(operations.tasks, taskId)
         throw new ConflictError(
           'fusion-not-awaiting',
           'the fusion was canceled during the re-run; the speculative task was rolled back',
         )
       }
 
-      return rowToFusion(loadFusionRow(db, id)!)
+      const fresh = await persistence.load(id)
+      if (!fresh) throw new Error(`fusion '${id}' disappeared after re-run`)
+      return rowToFusion(fresh)
     } finally {
       if (!ownershipTransferredToStartTask) {
         rmSync(workDir, { recursive: true, force: true })
@@ -1705,7 +1143,7 @@ export async function rejectFusion(
     // We own the 'running' claim; a post-claim failure must not leave the fusion
     // stuck running with no task — fail it (CAS from 'running', so we don't
     // clobber a concurrent cancel that already terminalized it).
-    casFusionStatus(db, id, ['running'], 'failed', {
+    await casFusionStatus(persistence, id, ['running'], 'failed', {
       extra: { error: err instanceof Error ? err.message : String(err), decidedAt: Date.now() },
     })
     throw err instanceof Error ? err : new Error(String(err))
@@ -1723,14 +1161,17 @@ export async function rejectFusion(
  * here would bypass cancelTask's terminal sweep and its task-scoped review
  * mutation coordinator.
  */
-async function cancelFusionEngineTask(db: DbClient, taskId: string): Promise<void> {
+async function cancelFusionEngineTask(
+  tasks: FusionEngineTaskOperations,
+  taskId: string,
+): Promise<void> {
   // RFC-170 T6 (Codex re-review F12): a task can FLIP between the read and the
   // cancel. Reading once + swallowing the miss leaves the engine task alive
   // under a canceled fusion. Instead RE-READ and retry cancelTask until the task
   // is terminal (bounded — the fusion is already canceled, so it must settle;
   // the bound guards a pathological oscillation).
   for (let attempt = 0; attempt < 8; attempt++) {
-    const task = await getTask(db, taskId)
+    const task = await tasks.load(taskId)
     if (task === null || TERMINAL_TASK.has(task.status)) return // gone or terminal → done
     if (
       task.status === 'pending' ||
@@ -1738,15 +1179,15 @@ async function cancelFusionEngineTask(db: DbClient, taskId: string): Promise<voi
       task.status === 'awaiting_human' ||
       task.status === 'awaiting_review'
     ) {
-      await cancelTask(db, taskId).catch(() => undefined)
+      await tasks.cancel(taskId).catch(() => undefined)
     }
     // Loop: re-read next iteration; if the cancel landed we return at the top.
   }
 }
 
 export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): Promise<Fusion> {
-  const { db } = deps
-  const row = loadFusionRow(db, id)
+  const { operations } = deps
+  const row = await operations.persistence.load(id)
   if (!row) throw new NotFoundError('fusion-not-found', `fusion '${id}' not found`)
   if (!canDecide(actor, row)) {
     throw new ConflictError(
@@ -1762,21 +1203,7 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
   // a concurrent reject that attached a new task B between our load and this CAS
   // would leave B running while we canceled A. Only from a cancelable state (NOT
   // 'applying' — a mid-approve commit must not be canceled from under the winner).
-  const claim = dbTxSync(db, (tx) => {
-    const cur = tx
-      .select({ status: fusions.status, currentTaskId: fusions.currentTaskId })
-      .from(fusions)
-      .where(eq(fusions.id, id))
-      .get()
-    if (!cur || (cur.status !== 'running' && cur.status !== 'awaiting_approval')) {
-      return { ok: false as const }
-    }
-    tx.update(fusions)
-      .set({ status: 'canceled', decidedByUserId: actor.user.id, decidedAt: Date.now() })
-      .where(eq(fusions.id, id))
-      .run()
-    return { ok: true as const, taskId: cur.currentTaskId }
-  })
+  const claim = await operations.persistence.claimCancellation({ id, actor, now: Date.now() })
   if (!claim.ok) {
     throw new ConflictError(
       'fusion-terminal',
@@ -1784,6 +1211,8 @@ export async function cancelFusion(deps: FusionDeps, id: string, actor: Actor): 
     )
   }
   // Cancel the EXACT task current at cancel-commit time (covers parked states).
-  if (claim.taskId !== null) await cancelFusionEngineTask(db, claim.taskId)
-  return rowToFusion(loadFusionRow(db, id)!)
+  if (claim.taskId !== null) await cancelFusionEngineTask(operations.tasks, claim.taskId)
+  const fresh = await operations.persistence.load(id)
+  if (!fresh) throw new Error(`fusion '${id}' disappeared after cancel`)
+  return rowToFusion(fresh)
 }

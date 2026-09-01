@@ -9,7 +9,6 @@
 
 import { join } from 'node:path'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { eq } from 'drizzle-orm'
 import {
   buildChangeGroups,
   changeNarrativeSchema,
@@ -22,19 +21,16 @@ import {
   type StructuralDiff,
   type Task,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { tasks } from '@/db/schema'
 import { DomainError } from '@/util/errors'
 import { appHome } from '@/util/paths'
 import { gitChangedEntries, gitDiffNumstat } from '@/util/git'
 import type { Logger } from '@/util/log'
 import type { Actor } from '@/auth/actor'
 import { canonicalRepoKeys } from '@/services/repoLabels'
-import { requireTaskMember } from '@/services/taskCollab'
-import { resolveInternalAgentRuntime } from '@/services/runtimeRegistry'
 import { runSystemAgent, type SystemAgentRunResult } from '@/services/systemAgentRun'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { ecosystemForManifest } from '@/services/structuralDiff/deps/manifests'
+import type { CodeWorkspaceRead } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
 
 const NARRATIVE_TIMEOUT_MS = 120_000
 /** A failed generation stays reportable this long, then decays to the 404
@@ -97,8 +93,11 @@ export interface NarrativeInput {
   diff: StructuralDiff
 }
 
-export async function buildNarrativeInput(db: DbClient, task: Task): Promise<NarrativeInput> {
-  const diff = await getTaskStructuralDiff(db, task.id, 'task')
+export async function buildNarrativeInput(
+  workspace: CodeWorkspaceRead,
+  task: Task,
+): Promise<NarrativeInput> {
+  const diff = await getTaskStructuralDiff(workspace, task.id, 'task')
   const multiRepo = task.repoCount > 1
 
   // The FILE universe is the git enumeration, NOT diff.files — the structural
@@ -299,7 +298,20 @@ export function extractJsonObject(text: string): unknown | null {
 // ---------------------------------------------------------------------------
 
 export interface ChangeNarrativeDeps {
-  db: DbClient
+  workspace: CodeWorkspaceRead
+  /** Closed collaboration authorization; no task/member rows cross this seam. */
+  requireMember(actor: Actor, taskId: string): Promise<void>
+  /** Provider-neutral runtime profile resolved by the runtime-registry owner. */
+  resolveRuntime(input: {
+    readonly runtimeName: string | null
+    readonly defaultRuntime: string | null
+  }): Promise<{
+    readonly protocol: Parameters<typeof runSystemAgent>[0]['protocol']
+    readonly binaryPath: string | null
+    readonly configDir: { readonly env: string; readonly name: string }
+    readonly model: string | null
+    readonly isSandbox: boolean
+  }>
   /** RFC-239 — per-feature runtime selection (config.changeNarrativeRuntime);
    *  unset falls through defaultRuntime → opencode (RFC-117 chain). */
   runtimeName?: string | null
@@ -335,18 +347,7 @@ export async function triggerChangeNarrative(
   task: Task,
   actor: Actor,
 ): Promise<{ status: 'generating'; startedAt: number }> {
-  // The Task shape does not expose ownerUserId — read the visibility row
-  // directly (same Pick the member gate is typed against).
-  const ownerRows = await deps.db
-    .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-    .from(tasks)
-    .where(eq(tasks.id, task.id))
-    .limit(1)
-  const ownerRow = ownerRows[0]
-  if (ownerRow === undefined) {
-    throw new DomainError('task-not-found', `task '${task.id}' not found`, 404)
-  }
-  await requireTaskMember(deps.db, actor, ownerRow)
+  await deps.requireMember(actor, task.id)
 
   const existing = generating.get(task.id)
   if (existing !== undefined) return { status: 'generating', startedAt: existing.startedAt }
@@ -357,7 +358,7 @@ export async function triggerChangeNarrative(
     // Synchronous-to-the-caller validation: base-commit / emptiness produce a
     // 4xx on the POST itself, not a background failure the user has to poll
     // for. Reuses the structural-diff computation (409/410 pass through).
-    const input = await buildNarrativeInput(deps.db, task)
+    const input = await buildNarrativeInput(deps.workspace, task)
     if (input.groups.length === 0) {
       throw new DomainError('narrative-nothing-to-narrate', 'this task changed no files', 409)
     }
@@ -380,17 +381,12 @@ export async function triggerChangeNarrative(
   return trigger
 }
 
-async function taskExists(db: DbClient, taskId: string): Promise<boolean> {
-  const rows = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
-  return rows.length > 0
-}
-
 async function runGeneration(
   deps: ChangeNarrativeDeps,
   task: Task,
   input: NarrativeInput,
 ): Promise<void> {
-  const runtime = await resolveInternalAgentRuntime(deps.db, {
+  const runtime = await deps.resolveRuntime({
     runtimeName: deps.runtimeName ?? null,
     defaultRuntime: deps.defaultRuntime ?? null,
   })
@@ -439,7 +435,7 @@ async function runGeneration(
   // Deletion race (design §3.2-5): the task may be deleted while the agent
   // runs. Check before writing (skip entirely) and after (remove what we just
   // wrote so the deletion chain's directory removal stays final).
-  if (!(await taskExists(deps.db, task.id))) return
+  if ((await deps.workspace.findTask(task.id)) === null) return
   const path = narrativePath(task.id)
   try {
     await mkdir(join(appHome(), 'structural-diffs', task.id), { recursive: true })
@@ -447,7 +443,7 @@ async function runGeneration(
   } catch {
     return // best-effort persistence; the trigger's browser still got 'generating'
   }
-  if (!(await taskExists(deps.db, task.id))) {
+  if ((await deps.workspace.findTask(task.id)) === null) {
     await rm(join(appHome(), 'structural-diffs', task.id), { recursive: true, force: true }).catch(
       () => {},
     )

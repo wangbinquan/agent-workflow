@@ -14,7 +14,6 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { startExecution } from '@/services/execution/executor'
@@ -38,6 +37,7 @@ import {
   materializeSpace,
   prepareWorkflowTriggerLaunch,
   resolveTaskGitCommitIdentity,
+  type StartTaskDeps,
 } from '@/services/task'
 import { applyUploadsToWorktree, validateUploadPlan } from '@/services/upload'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
@@ -46,7 +46,7 @@ import { Paths } from '@/util/paths'
 import { ConflictError, ValidationError } from '@/util/errors'
 
 export interface MultipartLaunchDeps {
-  db: DbClient
+  db: StartTaskDeps['db']
   secretBox?: SecretBox
   configPath: string
   schedulerDriver: SchedulerDriverPort
@@ -116,10 +116,12 @@ export async function handleMultipartTaskStart(
     authority: deps.identityAccess.directAuthority.authorityForLegacyProjection(actor),
     resources: deps.identityAccess.taskExecutionResources,
   })
-  const workflow = loadTaskExecutionResourceSnapshot(deps.db, launchResources, {
-    kind: 'workflow-launch',
-    workflowId: startInput.workflowId,
-  }).workflow
+  const workflow = (
+    await loadTaskExecutionResourceSnapshot(launchResources, {
+      kind: 'workflow-launch',
+      workflowId: startInput.workflowId,
+    })
+  ).workflow
   await assertWorkflowSnapshotLaunchable(deps.db, workflow)
   // RFC-199 G1: reject a stale launch guard against the SAME visible row we
   // just captured, before URL resolution can mint a cache row/worktree/branch.

@@ -9,21 +9,20 @@
 //   collectMcpIdsFromClosure(closure)  — pure; unions every closure member's
 //                                        mcp[] ids into a deduped string[] in
 //                                        first-seen order.
-//   loadMcpsByIds(db, ids)             — single DB query (`inArray`) returning
-//                                        the matching mcps rows.
+//   loadMcpsByIds(query, ids)          — provider-neutral batch lookup.
 //
 // Composed in scheduler.ts as:
 //   const closure = await agentDeps.computeClosure(db, agent)
 //   const ids     = collectMcpIdsFromClosure(closure)
-//   const mcps    = await loadMcpsByIds(db, ids)
+//   const mcps    = await loadMcpsByIds(query, ids)
 //   await runNode({ ..., dependents: closure, mcps })
 
 import type { Agent, Mcp } from '@agent-workflow/shared'
-import { McpSchema } from '@agent-workflow/shared'
-import { inArray } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
-import { mcps as mcpsTable } from '@/db/schema'
+
+export interface McpClosureQuery {
+  loadByIds(ids: readonly string[]): Promise<readonly Mcp[]>
+}
 
 /**
  * Union the `mcp[]` ids declared on every closure agent, preserving the
@@ -58,35 +57,13 @@ export function collectMcpIdsFromClosure(closure: readonly Agent[]): string[] {
  *
  * Empty input returns `[]` without hitting the DB.
  */
-export async function loadMcpsByIds(db: DbClient, ids: readonly string[]): Promise<Mcp[]> {
+export async function loadMcpsByIds(
+  query: McpClosureQuery,
+  ids: readonly string[],
+): Promise<Mcp[]> {
   if (ids.length === 0) return []
-  const rows = await db
-    .select()
-    .from(mcpsTable)
-    .where(inArray(mcpsTable.id, [...ids]))
-  // Re-parse via the public schema so we never hand the runner a malformed
-  // row (the same `mcp-row-corrupt` validation that services/mcp.ts uses).
-  const byId = new Map<string, Mcp>()
-  for (const row of rows) {
-    let config: unknown
-    try {
-      config = JSON.parse(row.config)
-    } catch {
-      config = {}
-    }
-    const parsed = McpSchema.safeParse({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      type: row.type,
-      config,
-      enabled: row.enabled,
-      schemaVersion: row.schemaVersion,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    })
-    if (parsed.success) byId.set(row.id, parsed.data)
-  }
+  const rows = await query.loadByIds([...new Set(ids)])
+  const byId = new Map(rows.map((row) => [row.id, row]))
   // Preserve caller's id order (matches closure traversal order) so the
   // resulting inline JSON keys list is deterministic.
   const out: Mcp[] = []

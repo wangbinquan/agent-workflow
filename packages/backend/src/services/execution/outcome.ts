@@ -20,14 +20,12 @@
 //
 // `projectExecutionOutcome` is a pure function over pre-fetched rows (unit
 // tested directly); `getExecutionOutcome` is the thin DB assembler.
-import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { nodeRunOutputs, nodeRuns, tasks, workgroupMessages } from '@/db/schema'
+import type { TaskExecutionOutcomeReadModel } from '@/modules/task-execution/public/types'
+import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
 import { pickUpstreamSourceRun } from '@/services/freshness'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
 import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
-import { loadWorkgroupTaskState } from '@/services/workgroup/state'
 import {
   isTerminalTaskStatus,
   taskExecutionKind,
@@ -289,73 +287,14 @@ export function projectExecutionOutcome(args: {
   }
 }
 
-/** DB assembler for the pure projection above. Throws NotFoundError for a missing row. */
-export async function getExecutionOutcome(db: DbClient, taskId: string): Promise<ExecutionOutcome> {
-  const rows = await db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      errorSummary: tasks.errorSummary,
-      errorMessage: tasks.errorMessage,
-      failedNodeId: tasks.failedNodeId,
-      workflowSnapshot: tasks.workflowSnapshot,
-      workgroupId: tasks.workgroupId,
-      workgroupConfigJson: tasks.workgroupConfigJson,
-      sourceAgentName: tasks.sourceAgentName,
-      codeRoundId: tasks.codeRoundId,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  const task = rows[0]
-  if (task === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-
-  let workgroup: WorkgroupOutcomeInput | null = null
-  if (taskExecutionKind(task) === 'workgroup') {
-    const state = await loadWorkgroupTaskState(db, taskId)
-    let resultMessageBody: string | null = null
-    if (state.resultMessageId !== null) {
-      const msg = await db
-        .select({ bodyMd: workgroupMessages.bodyMd })
-        .from(workgroupMessages)
-        .where(eq(workgroupMessages.id, state.resultMessageId))
-        .limit(1)
-      resultMessageBody = msg[0]?.bodyMd ?? null
-    }
-    workgroup = {
-      gateSummary: state.gateSummary,
-      dwPhase: state.dwState?.phase ?? null,
-      resultMessageBody,
-    }
-  }
-
-  // Row loads are done-only: non-done tasks project empty outputs by contract.
-  let runs: OutcomeRunRow[] = []
-  let outputs: OutcomeOutputRow[] = []
-  if (task.status === 'done') {
-    runs = await db
-      .select({
-        id: nodeRuns.id,
-        nodeId: nodeRuns.nodeId,
-        iteration: nodeRuns.iteration,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
-        status: nodeRuns.status,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
-    outputs = await db
-      .select({
-        nodeRunId: nodeRunOutputs.nodeRunId,
-        portName: nodeRunOutputs.portName,
-        content: nodeRunOutputs.content,
-        kind: nodeRunOutputs.kind,
-        archiveJson: nodeRunOutputs.archiveJson,
-        active: nodeRunOutputs.active,
-      })
-      .from(nodeRunOutputs)
-      .innerJoin(nodeRuns, eq(nodeRunOutputs.nodeRunId, nodeRuns.id))
-      .where(eq(nodeRuns.taskId, taskId))
-  }
-
-  return projectExecutionOutcome({ task, runs, outputs, workgroup })
+/** Provider-neutral assembler for the pure projection above. */
+export async function getExecutionOutcome(
+  source: TaskExecutionOutcomeReadModel | Parameters<typeof createSqliteTaskExecutionReadModels>[0],
+  taskId: string,
+): Promise<ExecutionOutcome> {
+  const reader =
+    'find' in source ? source : createSqliteTaskExecutionReadModels(source).executionOutcome
+  const snapshot = await reader.find(taskId)
+  if (snapshot === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  return projectExecutionOutcome(snapshot)
 }

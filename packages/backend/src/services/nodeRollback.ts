@@ -25,14 +25,16 @@
 import { gitCommitExists, rollbackToSnapshot } from '@/util/git'
 import type { Logger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
-import { asc, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { taskRepos, tasks } from '@/db/schema'
-import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
+import {
+  createLegacySqliteRollbackEffectObserver,
+  loadLegacySqliteRollbackTarget,
+  type LegacySqliteRollbackDatabase,
+} from '@/modules/task-execution/infrastructure/legacySqliteNodeRollback'
+import type { TaskRollbackQueries } from '@/modules/task-execution/application/ports/taskRollbackQueries'
 
 export interface RollbackTarget {
   taskId?: string
-  db?: DbClient
+  db?: LegacySqliteRollbackDatabase
   repoCount: number
   /** Single-repo worktree; for multi-repo this is the container dir (never rolled back in retry mode). */
   worktreePath: string
@@ -103,22 +105,25 @@ export function planNodeRunRollbackTargets(
  * the scheduler uses for rows predating the multi-repo migration.
  */
 export async function loadRollbackTarget(
-  db: DbClient,
+  db: LegacySqliteRollbackDatabase,
   taskId: string,
 ): Promise<RollbackTarget | null> {
-  const taskRowArr = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-  const t = taskRowArr[0]
-  if (t === undefined) return null
-  const repoRows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, taskId))
-    .orderBy(asc(taskRepos.repoIndex))
-  const repos =
-    repoRows.length > 0
-      ? repoRows.map((r) => ({ worktreePath: r.worktreePath, worktreeDirName: r.worktreeDirName }))
-      : [{ worktreePath: t.worktreePath, worktreeDirName: '' }]
-  return { taskId, db, repoCount: t.repoCount, worktreePath: t.worktreePath, repos }
+  return await loadLegacySqliteRollbackTarget(db, taskId)
+}
+
+/** Provider-selected target loader used by PostgreSQL and new SQLite callers. */
+export async function loadRollbackTargetFrom(
+  queries: TaskRollbackQueries,
+  taskId: string,
+): Promise<RollbackTarget | null> {
+  const snapshot = await queries.load(taskId)
+  if (snapshot === null) return null
+  return {
+    taskId: snapshot.taskId,
+    repoCount: snapshot.repoCount,
+    worktreePath: snapshot.worktreePath,
+    repos: snapshot.repositories.map((repository) => ({ ...repository })),
+  }
 }
 
 export async function rollbackNodeRunWorktrees(
@@ -194,13 +199,10 @@ export async function rollbackNodeRunWorktrees(
     const effect =
       target.taskId === undefined || target.db === undefined
         ? undefined
-        : createLocalEffectAttemptObserver({
+        : createLegacySqliteRollbackEffectObserver({
             db: target.db,
             taskId: target.taskId,
             nodeRunId: run.id,
-            kind: 'workspace-rollback',
-            stableActionOrdinal: 'workspace-rollback',
-            candidateId: 'node-snapshot-rollback',
             request: { v: 1, runId: run.id, snapshots: map },
             resourceKeys: target.repos.map((repo) => `workspace:${sha256Hex(repo.worktreePath)}`),
           })
@@ -257,13 +259,10 @@ export async function rollbackNodeRunWorktrees(
   const effect =
     target.taskId === undefined || target.db === undefined
       ? undefined
-      : createLocalEffectAttemptObserver({
+      : createLegacySqliteRollbackEffectObserver({
           db: target.db,
           taskId: target.taskId,
           nodeRunId: run.id,
-          kind: 'workspace-rollback',
-          stableActionOrdinal: 'workspace-rollback',
-          candidateId: 'node-snapshot-rollback',
           request: { v: 1, runId: run.id, snapshot: snap },
           resourceKeys: [`workspace:${sha256Hex(target.worktreePath)}`],
         })

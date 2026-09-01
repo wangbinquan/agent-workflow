@@ -17,7 +17,7 @@
 // handle across ticks. So `walkOpencodeSessions` takes an already-open
 // readonly `Database` and never closes it.
 
-import type { Database } from 'bun:sqlite'
+import type { ReadonlySqliteDatabase } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 
 /** opencode `session` row (subset we read). */
 export interface OpencodeSessionRow {
@@ -77,7 +77,7 @@ export interface WalkOptions {
  * live poller).
  */
 export function* walkOpencodeSessions(
-  db: Database,
+  db: ReadonlySqliteDatabase,
   rootSessionId: string,
   opts: WalkOptions,
 ): Generator<WalkedSession> {

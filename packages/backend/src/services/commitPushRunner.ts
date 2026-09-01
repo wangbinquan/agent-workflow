@@ -13,18 +13,16 @@
 // the commit row). git is never asked to force-push. A push that can't be
 // honored never loses the agent's work — the local commit always lands first.
 
-import { eq } from 'drizzle-orm'
 import type {
   CommitPushMeta,
   CommitPushOutcome,
   RepositoryPublicationReceipt,
   SubrepoPushResult,
 } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
-import { nodeRuns } from '@/db/schema'
 import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
-import { mintNodeRun } from '@/services/nodeRunMint'
+import type { TaskExecutionEffectPersistence } from '@/modules/task-execution/application/ports/taskExecutionEffectStore'
+import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
+import type { NodeExecutionPersistence } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import { createLogger, type Logger } from '@/util/log'
 import { AW_INTERNAL_GIT_IDENTITY, runGit as realRunGit } from '@/util/git'
 import { join } from 'node:path'
@@ -46,13 +44,11 @@ import {
 import {
   bindRepositoryCommitParticipant,
   classifyRepositoryPushFailure,
-  createRepositoryPublicationTransport,
 } from '@/modules/source-control/composition'
 import type {
   RepositoryPublicationSubject,
   RepositoryPublicationTransport,
 } from '@/modules/source-control/public/types'
-import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
 
 type RunGit = typeof realRunGit
@@ -133,12 +129,15 @@ export interface CommitPushParams {
 }
 
 export interface CommitPushDeps {
-  db: DbClient
+  /** Provider-selected task-execution persistence. */
+  nodeRuns: NodeRunLifecyclePersistence
+  nodeExecution: NodeExecutionPersistence
+  effects: TaskExecutionEffectPersistence
   /** Injectable for tests; defaults to the real git CLI. */
   runGit?: RunGit
   log?: Logger
-  /** RFC-321 exact publication transport; production supplies the sealed-key composition. */
-  publicationTransport?: RepositoryPublicationTransport
+  /** RFC-321 exact publication transport selected by bootstrap. */
+  publicationTransport: RepositoryPublicationTransport
 }
 
 /**
@@ -153,14 +152,11 @@ export async function runCommitPush(
   params: CommitPushParams,
   deps: CommitPushDeps,
 ): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> {
-  const db = deps.db
   const runGit = deps.runGit ?? realRunGit
   const log = deps.log ?? createLogger('commit-push')
   const W = params.worktreePath
   const remote = params.pushRemote ?? 'origin'
-  const publicationTransport =
-    deps.publicationTransport ??
-    createRepositoryPublicationTransport({ db, appHome: Paths.root, runGit })
+  const publicationTransport = deps.publicationTransport
   const publicationSubject: RepositoryPublicationSubject =
     params.ownerUserId === undefined ||
     params.ownerUserId === null ||
@@ -180,8 +176,8 @@ export async function runCommitPush(
   // Born 'running' (NOT through the RFC-053 state machine — it governs
   // updates, not inserts): this container row is always a CHILD of the
   // triggering agent run, so it never enters deriveFrontier's in-flight set.
-  // mintNodeRun enforces exactly that invariant (RFC-098 revision #10).
-  const nodeRunId = await mintNodeRun(db, {
+  // The provider-selected lifecycle adapter enforces that invariant.
+  const nodeRunId = await deps.nodeRuns.mint({
     taskId: params.taskId,
     nodeId,
     status: 'running',
@@ -189,7 +185,7 @@ export async function runCommitPush(
     overrides: { parentNodeRunId: params.parentNodeRunId, startedAt },
   })
   const repositoryEffect = createLocalEffectAttemptObserver({
-    db,
+    persistence: deps.effects,
     taskId: params.taskId,
     nodeRunId,
     kind: 'repository',
@@ -275,38 +271,29 @@ export async function runCommitPush(
       outcome === 'commit-local-excluded-history'
         ? 'failed'
         : 'done'
-    const persistMeta = (tx: DbTxSync): void => {
-      tx.update(nodeRuns)
-        .set({
-          status,
-          finishedAt: Date.now(),
-          ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
-          commitPushJson: JSON.stringify(meta),
-        })
-        .where(eq(nodeRuns.id, nodeRunId))
-        .run()
-    }
-    if (repositoryEffect === undefined) {
-      await db
-        .update(nodeRuns)
-        .set({
-          status,
-          finishedAt: Date.now(),
-          ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
-          commitPushJson: JSON.stringify(meta),
-        })
-        .where(eq(nodeRuns.id, nodeRunId))
-    } else {
-      repositoryEffect.succeed(
-        {
-          outcome,
-          commitSha: meta.commitSha,
-          repairAttempts: meta.repairAttempts,
-          publicationReceipt: meta.publicationReceipt ?? null,
-        },
-        persistMeta,
-      )
-    }
+    const finishedAt = Date.now()
+    const patched = await deps.nodeExecution.patch({
+      nodeRunId,
+      values: { commitPushJson: JSON.stringify(meta) },
+      now: finishedAt,
+    })
+    if (!patched) throw new Error(`commit-push node run '${nodeRunId}' disappeared`)
+    await deps.nodeRuns.set({
+      nodeRunId,
+      to: status,
+      allowedFrom: ['running'],
+      extra: {
+        finishedAt,
+        ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
+      },
+      reason: 'commit-push-finished',
+    })
+    await repositoryEffect?.succeed({
+      outcome,
+      commitSha: meta.commitSha,
+      repairAttempts: meta.repairAttempts,
+      publicationReceipt: meta.publicationReceipt ?? null,
+    })
     return { nodeRunId, meta, ...(processUnreaped ? { processUnreaped: true as const } : {}) }
   }
 

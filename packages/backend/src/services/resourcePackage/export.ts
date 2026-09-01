@@ -13,26 +13,21 @@
 import { stringify as stringifyYaml } from 'yaml'
 import type { BundleResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { isVisibleRow, listGrantedResourceIds } from '@/services/resourceAcl'
-import {
-  getSqlitePackageResourceRow,
-  listSqlitePackageResourceRowsByIds,
-} from '@/modules/resource-catalog/public/operations'
+import { isVisibleRow } from '@/services/resourceAcl'
 import { encodeZip, type ZipFile } from '@/util/zip'
 import { ConflictError, ValidationError } from '@/util/errors'
 import {
   assertPrivilegedNodesExportable,
-  attachWorkgroupMembers,
   isBuiltinRow,
   rowName,
-  walkExportClosure,
+  walkExportClosureFromReadPort,
   type ClosureResource,
   type ExportClosure,
 } from './closure'
 import { expectTokenOf } from './preview'
+import { resourcePackageDocumentOf, type ResourcePackageReadPort } from './providerReadPort'
 import { serializeClosure, type SerializedPackage } from './serialize'
-import { packagedSkillFileRef, readSkillTree, type SkillTree } from './skillTree'
+import { packagedSkillFileRef, type SkillTree } from './skillTree'
 import { collectBundleBuiltins, collectPackageRequirements } from './requirements'
 
 /** 包格式版本。导入侧见到更高的值直接拒绝（design §8）。 */
@@ -167,13 +162,14 @@ skills/         技能文件树 / skill file trees
 `
 }
 
-export async function exportResourcePackage(
-  db: DbClient,
+export async function exportResourcePackageFromReadPort(
+  reads: ResourcePackageReadPort,
+  readPackageSkillTree: (skillId: string) => Promise<SkillTree>,
   actor: Actor,
   root: { type: BundleResourceType; id: string },
-  opts: { appHome: string; exportedAt?: number; expect?: RootExportFence },
+  opts: { exportedAt?: number; expect?: RootExportFence },
 ): Promise<ExportedPackage> {
-  const closure = await walkExportClosure(db, actor, root)
+  const closure = await walkExportClosureFromReadPort(reads, actor, root)
   assertRootUnchanged(closure.root.type, closure.root.row, opts.expect)
   assertPrivilegedNodesExportable(actor, closure.resources)
 
@@ -182,7 +178,7 @@ export async function exportResourcePackage(
   const skillTrees = new Map<string, SkillTree>()
   for (const r of closure.resources) {
     if (r.type !== 'skill') continue
-    skillTrees.set(r.id, await readSkillTree(db, opts.appHome, r.id))
+    skillTrees.set(r.id, await readPackageSkillTree(r.id))
   }
 
   // ⚠️ **授权复核必须排在任何 root fence 明文比较之前**。
@@ -192,10 +188,17 @@ export async function exportResourcePackage(
   // `package-root-changed ... now 2` —— 一个此刻**已经对你不可见**的资源，却把它的精确
   // revision 报了出来。不泄露 ZIP，但在竞态窗口里成了状态 oracle。
   const serialized = serializeClosure(closure, skillTrees)
-  await assertClosureStillCurrent(db, actor, closure, skillTrees, serialized, opts.appHome)
+  await assertClosureStillCurrent(
+    reads,
+    readPackageSkillTree,
+    actor,
+    closure,
+    skillTrees,
+    serialized,
+  )
   // exact fence 必须包住所有 live 读取。旧实现只在 walkClosure 后比较一次，随后读取
   // 技能文件树/工作组 roster 的窗口里根仍可变化，最终却带着旧 expected 成功 200。
-  await assertRootStillCurrent(db, actor, closure.root.type, closure.root.id, opts.expect)
+  await assertRootStillCurrent(reads, actor, closure.root.type, closure.root.id, opts.expect)
   const manifest = buildManifest(closure, serialized, {
     // 调用方给时间戳（路由传 `Date.now()`）。留成参数是为了让测试能断言
     // 「同一份闭包导出两次字节相同」——见 `encodeZip` 的可复现要求。
@@ -297,18 +300,19 @@ function assertRootUnchanged(
  * 自己带上授权判断。授权与读取要在**同一次**观测里成对出现。
  */
 async function assertRootStillCurrent(
-  db: DbClient,
+  reads: ResourcePackageReadPort,
   actor: Actor,
   type: BundleResourceType,
   id: string,
   expect: RootExportFence | undefined,
 ): Promise<void> {
   if (expect === undefined || Object.keys(expect).length === 0) return
-  const row = await getSqlitePackageResourceRow(db, type, id)
-  if (row === undefined) {
+  const snapshot = await reads.getById(type, id)
+  if (snapshot === undefined) {
     throw new ConflictError('package-root-changed', `this ${type} vanished during export`)
   }
-  const grants = new Set(await listGrantedResourceIds(db, actor, type))
+  const row = resourcePackageDocumentOf(snapshot)
+  const grants = await reads.listGrantedResourceIds(actor, type)
   if (!isVisibleRow(actor, row as never, grants)) {
     throw new ValidationError(
       'package-export-ref-unavailable',
@@ -351,12 +355,12 @@ function skillTreeDigest(tree: SkillTree | undefined): string {
 }
 
 async function assertClosureStillCurrent(
-  db: DbClient,
+  reads: ResourcePackageReadPort,
+  readPackageSkillTree: (skillId: string) => Promise<SkillTree>,
   actor: Actor,
   closure: ExportClosure,
   skillTrees: ReadonlyMap<string, SkillTree>,
   captured: SerializedPackage,
-  appHome: string,
 ): Promise<void> {
   const byType = new Map<BundleResourceType, Array<(typeof closure.resources)[number]>>()
   for (const resource of closure.resources) {
@@ -367,17 +371,14 @@ async function assertClosureStillCurrent(
 
   const currentRowById = new Map<string, Record<string, unknown>>()
   for (const [type, group] of byType) {
-    const rows = await listSqlitePackageResourceRowsByIds(
-      db,
-      type,
-      group.map((resource) => resource.id),
-    )
-    // ⚠️ 必须走**与闭包遍历同一条装载路径**：工作组成员在独立表 `workgroup_members`，
-    // 由 `attachWorkgroupMembers` 在装载层补进 `row.members`。裸 select 拿到的行没有
-    // 这个字段，比较时会恒不相等。
-    if (type === 'workgroup') await attachWorkgroupMembers(db, rows)
+    const rows = (
+      await reads.listByIds(
+        type,
+        group.map((resource) => resource.id),
+      )
+    ).map(resourcePackageDocumentOf)
     const currentById = new Map(rows.map((row) => [String(row.id), row]))
-    const grants = new Set(await listGrantedResourceIds(db, actor, type))
+    const grants = await reads.listGrantedResourceIds(actor, type)
 
     for (const resource of group) {
       const current = currentById.get(resource.id)
@@ -435,7 +436,7 @@ async function assertClosureStillCurrent(
   const freshTrees = new Map<string, SkillTree>()
   for (const r of fresh) {
     if (r.type !== 'skill') continue
-    freshTrees.set(r.id, await readSkillTree(db, appHome, r.id))
+    freshTrees.set(r.id, await readPackageSkillTree(r.id))
   }
   for (const r of fresh) {
     if (r.type !== 'skill') continue
