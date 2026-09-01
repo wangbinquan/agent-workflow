@@ -385,10 +385,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1910,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-349 修复数据库迁移源冻结与 provider-neutral runtime bootstrap，新增两个由既有 owner 管理且受 admission/fail-loud guard 约束的写入口。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -409,10 +406,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 366,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-349 将 SQLite/PostgreSQL runtime registry boot 收敛为一个显式 provider-neutral initialization job；它替代分支内隐式启动，不新增常驻 timer。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -482,10 +476,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25622,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349 新增 SQLite 历史迁移兼容执行器、provider-neutral runtime registry boot 及精确合同；所有符号均归既有 system-operations/runtime-management owner。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -503,7 +494,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "b7f4a887e006fe607d15b7d2f97cd60053377706",
-    "contentDigest": "sha256:7a930ea7e3eadfb5a64b9781dfb814ac24f0e43a7515a3d3540518d192bd283c",
+    "contentDigest": "sha256:a8425596178f3791433310ee0b8cc2af5701de27068355defba4eab44583424e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
