@@ -12,14 +12,11 @@
 // resolves "an agent visible to this repo for this slot" would report ready and
 // then fail on the MR, in front of the author.
 
-import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { capabilityTemplates, webhookTriggers } from '@/db/schema'
+import type { ReadinessFactsReadPort } from '@/modules/code-capability/application/ports/readinessFactsRead'
 import { lookupStageContract } from '@/modules/code-capability/domain/capabilityRegistry'
 import { parseCodeCapabilityId } from '@/modules/code-capability/domain/stageContract'
 import type { ReadinessInput } from '@/modules/code-capability/domain/templateLayers'
 import { resolveCodeHostEndpointId } from '@/modules/code-capability/application/resolveRepoEndpoint'
-import { resolveAgentForBinding } from '@/services/codeReviewAgentCaller'
 
 export interface CapabilityTriggerCandidate {
   readonly id: string
@@ -63,28 +60,6 @@ export function selectCapabilityTrigger(
   return null
 }
 
-/** T104 后内联自 services/codeCapabilityTrigger（读面自持，writer 已删）。 */
-async function findCapabilityTriggerRow(
-  db: DbClient,
-  key: { endpointId: string; repoId: string; capability: string },
-): Promise<CapabilityTriggerMatch | null> {
-  const rows = await db
-    .select({
-      id: webhookTriggers.id,
-      repoScope: webhookTriggers.repoScope,
-      eventTypes: webhookTriggers.eventTypes,
-    })
-    .from(webhookTriggers)
-    .where(
-      and(
-        eq(webhookTriggers.endpointId, key.endpointId),
-        eq(webhookTriggers.launchKind, 'code-round'),
-        eq(webhookTriggers.launchRefId, key.capability),
-      ),
-    )
-  return selectCapabilityTrigger(rows, key.repoId)
-}
-
 /**
  * Capabilities that cannot be woken by anything else.
  *
@@ -109,7 +84,7 @@ export function capabilityAgentSlots(capability: string): string[] {
 }
 
 export interface GatherFactsInput {
-  db: DbClient
+  reader: ReadinessFactsReadPort
   repoId: string
   capability: string
   /** The endpoint this repository's events arrive on. */
@@ -128,34 +103,29 @@ export interface GatherFactsInput {
  * gap produces) stay testable without a database.
  */
 export async function gatherReadinessFacts(input: GatherFactsInput): Promise<ReadinessInput> {
-  const { db } = input
-  const hasBinding = input.templateId !== null && input.templateId !== ''
+  const { reader } = input
+  const templateId = input.templateId
+  const hasBinding = templateId !== null && templateId !== ''
 
   // RFC-309 — one lookup, not two. The old pair asked "does the binding exist"
   // and then "does the framework it names exist", because a cell could point at
   // a binding whose framework had been deleted underneath it. A merged template
   // cannot be half-missing, so `frameworkExists` is now simply "the template
   // this cell points at is still there".
-  let frameworkExists = false
-  if (hasBinding) {
-    const [template] = await db
-      .select({ id: capabilityTemplates.id })
-      .from(capabilityTemplates)
-      .where(eq(capabilityTemplates.id, input.templateId as string))
-      .limit(1)
-    frameworkExists = template !== undefined
-  }
+  const frameworkExists = hasBinding ? await reader.templateExists(templateId) : false
 
-  const trigger = await findCapabilityTriggerRow(db, {
-    endpointId: input.endpointId,
-    repoId: input.repoId,
-    capability: input.capability,
-  })
+  const trigger = selectCapabilityTrigger(
+    await reader.listCapabilityTriggers({
+      endpointId: input.endpointId,
+      capability: input.capability,
+    }),
+    input.repoId,
+  )
 
   // The same resolution the round performs. An enabled endpoint for the
   // provider IS the code-host identity a round keys its ledger to, so asking
   // any other question here would let a cell pass a check the round then fails.
-  const endpoint = await resolveCodeHostEndpointId(db, input.provider ?? 'gitlab')
+  const endpoint = await resolveCodeHostEndpointId(reader.repoEndpoints, input.provider ?? 'gitlab')
 
   return {
     enabled: input.enabled,
@@ -163,7 +133,7 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
     frameworkExists,
     hasTrigger: trigger !== null,
     codeHostConfigured: endpoint.ok,
-    invisibleAgentSlots: await invisibleSlots(db, input),
+    invisibleAgentSlots: await invisibleSlots(reader, input),
     requiresWakeSource: capabilityRequiresWakeSource(input.capability),
     // What can start this capability, given it is not woken by an MR event.
     //
@@ -191,7 +161,10 @@ export async function gatherReadinessFacts(input: GatherFactsInput): Promise<Rea
  * the contract does not declare is harmless, while a contract slot the binding
  * has not mapped is a round that dies at that stage.
  */
-async function invisibleSlots(db: DbClient, input: GatherFactsInput): Promise<string[]> {
+async function invisibleSlots(
+  reader: ReadinessFactsReadPort,
+  input: GatherFactsInput,
+): Promise<string[]> {
   const slots = capabilityAgentSlots(input.capability)
 
   // Resolved against the binding being SAVED, not the one currently stored.
@@ -202,8 +175,8 @@ async function invisibleSlots(db: DbClient, input: GatherFactsInput): Promise<st
 
   const invisible: string[] = []
   for (const slot of slots) {
-    const resolved = await resolveAgentForBinding(db, { templateId: input.templateId, slot })
-    if (!resolved.ok) invisible.push(slot)
+    const visible = await reader.agentSlotVisible({ templateId: input.templateId, slot })
+    if (!visible) invisible.push(slot)
   }
   return invisible
 }

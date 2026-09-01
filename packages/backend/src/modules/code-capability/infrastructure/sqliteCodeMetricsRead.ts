@@ -1,18 +1,15 @@
-// RFC-349 — PostgreSQL implementation of the code-capability metrics read
-// model. Provider SQL stays in infrastructure; application owns the bucket and
-// outcome projection shared with SQLite.
+// RFC-349 — SQLite rows behind the shared code metrics projection.
 
 import { and, eq, gte, isNotNull, sql } from 'drizzle-orm'
-
+import type { DbClient } from '@/db/client'
 import { codeFindings, codeWorkItems, codeWorkRounds } from '@/db/schema'
-import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
-import type { CodeMetricsReadPort } from '@/modules/code-capability/application/ports/codeMetricsRead'
-import type { CodeMetricsQuery } from '@/modules/code-capability/public/queries'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { CodeMetricsReadPort } from '../application/ports/codeMetricsRead'
 
-export function createPostgresqlCodeMetricsRead(db: PostgresqlDatabaseClient): CodeMetricsReadPort {
+export function createSqliteCodeMetricsRead(db: DbClient): CodeMetricsReadPort {
   return {
     async loadSince(since) {
+      // Only findings that were actually published count. An unpublished one
+      // was never shown to anyone and cannot be outstanding adoption work.
       const findings = await db
         .select({
           capability: codeFindings.capability,
@@ -37,9 +34,4 @@ export function createPostgresqlCodeMetricsRead(db: PostgresqlDatabaseClient): C
       return { findings, rounds }
     },
   }
-}
-
-/** Retained as the infrastructure convenience used by focused adapter tests. */
-export function createPostgresqlCodeMetricsQuery(db: PostgresqlDatabaseClient): CodeMetricsQuery {
-  return createCodeMetricsQuery(createPostgresqlCodeMetricsRead(db))
 }

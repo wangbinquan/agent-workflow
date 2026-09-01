@@ -18,9 +18,11 @@
 // four. It costs one extra column of screen space and buys a metric that cannot
 // quietly flatter the platform that produced it.
 
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { codeFindings, codeWorkItems, codeWorkRounds } from '@/db/schema'
+import type {
+  CodeMetricFindingRow,
+  CodeMetricRoundRow,
+  CodeMetricsReadPort,
+} from '@/modules/code-capability/application/ports/codeMetricsRead'
 import type {
   CodeAdoptionBuckets,
   CodeMetricsQuery,
@@ -38,18 +40,7 @@ import type {
  */
 export const DEFAULT_METRICS_WINDOW_MS = 30 * 24 * 60 * 60 * 1000
 
-export interface CodeMetricFindingRow {
-  readonly capability: string
-  readonly resolvedAt: number | null
-  readonly codeChangedAt: number | null
-}
-
-export interface CodeMetricRoundRow {
-  readonly capability: string
-  readonly outcome: string | null
-  readonly endedAt: number | null
-  readonly n: number
-}
+export type { CodeMetricFindingRow, CodeMetricRoundRow }
 
 /**
  * Provider-neutral metrics projection. SQLite and PostgreSQL own their query
@@ -109,39 +100,13 @@ export function projectCodeMetricsSummary(input: {
   }
 }
 
-export function createCodeMetricsQuery(db: DbClient): CodeMetricsQuery {
+export function createCodeMetricsQuery(reader: CodeMetricsReadPort): CodeMetricsQuery {
   return {
     async summary(input) {
       const windowMs = input?.windowMs ?? DEFAULT_METRICS_WINDOW_MS
       const now = input?.now ?? Date.now()
       const since = now - windowMs
-
-      // Only findings that were actually PUBLISHED count. An unpublished one
-      // was never put in front of anyone, so counting it as "outstanding" would
-      // blame the reader for something they never saw.
-      const findings = await db
-        .select({
-          capability: codeFindings.capability,
-          resolvedAt: codeFindings.resolvedAt,
-          codeChangedAt: codeFindings.codeChangedAt,
-        })
-        .from(codeFindings)
-        .where(and(isNotNull(codeFindings.externalId), gte(codeFindings.createdAt, since)))
-
-      // Rounds carry no capability of their own — it lives on the work item, so
-      // this joins rather than reading a denormalized copy. A copy would drift
-      // the first time a work item's capability is corrected.
-      const rounds = await db
-        .select({
-          capability: codeWorkItems.capability,
-          outcome: codeWorkRounds.outcome,
-          endedAt: codeWorkRounds.endedAt,
-          n: sql<number>`count(*)`,
-        })
-        .from(codeWorkRounds)
-        .innerJoin(codeWorkItems, eq(codeWorkRounds.workItemId, codeWorkItems.id))
-        .where(gte(codeWorkRounds.startedAt, since))
-        .groupBy(codeWorkItems.capability, codeWorkRounds.outcome, codeWorkRounds.endedAt)
+      const { findings, rounds } = await reader.loadSince(since)
 
       return projectCodeMetricsSummary({ windowMs, findings, rounds })
     },

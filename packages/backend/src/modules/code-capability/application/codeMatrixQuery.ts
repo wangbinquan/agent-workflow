@@ -4,9 +4,6 @@
 // is the pairing the page needs: a readiness state next to the specific missing
 // piece next to where that piece is configured.
 
-import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
-import { codeAiAttempts, codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import type {
   DeliveryChainReadPort,
   DeliveryRow,
@@ -17,25 +14,17 @@ import type {
 } from '@/modules/code-capability/application/ports/capabilityMatrixRead'
 import type { RoundAttemptsReadPort } from '@/modules/code-capability/application/ports/roundAttemptsRead'
 import type { WorkItemProjectionReadPort } from '@/modules/code-capability/application/ports/workItemProjectionRead'
-import { createSqliteDeliveryChainRead } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
-import { listCapabilityCells } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
-import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
-import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import { repairActionsFor } from '@/modules/code-capability/domain/repairActions'
 export {
   ROUND_WINDOW,
   ATTEMPT_PAGE,
   VIRTUALISE_THRESHOLD,
 } from '@/modules/code-capability/domain/stateViewScale'
-import { ROUND_WINDOW, roundWindow } from '@/modules/code-capability/domain/stateViewScale'
 import { deriveReadiness } from '@/modules/code-capability/domain/templateLayers'
 import type {
   CodeMatrixQuery,
   CodeMatrixRow,
   CodeRoundAttemptsQuery,
-  CodeRoundProjection,
-  CodeStageProjection,
-  CodeWorkItemProjection,
   CodeWorkItemProjectionQuery,
 } from '@/modules/code-capability/public/queries'
 
@@ -61,43 +50,12 @@ export const ROUNDS_PER_ITEM = 3
  */
 export const ATTEMPTS_PER_ROUND = 200
 
-function isRoundAttemptsReadPort(
-  input: DbClient | RoundAttemptsReadPort,
-): input is RoundAttemptsReadPort {
-  return 'load' in input && typeof input.load === 'function'
-}
-
 export function createCodeRoundAttemptsQuery(
-  input: DbClient | RoundAttemptsReadPort,
+  reader: RoundAttemptsReadPort,
 ): CodeRoundAttemptsQuery {
-  if (isRoundAttemptsReadPort(input)) {
-    return {
-      async forRound(roundId) {
-        return await input.load(roundId, ATTEMPTS_PER_ROUND)
-      },
-    }
-  }
-  const db = input
   return {
     async forRound(roundId) {
-      return await db
-        .select({
-          attemptId: codeAiAttempts.id,
-          stageName: codeAiAttempts.stageName,
-          shardKey: codeAiAttempts.shardKey,
-          rerunSeq: codeAiAttempts.rerunSeq,
-          attemptSeq: codeAiAttempts.attemptSeq,
-          status: codeAiAttempts.status,
-          validationOutcome: codeAiAttempts.validationOutcome,
-          sessionRef: codeAiAttempts.sessionRef,
-          nodeRunId: codeAiAttempts.nodeRunId,
-          startedAt: codeAiAttempts.startedAt,
-          endedAt: codeAiAttempts.endedAt,
-        })
-        .from(codeAiAttempts)
-        .where(eq(codeAiAttempts.roundId, roundId))
-        .orderBy(codeAiAttempts.startedAt, codeAiAttempts.rerunSeq, codeAiAttempts.attemptSeq)
-        .limit(ATTEMPTS_PER_ROUND)
+      return await reader.load(roundId, ATTEMPTS_PER_ROUND)
     },
   }
 }
@@ -123,52 +81,17 @@ export function createCodeRoundAttemptsQuery(
  * lookups for the five capabilities of one repository, on a page a person opens
  * by hand. The stored value stays as the record of what `enable` observed.
  */
-function isCapabilityMatrixReadPort(
-  input: DbClient | CapabilityMatrixReadPort,
-): input is CapabilityMatrixReadPort {
-  return 'loadForRepo' in input && typeof input.loadForRepo === 'function'
-}
-
 async function loadCapabilityMatrixRows(
-  input: DbClient | CapabilityMatrixReadPort,
+  reader: CapabilityMatrixReadPort,
   repoId: string,
 ): Promise<readonly CapabilityMatrixReadRow[]> {
-  if (isCapabilityMatrixReadPort(input)) return await input.loadForRepo(repoId)
-
-  const db = input
-  const cells = await listCapabilityCells(db, repoId)
-  if (cells.length === 0) return []
-
-  // Which code host this repository belongs to. A repository whose endpoint
-  // cannot be resolved is not an error here: `codeHostConfigured` is one of
-  // the facts, and reporting it as missing is the honest answer — the same
-  // one the round would reach.
-  const endpoint = await resolveRepoEndpoint(db, repoId)
-  return await Promise.all(
-    cells.map(
-      async (cell): Promise<CapabilityMatrixReadRow> => ({
-        repoId: cell.repoId,
-        capability: cell.capability,
-        templateId: cell.templateId,
-        enabled: cell.enabled,
-        facts: await gatherReadinessFacts({
-          db,
-          repoId,
-          capability: cell.capability,
-          endpointId: endpoint.ok ? endpoint.endpointId : '',
-          templateId: cell.templateId,
-          enabled: cell.enabled,
-          ...(endpoint.ok ? { provider: endpoint.provider } : {}),
-        }),
-      }),
-    ),
-  )
+  return await reader.loadForRepo(repoId)
 }
 
-export function createCodeMatrixQuery(input: DbClient | CapabilityMatrixReadPort): CodeMatrixQuery {
+export function createCodeMatrixQuery(reader: CapabilityMatrixReadPort): CodeMatrixQuery {
   return {
     async forRepo(repoId) {
-      const rows = await loadCapabilityMatrixRows(input, repoId)
+      const rows = await loadCapabilityMatrixRows(reader, repoId)
       return rows.map((row): CodeMatrixRow => {
         const derived = deriveReadiness(row.facts)
         return {
@@ -206,84 +129,12 @@ export function decodeCursor(cursor: string): { createdAt: number; id: string } 
   return { createdAt, id }
 }
 
-function isWorkItemProjectionReadPort(
-  input: DbClient | WorkItemProjectionReadPort,
-): input is WorkItemProjectionReadPort {
-  return 'readPage' in input && typeof input.readPage === 'function'
-}
-
 export function createCodeWorkItemProjectionQuery(
-  input: DbClient | WorkItemProjectionReadPort,
+  reader: WorkItemProjectionReadPort,
 ): CodeWorkItemProjectionQuery {
-  if (isWorkItemProjectionReadPort(input)) {
-    return {
-      async page(request) {
-        return await input.readPage(request)
-      },
-    }
-  }
-  const db = input
   return {
-    async page(input) {
-      const limit = Math.max(1, Math.min(input.limit ?? WORK_ITEM_PAGE_LIMIT, 100))
-      const filters: SQL[] = []
-      if (input.codeHostEndpointId !== undefined) {
-        filters.push(eq(codeWorkItems.codeHostEndpointId, input.codeHostEndpointId))
-      }
-      if (input.stableProjectId !== undefined) {
-        filters.push(eq(codeWorkItems.stableProjectId, input.stableProjectId))
-      }
-      if (input.capability !== undefined) {
-        filters.push(eq(codeWorkItems.capability, input.capability))
-      }
-
-      const cursor = input.cursor == null ? null : decodeCursor(input.cursor)
-      if (cursor !== null) {
-        // Strictly older than the cursor. An unparsable cursor is ignored rather
-        // than erroring: it means a stale link, and starting from the top is a
-        // better answer than a page that refuses to render.
-        filters.push(lt(codeWorkItems.createdAt, cursor.createdAt))
-      }
-
-      const rows = await db
-        .select()
-        .from(codeWorkItems)
-        .where(filters.length === 0 ? undefined : and(...filters))
-        .orderBy(desc(codeWorkItems.createdAt), desc(codeWorkItems.id))
-        // One extra, to learn whether there IS a next page without a second
-        // query — and without claiming there is one when the last page is full.
-        .limit(limit + 1)
-
-      // The caller may widen this to the full window when it is looking at ONE
-      // item; the LIST stays narrow, because twenty rounds across twenty items
-      // is the response size T66 exists to bound.
-      const roundLimit = Math.max(1, Math.min(input.roundLimit ?? ROUNDS_PER_ITEM, ROUND_WINDOW))
-
-      const page = rows.slice(0, limit)
-      const items: CodeWorkItemProjection[] = []
-      for (const row of page) {
-        const projected = await projectRounds(db, row.id, roundLimit)
-        items.push({
-          workItemId: row.id,
-          capability: row.capability,
-          anchorKind: row.anchorKind,
-          anchorId: row.anchorId,
-          status: row.status,
-          epoch: row.epoch,
-          rounds: projected.rounds,
-          // Always present, even at zero: a caller that renders it
-          // unconditionally cannot accidentally suppress the notice by reading
-          // a missing key as "nothing hidden".
-          roundsHidden: projected.hidden,
-        })
-      }
-
-      const last = page.at(-1)
-      return {
-        items,
-        nextCursor:
-          rows.length > limit && last !== undefined ? encodeCursor(last.createdAt, last.id) : null,
-      }
+    async page(request) {
+      return await reader.readPage(request)
     },
   }
 }
@@ -304,74 +155,6 @@ export function createCodeWorkItemProjectionQuery(
 export function deriveRoundStatus(outcome: string | null, endedAt: number | null): string {
   if (outcome === null) return endedAt === null ? 'running' : 'ended-without-outcome'
   return endedAt === null ? 'settling' : outcome
-}
-
-async function projectRounds(
-  db: DbClient,
-  workItemId: string,
-  limit: number,
-): Promise<{ rounds: CodeRoundProjection[]; hidden: number }> {
-  // The total first, because the count is the point: T66's failure is a
-  // truncated list that looks complete, and a reader on an eighty-round merge
-  // request seeing three has no way to tell which they are looking at.
-  const [counted] = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(codeWorkRounds)
-    .where(eq(codeWorkRounds.workItemId, workItemId))
-  const total = counted?.n ?? 0
-
-  const rounds = await db
-    .select()
-    .from(codeWorkRounds)
-    .where(eq(codeWorkRounds.workItemId, workItemId))
-    .orderBy(desc(codeWorkRounds.roundSeq))
-    .limit(limit)
-
-  const out: CodeRoundProjection[] = []
-  for (const round of rounds) {
-    const stages = await db
-      .select()
-      .from(codeRoundStages)
-      // Ascending: the sequence should read the way the engine ran it, which is
-      // the opposite of how rounds are listed.
-      .orderBy(codeRoundStages.stageSeq)
-      .where(eq(codeRoundStages.roundId, round.id))
-
-    out.push({
-      roundId: round.id,
-      roundSeq: round.roundSeq,
-      status: deriveRoundStatus(round.outcome, round.endedAt),
-      outcome: round.outcome,
-      // RFC-307 — which contract version this round actually ran.
-      //
-      // The flow view draws the CURRENT contract, so a round from before a
-      // contract bump can name stages the picture does not have. Sending the
-      // version lets the UI say "this round ran v3, you are looking at v4"
-      // instead of silently dropping the stages it cannot place, which would
-      // make an old round look like it skipped work it in fact did.
-      stageContractVer: round.stageContractVer,
-      baselineSha: round.baselineSha,
-      startedAt: round.startedAt,
-      endedAt: round.endedAt,
-      stages: stages.map(
-        (stage): CodeStageProjection => ({
-          stageName: stage.stageName,
-          stageSeq: stage.stageSeq,
-          kind: stage.stageKind,
-          status: stage.status,
-          error: stage.error,
-          startedAt: stage.startedAt,
-          endedAt: stage.endedAt,
-        }),
-      ),
-    })
-  }
-
-  // `roundWindow` rather than arithmetic here: the page and the query must not
-  // be able to disagree about the bound, which is exactly why the constants and
-  // the slice live in one domain module.
-  const window = roundWindow({ total, limit })
-  return { rounds: out, hidden: window.hidden }
 }
 
 /**
@@ -398,16 +181,9 @@ export interface CodeDeliveryChainQuery {
   failures(input: { stableProjectId?: string; limit?: number }): Promise<DeliveryRow[]>
 }
 
-function isDeliveryChainReadPort(
-  input: DbClient | DeliveryChainReadPort,
-): input is DeliveryChainReadPort {
-  return 'recent' in input && typeof input.recent === 'function'
-}
-
 export function createCodeDeliveryChainQuery(
-  input: DbClient | DeliveryChainReadPort,
+  reader: DeliveryChainReadPort,
 ): CodeDeliveryChainQuery {
-  const reader = isDeliveryChainReadPort(input) ? input : createSqliteDeliveryChainRead(input)
   return {
     async forProject(input) {
       return await reader.recent({

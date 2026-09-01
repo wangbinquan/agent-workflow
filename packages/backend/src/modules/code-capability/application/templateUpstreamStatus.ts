@@ -1,30 +1,17 @@
-// RFC-309 T16 — the upstream link, connected to something.
+// RFC-309 T16 / RFC-349 — provider-neutral capability-template upstream sync.
 //
-// `domain/templateUpstream.ts` has been correct and unreachable since RFC-304:
-// four states, a three-way diff and a safe merge, with no production caller.
-// This file is the join. It reads the two rows, feeds the pure functions, and
-// turns their answer into what a person can act on.
-//
-// ## Why this matters more after the merge than before
-//
-// RFC-309 removed the shared department framework, so "everyone runs the same
-// scripts" is no longer a fact about the data model — it is a fact about where
-// people copied from. The upstream link is the only record of that, and an
-// upstream fix reaches a copy only if somebody is TOLD there is one.
-//
-// ## The base snapshot, and what happens without it
-//
-// A three-way merge needs the values as they were at copy time. Copies made
-// before 0175 have only a digest, which answers "was this edited" but not
-// "which field did WE change". Rather than invent a base — every plausible
-// guess silently discards somebody's edit — a template with no base recorded
-// reports every difference as a `conflict`. That is the honest degradation: it
-// still shows what upstream changed, and it never applies anything on its own.
+// The application owns three-way comparison and merge decisions. Persistence
+// owns the provider transaction and executes load -> decide -> persist without
+// exposing a raw transaction or table to the use case.
 
-import { eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import type { DbClient } from '@/db/client'
-import { capabilityTemplates } from '@/db/schema'
+import type {
+  TemplateUpstreamMergePatch,
+  TemplateUpstreamPersistence,
+  TemplateUpstreamPersistenceResult,
+  TemplateUpstreamRecord,
+  TemplateUpstreamSnapshot,
+} from '@/modules/code-capability/application/ports/templateUpstreamPersistence'
 import {
   judgeUpstream,
   mergeUnoverridden,
@@ -32,15 +19,21 @@ import {
   type FieldResolution,
   type UpstreamStatus,
 } from '@/modules/code-capability/domain/templateUpstream'
-import {
-  mayReadScripts,
-  mergeableSnapshot,
-  templateDigest,
-  MERGEABLE_FIELDS,
-  type MergeableField,
-} from '@/services/capabilityTemplates'
+import { sha256Hex } from '@/util/hash'
 
-type TemplateRow = typeof capabilityTemplates.$inferSelect
+const MERGEABLE_FIELDS = [
+  'description',
+  'scripts',
+  'hooks',
+  'paramSchema',
+  'paramDefaults',
+  'agentBySlot',
+  'promptBySlot',
+  'params',
+  'stageContractVer',
+] as const
+
+type MergeableField = (typeof MERGEABLE_FIELDS)[number]
 
 export interface UpstreamReport {
   /** Absent when this template was authored here rather than copied. */
@@ -50,34 +43,152 @@ export interface UpstreamReport {
   upstreamName: string | null
   /** Per-field verdicts. Empty when there is no upstream to compare against. */
   fields: readonly FieldResolution[]
-  /**
-   * False when the copy predates the base snapshot. The UI says so rather than
-   * offering a merge whose result it cannot predict.
-   */
+  /** False when the copy predates the base snapshot. */
   baseRecorded: boolean
 }
 
+export interface MergeOutcome {
+  applied: readonly string[]
+  keptLocal: readonly string[]
+  stillConflicted: readonly string[]
+}
+
+export type TemplateUpstreamMergeResult =
+  | TemplateUpstreamPersistenceResult
+  | { ok: false; code: 'scripts-forbidden' }
+
+export interface TemplateUpstreamOperations {
+  read(templateId: string): Promise<UpstreamReport | null>
+  merge(templateId: string, actor: Actor, now?: number): Promise<TemplateUpstreamMergeResult>
+}
+
+export function createTemplateUpstreamOperations(
+  persistence: TemplateUpstreamPersistence,
+): TemplateUpstreamOperations {
+  return Object.freeze({
+    async read(templateId: string): Promise<UpstreamReport | null> {
+      return await readUpstreamReport(persistence, templateId)
+    },
+    async merge(
+      templateId: string,
+      actor: Actor,
+      now?: number,
+    ): Promise<TemplateUpstreamMergeResult> {
+      return await mergeFromUpstream(persistence, templateId, actor, now)
+    },
+  })
+}
+
+export async function readUpstreamReport(
+  persistence: TemplateUpstreamPersistence,
+  templateId: string,
+): Promise<UpstreamReport | null> {
+  const row = await persistence.load(templateId)
+  if (row === null) return null
+  const upstream = row.upstreamId === null ? null : await persistence.load(row.upstreamId)
+  return projectUpstreamReport(row, upstream)
+}
+
 /**
- * Where this template stands relative to what it was copied from.
+ * Take every upstream field that changed while the local copy did not.
  *
- * Returns a null status — not an error — for a template that was authored
- * rather than copied. "No upstream" is the normal case for an original, and
- * making the caller handle an error for it would put a failure path on the
- * common one.
+ * The persistence adapter reloads both rows inside its provider transaction,
+ * invokes this synchronous decision, and applies the returned patch before the
+ * transaction closes. PostgreSQL therefore never relies on a SQLite shadow or
+ * a stale route-loaded row.
  */
-export async function readUpstreamReport(db: DbClient, row: TemplateRow): Promise<UpstreamReport> {
+export async function mergeFromUpstream(
+  persistence: TemplateUpstreamPersistence,
+  templateId: string,
+  actor: Actor,
+  now: number = Date.now(),
+): Promise<TemplateUpstreamMergeResult> {
+  if (!actor.permissions.has('scripts:author')) {
+    return { ok: false, code: 'scripts-forbidden' }
+  }
+
+  const result = await persistence.decideAndPersist(templateId, (snapshot) =>
+    decideTemplateUpstreamMerge(snapshot, now),
+  )
+  return result ?? { ok: false, code: 'upstream-gone' }
+}
+
+function decideTemplateUpstreamMerge(
+  snapshot: TemplateUpstreamSnapshot,
+  now: number,
+): {
+  readonly result: TemplateUpstreamPersistenceResult
+  readonly patch: TemplateUpstreamMergePatch | null
+} {
+  const row = snapshot.local
+  if (row.upstreamId === null || row.upstreamVersion === null) {
+    return { result: { ok: false, code: 'no-upstream' }, patch: null }
+  }
+  if (snapshot.upstream === null) {
+    return { result: { ok: false, code: 'upstream-gone' }, patch: null }
+  }
+
+  const report = projectUpstreamReport(row, snapshot.upstream)
+  const outcome = mergeUnoverridden(report.fields)
+  const taken = new Map(
+    report.fields
+      .filter((field): field is Extract<FieldResolution, { action: 'take-upstream' }> => {
+        return field.action === 'take-upstream'
+      })
+      .map((field) => [field.field, field.value]),
+  )
+
+  if (taken.size === 0) return { result: { ok: true, ...outcome }, patch: null }
+
+  const next: TemplateUpstreamRecord = { ...row }
+  for (const [field, value] of taken) writeField(next, field as MergeableField, value)
+
+  const oldBase = readBase(row)
+  const upstreamNow = mergeableSnapshot(snapshot.upstream)
+  const conflicted = new Set(outcome.stillConflicted)
+  const newBase: Record<string, unknown> = {}
+  for (const field of MERGEABLE_FIELDS) {
+    newBase[field] = conflicted.has(field) ? (oldBase?.[field] ?? null) : upstreamNow[field]
+  }
+
+  next.baseSnapshotJson = JSON.stringify(newBase)
+  next.baseDigest = templateDigest(next)
+  if (conflicted.size === 0) next.upstreamVersion = snapshot.upstream.updatedAt
+  next.updatedAt = now
+
+  return {
+    result: { ok: true, ...outcome },
+    patch: {
+      description: next.description,
+      scriptsJson: next.scriptsJson,
+      hooksJson: next.hooksJson,
+      paramSchemaJson: next.paramSchemaJson,
+      paramDefaultsJson: next.paramDefaultsJson,
+      agentBySlotJson: next.agentBySlotJson,
+      promptBySlotJson: next.promptBySlotJson,
+      paramsJson: next.paramsJson,
+      stageContractVer: next.stageContractVer,
+      upstreamVersion: next.upstreamVersion,
+      baseDigest: next.baseDigest,
+      baseSnapshotJson: next.baseSnapshotJson,
+      updatedAt: next.updatedAt,
+    },
+  }
+}
+
+function projectUpstreamReport(
+  row: TemplateUpstreamRecord,
+  upstream: TemplateUpstreamRecord | null,
+): UpstreamReport {
   if (row.upstreamId === null || row.upstreamVersion === null || row.baseDigest === null) {
     return { link: null, status: null, upstreamName: null, fields: [], baseRecorded: false }
   }
 
   const link = { upstreamId: row.upstreamId, upstreamVersion: row.upstreamVersion }
-  const upstream = await getRow(db, row.upstreamId)
   const local = mergeableSnapshot(row)
   const base = readBase(row)
 
   if (upstream === null) {
-    // Orphaned. No comparison is possible and none is offered — reporting
-    // fields here would invite a merge against a row that is gone.
     return {
       link,
       status: judgeUpstream({
@@ -96,13 +207,6 @@ export async function readUpstreamReport(db: DbClient, row: TemplateRow): Promis
   const fields = resolveThreeWay(
     MERGEABLE_FIELDS.map((field) => ({
       field,
-      // With no recorded base, the stand-in is a value equal to NEITHER side.
-      // `resolveThreeWay` then reads both as changed, which lands on
-      // `conflict` for every real difference and `unchanged` wherever the two
-      // already agree — the honest answer when we cannot prove who moved.
-      // Standing in with LOCAL would be the tempting alternative and it is
-      // wrong in the dangerous direction: every difference would read
-      // `take-upstream` and a merge would silently overwrite local edits.
       base: base === null ? NO_BASE : base[field],
       upstream: upstreamNow[field],
       local: local[field],
@@ -116,8 +220,8 @@ export async function readUpstreamReport(db: DbClient, row: TemplateRow): Promis
       upstreamVersionNow: upstream.updatedAt,
       localDigest: templateDigest(row),
       localOverrides: fields
-        .filter((f) => f.action === 'keep-local' || f.action === 'conflict')
-        .map((f) => f.field),
+        .filter((field) => field.action === 'keep-local' || field.action === 'conflict')
+        .map((field) => field.field),
     }),
     upstreamName: upstream.name,
     fields,
@@ -125,104 +229,48 @@ export async function readUpstreamReport(db: DbClient, row: TemplateRow): Promis
   }
 }
 
-export interface MergeOutcome {
-  applied: readonly string[]
-  keptLocal: readonly string[]
-  stillConflicted: readonly string[]
-}
-
-/**
- * Take everything upstream changed that we did not, and nothing else.
- *
- * Conflicts are deliberately left as they are. Applying one would discard the
- * local change that was the reason for copying; there is no safe automatic
- * answer, which is why the domain function has never had a `force` flag.
- *
- * ## Where the new base comes from, which took two tries to get right
- *
- * The obvious move — record the merged LOCAL row as the new base — is wrong,
- * and wrong in a way that only shows up on the second read. A field we
- * deliberately kept would then have a base equal to our value and an upstream
- * still holding theirs, so the next comparison reads it as "upstream changed
- * this, we did not" and offers to undo the very override we just protected.
- *
- * The base is a common ANCESTOR, so it has to move to UPSTREAM's values —
- * except on the fields still in conflict, which keep the old base precisely so
- * they stay in conflict. Advancing them would resolve, silently and in
- * upstream's favour, exactly the disagreements a person was asked to settle.
- *
- * `upstreamVersion` moves only when nothing is left in conflict, for the same
- * reason: with an outstanding conflict the copy is not up to date, and saying
- * `current` would retire the badge with the disagreement still open.
- */
-export async function mergeFromUpstream(
-  db: DbClient,
-  row: TemplateRow,
-  actor: Actor,
-  now: number = Date.now(),
-): Promise<
-  | { ok: false; code: 'no-upstream' | 'upstream-gone' | 'scripts-forbidden' }
-  | ({ ok: true } & MergeOutcome)
-> {
-  // The hole this closes: a merge applies upstream's `scripts`, and scripts run
-  // as the daemon. Without this, "update from upstream" would be a way to
-  // install a script body without the grant authoring one requires — pick an
-  // upstream whose scripts you like, press update. Checked HERE rather than at
-  // the route so a second caller cannot become a way around it, exactly as
-  // `assertTemplateFieldsAllowed` is checked in the service.
-  if (!mayReadScripts(actor)) return { ok: false, code: 'scripts-forbidden' }
-  if (row.upstreamId === null || row.upstreamVersion === null)
-    return { ok: false, code: 'no-upstream' }
-  const upstream = await getRow(db, row.upstreamId)
-  if (upstream === null) return { ok: false, code: 'upstream-gone' }
-
-  const report = await readUpstreamReport(db, row)
-  const outcome = mergeUnoverridden(report.fields)
-  const taken = new Map(
-    report.fields
-      .filter((f): f is Extract<FieldResolution, { action: 'take-upstream' }> => {
-        return f.action === 'take-upstream'
-      })
-      .map((f) => [f.field, f.value]),
-  )
-
-  // Nothing to take is a genuine no-op, written as one. A merge that took
-  // nothing but still advanced the base would resolve every conflict by
-  // forgetting it — and that is the state a copy with no recorded base is
-  // always in, which is why that case must not reach a write at all.
-  if (taken.size === 0) return { ok: true, ...outcome }
-
-  const next = { ...row }
-  for (const [field, value] of taken) {
-    writeField(next, field as MergeableField, value)
-  }
-
-  const oldBase = readBase(row)
-  const upstreamNow = mergeableSnapshot(upstream)
-  const conflicted = new Set(outcome.stillConflicted)
-  const newBase: Record<string, unknown> = {}
-  for (const field of MERGEABLE_FIELDS) {
-    newBase[field] = conflicted.has(field) ? (oldBase?.[field] ?? null) : upstreamNow[field]
-  }
-
-  next.baseSnapshotJson = JSON.stringify(newBase)
-  next.baseDigest = templateDigest(next)
-  if (conflicted.size === 0) next.upstreamVersion = upstream.updatedAt
-  next.updatedAt = now
-
-  await db.update(capabilityTemplates).set(next).where(eq(capabilityTemplates.id, row.id))
-  return { ok: true, ...outcome }
-}
-
-/**
- * A sentinel that equals neither side, used as the base when none was recorded.
- *
- * Deliberately a value no template field can hold, so it can never accidentally
- * compare equal to a real one and turn a genuine conflict into `take-upstream`.
- */
 const NO_BASE = Symbol('no-base-recorded')
 
-function readBase(row: TemplateRow): Record<MergeableField, unknown> | null {
+function parseJson(raw: string, fallback: unknown): unknown {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return parsed === null ? fallback : parsed
+  } catch {
+    return fallback
+  }
+}
+
+function mergeableSnapshot(row: TemplateUpstreamRecord): Record<MergeableField, unknown> {
+  return {
+    description: row.description,
+    scripts: parseJson(row.scriptsJson, {}),
+    hooks: parseJson(row.hooksJson, []),
+    paramSchema: parseJson(row.paramSchemaJson, []),
+    paramDefaults: parseJson(row.paramDefaultsJson, {}),
+    agentBySlot: parseJson(row.agentBySlotJson, {}),
+    promptBySlot: parseJson(row.promptBySlotJson, {}),
+    params: parseJson(row.paramsJson, {}),
+    stageContractVer: row.stageContractVer,
+  }
+}
+
+function templateDigest(row: TemplateUpstreamRecord): string {
+  return sha256Hex(
+    JSON.stringify([
+      row.capability,
+      row.scriptsJson,
+      row.hooksJson,
+      row.paramSchemaJson,
+      row.paramDefaultsJson,
+      row.agentBySlotJson,
+      row.promptBySlotJson,
+      row.paramsJson,
+      row.stageContractVer,
+    ]),
+  )
+}
+
+function readBase(row: TemplateUpstreamRecord): Record<MergeableField, unknown> | null {
   if (row.baseSnapshotJson === null) return null
   try {
     const parsed: unknown = JSON.parse(row.baseSnapshotJson)
@@ -237,10 +285,12 @@ function changedFields(
   base: Record<MergeableField, unknown>,
   local: Record<MergeableField, unknown>,
 ): string[] {
-  return MERGEABLE_FIELDS.filter((f) => JSON.stringify(base[f]) !== JSON.stringify(local[f]))
+  return MERGEABLE_FIELDS.filter((field) => {
+    return JSON.stringify(base[field]) !== JSON.stringify(local[field])
+  })
 }
 
-function writeField(row: TemplateRow, field: MergeableField, value: unknown): void {
+function writeField(row: TemplateUpstreamRecord, field: MergeableField, value: unknown): void {
   switch (field) {
     case 'description':
       row.description = typeof value === 'string' ? value : null
@@ -270,12 +320,4 @@ function writeField(row: TemplateRow, field: MergeableField, value: unknown): vo
       row.stageContractVer = typeof value === 'number' ? value : row.stageContractVer
       return
   }
-}
-
-async function getRow(db: DbClient, id: string): Promise<TemplateRow | null> {
-  return (
-    (
-      await db.select().from(capabilityTemplates).where(eq(capabilityTemplates.id, id)).limit(1)
-    )[0] ?? null
-  )
 }

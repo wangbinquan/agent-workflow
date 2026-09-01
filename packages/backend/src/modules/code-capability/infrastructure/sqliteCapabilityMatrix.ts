@@ -24,10 +24,17 @@
 import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import { repoCapabilityConfig } from '@/db/schema'
+import { gatherReadinessFacts } from '@/modules/code-capability/application/readinessFacts'
+import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
+import type {
+  CapabilityMatrixReadPort,
+  CapabilityMatrixReadRow,
+} from '@/modules/code-capability/application/ports/capabilityMatrixRead'
 import {
   type ReadinessIssue,
   type ReadinessState,
 } from '@/modules/code-capability/domain/templateLayers'
+import { createSqliteReadinessFactsRead } from './sqliteReadinessFactsRead'
 
 export interface CapabilityCell {
   id: string
@@ -71,4 +78,34 @@ export async function listCapabilityCells(db: DbClient, repoId: string): Promise
     .from(repoCapabilityConfig)
     .where(eq(repoCapabilityConfig.repoId, repoId))
   return rows.map(toCell)
+}
+
+export function createSqliteCapabilityMatrixRead(db: DbClient): CapabilityMatrixReadPort {
+  const readiness = createSqliteReadinessFactsRead(db)
+  return {
+    async loadForRepo(repoId) {
+      const cells = await listCapabilityCells(db, repoId)
+      if (cells.length === 0) return []
+      const endpoint = await resolveRepoEndpoint(readiness.repoEndpoints, repoId)
+      return await Promise.all(
+        cells.map(
+          async (cell): Promise<CapabilityMatrixReadRow> => ({
+            repoId: cell.repoId,
+            capability: cell.capability,
+            templateId: cell.templateId,
+            enabled: cell.enabled,
+            facts: await gatherReadinessFacts({
+              reader: readiness,
+              repoId,
+              capability: cell.capability,
+              endpointId: endpoint.ok ? endpoint.endpointId : '',
+              templateId: cell.templateId,
+              enabled: cell.enabled,
+              ...(endpoint.ok ? { provider: endpoint.provider } : {}),
+            }),
+          }),
+        ),
+      )
+    },
+  }
 }

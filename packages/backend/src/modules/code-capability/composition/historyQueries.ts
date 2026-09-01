@@ -11,11 +11,22 @@ import {
   type CodeDeliveryChainQuery,
 } from '@/modules/code-capability/application/codeMatrixQuery'
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
+import {
+  createTemplateUpstreamOperations,
+  type TemplateUpstreamOperations,
+} from '@/modules/code-capability/application/templateUpstreamStatus'
 import { createPostgresqlCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/postgresqlCapabilityMatrixRead'
-import { createPostgresqlCodeMetricsQuery } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
+import { createPostgresqlCodeMetricsRead } from '@/modules/code-capability/infrastructure/postgresqlCodeMetricsQuery'
 import { createPostgresqlDeliveryChainRead } from '@/modules/code-capability/infrastructure/postgresqlDeliveryChain'
 import { createPostgresqlRoundAttemptsRead } from '@/modules/code-capability/infrastructure/postgresqlRoundAttemptsRead'
+import { createPostgresqlTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/postgresqlTemplateUpstreamPersistence'
 import { createPostgresqlWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/postgresqlWorkItemProjectionRead'
+import { createSqliteCapabilityMatrixRead } from '@/modules/code-capability/infrastructure/sqliteCapabilityMatrix'
+import { createSqliteCodeMetricsRead } from '@/modules/code-capability/infrastructure/sqliteCodeMetricsRead'
+import { createSqliteDeliveryChainRead } from '@/modules/code-capability/infrastructure/sqliteDeliveryChain'
+import { createSqliteRoundAttemptsRead } from '@/modules/code-capability/infrastructure/sqliteRoundAttemptsRead'
+import { createSqliteTemplateUpstreamPersistence } from '@/modules/code-capability/infrastructure/sqliteTemplateUpstreamPersistence'
+import { createSqliteWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/sqliteWorkItemProjectionRead'
 import type {
   CodeMetricsQuery,
   CodeMatrixQuery,
@@ -30,15 +41,17 @@ export interface CodeHistoryQueries {
   readonly attempts: CodeRoundAttemptsQuery
   readonly deliveries: CodeDeliveryChainQuery
   readonly metrics: CodeMetricsQuery
+  readonly templateUpstream: TemplateUpstreamOperations
 }
 
 export function composeSqliteCodeHistoryQueries(db: DbClient): CodeHistoryQueries {
   return Object.freeze({
-    matrix: createCodeMatrixQuery(db),
-    workItems: createCodeWorkItemProjectionQuery(db),
-    attempts: createCodeRoundAttemptsQuery(db),
-    deliveries: createCodeDeliveryChainQuery(db),
-    metrics: createCodeMetricsQuery(db),
+    matrix: createCodeMatrixQuery(createSqliteCapabilityMatrixRead(db)),
+    workItems: createCodeWorkItemProjectionQuery(createSqliteWorkItemProjectionRead(db)),
+    attempts: createCodeRoundAttemptsQuery(createSqliteRoundAttemptsRead(db)),
+    deliveries: createCodeDeliveryChainQuery(createSqliteDeliveryChainRead(db)),
+    metrics: createCodeMetricsQuery(createSqliteCodeMetricsRead(db)),
+    templateUpstream: createTemplateUpstreamOperations(createSqliteTemplateUpstreamPersistence(db)),
   })
 }
 
@@ -50,6 +63,9 @@ export function composePostgresqlCodeHistoryQueries(
     workItems: createCodeWorkItemProjectionQuery(createPostgresqlWorkItemProjectionRead(db)),
     attempts: createCodeRoundAttemptsQuery(createPostgresqlRoundAttemptsRead(db)),
     deliveries: createCodeDeliveryChainQuery(createPostgresqlDeliveryChainRead(db)),
-    metrics: createPostgresqlCodeMetricsQuery(db),
+    metrics: createCodeMetricsQuery(createPostgresqlCodeMetricsRead(db)),
+    templateUpstream: createTemplateUpstreamOperations(
+      createPostgresqlTemplateUpstreamPersistence(db),
+    ),
   })
 }

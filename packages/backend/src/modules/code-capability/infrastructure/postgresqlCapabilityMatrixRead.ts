@@ -6,15 +6,7 @@
 
 import { and, eq, inArray } from 'drizzle-orm'
 
-import {
-  agents,
-  cachedRepos,
-  capabilityTemplates,
-  codeHostConnections,
-  repoCapabilityConfig,
-  webhookEndpoints,
-  webhookTriggers,
-} from '@/db/schema'
+import { agents, capabilityTemplates, repoCapabilityConfig, webhookTriggers } from '@/db/schema'
 import type {
   CapabilityMatrixReadPort,
   CapabilityMatrixReadRow,
@@ -24,30 +16,9 @@ import {
   capabilityRequiresWakeSource,
   selectCapabilityTrigger,
 } from '@/modules/code-capability/application/readinessFacts'
-import type { RepoEndpointVerdict } from '@/modules/code-capability/application/resolveRepoEndpoint'
-import {
-  resolveRepoProvider,
-  type ConnectionCandidate,
-} from '@/modules/code-capability/domain/repoProvider'
+import { resolveRepoEndpoint } from '@/modules/code-capability/application/resolveRepoEndpoint'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-
-type CodeHostProvider = 'gitlab' | 'github'
-
-interface EnabledEndpoint {
-  readonly id: string
-  readonly provider: CodeHostProvider
-}
-
-function parseStringArray(raw: string): string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === 'string')
-      : []
-  } catch {
-    return []
-  }
-}
+import { createPostgresqlRepoEndpointRead } from './postgresqlRepoEndpointRead'
 
 function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
   try {
@@ -60,61 +31,10 @@ function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
   }
 }
 
-async function resolveEndpoint(
-  db: PostgresqlDatabaseClient,
-  repoId: string,
-  endpoints: readonly EnabledEndpoint[],
-): Promise<RepoEndpointVerdict> {
-  if (endpoints.length === 0) {
-    return {
-      ok: false,
-      message:
-        'no enabled webhook endpoint is configured, so this repository has no identity to key its findings to',
-    }
-  }
-
-  const providers = [...new Set(endpoints.map((row) => row.provider))]
-  let provider: CodeHostProvider
-  if (providers.length === 1) {
-    provider = providers[0]!
-  } else {
-    const [repo] = await db
-      .select({ urlRedacted: cachedRepos.urlRedacted })
-      .from(cachedRepos)
-      .where(eq(cachedRepos.id, repoId))
-      .limit(1)
-    const rows = await db
-      .select({
-        provider: codeHostConnections.provider,
-        baseUrl: codeHostConnections.baseUrl,
-        prefixes: codeHostConnections.repositoryUrlPrefixesJson,
-      })
-      .from(codeHostConnections)
-    const candidates: ConnectionCandidate[] = rows
-      .filter((row) => providers.includes(row.provider))
-      .map((row) => ({
-        provider: row.provider,
-        baseUrl: row.baseUrl,
-        repositoryUrlPrefixes: parseStringArray(row.prefixes),
-      }))
-    const verdict = resolveRepoProvider(repo?.urlRedacted ?? null, candidates)
-    if (!verdict.ok) return verdict
-    provider = verdict.provider
-  }
-
-  const matches = endpoints.filter((row) => row.provider === provider)
-  if (matches.length !== 1) {
-    return {
-      ok: false,
-      message: `${String(matches.length)} enabled ${provider} webhook endpoints exist and this repository does not record which one delivers its events — pick one explicitly rather than keying its ledger to an arbitrary endpoint`,
-    }
-  }
-  return { ok: true, provider, endpointId: matches[0]!.id }
-}
-
 export function createPostgresqlCapabilityMatrixRead(
   db: PostgresqlDatabaseClient,
 ): CapabilityMatrixReadPort {
+  const endpointReader = createPostgresqlRepoEndpointRead(db)
   return {
     async loadForRepo(repoId) {
       const cells = await db
@@ -128,11 +48,7 @@ export function createPostgresqlCapabilityMatrixRead(
         .where(eq(repoCapabilityConfig.repoId, repoId))
       if (cells.length === 0) return []
 
-      const endpoints = await db
-        .select({ id: webhookEndpoints.id, provider: webhookEndpoints.provider })
-        .from(webhookEndpoints)
-        .where(eq(webhookEndpoints.enabled, true))
-      const endpoint = await resolveEndpoint(db, repoId, endpoints)
+      const endpoint = await resolveRepoEndpoint(endpointReader, repoId)
 
       const templateIds = [
         ...new Set(
@@ -206,10 +122,6 @@ export function createPostgresqlCapabilityMatrixRead(
           triggers.filter((candidate) => candidate.launchRefId === cell.capability),
           repoId,
         )
-        const provider = endpoint.ok ? endpoint.provider : 'gitlab'
-        const codeHostConfigured =
-          endpoints.filter((candidate) => candidate.provider === provider).length === 1
-
         return {
           repoId: cell.repoId,
           capability: cell.capability,
@@ -220,7 +132,7 @@ export function createPostgresqlCapabilityMatrixRead(
             hasBinding,
             frameworkExists: template !== undefined,
             hasTrigger: trigger !== null,
-            codeHostConfigured,
+            codeHostConfigured: endpoint.ok,
             invisibleAgentSlots,
             requiresWakeSource: capabilityRequiresWakeSource(cell.capability),
             hasWakeSource: (trigger?.events ?? []).some((event) => event.startsWith('pipeline_')),

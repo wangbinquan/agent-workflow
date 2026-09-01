@@ -23,13 +23,14 @@
 // Only when two providers both have endpoints does the repository's URL have to
 // break the tie, and only then can it fail to.
 
-import { and, eq } from 'drizzle-orm'
-import { cachedRepos, codeHostConnections, webhookEndpoints } from '@/db/schema'
+import type {
+  CodeHostProvider,
+  RepoEndpointReadPort,
+} from '@/modules/code-capability/application/ports/repoEndpointRead'
 import {
   resolveRepoProvider,
   type ConnectionCandidate,
 } from '@/modules/code-capability/domain/repoProvider'
-import type { DbClient } from '@/db/client'
 
 export type RepoEndpointVerdict =
   | { ok: true; provider: 'gitlab' | 'github'; endpointId: string }
@@ -46,13 +47,10 @@ function parseUrlPrefixes(raw: string): string[] {
 }
 
 export async function resolveRepoEndpoint(
-  db: DbClient,
+  reader: RepoEndpointReadPort,
   repoId: string,
 ): Promise<RepoEndpointVerdict> {
-  const endpoints = await db
-    .select({ id: webhookEndpoints.id, provider: webhookEndpoints.provider })
-    .from(webhookEndpoints)
-    .where(eq(webhookEndpoints.enabled, true))
+  const endpoints = await reader.listEnabledEndpoints()
 
   if (endpoints.length === 0) {
     return {
@@ -67,9 +65,7 @@ export async function resolveRepoEndpoint(
   // Unanimous endpoints answer on their own — the common deployment, and the
   // one that used to work before this resolution existed.
   const provider =
-    providers.length === 1
-      ? providers[0]!
-      : await disambiguate(db, repoId, providers as Array<'gitlab' | 'github'>)
+    providers.length === 1 ? providers[0]! : await disambiguate(reader, repoId, providers)
 
   if (typeof provider !== 'string') return provider
 
@@ -85,42 +81,33 @@ export async function resolveRepoEndpoint(
 
 /** Two providers have endpoints; the repository's URL has to decide. */
 async function disambiguate(
-  db: DbClient,
+  reader: RepoEndpointReadPort,
   repoId: string,
-  providers: ReadonlyArray<'gitlab' | 'github'>,
+  providers: ReadonlyArray<CodeHostProvider>,
 ): Promise<'gitlab' | 'github' | { ok: false; message: string }> {
-  const [repo] = await db
-    .select({ urlRedacted: cachedRepos.urlRedacted })
-    .from(cachedRepos)
-    .where(eq(cachedRepos.id, repoId))
-    .limit(1)
-
-  const connections = await db
-    .select({
-      provider: codeHostConnections.provider,
-      baseUrl: codeHostConnections.baseUrl,
-      prefixes: codeHostConnections.repositoryUrlPrefixesJson,
-    })
-    .from(codeHostConnections)
+  const [repoUrl, connections] = await Promise.all([
+    reader.readRepoUrl(repoId),
+    reader.listConnections(),
+  ])
 
   const candidates: ConnectionCandidate[] = connections
     .filter((row) => providers.includes(row.provider))
     .map((row) => ({
       provider: row.provider,
       baseUrl: row.baseUrl,
-      repositoryUrlPrefixes: parseUrlPrefixes(row.prefixes),
+      repositoryUrlPrefixes: parseUrlPrefixes(row.repositoryUrlPrefixesJson),
     }))
 
-  const verdict = resolveRepoProvider(repo?.urlRedacted ?? null, candidates)
+  const verdict = resolveRepoProvider(repoUrl, candidates)
   return verdict.ok ? verdict.provider : verdict
 }
 
 /** Kept for the readiness path, which asks the same question per capability. */
 export async function providerForRepo(
-  db: DbClient,
+  reader: RepoEndpointReadPort,
   repoId: string,
 ): Promise<'gitlab' | 'github' | null> {
-  const verdict = await resolveRepoEndpoint(db, repoId)
+  const verdict = await resolveRepoEndpoint(reader, repoId)
   return verdict.ok ? verdict.provider : null
 }
 
@@ -137,13 +124,12 @@ export async function providerForRepo(
  * gets its own parallel ledger, invisible to the one the previous rounds wrote.
  */
 export async function resolveCodeHostEndpointId(
-  db: DbClient,
-  provider: 'gitlab' | 'github',
+  reader: RepoEndpointReadPort,
+  provider: CodeHostProvider,
 ): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
-  const rows = await db
-    .select({ id: webhookEndpoints.id })
-    .from(webhookEndpoints)
-    .where(and(eq(webhookEndpoints.provider, provider), eq(webhookEndpoints.enabled, true)))
+  const rows = (await reader.listEnabledEndpoints()).filter(
+    (endpoint) => endpoint.provider === provider,
+  )
 
   if (rows.length === 1) return { ok: true, id: rows[0]!.id }
   if (rows.length === 0) {
