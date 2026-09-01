@@ -72,6 +72,7 @@ import type {
   WorkflowPackageMutation,
   WorkgroupPackageMutation,
 } from '../../public/types'
+import { PLUGIN_DISABLED_ERROR_CODE } from '../../public/types'
 import type {
   PostgresqlResourcePackageMutationRequestContext,
   PostgresqlResourcePackageTransactionReader,
@@ -290,7 +291,7 @@ async function assertAgentResourceRows(input: {
     const disabled = pluginIds.filter((id) => byId.get(id) === false)
     if (disabled.length > 0) {
       throw new ValidationError(
-        'plugin-disabled',
+        PLUGIN_DISABLED_ERROR_CODE,
         `agent references disabled plugin(s): ${disabled.join(', ')}`,
         { disabled },
       )

@@ -80,10 +80,16 @@ interface CodecSiteException {
  */
 const CODEC_SITE_EXCEPTIONS: readonly CodecSiteException[] = [
   {
-    file: 'packages/backend/src/services/review.ts',
-    why: '评审侧的分支不只是「怎么切」，还要区分**切出来的是文档正文还是工作区路径**（inlineBodies vs itemPaths，后者随后要去读文件）。它按字符串形态的 upstreamKind 判断，手上没有 ParsedKind，收进统一入口需要先把评审输入的 kind 解析面一起改。',
+    file: 'packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts',
+    why: 'SQLite 评审适配器的分支不只是「怎么切」，还要区分**切出来的是文档正文还是工作区路径**（inlineBodies vs itemPaths，后者随后要去读文件）。它按字符串形态的 upstreamKind 判断，手上没有 ParsedKind，收进统一入口需要先把评审输入的 kind 解析面一起改。',
     removeWhen:
       'RFC-317 B10 或评审域的下一个 RFC：把 review 的 upstreamKind 从字符串换成 ParsedKind，届时这里改走 splitPortItems 并把「正文/路径」的判断交给 handler 的 isReviewableBody。',
+  },
+  {
+    file: 'packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts',
+    why: 'PostgreSQL 评审适配器与 SQLite 适配器保持同一正文/路径分流语义；当前 closed persistence contract 仍只携带字符串 upstreamKind，尚不能无损改走 ParsedKind handler。',
+    removeWhen:
+      '评审输入 contract 将 upstreamKind 收窄为 ParsedKind，并把正文/路径判定下沉到共享 handler 时，两套 provider adapter 同步移除此例外。',
   },
 ]
 

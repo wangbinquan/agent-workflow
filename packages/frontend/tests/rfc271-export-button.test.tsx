@@ -311,7 +311,18 @@ describe('④ skill 页面：两个查询不同版时不得导出', () => {
 
   test('后端 content 响应确实带上了这两个数值（否则上面的判定恒为 true）', () => {
     const service = readFileSync(
-      resolve(import.meta.dirname, '..', '..', 'backend', 'src', 'services', 'skill.ts'),
+      resolve(
+        import.meta.dirname,
+        '..',
+        '..',
+        'backend',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'legacy',
+        'skill.ts',
+      ),
       'utf8',
     )
     expect(service).toContain('contentVersion: skill.contentVersion')

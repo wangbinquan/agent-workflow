@@ -55,6 +55,19 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(background).not.toContain('void runDueSchedulesOnce')
   })
 
+  test('task transport fails closed when any selected-provider dependency is absent', () => {
+    const route = read('routes/tasks.ts')
+    for (const code of [
+      'task-route-operations-not-composed',
+      'task-recovery-operations-not-composed',
+      'task-code-workspace-not-composed',
+      'task-repository-workspace-not-composed',
+      'task-change-narrative-not-composed',
+    ]) {
+      expect(route).toContain(`throw new Error('${code}')`)
+    }
+  })
+
   test('workgroup host ledger delegates Collaboration projection on the reserved transaction', () => {
     const adapter = read(
       'modules/task-execution/infrastructure/postgresqlWorkgroupHostLedgerParticipant.ts',

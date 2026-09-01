@@ -96,7 +96,10 @@ describe('validation 词条完整性', () => {
 
   test('backend workflow.validator 的每个 code 都有精确词条（防新码漏词）', () => {
     const validator = readFileSync(
-      resolve(__dirname, '../../backend/src/services/workflow.validator.ts'),
+      resolve(
+        __dirname,
+        '../../backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
+      ),
       'utf8',
     )
     const codes = [
