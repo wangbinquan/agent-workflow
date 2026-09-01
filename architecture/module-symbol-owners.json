@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2655,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25605
+    "symbolsIncludingFileRoots": 25608
   },
   "entries": [
     {
@@ -151967,6 +151967,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlSql.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlSql.ts#compilePostgresqlConflictTargets",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "compilePostgresqlConflictTargets",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/postgresqlSql.ts",
       "id": "owner:packages/backend/src/platform/persistence/postgresqlSql.ts#compilePostgresqlSql",
@@ -151985,6 +151997,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "dollarQuoteTag",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlSql.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlSql.ts#ON_CONFLICT_TARGET",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ON_CONFLICT_TARGET",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -152021,6 +152045,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "PostgresqlStatementOperation",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlSql.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlSql.ts#QUALIFIED_QUOTED_COLUMN",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "QUALIFIED_QUOTED_COLUMN",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -307932,5 +307968,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4e10ed83ace1c97e10744b6ca8c218d8019649a04fde8dadad1d77105bf80bf2"
+  "sourceDigest": "sha256:60d61405d0fd7c44b2c3f0e47195ae605e45caa57611a0226b5da77facd2d904"
 }
