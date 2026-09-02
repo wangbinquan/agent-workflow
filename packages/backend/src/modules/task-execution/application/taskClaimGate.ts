@@ -93,14 +93,19 @@ export class TaskClaimGate {
     return this.paused
   }
 
-  /** Reversible provider-session admission freeze. Existing permits drain. */
+  /**
+   * Reversible provider-session admission freeze. Existing permits drain.
+   *
+   * A sealed gate already satisfies everything pause promises — no new
+   * admissions — so pausing it is a no-op, not a conflict. Daemon shutdown
+   * seals first (graceful task drain) and only then closes the provider
+   * session, whose freeze pauses this same gate; rejecting that second call
+   * failed the whole session close, which skipped every close participant,
+   * identity shutdown and the database close (2026-09-02: every SQLite
+   * shutdown logged "failed to close daemon provider sessions").
+   */
   pause(): void {
-    if (this.sealed) {
-      throw new TaskExecutionError(
-        'task-execution-shutting-down',
-        'task execution admission is sealed for daemon shutdown',
-      )
-    }
+    if (this.sealed) return
     this.paused = true
   }
 

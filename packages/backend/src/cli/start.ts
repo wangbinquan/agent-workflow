@@ -288,6 +288,7 @@ import {
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
 } from './daemonProviderRuntimeSession'
+import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
 import {
   createLazyPausableDaemonRuntimeServiceBindings,
   createManagedWorkerRuntimeHandleFactory,
@@ -1094,7 +1095,7 @@ async function servePostgresqlDaemon(input: {
       await input.bootstrap.stop()
     } catch (error) {
       input.log.warn('PostgreSQL daemon shutdown error', {
-        error: error instanceof Error ? error.message : String(error),
+        error: describeDaemonProviderSessionFailure(error),
       })
     }
     controlListener.close()
@@ -3366,7 +3367,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       // the still-owned PID lock. PostgreSQL follows the same best-effort
       // terminal-close contract in servePostgresqlDaemon.
       log.warn('SQLite daemon shutdown error', {
-        error: error instanceof Error ? error.message : String(error),
+        error: describeDaemonProviderSessionFailure(error),
       })
     }
     // `stop` treats lock disappearance as the terminal acknowledgement. Retract

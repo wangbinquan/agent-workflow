@@ -475,12 +475,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25672,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25673,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 修复「daemon 关停必失败」——关停先 seal 任务准入、再关 provider session，而 session freeze 会 pause 同一个 claim gate，旧实现对已 seal 的 gate 抛错，close 因此在跑 close participants / identity shutdown / 数据库关闭之前就中断。诊断这条只印最外层 AggregateError message 的日志需要展开全部 cause，故新增一个导出的 describeDaemonProviderSessionFailure。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:87bb72a67499934089058910449aaa7fcf4f8c722c7e25bcaf4b7eaa593ce649",
+    "sourceDigest": "sha256:75936708431a759d35fd785230bdb46863faf8a16bfc01b3ff960a96afba1c9b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +496,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8c5402a8215fd251621e81f45c15bfe9239cabd2",
-    "contentDigest": "sha256:65cbaf647fd403372109b25b233d0725ea7b7a1f2a327146d470d8772a7e965a",
+    "currentSnapshotSha": "f663be47c1ec0981a66a2b3f1bdc9014e5e8eb4f",
+    "contentDigest": "sha256:0fdd86e079d24cfefc8a4a4ff9bf47088bf81ee4e354da18869d7f9f121f633c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

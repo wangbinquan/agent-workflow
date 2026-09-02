@@ -6,7 +6,7 @@
     "moduleFiles": 1254,
     "productionFiles": 2663,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25672
+    "symbolsIncludingFileRoots": 25673
   },
   "entries": [
     {
@@ -4077,6 +4077,18 @@
       "symbol": "DaemonProviderSessionLifecycleInput",
       "targetContext": "task-execution",
       "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderSession.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderSession.ts#describeDaemonProviderSessionFailure",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "describeDaemonProviderSessionFailure",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
     },
     {
       "currentContext": "legacy",
@@ -308735,5 +308747,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:87bb72a67499934089058910449aaa7fcf4f8c722c7e25bcaf4b7eaa593ce649"
+  "sourceDigest": "sha256:75936708431a759d35fd785230bdb46863faf8a16bfc01b3ff960a96afba1c9b"
 }

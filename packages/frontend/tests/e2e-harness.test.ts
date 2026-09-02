@@ -187,3 +187,49 @@ process.exit(1)
     expect(existsSync(externalHome)).toBe(true)
   })
 })
+
+// 2026-09-02 —— DE-07 在 CI 上以 `POST .../tools/{id}/publish returned 500
+// {"code":"internal-error"}` 红了两次，而 daemon 端那条带 stack 的
+// `unhandled error` 日志只在 `E2E_VERBOSE` 下才回显，CI 不设它：job log 和
+// trace artifact 里都没有服务端线索。harness 现在无条件回显这一类行，这些用例
+// 锁住「只挑这一类、且跨 chunk 断行也不漏」。
+describe('daemon diagnostic echo filter', () => {
+  test('emits only unhandled-error lines and leaves ordinary logs alone', () => {
+    const filter = harnessTestApi.createDaemonDiagnosticFilter()
+
+    expect(
+      filter(
+        '[2026-09-02T14:00:00.000Z] INFO  [daemon] agent-workflow ready\n' +
+          '[2026-09-02T14:00:01.000Z] WARN  [daemon] slow query ms=120\n' +
+          '[2026-09-02T14:00:02.000Z] ERROR [api] unhandled error name=TypeError message=boom\n',
+      ),
+    ).toEqual([
+      '[2026-09-02T14:00:02.000Z] ERROR [api] unhandled error name=TypeError message=boom',
+    ])
+  })
+
+  test('rejoins a record split across two chunks', () => {
+    const filter = harnessTestApi.createDaemonDiagnosticFilter()
+
+    expect(filter('[ts] ERROR [api] unhandl')).toEqual([])
+    expect(filter('ed error name=Error\n')).toEqual(['[ts] ERROR [api] unhandled error name=Error'])
+  })
+
+  test('holds an unterminated line back until its newline arrives', () => {
+    const filter = harnessTestApi.createDaemonDiagnosticFilter()
+
+    expect(filter('[ts] ERROR [api] unhandled error name=Error')).toEqual([])
+    expect(filter('\n')).toEqual(['[ts] ERROR [api] unhandled error name=Error'])
+  })
+
+  test('drops an unbounded carry instead of growing it forever', () => {
+    const filter = harnessTestApi.createDaemonDiagnosticFilter()
+
+    expect(filter('x'.repeat(70 * 1024))).toEqual([])
+    // The oversized carry was discarded, so the next newline closes only what
+    // arrived after it.
+    expect(filter('[ts] ERROR [api] unhandled error name=Error\n')).toEqual([
+      '[ts] ERROR [api] unhandled error name=Error',
+    ])
+  })
+})

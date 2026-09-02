@@ -68,6 +68,37 @@ function describeSession(session: ManagedDaemonProviderSession): string {
   return `${session.provider}/${session.generationId}`
 }
 
+/**
+ * Flatten one provider-session failure into a single diagnostic line.
+ *
+ * Close failures arrive as nested `AggregateError`s: session stop wraps the
+ * per-session close, which wraps the runtime freeze, which wraps each handle's
+ * own stop/drain rejection. Logging only the outermost `message` prints
+ * "failed to close daemon provider sessions" and drops every cause, which is
+ * exactly the level at which an operator learns nothing (2026-09-02: every
+ * SQLite shutdown logged that line with no way to tell which participant
+ * failed). Callers log this instead of `error.message`.
+ */
+export function describeDaemonProviderSessionFailure(error: unknown): string {
+  const seen = new Set<unknown>()
+  const describe = (value: unknown): string => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) return '<circular>'
+      seen.add(value)
+    }
+    if (value instanceof AggregateError) {
+      const causes = value.errors.map(describe).filter((line) => line.length > 0)
+      return causes.length === 0 ? value.message : `${value.message}: [${causes.join('; ')}]`
+    }
+    if (value instanceof Error) {
+      const own = `${value.name}: ${value.message}`
+      return value.cause === undefined ? own : `${own} <- ${describe(value.cause)}`
+    }
+    return String(value)
+  }
+  return describe(error)
+}
+
 function assertSessionMatches(
   session: ManagedDaemonProviderSession,
   input: DaemonProviderSessionLifecycleInput,

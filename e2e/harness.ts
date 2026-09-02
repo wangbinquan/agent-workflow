@@ -393,6 +393,37 @@ function mockNpmRegistryEnv(home: string): Record<string, string> {
   return { npm_config_registry: registry, npm_config_cache: join(home, '.npm-cache') }
 }
 
+/**
+ * A daemon log line the failing spec almost always needs, and that CI throws
+ * away today.
+ *
+ * `packages/backend/src/util/errors.ts` maps every unmapped throw to a 500
+ * `{"code":"internal-error"}` and logs `unhandled error` with the stack — but
+ * the harness only echoes daemon output under `E2E_VERBOSE`, which CI does not
+ * set. A CI-only 500 therefore arrives as an opaque response body with no
+ * server-side trace anywhere in the job log or the trace artifact (2026-09-02:
+ * DE-07's `POST .../tools/{id}/publish` 500 on ubuntu shard 2/3 was
+ * undiagnosable for exactly this reason). Echoing just these lines keeps the
+ * default log quiet while making the next occurrence explain itself.
+ *
+ * The daemon renders one log record per line (`formatHuman` JSON-escapes field
+ * values, so even a stack stays on one line), so the filter is line-based and
+ * carries the partial trailing line between chunks.
+ */
+const DAEMON_DIAGNOSTIC_LINE = /\bERROR\b.*unhandled error/
+/** Cap the carry-over so a daemon that never emits a newline cannot grow it. */
+const DAEMON_DIAGNOSTIC_CARRY_LIMIT = 64 * 1024
+
+function createDaemonDiagnosticFilter(): (chunk: string) => string[] {
+  let carry = ''
+  return (chunk: string): string[] => {
+    const lines = (carry + chunk).split('\n')
+    carry = lines.pop() ?? ''
+    if (carry.length > DAEMON_DIAGNOSTIC_CARRY_LIMIT) carry = ''
+    return lines.filter((line) => DAEMON_DIAGNOSTIC_LINE.test(line))
+  }
+}
+
 interface ReadyDaemon {
   baseUrl: string
   bootstrapToken: string | null
@@ -402,6 +433,7 @@ async function waitForDaemonReady(
   child: DaemonChild,
   readyTimeoutMs = READY_TIMEOUT_MS,
   outputTail: DaemonOutputTail = { stdout: '', stderr: '' },
+  echoDiagnostics: (chunk: string) => void = () => {},
 ): Promise<ReadyDaemon> {
   child.stderr.setEncoding('utf-8')
   child.stdout.setEncoding('utf-8')
@@ -428,6 +460,7 @@ async function waitForDaemonReady(
 
     const onData = (chunk: string): void => {
       if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
+      echoDiagnostics(chunk)
       outputTail.stdout = appendOutputTail(outputTail.stdout, chunk)
       const match = outputTail.stdout.match(
         /agent-workflow ready[^\n]*\n\s+(https?:\/\/[^\s?]+)(?:\?token=([A-Za-z0-9]+))?\r?\n/,
@@ -603,6 +636,12 @@ async function startDaemonWithPortAllocator(
     for (let attempt = 1; attempt <= DAEMON_START_ATTEMPTS; attempt += 1) {
       const bindPort = await portAllocator()
       const outputTail: DaemonOutputTail = { stdout: '', stderr: '' }
+      // One filter per attempt: a restarted daemon starts a fresh line carry.
+      const diagnosticFilter = createDaemonDiagnosticFilter()
+      const echoDaemonDiagnostics = (chunk: string): void => {
+        if (process.env.E2E_VERBOSE) return
+        for (const line of diagnosticFilter(chunk)) process.stderr.write(`[daemon error] ${line}\n`)
+      }
 
       // Pre-seed config.json so the daemon picks the stub binary on its
       // version-probe path — no PATH gymnastics required. Re-write it on each
@@ -664,7 +703,12 @@ async function startDaemonWithPortAllocator(
       child = attemptChild
 
       try {
-        const ready = await waitForDaemonReady(attemptChild, opts.readyTimeoutMs, outputTail)
+        const ready = await waitForDaemonReady(
+          attemptChild,
+          opts.readyTimeoutMs,
+          outputTail,
+          echoDaemonDiagnostics,
+        )
 
         const token =
           opts.authMode === 'bootstrap'
@@ -693,6 +737,7 @@ async function startDaemonWithPortAllocator(
         attemptChild.stdout.on('data', (chunk: string) => {
           outputTail.stdout = appendOutputTail(outputTail.stdout, chunk)
           if (process.env.E2E_VERBOSE) process.stdout.write(`[daemon stdout] ${chunk}`)
+          echoDaemonDiagnostics(chunk)
         })
 
         const startedChild = attemptChild
@@ -782,4 +827,5 @@ export async function startDaemon(opts: SpawnOptions = {}): Promise<DaemonHandle
 export const harnessTestApi = {
   e2eAdmin: E2E_ADMIN,
   startDaemonWithPortAllocator,
+  createDaemonDiagnosticFilter,
 }

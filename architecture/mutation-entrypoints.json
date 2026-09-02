@@ -45702,7 +45702,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:87bb72a67499934089058910449aaa7fcf4f8c722c7e25bcaf4b7eaa593ce649",
+  "sourceDigest": "sha256:75936708431a759d35fd785230bdb46863faf8a16bfc01b3ff960a96afba1c9b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
