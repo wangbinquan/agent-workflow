@@ -8,14 +8,25 @@
 // the daemon keeps serving; WAL isolates it from concurrent writers and the
 // periodic checkpoint loop absorbs the WAL growth afterwards.
 
-import { vacuumSqliteInto } from '@/platform/persistence/sqlite/systemBackupVacuum'
+import {
+  quickCheckSqlite,
+  vacuumSqliteInto,
+} from '@/platform/persistence/sqlite/systemBackupVacuum'
 
 declare const self: Worker
 
-self.onmessage = (event: MessageEvent<{ dbPath: string; dest: string }>) => {
-  const { dbPath, dest } = event.data
+/**
+ * RFC-349 —— 同一个 worker 也承担 `PRAGMA quick_check`。它同样要把整个多 GB 文件
+ * 读一遍（本机 4.2GB 实测 4.4 秒），同样是同步的，同样不能留在主线程上。
+ */
+export type BackupVacuumWorkerRequest =
+  | { readonly dbPath: string; readonly dest: string }
+  | { readonly quickCheckPath: string }
+
+self.onmessage = (event: MessageEvent<BackupVacuumWorkerRequest>) => {
   try {
-    vacuumSqliteInto({ dbPath, dest })
+    if ('quickCheckPath' in event.data) quickCheckSqlite({ dbPath: event.data.quickCheckPath })
+    else vacuumSqliteInto({ dbPath: event.data.dbPath, dest: event.data.dest })
     postMessage({ ok: true as const })
   } catch (error) {
     postMessage({

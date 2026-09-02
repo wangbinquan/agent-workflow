@@ -5443,9 +5443,9 @@
   "denominator": {
     "ambientWiring": 493,
     "disabled": 11,
-    "entries": 366,
+    "entries": 367,
     "executionLocal": 52,
-    "longRunning": 82,
+    "longRunning": 83,
     "managed": 11,
     "periodic": 221
   },
@@ -10537,7 +10537,7 @@
       "dependencies": [],
       "file": "packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts#vacuumIntoWorker",
+      "id": "background:packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts#runBackupWorker",
       "kind": "long-running",
       "lifecycle": {
         "health": false,
@@ -10545,6 +10545,27 @@
         "run": false,
         "start": false,
         "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts#runBackupWorker",
+      "phase": "unknown",
+      "symbol": "runBackupWorker",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts#vacuumIntoWorker",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
         "stop": false
       },
       "lifetime": "daemon",
@@ -13532,5 +13553,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fd6cb5df27159ce63aecdcb76cbfe58fa8f54600a046c9f5870987be06a15f67"
+  "sourceDigest": "sha256:895f0fb015acc02616322b1b1af0266b2b8e1e9de450449a7a268f049ad8c921"
 }

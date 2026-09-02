@@ -32,6 +32,7 @@ import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { stringifyWorkflowYaml } from '@/services/workflow.yaml'
 import { listWorkflows } from '@/services/workflow'
+import { quickCheckSqlite } from './systemBackupVacuum'
 import { captureWorktrees } from './systemWorktreeBackup'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -57,7 +58,7 @@ const BACKUP_VACUUM_WORKER_ENTRY =
  *  加为额外入口(见 scripts/build-binary.ts 的 WORKER_ENTRIES);②这里对**任何**
  *  worker 失败都回落到同线程 VACUUM INTO——丢的只是「不冻结主线程」这个优化,
  *  绝不丢备份本身。 */
-function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
+function runBackupWorker(request: unknown, label: string): Promise<void> {
   const worker = new Worker(BACKUP_VACUUM_WORKER_ENTRY)
   return new Promise<void>((resolvePromise, rejectPromise) => {
     const settle = (fn: () => void): void => {
@@ -66,13 +67,17 @@ function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
     }
     worker.onmessage = (event: MessageEvent<{ ok: boolean; error?: string }>) => {
       if (event.data.ok) settle(() => resolvePromise())
-      else settle(() => rejectPromise(new Error(`backup vacuum failed: ${event.data.error}`)))
+      else settle(() => rejectPromise(new Error(`backup ${label} failed: ${event.data.error}`)))
     }
     worker.onerror = (event) => {
-      settle(() => rejectPromise(new Error(`backup vacuum worker error: ${event.message}`)))
+      settle(() => rejectPromise(new Error(`backup ${label} worker error: ${event.message}`)))
     }
-    worker.postMessage({ dbPath, dest })
+    worker.postMessage(request)
   })
+}
+
+function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
+  return runBackupWorker({ dbPath, dest }, 'vacuum')
 }
 
 /** RFC-311 实现门 P0-2:备份的只读快照会在库上持续 30–90 秒,而 C5 把 WAL
@@ -83,6 +88,35 @@ function vacuumIntoWorker(dbPath: string, dest: string): Promise<void> {
 let activeDbSnapshots = 0
 export function isDbSnapshotInProgress(): boolean {
   return activeDbSnapshots > 0
+}
+
+/**
+ * RFC-349 —— `PRAGMA quick_check` 也走 worker。
+ *
+ * 它要把整个多 GB 文件读一遍（本机 4.2GB 实测 4.4 秒）且 bun:sqlite 是同步的，
+ * 留在主线程上就是全站冻结这么久。一次数据库迁移的安全备份原本要跑两遍
+ * （临时文件一遍、改名后的目标一遍），本机全量取证实测 daemon 事件循环停顿 18.1 秒、
+ * 托管 Linux 上 11.1 秒，期间 100 个客户端的 status 轮询集体超时。
+ *
+ * 回落规则与 `vacuumIntoOffThread` 一致（RFC-311 P0-2）：worker 起不来就在主线程上
+ * 跑同一条校验——丢的只是「不冻结主线程」这个优化，**校验本身绝不能没**。
+ */
+export async function quickCheckOffThread(dbPath: string): Promise<{ offThread: boolean }> {
+  activeDbSnapshots += 1
+  try {
+    await runBackupWorker({ quickCheckPath: dbPath }, 'quick-check')
+    return { offThread: true }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('backup quick-check failed:'))
+      throw error
+    log.warn('backup quick-check worker unavailable; falling back to the main thread', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    quickCheckSqlite({ dbPath })
+    return { offThread: false }
+  } finally {
+    activeDbSnapshots -= 1
+  }
 }
 
 export async function vacuumIntoOffThread(

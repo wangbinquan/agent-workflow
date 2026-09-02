@@ -16204,6 +16204,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2d6088b27f3954ef801e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-E",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/backup.ts#$file",
+      "toPath": "packages/backend/src/services/backup.ts",
+      "toSymbol": "quickCheckOffThread",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "fromPath": "packages/backend/src/services/resourceAcl.ts",
       "fromSymbol": "$file",
@@ -88997,9 +89014,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5235,
+    "architectureExceptions": 5236,
     "implementationSccs": 0,
-    "observedEdges": 6290,
+    "observedEdges": 6291,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -107198,6 +107215,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#HealthDatabaseReadModel"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup.ts#$file",
+      "id": "import:2d6088b27f3954ef801e",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-E",
+      "role": "legacy-outbound",
+      "specifier": "@/services/backup",
+      "syntax": "static-import",
+      "targetSymbol": "quickCheckOffThread",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/backup.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/backup.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -190185,7 +190218,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fd6cb5df27159ce63aecdcb76cbfe58fa8f54600a046c9f5870987be06a15f67",
+  "sourceDigest": "sha256:895f0fb015acc02616322b1b1af0266b2b8e1e9de450449a7a268f049ad8c921",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

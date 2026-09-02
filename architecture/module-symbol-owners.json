@@ -6,7 +6,7 @@
     "moduleFiles": 1254,
     "productionFiles": 2664,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25667
+    "symbolsIncludingFileRoots": 25671
   },
   "entries": [
     {
@@ -154308,6 +154308,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqlite/systemBackupVacuum.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemBackupVacuum.ts#quickCheckSqlite",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "quickCheckSqlite",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqlite/systemBackupVacuum.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqlite/systemBackupVacuum.ts#vacuumSqliteInto",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -155392,6 +155404,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "log",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts#quickCheckOffThread",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "quickCheckOffThread",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqlite/systemProviderBackup.ts#runBackupWorker",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "runBackupWorker",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -164728,6 +164764,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/backupVacuumWorker.ts",
+      "id": "owner:packages/backend/src/services/backupVacuumWorker.ts#BackupVacuumWorkerRequest",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "BackupVacuumWorkerRequest",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -308675,5 +308723,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fd6cb5df27159ce63aecdcb76cbfe58fa8f54600a046c9f5870987be06a15f67"
+  "sourceDigest": "sha256:895f0fb015acc02616322b1b1af0266b2b8e1e9de450449a7a268f049ad8c921"
 }
