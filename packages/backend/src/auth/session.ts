@@ -286,6 +286,33 @@ export function admitDaemonIdentity(
   return identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
 }
 
+/**
+ * Admit the owner of durable work the daemon is resuming on their behalf.
+ *
+ * The evidence is the durable row itself: the owner committed this work through
+ * an authenticated request, the daemon died before finishing it, and boot
+ * recovery has to finish it for them.  There is no live token to re-present, so
+ * `resolveIdentity` cannot help — but the work still has to run **as the owner**,
+ * because everything it touches is filtered by that account's visibility.
+ *
+ * `fromSession` is deliberate and matches `localOperator.forLegacyHttpUser`,
+ * which made the same choice for the same reason ("preserves session semantics
+ * so self-role and audit guards continue to see the acting account").  Unlike
+ * that seam this one mints a **registered direct authority**, which is what the
+ * RFC-345 Resource Catalog requires: `authorityForLegacyProjection` only
+ * resolves a projection the registry itself minted, so hand-built actors fail
+ * with `foreign-legacy-actor-projection`.
+ *
+ * A disabled or deleted account resolves to null; the caller must skip that row
+ * rather than fall back to some other identity.
+ */
+export function admitDurableWorkOwner(
+  identityAccess: DirectAuthorityAdmissionRuntime,
+  ownerUserId: string,
+): Promise<DirectAuthorityIdentity | null> {
+  return identityAccess.directAuthority.fromSession(admittedSessionCredential(ownerUserId))
+}
+
 export async function resolveActor(
   authOrDb: AuthRuntime | LegacySqliteAuthRuntimeInput,
   raw: string,

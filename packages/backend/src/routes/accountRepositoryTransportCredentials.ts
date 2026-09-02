@@ -16,6 +16,7 @@ import {
   type TestOwnCodeHostPushCredentialRequest,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
+import type { CurrentSubjectAccessResolver } from '@/modules/identity-access/public/participants'
 import {
   RepositoryTransportCredentialError,
   type OwnRepositoryCredentialSubject,
@@ -72,9 +73,9 @@ interface AccountRepositoryTransportCredentials {
 
 export interface AccountRepositoryTransportCredentialRouteDeps {
   readonly credentials: AccountRepositoryTransportCredentials
-  readonly currentSubjects: {
-    resolveCurrentSubject(userId: string): Promise<{ readonly userId: string } | null>
-  }
+  /** identity-access owns this port; re-declaring its shape here only hid the
+   *  fact that the route already depends on it. */
+  readonly currentSubjects: CurrentSubjectAccessResolver
 }
 
 export interface AccountRepositoryTransportCredentialRuntimeDeps {

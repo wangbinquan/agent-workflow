@@ -7,10 +7,7 @@ import type {
   IntentPersistence,
   IntentTurnRuntimeResolver,
 } from '@/modules/intent/public/operations'
-import type {
-  CurrentSubjectAccessResolver,
-  LegacyActorProjectionFactory,
-} from '@/modules/identity-access/public/participants'
+import { admitDurableWorkOwner, type DirectAuthorityAdmissionRuntime } from '@/auth/session'
 import type { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
@@ -27,10 +24,9 @@ const log = createLogger('intentDispatcher')
 
 export interface IntentDispatchDeps {
   persistence: IntentPersistence
-  identityAccess: Readonly<{
-    resolveAuthority: CurrentSubjectAccessResolver
-    legacyProjection: LegacyActorProjectionFactory
-  }>
+  /** Boot recovery re-admits each session's owner through this seam; see
+   *  `admitDurableWorkOwner`. */
+  identityAccess: DirectAuthorityAdmissionRuntime
   appHome: string
   configSnapshot: ReturnType<typeof loadConfig>
   runtimeResolver: IntentTurnRuntimeResolver
@@ -180,14 +176,13 @@ export async function resumeQueuedIntentWorkingSets(
   for (const { sessionId } of queued) {
     const session = await deps.persistence.findSession(sessionId)
     if (session === null) continue
-    const current = await deps.identityAccess.resolveAuthority.resolveCurrentSubject(
-      session.ownerUserId,
-    )
-    const actor =
-      current === null
-        ? null
-        : (deps.identityAccess.legacyProjection.fromResolvedSubject(current) as unknown as Actor)
-    if (actor === null) continue
+    // The owner has to be re-admitted, not hand-projected: `resourceCatalogFor`
+    // resolves the actor back to its registered authority (RFC-345), and a
+    // projection the registry never minted throws `foreign-legacy-actor-projection`
+    // — which is exactly how every queued successor silently died after a crash.
+    const admitted = await admitDurableWorkOwner(deps.identityAccess, session.ownerUserId)
+    if (admitted === null) continue
+    const actor = admitted.actor as unknown as Actor
     const next = await activateIntentWorkingSetChange(
       deps.persistence,
       intentResourceVisibility(deps.resourceCatalogFor(actor)),

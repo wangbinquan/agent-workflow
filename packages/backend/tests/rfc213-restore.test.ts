@@ -15,7 +15,7 @@
 //   - remove the incoming quick_check → corrupt-incoming test swaps in garbage → red.
 //   - invert computeRestoreDirection → downgrade test accepts a newer backup → red.
 
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -40,6 +40,13 @@ import { writePidFileForTest } from '../src/util/lock'
 import { appVersion } from '../src/util/version'
 import { extractTarGz, tarGz } from '../src/util/archive'
 import { restoreSqliteBackupForTest as restoreBackup } from './helpers/sqlitePostRestoreRecovery'
+
+// 预算而非性能门：本文件每条用例都在做真实 I/O —— seed → backup(tar+gzip) →
+// restore(解包 + swap + 迁移)，本机各 ~0.5s。bun 默认的 5s 上限对这种形状太紧：
+// CI 上四分片同跑时 `--no-safety-backup` 那条整整卡满 5008ms 而红
+//（run 33583792341，ubuntu shard 4/4），本机在负载下也复现过。这里给整份文件
+// 一个说得出理由的预算，而不是把「重跑就过了」当通过依据；真挂住的用例照样会红。
+setDefaultTimeout(30_000)
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

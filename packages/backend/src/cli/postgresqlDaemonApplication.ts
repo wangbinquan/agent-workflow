@@ -1485,10 +1485,7 @@ export async function composePostgresqlDaemonApplication(
   })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
-    identityAccess: Object.freeze({
-      resolveAuthority: identityAccess.resolveAuthority,
-      legacyProjection: identityAccess.legacyProjection,
-    }),
+    identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: input.appHome,
     runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
     dumpAuxiliary: intentDumpAuxiliary,

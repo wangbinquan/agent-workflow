@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 851,
+    "consumers": 850,
     "exactEntrypointFiles": 61,
     "governedFieldSurfaces": 5,
-    "methods": 885,
+    "methods": 884,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18889,
-    "symbols": 946
+    "recursiveFields": 18861,
+    "symbols": 945
   },
   "entries": [
     {
@@ -47540,7 +47540,6 @@
         "public:identity-access:participants:DirectAuthorityBinding",
         "public:identity-access:participants:DirectAuthorityIdentity",
         "public:identity-access:participants:LegacyActorProjection",
-        "public:identity-access:participants:LegacyActorProjectionFactory",
         "public:intent:operations:IntentContextResourceAuthorityPair",
         "public:intent:operations:IntentContextResourceAuthorization",
         "public:intent:operations:IntentPersistence",
@@ -47934,7 +47933,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:ea8f75b23a1e03067bfa"
+        "import:64c72a446168beac01bc"
       ],
       "context": "identity-access",
       "dataClass": "confidential",
@@ -47997,7 +47996,9 @@
           "type": "'invited'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:64c72a446168beac01bc"
+          ],
           "fieldPath": "$method:resolveCurrentSubject.$return.$variant:0.userId",
           "type": "string"
         },
@@ -48020,7 +48021,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:ea8f75b23a1e03067bfa"
+            "import:64c72a446168beac01bc"
           ],
           "name": "resolveCurrentSubject",
           "signatureDigest": "sha256:e0b521216806ea585a77aadd93279fa45d7baf7509f62b1ff19f9938ac4f3b18"
@@ -48030,9 +48031,9 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:ea8f75b23a1e03067bfa",
-          "file": "packages/backend/src/services/intent/dispatcher.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file"
+          "edgeId": "import:64c72a446168beac01bc",
+          "file": "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/accountRepositoryTransportCredentials.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -51571,7 +51572,6 @@
         "public:identity-access:participants:DirectAuthorityAdmission",
         "public:identity-access:participants:DirectAuthorityBinding",
         "public:identity-access:participants:DirectAuthorityIdentity",
-        "public:identity-access:participants:LegacyActorProjectionFactory",
         "public:intent:operations:IntentContextResourceAuthorityPair",
         "public:intent:operations:IntentContextResourceAuthorization",
         "public:intent:operations:IntentPersistence",
@@ -51616,201 +51616,6 @@
       "signatureDigest": "sha256:6336f1b06cb09aeb20902cb7fbfa1b9b2e2732a9f80f1f37257a6fe9a217c443",
       "status": "target-context-current-surface",
       "symbol": "LegacyActorProjection",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "Extract",
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 28,
-        "maxUnionVariants": 14
-      },
-      "consumerEdgeIds": [
-        "import:009b5330d3c57bcd2a35"
-      ],
-      "context": "identity-access",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.accessRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.additionalPermissions[]",
-          "type": "(typeof PERMISSIONS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.role.$variant:0",
-          "type": "'admin'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.role.$variant:1",
-          "type": "'user'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.role.$variant:2",
-          "type": "'manager'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.role.$variant:3",
-          "type": "'guest'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.status.$variant:0",
-          "type": "'active'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.status.$variant:1",
-          "type": "'disabled'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.status.$variant:2",
-          "type": "'invited'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.userId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$parameter:subject.username",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.authorityRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.patId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.permissions[]",
-          "type": "(typeof PERMISSIONS)[number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.purpose",
-          "type": "z.infer<typeof PatPurposeSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.source",
-          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:009b5330d3c57bcd2a35"
-          ],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.role.$variant:0",
-          "type": "'admin'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.role.$variant:1",
-          "type": "'user'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.role.$variant:2",
-          "type": "'manager'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.role.$variant:3",
-          "type": "'guest'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.status.$variant:0",
-          "type": "'active'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.status.$variant:1",
-          "type": "'disabled'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.status.$variant:2",
-          "type": "'invited'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.user.username",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:fromResolvedSubject.$return.userId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "public:identity-access:participants:LegacyActorProjectionFactory",
-      "members": [
-        "fromResolvedSubject"
-      ],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:009b5330d3c57bcd2a35"
-          ],
-          "name": "fromResolvedSubject",
-          "signatureDigest": "sha256:3119f3211249940974e8a3fb6e5a0ab41deb66d3f8d46de25c9bf9bc648e27c7"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#LegacyActorProjectionFactory",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:009b5330d3c57bcd2a35",
-          "file": "packages/backend/src/services/intent/dispatcher.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:d6fa74e75a5ef73b0cd6c20758ef319b55b15098912dd6c916ccfa5902efbfd2",
-      "status": "target-context-current-surface",
-      "symbol": "LegacyActorProjectionFactory",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "Extract",
@@ -53454,7 +53259,6 @@
         "public:identity-access:participants:CurrentSubjectAccessResolver",
         "public:identity-access:participants:InitialUserAccessProvision",
         "public:identity-access:participants:InitialUserAccessProvisioner",
-        "public:identity-access:participants:LegacyActorProjectionFactory",
         "public:identity-access:participants:UserAccessFenceReader",
         "public:identity-access:queries:GetUserAccess",
         "public:identity-access:queries:requireUserAccess",
@@ -53561,8 +53365,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/types.ts#ResolvedAuthoritySubject",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:identity-access:participants:CurrentSubjectAccessResolver",
-        "public:identity-access:participants:LegacyActorProjectionFactory"
+        "public:identity-access:participants:CurrentSubjectAccessResolver"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -152164,7 +151967,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb",
+  "sourceDigest": "sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304",
   "targetContexts": [
     "collaboration",
     "development-automation",

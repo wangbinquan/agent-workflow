@@ -375,23 +375,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
-      "fromPath": "packages/backend/src/services/intent/dispatcher.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:009b5330d3c57bcd2a35",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W4-E0",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#LegacyActorProjectionFactory",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "LegacyActorProjectionFactory",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlIntegrationTriggerParticipant.ts#$file",
@@ -10878,6 +10861,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toSymbol": "GateWorkspaceRollbackTargetReceipt",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1b61d1cf7321fccf3308",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentContextAuthorization.ts#composeSqliteIntentContextResourceAuthorizationSyncFactory",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentContextAuthorization.ts",
+      "toSymbol": "composeSqliteIntentContextResourceAuthorizationSyncFactory",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -30246,23 +30246,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4a117c2ce0c5f611d997",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E4a",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/persistence.ts#$file",
-      "toPath": "packages/backend/src/modules/intent/composition/persistence.ts",
-      "toSymbol": "createSqliteIntentPersistence",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts",
       "fromSymbol": "$file",
@@ -40837,6 +40820,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/accountRepositoryTransportCredentials.ts#$file",
+      "fromPath": "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:64c72a446168beac01bc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W4-E0",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#CurrentSubjectAccessResolver",
+      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toSymbol": "CurrentSubjectAccessResolver",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
       "fromPath": "packages/backend/src/routes/developmentMissions.ts",
       "fromSymbol": "$file",
@@ -43944,6 +43944,23 @@
       "toPath": "packages/backend/src/util/log.ts",
       "toSymbol": "createLogger",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6ca48164e3d7d4247420",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/persistence.ts#composeSqliteIntentPersistence",
+      "toPath": "packages/backend/src/modules/intent/composition/persistence.ts",
+      "toSymbol": "composeSqliteIntentPersistence",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -93877,23 +93894,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
-      "fromPath": "packages/backend/src/services/intent/dispatcher.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ea8f75b23a1e03067bfa",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W4-E0",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#CurrentSubjectAccessResolver",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "CurrentSubjectAccessResolver",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts",
       "fromSymbol": "$file",
@@ -102983,22 +102983,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/intent/dispatcher.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
-      "id": "import:009b5330d3c57bcd2a35",
-      "owner": "intent",
-      "removeAfterWave": "W4-E0",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "LegacyActorProjectionFactory",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#LegacyActorProjectionFactory"
     },
     {
       "edgeKind": "value",
@@ -113143,6 +113127,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:1b61d1cf7321fccf3308",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/intentContextAuthorization",
+      "syntax": "static-import",
+      "targetSymbol": "composeSqliteIntentContextResourceAuthorizationSyncFactory",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentContextAuthorization.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentContextAuthorization.ts#composeSqliteIntentContextResourceAuthorizationSyncFactory"
     },
     {
       "edgeKind": "value",
@@ -132074,22 +132074,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:4a117c2ce0c5f611d997",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E4a",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/intent/composition/persistence",
-      "syntax": "static-import",
-      "targetSymbol": "createSqliteIntentPersistence",
-      "toContext": "intent",
-      "toFile": "packages/backend/src/modules/intent/composition/persistence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/persistence.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteWorkspaceParticipant.ts#$file",
@@ -142523,6 +142507,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/accountRepositoryTransportCredentials.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/accountRepositoryTransportCredentials.ts#$file",
+      "id": "import:64c72a446168beac01bc",
+      "owner": "source-control",
+      "removeAfterWave": "W4-E0",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "CurrentSubjectAccessResolver",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#CurrentSubjectAccessResolver"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/developmentMissions.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#$file",
       "id": "import:64d0dcb1c8d8c7dd0a49",
@@ -145575,6 +145575,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/log.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:6ca48164e3d7d4247420",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/composition/persistence",
+      "syntax": "static-import",
+      "targetSymbol": "composeSqliteIntentPersistence",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/composition/persistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/persistence.ts#composeSqliteIntentPersistence"
     },
     {
       "edgeKind": "value",
@@ -194234,22 +194250,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/intent/dispatcher.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
-      "id": "import:ea8f75b23a1e03067bfa",
-      "owner": "intent",
-      "removeAfterWave": "W4-E0",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "CurrentSubjectAccessResolver",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#CurrentSubjectAccessResolver"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts#$file",
@@ -203266,7 +203266,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb",
+  "sourceDigest": "sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

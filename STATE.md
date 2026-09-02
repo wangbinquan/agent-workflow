@@ -40,6 +40,27 @@
 > `sqliteLogicalSource.assertUnchanged` 另外改为**点名漂移信号**（实测：另一条连接一次裸 `wal_checkpoint`，零逻辑变更也会把
 > `data_version` 加一），否则 4.3GB hosted 迁移失败后无法归因。
 >
+> **2026-09-02 续修（夜跑 e2e 三条 + 主干守卫）**：提交 `39aa4870d` 与本批。
+>
+> 10. `periodicOrphanReconcileMs` 变成「要重启才生效」：循环搬进 provider session 后把**睡多久**接到了旋钮上，
+>     改动只在改动前那个周期走完时才被看见——旋钮在「关」时那是 `DAEMON_CADENCE.orphanReconcile` 的十分钟。
+>     改为按固定监督拍（新增 `orphanReconcileSupervisory` = 60s，等于该旋钮允许的最小正周期）醒来、醒来时才用
+>     `isPeriodicReconcileDue` 判这一拍要不要真扫；顺带删掉 RFC-349 之后再无调用者的 `startOrphanReconcileLoop`
+>     （它那份 config-applied 热生效接线正是搬丢的东西）。e2e OPS-X4/OPS-X10。
+> 11. `routeLaunch` 给代理 / 工作组启动也加上了 `deferRepoPreparation: true`（RFC-287 G7 只覆盖 JSON `/api/tasks`），
+>     解析不出的 ref 不再当场以服务端原话被拒，而是先铸一行注定失败的任务。e2e TASK-06。
+> 12. 启动恢复排队中的工作上下文后继时**两处**接连断掉，会话永远停在「生成中」（e2e INTENT-X8）：
+>     ①`resumeQueuedIntentWorkingSets` 自己手捏 actor，而 RFC-345 之后 Resource Catalog 只认注册表铸出的授权
+>     （`foreign-legacy-actor-projection`）——改为经 `admitDurableWorkOwner`（`auth/session.ts`，与
+>     `admitDaemonIdentity` 同形）正式 admit 属主；最后一个生产 consumer 消失后，兼容出口
+>     `LegacyActorProjectionFactory` 一并删除（RFC-347 记的那笔 projection 债），`CurrentSubjectAccessResolver`
+>     改由 `routes/accountRepositoryTransportCredentials.ts` 消费（它此前自己重抄了一份同形结构类型）。
+>     ②`cli/start.ts` 用的是**不带资源鉴权**的 `createSqliteIntentPersistence`，而 `createComposedApp` 与
+>     PostgreSQL daemon 用的是 authorized 组装：任何「加资源」的上下文变更都会在事务里以
+>     `intent-context-authorization-not-composed` 收场，变更被判 failed。
+> 13. `rfc213-restore` 整份文件改为显式 30s 预算：每条用例都在做 tar+gzip+迁移的真实 I/O，本机 ~0.5s，
+>     bun 默认 5s 上限在 CI 四分片同跑时卡满而红（run 33583792341）。不是性能门，别当重跑借口。
+>
 > **仍未关闭**：`postgresql-evidence` 的 large migration 仍以 `sqlite-source-mutated` 收场（copying 阶段），
 > 冻结窗内仍有写手/checkpoint 漏出——下一次 hosted run 会带上漂移信号名，据此定位后再修；另需复核
 > `cli/start.ts` §8 的四个 background ticker（limits / backup / submoduleRefresh / batchImportGc）起在 provider session

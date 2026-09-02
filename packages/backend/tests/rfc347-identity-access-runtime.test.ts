@@ -293,13 +293,17 @@ describe('RFC-347 exact production source locks', () => {
     expect(callPaths('.forCall(')).toEqual([
       'src/modules/task-execution/composition/nodeMechanics.ts',
     ])
+    // 兼容投影只剩模块内部一个使用者（LocalOperatorContextFactory）；composition
+    // 不再把它作为 participant 转出去（RFC-349 还清了 dispatcher 那笔债之后）。
     expect(importPaths('/legacyActorProjection')).toEqual([
       'src/modules/identity-access/application/operationContext.ts',
-      'src/modules/identity-access/composition.ts',
     ])
-    expect(callPaths('.legacyProjection.fromResolvedSubject(')).toEqual([
-      'src/services/intent/dispatcher.ts',
-    ])
+    // RFC-349 把这笔债还了：启动恢复不再手捏投影（`admitDurableWorkOwner` 正式 admit
+    // 属主），最后一个生产 consumer 消失后 `legacyProjection` 这个兼容出口本身也删了。
+    expect(callPaths('.legacyProjection.fromResolvedSubject(')).toEqual([])
+    expect(source('src/modules/identity-access/public/participants.ts')).not.toContain(
+      'LegacyActorProjectionFactory',
+    )
     expect(callPaths('buildActor(')).toEqual([
       'src/auth/actor.ts',
       'src/cli/postgresqlDaemonApplication.ts',

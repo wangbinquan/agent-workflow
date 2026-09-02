@@ -132,13 +132,6 @@ export interface LegacyActorProjection extends AuthenticatedAuthoritySnapshot {
   readonly userId: string
 }
 
-/** Narrow compatibility participant for legacy consumers that already hold a
- * subject resolved by identity-access. The branded projection remains owned by
- * the runtime; consumers never import its implementation. */
-export interface LegacyActorProjectionFactory {
-  fromResolvedSubject(subject: ResolvedAuthoritySubject): LegacyActorProjection
-}
-
 export interface DirectAuthenticatedAuthority extends LegacyActorProjection {
   readonly [directAuthenticatedAuthorityBrand]: 'direct-authenticated-authority'
 }

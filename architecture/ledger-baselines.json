@@ -384,8 +384,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1910,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1911,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-349 修复：daemon 崩在生成中时，排队中的工作上下文后继要在重启后接着跑完，而它必须以**被正式 admit 的**属主身份跑——RFC-345 之后 Resource Catalog 只认注册表铸出的授权，启动恢复原先手捏的投影会被 `foreign-legacy-actor-projection` 拒掉，那行变更再没人碰、会话永远停在「生成中」（e2e INTENT-X8）。+1 条 credential 适配器入口：`auth/session.ts` 的 `admitDurableWorkOwner`，与既有 `admitDaemonIdentity` 同形，凭据只由该适配器铸造这条约束不变。同批 public-surfaces 降 1：最后一个生产 consumer 消失后，兼容出口 `LegacyActorProjectionFactory` 一并删除；cross-context 边数不变——dispatcher 退出的那条被 `routes/accountRepositoryTransportCredentials.ts` 改为消费 `CurrentSubjectAccessResolver` 端口顶上（它此前自己重抄了一份同形结构类型）。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -454,7 +457,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 946,
+      "baseline": 945,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -480,7 +483,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb",
+    "sourceDigest": "sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +496,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "90e940dc98caaff678dcacfcf96668337cafadff",
-    "contentDigest": "sha256:8e36aab18e503f5a636596ffa8908273267d07dea1888fcc35d8980e671d3f83",
+    "currentSnapshotSha": "6b9464a1628d0a0328a1b21394c1b11f4d5e39bb",
+    "contentDigest": "sha256:970d1201b0aee99e9884d7561c4a3d2a7d79362bd6737d44868b64fb8d8933d1",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

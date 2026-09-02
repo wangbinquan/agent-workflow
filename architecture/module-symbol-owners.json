@@ -2845,6 +2845,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#admitDurableWorkOwner",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "admitDurableWorkOwner",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
       "exported": false,
       "file": "packages/backend/src/auth/session.ts",
       "id": "owner:packages/backend/src/auth/session.ts#ADMITTED_DAEMON_CREDENTIAL",
@@ -61620,19 +61632,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "legacyActorProjectionBrand",
-      "targetContext": "identity-access",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#LegacyActorProjectionFactory",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:d6fa74e75a5ef73b0cd6c20758ef319b55b15098912dd6c916ccfa5902efbfd2",
-      "status": "current-module",
-      "symbol": "LegacyActorProjectionFactory",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -308184,5 +308183,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb"
+  "sourceDigest": "sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304"
 }

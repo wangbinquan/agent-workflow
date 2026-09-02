@@ -4,7 +4,6 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import type { TransactionScope } from '@/platform/persistence/transactionScope'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
 import { GetUserPresence } from './application/queries/getUserPresence'
-import { projectDelegatedLegacyActor } from './application/legacyActorProjection'
 import {
   InMemoryUserPresenceStore,
   PerformanceMonotonicClock,
@@ -53,7 +52,6 @@ import type {
   DirectQueryContextFactory,
   InitialUserAccessProvisioner,
   InitialUserAccessProvision,
-  LegacyActorProjectionFactory,
   PresenceConnectionTracker,
   PresenceLease,
   PresenceQuery,
@@ -121,7 +119,6 @@ export interface IdentityAccessRuntime {
   /** Composition-only local CLI participant; not an HTTP/MCP authority mint. */
   readonly localOperator: LocalOperatorContextFactory
   readonly delegatedRequests: DelegatedRequestAuthorityFactory
-  readonly legacyProjection: LegacyActorProjectionFactory
   readonly createManagedUser: CreateManagedUser
   readonly updateUserAccess: UpdateUserAccess
   readonly getUserAccess: GetUserAccess
@@ -242,10 +239,6 @@ function buildIdentityAccessRuntime(
     resolveAuthority,
     registry,
   )
-  const legacyProjection: LegacyActorProjectionFactory = Object.freeze({
-    fromResolvedSubject: projectDelegatedLegacyActor,
-  })
-
   const presenceStore = new InMemoryUserPresenceStore()
   const presenceClock = new PerformanceMonotonicClock()
   const graceTimer = new TimeoutPresenceTimer()
@@ -276,7 +269,6 @@ function buildIdentityAccessRuntime(
     directAuthority,
     localOperator: new LocalOperatorContextFactory(resolveAuthority, contexts),
     delegatedRequests,
-    legacyProjection,
     createManagedUser: new CreateManagedUser({
       transactions,
       auditId: factoryDeps.id,

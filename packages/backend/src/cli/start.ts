@@ -261,7 +261,8 @@ import { directOperationAuthority, directRequestAuthority } from '@/routes/opera
 import type { Actor } from '@/auth/actor'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
-import { createSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
+import { composeSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import {
   composeIntentDumpAuxiliaryQueries,
   composeIntentTurnRuntimeResolver,
@@ -2905,7 +2906,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       workgroups: workgroupCatalog.queries,
     },
   })
-  const intentPersistence = createSqliteIntentPersistence(db)
+  // Context mutations authorize each added resource INSIDE their transaction, so
+  // the daemon needs the authorized runner — the same one `createComposedApp` and
+  // the PostgreSQL daemon compose. With the plain runner every activation that
+  // adds a resource dies on `intent-context-authorization-not-composed`, which is
+  // how boot recovery silently failed every queued working-context successor.
+  const intentPersistence = composeSqliteIntentPersistence({
+    db,
+    contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+  })
   const intentPlatformInventory = composeIntentPlatformInventoryParticipant({
     authorityFor: intentAuthorityFor,
     capabilityTemplates: capabilityTemplateOperations,
@@ -2933,10 +2942,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   intentDispatchDeps = Object.freeze({
     persistence: intentPersistence,
-    identityAccess: Object.freeze({
-      resolveAuthority: identityAccess.resolveAuthority,
-      legacyProjection: identityAccess.legacyProjection,
-    }),
+    identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: Paths.root,
     runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
     dumpAuxiliary: intentDumpAuxiliary,
