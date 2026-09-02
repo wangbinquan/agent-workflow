@@ -58,6 +58,8 @@ const FULL_SEED_COUNTS = Object.freeze({
   cachedRepos: 500,
 })
 const HARD_FREEZE_MS = 1_000
+/** 记一条停顿样本的门槛：比硬门槛低一档，才能看见「还没到红线但已经在长」的那些。 */
+const STALL_SAMPLE_MS = 400
 const EVENT_LOOP_GAP_MS = 500
 const HIDDEN_POSTGRESQL_HOST_KEYS = new Set([
   'PATH',
@@ -426,6 +428,12 @@ interface MigrationLoadReport {
   readonly retries: number
   readonly logicalBackupDigest: string
   readonly eventLoopMaxGapMs: number
+  /** 超过阈值的延迟样本连同当时的迁移 phase，按大小排前几条。 */
+  readonly stalls: readonly {
+    readonly kind: 'status' | 'event-loop'
+    readonly phase: string
+    readonly ms: number
+  }[]
   readonly websocket: {
     readonly connections: number
     readonly messages: number
@@ -1355,6 +1363,21 @@ async function runLargeMigration(input: {
   )
   const samples: number[] = []
   const rssSamples: number[] = []
+  // 停顿发生在**哪个阶段**，报告以前一个字都没有：只有一个跨整场迁移的 max。
+  // 2026-09-03 追一次 18.1 秒的事件循环停顿时，这条信息缺失让排查多花了一整轮
+  // （最后靠离线实测各操作耗时才定位到安全备份的 quick_check）。现在超过阈值的样本
+  // 连同当时的 phase 一起记下来，报告里按大小列前几条。
+  const stalls: Array<{
+    readonly kind: 'status' | 'event-loop'
+    readonly phase: string
+    readonly ms: number
+  }> = []
+  const recordStall = (kind: 'status' | 'event-loop', phase: string, ms: number): void => {
+    if (ms < STALL_SAMPLE_MS) return
+    stalls.push({ kind, phase, ms })
+    stalls.sort((left, right) => right.ms - left.ms)
+    if (stalls.length > 12) stalls.length = 12
+  }
   let statusErrors = 0
   let retries = 0
   let eventLoopMaxGapMs = 0
@@ -1372,7 +1395,9 @@ async function runLargeMigration(input: {
     do {
       try {
         const status = await maintenanceStatus(input.daemon)
-        eventLoopMaxGapMs = Math.max(eventLoopMaxGapMs, status.eventLoop?.maxGapMs ?? 0)
+        const gap = status.eventLoop?.maxGapMs ?? 0
+        if (gap > eventLoopMaxGapMs) recordStall('event-loop', latest.phase, gap)
+        eventLoopMaxGapMs = Math.max(eventLoopMaxGapMs, gap)
         if (status.database?.provider === 'postgresql' && status.database.poolWait !== null) {
           latestPoolWait = status.database.poolWait
         }
@@ -1393,6 +1418,7 @@ async function runLargeMigration(input: {
             )
             retries = Math.max(retries, latest.failure?.retryCount ?? 0)
             samples.push(performance.now() - requestAt)
+            recordStall('status', latest.phase, performance.now() - requestAt)
             if (latest.failure !== null) break
           } catch {
             samples.push(performance.now() - requestAt)
@@ -1467,6 +1493,7 @@ async function runLargeMigration(input: {
     retries,
     logicalBackupDigest: digest,
     eventLoopMaxGapMs,
+    stalls: Object.freeze([...stalls]),
     websocket: {
       connections: sockets.length,
       messages: sockets.reduce((sum, probe) => sum + probe.messages, 0),
@@ -1940,6 +1967,10 @@ function markdown(report: EvidenceReport): string {
     lines.push(
       `- Large migration: ${report.migration.durationMs.toFixed(1)}ms; ${report.migration.rowsCopied} rows; ${report.migration.rowsPerSecond.toFixed(1)} rows/s; status p95=${report.migration.status.p95Ms.toFixed(1)}ms max=${report.migration.status.maxMs.toFixed(1)}ms; event-loop max=${report.migration.eventLoopMaxGapMs.toFixed(1)}ms; pool-wait p95=${report.migration.poolWait.p95Ms.toFixed(1)}ms max=${report.migration.poolWait.maxMs.toFixed(1)}ms; errors=${report.migration.statusErrors}`,
     )
+    // 停顿落在哪个阶段——排查一次多秒级冻结时，这一行顶一整轮离线实测。
+    for (const stall of report.migration.stalls ?? []) {
+      lines.push(`  - stall ${stall.kind} ${stall.ms.toFixed(1)}ms during \`${stall.phase}\``)
+    }
   }
   if (report.runtimePhases !== undefined) {
     lines.push(
