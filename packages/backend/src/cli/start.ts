@@ -2574,10 +2574,24 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
 
   // 7. HTTP server.
+  //
+  // The authoring HTTP surface and the OS runtime must read ONE platform tool
+  // catalog. `createComposedApp` composes its own digital-employee module, so a
+  // catalog built later (for `employeeOs` alone) leaves every
+  // `/work-items/:ref/tools` response empty and the job-template editor with no
+  // built-in tool to bind.
+  const digitalEmployeePlatformTools = await composeDigitalEmployeeBuiltinToolCatalog({
+    agentTemplates: digitalEmployeeAgentTemplates,
+    typePackageDescriptorJsons: [
+      ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
+      developmentEmployeeTypePackage.descriptorJson,
+    ],
+  })
   const app = createComposedApp(
     composeSqliteAppDeps({
       providerCore,
       token,
+      digitalEmployeePlatformTools,
       configPath: Paths.config,
       daemonInfoPath: Paths.daemonInfo,
       // RFC-226: runtime readiness is not daemon health. Startup never executes
@@ -2800,13 +2814,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     typePackages: [developmentEmployeeTypePackage],
     typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
-    platformTools: await composeDigitalEmployeeBuiltinToolCatalog({
-      agentTemplates: digitalEmployeeAgentTemplates,
-      typePackageDescriptorJsons: [
-        ...readPersistedDigitalEmployeeTypePackageDescriptorJsons(db),
-        developmentEmployeeTypePackage.descriptorJson,
-      ],
-    }),
+    platformTools: digitalEmployeePlatformTools,
     onAutomaticUpgradeIssue: (issue) => {
       log.warn('automatic digital employee type upgrade could not prove compatibility', {
         ...issue,

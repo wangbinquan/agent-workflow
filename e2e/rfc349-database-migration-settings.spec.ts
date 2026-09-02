@@ -274,7 +274,11 @@ test('one click is idempotent, reload resumes, cutover closes rollback, and rece
   await page.reload()
   await expect(page.getByRole('button', { name: 'Resume' })).toBeVisible({ timeout: 30_000 })
   await page.getByRole('button', { name: 'Resume' }).click()
-  await expect(page.getByText('Live provider').locator('..')).toContainText('postgresql')
+  // `exact` matters: the section description also says "Inspect the live provider …",
+  // and getByText's substring matching would otherwise resolve to two elements.
+  await expect(page.getByText('Live provider', { exact: true }).locator('..')).toContainText(
+    'postgresql',
+  )
   await expect(page.getByText(/PostgreSQL accepted a business write/)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Roll back to SQLite' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Test target' })).toBeDisabled()

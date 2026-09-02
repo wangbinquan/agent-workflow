@@ -45,20 +45,30 @@ T1 生成报告必须把表按 bounded context、prefix、consumer、row estimat
 
 ## 4. 总任务图
 
-| 任务        | 内容                                                                                                   | 依赖       | Draft 状态           |
-| ----------- | ------------------------------------------------------------------------------------------------------ | ---------- | -------------------- |
-| RFC-349-T0  | proposal/design/plan、RFC index、STATE；只读 source audit                                              | —          | Done（仅 RFC Draft） |
-| RFC-349-T1  | 用户批准 D1～D14；fresh source-lock、owner/index/remote/candidate-gate audit                           | T0         | In Progress          |
-| RFC-349-T2  | 184-table schema/consumer contract、双 provider behavior oracle、旧实现 red targets                    | T1         | Pending              |
-| RFC-349-T3  | provider config/runtime/factory、PostgreSQL pool/health/timeout、generation pointer skeleton           | T2         | Pending              |
-| RFC-349-T4  | 双 dialect schema、PostgreSQL baseline/forward migrations、codec/constraint projector                  | T2–T3      | Pending              |
-| RFC-349-T5  | 全业务 application port + SQLite/PostgreSQL adapter cohort cutover；旧 DB surface 归零                 | T3–T4      | Pending              |
-| RFC-349-T6  | backup/restore/doctor/maintenance/start/runtime provider matrix cutover                                | T4–T5      | Pending              |
-| RFC-349-T7  | durable one-click migration engine：preflight/freeze/backup/copy/verify/cutover/rollback               | T4–T6      | Pending              |
-| RFC-349-T8  | 六张 legacy 表 logical archive + target omit；schema count/report gate                                 | T2、T4、T7 | Pending              |
-| RFC-349-T9  | system-operations command/query、Settings/CLI/status/progress/cancel/resume/finalize                   | T7–T8      | Pending              |
-| RFC-349-T10 | dual-provider full regression、fault/mutation、large migration、100-client soak、三平台 compiled smoke | T3–T9      | Pending              |
-| RFC-349-T11 | exact publication、remote/hosted exact-SHA、canonical/provenance/RFC-294/STATE closeout                | T10        | Pending              |
+状态列于 2026-09-02 按 live source 重采（此前整张表停在 Draft 期的 Pending，与已落地的 216 个 PostgreSQL adapter、128 个
+`rfc349-*` 测试文件严重不符）。**「源码已落地」不等于「已验收」**：T10 的 hosted evidence 至今一次都没有绿过，因此 T10/T11 仍未完成。
+
+| 任务        | 内容                                                                                                   | 依赖       | 状态（2026-09-02 live）                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------- |
+| RFC-349-T0  | proposal/design/plan、RFC index、STATE；只读 source audit                                              | —          | Done                                                                                      |
+| RFC-349-T1  | 用户批准 D1～D14；fresh source-lock、owner/index/remote/candidate-gate audit                           | T0         | Done（184 表 / 222 migration 已落 `schemaContract.ts`）                                   |
+| RFC-349-T2  | 184-table schema/consumer contract、双 provider behavior oracle、旧实现 red targets                    | T1         | Done（`buildLogicalSchemaContract` + `rfc349-dual-provider-behavior-oracle`）             |
+| RFC-349-T3  | provider config/runtime/factory、PostgreSQL pool/health/timeout、generation pointer skeleton           | T2         | Done（`databaseProviderRuntime` / `generationStore` / `postgresqlRuntime`）               |
+| RFC-349-T4  | 双 dialect schema、PostgreSQL baseline/forward migrations、codec/constraint projector                  | T2–T3      | Done（`postgresqlSchema` / `postgresqlMigrator` / `postgresqlMigrationHistory`）          |
+| RFC-349-T5  | 全业务 application port + SQLite/PostgreSQL adapter cohort cutover；旧 DB surface 归零                 | T3–T4      | Done（216 个 `postgresql*` adapter；provider-cutover 架构门守 exact 债表）                |
+| RFC-349-T6  | backup/restore/doctor/maintenance/start/runtime provider matrix cutover                                | T4–T5      | Done                                                                                      |
+| RFC-349-T7  | durable one-click migration engine：preflight/freeze/backup/copy/verify/cutover/rollback               | T4–T6      | Done（`databaseMigrationRunner` / `ControlPlane` / `Coordinator`）                        |
+| RFC-349-T8  | 六张 legacy 表 logical archive + target omit；schema count/report gate                                 | T2、T4、T7 | Done（`RFC349_ARCHIVE_THEN_OMIT_TABLES` 六项 + schema 门）                                |
+| RFC-349-T9  | system-operations command/query、Settings/CLI/status/progress/cancel/resume/finalize                   | T7–T8      | Done（`routes/databaseMigrations.ts` + `DatabaseMigrationSection.tsx` + e2e）             |
+| RFC-349-T10 | dual-provider full regression、fault/mutation、large migration、100-client soak、三平台 compiled smoke | T3–T9      | **In Progress**：三平台 compiled 已绿；large migration 仍 `sqlite-source-mutated`（见下） |
+| RFC-349-T11 | exact publication、remote/hosted exact-SHA、canonical/provenance/RFC-294/STATE closeout                | T10        | **Pending**（AC-14/AC-15 未满足，不得标 Done）                                            |
+
+**T10 未关闭的确切原因**：`postgresql-evidence` 的 `PostgreSQL crash matrix + 100-client full seed` 在 4.3GB full-seed 上于 `copying`
+阶段以 `{"category":"source-integrity","detailCode":"sqlite-source-mutated","retryable":false}` 收场——冻结窗内仍有写手或 checkpoint
+漏出。实测：另一条连接执行一次**裸 `PRAGMA wal_checkpoint(TRUNCATE)`**，零逻辑变更也会让 reader 的 `data_version` 加一，因此
+`assertUnchanged` 的三个信号里究竟哪个动了，是归因的前提；`sqliteLogicalSource.assertUnchanged` 已改为逐项点名漂移信号，下一次
+hosted run 即可定位。另需复核 `cli/start.ts` §8 的四个 background ticker（limits / backup / submoduleRefresh / batchImportGc）——它们
+起在 provider session 的可暂停 factory **之外**，而 PostgreSQL daemon 侧的同类是 `backupRuntimeFactory` 等可暂停 handle。
 
 关键路径：
 
