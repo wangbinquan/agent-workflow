@@ -181,12 +181,17 @@ describe('RFC-210 submodule snapshot / rollback', () => {
 })
 
 describe('RFC-210 detectSubmodules performance gate', () => {
+  // 预算而非性能门：这条断的是「没有 .gitmodules 时它返回 false」，而「不多 spawn 一个
+  // git 进程」那条判据由下面的源码锁盯着（行为面观察不到「零进程」，注释已写明）。
+  // 它自己却要真的 `git init/add/commit` 造一个仓，在 CI 上四分片同跑时曾整整卡满
+  // bun 默认的 5s 上限而红（run 33587996629，macos shard 1/4）。同文件的嵌套回滚那条
+  // 早就写了显式 90s，这条只是漏了。
   test('hasDirtySubmoduleContent short-circuits when .gitmodules is absent', async () => {
     const repo = join(root, 'nosub')
     await initRepo(repo, 'a.txt', 'v1\n')
     expect(existsSync(join(repo, '.gitmodules'))).toBe(false)
     expect(await hasDirtySubmoduleContent(repo)).toBe(false)
-  })
+  }, 30_000)
 
   test('source-level lock: the existsSync gate precedes any runGit call', () => {
     // Behavioural assertions cannot observe "zero processes spawned" here, so the

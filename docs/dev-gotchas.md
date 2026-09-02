@@ -64,6 +64,13 @@
   - 判据：失败耗时高度一致且贴着某个硬超时 + 改动面与该用例无关 + 单跑绿 ⇒ 资源竞争，不是回归。**但别就此放行**：先单跑确认，再看这一轮门禁里有没有同族的真红被淹没（RFC-304 PR-2 那条「并发红与自己的红同时出现」是同一个坑的另一半）。
   - 定式：门禁跑起来之后就等它，要验证别的用例就等门禁结束，或者把它放进另一台机器/另一棵树并接受它同样会互相抢。
 
+- **CI 上的 5s 假红不是「别人抢 CPU」，是这条用例本来就该有自己的预算**（2026-09-02 一轮里咬到三条）：上一条讲的是「门禁在跑时别在同一台机器上另跑测试」——那是**本地**能躲开的竞争。CI 躲不开：backend 四分片就是设计成并行的，e2e 另有多腿同跑。于是**任何做真实 I/O 的用例只要贴着 bun 默认的 5s 上限，就会周期性假红**。一轮里咬到的三条，失败耗时全部是 5.0～5.1s，而且本机单跑都在 1.4～2.5s：
+  - `rfc213-restore`（tar+gzip 打包 → 解包 → swap → 迁移，整份文件每条都在做）；
+  - `rfc210-subrepo-snapshot-rollback` 的 `.gitmodules` 短路那条（要真的 `git init/add/commit` 造一个仓）；
+  - `rfc310-employee-case-runtime` 的 WorkStart 那条（一条用例近 1900 行，建库 + 写 FS + 多播 + 投影回读）。
+  - **处置**：给它一个**说得出理由的显式预算**（整份文件都是这个形状就 `setDefaultTimeout(30_000)`，只有一条就 `test(name, fn, 30_000)`），并在注释里写清「这是预算不是性能门」+ 那次红的 run id。本仓早就有这个惯例（同文件里嵌套回滚那条写着 90_000），只是新用例容易漏。
+  - **不要**把它当成「重跑就过了」：判据仍是先单跑确认、再看同轮有没有真红被淹。真正的性能门要另立判据（例：RFC-210「零 submodule argv」是靠**源码锁**断言 `existsSync` 先于 `runGit`，不是靠墙钟），这样加预算就不会把门一起放松。
+
 - **本仓有三个包，`bun test` 跑的是「当前目录那一个」——改了 `packages/shared` 就必须单独跑它**（2026-08-25 实撞，RFC-324）：改动同时动了 shared 的 schema（资源 ACL 与任务成员的 wire）与 backend / frontend 的消费方。我跑了 backend 的相关子集（全绿）和 frontend 全量 6807（全绿）就推了，**CI 上 8 个 backend shard 全红 + Lint 腿红**——Lint 腿里跑的是 `@agent-workflow/shared` 的 2245 条，其中 4 条断言的正是我改掉的那两个 schema。
   - 为什么容易漏：`bun test <路径>` 在仓根跑会按路径过滤，看起来「跑过了」；而 shared 的测试在 `packages/shared/tests/` 下、由 CI 的 **Lint + Typecheck + Format + Shared + system mock** 那条腿执行，跟 backend 四分片不是同一个 job，名字里也没有 "test"，扫 job 名的时候最容易划过去。
   - 定式：**改了 `packages/shared/src/schemas/` 下的任何文件就同时跑 `cd packages/shared && bun test`**。更一般地——推之前问一句「这次改动跨了几个包？我是不是每个包都跑了？」三个包各有各的 runner（backend/shared 是 `bun test`，frontend 是 `vitest`）。

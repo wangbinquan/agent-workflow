@@ -667,6 +667,9 @@ describe('RFC-310 stateful employee Case runtime', () => {
     })
   })
 
+  // 预算而非性能门：这条用例一个人跑完了近 1900 行的案件生命周期（建库、写 FS、
+  // 多播、投影回读），本机整份文件 ~1.4s，CI 上四分片同跑时它自己就卡满了 bun 默认的
+  // 5s 上限（run 33587996629，macos shard 1/4，5095ms）。给它一个说得出理由的预算。
   test('WorkStart directly fixes the first work item while lifecycle facts remain durable and multicast', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc310-case-runtime-'))
@@ -2526,5 +2529,5 @@ describe('RFC-310 stateful employee Case runtime', () => {
       items: Array<{ id: string }>
     }
     expect(events.items.map((item) => item.id)).toContain(firstEventLaunch.caseRef.id)
-  })
+  }, 30_000)
 })
