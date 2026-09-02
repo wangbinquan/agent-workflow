@@ -384,7 +384,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1917,
+      "baseline": 1907,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -419,8 +419,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6275,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6290,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-349 把 SERIALIZABLE 的重试判据 / 预算 / 退避从 19 份重复实现收敛成 `db/postgresqlSerializationRetry.ts` 一份，17 个 provider adapter 各新增一条到该平台原语的入边（15 条，sqlite↔postgresql 孪生折叠掉 2）。同批 module-symbol-owners 降 10、mutation-entrypoints 降 10。起因是本机 100 客户端全量取证实测：服务端 3210 次 40001 里有 429 次耗尽「3 次、无退避」的预算，原样变成用户可见的 500。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -440,8 +443,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5220,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5235,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-349 把 SERIALIZABLE 的重试判据 / 预算 / 退避从 19 份重复实现收敛成 `db/postgresqlSerializationRetry.ts` 一份，17 个 provider adapter 各新增一条到该平台原语的入边（15 条，sqlite↔postgresql 孪生折叠掉 2）。同批 module-symbol-owners 降 10、mutation-entrypoints 降 10。起因是本机 100 客户端全量取证实测：服务端 3210 次 40001 里有 429 次耗尽「3 次、无退避」的预算，原样变成用户可见的 500。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -475,12 +481,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25673,
+      "baseline": 25663,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877",
+    "sourceDigest": "sha256:15b66adaad0fd8cf3ceccbcd8d884aec07ff574f223f5cc8fb502644e38af0b6",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +499,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ae23150e14a8252f61f991e00a16fb7d8ab94acd",
-    "contentDigest": "sha256:3defed83f96a07011255f538cb2b1019270bd549dd4d473ba0c180030f53fbca",
+    "currentSnapshotSha": "d7595387e2577b67b4515249c2a0a95bb8b29e38",
+    "contentDigest": "sha256:b817b9ac43b4227ac96bb2d188a407ebe49c66b86e778645bd71e4ebad1b0bec",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

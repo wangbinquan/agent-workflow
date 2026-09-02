@@ -7,28 +7,10 @@ import type {
   RuntimeRow,
   RuntimeUpdateRecord,
 } from '../application/runtimeRegistryOperations'
+import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 type PostgresqlTransaction = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
 type RuntimeTestSession = typeof mcpRuntimeTestSessions.$inferSelect
-
-function property(value: object, key: PropertyKey): unknown {
-  return Reflect.get(value, key)
-}
-
-function retryableTransactionError(error: unknown): boolean {
-  let current = error
-  for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
-    const code = property(current, 'code')
-    const sqlState = property(current, 'errno')
-    // RFC-349：Bun.SQL 的 `PostgresError` 把 SQLSTATE 放在 `errno`，`code` 恒为
-    // `ERR_POSTGRES_SERVER_ERROR`。只看 `code` 的判据一次都不会命中，SERIALIZABLE
-    // 冲突就原样变成 500——托管取证跑实测 77 次。
-    if (code === '40001' || code === '40P01') return true
-    if (sqlState === '40001' || sqlState === '40P01') return true
-    current = property(current, 'cause')
-  }
-  return false
-}
 
 async function serializable<T>(
   db: PostgresqlDatabaseClient,
@@ -41,7 +23,7 @@ async function serializable<T>(
         return await body(transaction)
       })
     } catch (error) {
-      if (attempt < 2 && retryableTransactionError(error)) continue
+      if (await retryPostgresqlSerialization(attempt, error)) continue
       throw error
     }
   }

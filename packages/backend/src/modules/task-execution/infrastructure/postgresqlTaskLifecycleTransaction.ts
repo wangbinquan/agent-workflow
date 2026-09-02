@@ -26,6 +26,7 @@ import type {
 import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { TaskExecutionError } from '../application/taskExecutionError'
+import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 export type PostgresqlTaskExecutionTransaction = PostgresqlCommittedEventTransaction
 
@@ -43,21 +44,6 @@ export type PostgresqlHumanGateTaskTransition =
   | 'release-review'
   | 'release-human'
 
-function retryable(error: unknown): boolean {
-  let current: unknown = error
-  for (let depth = 0; depth < 4 && current !== null && typeof current === 'object'; depth += 1) {
-    const code = (current as { readonly code?: unknown }).code
-    const sqlState = (current as { readonly errno?: unknown }).errno
-    // RFC-349：Bun.SQL 的 `PostgresError` 把 SQLSTATE 放在 `errno`，`code` 恒为
-    // `ERR_POSTGRES_SERVER_ERROR`。只看 `code` 的判据一次都不会命中，SERIALIZABLE
-    // 冲突就原样变成 500——托管取证跑实测 77 次。
-    if (code === '40001' || code === '40P01') return true
-    if (sqlState === '40001' || sqlState === '40P01') return true
-    current = (current as { readonly cause?: unknown }).cause
-  }
-  return false
-}
-
 export async function withPostgresqlSerializableTaskExecution<T>(
   db: PostgresqlDatabaseClient,
   body: (tx: PostgresqlTaskExecutionTransaction) => Promise<T>,
@@ -69,7 +55,7 @@ export async function withPostgresqlSerializableTaskExecution<T>(
         return await body(tx)
       })
     } catch (error) {
-      if (attempt < 2 && retryable(error)) continue
+      if (await retryPostgresqlSerialization(attempt, error)) continue
       throw error
     }
   }

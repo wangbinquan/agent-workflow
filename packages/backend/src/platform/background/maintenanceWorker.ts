@@ -92,6 +92,7 @@ import {
   routeMaintenanceWorkerRequest,
   type MaintenanceWorkerInitRequest,
 } from './maintenanceWorkerMessageRouter'
+import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
 
 declare const self: Worker
 
@@ -194,19 +195,7 @@ function isSqliteBusy(error: unknown): boolean {
 }
 
 function postgresqlRetryCode(error: unknown): '40001' | '40P01' | undefined {
-  let current: unknown = error
-  for (let depth = 0; depth < 4; depth += 1) {
-    if (typeof current !== 'object' || current === null) return undefined
-    const code = (current as { readonly code?: unknown }).code
-    const sqlState = (current as { readonly errno?: unknown }).errno
-    // RFC-349：Bun.SQL 的 `PostgresError` 把 SQLSTATE 放在 `errno`，`code` 恒为
-    // `ERR_POSTGRES_SERVER_ERROR`。只看 `code` 的判据一次都不会命中，SERIALIZABLE
-    // 冲突就原样变成 500——托管取证跑实测 77 次。
-    if (code === '40001' || code === '40P01') return code
-    if (sqlState === '40001' || sqlState === '40P01') return sqlState
-    current = (current as { readonly cause?: unknown }).cause
-  }
-  return undefined
+  return postgresqlSerializationFailureCode(error)
 }
 
 function retryableLedgerError(error: unknown): 'sqlite-busy' | 'postgresql-transient' | undefined {

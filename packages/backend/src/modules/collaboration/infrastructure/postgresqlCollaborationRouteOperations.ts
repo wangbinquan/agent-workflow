@@ -85,6 +85,7 @@ import {
 import { buildReviewAnchorDocument, resolveReviewAnchor } from '../domain/reviewAnchor'
 import { PostgresqlCommittedReviewArtifactReader } from './postgresqlCommittedReviewArtifactReader'
 import { PostgresqlManualQuestionOpenWriter } from './postgresqlManualQuestionOpenWriter'
+import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
 type DocVersionRow = typeof docVersions.$inferSelect
@@ -94,21 +95,6 @@ type ClarifyRoundRow = typeof clarifyRounds.$inferSelect
 
 const LOCAL_DECIDER = 'local'
 
-function isRetryablePostgresqlError(error: unknown): boolean {
-  let current: unknown = error
-  for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
-    const code = Reflect.get(current, 'code')
-    const sqlState = Reflect.get(current, 'errno')
-    // RFC-349：Bun.SQL 的 `PostgresError` 把 SQLSTATE 放在 `errno`，`code` 恒为
-    // `ERR_POSTGRES_SERVER_ERROR`。只看 `code` 的判据一次都不会命中，SERIALIZABLE
-    // 冲突就原样变成 500——托管取证跑实测 77 次。
-    if (code === '40001' || code === '40P01') return true
-    if (sqlState === '40001' || sqlState === '40P01') return true
-    current = Reflect.get(current, 'cause')
-  }
-  return false
-}
-
 async function serializable<T>(db: PostgresqlDatabaseClient, body: (tx: PgTx) => Promise<T>) {
   for (let attempt = 0; ; attempt += 1) {
     try {
@@ -117,7 +103,7 @@ async function serializable<T>(db: PostgresqlDatabaseClient, body: (tx: PgTx) =>
         return await body(tx)
       })
     } catch (error) {
-      if (attempt < 2 && isRetryablePostgresqlError(error)) continue
+      if (await retryPostgresqlSerialization(attempt, error)) continue
       throw error
     }
   }

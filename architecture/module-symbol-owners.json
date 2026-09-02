@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1887,
+    "backendFiles": 1888,
     "frontendFiles": 621,
-    "legacyFiles": 633,
+    "legacyFiles": 634,
     "moduleFiles": 1254,
-    "productionFiles": 2663,
+    "productionFiles": 2664,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25673
+    "symbolsIncludingFileRoots": 25663
   },
   "entries": [
     {
@@ -1605,18 +1605,6 @@
       "symbol": "GLOBAL_POLICY_ID",
       "targetContext": "identity-access",
       "targetLayer": "domain"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "auth",
-      "exported": false,
-      "file": "packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts",
-      "id": "owner:packages/backend/src/auth/infrastructure/postgresqlAuthPersistence.ts#isRetryable",
-      "removeAfterWave": "W4-E0",
-      "status": "legacy-target",
-      "symbol": "isRetryable",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
     },
     {
       "currentContext": "legacy",
@@ -6223,6 +6211,102 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "quickCheckDbFile",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": false,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": false,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#BACKOFF_BASE_MS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "BACKOFF_BASE_MS",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": false,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#BACKOFF_CEILING_MULTIPLIER",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "BACKOFF_CEILING_MULTIPLIER",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#isPostgresqlSerializationFailure",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isPostgresqlSerializationFailure",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#POSTGRESQL_SERIALIZATION_ATTEMPTS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "POSTGRESQL_SERIALIZATION_ATTEMPTS",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#postgresqlSerializationBackoffMs",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "postgresqlSerializationBackoffMs",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#postgresqlSerializationFailureCode",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "postgresqlSerializationFailureCode",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "id": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "retryPostgresqlSerialization",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -25822,18 +25906,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#isRetryablePostgresqlError",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isRetryablePostgresqlError",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#listPostgresqlClarifySummaries",
       "removeAfterWave": null,
       "status": "current-module",
@@ -27178,18 +27250,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#retrySerializable",
       "removeAfterWave": null,
       "status": "current-module",
@@ -27278,18 +27338,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlManualQuestionOpenWriter",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -60077,18 +60125,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#isRetryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isRetryable",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
       "id": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#LoadedOidcState",
       "removeAfterWave": null,
       "status": "current-module",
@@ -60257,18 +60293,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts#isRetryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isRetryable",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts",
       "id": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts#isSlugUniqueError",
       "removeAfterWave": null,
       "status": "current-module",
@@ -60405,18 +60429,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "identityKey",
-      "targetContext": "identity-access",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "identity-access",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts",
-      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts#isRetryablePostgresqlTransactionError",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isRetryablePostgresqlTransactionError",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
@@ -98458,18 +98470,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#isRetryableTransactionError",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "isRetryableTransactionError",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#PostgresqlResourceCatalogTransaction",
@@ -134197,18 +134197,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#TERMINAL",
       "removeAfterWave": null,
       "status": "current-module",
@@ -134725,18 +134713,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#serializable",
       "removeAfterWave": null,
       "status": "current-module",
@@ -134821,18 +134797,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#serializable",
       "removeAfterWave": null,
       "status": "current-module",
@@ -134897,18 +134861,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlTaskExecutionIntentTerminalPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -135125,18 +135077,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "resolveManagedProcesses",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -135515,18 +135455,6 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#transitionPostgresqlHumanGateTaskTx",
@@ -135677,18 +135605,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlTaskOwnershipPersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -137801,18 +137717,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlTerminalMaintenancePersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#retryable",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "retryable",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -159004,30 +158908,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "PostgresqlTransaction",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
-      "id": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#property",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "property",
-      "targetContext": "platform",
-      "targetLayer": "runtime-registry"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts",
-      "id": "owner:packages/backend/src/platform/runtime-registry/infrastructure/postgresqlRuntimeRegistryPersistence.ts#retryableTransactionError",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "retryableTransactionError",
       "targetContext": "platform",
       "targetLayer": "runtime-registry"
     },
@@ -308747,5 +308627,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877"
+  "sourceDigest": "sha256:15b66adaad0fd8cf3ceccbcd8d884aec07ff574f223f5cc8fb502644e38af0b6"
 }

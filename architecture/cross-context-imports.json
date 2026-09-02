@@ -341,6 +341,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:00aae42f93eabb423cbf",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/legacyMissionDrain.ts#$file",
@@ -11102,6 +11119,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1f99ef6f9fcda719b788",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts#$file",
@@ -11456,6 +11490,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ValidationError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:208b1c5b2743a24cae92",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -11899,6 +11950,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts",
       "toSymbol": "PostgresqlResourcePackageProviderComposition",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:21654b51696564ce12b2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -20758,6 +20826,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3b40221bea9a38efa43b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/ownerIdentityQueries.ts#$file",
@@ -22528,6 +22613,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:401a00c80b36905de52d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
       "fromSymbol": "$file",
@@ -23917,6 +24019,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
       "toPath": "packages/backend/src/util/log.ts",
       "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:44fe36639e466768eb34",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -33389,6 +33508,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6003ac2a824465c2e5f0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/mcpRuntimeTest.ts#$file",
@@ -39985,6 +40121,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:71b4adc7f90d9a43e25c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts#$file",
@@ -41192,6 +41345,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:75b78651f045fd2927f9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#$file",
@@ -41733,6 +41903,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7799144cac5cc211067c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -51543,6 +51730,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
       "toSymbol": "composeResourceScopeAuthorizationBinding",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:95129ed5803c76eb053b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -75160,6 +75364,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d83df9d2ab932e57f883",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader.ts",
       "fromSymbol": "$file",
@@ -79847,6 +80068,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e61aae4987593372ca6a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -86108,6 +86346,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f945ce77c7ffffe31005",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
+      "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "fromPath": "packages/backend/src/services/resourceAcl.ts",
       "fromSymbol": "$file",
@@ -88742,9 +88997,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5220,
+    "architectureExceptions": 5235,
     "implementationSccs": 0,
-    "observedEdges": 6275,
+    "observedEdges": 6290,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -88975,6 +89230,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/lifecycle.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#$file",
+      "id": "import:00aae42f93eabb423cbf",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "type",
@@ -101089,6 +101360,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#$file",
+      "id": "import:1f99ef6f9fcda719b788",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts",
@@ -101519,6 +101806,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#$file",
+      "id": "import:208b1c5b2743a24cae92",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "value",
@@ -102015,6 +102318,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts#PostgresqlResourcePackageProviderComposition"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#$file",
+      "id": "import:21654b51696564ce12b2",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "value",
@@ -112049,6 +112368,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#$file",
+      "id": "import:3b40221bea9a38efa43b",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/composition/ownerIdentityQueries.ts",
@@ -114066,6 +114401,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts#$file",
+      "id": "import:401a00c80b36905de52d",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyCallClosure.ts#$file",
@@ -115855,6 +116206,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunEvents"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#$file",
+      "id": "import:44fe36639e466768eb34",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "value",
@@ -126561,6 +126928,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts#$file",
+      "id": "import:6003ac2a824465c2e5f0",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/mcpRuntimeTest.ts",
@@ -134193,6 +134576,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workgroupOperations.ts#composeWorkgroupCatalog"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlManualQuestionOpenWriter.ts#$file",
+      "id": "import:71b4adc7f90d9a43e25c",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts",
@@ -135537,6 +135936,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/memoryInject.ts#injectMemoryForRun"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#$file",
+      "id": "import:75b78651f045fd2927f9",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
@@ -136175,6 +136590,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#$file",
+      "id": "import:7799144cac5cc211067c",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "type",
@@ -147231,6 +147662,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#composeResourceScopeAuthorizationBinding"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcIdentityCrossContext.ts#$file",
+      "id": "import:95129ed5803c76eb053b",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "value",
@@ -173970,6 +174417,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentTerminalPersistence.ts#$file",
+      "id": "import:d83df9d2ab932e57f883",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader.ts#$file",
@@ -179199,6 +179662,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts#$file",
+      "id": "import:e61aae4987593372ca6a",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
     },
     {
       "edgeKind": "type",
@@ -186290,6 +186769,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts#$file",
+      "id": "import:f945ce77c7ffffe31005",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/postgresqlSerializationRetry",
+      "syntax": "static-import",
+      "targetSymbol": "retryPostgresqlSerialization",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/postgresqlSerializationRetry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceMaintenanceSqlStore.ts#$file",
@@ -189690,7 +190185,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877",
+  "sourceDigest": "sha256:15b66adaad0fd8cf3ceccbcd8d884aec07ff574f223f5cc8fb502644e38af0b6",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

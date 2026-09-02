@@ -16,6 +16,12 @@ import { join, resolve } from 'node:path'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import {
+  POSTGRESQL_SERIALIZATION_ATTEMPTS,
+  postgresqlSerializationBackoffMs,
+  postgresqlSerializationFailureCode,
+  retryPostgresqlSerialization,
+} from '@/db/postgresqlSerializationRetry'
 
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
@@ -93,14 +99,76 @@ describe('RFC-349 PostgreSQL serialization retry', () => {
     expect(fixture.attempts()).toBe(1)
   })
 
-  test('every retry predicate in src reads the SQLSTATE Bun actually sets', () => {
-    const offenders: string[] = []
+  // 2026-09-02：本机 100 客户端全量取证实测——服务端记录 3210 次 40001，其中 429 次
+  // （13.4%）耗尽「3 次、无退避」的预算后原样变成 500，`postgresql-normal` 相位因此
+  // 判红（`runtimePhaseFailures` 要求 httpErrors===0）。预算与退避从此只有一份。
+  test('the SQLSTATE decision lives in exactly one module', () => {
+    const owners: string[] = []
     for (const file of sourceFiles(SRC_ROOT)) {
       const source = readFileSync(file, 'utf8')
-      if (!source.includes("'40001'")) continue
-      if (source.includes('errno')) continue
-      offenders.push(file.slice(SRC_ROOT.length + 1))
+      if (!/(?:code|sqlState|errno)\s*===\s*'40001'/.test(source)) continue
+      owners.push(file.slice(SRC_ROOT.length + 1))
     }
-    expect(offenders).toEqual([])
+    expect(
+      owners,
+      '又有人自带了一份 SQLSTATE 判据。判据、重试预算与退避是一体的策略，' +
+        '复制一份就意味着那条路径悄悄退回「3 次、无退避」',
+    ).toEqual(['db/postgresqlSerializationRetry.ts'])
+  })
+
+  test('the shared policy reads both code and errno, through the cause chain', () => {
+    expect(postgresqlSerializationFailureCode(bunPostgresError('40001', 'conflict'))).toBe('40001')
+    expect(
+      postgresqlSerializationFailureCode(
+        Object.assign(new Error('Failed query: commit'), {
+          cause: bunPostgresError('40P01', 'deadlock detected'),
+        }),
+      ),
+    ).toBe('40P01')
+    // Some drivers put SQLSTATE on `code` directly; both spellings decide the same.
+    expect(
+      postgresqlSerializationFailureCode(Object.assign(new Error('x'), { code: '40001' })),
+    ).toBe('40001')
+    expect(
+      postgresqlSerializationFailureCode(bunPostgresError('23505', 'duplicate')),
+    ).toBeUndefined()
+    expect(postgresqlSerializationFailureCode('boom')).toBeUndefined()
+  })
+
+  test('the budget is bounded and every retry backs off with full jitter', async () => {
+    expect(POSTGRESQL_SERIALIZATION_ATTEMPTS).toBeGreaterThan(3)
+
+    // Full jitter: the delay is uniform in [0, ceiling), and the ceiling doubles
+    // per attempt until it is capped. A fixed delay would let a batch of
+    // conflicting transactions retry in lockstep and collide again.
+    expect(postgresqlSerializationBackoffMs(0, () => 0.999)).toBeCloseTo(2 * 0.999, 5)
+    expect(postgresqlSerializationBackoffMs(3, () => 0.999)).toBeCloseTo(16 * 0.999, 5)
+    expect(postgresqlSerializationBackoffMs(0, () => 0)).toBe(0)
+    // Capped, so a long budget cannot blow the evidence gate's 1000ms per request.
+    const worst = Array.from({ length: POSTGRESQL_SERIALIZATION_ATTEMPTS }, (_unused, attempt) =>
+      postgresqlSerializationBackoffMs(attempt, () => 1),
+    ).reduce((total, delay) => total + delay, 0)
+    expect(worst).toBeLessThan(200)
+
+    const conflict = bunPostgresError('40001', 'conflict')
+    expect(await retryPostgresqlSerialization(0, conflict)).toBe(true)
+    expect(
+      await retryPostgresqlSerialization(POSTGRESQL_SERIALIZATION_ATTEMPTS - 1, conflict),
+    ).toBe(false)
+    expect(await retryPostgresqlSerialization(0, bunPostgresError('23505', 'duplicate'))).toBe(
+      false,
+    )
+  })
+
+  test('a task-execution transaction consumes the whole shared budget before failing', async () => {
+    const conflicts = Array.from({ length: POSTGRESQL_SERIALIZATION_ATTEMPTS - 1 }, () =>
+      bunPostgresError('40001', 'conflict'),
+    )
+    const fixture = clientThatFails(conflicts)
+
+    await expect(
+      withPostgresqlSerializableTaskExecution(fixture.db, async () => 'committed'),
+    ).resolves.toBe('committed')
+    expect(fixture.attempts()).toBe(POSTGRESQL_SERIALIZATION_ATTEMPTS)
   })
 })
