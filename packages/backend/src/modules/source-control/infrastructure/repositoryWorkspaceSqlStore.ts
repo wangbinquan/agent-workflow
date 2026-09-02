@@ -180,7 +180,12 @@ function scheduledReferenceIds(rows: readonly { readonly launch_payload: string 
 function referencedCondition(scheduleIds: ReadonlySet<string>): SQLWrapper {
   const scheduled =
     scheduleIds.size === 0
-      ? sql`0`
+      ? // RFC-349: this fragment sits in an `OR` arm, and the same builder now
+        // renders for PostgreSQL, which types `0` as integer and rejects the
+        // whole statement (`argument of OR must be type boolean, not type
+        // integer`). `false` is the literal both dialects agree on — it is what
+        // drizzle's own empty `inArray` emits.
+        sql`false`
       : sql`${cachedRepos.id} in (${sql.join(
           [...scheduleIds].map((id) => sql`${id}`),
           sql`, `,

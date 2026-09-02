@@ -34,6 +34,16 @@ export interface DaemonProviderSessionFactory<Session extends ManagedDaemonProvi
 
 export interface DaemonProviderSessionController<Session extends ManagedDaemonProviderSession> {
   current(): Session
+  /**
+   * Non-null exactly while `current` is being replaced. Listener delegates must
+   * await it before they resolve `current`: composing the target reads and
+   * writes through process-wide provider state (RFC-349's shared table
+   * projection), so a request served by the outgoing composition inside that
+   * window compiles target-shaped SQL against the source client and fails with
+   * an opaque driver error. Holding is bounded by the composition build and is
+   * the difference between a slightly slow control-plane poll and a 500.
+   */
+  handover(): Promise<void> | null
   pauseBackgroundWriters(input: DaemonProviderSessionLifecycleInput): Promise<void>
   switchProviderComposition(input: DaemonProviderSessionLifecycleInput): Promise<void>
   resumeBackgroundWriters(input: DaemonProviderSessionLifecycleInput): Promise<void>
@@ -75,9 +85,18 @@ export function createDaemonProviderSessionController<
 >(input: {
   readonly initial: Session
   readonly factory: DaemonProviderSessionFactory<Session>
+  /**
+   * Called with whatever session owns the listener after every composition
+   * attempt — the new one, or the source when the attempt failed. The
+   * controller itself knows no provider state; bootstrap uses this to keep
+   * process-wide provider selection pinned to the serving composition, which
+   * is what makes a failed cutover leave a working daemon behind.
+   */
+  readonly onCurrentSelected?: (session: Session) => void
 }): DaemonProviderSessionController<Session> {
   let current = input.initial
   let standby: Session | null = null
+  let handoverBarrier: Promise<void> | null = null
   let pausedByOperationId: string | null = null
   let stopped = false
   const retired = new Set<Session>()
@@ -115,6 +134,7 @@ export function createDaemonProviderSessionController<
 
   return Object.freeze({
     current: () => current,
+    handover: () => handoverBarrier,
 
     async pauseBackgroundWriters(lifecycleInput: DaemonProviderSessionLifecycleInput) {
       assertLive()
@@ -138,44 +158,62 @@ export function createDaemonProviderSessionController<
         return
       }
 
-      // Before target admission opens, rollback reuses the exact frozen source
-      // composition instead of creating a second source session. The failed
-      // candidate never admitted business/background work and can be retired.
-      const rollbackStandby = standby
-      if (
-        rollbackStandby !== null &&
-        rollbackStandby.provider === lifecycleInput.provider &&
-        rollbackStandby.generationId === lifecycleInput.generationId
-      ) {
-        const failedCandidate = current
-        current = rollbackStandby
-        standby = null
-        await closeRetired(failedCandidate)
-        return
+      // Everything below either replaces `current` or reinstates it after a
+      // failed attempt, and composing a provider moves process-wide provider
+      // state. Fence the listener for the whole attempt so no request is ever
+      // served by a composition that no longer matches that state.
+      let releaseHandover: () => void = () => {}
+      handoverBarrier = new Promise<void>((resolve) => {
+        releaseHandover = resolve
+      })
+      const settleHandover = (): void => {
+        handoverBarrier = null
+        input.onCurrentSelected?.(current)
+        releaseHandover()
       }
 
-      // `create` must finish while the old session remains the current frozen
-      // composition. A failed candidate therefore leaves recovery able to
-      // resume the exact source session.
-      const candidate = await input.factory.create(lifecycleInput)
       try {
-        assertSessionMatches(candidate, lifecycleInput)
-      } catch (error) {
-        try {
-          await candidate.close({ reason: 'provider-switch' })
-        } catch {
-          // The mismatch is the authoritative bootstrap failure. A candidate
-          // that cannot close never becomes current and has no admitted work.
+        // Before target admission opens, rollback reuses the exact frozen source
+        // composition instead of creating a second source session. The failed
+        // candidate never admitted business/background work and can be retired.
+        const rollbackStandby = standby
+        if (
+          rollbackStandby !== null &&
+          rollbackStandby.provider === lifecycleInput.provider &&
+          rollbackStandby.generationId === lifecycleInput.generationId
+        ) {
+          const failedCandidate = current
+          current = rollbackStandby
+          standby = null
+          await closeRetired(failedCandidate)
+          return
         }
-        throw error
-      }
 
-      const previous = current
-      current = candidate
-      if (standby !== null) await closeRetired(standby)
-      // Do not close the frozen source yet. It is the cutover-horizon rollback
-      // composition until the target has successfully started all writers.
-      standby = previous
+        // `create` must finish while the old session remains the current frozen
+        // composition. A failed candidate therefore leaves recovery able to
+        // resume the exact source session.
+        const candidate = await input.factory.create(lifecycleInput)
+        try {
+          assertSessionMatches(candidate, lifecycleInput)
+        } catch (error) {
+          try {
+            await candidate.close({ reason: 'provider-switch' })
+          } catch {
+            // The mismatch is the authoritative bootstrap failure. A candidate
+            // that cannot close never becomes current and has no admitted work.
+          }
+          throw error
+        }
+
+        const previous = current
+        current = candidate
+        if (standby !== null) await closeRetired(standby)
+        // Do not close the frozen source yet. It is the cutover-horizon rollback
+        // composition until the target has successfully started all writers.
+        standby = previous
+      } finally {
+        settleHandover()
+      }
     },
 
     async resumeBackgroundWriters(lifecycleInput: DaemonProviderSessionLifecycleInput) {

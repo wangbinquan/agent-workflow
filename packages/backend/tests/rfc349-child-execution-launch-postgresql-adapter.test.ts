@@ -55,11 +55,9 @@ function postgresqlFixture(trace: string[]) {
     if (normalized.startsWith('insert into "agent_workflow"."tasks"')) {
       trace.push('task:insert')
     }
-    if (
-      normalized.includes('agent_workflow_meta') &&
-      normalized.includes('database_generations') &&
-      normalized.includes('first_live_write_at')
-    ) {
+    // RFC-349: matches both the one-shot live-write marker and the
+    // per-transaction generation fence.
+    if (normalized.includes('agent_workflow_meta') && normalized.includes('database_generations')) {
       return sqlRows({
         objects: [{ generation_id: 'dbg_child_launch_pg' }],
         values: [['dbg_child_launch_pg']],

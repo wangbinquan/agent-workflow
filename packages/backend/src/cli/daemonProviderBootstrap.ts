@@ -40,6 +40,12 @@ export interface CreateDaemonProviderBootstrapInput<WebSocket = DaemonProviderLi
   >
   /** Production passes the public System Operations factory explicitly. */
   readonly createMigrationAdmission?: DatabaseMigrationDaemonAdmissionFactory
+  /**
+   * Notified with the session that owns the listener after every composition
+   * attempt. Bootstrap uses it to keep process-wide provider selection pinned
+   * to the serving composition, including after a failed cutover.
+   */
+  readonly onCurrentSelected?: (session: DaemonProviderListenerRuntimeSession<WebSocket>) => void
 }
 
 export function createDaemonProviderBootstrap<WebSocket = DaemonProviderListenerWebSocket>(
@@ -48,6 +54,9 @@ export function createDaemonProviderBootstrap<WebSocket = DaemonProviderListener
   const controller = createDaemonProviderSessionController({
     initial: input.initialSession,
     factory: input.sessionFactory,
+    ...(input.onCurrentSelected === undefined
+      ? {}
+      : { onCurrentSelected: input.onCurrentSelected }),
   })
   const admission = createDaemonProviderMigrationAdmission({
     controller,

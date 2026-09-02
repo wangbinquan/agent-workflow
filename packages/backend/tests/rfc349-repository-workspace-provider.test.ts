@@ -279,4 +279,22 @@ describe('RFC-349 repository workspace provider boundary', () => {
     expect(insert).not.toContain('("cached_repos"."id"')
     expect(fixture.executions.some((query) => query.includes('database_generations'))).toBeTrue()
   })
+
+  // RFC-349 —— 这条守卫来自托管取证跑（真外置 PostgreSQL）：`/api/cached-repos`
+  // 与 `/api/overview` 的分面统计在 `postgresql-normal` / `postgresql-maintenance`
+  // 两个相位共打出 563 次
+  // `argument of OR must be type boolean, not type integer` —— 全是 500。
+  // 成因是 referenced 谓词在「没有定时任务引用」时用 `sql\`0\`` 当 OR 的一个分支：
+  // SQLite 把 0 当 false，PostgreSQL 不接受整数做布尔。两个 dialect 都认的字面量
+  // 是 `false`（drizzle 自己的空 `inArray` 也是这么发的）。
+  test('the cached-repo facet predicate uses a boolean literal both dialects accept', async () => {
+    const fixture = postgresqlFixture()
+    await fixture.store.listCachedRepoPage({ limit: 20 })
+
+    const facets = fixture.executions.find((query) => query.includes('referenced_count'))
+    expect(facets).toBeDefined()
+    // The OR arm for "no scheduled task references this repo".
+    expect(facets).toContain('or false')
+    expect(facets).not.toMatch(/\bor 0\b/)
+  })
 })

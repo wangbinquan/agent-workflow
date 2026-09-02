@@ -48,21 +48,103 @@ function mutationCount(rows: readonly Record<string, unknown>[]): number {
     : rows.length
 }
 
-async function markFirstGenerationWrite(
-  connection: PostgresqlReservedConnection,
+/**
+ * Runtimes whose generation this process has already durably marked as
+ * live-written. Keyed by the runtime rather than the generation id so a second
+ * composition of the same generation (and every test fixture) starts clean.
+ */
+const markedGenerations = new WeakSet<PostgresqlDatabaseRuntime>()
+
+/**
+ * Per-transaction generation fence. A read: the row is only ever written by the
+ * one-shot marker below and by generation retirement, so concurrent business
+ * writes never conflict here — a serialization failure at this statement means
+ * the generation really was retired underneath the transaction, which is
+ * exactly what the fence exists to catch.
+ */
+async function assertActiveGeneration(
+  connection: PostgresqlPool | PostgresqlReservedConnection,
   runtime: PostgresqlDatabaseRuntime,
 ): Promise<void> {
   const rows = await connection.unsafe(
-    'UPDATE "agent_workflow_meta"."database_generations" ' +
-      'SET first_live_write_at = COALESCE(first_live_write_at, ' +
-      'floor(extract(epoch from clock_timestamp()) * 1000)::bigint) ' +
-      "WHERE generation_id = $1 AND state = 'active' RETURNING generation_id",
+    'SELECT generation_id FROM "agent_workflow_meta"."database_generations" ' +
+      "WHERE generation_id = $1 AND state = 'active'",
     [runtime.generationId],
   )
   if (rows.length !== 1) {
     throw new PostgresqlGenerationFenceError(
       'PostgreSQL business write rejected by the active database generation fence',
     )
+  }
+}
+
+/**
+ * RFC-349 rollback horizon: record that the target generation has taken a live
+ * business write. Two properties matter and neither survives the original
+ * `SET first_live_write_at = COALESCE(first_live_write_at, now)` shape:
+ *
+ * - It must not be re-written once set. That statement wrote the same single
+ *   row on *every* business statement, so any two concurrent SERIALIZABLE
+ *   transactions — including the session touch every authenticated request
+ *   performs — collided on it. The hosted evidence run failed with 38
+ *   `could not serialize access due to concurrent update` in a 12-second phase,
+ *   all of them 500s the caller never caused. `WHERE first_live_write_at IS
+ *   NULL` makes the statement a no-op after the first success, so the steady
+ *   state has no writer at all.
+ * - The first writers must not collide either. Running it on its own pooled
+ *   connection puts it at READ COMMITTED, where a loser re-evaluates the
+ *   predicate after the winner commits, matches no row and returns quietly,
+ *   instead of aborting a SERIALIZABLE business transaction.
+ *
+ * The marker therefore commits strictly *before* the business write it belongs
+ * to rather than with it — a deliberate deviation from design §11.6's
+ * "same transaction". It can only fail conservatively: the marker may outlive a
+ * business transaction that rolled back, which closes the instant-rollback
+ * horizon one write too early. The reverse — data committed on the target with
+ * no marker — remains impossible.
+ */
+const MARKER_RESERVE_TIMEOUT_MS = 2_000
+
+async function markFirstGenerationWrite(
+  runtime: PostgresqlDatabaseRuntime,
+  caller: PostgresqlPool | PostgresqlReservedConnection,
+): Promise<void> {
+  if (markedGenerations.has(runtime)) return
+  // A connection of its own, never the pool's shared query path: a pooled
+  // statement can land on a session another caller has already opened a
+  // transaction on, and this write would then arrive before that transaction's
+  // `SET TRANSACTION ISOLATION LEVEL`. But `poolMax` can be 1, and the caller
+  // is already holding a connection while it waits here — so bound the wait and
+  // fall back to the caller's own session rather than deadlocking. The fallback
+  // only reintroduces the one-time race between the very first writers.
+  let dedicated: PostgresqlReservedConnection | null = null
+  try {
+    dedicated = await runtime
+      .providerPool()
+      .reserve({ signal: AbortSignal.timeout(MARKER_RESERVE_TIMEOUT_MS) })
+  } catch {
+    dedicated = null
+  }
+  try {
+    const rows = await (dedicated ?? caller).unsafe(
+      'WITH marked AS (' +
+        'UPDATE "agent_workflow_meta"."database_generations" ' +
+        'SET first_live_write_at = ' +
+        'floor(extract(epoch from clock_timestamp()) * 1000)::bigint ' +
+        "WHERE generation_id = $1 AND state = 'active' AND first_live_write_at IS NULL " +
+        'RETURNING generation_id) ' +
+        'SELECT generation_id FROM marked UNION ALL ' +
+        'SELECT generation_id FROM "agent_workflow_meta"."database_generations" ' +
+        "WHERE generation_id = $1 AND state = 'active' AND first_live_write_at IS NOT NULL",
+      [runtime.generationId],
+    )
+    // One row means this generation is active and now carries a marker — set by
+    // this statement or by an earlier writer. Either way the process never has
+    // to run it again. Zero rows means the generation is not active;
+    // `assertActiveGeneration` is the authority on that and rejects the write.
+    if (rows.length === 1) markedGenerations.add(runtime)
+  } finally {
+    dedicated?.release()
   }
 }
 
@@ -84,13 +166,15 @@ async function withWriteFence<T>(input: {
   const operation = assertPostgresqlBusinessStatement(input.sql)
   if (operation !== 'write') return await input.execute(input.client)
   if (input.transactional) {
-    await markFirstGenerationWrite(input.client as PostgresqlReservedConnection, input.runtime)
+    await markFirstGenerationWrite(input.runtime, input.client)
+    await assertActiveGeneration(input.client, input.runtime)
     return await input.execute(input.client)
   }
+  await markFirstGenerationWrite(input.runtime, input.client)
   const connection = await input.runtime.providerPool().reserve()
   try {
     await connection.unsafe('BEGIN')
-    await markFirstGenerationWrite(connection, input.runtime)
+    await assertActiveGeneration(connection, input.runtime)
     const result = await input.execute(connection)
     await connection.unsafe('COMMIT')
     return result

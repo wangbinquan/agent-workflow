@@ -55,6 +55,10 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (query.includes('database_generations')) return rows([['rfc349_collaboration_runtime']])
     return rows(responses.shift() ?? [])
   }
   const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
@@ -248,11 +252,12 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       expect.stringContaining('select'),
       expect.stringContaining('select'),
       'begin',
-      expect.stringContaining('UPDATE "agent_workflow_meta"."database_generations"'),
+      expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
+      expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."clarify_rounds"'),
       'commit',
     ])
-    expect(postgresql.executions[4]?.sql).toContain('returning')
+    expect(postgresql.executions[5]?.sql).toContain('returning')
   })
 
   test('owns review repair inspection, approval outputs, and document unapproval', async () => {
@@ -364,9 +369,11 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       'begin',
       expect.stringContaining('select'),
       expect.stringContaining('select'),
-      expect.stringContaining('UPDATE "agent_workflow_meta"."database_generations"'),
+      // One process-wide live-write marker, then a generation fence per write.
+      expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
+      expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
       expect.stringContaining('insert into "agent_workflow"."node_run_outputs"'),
-      expect.stringContaining('UPDATE "agent_workflow_meta"."database_generations"'),
+      expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
       expect.stringContaining('insert into "agent_workflow"."node_run_outputs"'),
       'commit',
     ])
@@ -385,8 +392,11 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       }),
     ).resolves.toBe(true)
     expect(postgresqlUnapprove.executions.map(({ sql }) => sql)).toEqual([
+      // The one-shot marker commits on its own reserved session, ahead of the
+      // transaction it belongs to.
+      expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
       'BEGIN',
-      expect.stringContaining('UPDATE "agent_workflow_meta"."database_generations"'),
+      expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."doc_versions"'),
       'COMMIT',
     ])

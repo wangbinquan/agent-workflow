@@ -174,9 +174,11 @@ describe('RFC-349 PostgreSQL auth adapter', () => {
     const statements = fake.executions.map((execution) => execution.sql.trim().toLowerCase())
     expect(statements).toContain('begin')
     expect(statements).toContain('commit')
+    // RFC-349: one process-wide live-write marker plus one per-transaction
+    // generation fence for each of the two writes.
     expect(
       statements.filter((statement) => statement.includes('database_generations')),
-    ).toHaveLength(2)
+    ).toHaveLength(3)
     expect(
       statements.some((statement) =>
         statement.includes('insert into "agent_workflow"."user_sessions"'),
@@ -186,7 +188,8 @@ describe('RFC-349 PostgreSQL auth adapter', () => {
       statements.some((statement) => statement.includes('update "agent_workflow"."user_sessions"')),
     ).toBe(true)
     expect(revocations).toEqual(['session-revoked'])
-    expect(fake.releases).toBe(2)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.releases).toBe(3)
   })
 
   test('policy mutation is serializable and generation-fenced', async () => {
@@ -204,11 +207,13 @@ describe('RFC-349 PostgreSQL auth adapter', () => {
       'begin',
       'set transaction isolation level serializable',
       expect.stringContaining('auth_login_policy'),
-      expect.stringContaining('database_generations'),
+      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
+      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."auth_login_policy"'),
       'commit',
     ])
-    expect(fake.releases).toBe(1)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.releases).toBe(2)
   })
 
   test('session and PAT resolution stay atomic on one reserved connection', async () => {

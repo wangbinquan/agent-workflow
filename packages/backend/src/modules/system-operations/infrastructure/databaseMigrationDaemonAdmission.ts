@@ -74,6 +74,11 @@ function isMigrationControlRequest(request: Request): boolean {
     path === '/api/database' ||
     path.startsWith('/api/database/') ||
     path === '/api/health' ||
+    // The endpoint an operator (and the RFC-349 evidence run) watches a
+    // migration through. It reads an in-memory maintenance projection plus
+    // in-memory pool telemetry — no database work of its own — so refusing it
+    // only blinds the caller during the exact window it exists to describe.
+    path === '/api/maintenance/status' ||
     (!path.startsWith('/api/') && !path.startsWith('/ws/'))
   )
 }

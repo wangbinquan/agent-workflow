@@ -399,8 +399,10 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
     ).toBeTrue()
     expect(statements.map((statement) => statement.trim().toLowerCase())).toEqual([
       expect.stringMatching(/^select/),
+      // The one-shot live-write marker commits on its own reserved session.
+      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       'begin',
-      expect.stringContaining('update "agent_workflow_meta"."database_generations"'),
+      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."tasks"'),
       'commit',
     ])

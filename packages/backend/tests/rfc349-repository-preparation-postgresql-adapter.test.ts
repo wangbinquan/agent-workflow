@@ -46,11 +46,9 @@ function postgresqlFixture(trace: string[]) {
     executions.push({ sql: query, parameters })
     const normalized = query.trim().toLowerCase()
     if (normalized === 'commit') trace.push('db:commit')
-    if (
-      normalized.includes('agent_workflow_meta') &&
-      normalized.includes('database_generations') &&
-      normalized.includes('first_live_write_at')
-    ) {
+    // RFC-349: matches both the one-shot live-write marker and the
+    // per-transaction generation fence.
+    if (normalized.includes('agent_workflow_meta') && normalized.includes('database_generations')) {
       return sqlRows({
         objects: [{ generation_id: 'dbg_repo_prep_retry_pg' }],
         values: [['dbg_repo_prep_retry_pg']],

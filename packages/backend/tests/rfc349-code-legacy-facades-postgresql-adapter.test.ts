@@ -32,6 +32,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (sql: string, parameters?: readonly unknown[]) => {
     executions.push({ sql, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (sql.includes('database_generations')) return rows([['dbg_code_legacy_pg']])
     return rows(responses.shift() ?? [])
   }
   const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
@@ -148,11 +152,14 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
     await persistence.replace({ ...row, description: 'updated', updatedAt: 101 })
     await persistence.delete(row.id)
 
-    expect(fake.executions).toHaveLength(12)
-    expect(fake.executions[1]?.sql).toContain('database_generations')
-    expect(fake.executions[2]?.sql).toContain('insert into "agent_workflow"."capability_templates"')
-    expect(fake.executions[6]?.sql).toContain('update "agent_workflow"."capability_templates"')
-    expect(fake.executions[10]?.sql).toContain(
+    // begin/marker/fence/write/commit for the first write, begin/fence/write/
+    // commit for the two that follow — the marker is one-shot per process.
+    expect(fake.executions).toHaveLength(13)
+    expect(fake.executions[0]?.sql).toContain('WITH marked AS (UPDATE "agent_workflow_meta"')
+    expect(fake.executions[2]?.sql).toContain('SELECT generation_id FROM "agent_workflow_meta"')
+    expect(fake.executions[3]?.sql).toContain('insert into "agent_workflow"."capability_templates"')
+    expect(fake.executions[7]?.sql).toContain('update "agent_workflow"."capability_templates"')
+    expect(fake.executions[11]?.sql).toContain(
       'delete from "agent_workflow"."capability_templates"',
     )
   })

@@ -5452,8 +5452,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#transaction:223",
-      "line": 223,
+      "id": "tx:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#transaction:307",
+      "line": 307,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#decorateDatabase",
       "status": "clear",
       "symbol": "decorateDatabase",
@@ -5852,7 +5852,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9813931e30ebcec18e6f85d2fa011628c1d0e5f5f4974c4b466828d5814d504d",
+  "sourceDigest": "sha256:1ceda6c71c8635405868ab385a1aa00ea02bd44f566640c2139f8f840266c58a",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

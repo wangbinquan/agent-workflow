@@ -89,6 +89,11 @@ function postgresqlFixture(responses: Response[]) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (query.includes('database_generations'))
+      return rows({ objects: [{ generation_id: 'dbg_event_delivery_pg' }] })
     return rows(responses.shift() ?? {})
   }
   const connection: PostgresqlReservedConnection = {
@@ -184,16 +189,7 @@ describe('RFC-349 Event Center provider behavior', () => {
   })
 
   test('PostgreSQL notification settlement fences both lease owner and attempt count', async () => {
-    const fake = postgresqlFixture([
-      {},
-      { objects: [{ generation_id: 'dbg_event_delivery_pg' }] },
-      { values: [['delivery-1']] },
-      {},
-      {},
-      { objects: [{ generation_id: 'dbg_event_delivery_pg' }] },
-      { values: [] },
-      {},
-    ])
+    const fake = postgresqlFixture([{}, { values: [['delivery-1']] }, {}, {}, { values: [] }, {}])
     const store = createPostgresqlEventStore(fake.db)
 
     await expect(
@@ -231,12 +227,7 @@ describe('RFC-349 Event Center provider behavior', () => {
   })
 
   test('PostgreSQL committed-event manual retry preserves lease and version CAS', async () => {
-    const fake = postgresqlFixture([
-      {},
-      { objects: [{ generation_id: 'dbg_event_delivery_pg' }] },
-      { values: [[3, 500]] },
-      {},
-    ])
+    const fake = postgresqlFixture([{}, { values: [[3, 500]] }, {}])
     const persistence = createPostgresqlCommittedEventDeliveryPersistence(fake.db)
 
     await expect(
@@ -270,11 +261,8 @@ describe('RFC-349 Event Center provider behavior', () => {
       { values: [] },
       {},
       { values: [] },
-      { objects: [{ generation_id: 'dbg_event_delivery_pg' }] },
       { count: 1 },
-      { objects: [{ generation_id: 'dbg_event_delivery_pg' }] },
       { count: 1 },
-      { objects: [{ generation_id: 'dbg_event_delivery_pg' }] },
       { count: 1 },
       {
         values: [

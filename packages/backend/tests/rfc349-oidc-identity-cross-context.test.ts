@@ -58,6 +58,12 @@ function fixture(responses: Response[]) {
   let releases = 0
   const run = (client: Execution['client'], query: string, parameters?: readonly unknown[]) => {
     executions.push({ client, sql: query, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are provider plumbing, not part of this cross-context
+    // script. Answer them without consuming a queued response.
+    if (query.includes('database_generations')) {
+      return rows({ objects: [{ generation_id: 'dbg_oidc_cross_context_pg' }] })
+    }
     return rows(responses.shift() ?? {})
   }
   const connection: PostgresqlReservedConnection = {
@@ -172,7 +178,6 @@ describe('RFC-349 PostgreSQL OIDC identity cross-context transaction', () => {
   })
 
   test('user, access audit, identity, and profile seed commit on one reserved connection', async () => {
-    const generation = { objects: [{ generation_id: 'dbg_oidc_identity_pg' }] }
     const fake = fixture([
       {},
       {},
@@ -181,13 +186,9 @@ describe('RFC-349 PostgreSQL OIDC identity cross-context transaction', () => {
       { values: [] },
       { values: [['sub', 'preferred_username', 'name', 'email']] },
       { values: [] },
-      generation,
       { count: 1 },
-      generation,
       { count: 1 },
-      generation,
       { count: 1 },
-      generation,
       { count: 1 },
       {},
     ])
@@ -230,15 +231,12 @@ describe('RFC-349 PostgreSQL OIDC identity cross-context transaction', () => {
       expect.stringContaining('"agent_workflow"."user_identities"'),
     ])
     expect(sql.filter((statement) => statement.startsWith('update '))).toEqual([
-      expect.stringContaining('"agent_workflow_meta"."database_generations"'),
-      expect.stringContaining('"agent_workflow_meta"."database_generations"'),
-      expect.stringContaining('"agent_workflow_meta"."database_generations"'),
-      expect.stringContaining('"agent_workflow_meta"."database_generations"'),
       expect.stringContaining('"agent_workflow"."user_identities"'),
     ])
     expect(fake.executions.every((execution) => execution.client === 'reserved')).toBe(true)
-    expect(fake.reserves).toBe(1)
-    expect(fake.releases).toBe(1)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.reserves).toBe(2)
+    expect(fake.releases).toBe(2)
     expect(fake.remaining()).toBe(0)
   })
 })

@@ -305,6 +305,7 @@ import {
   createPostgresqlHumanGateContinuationRecoveryQueries,
   createPostgresqlHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
+import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { enforceLimits } from '@/services/limits'
 import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
 
@@ -327,6 +328,11 @@ function isProviderControlRequest(request: Request): boolean {
     path === '/api/database' ||
     path.startsWith('/api/database/') ||
     path === '/api/health' ||
+    // The endpoint an operator (and the RFC-349 evidence run) watches a
+    // migration through. It reads an in-memory maintenance projection plus
+    // in-memory pool telemetry — no database work of its own — so refusing it
+    // only blinds the caller during the exact window it exists to describe.
+    path === '/api/maintenance/status' ||
     (!path.startsWith('/api/') && !path.startsWith('/ws/'))
   )
 }
@@ -3227,6 +3233,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
     },
     createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
+    // RFC-349 —— 表投影是**进程级**的：`createPostgresqlDatabaseClient` 一构造就把
+    // 它改指到 PostgreSQL。割接失败时 current 会退回源 session，但投影不会自己退
+    // 回来，于是整个 daemon 的每一条 SQLite 查询都会以
+    // `no such table: agent_workflow.*` 收场。把选择权钉在**真正在服务的**那份
+    // composition 上，成功与失败两条路径都对。
+    onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
   })
   deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
   await initialProviderSession.resume(providerSessionLifecycle)

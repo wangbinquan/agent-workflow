@@ -224,10 +224,13 @@ describe('RFC-349 token-call audit provider participant', () => {
           statement.includes('limit'),
       ),
     ).toBe(true)
+    // RFC-349: one process-wide live-write marker plus one per-transaction
+    // generation fence for each of the two audit writes.
     expect(
       statements.filter((statement) => statement.includes('database_generations')).length,
-    ).toBe(2)
-    expect(fake.releases).toBe(2)
+    ).toBe(3)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.releases).toBe(3)
   })
 
   test('maintenance invokes the selected AUTH participant without a DB fallback', () => {

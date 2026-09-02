@@ -67,6 +67,17 @@ function createScriptedPostgresqlFixture(
 ): ScriptedPostgresqlFixture {
   const remaining = [...steps]
   const execute = (query: string): SqlRows => {
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are provider plumbing, locked by
+    // `rfc349-postgresql-database-client.test.ts`. This oracle scripts the
+    // adapter's *behavior*, so they never consume a scripted step.
+    if (/"agent_workflow_meta"\."database_generations"/i.test(query)) {
+      return sqlRows({
+        label: 'active generation fence',
+        sql: /./,
+        objects: [{ generation_id: 'dbg_rfc349_dual_provider_oracle' }],
+      })
+    }
     const step = remaining.shift()
     if (step === undefined) {
       throw new Error(`${label}: unexpected PostgreSQL statement: ${query}`)
@@ -112,12 +123,6 @@ function createScriptedPostgresqlFixture(
 
 const BEGIN: SqlStep = { label: 'BEGIN', sql: /^BEGIN$/i }
 const COMMIT: SqlStep = { label: 'COMMIT', sql: /^COMMIT$/i }
-const GENERATION_FENCE: SqlStep = {
-  label: 'active generation fence',
-  sql: /UPDATE "agent_workflow_meta"\."database_generations"/i,
-  objects: [{ generation_id: 'dbg_rfc349_dual_provider_oracle' }],
-}
-
 type MaintenanceRow = Awaited<ReturnType<MaintenanceRunStore['read']>> & object
 
 function maintenanceRow(input: {
@@ -205,7 +210,6 @@ function postgresqlMaintenanceStore(): Readonly<{
       sql: /select .* from "agent_workflow"\."maintenance_runs"/is,
       values: [],
     },
-    GENERATION_FENCE,
     {
       label: 'insert maintenance run',
       sql: /insert into "agent_workflow"\."maintenance_runs"/i,
@@ -230,7 +234,6 @@ function postgresqlMaintenanceStore(): Readonly<{
       sql: /select .* from "agent_workflow"\."maintenance_runs"/is,
       values: [maintenanceValues(pending)],
     },
-    GENERATION_FENCE,
     {
       label: 'claim with lease',
       sql: /update "agent_workflow"\."maintenance_runs"/i,
@@ -238,7 +241,6 @@ function postgresqlMaintenanceStore(): Readonly<{
     },
     COMMIT,
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'reject wrong heartbeat lease',
       sql: /update "agent_workflow"\."maintenance_runs"/i,
@@ -246,7 +248,6 @@ function postgresqlMaintenanceStore(): Readonly<{
     },
     COMMIT,
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'accept live heartbeat lease',
       sql: /update "agent_workflow"\."maintenance_runs"/i,
@@ -254,7 +255,6 @@ function postgresqlMaintenanceStore(): Readonly<{
     },
     COMMIT,
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'accept live settlement lease',
       sql: /update "agent_workflow"\."maintenance_runs"/i,
@@ -262,7 +262,6 @@ function postgresqlMaintenanceStore(): Readonly<{
     },
     COMMIT,
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'reject stale settlement lease',
       sql: /update "agent_workflow"\."maintenance_runs"/i,
@@ -465,7 +464,6 @@ function postgresqlCommittedEventPersistence(events: readonly EventFixtureRow[])
       values: events.map(eventValues),
     },
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'manual retry wins CAS',
       sql: /update "agent_workflow"\."committed_event_deliveries"/i,
@@ -473,7 +471,6 @@ function postgresqlCommittedEventPersistence(events: readonly EventFixtureRow[])
     },
     COMMIT,
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'duplicate manual retry loses CAS',
       sql: /update "agent_workflow"\."committed_event_deliveries"/i,
@@ -607,7 +604,6 @@ function postgresqlApplyJournal(): Readonly<{
       values: APPLY_ROWS.map(applyValues),
     },
     BEGIN,
-    GENERATION_FENCE,
     {
       label: 'settle stale apply by expected-state CAS',
       sql: /update "agent_workflow"\."resource_bundle_applies"/i,

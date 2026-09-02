@@ -55,6 +55,11 @@ function fixture(responses: Array<Response | Error>) {
   let releases = 0
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (query.includes('database_generations'))
+      return rows({ objects: [{ generation_id: 'dbg_integration_pg' }] })
     const response = responses.shift() ?? {}
     if (response instanceof Error) throw response
     return rows(response)
@@ -210,7 +215,6 @@ describe('RFC-349 Integration provider adapters', () => {
 
     const postgresql = fixture([
       {},
-      { objects: [{ generation_id: 'dbg_integration_pg' }] },
       { count: 1 },
       {},
       {
@@ -253,19 +257,13 @@ describe('RFC-349 Integration provider adapters', () => {
     expect(resourceTransaction).toBeDefined()
     expect(postgresqlResourceLoads).toBe(1)
     expect(postgresql.executions[0]?.sql.trim().toLowerCase()).toBe('begin')
-    expect(postgresql.executions[3]?.sql.trim().toLowerCase()).toBe('commit')
-    expect(postgresql.releases).toBe(1)
+    expect(postgresql.executions[4]?.sql.trim().toLowerCase()).toBe('commit')
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(postgresql.releases).toBe(2)
   })
 
   test('PostgreSQL launch reservation serializes on the MR stream before checking open state', async () => {
-    const fake = fixture([
-      {},
-      {},
-      { values: [['open', 4, null]] },
-      { objects: [{ generation_id: 'dbg_integration_pg' }] },
-      { count: 1 },
-      {},
-    ])
+    const fake = fixture([{}, {}, { values: [['open', 4, null]] }, { count: 1 }, {}])
     const persistence = createPostgresqlMrLaunchGuardPersistence(fake.db)
 
     await expect(
@@ -297,17 +295,16 @@ describe('RFC-349 Integration provider adapters', () => {
     expect(lockIndex).toBeGreaterThanOrEqual(0)
     expect(streamReadIndex).toBeGreaterThan(lockIndex)
     expect(guardInsertIndex).toBeGreaterThan(streamReadIndex)
-    expect(fake.releases).toBe(1)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.releases).toBe(2)
   })
 
   test('PostgreSQL verified ingress returns the existing fact and revives its pending effect', async () => {
     const fake = fixture([
       {},
       { values: [['delivery-1', 2]] },
-      { objects: [{ generation_id: 'dbg_integration_pg' }] },
       { count: 1 },
       { values: [['effect-1', 'pending']] },
-      { objects: [{ generation_id: 'dbg_integration_pg' }] },
       { count: 1 },
       {},
     ])
@@ -342,7 +339,8 @@ describe('RFC-349 Integration provider adapters', () => {
         statement.includes('update "agent_workflow"."webhook_mr_control_effects"'),
       ),
     ).toBe(true)
-    expect(fake.releases).toBe(1)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.releases).toBe(2)
   })
 
   test('terminal ingress and launch reservation share one transaction lock key', () => {
@@ -358,16 +356,7 @@ describe('RFC-349 Integration provider adapters', () => {
     const collision = Object.assign(new Error('duplicate key value violates unique constraint'), {
       code: '23505',
     })
-    const fake = fixture([
-      {},
-      { objects: [{ generation_id: 'dbg_integration_pg' }] },
-      collision,
-      {},
-      {},
-      { objects: [{ generation_id: 'dbg_integration_pg' }] },
-      { values: [['delivery-existing', 2]] },
-      {},
-    ])
+    const fake = fixture([{}, collision, {}, {}, { values: [['delivery-existing', 2]] }, {}])
     const persistence = createPostgresqlWebhookDeliveryPersistence(fake.db)
 
     const receipt = await persistence.insert({

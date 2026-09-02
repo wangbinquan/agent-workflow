@@ -1053,7 +1053,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -1064,7 +1064,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -45539,7 +45538,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9813931e30ebcec18e6f85d2fa011628c1d0e5f5f4974c4b466828d5814d504d",
+  "sourceDigest": "sha256:1ceda6c71c8635405868ab385a1aa00ea02bd44f566640c2139f8f840266c58a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

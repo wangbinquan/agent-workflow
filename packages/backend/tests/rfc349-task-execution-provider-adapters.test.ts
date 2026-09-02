@@ -67,6 +67,11 @@ function postgresqlFixture(responses: Response[]) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (query.includes('database_generations'))
+      return rows({ objects: [{ generation_id: 'dbg_task_execution_pg' }] })
     return rows(responses.shift() ?? {})
   }
   const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
@@ -192,12 +197,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       leaseUntil: 100,
       ownerRevision: 3,
     })
-    const fake = postgresqlFixture([
-      {},
-      { objects: [{ generation_id: 'dbg_task_execution_pg' }] },
-      { values: [[4, 250]] },
-      {},
-    ])
+    const fake = postgresqlFixture([{}, { values: [[4, 250]] }, {}])
     const persistence = new PostgresqlTaskOwnershipPersistence(fake.db)
 
     await expect(persistence.heartbeat({ token, now: 150, leaseMs: 100 })).resolves.toMatchObject({
@@ -229,12 +229,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       leaseUntil: 100,
       ownerRevision: 3,
     })
-    const fake = postgresqlFixture([
-      {},
-      { objects: [{ generation_id: 'dbg_task_execution_pg' }] },
-      { values: [] },
-      {},
-    ])
+    const fake = postgresqlFixture([{}, { values: [] }, {}])
 
     await expect(
       new PostgresqlTaskOwnershipPersistence(fake.db).heartbeat({
@@ -254,13 +249,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       leaseUntil: 100,
       ownerRevision: 3,
     })
-    const fake = postgresqlFixture([
-      {},
-      {},
-      { objects: [{ generation_id: 'dbg_task_execution_pg' }] },
-      { values: [[9]] },
-      {},
-    ])
+    const fake = postgresqlFixture([{}, {}, { values: [[9]] }, {}])
 
     await expect(
       withPostgresqlSerializableTaskExecution(fake.db, async (tx) => {
@@ -286,15 +275,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       leaseUntil: 100,
       ownerRevision: 3,
     })
-    const fake = postgresqlFixture([
-      {},
-      {},
-      { objects: [{ generation_id: 'dbg_task_execution_pg' }] },
-      { values: [[9]] },
-      { objects: [{ generation_id: 'dbg_task_execution_pg' }] },
-      { values: [[0]] },
-      {},
-    ])
+    const fake = postgresqlFixture([{}, {}, { values: [[9]] }, { values: [[0]] }, {}])
 
     await expect(
       new PostgresqlTaskEngineApplicationPersistence(fake.db).updateWorkspaceProfile({

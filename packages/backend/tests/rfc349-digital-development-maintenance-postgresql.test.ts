@@ -157,9 +157,10 @@ describe('RFC-349 Digital/Development PostgreSQL maintenance owners', () => {
     expect(sql).toContain('"agent_workflow"."development_missions"')
     expect(sql).toContain('"agent_workflow"."development_bundle_refs"')
     expect(sql).toContain('"agent_workflow"."employee_input_uploads"')
+    // One process-wide live-write marker plus a generation fence per write.
     expect(
       fake.statements.filter((statement) => statement.includes('database_generations')),
-    ).toHaveLength(2)
+    ).toHaveLength(3)
   })
 
   test('writer cutover locks, counts, fences and updates in one PostgreSQL transaction', async () => {

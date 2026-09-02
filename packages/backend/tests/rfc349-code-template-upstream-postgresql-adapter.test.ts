@@ -40,6 +40,12 @@ function fixture() {
   const queued: Array<Parameters<typeof result>[0]> = []
   const run = (sql: string, parameters?: readonly unknown[]) => {
     executions.push({ sql, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (sql.includes('database_generations')) {
+      return result({ objects: [{ generation_id: 'dbg_code_template_pg' }] })
+    }
     return result(queued.shift() ?? {})
   }
   const connection: PostgresqlReservedConnection = { unsafe: run, release() {} }
@@ -197,11 +203,12 @@ describe('RFC-349 PostgreSQL capability-template upstream adapter', () => {
     expect(normalized[2]).toContain('from "agent_workflow"."capability_templates"')
     expect(normalized[3]).toContain('for update')
     expect(normalized[4]).toContain('from "agent_workflow"."capability_templates"')
-    expect(normalized[5]).toContain('database_generations')
-    expect(normalized[6]).toContain('update "agent_workflow"."capability_templates"')
-    expect(normalized[7]).toBe('commit')
-    expect(fake.executions[6]?.parameters).toContain(JSON.stringify({ entry: 'new' }))
-    expect(fake.executions[6]?.parameters).toContain(200)
-    expect(fake.executions[6]?.parameters).toContain(300)
+    expect(normalized[5]).toContain('with marked as (update "agent_workflow_meta"')
+    expect(normalized[6]).toContain('select generation_id from "agent_workflow_meta"')
+    expect(normalized[7]).toContain('update "agent_workflow"."capability_templates"')
+    expect(normalized[8]).toBe('commit')
+    expect(fake.executions[7]?.parameters).toContain(JSON.stringify({ entry: 'new' }))
+    expect(fake.executions[7]?.parameters).toContain(200)
+    expect(fake.executions[7]?.parameters).toContain(300)
   })
 })

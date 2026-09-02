@@ -49,6 +49,11 @@ function fixture(responses: Response[]) {
   let releases = 0
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    // RFC-349: the one-shot live-write marker and the per-transaction
+    // generation fence are infrastructure, not part of the adapter contract
+    // each case queues responses for. Answer them without consuming the queue.
+    if (query.includes('database_generations'))
+      return rows({ objects: [{ generation_id: 'dbg_identity_pg' }] })
     return rows(responses.shift() ?? {})
   }
   const connection: PostgresqlReservedConnection = {
@@ -163,14 +168,7 @@ describe('RFC-349 PostgreSQL identity-access adapter', () => {
   })
 
   test('runs pure decision and CAS persistence in one serializable reserved transaction', async () => {
-    const fake = fixture([
-      {},
-      {},
-      { values: [USER_VALUES] },
-      { objects: [{ generation_id: 'dbg_identity_pg' }] },
-      { count: 1 },
-      {},
-    ])
+    const fake = fixture([{}, {}, { values: [USER_VALUES] }, { count: 1 }, {}])
     const cache = new PostgresqlAuthorityFenceCache()
     const runner = new PostgresqlUserAccessTransactionRunner(fake.db, cache)
 
@@ -193,11 +191,13 @@ describe('RFC-349 PostgreSQL identity-access adapter', () => {
       'begin',
       'set transaction isolation level serializable',
       expect.stringContaining('from "agent_workflow"."users"'),
-      expect.stringContaining('update "agent_workflow_meta"."database_generations"'),
+      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
+      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."users"'),
       'commit',
     ])
-    expect(fake.releases).toBe(1)
+    // +1 reserved session: the one-shot RFC-349 live-write marker.
+    expect(fake.releases).toBe(2)
   })
 
   test('undeclared decision reads fail closed before persistence', async () => {
@@ -221,14 +221,7 @@ describe('RFC-349 PostgreSQL identity-access adapter', () => {
       new Error('duplicate key value violates unique constraint "users_email_unique"'),
       { code: '23505', constraint: 'users_email_unique' },
     )
-    const fake = fixture([
-      {},
-      {},
-      { values: [USER_VALUES] },
-      { objects: [{ generation_id: 'dbg_identity_pg' }] },
-      { error: duplicateEmail },
-      {},
-    ])
+    const fake = fixture([{}, {}, { values: [USER_VALUES] }, { error: duplicateEmail }, {}])
     const runner = new PostgresqlUserAccessTransactionRunner(
       fake.db,
       new PostgresqlAuthorityFenceCache(),
@@ -255,14 +248,7 @@ describe('RFC-349 PostgreSQL identity-access adapter', () => {
       new Error('duplicate key value violates unique constraint "users_username_unique"'),
       { code: '23505', constraint: 'users_username_unique' },
     )
-    const fake = fixture([
-      {},
-      {},
-      { values: [USER_VALUES] },
-      { objects: [{ generation_id: 'dbg_identity_pg' }] },
-      { error: duplicateUsername },
-      {},
-    ])
+    const fake = fixture([{}, {}, { values: [USER_VALUES] }, { error: duplicateUsername }, {}])
     const runner = new PostgresqlUserAccessTransactionRunner(
       fake.db,
       new PostgresqlAuthorityFenceCache(),

@@ -290,7 +290,7 @@ describe('RFC-349 source-control provider adapters', () => {
     expect(sql[0]?.toUpperCase()).toBe('BEGIN')
     expect(sql.some((statement) => statement.startsWith('delete from'))).toBe(true)
     expect(sql.some((statement) => statement.includes('on conflict'))).toBe(true)
-    expect(sql.filter((statement) => statement.includes('database_generations'))).toHaveLength(2)
+    expect(sql.filter((statement) => statement.includes('database_generations'))).toHaveLength(3)
     expect(sql.at(-1)?.toUpperCase()).toBe('COMMIT')
   })
 
