@@ -1,9 +1,10 @@
 # RFC-345 实施计划 — Resource Catalog 与 ResourcePackage 合同归位
 
-状态：Approved / In Progress（对账于 2026-09-02，HEAD `ea9a30187`）；D1～D10 已获用户明确批准。
+状态：Approved / In Progress（2026-09-02）；D1～D10 已获用户明确批准。
 T1～T3 完成；T4a～T4d、T5 六个 cohort 的 aggregate 面、T6 与 T8 已于 2026-08-31 进入 published `main`；
-T7 主路径已切但 deep-import 未归零；**T9 未开始、T10 未做、AC-12 未满足**，RFC-345 / W4-C 不得标 Done。
-逐条判据见 §7「2026-09-02 实施对账」。
+**T9 已完成**（11 条 edge 真退役 + 删掉第 11 个 facade `services/skill-zip.ts`，其余 11 条按 consumer 归属逐条转交；
+账本里 owner 仍为「RFC-345 T9」的 edge = 0），只差账本重采；**T10 未做、AC-12 未满足**，RFC-345 / W4-C 不得标 Done。
+逐条判据见 §7「2026-09-02 实施对账」，T9 结果见 §7.5。
 
 Current-source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`（`HEAD=origin/main`；RFC-344 published implementation
 candidate）。生产实现开始前仍须 fresh fetch；OperationCatalog binding cohort 还必须等待 RFC-344 hosted closeout 后 re-pin 最终
@@ -236,11 +237,11 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 ### T9 — Facade、imports 与 architecture debt closeout
 
-- [ ] 删除 consumer=0 的 resource ACL/ref/catalog/package/aggregate legacy facade；
-- [ ] 保留 facade 必须有 exact remaining consumer + remove owner，不用目录级/prefix exemption；
+- [x] 删除 consumer=0 的 resource ACL/ref/catalog/package/aggregate legacy facade；（本轮 `services/skill-zip.ts`，见 §7.5.1）
+- [x] 保留 facade 必须有 exact remaining consumer + remove owner，不用目录级/prefix exemption；（22 条全部逐条落 owner，见 §7.5）
 - [ ] public surface/cross-context/facade/mutation-entrypoint/transaction-effects ledgers重采；
-- [ ] source-lock 防 `ACL_TABLES`、generic resource service、classic deep import 与 package writer direct arm复辟；
-- [ ] RFC-294 W4-C 每一项建立 exact evidence；
+- [x] source-lock 防 `ACL_TABLES`、generic resource service、classic deep import 与 package writer direct arm复辟；（见 §7.5.3）
+- [x] RFC-294 W4-C 每一项建立 exact evidence；（§7.1～§7.3 + §7.5）
 - [ ] architecture canonical 只在 source freeze/publication critical section 由单 owner生成，不代交 RFC-344 当前 dirty JSON。
 
 **退出门**：AC-1～AC-11 成立；W4-C debt归零或逐项转交已存在的 exact successor，不以“目录已建”代替生产 cutover。
@@ -448,6 +449,54 @@ remaining consumer + remove owner。
    `db/schema.ts` 340、`util/errors.ts` 190、`db/client.ts` 80、`db/txSync.ts` 66、`postgresqlDatabaseClient.ts` 56、
    `auth/actor.ts` 49** —— 主要是双 provider 镜像与平台原语边，不是 RC 自身的业务耦合。T9 的退出门若照 915 逐条清，会把
    W9 平台合同的活提前吞进 W4-C；建议 T9 只认「inbound 504 条 + RC→非平台 outbound」，其余按 §7.3.4-1 转交。
+
+### 7.5 T9 执行结果（2026-09-02，用户裁决：RC 侧真退役 / consumer 侧转交）
+
+T9 开工前先把「剩余 22 条 edge」按**修法落在谁的代码里**分成两堆，用户于 2026-09-02 批准该折中路线。
+判定规则（写死，供后续 wave 复用）：**修法完全落在 `modules/resource-catalog/**`内部的才由本 RFC 退役；
+需要往别的 context 的文件里塞注入、或需要新开公共合同的，转交该 consumer 所属 wave**。
+「把`@/services/x`改写成`@/modules/resource-catalog/...`」只在 consumer 本身属于 RC 自己的 legacy 面时才算退役——
+否则那只是把一条已登记的兼容 facade 边换成一条更差的跨 context deep import。
+
+#### 7.5.1 已退役（11 条 edge，删掉 1 个 facade）
+
+| 符号                                                    | 原 consumer                                          | 修法                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rowToAgent` / `rowToWorkflowDetail` / `rowToWorkgroup` | `server.ts` ×3、`cli/start.ts` ×3                    | bootstrap 过去把 **RC 自己的行映射器**当参数喂回 `composeIntegrationTriggerResourceBinding`；改由 `legacyIntegrationTriggerResourceSnapshots.ts` 直接读 `../legacy/{agent,workflow,workgroups}`。PostgreSQL 孪生本来就不需要这三个参数，是这条改动成立的现成证据 |
+| `buildWorkflowValidationContext`                        | `server.ts`、`cli/start.ts`                          | 新增 `composeSqliteDynamicWorkflowValidationContext(db)`（`composition/workflowOperations.ts`），bootstrap 只调用它；PostgreSQL daemon 早已自建 `validationContext`                                                                                              |
+| `assertNameUnchangedForEditor`                          | `cli/start.ts`、`cli/postgresqlDaemonApplication.ts` | 挂到 `ResourceAuthorizationApplication` 上（它就在相邻几行被调用），两个 daemon 改用 `resourceCatalog.authorization.assertNameUnchangedForEditor`                                                                                                                |
+| `decodeZip`                                             | `services/resourcePackage/parse.ts`                  | 该文件属 RFC-345 §4 自己列的 RC legacy package 面，改读 `infrastructure/legacy/skill-zip`；**`services/skill-zip.ts` 生产 consumer 归零后已删除**（4 个测试改指 owner 模块）                                                                                     |
+
+`services/skill-zip.ts` 是本 RFC 第 11 个被真正删掉的 facade（前十个见 `RETIRED_FACADES`）。
+
+#### 7.5.2 已转交（11 条 edge，owner wave 写进 `REMOVE_OWNERS`）
+
+| 符号                                                                                       | consumer                                                                     | 新 owner | 转交理由                                                                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentDependencyLookup` / `resolveDependsClosure`                                          | `task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts`      | W4-E1    | 要把 `AgentDependencyQueries` 注入 task-execution 自己的注入解析器                                                                                                                                                                                       |
+| `isSkillInjectableThisBoot`                                                                | 同上                                                                         | W4-E1    | 同上（`SkillCatalogBootParticipant`）                                                                                                                                                                                                                    |
+| `skillFilesRel`                                                                            | 同上                                                                         | W4-E1    | 同上（`SkillQueries`）                                                                                                                                                                                                                                   |
+| `buildWorkflowValidationContext` / `validateWorkflowDef` / `loadWorkflowValidationContext` | `services/{dynamicWorkflowRunner,multipartTaskStart,task,taskLaunchGate}.ts` | W4-E1    | 要把 `WorkflowValidationQueries` 注入这四个 legacy 扁平 service（含 7396 行的 `services/task.ts`）并改组合根签名；这四个文件正是 W4-E1 要重写的对象，现在接线是过渡态                                                                                    |
+| `snapshotNodeAgentWhere`                                                                   | `collaboration/infrastructure/legacySqliteReview.ts`                         | W4       | 它返回 Drizzle `SQL` 片段；退役等于 collaboration 侧改走查询 participant                                                                                                                                                                                 |
+| `extractWorkflowAgentRefs`                                                                 | `services/intent/dumpBuilder.ts`                                             | W4-E4a   | dumpBuilder 今天只消费 RC `public/`；退役需要 `PortableImportReferenceApplication` 实例注入，属 Intent 侧接线                                                                                                                                            |
+| `StagedSkillVersion`                                                                       | `services/intent/journalArtifacts.ts`                                        | W4-E4a   | **本 RFC 试过就地退役并回退了**：journal 把这个暂存句柄整个 round-trip 回 `abortStagedSkillVersion` / `publishStagedSkillVersion`，其中 `noop` 是一整行 `skill_versions`。干净退役需要一个公共 staged DTO，而 **AC-2 明令 public type 不含 Drizzle row** |
+| `runSkillIdentityMigrationBarrier`                                                         | `platform/persistence/sqlite/systemProviderRestore.ts`                       | W9-E     | 物理恢复代已由 RFC-346 留给 W9-E；该文件今天没有任何 RC deep import，就地改写会新开一条 platform→RC 边                                                                                                                                                   |
+
+与 §7.4 预估的 15/7 相比实际是 11/11：`StagedSkillVersion` 与 `extractWorkflowAgentRefs` 需要的公共合同分别被 AC-2 与「不在别的 context 里塞注入」挡住，
+`snapshotNodeAgentWhere` 与 `runSkillIdentityMigrationBarrier` 就地改写只会把兼容 facade 边换成更差的跨 context deep import。四条都按上表转交并留了理由。
+
+#### 7.5.3 收口后的账本状态
+
+`EXACT_COMPATIBILITY_DEBT` 从 63 条降到 **52 条**，其中 **owner 仍写「RFC-345 T9」的 = 0**：
+W4-E1 25、W4-B 5、RFC-349 provider cutover 4、W4-E6 3、W6 3、W4-E7 2、W4-E2 2、W4-E3 2、W4-E4a 2、W4 1、W4-E8 1、W4-E9 1、W9-E 1。
+`RETIRED_FACADES` 从 10 条增到 **11 条**。这满足 T9 退出门的「W4-C debt 归零**或**逐项转交已存在的 exact successor」。
+
+#### 7.5.4 守卫
+
+- `rfc345-classic-facade-provider-neutralization.test.ts` 新增一条：三个组合根（`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts`）
+  不得再 import `@/services/{agent,workflow,workflow.validator,workgroups,resourceAcl}`，且 trigger 适配器不得再把行映射器声明成注入依赖；
+- T9 要求的另外四类 source-lock 已存在，未重复造：`ACL_TABLES` 作用域（`rfc345-resource-catalog-contracts.test.ts:443`）、
+  generic loader/writer（`:395`）、package writer direct arm（`:1636`）、classic deep import（facade 退役账本本身）。
 
 ### 7.4 下一步（不改变 §2 依赖图）
 

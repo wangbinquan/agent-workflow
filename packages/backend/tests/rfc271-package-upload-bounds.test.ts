@@ -15,7 +15,10 @@ import {
   registerResourcePackageRoutes,
   RESOURCE_PACKAGE_BODY_MAX_BYTES,
 } from '../src/routes/resourcePackages'
-import { decodeZip, ZIP_LIMITS } from '../src/services/skill-zip'
+import {
+  decodeZip,
+  ZIP_LIMITS,
+} from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { errorHandler, ValidationError } from '../src/util/errors'
 
 const LOCAL_FILE_HEADER = 0x04034b50

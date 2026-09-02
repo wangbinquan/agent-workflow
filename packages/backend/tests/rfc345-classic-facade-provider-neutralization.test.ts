@@ -51,6 +51,48 @@ describe('RFC-345 classic facade provider neutralization', () => {
     }
   })
 
+  // RFC-345 T9: bootstrap used to hand Resource Catalog its OWN row mappers back
+  // through the compatibility services (server.ts / cli/start.ts imported
+  // rowToAgent / rowToWorkflowDetail / rowToWorkgroup only to pass them into
+  // composeIntegrationTriggerResourceBinding). The PostgreSQL twin never needed
+  // them, which is the proof the SQLite adapter can read its own legacy module.
+  test('integration-trigger snapshots read their own row mappers, not bootstrap-injected ones', () => {
+    const adapter = source(
+      'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts',
+    )
+    expect(adapter).toContain("from '../legacy/agent'")
+    expect(adapter).toContain("from '../legacy/workflow'")
+    expect(adapter).toContain("from '../legacy/workgroups'")
+    for (const mapper of ['rowToAgent', 'rowToWorkflowDetail', 'rowToWorkgroup']) {
+      expect(adapter, mapper).not.toContain(`dependencies.${mapper}`)
+      expect(adapter, `${mapper} declared as an injected dependency`).not.toMatch(
+        new RegExp(`readonly ${mapper}:`),
+      )
+    }
+  })
+
+  // RFC-345 T9: the three bootstrap seams that used to borrow Resource Catalog's
+  // own symbols through the compatibility services — row mappers, the dynamic
+  // workflow validation context and the rename fence — are now sourced from the
+  // module itself, so no composition root imports a classic facade.
+  test('bootstrap composes Resource Catalog seams from the module, not from the facades', () => {
+    expect(source('src/modules/resource-catalog/composition/workflowOperations.ts')).toContain(
+      'export function composeSqliteDynamicWorkflowValidationContext',
+    )
+    expect(source('src/modules/resource-catalog/application/resourceAuthorization.ts')).toContain(
+      'assertNameUnchangedForEditor,',
+    )
+    for (const bootstrap of [
+      'src/server.ts',
+      'src/cli/start.ts',
+      'src/cli/postgresqlDaemonApplication.ts',
+    ]) {
+      expect(source(bootstrap), bootstrap).not.toMatch(
+        /from '@\/services\/(?:agent|workflow|workflow\.validator|workgroups|resourceAcl)'/,
+      )
+    }
+  })
+
   test('Resource Catalog does not hide legacy reference or ACL mechanics behind service imports', () => {
     const offenders = typescriptFiles('src/modules/resource-catalog').filter((file) =>
       /@\/services\/(?:resourceRefs|importRefs|resourceAcl)(?:['"]|\/)/.test(

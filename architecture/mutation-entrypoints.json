@@ -17257,10 +17257,10 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts",
@@ -17268,9 +17268,7 @@
       "id": "mutation:packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts#createResourceAuthorizationApplication",
       "missingControls": [
         "audit",
-        "authority",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/resourceAuthorization.ts#createResourceAuthorizationApplication",
@@ -45704,7 +45702,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:568d39e0c9428884fb2eacc7dc3db59c95c7a86a6ed3e33591887aec93f759f3",
+  "sourceDigest": "sha256:40b8077fa75158fe81bae07e2027b8d7f86e5e74e45cf941e474d48bd48ef4f2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -342,8 +342,8 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 63,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。"
+      "baseline": 52,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。"
     },
     {
       "id": "rfc349-provider-specific-business-dependencies",
@@ -385,10 +385,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1917,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-349：+1 —— artifact store 的 `writeTableChunk` 改为回执 `{chunk, bytes}`。原来进度里的`bytesCopied` 是 `Buffer.byteLength(canonicalSchemaJson(persisted))`，为了数字节把整份数据集每 chunk 重新序列化一遍（全程等于多序列化整个 4.3GB）；改成让写盘方直接报它写了多少。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -422,8 +419,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6267,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6268,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-345 T9：净 +1。删掉 `services/skill-zip.ts` 兼容 facade 抵消掉它的 2 条 re-export 边（`decodeZip` / `ZIP_LIMITS`），新增 3 条：①②`server.ts` 与 `cli/start.ts` 改从 owner 的 `composition/workflowOperations#composeSqliteDynamicWorkflowValidationContext` 取动态工作流校验上下文（此前是从 `@/services/workflow.validator` 兼容 facade 借 Resource Catalog 自己的 loader，legacy→legacy 不计数，所以「改成正确方向」在这份账本上反而 +2）；③`services/resourcePackage/parse.ts` 直读 owner 的归档 codec，正是让上面那个 facade 的生产 consumer 归零、从而可以删除的那一步。三条都已逐条登记在 commons-debt.json 或 rfc345-resource-acl-facade-retirement.test.ts 的 successor 账本里。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -443,14 +443,17 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6063,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 6064,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-345 T9：净 +1。删掉 `services/skill-zip.ts` 兼容 facade 抵消掉它的 2 条 re-export 边（`decodeZip` / `ZIP_LIMITS`），新增 3 条：①②`server.ts` 与 `cli/start.ts` 改从 owner 的 `composition/workflowOperations#composeSqliteDynamicWorkflowValidationContext` 取动态工作流校验上下文（此前是从 `@/services/workflow.validator` 兼容 facade 借 Resource Catalog 自己的 loader，legacy→legacy 不计数，所以「改成正确方向」在这份账本上反而 +2）；③`services/resourcePackage/parse.ts` 直读 owner 的归档 codec，正是让上面那个 facade 的生产 consumer 归零、从而可以删除的那一步。三条都已逐条登记在 commons-debt.json 或 rfc345-resource-acl-facade-retirement.test.ts 的 successor 账本里。"
+      }
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 354,
+      "baseline": 353,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -478,15 +481,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25676,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349：+3 个 top-level symbol —— `createLogicalTableChunkSummary` 与 `LogicalTableChunkSummary`（逐块折叠出表级 artifact entry，不再保留任何一行）、`LogicalTableChunkReceipt`（artifact store 写盘时把真实字节数一并回执）。原来的拷贝循环把一张表的所有 chunk 攒进数组，再交给 `summarizeLogicalTableChunks`（它内部还 `flatMap` 出所有行）：`node_run_events` 在 full 种子下是 1000 万行，本机同参数复跑实测 daemon RSS 涨到 **13.9GB 且仍在涨**，16GB 的 runner 上就是那次托管取证跑 `exit 143`（SIGTERM）的直接死因。entry 的每个字段都是可折叠的累计量。"
-      }
+      "baseline": 25672,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:568d39e0c9428884fb2eacc7dc3db59c95c7a86a6ed3e33591887aec93f759f3",
+    "sourceDigest": "sha256:40b8077fa75158fe81bae07e2027b8d7f86e5e74e45cf941e474d48bd48ef4f2",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -499,8 +499,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d335ea0fa3072cb40caf4f43f1e6ce6b5522e6ee",
-    "contentDigest": "sha256:6b74884578d304bdc0cbbf6ade0800366e42b0fce024e0b61b8e694d98e3391c",
+    "currentSnapshotSha": "1152b076aa505ed9130ba0cc01eb5ff5d9b76a90",
+    "contentDigest": "sha256:7179abdbddb2dee9b4a357bfd0d330ccc728626f4fa0507803470c5008f69d18",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

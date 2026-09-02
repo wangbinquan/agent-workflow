@@ -26,7 +26,7 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { eq } from 'drizzle-orm'
 import { agents, mcps, workflows } from '../src/db/schema'
-import { decodeZip } from '../src/services/skill-zip'
+import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { applyPackageSecretInputs } from '../src/services/resourcePackage/secretInputs'
 import { exportResourcePackage } from './helpers/resourcePackageProvider'
 

@@ -37,7 +37,7 @@ const REMOVE_OWNERS = {
     'ResourceAuthorizationApplication',
   ),
   agentDependencies: owner(
-    'RFC-345 T9',
+    'RFC-294 W4-E1',
     'packages/backend/src/modules/resource-catalog/public/queries.ts',
     'AgentDependencyQueries',
   ),
@@ -47,7 +47,7 @@ const REMOVE_OWNERS = {
     'AgentCatalogModule',
   ),
   agentQueries: owner(
-    'RFC-345 T9',
+    'RFC-294 W4',
     'packages/backend/src/modules/resource-catalog/public/queries.ts',
     'AgentQueries',
   ),
@@ -92,7 +92,7 @@ const REMOVE_OWNERS = {
     'McpRuntimeTestPersistence',
   ),
   portableImportReferences: owner(
-    'RFC-345 T9',
+    'RFC-294 W4-E4a',
     'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts',
     'PortableImportReferenceApplication',
   ),
@@ -117,17 +117,22 @@ const REMOVE_OWNERS = {
     'ResourcePackageReadPort',
   ),
   skillBoot: owner(
-    'RFC-345 T9',
+    'RFC-294 W4-E1',
+    'packages/backend/src/modules/resource-catalog/public/participants.ts',
+    'SkillCatalogBootParticipant',
+  ),
+  skillBootRestore: owner(
+    'RFC-294 W9-E',
     'packages/backend/src/modules/resource-catalog/public/participants.ts',
     'SkillCatalogBootParticipant',
   ),
   skillQueries: owner(
-    'RFC-345 T9',
+    'RFC-294 W4-E1',
     'packages/backend/src/modules/resource-catalog/public/queries.ts',
     'SkillQueries',
   ),
   skillVersion: owner(
-    'RFC-345 T9',
+    'RFC-294 W4-E4a',
     'packages/backend/src/modules/resource-catalog/public/types.ts',
     'SkillCatalogVersion',
   ),
@@ -192,7 +197,7 @@ const REMOVE_OWNERS = {
     'WorkflowQueries',
   ),
   workflowValidation: owner(
-    'RFC-345 T9',
+    'RFC-294 W4-E1',
     'packages/backend/src/modules/resource-catalog/public/queries.ts',
     'WorkflowValidationQueries',
   ),
@@ -227,7 +232,6 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
   facade('services/plugin.ts'),
   facade('services/resourceAcl.ts'),
   facade('services/resourceRefs.ts'),
-  facade('services/skill-zip.ts'),
   facade('services/skill.ts'),
   facade('services/skillBootVerify.ts'),
   facade('services/skillDeleteOp.ts'),
@@ -277,6 +281,10 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
 
 const RETIRED_FACADES = [
   'services/agentResourceIntegrity.ts',
+  // RFC-345 T9: the last production consumer (the resource-package parser, which
+  // is Resource Catalog's own legacy package layer) now reads the archive codec
+  // from the owning module, so the compatibility re-export was deleted.
+  'services/skill-zip.ts',
   'services/mcp.ts',
   'services/plugin.ts',
   'services/skill.ts',
@@ -310,13 +318,6 @@ const edge = (
 const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   edge(
     'services/agent.ts',
-    'cli/start.ts',
-    ['rowToAgent'],
-    'bootstrap Agent projection',
-    REMOVE_OWNERS.agentCatalog,
-  ),
-  edge(
-    'services/agent.ts',
     'modules/collaboration/infrastructure/legacySqliteReview.ts',
     ['snapshotNodeAgentWhere'],
     'review node Agent snapshot',
@@ -342,13 +343,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['getAgentById'],
     'digital-employee Agent execution lookup',
     REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/agent.ts',
-    'server.ts',
-    ['rowToAgent'],
-    'bootstrap Agent projection',
-    REMOVE_OWNERS.agentCatalog,
   ),
   edge(
     'services/agentDeps.ts',
@@ -377,20 +371,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['deletePreparedMcpRuntimeTestsInTx', 'transitionMcpRuntimeTestsInTx'],
     'bootstrap MCP runtime-test lifecycle',
     REMOVE_OWNERS.mcpRuntimePersistence,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'cli/postgresqlDaemonApplication.ts',
-    ['assertNameUnchangedForEditor'],
-    'PostgreSQL daemon resource-name write fence',
-    REMOVE_OWNERS.acl,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'cli/start.ts',
-    ['assertNameUnchangedForEditor'],
-    'SQLite daemon resource-name write fence',
-    REMOVE_OWNERS.acl,
   ),
   edge(
     'services/resourceAcl.ts',
@@ -527,13 +507,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     REMOVE_OWNERS.portableImportReferences,
   ),
   edge(
-    'services/skill-zip.ts',
-    'services/resourcePackage/parse.ts',
-    ['decodeZip'],
-    'resource-package Skill archive decode',
-    REMOVE_OWNERS.skillZip,
-  ),
-  edge(
     'services/skillBootVerify.ts',
     'modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts',
     ['isSkillInjectableThisBoot'],
@@ -545,7 +518,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'platform/persistence/sqlite/systemProviderRestore.ts',
     ['runSkillIdentityMigrationBarrier'],
     'restored-provider Skill identity migration barrier',
-    REMOVE_OWNERS.skillBoot,
+    REMOVE_OWNERS.skillBootRestore,
   ),
   edge(
     'services/skillIdentityPaths.ts',
@@ -560,13 +533,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['StagedSkillVersion'],
     'Intent staged Skill version artifact',
     REMOVE_OWNERS.skillVersion,
-  ),
-  edge(
-    'services/workflow.ts',
-    'cli/start.ts',
-    ['rowToWorkflowDetail'],
-    'bootstrap Workflow projection',
-    REMOVE_OWNERS.workflowCatalog,
   ),
   edge(
     'services/workflow.ts',
@@ -591,13 +557,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.ts',
-    'server.ts',
-    ['rowToWorkflowDetail'],
-    'bootstrap Workflow projection',
-    REMOVE_OWNERS.workflowCatalog,
-  ),
-  edge(
-    'services/workflow.ts',
     'services/task.ts',
     ['getWorkflow'],
     'task service Workflow lookup',
@@ -609,20 +568,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['getWorkflow'],
     'task launch Workflow lookup',
     REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workflow.validator.ts',
-    'cli/start.ts',
-    ['buildWorkflowValidationContext'],
-    'SQLite daemon Workflow validation composition',
-    REMOVE_OWNERS.workflowValidation,
-  ),
-  edge(
-    'services/workflow.validator.ts',
-    'server.ts',
-    ['buildWorkflowValidationContext'],
-    'HTTP application Workflow validation composition',
-    REMOVE_OWNERS.workflowValidation,
   ),
   edge(
     'services/workflow.validator.ts',
@@ -738,24 +683,10 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workgroups.ts',
-    'cli/start.ts',
-    ['rowToWorkgroup'],
-    'bootstrap Workgroup projection',
-    REMOVE_OWNERS.workgroupCatalog,
-  ),
-  edge(
-    'services/workgroups.ts',
     'modules/task-execution/infrastructure/legacyCallClosure.ts',
     ['getWorkgroupById'],
     'task call-closure Workgroup lookup',
     REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/workgroups.ts',
-    'server.ts',
-    ['rowToWorkgroup'],
-    'bootstrap Workgroup projection',
-    REMOVE_OWNERS.workgroupCatalog,
   ),
 ]
 

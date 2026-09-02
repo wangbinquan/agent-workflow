@@ -153,6 +153,7 @@ import {
   composeResourceScopeAuthorizationBinding,
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import { composeIntegrationTriggerResourceBinding } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
@@ -167,9 +168,6 @@ import {
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
   runDigitalEmployeeOsCycle,
 } from '@/modules/digital-employee/composition'
-import { rowToAgent } from '@/services/agent'
-import { rowToWorkflowDetail } from '@/services/workflow'
-import { rowToWorkgroup } from '@/services/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
 import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
@@ -257,7 +255,6 @@ import {
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
-import { buildWorkflowValidationContext } from '@/services/workflow.validator'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { batchOwnerUserId } from '@/services/repoBatchImport'
 import { redactEventPayload } from '@/services/tokenRedaction'
@@ -279,7 +276,6 @@ import {
   type DevelopmentConfigResourceAccess,
 } from '@/modules/development-automation/composition/configOperations'
 import { composeDevelopmentAdapterConfigOperations } from '@/modules/integration/composition/developmentAdapterConfigOperations'
-import { assertNameUnchangedForEditor } from '@/services/resourceAcl'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
@@ -1801,7 +1797,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         }),
         dynamicWorkflow: Object.freeze({
           persistence: composeSqliteDynamicWorkflowPersistence(db),
-          validationContext: { load: () => buildWorkflowValidationContext(db) },
+          validationContext: composeSqliteDynamicWorkflowValidationContext(db),
         }),
         codeHostConnections: repositoryMetadataConnections,
         repositoryPublicationTransport,
@@ -1892,7 +1888,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
     db,
     resources: composeIntegrationTriggerResourceBinding(
-      { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+      { canViewResourceInTx, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
     ),
     validation: Object.freeze({
@@ -2263,7 +2259,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     requireGovern(actor, row) {
       return resourceCatalog.authorization.requireResourceGovern(actor, 'capability_template', row)
     },
-    assertNameUnchangedForEditor,
+    assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
   }
   const capabilityTemplateOperations = composeSqliteCapabilityTemplateOperations({
     db,
@@ -2283,7 +2279,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     requireGovern(actor, type, row) {
       return resourceCatalog.authorization.requireResourceGovern(actor, type, row)
     },
-    assertNameUnchangedForEditor,
+    assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
   }
   const developmentConfigOperations = composeDevelopmentConfigOperations(
     db,

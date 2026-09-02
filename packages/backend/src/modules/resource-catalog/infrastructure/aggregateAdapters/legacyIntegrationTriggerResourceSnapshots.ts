@@ -2,8 +2,10 @@
 //
 // Resource Catalog owns the target lookup + ACL projection. Launch-shape,
 // closure, input mapping and trigger preflight remain with their current
-// integration owners. Legacy row mappers arrive through composition so this
-// infrastructure adapter never imports the compatibility service layer.
+// integration owners. The row mappers are Resource Catalog's own legacy
+// infrastructure, so this adapter reads them directly (RFC-345 T9) instead of
+// having bootstrap hand them back through the compatibility service layer —
+// which is what the PostgreSQL twin already does.
 
 import type { AclResourceType, Agent, WorkflowDetail, Workgroup } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
@@ -13,6 +15,9 @@ import { agents, workflows, workgroupMembers, workgroups } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import type { IntegrationTriggerResourceSnapshotPorts } from '../../application/participants/integrationTriggerResourceSnapshot'
+import { rowToAgent } from '../legacy/agent'
+import { rowToWorkflowDetail } from '../legacy/workflow'
+import { rowToWorkgroup } from '../legacy/workgroups'
 import type { ResourceRequestContext } from '../../public/participants'
 import type {
   TaskExecutionAgentSnapshot,
@@ -20,10 +25,6 @@ import type {
   TaskExecutionWorkgroupSnapshot,
 } from '../../public/types'
 
-type AgentRow = typeof agents.$inferSelect
-type WorkflowRow = typeof workflows.$inferSelect
-type WorkgroupRow = typeof workgroups.$inferSelect
-type WorkgroupMemberRow = typeof workgroupMembers.$inferSelect
 type AclRow = Readonly<{
   readonly id: string
   readonly ownerUserId: string | null
@@ -66,9 +67,6 @@ export interface LegacyIntegrationTriggerResourceDependencies {
     type: AclResourceType,
     row: AclRow,
   ) => boolean
-  readonly rowToAgent: (row: AgentRow) => Agent
-  readonly rowToWorkflowDetail: (row: WorkflowRow) => WorkflowDetail
-  readonly rowToWorkgroup: (row: WorkgroupRow, members: WorkgroupMemberRow[]) => Workgroup
   readonly assertNotBuiltin: (
     type: AclResourceType,
     row: Readonly<{ builtin?: boolean | null }>,
@@ -160,7 +158,7 @@ export function createLegacyIntegrationTriggerResourceSnapshotPorts(
       throw new NotFoundError('workflow-not-found', 'workflow not found')
     }
     dependencies.assertNotBuiltin('workflow', row)
-    return workflowSnapshot(dependencies.rowToWorkflowDetail(row))
+    return workflowSnapshot(rowToWorkflowDetail(row))
   }
 
   const ports: IntegrationTriggerResourceSnapshotPorts = {
@@ -180,7 +178,7 @@ export function createLegacyIntegrationTriggerResourceSnapshotPorts(
       dependencies.assertNotBuiltin('agent', row)
       return Object.freeze({
         kind: 'scheduled-agent' as const,
-        agent: agentSnapshot(dependencies.rowToAgent(row)),
+        agent: agentSnapshot(rowToAgent(row)),
       })
     },
 
@@ -204,7 +202,7 @@ export function createLegacyIntegrationTriggerResourceSnapshotPorts(
         .all()
       return Object.freeze({
         kind: 'scheduled-workgroup' as const,
-        workgroup: workgroupSnapshot(dependencies.rowToWorkgroup(row, members)),
+        workgroup: workgroupSnapshot(rowToWorkgroup(row, members)),
       })
     },
 

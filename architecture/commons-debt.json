@@ -5722,6 +5722,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/resourcePackage/parse.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skill-zip",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-345 T9：资源包解析器属 Resource Catalog 自己的 legacy package 面（RFC-345 §4 源码范围），读的是同一 owner 的归档 codec。改成直读 owner 模块后，`services/skill-zip.ts` 兼容 facade 的最后一个生产 consumer 归零并已删除；这条边随 package 面整体迁入 owner 目录时一并消失。",
+      "introducedByRFC": "RFC-345（T9 facade retirement）",
+      "removeAfterWave": "RFC-294 W4-C 之后的 package 面迁移（services/resourcePackage/** → resource-catalog/package）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0e42f9b92d331b4b0e36"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourcePackage/parse.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/resourcePackage/parse.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/resourceRefs.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs",
       "specifier": "@/modules/resource-catalog/infrastructure/legacy/resourceRefs",
@@ -6129,31 +6152,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/shutdown.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/skill-zip.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skill-zip",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:61fdc7ae34ab0e4daf49",
-        "import:932d41792a2d1bf31a94"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/skill-zip.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#ZIP_LIMITS",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/skill-zip.ts"
       ]
     },
     {
@@ -9253,15 +9251,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:568d39e0c9428884fb2eacc7dc3db59c95c7a86a6ed3e33591887aec93f759f3",
+    "sourceDigest": "sha256:40b8077fa75158fe81bae07e2027b8d7f86e5e74e45cf941e474d48bd48ef4f2",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "d335ea0fa3072cb40caf4f43f1e6ce6b5522e6ee",
-    "contentDigest": "sha256:398aa888a80cd19e6b2ed20c13c5a9ea4cf41642fffe59ce5e13a4ac2df20324",
+    "currentSnapshotSha": "1152b076aa505ed9130ba0cc01eb5ff5d9b76a90",
+    "contentDigest": "sha256:1446e7707bf3aefb3b734580b5424638e801d8bd4b7808fbfbf9adac4c258ec9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

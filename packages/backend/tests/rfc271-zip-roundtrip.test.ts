@@ -10,7 +10,7 @@
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { describe, expect, test } from 'bun:test'
-import { decodeZip } from '../src/services/skill-zip'
+import { decodeZip } from '../src/modules/resource-catalog/infrastructure/legacy/skill-zip'
 import { encodeZip } from '../src/util/zip'
 
 const bytes = (s: string): Uint8Array => new TextEncoder().encode(s)

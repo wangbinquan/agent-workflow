@@ -15,6 +15,7 @@ import {
   type AclRow,
   type DisclosedRefs,
 } from '../domain/resourceAccess'
+import { assertNameUnchangedForEditor } from './resourceAccess'
 import type { ResourceCatalogGrantReadPort } from './ports/providerResourceCatalogPersistence'
 
 /**
@@ -138,6 +139,10 @@ export function createResourceAuthorizationApplication(grants: ResourceCatalogGr
   }
 
   return Object.freeze({
+    // RFC-345 T9: the rename fence is Resource Catalog policy. Bootstrap used to
+    // import it from the `@/services/resourceAcl` facade and pass it back into
+    // access bags that already call this very application.
+    assertNameUnchangedForEditor,
     canEditResource,
     canGovernResource,
     canViewResource,

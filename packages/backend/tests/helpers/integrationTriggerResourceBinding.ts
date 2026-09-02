@@ -11,7 +11,6 @@ import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog
 import { composeSqliteAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createSqliteTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
 import { canViewResourceInTx } from '../../src/modules/resource-catalog/composition/resourceAcl'
-import { rowToAgent } from '../../src/services/agent'
 import { assertNotBuiltin } from '../../src/services/systemResources'
 import {
   createScheduledTask as createScheduledTaskService,
@@ -26,8 +25,6 @@ import {
   type IntegrationTriggerResourceAuthority,
   updateScheduledTask as updateScheduledTaskService,
 } from '../../src/services/scheduledTasks'
-import { rowToWorkflowDetail } from '../../src/services/workflow'
-import { rowToWorkgroup } from '../../src/services/workgroups'
 import { legacyTaskExecutionResourceDependencies } from '../../src/services/execution/legacyTaskExecutionResourceDependencies'
 import { composeSqliteScheduledTaskRuntime } from '../../src/modules/integration/composition/scheduledTasks'
 import { assertWorkflowSnapshotLaunchable } from '../../src/services/taskLaunchGate'
@@ -36,7 +33,7 @@ import { triggerRevalidation } from '../../src/ws/revalidationHook'
 
 export function integrationTriggerResourceBinding() {
   return composeIntegrationTriggerResourceBinding(
-    { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+    { canViewResourceInTx, assertNotBuiltin },
     composeDigitalEmployeeIntegrationTriggerParticipant,
   )
 }

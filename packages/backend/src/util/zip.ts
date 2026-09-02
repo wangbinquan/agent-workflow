@@ -1,4 +1,5 @@
-// RFC-271 T18 —— zip **编码**（导出侧）。解码侧在 `services/skill-zip.ts:decodeZip`。
+// RFC-271 T18 —— zip **编码**（导出侧）。解码侧在
+// `modules/resource-catalog/infrastructure/legacy/skill-zip.ts:decodeZip`。
 //
 // **store-only（不压缩）**是刻意的：
 //   · 配置包的体量由技能文件树决定，而那些文件多半已经是压缩过的资产；

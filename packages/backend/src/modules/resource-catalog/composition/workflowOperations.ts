@@ -23,6 +23,10 @@ import type {
 } from '../application/workflows/ports'
 import { createSqliteWorkflowRepository } from '../infrastructure/sqliteWorkflowRepository'
 import {
+  loadWorkflowValidationContext,
+  type ValidatorContext,
+} from '../infrastructure/legacy/workflow.validator'
+import {
   createPostgresqlWorkflowRepository,
   type PostgresqlWorkflowPersistenceSemantics,
 } from '../infrastructure/postgresqlWorkflowRepository'
@@ -172,5 +176,20 @@ export function composeWorkflowCatalog(
     acl,
     validation: createSqliteWorkflowValidationPort(input.db),
     admission: createSqliteWorkflowReferenceAdmissionPort(input.db),
+  })
+}
+
+/**
+ * RFC-345 T9 — the dynamic-workflow validation context is Resource Catalog's
+ * own legacy loader. Bootstrap used to import it through the `@/services`
+ * compatibility facade only to hand it straight back into the task engine; the
+ * PostgreSQL daemon already builds its source from the public catalog queries,
+ * so the SQLite side owns its loader here instead of borrowing the facade.
+ */
+export function composeSqliteDynamicWorkflowValidationContext(db: DbClient): Readonly<{
+  load(): Promise<ValidatorContext>
+}> {
+  return Object.freeze({
+    load: () => loadWorkflowValidationContext(db),
   })
 }

@@ -132,14 +132,17 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
 
   test('Skill ZIP route consumes one provider-bound whole-tree participant', () => {
     const route = source('routes/skills.ts')
-    const facade = source('services/skill-zip.ts')
+    const codec = source('modules/resource-catalog/infrastructure/legacy/skill-zip.ts')
 
     expect(route).toContain('readonly zipImport: SkillZipImportParticipant')
     expect(route).toContain('module.zipImport.parse(')
     expect(route).toContain('module.zipImport.commit(')
     expect(route).not.toMatch(/@\/services\/skill-zip|\bdeps\.db\b|\bDbClient\b/)
-    expect(facade).toContain('decodeZip')
-    expect(facade).not.toMatch(/parseSkillZipBuffer|commitSkillZipBuffer/)
+    expect(codec).toContain('export function decodeZip')
+    // RFC-345 T9: `services/skill-zip.ts` was deleted once its last production
+    // consumer (the resource-package parser) read the codec from this module,
+    // so the route must reach the archive only through the participant.
+    expect(route).not.toMatch(/parseSkillZipBuffer|commitSkillZipBuffer/)
   })
 
   test('Agent and Workgroup launch transports consume required provider-neutral task bindings', () => {

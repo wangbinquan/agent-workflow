@@ -86,7 +86,6 @@ import { composeWorkflowCatalog } from '@/modules/resource-catalog/composition/w
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeSqliteWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeSqliteDynamicWorkflowPersistence } from '@/modules/task-execution/composition/dynamicWorkflowPersistence'
-import { buildWorkflowValidationContext } from '@/services/workflow.validator'
 import {
   composeSqliteResourceCatalog,
   type ProviderResourceCatalogComposition,
@@ -96,6 +95,7 @@ import {
   composeSqliteResourcePackageProvider,
   type ComposedResourcePackageCatalog,
 } from '@/modules/resource-catalog/composition/resourcePackageOperations'
+import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
   canViewResource,
@@ -258,9 +258,6 @@ import {
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
-import { rowToAgent } from '@/services/agent'
-import { rowToWorkflowDetail } from '@/services/workflow'
-import { rowToWorkgroup } from '@/services/workgroups'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { legacyTaskExecutionResourceDependencies } from '@/services/execution/legacyTaskExecutionResourceDependencies'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
@@ -895,7 +892,7 @@ function withIntegrationTriggerResources(
   return Object.freeze({
     ...identityAccess,
     integrationTriggerResources: composeIntegrationTriggerResourceBinding(
-      { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+      { canViewResourceInTx, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
     ),
     taskExecutionResources: createSqliteTaskExecutionResourceBinding(
@@ -1795,7 +1792,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
             runtimeRegistry,
             dynamicWorkflow: {
               persistence: composeSqliteDynamicWorkflowPersistence(deps.db),
-              validationContext: { load: () => buildWorkflowValidationContext(deps.db) },
+              validationContext: composeSqliteDynamicWorkflowValidationContext(deps.db),
             },
             identityAccess,
             repositoryPublicationTransport: repositoryBootstrap.repositoryPublicationTransport,
@@ -2490,7 +2487,7 @@ function composeSqliteApiRouteMounts(
   const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
     db: deps.db,
     resources: composeIntegrationTriggerResourceBinding(
-      { canViewResourceInTx, rowToAgent, rowToWorkflowDetail, rowToWorkgroup, assertNotBuiltin },
+      { canViewResourceInTx, assertNotBuiltin },
       composeDigitalEmployeeIntegrationTriggerParticipant,
     ),
     validation: Object.freeze({

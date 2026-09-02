@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1888,
+    "backendFiles": 1887,
     "frontendFiles": 621,
-    "legacyFiles": 634,
+    "legacyFiles": 633,
     "moduleFiles": 1254,
-    "productionFiles": 2664,
+    "productionFiles": 2663,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25676
+    "symbolsIncludingFileRoots": 25672
   },
   "entries": [
     {
@@ -85464,6 +85464,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts#composeSqliteDynamicWorkflowValidationContext",
+      "removeAfterWave": "W4-C",
+      "status": "current-module",
+      "symbol": "composeSqliteDynamicWorkflowValidationContext",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts#composeWorkflowCatalog",
       "removeAfterWave": "W4-C",
       "status": "current-module",
@@ -86532,18 +86544,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#AgentRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "AgentRow",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#agentSnapshot",
       "removeAfterWave": null,
       "status": "current-module",
@@ -86604,46 +86604,10 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#WorkflowRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "WorkflowRow",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#workflowSnapshot",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "workflowSnapshot",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#WorkgroupMemberRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "WorkgroupMemberRow",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts#WorkgroupRow",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "WorkgroupRow",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -193217,18 +193181,6 @@
       "status": "legacy-target",
       "symbol": "log",
       "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/skill-zip.ts",
-      "id": "owner:packages/backend/src/services/skill-zip.ts#$file",
-      "removeAfterWave": "W4-C",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -308783,5 +308735,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:568d39e0c9428884fb2eacc7dc3db59c95c7a86a6ed3e33591887aec93f759f3"
+  "sourceDigest": "sha256:40b8077fa75158fe81bae07e2027b8d7f86e5e74e45cf941e474d48bd48ef4f2"
 }

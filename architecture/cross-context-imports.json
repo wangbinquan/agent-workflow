@@ -5577,6 +5577,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/resourcePackage/parse.ts#$file",
+      "fromPath": "packages/backend/src/services/resourcePackage/parse.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0e42f9b92d331b4b0e36",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip",
+      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
+      "toSymbol": "decodeZip",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/intent/resourceCatalog.ts#$file",
@@ -39970,23 +39987,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/skill-zip.ts#$file",
-      "fromPath": "packages/backend/src/services/skill-zip.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:61fdc7ae34ab0e4daf49",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
-      "toSymbol": "decodeZip",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
       "fromSymbol": "$file",
@@ -58921,23 +58921,6 @@
       "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toSymbol": "PostgresqlDatabaseClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/skill-zip.ts#$file",
-      "fromPath": "packages/backend/src/services/skill-zip.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:932d41792a2d1bf31a94",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#ZIP_LIMITS",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
-      "toSymbol": "ZIP_LIMITS",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -82672,6 +82655,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cdeccb3c5683f64bedbb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts#composeSqliteDynamicWorkflowValidationContext",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts",
+      "toSymbol": "composeSqliteDynamicWorkflowValidationContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file",
@@ -87566,6 +87566,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "eventTypeCatalog",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d8f7becdf53266606d0a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts#composeSqliteDynamicWorkflowValidationContext",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts",
+      "toSymbol": "composeSqliteDynamicWorkflowValidationContext",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -103073,9 +103090,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6063,
+    "architectureExceptions": 6064,
     "implementationSccs": 0,
-    "observedEdges": 6267,
+    "observedEdges": 6268,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -108314,6 +108331,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/resourcePackage/parse.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/resourcePackage/parse.ts#$file",
+      "id": "import:0e42f9b92d331b4b0e36",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skill-zip",
+      "syntax": "static-import",
+      "targetSymbol": "decodeZip",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip"
     },
     {
       "edgeKind": "type",
@@ -141901,22 +141934,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/skill-zip.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/skill-zip.ts#$file",
-      "id": "import:61fdc7ae34ab0e4daf49",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skill-zip",
-      "syntax": "export",
-      "targetSymbol": "decodeZip",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#decodeZip"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePluginRepository.ts#$file",
@@ -160458,22 +160475,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/skill-zip.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/skill-zip.ts#$file",
-      "id": "import:932d41792a2d1bf31a94",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skill-zip",
-      "syntax": "export",
-      "targetSymbol": "ZIP_LIMITS",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#ZIP_LIMITS"
     },
     {
       "edgeKind": "value",
@@ -183708,6 +183709,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:cdeccb3c5683f64bedbb",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/workflowOperations",
+      "syntax": "static-import",
+      "targetSymbol": "composeSqliteDynamicWorkflowValidationContext",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts#composeSqliteDynamicWorkflowValidationContext"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
@@ -188458,6 +188475,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#eventTypeCatalog"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:d8f7becdf53266606d0a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/workflowOperations",
+      "syntax": "static-import",
+      "targetSymbol": "composeSqliteDynamicWorkflowValidationContext",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/workflowOperations.ts#composeSqliteDynamicWorkflowValidationContext"
     },
     {
       "edgeKind": "value",
@@ -203893,7 +203926,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:568d39e0c9428884fb2eacc7dc3db59c95c7a86a6ed3e33591887aec93f759f3",
+  "sourceDigest": "sha256:40b8077fa75158fe81bae07e2027b8d7f86e5e74e45cf941e474d48bd48ef4f2",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

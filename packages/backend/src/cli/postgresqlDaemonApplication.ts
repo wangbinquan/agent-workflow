@@ -265,7 +265,6 @@ import { redactEventPayload } from '@/services/tokenRedaction'
 import { mcpRouteNow } from '@/routes/mcps'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { directRequestAuthority } from '@/routes/operationAuthority'
-import { assertNameUnchangedForEditor } from '@/services/resourceAcl'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
 import {
   composePostgresqlAppDeps,
@@ -592,7 +591,7 @@ export async function composePostgresqlDaemonApplication(
         resourceCatalog.authorization.requireResourceEdit(actor, 'capability_template', row),
       requireGovern: (actor, row) =>
         resourceCatalog.authorization.requireResourceGovern(actor, 'capability_template', row),
-      assertNameUnchangedForEditor,
+      assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
     },
   })
   type CapabilityTemplateAclRow = Readonly<{
@@ -1338,7 +1337,7 @@ export async function composePostgresqlDaemonApplication(
       resourceCatalog.authorization.requireResourceEdit(actor, type, row),
     requireGovern: (actor, type, row) =>
       resourceCatalog.authorization.requireResourceGovern(actor, type, row),
-    assertNameUnchangedForEditor,
+    assertNameUnchangedForEditor: resourceCatalog.authorization.assertNameUnchangedForEditor,
   }
   const developmentConfig = composePostgresqlDevelopmentConfigOperations({
     db: input.db,
