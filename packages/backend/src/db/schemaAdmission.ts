@@ -73,6 +73,19 @@ export const LEGACY_MIGRATION_HASHES: Readonly<Record<string, readonly string[]>
   '0107_rfc217_clarify_unify_t17': [
     '7d9cc403ede0aea34d7a6557ff0f10de73a8adb04fad09430e973c94aee2b1b4',
   ],
+  // 2026-09-02 — unlike the entries around it, this alias does not predate the
+  // canonical form: 0111 was amended (`json_group_array(x ORDER BY y)` →
+  // ordered subquery, so the statement parses on SQLite < 3.44) AFTER it had
+  // shipped and been applied everywhere, and the repin was omitted. Every
+  // existing database then stopped at migration-history-preflight and the
+  // daemon refused to start. The receipt below is the sha256 of the shipped
+  // bytes, kept verbatim at
+  // tests/fixtures/shipped-migrations/0111_rfc223_agent_refs_to_id.sql, and
+  // migration-0111-rfc223.test.ts holds the two forms to the same end state —
+  // which is what makes accepting the older receipt sound.
+  '0111_rfc223_agent_refs_to_id': [
+    '8f7584ecb9229bf9bfad82040d9fab68a11ed4885748e7f034eee0b0f8510d97',
+  ],
   '0125_rfc238_mcp_runtime_playground': [
     '475944d58ef1c8341ed86e3c88ce080aebcef8dbc23548ea43345be3a8eee450',
   ],

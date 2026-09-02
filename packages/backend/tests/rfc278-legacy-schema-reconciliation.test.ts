@@ -119,7 +119,7 @@ afterEach(() => {
 })
 
 describe('RFC-278 legacy schema reconciliation', () => {
-  test('accepts only the eight observed full legacy migration hashes', () => {
+  test('accepts only the observed full legacy migration hashes', () => {
     for (const [tag, legacyHash] of legacyAliasEntries()) {
       const expected = expectedMigration(tag)
       assertSingleReceipt(expected, expected.hash)
@@ -295,15 +295,15 @@ describe('RFC-278 legacy schema reconciliation', () => {
 // 这张表原本在本文件里被手抄了一份，与生产的那份各改各的；现在共用一个对象，
 // 下面两条则把「它有多大」和「每一条是不是还活着」变成断言。
 //
-// 存活判据刻意不用散文 `why`：八条别名的理由是同一句话（"生产库里已应用的是规范化
-// 之前的字节"），八份一模一样的 why 只会让人不再读它。真正能自己过期的判据是——
+// 存活判据刻意不用散文 `why`：绝大多数别名的理由是同一句话（"生产库里已应用的是
+// 规范化之前的字节"），一模一样的 why 抄 N 份只会让人不再读它。真正能自己过期的判据是——
 // **别名哈希必须与该 tag 当前规范文件的哈希不同**。相同就说明规范文件已经回到了当年
 // 被应用的字节，这条别名是死的，应当删掉；死别名不是多余的一行，是一张空白许可证：
 // 它让那个 tag 上未来任何一次字节漂移都能冒充"历史回执"通过准入。
 describe('RFC-317 T46（CC-03）—— 历史迁移别名账本', () => {
-  const LEDGER_SIZE = 8
+  const LEDGER_SIZE = 9
 
-  test('账本恰好 8 条（增删都要显式改这个数字）', () => {
+  test('账本恰好 9 条（增删都要显式改这个数字）', () => {
     expect(
       Object.keys(LEGACY_MIGRATION_HASHES).length,
       '别名表变大了：每多一条，就多一个 tag 允许非规范字节通过准入。加之前先问' +
