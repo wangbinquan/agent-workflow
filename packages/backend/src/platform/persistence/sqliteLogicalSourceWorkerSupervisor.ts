@@ -59,6 +59,11 @@ const SOURCE_CODES = new Set([
   'sqlite-source-integrity',
   'sqlite-source-schema',
   'sqlite-source-mutated',
+  // The exact drifted signal survives the Worker boundary; collapsing it back to
+  // the bare code here would re-hide what a hosted migration failure was about.
+  'sqlite-source-mutated.data-version',
+  'sqlite-source-mutated.page-count',
+  'sqlite-source-mutated.file-bytes',
   'sqlite-source-read',
 ])
 

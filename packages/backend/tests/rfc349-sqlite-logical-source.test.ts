@@ -89,6 +89,11 @@ describe('RFC-349 SQLite logical source', () => {
       writer.exec("UPDATE users SET display_name = 'Drifted' WHERE id = 'usr-1'")
       writer.close()
       await expect(source.assertUnchanged(snapshot)).rejects.toThrow(/data_version \d+ -> \d+/)
+      // The durable failure record keeps only a `detailCode` slug, so the signal
+      // has to ride the CODE or a hosted evidence failure stays unattributable.
+      await expect(source.assertUnchanged(snapshot)).rejects.toMatchObject({
+        code: 'sqlite-source-mutated.data-version',
+      })
     } finally {
       await source.close()
     }

@@ -40,12 +40,26 @@ export interface SqliteLogicalSource {
   close(): Promise<void>
 }
 
+/**
+ * The one signal that moved, carried in the error CODE rather than only in the
+ * message: the durable failure record is a closed shape whose only free field
+ * is a `detailCode` slug, so a hosted `postgresql-evidence` failure otherwise
+ * reads as a bare `sqlite-source-mutated` with nothing to act on. `data-version`
+ * means another connection committed (a bare `PRAGMA wal_checkpoint` is enough);
+ * `page-count` / `file-bytes` mean the file itself grew or was rewritten.
+ */
+export type SqliteLogicalSourceMutationCode =
+  | 'sqlite-source-mutated'
+  | 'sqlite-source-mutated.data-version'
+  | 'sqlite-source-mutated.page-count'
+  | 'sqlite-source-mutated.file-bytes'
+
 export class SqliteLogicalSourceError extends Error {
   constructor(
     public readonly code:
       | 'sqlite-source-integrity'
       | 'sqlite-source-schema'
-      | 'sqlite-source-mutated'
+      | SqliteLogicalSourceMutationCode
       | 'sqlite-source-read',
     message: string,
   ) {
@@ -172,21 +186,40 @@ export function openSqliteLogicalSource(input: {
       // page_count/fileBytes only move when the file itself grows or is
       // rewritten. Which of the three fired is what tells the operator whether a
       // writer escaped the freeze or the file was merely checkpointed.
-      const drift = [
+      const drift: { readonly code: SqliteLogicalSourceMutationCode; readonly detail: string }[] = [
         ...(dataVersion === expected.dataVersion
           ? []
-          : [`data_version ${expected.dataVersion} -> ${dataVersion}`]),
+          : [
+              {
+                code: 'sqlite-source-mutated.data-version' as const,
+                detail: `data_version ${expected.dataVersion} -> ${dataVersion}`,
+              },
+            ]),
         ...(pageCount === expected.pageCount
           ? []
-          : [`page_count ${expected.pageCount} -> ${pageCount}`]),
+          : [
+              {
+                code: 'sqlite-source-mutated.page-count' as const,
+                detail: `page_count ${expected.pageCount} -> ${pageCount}`,
+              },
+            ]),
         ...(fileBytes === expected.fileBytes
           ? []
-          : [`file_bytes ${expected.fileBytes} -> ${fileBytes}`]),
+          : [
+              {
+                code: 'sqlite-source-mutated.file-bytes' as const,
+                detail: `file_bytes ${expected.fileBytes} -> ${fileBytes}`,
+              },
+            ]),
       ]
       if (drift.length > 0) {
+        // The first entry is the most diagnostic one (see the type doc); the
+        // message still lists every signal that moved.
         throw new SqliteLogicalSourceError(
-          'sqlite-source-mutated',
-          `SQLite source generation changed after the migration freeze (${drift.join(', ')})`,
+          drift[0]!.code,
+          `SQLite source generation changed after the migration freeze (${drift
+            .map((entry) => entry.detail)
+            .join(', ')})`,
         )
       }
     },

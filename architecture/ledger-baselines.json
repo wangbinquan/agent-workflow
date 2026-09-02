@@ -475,12 +475,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25626,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25627,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349：`SqliteLogicalSourceMutationCode` 让漂移信号随 error code 落进 durable failure record 的 `detailCode`（该记录是 strict 形状，没有自由文本字段），否则 hosted `postgresql-evidence` 的 `sqlite-source-mutated` 永远无法归因。+1 个 public symbol。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:661e539bb74a8b8fa1b4cd4d094813dbeea46675eb8d965c7e44cfcd62b2a557",
+    "sourceDigest": "sha256:c760c510569b081692886aee3b34dbef8a7eb54aac087932b9a5524436e2d570",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +496,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a5b61f059dede5c5bfd32f811fe3d7fd3d2dbfd3",
-    "contentDigest": "sha256:217e9585a7ef38ed6046ec1a19bee69d22dda20758b7243763e2eda5bf0c79e2",
+    "currentSnapshotSha": "989998fd715f1a5e2d4d93cf13feb364ad16fddb",
+    "contentDigest": "sha256:27cd026d63734e74a34319db170b0af5f91b5c7192412ffb805c788632425e80",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

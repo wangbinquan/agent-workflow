@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2657,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25626
+    "symbolsIncludingFileRoots": 25627
   },
   "entries": [
     {
@@ -157465,6 +157465,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/sqliteLogicalSource.ts",
+      "id": "owner:packages/backend/src/platform/persistence/sqliteLogicalSource.ts#SqliteLogicalSourceMutationCode",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "SqliteLogicalSourceMutationCode",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/sqliteLogicalSource.ts",
       "id": "owner:packages/backend/src/platform/persistence/sqliteLogicalSource.ts#SqliteLogicalSourceSnapshot",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -308184,5 +308196,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:661e539bb74a8b8fa1b4cd4d094813dbeea46675eb8d965c7e44cfcd62b2a557"
+  "sourceDigest": "sha256:c760c510569b081692886aee3b34dbef8a7eb54aac087932b9a5524436e2d570"
 }
