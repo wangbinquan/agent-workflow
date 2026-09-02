@@ -528,6 +528,22 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
 同一段还有一条：**census 的生成物不要进 `prettier --write` 批处理**。它们必须与生成器逐字
 相等，被 prettier 重排一次就红（实撞的是 `design/RFC-294-…/status.md`，A2 投影守卫）。
 
+## Bun `rmSync` 在只读目录上给的 errno 因平台而异，按码白名单分流必漏（2026-09-02 实测）
+
+`rmSync(dir, { recursive: true, force: true })` 删不动一棵含 `0o500`（`dr-x------`）目录的树
+——unlink 一个文件要的是**父目录**的写位，不是文件自己的。它报出来的错有两点误导人：
+
+- **路径永远是你传进去的顶层**（`rm '.../opencode-stores'`），不是真正卡住的那一层，日志里
+  看不出是哪个子目录挡的；
+- **errno 因平台 / 版本而异**：本机 macOS（Bun 1.3.13）报 `EACCES`（unlink 当场被父目录拒），
+  CI 的 macos-latest runner 报 `ENOTEMPTY`（unlink 被拒 → 文件还在 → 随后的 rmdir 落空）。
+  实撞：`cleanupRetiredStores` 按 `EACCES` / `EPERM` 分流去补写位重试，本机全绿、CI backend
+  shard 1（macOS）当场红。
+
+**判据用事实、不要用 errno**：先做补救动作（这里是给树里的目录补 owner 写位），按「补到了
+几个」决定是重试还是把原错误原样抛出去。凡是「同一件事在不同平台给不同码」的场合（rmdir 的
+`ENOTEMPTY` / `EEXIST` 是 POSIX 明文允许二选一的），错误码白名单都是错的形状。
+
 ## 架构账本的联动点：动一次代码要同步 8 处（RFC-329 实测，2026-08-26 连推红六轮）
 
 一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的
@@ -589,6 +605,23 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
    最终 diff 6 增 6 减。
 3. 跑生成器前先 `cp` 一份 HEAD 版本到 scratchpad，跑完对着它做「只取自己那几条」的合并；
    **不要**直接 `git add architecture/`。
+4. **整套账本都要重生成时：把 HEAD 导出成一棵干净树、让生成器读它**（2026-09-02 实测；比
+   第 1、2 条的手工挑条目省事，且零污染）。`git archive <ref> | tar -x -C <scratchpad>/tree`
+   产出的是**导出**不是 worktree（没有 `.git`、提交不了，不违反「不建 worktree」）。再把
+   `scripts/architecture-census.ts` 复制到 scratchpad 改两处：`REPO_ROOT` 取 `process.argv[2]`、
+   三个相对 `import` 改成**真实仓库的绝对路径**（否则直接在导出树里跑会
+   `Cannot find module '@agent-workflow/shared'` —— 工作区包靠真实仓库的解析上下文）。
+   然后 `bun run <scratchpad>/census-driver.ts <scratchpad>/tree --write`，产物落在导出树里，
+   跟工作树里别人的在制品完全不相干。
+   - **自验**：生成物的 `sourceDigest` 必须等于第 1 条用 git 算出来的值——两条独立路径对上
+     才算数（本次两边都是 `4ceb50e1…`）。
+   - **一处残留耦合**：`rfc294Canonical.ts` 静态 import 了
+     `src/modules/task-execution/domain/codeHostRecovery.ts`，这一份读的是**真实工作树**；
+     该文件被别人改脏时这条路子不干净，用之前先确认它等于 HEAD。
+   - 同一套姿势还能用来**判定账本到底同步了没有**：把 tip 导出来整体重跑一次，与 committed
+     的 `architecture/*.json` + `status.md` 逐字节比。2026-09-02 就是这么确认「并发 session
+     的重生成已经把我的改动一起收进去了、我不必再提一笔」的——他们的生成器读的是含我已提交
+     源码的磁盘，产物天然覆盖我那部分。
 
 ### 改 artifact 的 `entries` 别忘了同文件的 `denominator`
 
