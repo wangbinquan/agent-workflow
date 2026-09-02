@@ -38,4 +38,9 @@ export interface MrTerminalControl {
   reconcileOnBoot(): Promise<void>
   /** Stop accepting wakeups, abort launch owners, and wait for the active effect attempt. */
   stop(): Promise<void>
+  /**
+   * Re-arm after a provider pause. Only the RFC-349 rollback path calls this:
+   * the frozen source session resumes its own writers when a cutover fails.
+   */
+  resume(): void
 }

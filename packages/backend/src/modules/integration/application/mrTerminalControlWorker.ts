@@ -54,10 +54,29 @@ export class MrTerminalControlWorker {
     if (this.stopped) return
     this.requested = true
     if (this.running !== null) return
-    this.running = this.drain().finally(() => {
-      this.running = null
-      if (this.requested && !this.stopped) this.wake()
-    })
+    this.running = this.drain()
+      .catch((error: unknown) => {
+        // `wake` is fire-and-forget (interval tick / webhook dispatch), so
+        // nothing on the hot path awaits this promise. Without this handler a
+        // drain failure becomes an unhandled rejection and takes the whole
+        // daemon down — RFC-349 cutover reproduced exactly that when the
+        // process-wide schema projection flipped under a still-armed worker.
+        log.error('mr terminal control drain failed', { error: safeError(error) })
+      })
+      .finally(() => {
+        this.running = null
+        if (this.requested && !this.stopped) this.wake()
+      })
+  }
+
+  /**
+   * Re-arm a worker that a provider pause stopped. `stop` stays terminal for a
+   * retired session; only the RFC-349 rollback path — the frozen source session
+   * resuming after a failed cutover — revives this exact instance.
+   */
+  resume(): void {
+    this.stopped = false
+    this.start()
   }
 
   async reconcileOnBoot(): Promise<void> {

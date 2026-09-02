@@ -258,8 +258,11 @@
       "id": "rfc319-e2e-endpoint-coverage",
       "file": "architecture/e2e-endpoint-coverage.json",
       "symbol": "uncovered",
-      "baseline": 68,
-      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。（2026-08-25：RFC-319 B76 —— 夜跑 `d366ed4f2` 的实测 journal 显示 B70/B72 那两批 spec 已真实打到 28 条，206 → 178。**这两份账本只在夜跑对账**，前几批只改了 R3 能力账本、漏了这里，是本次红的成因。）（2026-08-25：RFC-319 B84 —— 夜跑 `5eb976fc3`（run 32830821072）实测 journal 显示 B75 那批 spec 已真实打到 6 条：webhook 端点的 GET/PUT/DELETE 与 rotate-url-token、webhook 触发规则的 DELETE、定时任务的 PUT。178 → 172。**再次是「只改了 R3 能力账本、漏了这份」造成的夜跑红**，与 B76 同一成因。）（同批**预对账**：夜跑那份 journal 采自 `5eb976fc3`，在 B80 / B82 / B83 六份新 spec 之前，照现状下次夜跑还会再红一次。于是把那 6 份 spec 在本地按同一套 `AW_E2E_ROUTE_JOURNAL` 开关跑了一遍（57 passed），把命中并进夜跑 journal 后重跑对账，又销掉 8 条：身份/会话面 5 条、`GET /api/users/:id`、`DELETE /api/users/:id`、`GET /api/skills/:id/versions/diff`、`POST /api/workflows/:id/validate-draft`。172 → 164。）（2026-08-26：RFC-319 B93～B100 —— 本轮把基线补齐到与来源逐字相等并继续预对账。B93～B97 那笔（caca2b451）改了来源却没把基线带上：共享工作树上这份文件在我写完与提交之间被并发 session 覆写回旧值，commit-mine 取的是工作树内容，于是来源 147 / 基线 164 直接把 T16 推红。教训：账本类文件改完要立刻提交，并在提交后回读committed内容复核。B98～B100 三份新 spec（27 条用例）本地开 AW_E2E_ROUTE_JOURNAL 跑过（27 passed），再销 13 条：OIDC provider 的 PATCH/DELETE、action-templates 一族七条、automation-policies、code/digital-employees、task-catalog/sources、code/missions。）（2026-08-26：RFC-319 B101 —— WF-52 的配置包导出用例真打到 `GET /api/workflows/:id/export-package`，134 → 133。R2 无变化：本批只加载工作流详情页，账本里剩的六条都是 /code 一族与 /workflows/new、/workgroups/launch。）（2026-08-26：RFC-319 B102 —— AGENT-44/RES-X6 的改名用例真打到三类资源的 rename 端点（agents / mcps / plugins），133 → 130。R2 无变化。）（2026-08-26：RFC-319 B104+B105 —— EVENT-36 的按需观察器用例真打到 `POST /api/event-center/observers/run-due`，130 → 129。R2 无变化：两批只加载已覆盖的页面。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）（2026-08-30：exact SHA `acb518f8` 的 full-tier journal 显示 RFC-341 committed-delivery retry 与 RFC-342 memory scope move 两条新增写端点尚未被浏览器旅程命中；两条均已有 focused backend / frontend contract 测试，本批先如实登记，后续补真实用户旅程再销账。）"
+      "baseline": 80,
+      "why": "RFC-319 R1：默认全量 e2e 跑完后，allRouteMeta() 的 467 条端点声明里一次都没被打到的那些（开工时 271 条，58.7% 的 API 面零 e2e 流量）。条目数只许降——每降一条代表一个用户面动作真的被端到端跑过了。涨了说明新挂的端点没人测，必须在 review 里解释为什么。RFC-323 的员工 Adapter 浏览器旅程命中员工详情/更新与 Adapter 列表/详情四条端点，220 → 216；终态 SHA 089015b1 的 full tier 又实测命中 review、task question/feedback 与 workgroup config 共 12 条，216 → 204。RFC-324 新挂了定时任务的两个 ACL 端点（GET / PUT /api/scheduled-tasks/:id/acl），本 RFC 的 e2e 预算全押在用户真正抱怨的那条路径上（把工作流授权给别人用但不想让他改），这两条端到端只差「面板点得开」一层、档位判定由后端 rfc324-scheduled-task-acl 覆盖，因此 204 → 206；销账要求写在 design/RFC-324-graded-resource-grants/plan.md §7。（2026-08-25：RFC-319 B76 —— 夜跑 `d366ed4f2` 的实测 journal 显示 B70/B72 那两批 spec 已真实打到 28 条，206 → 178。**这两份账本只在夜跑对账**，前几批只改了 R3 能力账本、漏了这里，是本次红的成因。）（2026-08-25：RFC-319 B84 —— 夜跑 `5eb976fc3`（run 32830821072）实测 journal 显示 B75 那批 spec 已真实打到 6 条：webhook 端点的 GET/PUT/DELETE 与 rotate-url-token、webhook 触发规则的 DELETE、定时任务的 PUT。178 → 172。**再次是「只改了 R3 能力账本、漏了这份」造成的夜跑红**，与 B76 同一成因。）（同批**预对账**：夜跑那份 journal 采自 `5eb976fc3`，在 B80 / B82 / B83 六份新 spec 之前，照现状下次夜跑还会再红一次。于是把那 6 份 spec 在本地按同一套 `AW_E2E_ROUTE_JOURNAL` 开关跑了一遍（57 passed），把命中并进夜跑 journal 后重跑对账，又销掉 8 条：身份/会话面 5 条、`GET /api/users/:id`、`DELETE /api/users/:id`、`GET /api/skills/:id/versions/diff`、`POST /api/workflows/:id/validate-draft`。172 → 164。）（2026-08-26：RFC-319 B93～B100 —— 本轮把基线补齐到与来源逐字相等并继续预对账。B93～B97 那笔（caca2b451）改了来源却没把基线带上：共享工作树上这份文件在我写完与提交之间被并发 session 覆写回旧值，commit-mine 取的是工作树内容，于是来源 147 / 基线 164 直接把 T16 推红。教训：账本类文件改完要立刻提交，并在提交后回读committed内容复核。B98～B100 三份新 spec（27 条用例）本地开 AW_E2E_ROUTE_JOURNAL 跑过（27 passed），再销 13 条：OIDC provider 的 PATCH/DELETE、action-templates 一族七条、automation-policies、code/digital-employees、task-catalog/sources、code/missions。）（2026-08-26：RFC-319 B101 —— WF-52 的配置包导出用例真打到 `GET /api/workflows/:id/export-package`，134 → 133。R2 无变化：本批只加载工作流详情页，账本里剩的六条都是 /code 一族与 /workflows/new、/workgroups/launch。）（2026-08-26：RFC-319 B102 —— AGENT-44/RES-X6 的改名用例真打到三类资源的 rename 端点（agents / mcps / plugins），133 → 130。R2 无变化。）（2026-08-26：RFC-319 B104+B105 —— EVENT-36 的按需观察器用例真打到 `POST /api/event-center/observers/run-due`，130 → 129。R2 无变化：两批只加载已覆盖的页面。）（2026-08-26：RFC-319 B106～B113 + 维护拍 + DE-41 一次性补对账。这十批只改了 R3 能力账本、漏了这两份——与 B76 / B84 同一成因，不补必红。做法是**增量对账**而不是跑全量：判据 `uncovered = D − H(全量)` 用集合恒等式化成 `(U_old ∪ N) − H_new`，其中 U_old 是账本现值（结构守卫已证明无幽灵），N 是自账本记录点以来新挂的端点，H_new 取自本地开 `AW_E2E_ROUTE_JOURNAL` 跑过的**全部新增/改动 spec**（自上次对账起 `git diff` 出来的 17 份，外加两份会打到新端点的既有 spec：rfc321-code-push-credentials、account-profile；共 127 条用例、1465 条 journal 记录）。这样既不必跑全量，也不会把 N 里没人打过的悄悄算成已覆盖。R1 129 → 96：本批真打到 34 条旧欠账，同时把三条**新挂却无人测**的端点如实计入（GET /api/memories/facets、GET/PUT /api/scheduled-tasks/:id/acl —— 它们是别人的债，棘轮按设计把它们摆到台面上）。R2 6 → 4：DE-41 真加载了 /code/missions/$missionId，B106 那批真加载了 /code/assignments。）（2026-08-30：exact SHA `acb518f8` 的 full-tier journal 显示 RFC-341 committed-delivery retry 与 RFC-342 memory scope move 两条新增写端点尚未被浏览器旅程命中；两条均已有 focused backend / frontend contract 测试，本批先如实登记，后续补真实用户旅程再销账。）（2026-09-02：RFC-349 —— `/api/database*` 的 12 条端点如实登记为未覆盖，68 → 80。浏览器腿 rfc349-database-migration-settings.spec.ts 用 page.route 把它们整段以夹具应答，刻意不打真服务端（它要在没有外置 PostgreSQL 的机器上逐相位驱动 UI）；真实覆盖在 postgresql-evidence 那条腿上，但 journal 只采被测 daemon 的 req 日志，采不到它。销账要求：让浏览器腿真打服务端。）",
+      "allowGrowth": {
+        "why": "RFC-349：这 12 条 `/api/database*` 端点此前根本不在 `declaredTotal` 的对账口径里，账本因此少算了 12 条欠账。本次把 declaredTotal 472 → 495 补齐后，它们如实落进 uncovered，68 → 80。不是新挂了没人测的端点，是把一直存在、一直没被浏览器腿打到的欠账摆上台面。"
+      }
     },
     {
       "id": "rfc319-e2e-route-coverage",
@@ -476,14 +479,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25628,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349 T10：冻结源库期间请求路径不许写。新增一个具名端口 `DatabaseSourceWriteWindow` + 其默认值 `ALWAYS_WRITABLE_DATABASE_SOURCE`（auth application），以及 start.ts 里承载它的 `BoundDatabaseMigrationBootstrap` —— 共 +3 个 top-level symbol。路由层的维护门（503）早就在，漏的是它拦不到的两处：认证顺手写的 `user_sessions/user_pats.last_used_at` 与 PAT 的 token-call 审计，它们跑在路由门之前、且落在故意豁免的 `/api/database/*` 上（迁移必须能被盯着看）。一页写就足以让拷贝以 `sqlite-source-mutated` 收场——本机复现每次必中。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f95170aab21d2214723c8728f185d2c316f3cea8c12c98b44b3950cbf721caff",
+    "sourceDigest": "sha256:9813931e30ebcec18e6f85d2fa011628c1d0e5f5f4974c4b466828d5814d504d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -496,8 +496,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0f6c79977f4a93e9e86a87e278c8916beb5bab27",
-    "contentDigest": "sha256:07307edb6611cda585709a78c583489cbd52cdf9f36ae73cb3c145ded8a7d1e3",
+    "currentSnapshotSha": "fcff91711413608fd647408a408d83dfdb120a58",
+    "contentDigest": "sha256:38743beceee301c4bd7c65251433855ff38c25ca4f59054e4602198cf7740618",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

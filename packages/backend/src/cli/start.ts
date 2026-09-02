@@ -964,6 +964,27 @@ async function composePostgresqlProviderSession(input: {
     id: 'webhook-terminal-control',
     close: () => runtime.webhookTerminalControl.stop(),
   })
+  // RFC-349 — mirror of the SQLite bootstrap below: the terminal-control worker
+  // holds an interval timer plus a fire-and-forget drain bound to this
+  // generation's client, so a pause has to stop it, not just a close. The close
+  // participant above still runs for the retired session; `stop` is idempotent.
+  const webhookTerminalRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'webhook-terminal-control',
+    start() {
+      runtime.webhookTerminalControl.resume()
+      let stopping: Promise<void> | null = null
+      return Object.freeze({
+        stop() {
+          stopping ??= runtime.webhookTerminalControl.stop()
+          return stopping
+        },
+        async drain() {
+          if (stopping === null) throw new Error('webhook-terminal-control-drain-before-stop')
+          await stopping
+        },
+      })
+    },
+  })
 
   const session = await _createComposedDaemonProviderRuntimeSession({
     provider: 'postgresql',
@@ -976,6 +997,7 @@ async function composePostgresqlProviderSession(input: {
       mcpRuntimeBindings.runtimeFactory,
     ],
     backgroundWriterFactories: [
+      webhookTerminalRuntimeFactory,
       afterCommitPumpFactory,
       humanGateRuntimeFactory,
       committedEventRuntimeFactory,
@@ -3111,7 +3133,35 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     maintenanceRuntimeBindings.runtimeFactory,
     mcpRuntimeTestBindings.runtimeFactory,
   ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
+  // RFC-349 — the MR terminal-control worker owns an interval timer and a
+  // fire-and-forget drain against the SQLite client. A migration freeze must
+  // stop it before `selectDatabaseSchemaProvider('postgresql')` re-points the
+  // shared table projection, otherwise its next tick prepares
+  // `agent_workflow.webhook_mr_launch_guards` on bun:sqlite and the daemon dies
+  // mid-cutover. Registering it as a provider handle (not only as a close
+  // participant) is what puts it inside the pause/resume fence.
+  const webhookTerminalControlRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'webhook-terminal-control',
+    start() {
+      // Boot already armed the worker through `reconcileOnBoot`; this call only
+      // matters on the rollback path, where the frozen source session takes its
+      // own writers back after a failed cutover.
+      webhookTerminalControl.resume()
+      let stopping: Promise<void> | null = null
+      return Object.freeze({
+        stop() {
+          stopping ??= webhookTerminalControl.stop()
+          return stopping
+        },
+        async drain() {
+          if (stopping === null) throw new Error('webhook-terminal-control-drain-before-stop')
+          await stopping
+        },
+      })
+    },
+  })
   const providerBackgroundWriterFactories = Object.freeze([
+    webhookTerminalControlRuntimeFactory,
     limitsRuntimeFactory,
     backupRuntimeFactory,
     submoduleRefreshRuntimeFactory,

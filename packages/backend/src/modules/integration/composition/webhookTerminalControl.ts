@@ -86,6 +86,7 @@ export function composeMrTerminalControlWithPorts(input: {
     wake: (effectId) => worker.wake(effectId),
     reconcileOnBoot: () => worker.reconcileOnBoot(),
     stop: () => worker.stop(),
+    resume: () => worker.resume(),
   }
 }
 
