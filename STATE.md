@@ -20,6 +20,17 @@
 > 三处 ambient 锚点与 sourceDigest 全偏——正确姿势是 `git archive <要推的 commit>` 导出提交本身、软链真仓库 `.git` 后
 > 跑 `architecture:write --snapshot-sha HEAD`（已由 agent-workflow-f9 写进 `docs/dev-gotchas.md`）。
 >
+> 📝 **RFC 已落档、待批准（Draft，2026-09-02）：[RFC-351 SQLite 写事务一律预占 writer](design/RFC-351-sqlite-write-transaction-immediate-cutover/proposal.md)。**
+> 起于 2026-09-02 主干 CI run `33638907352` 的一条「玄学红」：`rfc319-digital-employee-p1` 的 `beforeAll` 两次
+> `POST …/tools/{id}/publish` 都 500，而绿的 `78dcc5999` 与红的 `f663be47c` 之间生产代码 diff 只有一段注释。
+> 挖到底是**真缺陷不是 flake**：全仓 37 处裸 `db.transaction(...)` 绕过 `dbTxSync`（26 处「先读后写」），
+> deferred 事务的读→写升级会以 `SQLITE_BUSY_SNAPSHOT` **0ms 失败、绕过 5s `busy_timeout`**（已用双连接脚本复现），
+> 裸 `SQLiteError` 在 HTTP 边界兜成 500。既有账本 `RAW_TRANSACTION_SITES`（RFC-317 T37）的安全理由只回答了
+> S-10 的 async 半提交，**没回答 RFC-338 AC-2 的 `BEGIN IMMEDIATE`**，于是这 37 处对后者是未覆盖的逃逸口。
+> 三件套已落档，**等待用户批准后才动生产代码**。另有一个**独立于本 RFC** 的可观测性缺口：e2e harness 把 daemon
+> 输出只留在内存 tail 里，CI 上任何 500 都拿不到服务端堆栈——这正是它长期被读成 flake 的原因。对应修复已由另一个
+> session 写在工作树里（回显 `unhandled error` 行），但该 session 已结束、改动**尚未提交**，归属确认中。
+
 > 🚧 **RFC 实施中（Approved / In Progress，2026-08-31）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
 > 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：
 > SQLite 继续默认；PostgreSQL server 外置，二进制只带 client/pool/schema/migration；V1 以一次 durable maintenance-window operation 自动完成
