@@ -176,12 +176,24 @@ function percentile(samples: readonly number[], quantile: number): number {
   ]!
 }
 
+/**
+ * RFC-349 —— 不用 `Math.max(...samples)`：它把整个数组当**函数实参**展开，样本一多就
+ * 直接 `RangeError: Maximum call stack size exceeded`。full 口径（100 客户端 × 180 秒
+ * × 三个相位）的延迟样本是几十万条，本机全量取证跑实测在收尾算报告时炸在这里——迁移
+ * 本身已经跑完（13,208,635 行、崩溃续跑 26/26），只是报告算不出来。
+ */
+function maxOf(samples: readonly number[]): number {
+  let maximum = 0
+  for (const sample of samples) if (sample > maximum) maximum = sample
+  return maximum
+}
+
 function stats(samples: readonly number[]): LatencyStats {
   return {
     count: samples.length,
     p50Ms: percentile(samples, 0.5),
     p95Ms: percentile(samples, 0.95),
-    maxMs: samples.length === 0 ? 0 : Math.max(...samples),
+    maxMs: maxOf(samples),
   }
 }
 
@@ -555,7 +567,7 @@ async function runPhase(input: {
     processMemory: {
       samples: rssSamples.length,
       lastRssMib: rssSamples.at(-1) ?? null,
-      maxRssMib: rssSamples.length === 0 ? null : Math.max(...rssSamples),
+      maxRssMib: rssSamples.length === 0 ? null : maxOf(rssSamples),
     },
     daemon: input.daemon.diagnostics(),
   }
