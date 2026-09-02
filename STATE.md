@@ -162,6 +162,64 @@ memory-distill / development-wake / digital-employee-os / event-center / fusion-
 > 守卫：`tests/rfc349-frozen-source-request-writes.test.ts`（关着不写 / 开着照写 / 省略即照写 /
 > 审计中间件问同一个窗口 / daemon 确实接了真窗口，共 5 条）。
 
+> **T10 之后：把 `postgresql-evidence` 从「一次都没绿过」往下逐层剥（2026-09-02 续）。**
+> 这条 workflow 自建起从未成功过一次（`gh run list --workflow postgresql-evidence.yml` 全红）。
+> 本机复现口径固定为：常驻容器 `agent-workflow-rfc349-pg-0831`（`127.0.0.1:62815`）+
+> `--mode large-soak --scale small --clients 8 --duration-seconds 20`，**每轮约 6 分钟**
+> （含 `bun run build:binary:e2e`），45MB 种子。每修一层就重跑一轮，按 daemon 日志里的
+> 错误分类计数收敛。已修：
+>
+> 15. **割接瞬间 daemon 直接退出**（`a841e3ac6`）：`SQLiteError: no such table:
+agent_workflow.webhook_mr_launch_guards`。MR 终态 worker 只登记成 close participant，
+>     而割接期间源 session 是**故意**留着的回滚地平线，close 不跑；投影改指后它的 5s 拍
+>     继续跳。改成 provider handle（pause 就停），并给 `wake()` 的 fire-and-forget promise
+>     补 catch——没有它任何 drain 失败都是 unhandled rejection、直接带走进程。
+> 16. **PG 常态下业务读大面积 500**（`022c4ca1d`）：`argument of OR must be type boolean,
+not type integer`，两个 PostgreSQL 相位共 563 次。referenced 谓词在「没有定时任务
+>     引用」时用 `sql\`0\`` 当 OR 的一个分支；SQLite 把 0 当 false，PostgreSQL 不接受。
+> 17. **`database_generations` 的首笔实时写标记把并发事务全撞死**（`022c4ca1d`）：
+>     `SET first_live_write_at = COALESCE(first_live_write_at, now)` 在**每一条**业务语句上
+>     重写同一行，任意两个并发 SERIALIZABLE 事务（含每个已认证请求顺手做的 session touch）
+>     必然互撞，12 秒 38 次 `could not serialize access due to concurrent update`。拆成
+>     「每事务必做的**围栏读**（`state='active'`）」+「每进程一次的**标记写**
+>     （`WHERE first_live_write_at IS NULL`，走自己的连接、READ COMMITTED 自动提交）」。
+>     偏离说明：标记因此先于所属业务写提交，不是 design §11.6 的同事务；偏差方向只会保守。
+> 18. **割接窗口里源 composition 仍在裸奔**（`022c4ca1d`）：表投影是**进程级**的，
+>     `createPostgresqlDatabaseClient` 一构造就改指，而候选 composition 要构建几百毫秒
+>     （实测 531ms）。这期间 `current` 还是 SQLite 那份，每条豁免维护门的控制面请求都拿
+>     PostgreSQL 限定名打到 bun:sqlite 上（40 次 `no such table: agent_workflow.user_sessions`）。
+>     加 handover 栅栏（换 composition 期间 listener 的 `fetch` / `tryUpgrade` 挂起，换完由
+>     接手的那份回答）+ `onCurrentSelected` 把 provider 选择钉在真正在服务的那份上
+>     （割接失败退回源 session 时投影也跟着退回——这条路径以前没人管）。
+> 19. **`/api/maintenance/status` 进维护门豁免名单**（`022c4ca1d`）：它是盯迁移用的端点，
+>     只读内存投影与连接池遥测。**顺带订正取证夹具**：`waitForBusinessAdmission` 原本轮询
+>     的就是它，豁免后等待变成空转——改为轮询真正受门管的 `/api/tasks?limit=1`（`3d3e9dc9b`）。
+> 20. **读一次迁移状态会新建一个 target runtime**（`3d3e9dc9b`）：割接完成到 finalize 之间，
+>     `GET /api/database/migrations/:id` 与 `GET /api/database` 都走 `withRunner`，它会
+>     `createPostgresqlDatabaseRuntime`（自带 poolMax=16 条连接）并抢 operation 级 advisory
+>     lock。8 个并发轮询于是互相抢锁 + 把服务端连接打爆（`sorry, too many clients already`），
+>     随后整条 PostgreSQL 面级联失败。改为：manifest 记下 `firstLiveWriteAt` 就不探、有
+>     active run 就不探、要探时并发共用一次、撞上别人的锁读成「这次不探」。
+> 21. **仓内十九处 SERIALIZABLE 重试判据一次都没命中过**（本批）：Bun.SQL 的
+>     `PostgresError` 把 SQLSTATE 放在 **`errno`**，`code` 恒为 `ERR_POSTGRES_SERVER_ERROR`
+>     （本机对真 PostgreSQL 实测 `SELECT 1/0` → `{code:'ERR_POSTGRES_SERVER_ERROR',
+errno:'22012'}`）。所有 `if (code === '40001' || code === '40P01')` 都是死代码，于是
+>     `PUT /api/tasks/:id/members` 的并发写打出 77 次 `could not serialize access due to
+read/write dependencies among transactions`，每次都是用户可见的 500，还顺带把连接留在
+>     失败事务里，后续复用该连接的事务再吃 36 次 `SET TRANSACTION ISOLATION LEVEL must be
+called before any query`。十九处判据统一补上 `errno`；守卫
+>     `tests/rfc349-postgresql-serialization-retry.test.ts`（真 Bun 形状重试 / drizzle 包一层
+>     的 cause 链也重试 / 无关错误照抛 / 源码扫描：凡检查 `'40001'` 的文件必须也读 `errno`）。
+>
+> 顺带：RFC-338 维护 soak 的 SQLite 语句判据从「单条最慢 < 250ms」改成「千分之一以上语句越
+> 250ms」+「单条越 1s」。原判据是单样本尾部门，实测在互不相关的提交上反复红绿（一天里 4 红
+> 8 绿），每次都是 p95<=50ms、errors=0、只有 max 越线——它测的是共享 runner 的调度抖动。
+>
+> **仍未关闭**：`postgresql-evidence` 尚未跑绿；CI 那条 100 客户端 / full 种子（10M events、
+> 4.3GB SQLite）的 run 在 2026-09-02 06:35 以 **exit 143（SIGTERM）** 结束，种子完成后静默 30
+> 分钟——疑似 runner 资源（内存/磁盘）而非产品，尚未定论。下一步：本机小规模收敛到零错误后，
+> 按 exact SHA 重新 dispatch 一次 hosted run 看它停在哪。
+
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表
 > （`INTENT_NODE_TEACHING satisfies {[K in NodeKind]…}` / `INTENT_RESOURCE_TEACHING` 按 intent payload schema 键控 / `INTENT_PLATFORM_RESOURCE_MAP satisfies Record<AclResourceType,…>`）

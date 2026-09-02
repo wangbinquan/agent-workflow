@@ -476,14 +476,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25632,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349：+1 个 top-level symbol `isDatabaseMigrationTargetProbeUnavailable`（system-operations coordinator）。割接完成到 finalize 之间，读一次迁移状态会去开一个target runtime 并抢 operation 级 advisory lock；daemon 每个 provider composition 各有一个coordinator，握着锁的往往不是回答轮询的那一个。托管取证跑里每个并发轮询都因此吃到 `another process owns the PostgreSQL logical migration target`。这个判据把「锁被别人握着」读成「这次不探」而不是「状态请求失败」，单独导出是为了能被直接测到。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5204efb5cb3caa4d0a431fb98755c666de66efcc11016bff7fe63b48a7001007",
+    "sourceDigest": "sha256:377e73cf5118ad82b48845a0717c017083394cd6f633c78381e06666a7dfad50",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -496,8 +493,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "022c4ca1d68672d13f8648aea0e96d2da94852e1",
-    "contentDigest": "sha256:b4c4d88e15161464ae75dbdf7158210559eac9194c3db66242f49e8c2752bde9",
+    "currentSnapshotSha": "3d3e9dc9bcab1981a8a57b97f958cce04aad506f",
+    "contentDigest": "sha256:1fad5048f1f59d6f4fb068ba7548a9ff6df162ecd5f1f32bdc736dadb10921ea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
