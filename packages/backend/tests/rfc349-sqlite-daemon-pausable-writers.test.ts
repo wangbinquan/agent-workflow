@@ -27,6 +27,9 @@ const PAUSABLE_WRITERS = [
   { id: 'scheduled-backup', factory: 'backupRuntimeFactory' },
   { id: 'submodule-refresh', factory: 'submoduleRefreshRuntimeFactory' },
   { id: 'batch-import-gc', factory: 'batchImportRuntimeFactory' },
+  // RFC-350 AC-15：不活跃超时收割器同样是周期写手（它 cancel 任务、写原因与审计），
+  // 更不能写穿冻结窗口。两个 daemon 各注册一次。
+  { id: 'task-idle-timeout', factory: 'idleTimeoutRuntimeFactory' },
 ] as const
 
 /** The array literal passed as `backgroundWriterFactories` / `providerBackgroundWriterFactories`. */

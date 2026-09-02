@@ -2,6 +2,9 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **RFC 实施中（Approved / In Progress，2026-09-02）：[RFC-350 任务不活跃超时收割（僵尸任务）与 interrupted 树归档补齐](design/RFC-350-task-idle-timeout-reaper/proposal.md)。**
+> 起于用户「配置里有终态任务自动归档，也要有任务超时自动归档——任务最后一次没有动作之后多久就当僵尸自动归档」。源码对账后确认这条链今天一条都不接（归档器要整树终态、卡死检测明写不修、自动修复的取消/判失败选项都不是 auto-apply、资源上限只看总时长），并顺带查出 `interrupted` 树永远不会被归档这个既有缺口。用户四轮逐条拍板 D1–D14（见 proposal §4）。**用户 2026-09-02 已批准 D1–D14 与能力影响清单并授权完整实现、commit 与 push；明示跳过设计门。**
+>
 > 🚧 **RFC 实施中（Approved / In Progress，2026-08-31）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
 > 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：
 > SQLite 继续默认；PostgreSQL server 外置，二进制只带 client/pool/schema/migration；V1 以一次 durable maintenance-window operation 自动完成

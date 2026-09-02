@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 
-export type NumberRangeUnit = 'ms' | 'bytes' | 'days'
+export type NumberRangeUnit = 'ms' | 'bytes' | 'days' | 'hours'
 
 type LocalizedUnitKey = 'unit.hour' | 'unit.minute' | 'unit.second' | 'unit.year' | 'unit.day'
 
@@ -17,6 +17,12 @@ const UNIT_STEPS: Record<NumberRangeUnit, readonly UnitStep[]> = {
   days: [
     { factor: 365, key: 'unit.year' },
     { factor: 1, key: 'unit.day' },
+  ],
+  // RFC-350：小时粒度的阈值（taskIdleTimeout.idleHours）。24 的整数倍显示成「N 天」，
+  // 其余显示成「N 小时」——与 days/ms 同一套「一个量级、不向下穿透」的规则。
+  hours: [
+    { factor: 24, key: 'unit.day' },
+    { factor: 1, key: 'unit.hour' },
   ],
   bytes: [
     { factor: 1024 * 1024, suffix: 'MiB' },

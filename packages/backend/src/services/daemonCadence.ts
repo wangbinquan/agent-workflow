@@ -34,6 +34,13 @@ export const DAEMON_CADENCE = {
   /** stuck-task 检测（services/stuckTaskDetector.ts；阈值 S1-S5 见该模块）。 */
   stuckTaskScan: 5 * MINUTE_MS,
   /**
+   * RFC-350 不活跃超时收割（modules/task-execution/application/taskIdleTimeoutReaper.ts；
+   * DEFAULT OFF）。阈值最细 1 小时，5 分钟一拍把判定延迟压在阈值的 8% 以内，而扫描面
+   * 只有活任务，成本远低于 1Hz 的 resourceLimits。**非 hourly 循环不进
+   * MAINTENANCE_PHASE**（那张表只收周期性重维护，见文件头）。
+   */
+  taskIdleTimeout: 5 * MINUTE_MS,
+  /**
    * 孤儿进程周期回收（services/orphanReconcile.ts）的**默认**周期：真正的周期是
    * `periodicOrphanReconcileMs` 这个旋钮（0 = 关），本值只是它的出厂默认，两者由
    * `tests/rfc349-orphan-reconcile-hot-apply.test.ts` 钉在一起。

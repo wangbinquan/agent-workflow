@@ -9,6 +9,9 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       autoKill: 300_000,
       autoRepair: 300_000,
       stuckTaskScan: 300_000,
+      // RFC-350 新增（非调参）：不活跃超时收割的巡检拍。阈值最细 1 小时，5 分钟
+      // 一拍把判定延迟压在阈值的 8% 以内；DEFAULT OFF，关着时一次 IO 都不发。
+      taskIdleTimeout: 300_000,
       orphanReconcile: 600_000,
       // RFC-349 修复新增（非调参）：周期孤儿对账的监督拍。循环按它醒来、醒来时才
       // 判断这一拍要不要真扫，于是 `periodicOrphanReconcileMs` 改动最迟一分钟生效；

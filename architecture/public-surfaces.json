@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 884,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18861,
+    "recursiveFields": 18862,
     "symbols": 945
   },
   "entries": [
@@ -74180,8 +74180,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:04008840d850b6541722",
-            "import:a9d66dac04e373fc7662"
+            "import:04008840d850b6541722"
           ],
           "name": "load",
           "signatureDigest": "sha256:b398298ac1cae26e05ddd93aeffaec541206e74aa9ae0cf43d26d5f3776003e7"
@@ -144314,8 +144313,8 @@
       "budget": {
         "maxMethods": 20,
         "maxTopLevelFields": 20,
-        "maxTransitiveLeafFields": 98,
-        "maxUnionVariants": 34
+        "maxTransitiveLeafFields": 99,
+        "maxUnionVariants": 35
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
@@ -144741,16 +144740,21 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:recordEvent.$parameter:input.kind.$variant:10",
-          "type": "'restore'"
+          "type": "'quarantine'"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:recordEvent.$parameter:input.kind.$variant:11",
-          "type": "'pre-migration'"
+          "type": "'restore'"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:recordEvent.$parameter:input.kind.$variant:12",
+          "type": "'pre-migration'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recordEvent.$parameter:input.kind.$variant:13",
           "type": "'worktree-skip'"
         },
         {
@@ -144791,7 +144795,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:recordEvent.$parameter:input.kind.$variant:9",
-          "type": "'quarantine'"
+          "type": "'idle-timeout-reap'"
         },
         {
           "consumerEdgeIds": [],
@@ -151967,7 +151971,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77cf0b60fc3d077b9176d7a7cf42fc8767d54e15f2658b9b686f71b6543be6d7",
+  "sourceDigest": "sha256:cd6e5c4e1c04578372bb537e3c221222d1299efa1ec2f291b9a990114225ed54",
   "targetContexts": [
     "collaboration",
     "development-automation",

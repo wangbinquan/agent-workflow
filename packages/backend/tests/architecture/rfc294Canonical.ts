@@ -2474,6 +2474,18 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'ResourceLimitEnforcementDecision',
     }
   }
+  // RFC-350：不活跃超时收割的原因覆盖。与上面 resource-limit 那条同形——只在**已经
+  // 落进 canceled** 的行上覆盖终态文案，写入判据是「这一行的终态是不是我们写的」
+  // （status='canceled' 且 error_summary 仍是 cancelTask 的默认值），竞态里被别的
+  // 终态写手抢先的行原样保留它自己的原因。
+  if (/modules\/task-execution\/infrastructure\/taskIdleTimeoutPersistence/.test(value)) {
+    return {
+      authorityKind: 'control-revision',
+      controlSubtype: 'terminal-control',
+      revisionPredicate: 'idle-observation-and-own-terminal-copy-cas',
+      requiredBrandedProof: 'IdleTimeoutReapDecision',
+    }
+  }
   if (
     /platform\/persistence\/(?:postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|systemWorkspaceGc|taskLifecycleRepair\/))/.test(
       value,

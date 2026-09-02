@@ -89,6 +89,11 @@ import {
 } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { recoverInterruptedArchives } from '@/services/taskArchive'
+import {
+  composeTaskIdleTimeoutOperations,
+  createSqliteTaskIdleTimeoutPersistence,
+  runTaskIdleTimeoutSweep,
+} from '@/modules/task-execution/composition/taskIdleTimeout'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import {
@@ -864,6 +869,21 @@ async function composePostgresqlProviderSession(input: {
       })
     },
   })
+  // RFC-350 —— 不活跃超时收割（僵尸任务），DEFAULT OFF。见 SQLite 侧同名 handle 的说明。
+  const idleTimeoutRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'task-idle-timeout',
+    intervalMs: DAEMON_CADENCE.taskIdleTimeout,
+    run: () =>
+      runTaskIdleTimeoutSweep(
+        runtime.taskIdleTimeout,
+        loadConfig(Paths.config).taskIdleTimeout,
+      ).then(() => undefined),
+    onError(error) {
+      input.log.error('PostgreSQL task idle-timeout sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
 
   const backupRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'scheduled-backup',
@@ -1013,6 +1033,7 @@ async function composePostgresqlProviderSession(input: {
       eventCenterRuntimeFactory,
       fusionRuntimeFactory,
       limitsRuntimeFactory,
+      idleTimeoutRuntimeFactory,
       backupRuntimeFactory,
       submoduleRefreshRuntimeFactory,
       batchImportRuntimeFactory,
@@ -2736,6 +2757,31 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       })
     },
   })
+  // RFC-350 —— 不活跃超时收割（僵尸任务），DEFAULT OFF。同样是 provider-session
+  // handle：它会 cancel 任务并杀进程，绝不能在迁移冻结窗口里跑（AC-15）。留在主线程
+  // 而不是进 RFC-338 的维护 Worker，因为 cancelTask 依赖进程内 scheduler 的
+  // AbortController / driver stop ticket / WS 广播，Worker 线程拿不到。
+  const idleTimeoutOperations = composeTaskIdleTimeoutOperations({
+    persistence: createSqliteTaskIdleTimeoutPersistence(db),
+    cancelTask: async (taskId: string) => {
+      const { cancelTask } = await import('@/services/task')
+      await cancelTask(db, taskId)
+    },
+  })
+  const idleTimeoutRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'task-idle-timeout',
+    intervalMs: DAEMON_CADENCE.taskIdleTimeout,
+    // 每拍热读配置：开关与阈值改动免重启（AC-16）。
+    run: () =>
+      runTaskIdleTimeoutSweep(idleTimeoutOperations, loadConfig(Paths.config).taskIdleTimeout).then(
+        () => undefined,
+      ),
+    onError(error) {
+      log.error('task idle-timeout sweep failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
   // Scheduled backup creation keeps its own cadence; retention is admitted to
   // the maintenance Worker both by the configured heavy schedule and after a
   // backup settles.
@@ -3169,6 +3215,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const providerBackgroundWriterFactories = Object.freeze([
     webhookTerminalControlRuntimeFactory,
     limitsRuntimeFactory,
+    idleTimeoutRuntimeFactory,
     backupRuntimeFactory,
     submoduleRefreshRuntimeFactory,
     batchImportRuntimeFactory,

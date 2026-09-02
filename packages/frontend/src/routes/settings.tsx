@@ -1403,6 +1403,54 @@ export function GcTab({ config }: TabProps) {
         <TaskArchiveManualRun retentionDays={state.taskArchive?.retentionDays} />
       </SettingsCard>
       <SettingsCard
+        title={t('settings.cardGroups.taskIdleTimeoutTitle')}
+        hint={t('settings.cardGroups.taskIdleTimeoutHint')}
+      >
+        {/* RFC-350（用户拍板 D1–D14）——**开启后没人管的任务会被自动取消**：整棵树
+          超过阈值无任何动作时，先杀仍活着的 runtime 子进程树、再判 canceled。它只
+          负责终结，出库仍由上面那张卡的保留期完成。默认关闭。 */}
+        <Switch
+          checked={state.taskIdleTimeout?.enabled === true}
+          onChange={(v) =>
+            setState({
+              ...state,
+              taskIdleTimeout: {
+                ...(state.taskIdleTimeout ?? { idleHours: 24 }),
+                enabled: v,
+              },
+            })
+          }
+          label={t('settingsForm.taskIdleTimeoutEnabled')}
+          data-testid="settings-task-idle-timeout-enabled"
+        />
+        <Field
+          label={t('settingsForm.taskIdleTimeoutIdleHours')}
+          hint={t('settingsForm.taskIdleTimeoutIdleHoursHint')}
+        >
+          <SettingsNumberInput
+            setting="taskIdleTimeout.idleHours"
+            data-testid="settings-task-idle-timeout-hours"
+            value={state.taskIdleTimeout?.idleHours}
+            onChange={(v) =>
+              setState({
+                ...state,
+                taskIdleTimeout: {
+                  ...(state.taskIdleTimeout ?? { enabled: false }),
+                  idleHours: v ?? 24,
+                },
+              })
+            }
+          />
+        </Field>
+        {/* RFC-350 I-5：worktreeAutoGc 默认是关的，所以「收割了但磁盘不释放」是默认
+          形态，必须当场说清楚并指路，而不是让用户以为收割顺带清了盘。 */}
+        {state.taskIdleTimeout?.enabled === true && state.worktreeAutoGc?.enabled !== true ? (
+          <p className="muted settings-hint settings-hint--tight stack-top--sm">
+            {t('settings.taskIdleTimeoutWorktreeHint')}
+          </p>
+        ) : null}
+      </SettingsCard>
+      <SettingsCard
         title={t('settings.cardGroups.gcWebhooksTitle')}
         hint={t('settings.cardGroups.gcWebhooksHint')}
       >

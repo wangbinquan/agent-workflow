@@ -3,6 +3,8 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSyn
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+
 import {
   clarifyRounds,
   collaborationGateArtifacts,
@@ -53,7 +55,13 @@ import { createTerminalMaintenanceClaim, type TerminalMaintenanceClaim } from '.
 
 const log = createLogger('task-archive-postgresql')
 const ARCHIVE_SCHEMA_VERSION = 2
-const TERMINAL = ['done', 'failed', 'canceled'] as const
+// RFC-350：与 shared 的 `TERMINAL_TASK_STATUSES` 对齐。此前这里是一份手抄的三元素
+// 字面量，漏掉了 `interrupted`——而 orphan reaper 把 daemon 重启时在跑的任务翻成
+// interrupted 时**是写了 finished_at 的**（modules/task-execution/composition/
+// taskExecutionPersistence.ts）。漏掉的后果是：每次 daemon 重启残留的那批任务既
+// 不能被取消（cancel 事件的 allowed-from 不含 interrupted），又永远等不到归档，
+// 成为库里唯一一类永久居民。
+const TERMINAL = TERMINAL_TASK_STATUSES
 const BATCH_SIZE = 2_000
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]

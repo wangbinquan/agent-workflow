@@ -37,7 +37,7 @@ export interface RecoveryEventRow {
 }
 
 // Authoritative mirror of backend `services/recovery.ts` `RecoveryEventKind`
-// (10 values). When the backend adds a kind, the bundle-completeness test
+// (11 values). When the backend adds a kind, the bundle-completeness test
 // (recovery-section-kind-i18n.test.ts) flags the missing translation; until one
 // lands, labelForCode() falls back to the raw code (never blank, never a
 // leaked i18n key).
@@ -51,6 +51,8 @@ export const RECOVERY_EVENT_KINDS = [
   'auto-resume',
   'auto-repair',
   'heartbeat-kill',
+  // RFC-350：不活跃超时收割（僵尸任务）。
+  'idle-timeout-reap',
   'quarantine',
 ] as const
 

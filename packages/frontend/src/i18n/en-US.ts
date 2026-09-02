@@ -2758,6 +2758,9 @@ export const enUS: Resources = {
         'Retired directories and free pages inside the database. Deletion cannot be undone.',
       taskArchiveHint:
         'Export long-settled task trees to the archive directory and delete them from the database to bound its size. Off by default.',
+      taskIdleTimeoutTitle: 'Task idle timeout (auto-cancels abandoned tasks)',
+      taskIdleTimeoutHint:
+        'When a whole task tree goes this long with no activity it is treated as a zombie: any live runtime child process is killed, then every non-terminal task in the tree is canceled. It only terminates — export still happens through the settled-task archive above. Off by default.',
       gcWebhooksTitle: 'Webhook cleanup',
       gcWebhooksHint: 'Retain and purge webhook delivery history independently from task data.',
       networkListenerTitle: 'Daemon listener',
@@ -2878,6 +2881,8 @@ export const enUS: Resources = {
     diskCleanupConfirmBody:
       'This permanently deletes {{path}} ({{size}}). It is dead data left behind by the runtime-hardening retirement — no platform code reads or writes it any more. This cannot be undone.',
     taskArchiveRunNow: 'Archive now…',
+    taskIdleTimeoutWorktreeHint:
+      'Note: workspace auto-reclaim is off, so a reaped task\u2019s workspace directory still uses disk. Turn it on in the workspace reclaim card above to free it automatically.',
     taskArchiveScanning: 'Scanning…',
     taskArchiveNothing: 'No task tree is old enough to archive (retention: {{days}} days).',
     taskArchiveConfirmTitle: 'Archive and delete these tasks?',
@@ -5383,6 +5388,9 @@ export const enUS: Resources = {
           'The dynamic workflow was rejected too many times without passing; retries stopped.',
         dwRejectExhausted__hint:
           'Relax the acceptance criteria or adjust the workgroup goal, then relaunch.',
+        idleTimeout: 'The task had no activity for a long time and was reaped automatically.',
+        idleTimeout__hint:
+          'It stayed idle past the "task idle timeout" configured in Settings. Resume it if the work is still needed.',
         nodeTimeout: 'The node timed out.',
         nodeTimeout__hint: 'Raise the node timeout in its config, then Resume to retry.',
         childUnkillable: 'The agent process could not be terminated; the run was abandoned.',
@@ -5490,6 +5498,7 @@ export const enUS: Resources = {
         'auto-resume': 'Auto-resumed from the last checkpoint',
         'auto-repair': 'Auto-repaired an abnormal state',
         'heartbeat-kill': 'Terminated an unresponsive child process',
+        'idle-timeout-reap': 'Reaped after a long stretch with no activity',
         quarantine: 'Paused auto-recovery after repeated failures',
       },
     },
@@ -7175,6 +7184,10 @@ export const enUS: Resources = {
     taskArchiveRetentionDays: 'Archive retention (days)',
     taskArchiveRetentionDaysHint:
       'When every task in a tree is settled and the newest completion is older than this, the tree is exported to ~/.agent-workflow/archive/tasks/ and DELETED from the database — archived tasks disappear from lists, detail pages and search (404, same as never existing) with no online replay. 0 disables.',
+    taskIdleTimeoutEnabled: 'Reap idle tasks automatically',
+    taskIdleTimeoutIdleHours: 'Idle threshold (hours)',
+    taskIdleTimeoutIdleHoursHint:
+      'Activity means agent events plus the human actions that move a task forward (review decisions, clarify answers, question dispatch); comments and collaborator changes do not count. When the whole tree stays idle this long, its pending / running / awaiting-review / awaiting-answer tasks are canceled — including ones parked on a human. A canceled task can still be resumed and its workspace is kept.',
     webhookBodyRetention: 'Webhook delivery body retention (days)',
     webhookBodyRetentionHint:
       'Raw payloads older than this are pruned (replay unavailable); the rows stay. Lower it on high-volume deployments to cap disk usage.',

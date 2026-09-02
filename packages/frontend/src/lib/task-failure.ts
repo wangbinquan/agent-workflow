@@ -43,6 +43,8 @@ const EXACT_TOKENS: Record<string, string> = {
   'scheduler error': 'schedulerError',
   'dw-generate-exhausted': 'dwGenerateExhausted',
   'dw-reject-exhausted': 'dwRejectExhausted',
+  // RFC-350：不活跃超时收割（僵尸任务）。
+  'task-idle-timeout': 'idleTimeout',
 }
 
 /** Prefix-match summary tokens (writers append detail after the prefix). */

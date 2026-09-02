@@ -8,7 +8,7 @@
 
 export const JS_TIMER_MAX_MS = 2_147_483_647
 
-export type SettingsNumericUnit = 'ms' | 'bytes' | 'days'
+export type SettingsNumericUnit = 'ms' | 'bytes' | 'days' | 'hours'
 
 export interface SettingsNumericBound {
   readonly min: number
@@ -97,6 +97,10 @@ export const SETTINGS_NUMERIC_BOUNDS = {
   // RFC-311 T19:归档保留期。0 与 enabled=false 等价(都不归档),旋钮在设置页
   // 与开关同处一张卡——这是**会把任务从界面上抹掉**的能力,必须显式可见可调。
   'taskArchive.retentionDays': { min: 0, max: 3_650, unit: 'days' },
+  // RFC-350：不活跃超时阈值。下界取 1 小时而不是 0/分钟级——比 stuck detector 的
+  // 30 分钟尺度更细就会互相打架，也容易把正常长跑任务误杀；「关」由 enabled 表达，
+  // 不需要再用 0 表达一次。上界 8760 小时 = 365 天。
+  'taskIdleTimeout.idleHours': { min: 1, max: 8_760, unit: 'hours' },
   webhookTriggerFiresRetentionDays: { min: 0, max: 3_650, unit: 'days' },
   webhookDeliveryBodyRetentionDays: { min: 1, max: 3_650, unit: 'days' },
   webhookDeliveryRowRetentionDays: { min: 1, max: 3_650, unit: 'days' },

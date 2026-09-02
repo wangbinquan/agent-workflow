@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1911,
+    "entries": 1917,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27129,6 +27129,30 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts#runTaskIdleTimeoutSweep",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskIdleTimeoutReaper.ts#runTaskIdleTimeoutSweep",
+      "symbol": "runTaskIdleTimeoutSweep",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": true,
@@ -28272,6 +28296,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/fanoutScope.ts#applyAutoPromote",
       "symbol": "applyAutoPromote",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/domain/idleTimeoutPolicy.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/domain/idleTimeoutPolicy.ts#CANCELABLE",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/idleTimeoutPolicy.ts#CANCELABLE",
+      "symbol": "CANCELABLE",
       "targetContext": "task-execution",
       "targetLayer": "domain"
     },
@@ -30071,6 +30119,31 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskIdleTimeoutPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskIdleTimeoutPersistence.ts#createPostgresqlTaskIdleTimeoutPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskIdleTimeoutPersistence.ts#createPostgresqlTaskIdleTimeoutPersistence",
+      "symbol": "createPostgresqlTaskIdleTimeoutPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "system",
         "authorization": true,
@@ -31340,6 +31413,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskIdleTimeoutPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskIdleTimeoutPersistence.ts#createSqliteTaskIdleTimeoutPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskIdleTimeoutPersistence.ts#createSqliteTaskIdleTimeoutPersistence",
+      "symbol": "createSqliteTaskIdleTimeoutPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": false,
         "event": false,
@@ -31641,6 +31739,51 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionEffectTransactionStore.ts#SettleEffectAttemptInput",
       "symbol": "SettleEffectAttemptInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CANCEL_DEFAULT_SUMMARY",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#CANCEL_DEFAULT_SUMMARY",
+      "symbol": "CANCEL_DEFAULT_SUMMARY",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
+      "missingControls": [
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
+      "symbol": "createTaskIdleTimeoutPersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -45561,7 +45704,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77cf0b60fc3d077b9176d7a7cf42fc8767d54e15f2658b9b686f71b6543be6d7",
+  "sourceDigest": "sha256:cd6e5c4e1c04578372bb537e3c221222d1299efa1ec2f291b9a990114225ed54",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -45671,7 +45814,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 274,
+      "durableWriterSites": 275,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -46965,8 +47108,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#403:tasks",
-        "line": 403,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#411:tasks",
+        "line": 411,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#finalizeDatabase",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -46981,8 +47124,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceClaims",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#406:taskExecutionMaintenanceClaims",
-        "line": 406,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#414:taskExecutionMaintenanceClaims",
+        "line": 414,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#finalizeDatabase",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -49566,6 +49709,22 @@
       },
       {
         "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "writeIdleTimeoutReason",
+        "controlSubtype": "terminal-control",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#203:tasks",
+        "line": 203,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#createTaskIdleTimeoutPersistence",
+        "requiredBrandedProof": "IdleTimeoutReapDecision",
+        "revisionPredicate": "idle-observation-and-own-terminal-copy-cas",
+        "symbol": "createTaskIdleTimeoutPersistence"
+      },
+      {
+        "allowedTables": [
           "nodeRunEvents"
         ],
         "authorityKind": "terminal-maintenance",
@@ -49989,8 +50148,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskArchive.ts",
-        "id": "task-authority:packages/backend/src/services/taskArchive.ts#701:tasks",
-        "line": 701,
+        "id": "task-authority:packages/backend/src/services/taskArchive.ts#709:tasks",
+        "line": 709,
         "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

@@ -10,6 +10,8 @@ export type TaskRecoveryEventKind =
   | 'auto-resume'
   | 'auto-repair'
   | 'heartbeat-kill'
+  // RFC-350：不活跃超时收割（僵尸任务）。
+  | 'idle-timeout-reap'
   | 'quarantine'
   | 'restore'
   | 'pre-migration'

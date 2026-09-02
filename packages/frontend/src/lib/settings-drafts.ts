@@ -101,6 +101,8 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'eventStreamRetentionDays',
     'webhookTriggerFiresRetentionDays',
     'taskArchive',
+    // RFC-350：不活跃超时收割。同样是「界面能改、不登记就静默丢掉」的键。
+    'taskIdleTimeout',
     'maintenanceSchedule',
   ],
   // RFC-210. Registering here is not optional bookkeeping: this list IS the

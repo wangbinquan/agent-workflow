@@ -72,6 +72,8 @@ import {
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+
 import {
   taskExecutionModule,
   type TerminalMaintenanceClaim,
@@ -92,7 +94,13 @@ const log = createLogger('task-archive')
 
 const ARCHIVE_SCHEMA_VERSION = 2
 const EXPORT_BATCH = 2_000
-const TERMINAL = ['done', 'failed', 'canceled'] as const
+// RFC-350：与 shared 的 `TERMINAL_TASK_STATUSES` 对齐。此前这里是一份手抄的三元素
+// 字面量，漏掉了 `interrupted`——而 orphan reaper 把 daemon 重启时在跑的任务翻成
+// interrupted 时**是写了 finished_at 的**（modules/task-execution/composition/
+// taskExecutionPersistence.ts）。漏掉的后果是：每次 daemon 重启残留的那批任务既
+// 不能被取消（cancel 事件的 allowed-from 不含 interrupted），又永远等不到归档，
+// 成为库里唯一一类永久居民。
+const TERMINAL = TERMINAL_TASK_STATUSES
 
 /** 审计行的触发面:hourly 归档器 vs 设置页/API 的手动批量入口。 */
 export type ArchiveSource = 'sweep' | 'manual'

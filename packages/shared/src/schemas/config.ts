@@ -347,6 +347,23 @@ export const ConfigSchema = z.object({
     })
     .default({ enabled: false, retentionDays: 90, maxTreesPerSweep: 50 }),
 
+  /**
+   * RFC-350 —— 任务不活跃超时收割（僵尸任务）。**默认关闭**。开启后，一棵整树都超过
+   * `idleHours` 没有任何动作、且仍有非终态成员的任务树，会被先杀活着的 runtime 子进程树、
+   * 再判 `canceled`（带专用原因文案与恢复审计）。
+   *
+   * 它只负责**终结**：出库仍由上面的 `taskArchive` 按 `retentionDays` 完成——两道闸
+   * 各管一段。只开本项 = 僵尸被收成 canceled 但仍留在库里可查看；两个都开才是完整的
+   * 「超时 → 出库」。「动作」= agent 事件 + 推进任务的人类动作（评审决策 / 反问答复 /
+   * 问题派发决策），评论与成员变更**不算**。
+   */
+  taskIdleTimeout: z
+    .object({
+      enabled: z.boolean().default(false),
+      idleHours: z.number().int().min(1).max(8760).default(24),
+    })
+    .default({ enabled: false, idleHours: 24 }),
+
   /** RFC-349: live database provider. The existing flat sqlite* tuning fields
    * remain the SQLite adapter's settings; PostgreSQL-specific pool settings
    * live only inside this discriminated union. */
@@ -767,6 +784,7 @@ export const DEFAULT_CONFIG: Config = {
   eventStreamRetentionDays: 30,
   webhookTriggerFiresRetentionDays: 90,
   taskArchive: { enabled: false, retentionDays: 90, maxTreesPerSweep: 50 },
+  taskIdleTimeout: { enabled: false, idleHours: 24 },
   database: { provider: 'sqlite' },
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',
@@ -868,6 +886,12 @@ export const ConfigPatchSchema = ConfigSchema.partial()
         enabled: z.boolean(),
         retentionDays: boundedSettingsInteger('taskArchive.retentionDays').optional(),
         maxTreesPerSweep: z.number().int().min(1).max(1000).optional(),
+      })
+      .optional(),
+    taskIdleTimeout: z
+      .object({
+        enabled: z.boolean(),
+        idleHours: boundedSettingsInteger('taskIdleTimeout.idleHours').optional(),
       })
       .optional(),
     webhookDeliveryBodyRetentionDays: boundedSettingsInteger(

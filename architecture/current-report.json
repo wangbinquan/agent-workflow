@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 492,
-    "architectureExceptions": 6042,
-    "backgroundJobs": 364,
-    "crossContextImports": 6246,
+    "architectureExceptions": 6064,
+    "backgroundJobs": 366,
+    "crossContextImports": 6268,
     "facades": 354,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25634,
-    "mutationEntrypoints": 1911,
+    "moduleSymbolOwners": 25676,
+    "mutationEntrypoints": 1917,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 945,
     "transactionExternalEffects": 476
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 492,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1881,
+    "backendProductionFiles": 1888,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 364,
+    "backgroundEntries": 366,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -115,10 +115,10 @@
       },
       {
         "context": "task-execution",
-        "files": 318
+        "files": 325
       }
     ],
-    "moduleFiles": 1247,
+    "moduleFiles": 1254,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -164,5 +164,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:77cf0b60fc3d077b9176d7a7cf42fc8767d54e15f2658b9b686f71b6543be6d7"
+  "sourceDigest": "sha256:cd6e5c4e1c04578372bb537e3c221222d1299efa1ec2f291b9a990114225ed54"
 }

@@ -2252,6 +2252,8 @@ export interface Resources {
       gcRetentionTitle: string
       gcRetentionHint: string
       taskArchiveTitle: string
+      taskIdleTimeoutTitle: string
+      taskIdleTimeoutHint: string
       diskReclaimTitle: string
       diskReclaimHint: string
       taskArchiveHint: string
@@ -2368,6 +2370,7 @@ export interface Resources {
     diskCleanupConfirmTitle: string
     diskCleanupConfirmBody: string
     taskArchiveRunNow: string
+    taskIdleTimeoutWorktreeHint: string
     taskArchiveScanning: string
     taskArchiveNothing: string
     taskArchiveConfirmTitle: string
@@ -4182,6 +4185,7 @@ export interface Resources {
         'auto-resume': string
         'auto-repair': string
         'heartbeat-kill': string
+        'idle-timeout-reap': string
         quarantine: string
       }
     }
@@ -5716,6 +5720,9 @@ export interface Resources {
     webhookTriggerFiresRetentionDays: string
     webhookTriggerFiresRetentionDaysHint: string
     taskArchiveEnabled: string
+    taskIdleTimeoutEnabled: string
+    taskIdleTimeoutIdleHours: string
+    taskIdleTimeoutIdleHoursHint: string
     taskArchiveRetentionDays: string
     taskArchiveRetentionDaysHint: string
     webhookBodyRetention: string
@@ -9318,6 +9325,9 @@ export const zhCN: Resources = {
       diskReclaimHint: '退役目录与数据库内部空洞的盘点;删除不可撤销。',
       taskArchiveHint:
         '把久远的已完成任务整树导出到归档目录并从库中删除,以控制数据库体积。默认关闭。',
+      taskIdleTimeoutTitle: '任务不活跃超时(会自动取消没人管的任务)',
+      taskIdleTimeoutHint:
+        '整棵任务树在最后一次动作之后超过设定时长仍无任何动作时,视为僵尸任务:先杀掉仍活着的运行进程,再把树内未终态的任务判为「已取消」。它只负责终结,出库仍由上面的「终态任务归档」按保留期完成。默认关闭。',
       gcWebhooksTitle: 'Webhook 清理',
       gcWebhooksHint: '独立于任务数据保留并清理 Webhook 投递历史。',
       networkListenerTitle: 'Daemon 监听',
@@ -9436,6 +9446,8 @@ export const zhCN: Resources = {
     diskCleanupConfirmBody:
       '将永久删除 {{path}}({{size}})。它是运行时加固退役后遗留的死数据,平台已无任何代码读写它;删除不可撤销。',
     taskArchiveRunNow: '立即归档…',
+    taskIdleTimeoutWorktreeHint:
+      '注意:「工作区自动回收」当前是关闭的,被收割任务的工作区目录仍会占用磁盘。需要自动释放请在上方「工作区回收」卡片里开启。',
     taskArchiveScanning: '扫描中…',
     taskArchiveNothing: '没有可归档的任务树(保留期 {{days}} 天以内的都保留)。',
     taskArchiveConfirmTitle: '归档并删除这些任务?',
@@ -11758,6 +11770,9 @@ export const zhCN: Resources = {
         dwGenerateExhausted__hint: '调整需求描述或工作组配置后重新发起。',
         dwRejectExhausted: '动态工作流多次被驳回仍未达标，已停止重试。',
         dwRejectExhausted__hint: '放宽验收标准或调整工作组目标后重新发起。',
+        idleTimeout: '任务长时间没有任何活动，已被平台自动终结。',
+        idleTimeout__hint:
+          '超过设置页「任务不活跃超时」配置的时长仍无动作即视为僵尸任务；如仍需继续，可点「继续任务」恢复。',
         nodeTimeout: '节点执行超时。',
         nodeTimeout__hint: '可在节点配置中调大超时时间后点「继续任务」重试。',
         childUnkillable: '代理进程无法终止，已放弃该次运行。',
@@ -11863,6 +11878,7 @@ export const zhCN: Resources = {
         'auto-resume': '自动从断点继续运行',
         'auto-repair': '自动修复了一处异常状态',
         'heartbeat-kill': '终止了无响应的子进程',
+        'idle-timeout-reap': '因长时间无活动被自动终结',
         quarantine: '多次自动恢复失败，已暂停自动恢复',
       },
     },
@@ -13448,6 +13464,10 @@ export const zhCN: Resources = {
     taskArchiveRetentionDays: '归档保留期(天)',
     taskArchiveRetentionDaysHint:
       '整棵任务树全部终态、且最近完成时间早于该天数时,导出到 ~/.agent-workflow/archive/tasks/ 并从数据库删除——归档后任务在列表 / 详情 / 搜索里一律不可见(与不存在同形),不提供在线回看。0 = 不归档。',
+    taskIdleTimeoutEnabled: '启用任务不活跃超时收割',
+    taskIdleTimeoutIdleHours: '不活跃阈值(小时)',
+    taskIdleTimeoutIdleHoursHint:
+      '「动作」= 代理产生的事件,加上推进任务的人类操作(提交评审决策、答复反问、派发问题);评论与协作者变更不算。整棵树都超过该时长没有动作时,树内 pending / running / 等待评审 / 等待答复的任务会被自动取消(等人回答的任务同样会被收走)。取消后仍可「继续任务」恢复,工作区不会被删除。',
     webhookBodyRetention: 'Webhook 投递 body 保留（天）',
     webhookBodyRetentionHint:
       '超期投递的原始 payload 置空（重放不可用），行仍保留。高流量部署可调小以控制磁盘占用。',

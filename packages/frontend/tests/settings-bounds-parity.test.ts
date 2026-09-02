@@ -45,6 +45,8 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
       }
     case 'taskArchive.retentionDays':
       return { taskArchive: { enabled: false, retentionDays: value } }
+    case 'taskIdleTimeout.idleHours':
+      return { taskIdleTimeout: { enabled: false, idleHours: value } }
     case 'eventsArchiveThresholds.globalBytes':
       return {
         eventsArchiveThresholds: {
@@ -59,7 +61,7 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
 }
 
 describe('Settings numeric bounds parity', () => {
-  test('all 35 Config-backed numeric controls use the shared adapter exactly once', () => {
+  test('all 36 Config-backed numeric controls use the shared adapter exactly once', () => {
     expect(SETTINGS_SOURCE).not.toMatch(/<NumberInput\b/)
     // RFC-287 T10：25 → 28，补齐 maxConcurrentCodeHostCalls / maxActiveChildTasks /
     // maxInvocationDepth 三项配额（此前只能改配置文件）。
@@ -71,7 +73,9 @@ describe('Settings numeric bounds parity', () => {
     // RFC-311 T19：33 → 34，归档保留期(会让任务从界面消失,必须显式可调)。
     // RFC-313：34 → 35，会话重启预算。它与 defaultNodeRetries **相乘**决定单节点
     // 最坏 attempt 数（默认 8），是直接的成本旋钮，必须在界面上可调、可关。
-    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(35)
+    // RFC-350：35 → 36，任务不活跃超时阈值（开启后会**自动取消**没人管的任务，
+    // 必须在界面上可见可调，不能只藏在 config.json）。
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(36)
     for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
       const matches = SETTINGS_SOURCE.match(
         new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),

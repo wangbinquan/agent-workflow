@@ -122,6 +122,11 @@ import {
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { composePostgresqlDigitalEmployeeExecution } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
+import {
+  composeTaskIdleTimeoutOperations,
+  createPostgresqlTaskIdleTimeoutPersistence,
+  type TaskIdleTimeoutOperations,
+} from '@/modules/task-execution/composition/taskIdleTimeout'
 import { readTaskResourceUsage } from '@/services/limits'
 import {
   composePostgresqlDevelopmentAdmissionLookup,
@@ -372,6 +377,8 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly eventCenter: Awaited<ReturnType<typeof composePostgresqlEventCenter>>
   readonly fusion: ReturnType<typeof composePostgresqlFusionOperations>
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
+  /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
+  readonly taskIdleTimeout: TaskIdleTimeoutOperations
   readonly mcpRuntimeTests: ReturnType<typeof getMcpRuntimeTestService>
   readonly webhookTerminalControl: ReturnType<typeof composePostgresqlMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composePostgresqlWorkspaceMaintenanceCommand>
@@ -1212,6 +1219,14 @@ export async function composePostgresqlDaemonApplication(
     cancelTask: (taskId) =>
       taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
   })
+  // RFC-350：收割器与资源上限走同一条终结路径（cancel + 覆盖专用原因文案）；
+  // `user` 是 TaskCancellationCommand 今天仅有的非级联 cause，用户可见的原因由
+  // `writeIdleTimeoutReason` 覆盖出来，与 limits 先例完全同形。
+  const taskIdleTimeoutOperations = composeTaskIdleTimeoutOperations({
+    persistence: createPostgresqlTaskIdleTimeoutPersistence(input.db),
+    cancelTask: (taskId) =>
+      taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+  })
   const employeeExecution = composePostgresqlDigitalEmployeeExecution({
     appHome: input.appHome,
     actor: systemActor,
@@ -1809,6 +1824,7 @@ export async function composePostgresqlDaemonApplication(
     eventCenter,
     fusion: fusionOperations,
     resourceLimits: resourceLimitOperations,
+    taskIdleTimeout: taskIdleTimeoutOperations,
     mcpRuntimeTests,
     webhookTerminalControl,
     workspaceMaintenance,
