@@ -2,6 +2,16 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-03）：[RFC-352 Memory bounded context 合同归位（RFC-294 W4-E2）](design/RFC-352-memory-context-cutover/proposal.md)。**
+> 三件套已落档，**批准前不动任何生产代码**。范围：把 `services/` 里的注入（570 行）/ 蒸馏（1274）/ 调度（480）/
+> 源上下文（153）四块实现按分层迁进 `modules/memory`，删 8 个兼容 facade；把 `canViewMemory` / `canManageMemory`
+> 从 `modules/memory/infrastructure/sqliteMemoryCatalog.ts:1098,1117` 提到 application 层（今天授权策略住在 SQLite
+> adapter 里）；按 RFC-294 `design.md:3441` 落 source-control offered `RepositoryScopeAuthorizationInTx` 薄 participant
+> ——**行为逐字等于今天**（repo / repo_group / global 仍是全员可读、仅资源管理员可管，RFC-248 AC-29 / RFC-305），
+> 不借迁移改权限档位；列表分页下推、路由收成 decode/call/map。零 schema / migration / wire / WS / 前端改动。
+> plan §8 给 E2 写的「不可见 count 无侧信道」是安全项，按用户 2026-08-26 硬规则**不承接**，只做功能半边。
+> 用户 2026-09-03 已定两处范围：一刀切完（不拆蒸馏）、SC participant 本轮就落。
+
 > ✅ **RFC-294 账本重分桶与分母重设完成（2026-09-02，零生产改动、零 wave credit）。**
 > 起于 `plan.md §14` 那条挂了两天的「必须在下一个 wave 立项时裁决的输入」：RFC-349 双 provider 把 canonical 分母抬了
 > 三倍，各波退出门无法再照抄 exact id 总数。用户当日裁决取「provider adapter 归 infrastructure 层不计」这一支，并把
@@ -18,6 +28,11 @@
 > **踩坑**：R3 起初对所有 role 折叠，`rfc294-architecture-preflight` 的「cross-context internals are covered by exact,
 > expiring canonical exceptions」当场红 5 条——`temporary-internal-debt` / `off-dag-offered` 是**逐站点**的边界主张，
 > 两个 provider 各违一次就得各修一次，不能折叠。守卫是对的，规则已收窄。
+> **验收**：提交 `48078eaa2` 的 exact-SHA run `33648749416` 被并发 push 取消（共享 main 常态），按仓规看含它的后继——
+> **tip `6752ec8c7` 的 Main CI run `33690423539` 为 35/35 attempt-1 terminal success**；中间 `0127b8fa9` / `2bb15dae1`
+> 的红分别在 `Static scans`(fast-uri 公告) 与 `Playwright e2e windows shard 2/4`，都不在本批归属面。
+> 自验：`git archive 48078eaa2` 导出提交本身重跑 census，八份 canonical manifest 与 committed 逐字节相同。
+>
 > **下一刀**：W4-E2 memory（用户 2026-09-02 选定）。它今天的实剩是 67 条 exact edge + 8 个 legacy facade
 > （`services/memory*` 家族 2577 行）+ 3 个路由 824 行；`modules/memory` 骨架与双 provider store 已在，
 > 最难的正确性部分由 RFC-342/P0-A 交付。前置件：SC offered `RepositoryScopeAuthorizationInTx` 薄 participant

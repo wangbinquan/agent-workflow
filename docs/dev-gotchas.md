@@ -528,6 +528,24 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
 同一段还有一条：**census 的生成物不要进 `prettier --write` 批处理**。它们必须与生成器逐字
 相等，被 prettier 重排一次就红（实撞的是 `design/RFC-294-…/status.md`，A2 投影守卫）。
 
+## 对 CI 不检查的共享 md 跑 `prettier --write`，会把别人的行全变成 diff（2026-09-03 实撞）
+
+CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:check:repo-ui` 那张**点名清单**
+（`package.json:17-18`）——`design/**`、`STATE.md`、`docs/**`、`scripts/depcheck.ts` **都不在覆盖面内**，
+所以仓里本来就存在没被 prettier 格式化过的共享 md（实测 `design/RFC-294-…/review-2026-08-30.md` 在 HEAD
+上就不是 prettier 干净的）。在这类文件上顺手跑 `prettier --write`，它会把**整张 markdown 表按新的最大列宽
+重排**：只加了一行，`design/RFC-294-…/plan.md` 的 §3.2 表就多出 19 行「别人那些行被重新 padding」的删改，
+在多人共享工作树上这既违反「只提交自己改过的行」，也让 reviewer 无法一眼看出真实改动。
+
+判据与做法：
+
+1. **动共享 md 前先问「CI 查不查它」**：不查就**不要**跑 `prettier --write`，手工对齐既有风格即可。
+2. 真要保持 prettier 干净（比如该文件在 HEAD 上本来就是干净的），**让自己新增的表格行不超过现有最宽的那一格**
+   ——列宽不变，prettier 就只碰你自己那行。实测把新增行压短之后，diff 从「42 增 19 删」变成「26 增 0 删」。
+3. 提交前 `git diff --stat` 看一眼：**纯新增的文档批不该出现删除行**，出现了基本就是格式重排。
+4. markdown 表格单元格里出现 `|`（例如把三个路径缩写成 `a|b|c`），prettier 会把它当列分隔符、把那一行撑成
+   多列并顺手改坏整张表的分隔行。表格里写路径就分开写，别用 `|` 缩写。
+
 ## Bun `rmSync` 在只读目录上给的 errno 因平台而异，按码白名单分流必漏（2026-09-02 实测）
 
 `rmSync(dir, { recursive: true, force: true })` 删不动一棵含 `0o500`（`dr-x------`）目录的树
