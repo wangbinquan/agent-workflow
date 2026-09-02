@@ -342,13 +342,16 @@ describe('RFC-350 收割写入', () => {
     await addTask(db, { id: 'running', status: 'running', startedAt: NOW - 90 * HOUR })
 
     const p = createSqliteTaskIdleTimeoutPersistence(db)
+    const claimed: Record<string, boolean> = {}
     for (const taskId of ['ours', 'theirs', 'running']) {
-      await p.writeIdleTimeoutReason({
+      claimed[taskId] = await p.writeIdleTimeoutReason({
         taskId,
         summary: 'task-idle-timeout',
         message: 'no activity',
       })
     }
+    // 返回值就是「这一行是不是被本次收割认领了」——审计只在 true 时才写。
+    expect(claimed).toEqual({ ours: true, theirs: false, running: false })
     const rows = await db.select({ id: tasks.id, errorSummary: tasks.errorSummary }).from(tasks)
     const byId = new Map(rows.map((r) => [r.id, r.errorSummary]))
     expect(byId.get('ours')).toBe('task-idle-timeout')

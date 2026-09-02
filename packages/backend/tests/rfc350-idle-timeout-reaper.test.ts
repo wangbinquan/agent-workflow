@@ -63,6 +63,8 @@ function makeOperations(input: {
   cancelThrowsFor?: readonly string[]
   loadThrowsFor?: readonly string[]
   killThrows?: boolean
+  /** 这些任务的原因覆盖认领不到（模拟它们在窗口里自己跑完了）。 */
+  unclaimableTasks?: readonly string[]
 }): { operations: TaskIdleTimeoutOperations; recorder: Recorder } {
   const recorder: Recorder = { calls: [], reasons: [], audits: [], killed: [] }
   const byRoot = new Map(input.trees.map((tree) => [tree.rootTaskId, tree]))
@@ -82,6 +84,8 @@ function makeOperations(input: {
       async writeIdleTimeoutReason(reason) {
         recorder.calls.push(`reason:${reason.taskId}`)
         recorder.reasons.push({ ...reason })
+        // 认领失败 = 判定与收割之间任务自己落了别的终态（F-9）。
+        return input.unclaimableTasks?.includes(reason.taskId) !== true
       },
       async recordReapAudit(audit) {
         recorder.calls.push(`audit:${audit.taskId}`)
@@ -261,6 +265,29 @@ describe('RFC-350 runTaskIdleTimeoutSweep', () => {
     expect(recorder.reasons).toEqual([])
     expect(recorder.audits).toEqual([])
     expect(recorder.killed).toEqual([])
+  })
+
+  test('F-9 判定后任务自己跑完 ⇒ 不写审计、不计入收割数（审计行不许撒谎）', async () => {
+    const tree: IdleTimeoutTreeSnapshot = {
+      rootTaskId: 'root',
+      members: [
+        member('root', 'running', NOW - 40 * HOUR),
+        member('finished-itself', 'running', NOW - 40 * HOUR),
+      ],
+      liveRuns: [],
+    }
+    const { operations, recorder } = makeOperations({
+      trees: [tree],
+      unclaimableTasks: ['finished-itself'],
+    })
+    const result = await runTaskIdleTimeoutSweep(operations, IDLE_CONFIG, { now: NOW })
+    expect(result.reapedTasks).toBe(1)
+    expect(recorder.audits.map((audit) => audit.taskId)).toEqual(['root'])
+    // 覆盖仍然发起过（写入门自己判），只是没认领到。
+    expect(recorder.reasons.map((reason) => reason.taskId).sort()).toEqual([
+      'finished-itself',
+      'root',
+    ])
   })
 
   test('T-14 单拍上限传给 persistence，可被调用方收窄（F-7 / F-8）', async () => {

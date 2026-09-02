@@ -34,15 +34,22 @@ export interface TaskIdleTimeoutPersistence {
   /** 整棵树的活动快照；树不存在（并发删除）时返回 null。 */
   loadTreeActivity(rootTaskId: string): Promise<IdleTimeoutTreeSnapshot | null>
   /**
-   * 覆盖收割原因。只更新**取消真的落了**的行（status='canceled' 且 summary 仍是
-   * cancelTask 写的默认值）——竞态里被别的终态写手抢先的行保留它自己的真实原因，
-   * 与 `writeLimitReason` 的 RFC-097 audit S-14 教训同款。
+   * 覆盖收割原因，并回报**这一行到底是不是被本次收割认领了**。
+   *
+   * 只更新「取消真的落了」的行（status='canceled' 且 summary 仍是 cancelTask 写的
+   * 默认值）——竞态里被别的终态写手抢先的行保留它自己的真实原因，与 `writeLimitReason`
+   * 的 RFC-097 audit S-14 教训同款。
+   *
+   * 返回值不是锦上添花：判定与收割之间有一个窗口，任务可能自己跑完变 `done`
+   * （design §8 F-9）。那种情况下覆盖是空操作，而如果照写审计，任务详情页的「恢复」
+   * 区就会出现一条「因长时间无活动被自动终结」——对一个刚刚成功完成的任务撒谎。
+   * 所以审计只在认领成功时写。
    */
   writeIdleTimeoutReason(input: {
     readonly taskId: string
     readonly summary: string
     readonly message: string
-  }): Promise<void>
+  }): Promise<boolean>
   /**
    * 收割审计。与 `recordLimitCancellation` 同款由 persistence 自己写（它就是一次
    * 数据库写入），best-effort：审计插不进去不能让收割本身失败。

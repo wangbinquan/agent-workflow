@@ -199,7 +199,7 @@ export function createTaskIdleTimeoutPersistence(
       readonly taskId: string
       readonly summary: string
       readonly message: string
-    }): Promise<void> {
+    }): Promise<boolean> {
       await db
         .update(tasks)
         .set({ errorSummary: input.summary, errorMessage: input.message })
@@ -211,6 +211,16 @@ export function createTaskIdleTimeoutPersistence(
           ),
         )
         .run()
+      // 用一次回读判「认领成功没有」，而不是读 driver 的 changes 计数：两个 provider
+      // 的 mutation 结果形状不同（bun:sqlite 给 {changes}，remote 给 rows/count），
+      // 回读是同一段代码在两边都成立的唯一判据，代价是每个被收割任务一次窄查询。
+      const row = await db
+        .select({ status: tasks.status, errorSummary: tasks.errorSummary })
+        .from(tasks)
+        .where(eq(tasks.id, input.taskId))
+        .limit(1)
+        .get()
+      return row?.status === 'canceled' && row.errorSummary === input.summary
     },
 
     async recordReapAudit(input: IdleTimeoutAuditRecord): Promise<void> {

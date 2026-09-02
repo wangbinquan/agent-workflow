@@ -151,6 +151,7 @@ async function reapTree(
     ...verdict.liveTaskIds.filter((id) => id !== snapshot.rootTaskId),
   ]
   const reason = idleTimeoutReason({ silentMs: verdict.silentMs, thresholdMs })
+  let reaped = 0
   for (const taskId of ordered) {
     try {
       await operations.cancelTask(taskId)
@@ -162,11 +163,18 @@ async function reapTree(
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    await operations.persistence.writeIdleTimeoutReason({
+    const claimed = await operations.persistence.writeIdleTimeoutReason({
       taskId,
       summary: reason.summary,
       message: reason.message,
     })
+    // 判定与收割之间的窗口里任务可能自己跑完（design §8 F-9）。没认领到就什么也不记：
+    // 给一个刚刚成功完成的任务留一条「因长时间无活动被自动终结」的恢复记录是撒谎。
+    if (!claimed) {
+      log.debug('idle-timeout reap lost the race; task settled on its own', { taskId })
+      continue
+    }
+    reaped += 1
     await operations.persistence.recordReapAudit({
       taskId,
       reason: reason.message,
@@ -176,5 +184,5 @@ async function reapTree(
       now,
     })
   }
-  return ordered.length
+  return reaped
 }

@@ -216,11 +216,13 @@ export interface TaskIdleTimeoutPersistence {
   /** 非终态且未软删的任务 → 去重后的树根 id，按树内最早活动升序。 */
   listIdleCandidateRoots(limit: number): Promise<readonly string[]>
   loadTreeActivity(rootTaskId: string): Promise<IdleTimeoutTreeSnapshot | null>
+  /** 返回「这一行是不是被本次收割认领了」——审计只在 true 时才写，见 F-9。 */
   writeIdleTimeoutReason(input: {
     readonly taskId: string
     readonly summary: string
     readonly message: string
-  }): Promise<void>
+  }): Promise<boolean>
+  recordReapAudit(input: IdleTimeoutAuditRecord): Promise<void>
 }
 export interface TaskIdleTimeoutOperations {
   readonly persistence: TaskIdleTimeoutPersistence
@@ -310,17 +312,17 @@ taskIdleTimeout: z
 
 ## 8. 失败模式
 
-| #   | 场景                                                        | 行为                                                                                                                             |
-| --- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| F-1 | 进程杀不掉（`kill-failed`）                                 | 照常终结，审计记 outcome；日志 `warn`（D11 / AC-6）                                                                              |
-| F-2 | run 的 `started_at` 超出 48h PID 复用窗口                   | `window-expired`，不发信号，照常终结并记录（§3.2）                                                                               |
-| F-3 | `cancelTask` 抛 `ConflictError`（竞态里已终态）             | 吞掉，继续处理树内其余成员；不覆盖它的原因文案                                                                                   |
-| F-4 | `cancelTask` 抛 `cancel-transition-starved`（状态持续抖动） | 本树本拍放弃，下一拍重试；不写审计                                                                                               |
-| F-5 | 一棵树收割中途抛错                                          | 只影响该树；巡检继续下一棵（与归档器 `taskArchive.ts:963-976` 同款隔离）                                                         |
-| F-6 | 库在迁移冻结窗口                                            | 收割器作为可暂停 handle 已被 stop+drain，不写库（AC-15）                                                                         |
-| F-7 | `idleHours` 被改小                                          | 下一拍即生效，可能一次收割多棵树；单拍上限 20 棵兜底                                                                             |
-| F-8 | 树很大（数千子任务）                                        | `collectTree` 深度上限 64、分块查询（`chunkedAll`）；单拍 20 棵封顶                                                              |
-| F-9 | 任务在判定与收割之间恢复活动                                | 竞态窗口最长一拍。`cancelTask` 的 CAS 会拿到新状态；若仍可取消则照收（判定时刻的静默是事实）。这是可接受的语义，写进 domain 注释 |
+| #   | 场景                                                        | 行为                                                                                                                                                                                                                                                     |
+| --- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-1 | 进程杀不掉（`kill-failed`）                                 | 照常终结，审计记 outcome；日志 `warn`（D11 / AC-6）                                                                                                                                                                                                      |
+| F-2 | run 的 `started_at` 超出 48h PID 复用窗口                   | `window-expired`，不发信号，照常终结并记录（§3.2）                                                                                                                                                                                                       |
+| F-3 | `cancelTask` 抛 `ConflictError`（竞态里已终态）             | 吞掉，继续处理树内其余成员；不覆盖它的原因文案                                                                                                                                                                                                           |
+| F-4 | `cancelTask` 抛 `cancel-transition-starved`（状态持续抖动） | 本树本拍放弃，下一拍重试；不写审计                                                                                                                                                                                                                       |
+| F-5 | 一棵树收割中途抛错                                          | 只影响该树；巡检继续下一棵（与归档器 `taskArchive.ts:963-976` 同款隔离）                                                                                                                                                                                 |
+| F-6 | 库在迁移冻结窗口                                            | 收割器作为可暂停 handle 已被 stop+drain，不写库（AC-15）                                                                                                                                                                                                 |
+| F-7 | `idleHours` 被改小                                          | 下一拍即生效，可能一次收割多棵树；单拍上限 20 棵兜底                                                                                                                                                                                                     |
+| F-8 | 树很大（数千子任务）                                        | `collectTree` 深度上限 64、分块查询（`chunkedAll`）；单拍 20 棵封顶                                                                                                                                                                                      |
+| F-9 | 任务在判定与收割之间恢复活动 / 自己跑完                     | 竞态窗口最长一拍。`cancelTask` 的 CAS 会拿到新状态；若仍可取消则照收（判定时刻的静默是事实）。若它已自己落到别的终态，原因覆盖认领不到那一行，此时**不写审计、不计入收割数**——给一个刚刚成功完成的任务留一条「因长时间无活动被自动终结」的恢复记录是撒谎 |
 
 ---
 
@@ -343,6 +345,7 @@ taskIdleTimeout: z
 - T-10 `cancelTask` 抛 Conflict 时不写原因、不中断其余成员（F-3）
 - T-11 一棵树抛错不影响下一棵（F-5）
 - T-12 未收割任何树时不写审计、不写日志汇总（AC-8）
+- T-12b 竞态里任务自己跑完（原因覆盖认领不到）⇒ 不写审计、不计入收割数（F-9）
 - T-13 `enabled=false` 时一次 IO 都不发（AC-1）
 - T-14 单拍上限生效（F-7/F-8）
 
