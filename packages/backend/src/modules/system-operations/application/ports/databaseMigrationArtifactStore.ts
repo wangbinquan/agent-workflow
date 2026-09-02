@@ -46,11 +46,22 @@ export interface DatabaseMigrationFinalReceipt {
   readonly finalizedAt: number
 }
 
+export interface LogicalTableChunkReceipt {
+  readonly chunk: LogicalTableChunk
+  readonly bytes: number
+}
+
 export interface DatabaseMigrationArtifactStorePort {
   /** Physical root is passed only to the infrastructure-owned safety backup. */
   operationRoot(operationId: string): string
   manifestFileDigest(operationId: string): string
-  writeTableChunk(operationId: string, chunk: LogicalTableChunk): LogicalTableChunk
+  /**
+   * RFC-349: the receipt carries the bytes the store actually wrote. The copy
+   * loop needs that number for progress, and asking it here is the difference
+   * between counting bytes and serializing the whole dataset a second time
+   * just to measure it.
+   */
+  writeTableChunk(operationId: string, chunk: LogicalTableChunk): LogicalTableChunkReceipt
   writeLogicalManifest(operationId: string, manifest: LogicalDatabaseArtifactManifest): void
   writeLegacyArchiveManifest(operationId: string, manifest: LegacyArchiveManifest): string
   writeRollbackReceipt(operationId: string, receipt: DatabaseMigrationRollbackReceipt): string

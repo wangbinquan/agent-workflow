@@ -17,19 +17,15 @@ import {
   createLegacyArchiveManifest,
   createLogicalArtifactManifest,
   createLogicalTableChunk,
-  summarizeLogicalTableChunks,
+  createLogicalTableChunkSummary,
   type LogicalDatabaseArtifactManifest,
   type LogicalTableArtifactEntry,
-  type LogicalTableChunk,
 } from '@/platform/persistence/logicalDatabaseArtifact'
 import { writeDatabaseGenerationAtomic } from '@/platform/persistence/generationStore'
 import type { PostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { preflightPostgresqlTarget } from '@/platform/persistence/postgresqlPreflight'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import {
-  canonicalSchemaJson,
-  type LogicalSchemaContract,
-} from '@/platform/persistence/schemaContract'
+import { type LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type {
   SqliteLogicalSource,
   SqliteLogicalSourceSnapshot,
@@ -260,16 +256,6 @@ export function classifyDatabaseMigrationFailure(
   return { category: 'internal', detailCode, retryable: false }
 }
 
-function tableEntryFromChunks(
-  contract: LogicalSchemaContract,
-  tableId: string,
-  chunks: readonly LogicalTableChunk[],
-): LogicalTableArtifactEntry {
-  const table = contract.tables.find((candidate) => candidate.id === tableId)
-  if (table === undefined) throw new Error(`unknown logical table ${tableId}`)
-  return summarizeLogicalTableChunks({ table, chunks })
-}
-
 export function createDatabaseMigrationRunner(deps: {
   readonly controlPlane: DatabaseMigrationControlPlane
   readonly source: SqliteLogicalSource
@@ -421,7 +407,11 @@ export function createDatabaseMigrationRunner(deps: {
         return null
       }
       await deps.source.assertUnchanged(sourceSnapshot)
-      const chunks: LogicalTableChunk[] = []
+      // RFC-349 —— 逐块折叠，绝不把整张表攒在内存里。原来这里把每个 chunk 都 push 进数组
+      // 再交给 `summarizeLogicalTableChunks`（它内部还要 `flatMap` 出所有行），
+      // `node_run_events` 在 full 种子下是 1000 万行，托管取证跑的 daemon 因此在拷贝
+      // 阶段被运行环境按内存杀掉（exit 143）。entry 的每个字段都是可折叠的累计量。
+      const summary = createLogicalTableChunkSummary(table)
       let afterKey = null
       let chunkIndex = 0
       while (true) {
@@ -436,16 +426,16 @@ export function createDatabaseMigrationRunner(deps: {
         })
         const persisted = deps.artifacts.writeTableChunk(operationId, chunk)
         if (table.disposition !== 'ARCHIVE_THEN_OMIT') {
-          await deps.target.copyChunk(table, persisted, now())
+          await deps.target.copyChunk(table, persisted.chunk, now())
         }
         if (deps.controlPlane.readManifest(operationId).payload.cancellationRequestedAt !== null) {
           return null
         }
-        chunks.push(persisted)
+        summary.add(persisted.chunk)
         afterKey = rows.at(-1)!.key
         chunkIndex += 1
         rowsCopied += rows.length
-        bytesCopied += Buffer.byteLength(canonicalSchemaJson(persisted), 'utf8')
+        bytesCopied += persisted.bytes
         deps.onProgress?.({
           operationId,
           phase: 'copying',
@@ -461,7 +451,7 @@ export function createDatabaseMigrationRunner(deps: {
         })
         if (rows.length < chunkRows) break
       }
-      const entry = tableEntryFromChunks(deps.contract, table.id, chunks)
+      const entry = summary.finish()
       const expectedRows = sourceSnapshot.tableRows[table.id]
       if (entry.rowCount !== expectedRows) {
         throw new DatabaseMigrationRunnerError(

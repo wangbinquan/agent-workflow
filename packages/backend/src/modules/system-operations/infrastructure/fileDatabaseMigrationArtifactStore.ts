@@ -1,7 +1,7 @@
 // RFC-349 — durable filesystem adapter for migration chunks, manifests and
 // receipts. Application code never derives or reads these physical paths.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseMigrationArtifactStorePort } from '../application/ports/databaseMigrationArtifactStore'
 import { digestDatabaseArtifact } from '@/platform/persistence/generationStore'
@@ -24,7 +24,7 @@ export function createFileDatabaseMigrationArtifactStore(input: {
     },
     writeTableChunk(operationId, chunk) {
       const path = writeLogicalTableChunk(operationRoot(operationId), chunk)
-      return readLogicalTableChunk(path)
+      return { chunk: readLogicalTableChunk(path), bytes: statSync(path).size }
     },
     writeLogicalManifest(operationId, manifest) {
       writeLogicalArtifactManifest(operationRoot(operationId), manifest)

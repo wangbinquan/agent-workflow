@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1910,
+    "entries": 1911,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -33694,6 +33694,30 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#createLogicalTableChunkSummary",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#createLogicalTableChunkSummary",
+      "symbol": "createLogicalTableChunkSummary",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/platform/persistence/logicalDatabaseExport.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/persistence/logicalDatabaseExport.ts#createTableEntryAccumulator",
@@ -45537,7 +45561,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1631891e5776594b14391d822ae406acd46dc9e3ac7b5e691fc541e9cc2f8fb",
+  "sourceDigest": "sha256:77cf0b60fc3d077b9176d7a7cf42fc8767d54e15f2658b9b686f71b6543be6d7",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

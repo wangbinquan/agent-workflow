@@ -586,49 +586,82 @@ export function readLegacyArchiveManifest(path: string): LegacyArchiveManifest {
   }
 }
 
+/**
+ * RFC-349 —— 逐块折叠出表级 artifact entry，**不保留任何一行**。
+ *
+ * 原来的 `summarizeLogicalTableChunks` 走 `chunks.flatMap(chunk => chunk.payload.rows)`，
+ * 也就是把整张表的所有行同时物化在内存里（外加调用方为它攒的整份 chunk 数组）。
+ * `node_run_events` 在 full 种子下是 1000 万行——托管取证跑的 daemon 因此在拷贝阶段被
+ * 运行环境按内存杀掉（exit 143，种子完成后静默 30 分钟）。entry 的每一个字段都是可折叠的
+ * 累计量，所以这里改成流式累加器；`summarizeLogicalTableChunks` 保留为它的一次性包装，
+ * 既有调用方与用例逐字不变。
+ */
+export interface LogicalTableChunkSummary {
+  add(chunk: LogicalTableChunk): void
+  finish(): LogicalTableArtifactEntry
+}
+
+export function createLogicalTableChunkSummary(
+  table: LogicalTableContract,
+): LogicalTableChunkSummary {
+  const chunkDigests: string[] = []
+  let rowCount = 0
+  let blobBytes = 0
+  let firstKey: CanonicalLogicalRow['key'] | null = null
+  let lastKey: CanonicalLogicalRow['key'] | null = null
+  let schemaDigest: string | null = null
+
+  return {
+    add(chunk: LogicalTableChunk) {
+      if (chunk.payload.table !== table.id || chunk.payload.chunkIndex !== chunkDigests.length) {
+        throw new LogicalDatabaseCodecError(
+          'logical-artifact-corrupt',
+          `logical database chunk sequence is not contiguous for ${table.id}`,
+        )
+      }
+      if (schemaDigest === null) schemaDigest = chunk.payload.schemaDigest
+      chunkDigests.push(chunk.digest)
+      rowCount += chunk.payload.rows.length
+      for (const row of chunk.payload.rows) {
+        for (const value of row.values) {
+          if (value.type === 'bytes') blobBytes += Buffer.byteLength(value.value, 'base64')
+        }
+      }
+      firstKey ??= chunk.payload.rows[0]?.key ?? null
+      lastKey = chunk.payload.rows.at(-1)?.key ?? lastKey
+    },
+    finish(): LogicalTableArtifactEntry {
+      return LogicalTableArtifactEntrySchema.parse({
+        table: table.id,
+        disposition: table.disposition,
+        rowCount,
+        chunkCount: chunkDigests.length,
+        firstKey,
+        lastKey,
+        chunkDigests,
+        rootDigest: digestSchemaContract({
+          table: table.id,
+          schemaDigest,
+          rowCount,
+          chunkDigests,
+        }),
+        blobBytes,
+      })
+    },
+  }
+}
+
 export function summarizeLogicalTableChunks(input: {
   readonly table: LogicalTableContract
   readonly chunks: readonly LogicalTableChunk[]
 }): LogicalTableArtifactEntry {
-  const chunks = [...input.chunks].sort(
+  const summary = createLogicalTableChunkSummary(input.table)
+  for (const chunk of [...input.chunks].sort(
     (left, right) => left.payload.chunkIndex - right.payload.chunkIndex,
-  )
-  for (const [index, chunk] of chunks.entries()) {
-    if (chunk.payload.table !== input.table.id || chunk.payload.chunkIndex !== index) {
-      throw new LogicalDatabaseCodecError(
-        'logical-artifact-corrupt',
-        `logical database chunk sequence is not contiguous for ${input.table.id}`,
-      )
-    }
+  )) {
+    summary.add(chunk)
   }
-  const rows = chunks.flatMap((chunk) => chunk.payload.rows)
-  const blobBytes = rows.reduce(
-    (total, row) =>
-      total +
-      row.values.reduce(
-        (rowTotal, value) =>
-          rowTotal + (value.type === 'bytes' ? Buffer.byteLength(value.value, 'base64') : 0),
-        0,
-      ),
-    0,
-  )
-  const chunkDigests = chunks.map((chunk) => chunk.digest)
-  return LogicalTableArtifactEntrySchema.parse({
-    table: input.table.id,
-    disposition: input.table.disposition,
-    rowCount: rows.length,
-    chunkCount: chunks.length,
-    firstKey: rows[0]?.key ?? null,
-    lastKey: rows.at(-1)?.key ?? null,
-    chunkDigests,
-    rootDigest: digestSchemaContract({
-      table: input.table.id,
-      schemaDigest: chunks[0]?.payload.schemaDigest ?? null,
-      rowCount: rows.length,
-      chunkDigests,
-    }),
-    blobBytes,
-  })
+  return summary.finish()
 }
 
 export function logicalArtifactFileDigest(path: string): string {

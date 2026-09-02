@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   createLogicalArtifactManifest,
   createLogicalTableChunk,
   compareCanonicalLogicalKeys,
   decodeLogicalValue,
+  createLogicalTableChunkSummary,
   encodeLogicalRow,
   encodeLogicalValue,
   readLogicalArtifactManifest,
@@ -169,6 +170,85 @@ describe('RFC-349 provider-neutral logical artifact', () => {
         [{ type: 'integer', value: '1' }],
       ),
     ).toThrow('incompatible scalar types')
+  })
+
+  // RFC-349 —— 表级 artifact entry 必须能**逐块折叠**出来，不许把整张表攒在内存里。
+  //
+  // 由来：托管取证跑（full 种子，`node_run_events` 1000 万行）的 daemon 在拷贝阶段被
+  // 运行环境按内存杀掉（exit 143，种子完成后静默 30 分钟）。本机同参数复跑，拷到 947 万
+  // 行时 daemon RSS **7.1GB**——`summarizeLogicalTableChunks` 的 `chunks.flatMap(c =>
+  // c.payload.rows)` 把整张表物化了一遍，而调用方还为它攒了整份 chunk 数组。
+  // entry 的每个字段都是可折叠的累计量，所以两条路必须逐字等价。
+  test('the streaming summary is byte-identical to the one-shot one, and keeps no rows', () => {
+    const chunkOf = (chunkIndex: number, ids: readonly string[]) =>
+      createLogicalTableChunk({
+        operationId: 'dbm_operation_01',
+        contract: CONTRACT,
+        table: TABLE,
+        chunkIndex,
+        rows: ids.map((id) =>
+          encodeLogicalRow(TABLE, {
+            id,
+            counter: 7n,
+            enabled: 1,
+            payload: '{"a":1}',
+            bytes: new Uint8Array([1, 2, 3, 4]),
+            optional: null,
+          }),
+        ),
+      })
+
+    for (const chunks of [
+      [],
+      [chunkOf(0, ['a-1'])],
+      [chunkOf(0, ['a-1', 'a-2']), chunkOf(1, ['b-1', 'b-2']), chunkOf(2, ['c-1'])],
+    ]) {
+      const streaming = createLogicalTableChunkSummary(TABLE)
+      for (const chunk of chunks) streaming.add(chunk)
+      expect(streaming.finish()).toEqual(summarizeLogicalTableChunks({ table: TABLE, chunks }))
+    }
+
+    // A gap in the chunk sequence is still corruption, not a silent hole.
+    const gapped = createLogicalTableChunkSummary(TABLE)
+    gapped.add(chunkOf(0, ['a-1']))
+    expect(() => gapped.add(chunkOf(2, ['c-1']))).toThrow('not contiguous')
+
+    // The accumulator must not grow with the number of rows it has seen: 200
+    // chunks × 200 rows = 40k rows through it, and what it retains is one digest
+    // per chunk plus two keys.
+    const summary = createLogicalTableChunkSummary(TABLE)
+    for (let index = 0; index < 200; index += 1) {
+      summary.add(
+        chunkOf(
+          index,
+          Array.from({ length: 200 }, (_, row) => `row-${index}-${row}`),
+        ),
+      )
+    }
+    const entry = summary.finish()
+    expect(entry.rowCount).toBe(40_000)
+    expect(entry.chunkCount).toBe(200)
+    expect(JSON.stringify(entry).length).toBeLessThan(30_000)
+
+    // The copy loop must fold as it goes; accumulating chunks is the regression.
+    const runner = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'system-operations',
+        'application',
+        'databaseMigrationRunner.ts',
+      ),
+      'utf8',
+    )
+    expect(runner).toContain('summary.add(persisted.chunk)')
+    expect(runner).toContain('createLogicalTableChunkSummary(table)')
+    // 折叠是逐块进行的：copy 循环里不许再出现「把 chunk 攒起来最后一次性汇总」的形状。
+    const copyLoop = runner.slice(runner.indexOf('const summary = createLogicalTableChunkSummary'))
+    expect(copyLoop).not.toMatch(/chunks\.push\(/)
+    expect(copyLoop).not.toMatch(/summarizeLogicalTableChunks\(/)
   })
 
   test('binds chunk and manifest digests to exact row order and bytes', () => {

@@ -384,8 +384,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1910,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1911,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-349：+1 —— artifact store 的 `writeTableChunk` 改为回执 `{chunk, bytes}`。原来进度里的`bytesCopied` 是 `Buffer.byteLength(canonicalSchemaJson(persisted))`，为了数字节把整份数据集每 chunk 重新序列化一遍（全程等于多序列化整个 4.3GB）；改成让写盘方直接报它写了多少。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -419,7 +422,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6248,
+      "baseline": 6246,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -440,7 +443,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6044,
+      "baseline": 6042,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -475,12 +478,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25631,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25634,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349：+3 个 top-level symbol —— `createLogicalTableChunkSummary` 与 `LogicalTableChunkSummary`（逐块折叠出表级 artifact entry，不再保留任何一行）、`LogicalTableChunkReceipt`（artifact store 写盘时把真实字节数一并回执）。原来的拷贝循环把一张表的所有 chunk 攒进数组，再交给 `summarizeLogicalTableChunks`（它内部还 `flatMap` 出所有行）：`node_run_events` 在 full 种子下是 1000 万行，本机同参数复跑实测 daemon RSS 涨到 **13.9GB 且仍在涨**，16GB 的 runner 上就是那次托管取证跑 `exit 143`（SIGTERM）的直接死因。entry 的每个字段都是可折叠的累计量。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b1631891e5776594b14391d822ae406acd46dc9e3ac7b5e691fc541e9cc2f8fb",
+    "sourceDigest": "sha256:77cf0b60fc3d077b9176d7a7cf42fc8767d54e15f2658b9b686f71b6543be6d7",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +499,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "dda8151499dc6700ad97bd213335be7abc445407",
-    "contentDigest": "sha256:47ef4ae6f6b5bd5ed299781198c7efc683c27f7ea8752616fe55c8203d5d81fa",
+    "currentSnapshotSha": "e172a78b84e71270900c58cf3ca29c0d801b1377",
+    "contentDigest": "sha256:733ff5c6d70ab841f9360b01b20739a774d6e44aabeeeb52db54d9568c161416",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

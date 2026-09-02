@@ -14980,6 +14980,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:24cf7fa2bf3490216ed1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#createLogicalTableChunkSummary",
+      "toPath": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "toSymbol": "createLogicalTableChunkSummary",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/workflow.yaml.ts#$file",
       "fromPath": "packages/backend/src/services/workflow.yaml.ts",
       "fromSymbol": "$file",
@@ -31652,23 +31669,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4e123bf7243d771af41f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#canonicalSchemaJson",
-      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
-      "toSymbol": "canonicalSchemaJson",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -52956,23 +52956,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8420c92e685697ad22f5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#summarizeLogicalTableChunks",
-      "toPath": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toSymbol": "summarizeLogicalTableChunks",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/repos.ts#$file",
@@ -60042,23 +60025,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookTriggers",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "webhookTriggers",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:95f38a14717b8e861ca7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#LogicalTableChunk",
-      "toPath": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toSymbol": "LogicalTableChunk",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -102750,9 +102716,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 6044,
+    "architectureExceptions": 6042,
     "implementationSccs": 0,
-    "observedEdges": 6248,
+    "observedEdges": 6246,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -117239,6 +117205,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
+      "id": "import:24cf7fa2bf3490216ed1",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/logicalDatabaseArtifact",
+      "syntax": "static-import",
+      "targetSymbol": "createLogicalTableChunkSummary",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#createLogicalTableChunkSummary"
     },
     {
       "edgeKind": "value",
@@ -133415,22 +133397,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
-      "id": "import:4e123bf7243d771af41f",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/schemaContract",
-      "syntax": "static-import",
-      "targetSymbol": "canonicalSchemaJson",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#canonicalSchemaJson"
     },
     {
       "edgeKind": "type",
@@ -154361,22 +154327,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityAdmission"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
-      "id": "import:8420c92e685697ad22f5",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/logicalDatabaseArtifact",
-      "syntax": "static-import",
-      "targetSymbol": "summarizeLogicalTableChunks",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#summarizeLogicalTableChunks"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/repos.ts",
@@ -161223,22 +161173,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookTriggers"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
-      "id": "import:95f38a14717b8e861ca7",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/logicalDatabaseArtifact",
-      "syntax": "static-import",
-      "targetSymbol": "LogicalTableChunk",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#LogicalTableChunk"
     },
     {
       "edgeKind": "type",
@@ -203266,7 +203200,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b1631891e5776594b14391d822ae406acd46dc9e3ac7b5e691fc541e9cc2f8fb",
+  "sourceDigest": "sha256:77cf0b60fc3d077b9176d7a7cf42fc8767d54e15f2658b9b686f71b6543be6d7",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
