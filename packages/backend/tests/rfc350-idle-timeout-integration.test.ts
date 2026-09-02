@@ -216,8 +216,15 @@ describe('RFC-350 端到端', () => {
     await seedBase()
     await seedTask({ id: 'root', status: 'running', startedAt: NOW - 40 * HOUR })
     await runTaskIdleTimeoutSweep(operations(), IDLE_CONFIG, { now: NOW })
-    expect((await statusOf('root'))?.status).toBe('canceled')
+    const reaped = await statusOf('root')
+    expect(reaped?.status).toBe('canceled')
 
+    // 归档窗口必须相对**这一行真实的 finishedAt** 算，不能相对合成的 NOW。
+    // 收割走的是普通 cancel 路径（`operations.cancelTask`），finishedAt 由真实时钟
+    // 盖章——这是产品行为，不是 bug。原来写死的 `NOW + 91 * DAY` 只在「真实时间距
+    // NOW 不足一天」时才成立：NOW 是 2026-09-01T00:00Z，于是这条用例在
+    // 2026-09-02T16:00Z 前后自己变红（CI 13:07 还绿、16:12 就红），与任何提交无关。
+    const finishedAt = reaped?.finishedAt ?? NOW
     const dirs = tmpDirs()
     // 保留期内不动。
     expect(
@@ -225,7 +232,7 @@ describe('RFC-350 端到端', () => {
         await runTaskArchiveSweep(
           db,
           { enabled: true, retentionDays: 90 },
-          { ...dirs, now: NOW + 10 * DAY },
+          { ...dirs, now: finishedAt + 10 * DAY },
         )
       ).archived,
     ).toHaveLength(0)
@@ -235,7 +242,7 @@ describe('RFC-350 端到端', () => {
     const archived = await runTaskArchiveSweep(
       db,
       { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW + 91 * DAY },
+      { ...dirs, now: finishedAt + 91 * DAY },
     )
     expect(archived.archived.map((tree) => tree.rootTaskId)).toEqual(['root'])
     expect(await taskCount()).toBe(0)

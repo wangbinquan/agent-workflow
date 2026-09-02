@@ -10,6 +10,7 @@ import {
   type DaemonProviderMigrationAdmission,
 } from './daemonProviderMigrationAdmission'
 import {
+  createDaemonProviderListenerTraffic,
   createDaemonProviderRuntimeRouter,
   type DaemonProviderListenerRuntimeSession,
   type DaemonProviderListenerWebSocket,
@@ -48,12 +49,25 @@ export interface CreateDaemonProviderBootstrapInput<WebSocket = DaemonProviderLi
   readonly onCurrentSelected?: (session: DaemonProviderListenerRuntimeSession<WebSocket>) => void
 }
 
+/**
+ * Upper bound on draining in-flight listener calls before a cutover composes the
+ * target. Ordinary requests finish in milliseconds; this only has to be longer
+ * than that and shorter than an operator's patience. Exceeding it proceeds
+ * anyway — a stuck request must never be able to strand a migration.
+ */
+const LISTENER_QUIESCE_MS = 2_000
+
 export function createDaemonProviderBootstrap<WebSocket = DaemonProviderListenerWebSocket>(
   input: CreateDaemonProviderBootstrapInput<WebSocket>,
 ): DaemonProviderBootstrap<WebSocket> {
+  // One tracker shared by the listener delegates and the cutover: the router
+  // counts in-flight calls, the controller drains them before it moves
+  // process-wide provider state.
+  const traffic = createDaemonProviderListenerTraffic()
   const controller = createDaemonProviderSessionController({
     initial: input.initialSession,
     factory: input.sessionFactory,
+    quiesceListener: () => traffic.quiesce(LISTENER_QUIESCE_MS),
     ...(input.onCurrentSelected === undefined
       ? {}
       : { onCurrentSelected: input.onCurrentSelected }),
@@ -64,7 +78,7 @@ export function createDaemonProviderBootstrap<WebSocket = DaemonProviderListener
       ? {}
       : { createAdmission: input.createMigrationAdmission }),
   })
-  const router = createDaemonProviderRuntimeRouter<WebSocket>(controller)
+  const router = createDaemonProviderRuntimeRouter<WebSocket>(controller, traffic)
 
   return Object.freeze({
     fetch: router.fetch,

@@ -6,7 +6,7 @@
     "moduleFiles": 1254,
     "productionFiles": 2664,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25663
+    "symbolsIncludingFileRoots": 25667
   },
   "entries": [
     {
@@ -3422,6 +3422,18 @@
       "currentContext": "legacy",
       "currentLayer": "cli",
       "exported": false,
+      "file": "packages/backend/src/cli/daemonProviderBootstrap.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#LISTENER_QUIESCE_MS",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "LISTENER_QUIESCE_MS",
+      "targetContext": "task-execution",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
       "file": "packages/backend/src/cli/daemonProviderMigrationAdmission.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -3675,6 +3687,18 @@
       "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/daemonProviderRuntimeRouter.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeRouter.ts#createDaemonProviderListenerTraffic",
+      "removeAfterWave": "W4-E4b",
+      "status": "legacy-target",
+      "symbol": "createDaemonProviderListenerTraffic",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeRouter.ts",
       "id": "owner:packages/backend/src/cli/daemonProviderRuntimeRouter.ts#createDaemonProviderRuntimeRouter",
       "removeAfterWave": "W4-E4b",
       "status": "legacy-target",
@@ -3691,6 +3715,18 @@
       "removeAfterWave": "W4-E4b",
       "status": "legacy-target",
       "symbol": "DaemonProviderListenerRuntimeSession",
+      "targetContext": "runtime-management",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": true,
+      "file": "packages/backend/src/cli/daemonProviderRuntimeRouter.ts",
+      "id": "owner:packages/backend/src/cli/daemonProviderRuntimeRouter.ts#DaemonProviderListenerTraffic",
+      "removeAfterWave": "W4-E4b",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderListenerTraffic",
       "targetContext": "runtime-management",
       "targetLayer": "inbound"
     },
@@ -150532,6 +150568,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlLogicalTarget.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlLogicalTarget.ts#analyzeApplicationTables",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "analyzeApplicationTables",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -308627,5 +308675,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:15b66adaad0fd8cf3ceccbcd8d884aec07ff574f223f5cc8fb502644e38af0b6"
+  "sourceDigest": "sha256:fd6cb5df27159ce63aecdcb76cbfe58fa8f54600a046c9f5870987be06a15f67"
 }

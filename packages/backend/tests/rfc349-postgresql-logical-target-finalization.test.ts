@@ -189,6 +189,54 @@ const EXPECTED = [
 ]
 
 describe('RFC-349 PostgreSQL logical target finalization', () => {
+  // 2026-09-02 —— 割接后头一分钟的 40001 风暴。逻辑拷贝是纯 INSERT，不给 PostgreSQL 留
+  // 任何 planner 统计；autovacuum 补上之前，`WHERE task_id = $1` 被规划成顺序扫描，而
+  // 顺序扫描在 SERIALIZABLE 下持整表 predicate lock，于是每一笔并发写都与它互为读写依赖。
+  // 本机取证实测：割接后服务端一分钟内记 3210 次 40001，autoanalyze 之后同样负载几乎归零。
+  // ANALYZE 因此是割接的一步，不是优化。
+  test('analyzes every active target table once the schema is finalized', async () => {
+    const fake = fixture({ rowCount: 2 })
+    const target = await openPostgresqlLogicalTarget({
+      runtime: fake.runtime,
+      operationId: 'dbm_target_0001',
+      sourceGenerationId: 'dbg_source_0001',
+      contract: CONTRACT,
+      plan: PLAN,
+      verifyMigrationHistory: async () => undefined,
+    })
+    try {
+      await target.finalizeSchema(10, EXPECTED)
+    } finally {
+      await target.close()
+    }
+    const analyze = 'ANALYZE "agent_workflow"."fixture_rows_pg"'
+    expect(fake.statements).toContain(analyze)
+    // After the DDL transaction: ANALYZE takes its own snapshot, and running it
+    // inside would hide the statistics from this operation's own verification.
+    expect(fake.statements.indexOf(analyze)).toBeGreaterThan(fake.statements.lastIndexOf('COMMIT'))
+  })
+
+  test('re-analyzes on the resume path, where the baseline already exists', async () => {
+    const fake = fixture({ rowCount: 2 })
+    const target = await openPostgresqlLogicalTarget({
+      runtime: fake.runtime,
+      operationId: 'dbm_target_0001',
+      sourceGenerationId: 'dbg_source_0001',
+      contract: CONTRACT,
+      plan: PLAN,
+      verifyMigrationHistory: async () => undefined,
+    })
+    try {
+      await target.finalizeSchema(10, EXPECTED)
+      const first = fake.statements.length
+      // Second call takes the already-finalized early return.
+      await target.finalizeSchema(11, EXPECTED)
+      expect(fake.statements.slice(first)).toContain('ANALYZE "agent_workflow"."fixture_rows_pg"')
+    } finally {
+      await target.close()
+    }
+  })
+
   test('projects the provider-specific physical table mapping', () => {
     const plan = buildPostgresqlSchemaPlan(CONTRACT)
     expect(plan.statements.find((statement) => statement.kind === 'table')?.sql).toContain(

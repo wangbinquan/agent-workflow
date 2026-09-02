@@ -124,6 +124,15 @@ export function createDaemonProviderSessionController<
    * is what makes a failed cutover leave a working daemon behind.
    */
   readonly onCurrentSelected?: (session: Session) => void
+  /**
+   * Awaited after the handover barrier is armed and before the target
+   * composition is built. `handover()` only queues *new* listener calls; the
+   * ones already dispatched to the outgoing composition keep running, and
+   * composing the target moves process-wide provider state out from under them.
+   * Bootstrap passes the listener's in-flight drain here. Bounded by the
+   * implementation: a slow request must not be able to stall a cutover.
+   */
+  readonly quiesceListener?: () => Promise<void>
 }): DaemonProviderSessionController<Session> {
   let current = input.initial
   let standby: Session | null = null
@@ -204,6 +213,9 @@ export function createDaemonProviderSessionController<
       }
 
       try {
+        // New listener calls are queued behind the barrier above; drain the ones
+        // already running before process-wide provider state moves.
+        await input.quiesceListener?.()
         // Before target admission opens, rollback reuses the exact frozen source
         // composition instead of creating a second source session. The failed
         // candidate never admitted business/background work and can be retired.

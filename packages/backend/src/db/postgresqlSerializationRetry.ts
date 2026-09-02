@@ -16,15 +16,19 @@
 //     （13.4%）耗尽「3 次、无退避」的预算后原样变成用户可见的 500。加满抖动的指数
 //     退避 + 更大的预算就是为这条曲线设的。
 //
-// 退避是**满抖动**（AWS 建议的 full jitter）：`random() * min(2^attempt, 16) * 2ms`。
-// 最坏累计 ≈ 46ms、期望 ≈ 23ms，远低于取证对单请求 1000ms 的硬门槛，也足以把同批
-// 冲突方错开。
+// 退避是**满抖动**（AWS 建议的 full jitter）：`random() * min(2^attempt, 8) * 2ms`，
+// 上限 16ms。10 次尝试最坏累计 ≈126ms、期望 ≈63ms，远低于取证对单请求 1000ms 的硬门槛，
+// 也足以把同批冲突方错开。
+//
+// 预算定在 10 而不是更小：拷贝后的 `ANALYZE`（见 `postgresqlLogicalTarget`）已经把常态
+// 冲突压到 0，剩下的尖峰只出现在**维护作业与前台写重叠**的窗口——维护作业按范围批量
+// 删/归档，天然与前台写互为读写依赖。那段窗口里 6 次预算实测仍有个位数逃逸。
 
 /** 单次逻辑操作总共尝试几次（含第一次）。 */
-export const POSTGRESQL_SERIALIZATION_ATTEMPTS = 6
+export const POSTGRESQL_SERIALIZATION_ATTEMPTS = 10
 
 const BACKOFF_BASE_MS = 2
-const BACKOFF_CEILING_MULTIPLIER = 16
+const BACKOFF_CEILING_MULTIPLIER = 8
 
 /** 沿 `cause` 链找 40001 / 40P01，`code` 与 `errno` 两处都看；命中就返回那个 SQLSTATE。 */
 export function postgresqlSerializationFailureCode(error: unknown): '40001' | '40P01' | undefined {

@@ -84,6 +84,28 @@ function physicalTable(table: LogicalTableContract): string {
   return name
 }
 
+/**
+ * RFC-349 —— 割接前给目标库采一次统计。
+ *
+ * 逻辑拷贝是纯 INSERT，不给 PostgreSQL 留下任何 planner 统计；autovacuum 要过若干分钟
+ * 才补上。在那之前，`WHERE task_id = $1` 这种本该走索引的查询会被规划成顺序扫描——而
+ * **顺序扫描在 SERIALIZABLE 下持有的是整表级 predicate lock**，于是每一笔并发写都与它
+ * 互为读写依赖，40001 冲突率被推到接近 0.5。2026-09-02 本机取证实测：割接后头一分钟服务
+ * 端记 3210 次 40001，autoanalyze 补上统计之后同样负载几乎归零。
+ *
+ * 所以这一步是割接的一部分而不是优化：它决定「切过去的第一分钟能不能正常服务」。
+ */
+async function analyzeApplicationTables(
+  connection: PostgresqlReservedConnection,
+  contract: LogicalSchemaContract,
+): Promise<void> {
+  for (const table of contract.tables.filter(
+    (candidate) => candidate.disposition !== 'ARCHIVE_THEN_OMIT',
+  )) {
+    await connection.unsafe(`ANALYZE ${applicationTable(physicalTable(table))}`)
+  }
+}
+
 function keyJson(row: LogicalTableChunk['payload']['rows'][number] | undefined): string | null {
   return row === undefined ? null : canonicalSchemaJson(row.key).trimEnd()
 }
@@ -582,6 +604,8 @@ export async function openPostgresqlLogicalTarget(input: {
             'PostgreSQL target finalized baseline is not owned by this logical operation',
           )
         }
+        // Resume path: a discarded/rebuilt target may have lost its statistics.
+        await analyzeApplicationTables(connection, input.contract)
         return
       }
 
@@ -636,6 +660,9 @@ export async function openPostgresqlLogicalTarget(input: {
           'PostgreSQL target constraints, indexes or identities failed final verification',
         )
       }
+      // Outside the DDL transaction on purpose: ANALYZE takes its own snapshot,
+      // and the statistics must be visible to every planner after this point.
+      await analyzeApplicationTables(connection, input.contract)
     },
 
     async prepareGeneration(generation) {
