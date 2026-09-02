@@ -121,13 +121,28 @@ memory-distill / development-wake / digital-employee-os / event-center / fusion-
 > 顺带解释了一条早先的困惑：用 **daemon token** 打 12,656 个请求一次都不涨 `data_version`
 > （daemon 身份没有 session 行可 touch），换成 session token 就每秒一次。
 >
-> **修法是设计取舍，留给用户拍板**（本条只报不改）：
-> ① 冻结期间跳过这次 touch——注释里写明它「是活动投影，不是凭据有效性围栏」，维护窗内不写它
-> 不丢任何语义，改动面最小；
-> ② 让整条请求路径在冻结期间拒绝/推迟写入（更彻底：请求路径大概率还有别的写手，本次探针只在
-> 夹具打的那两个端点上取样，真实 UI 的面更宽）；
-> ③ 放松源完整性判据——**不可取**，那道判据正是这次迁移敢做的前提。
-> 建议先做 ①，再按 ② 的口径把请求路径的写手扫一遍。
+> **补测（同日，把「只抓到一条」升级成全窗口普查）**：把写探针的窗口对齐到「停掉 14 个 handle
+> 的那次 freeze」到失败为止（45.4 秒），窗内一共 **1227 条写**——1000 条
+> `update tasks set workspace_pruned_at`、46+46 条 `delete/insert task_collaborators`（**路由栈**）、
+> 33 条 `update event_type_catalog`（**路由栈**）、68 条 `maintenance_runs` 各写（maintenanceWorker）、
+> 12 条 `update user_sessions set last_used_at`（**路由栈**），其余是 webhook / runtimes /
+> employee_os / memory_distill 等零星。
+>
+> 按时间分布看得更清楚：**t+2s 有一个 1046 条的突发**——那是 stop 之后 drain 在收尾的在制品，
+> 属设计内，且发生在 `source.preflight()` 取快照**之前**，无害；t+7…t+32 安静；**t+32 之后稳定
+> ~10 条/秒直到失败**，后面这一段全是**路由栈**。
+>
+> **结论修正：冻结根本没有覆盖 HTTP 请求路径。** `user_sessions` 那条只是离失败最近的一条，
+> 不是唯一一条。所以：
+>
+> ① 只跳过 `last_used_at` 的 touch —— **不够**，`task_collaborators` / `event_type_catalog` 等
+> 路由写照样会把源库改掉；
+> ② **让请求路径在源库冻结期间拒绝/推迟写入** —— 这才是 T10 真正要的那一步（读必须照旧放行，
+> 否则进度页自己就打不开）；
+> ③ 放松源完整性判据 —— **不可取**，那道判据正是这次迁移敢做的前提。
+>
+> 修法是设计取舍（在哪一层拒、拒了给前端什么、维护窗内哪些写算合法例外），**留给用户拍板，
+> 本条只报不改**。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表
