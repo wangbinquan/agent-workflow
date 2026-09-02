@@ -73,7 +73,7 @@ describe('RFC-200 source wiring locks', () => {
       "(await state.opts.persistence.nodeExecution.read(aggRunId))?.envelopeNonce ?? ''",
     )
 
-    const memory = read('packages/backend/src/services/memoryInject.ts')
+    const memory = read('packages/backend/src/modules/memory/domain/injectionRendering.ts')
     // RFC-317 T39（CC-13）—— 围栏的 nonce 现在来自**必传的判别式**而不是默认参数：
     // 空 nonce 曾经默默走「不加围栏」的分支，安全路径是你得记得去要的那一条。
     expect(memory).toContain('fenceUntrusted(`memory:${m.id}`, m.bodyMd, fencing.nonce)')

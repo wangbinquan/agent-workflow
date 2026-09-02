@@ -15,7 +15,7 @@ import ts from 'typescript'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
-const KERNEL = 'packages/backend/src/services/memoryInject.ts'
+const KERNEL = 'packages/backend/src/modules/memory/domain/injectionRendering.ts'
 
 /**
  * 允许使用 `memoryFencingForNonce`（「空 nonce ⇒ 不加围栏」的显式转换器）的地方。
@@ -24,8 +24,8 @@ const KERNEL = 'packages/backend/src/services/memoryInject.ts'
  * 必须逐字复刻当年的拼法。新代码一律直接传 `{ kind: 'fenced', nonce }`。
  */
 const LEGACY_NONCE_CALLERS: Readonly<Record<string, string>> = {
-  'services/memoryInject.ts':
-    '转换器自身的定义，外加 buildMemoryBlock 入口——deps.envelopeNonce 可能来自历史调用方。',
+  'modules/memory/application/injection/injectMemory.ts':
+    'buildMemoryBlock 入口——deps.envelopeNonce 可能来自历史调用方（RFC-352 从 services/memoryInject.ts 平移过来）。',
   'services/runner.ts':
     'RFC-042 同会话追问会重建首轮的注入片段；首轮若是 pre-RFC-200 的行则没有 nonce。',
 }

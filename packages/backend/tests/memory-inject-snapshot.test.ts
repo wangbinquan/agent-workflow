@@ -14,12 +14,12 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { parseInjectedSnapshotJson } from '../src/modules/memory/domain/injectionRendering'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
   loadInjectableMemories,
-  parseInjectedSnapshotJson,
-} from '../src/services/memoryInject'
+} from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'

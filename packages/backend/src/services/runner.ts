@@ -110,7 +110,7 @@ import {
   formatMemoryBlockFromSnapshot,
   memoryFencingForNonce,
   type ScopeBudget,
-} from './memoryInject'
+} from '@/modules/memory/public/injection'
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'

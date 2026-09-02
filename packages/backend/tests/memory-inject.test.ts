@@ -26,11 +26,13 @@ import {
   estimateTokens,
   formatMemoryBlock,
   type MemoryEnvelopeFencing,
-  injectMemoryForRun,
-  loadInjectableMemories,
   type InjectableMemoryRow,
   type ScopeBudget,
-} from '../src/services/memoryInject'
+} from '../src/modules/memory/domain/injectionRendering'
+import {
+  injectMemoryForRun,
+  loadInjectableMemories,
+} from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent } from '@agent-workflow/shared'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
@@ -623,12 +625,20 @@ describe('source-code grep guards', () => {
   test('runner.ts must call the provider-neutral injection participant', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
     expect(src).toContain('memoryInjectionQueries.injectForRun(')
-    expect(src).not.toContain("from '@/services/memoryInject'")
+    expect(src).not.toContain("from '@/modules/memory/application/injection/injectMemory'")
   })
 
-  test('memoryInject.ts must keep BEGIN/END anchors (downstream may regex-strip)', () => {
+  test('injectionRendering.ts must keep BEGIN/END anchors (downstream may regex-strip)', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'memoryInject.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'memory',
+        'domain',
+        'injectionRendering.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('--- BEGIN INJECTED MEMORY ---')

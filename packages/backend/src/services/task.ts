@@ -185,7 +185,7 @@ import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
-import { parseInjectedSnapshotJson } from './memoryInject'
+import { parseInjectedSnapshotJson } from '@/modules/memory/public/injection'
 import { parsePortValidationFailuresJson } from './envelope'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from './reviewRoundStart'
 import { appendTaskCreatedCommittedEventTx } from '@/modules/task-execution/public/participants'

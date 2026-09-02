@@ -1967,7 +1967,7 @@ export const nodeRuns = sqliteTable(
     /**
      * RFC-046: post-budget-clip snapshot of approved memories injected into
      * this agent run's inline prompt (rendered into the `## Learned context`
-     * block by `formatMemoryBlock` — see services/memoryInject.ts).
+     * block by `formatMemoryBlock` — see modules/memory/domain/injectionRendering.ts).
      * Serialized as `InjectedMemorySnapshot[]` (shared/schemas/memory.ts).
      * NULL when the run pre-dates RFC-046, when the run kind is non-agent
      * (input/output/wrapper/review/clarify never call inject), or when

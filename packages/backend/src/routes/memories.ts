@@ -240,7 +240,7 @@ export function mountMemoryRoutes(
           parsed.error.format(),
         )
       }
-      // 缺省 approved：与注入链路（services/memoryInject.ts 只取 approved）一致——
+      // 缺省 approved：与注入链路（modules/memory/application/injection 只取 approved）一致——
       // 一个外部代理问「有哪些标签」，想要的是能被注入的事实，不是未审的候选。
       const status = parsed.data.status ?? 'approved'
       const actor = actorOf(c)

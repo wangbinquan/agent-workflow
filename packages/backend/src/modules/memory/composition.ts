@@ -42,7 +42,10 @@ import type { MemoryCatalogOperations } from './public/catalog'
 import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
 import type { MemoryResourceScopeAuthorization } from './infrastructure/sqliteMemoryCatalog'
 import type { EnqueueMemoryDistillJobInput, MemoryDistillWorkerOptions } from './public/commands'
-import { injectMemoryForRun, loadInjectedSnapshotFromFirstAttempt } from '@/services/memoryInject'
+import {
+  injectMemoryForRun,
+  loadInjectedSnapshotFromFirstAttempt,
+} from './application/injection/injectMemory'
 
 export { composePostgresqlSkillMemoryFusionParticipantFactory } from './infrastructure/postgresqlSkillMemoryFusionParticipant'
 

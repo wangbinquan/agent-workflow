@@ -4,7 +4,7 @@ import type { MemoryInjectionQueries } from '../../src/modules/memory/public/que
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
-} from '../../src/services/memoryInject'
+} from '../../src/modules/memory/application/injection/injectMemory'
 
 export function sqliteMemoryInjectionStore(db: DbClient): SqliteMemoryInjectionReadStore {
   return new SqliteMemoryInjectionReadStore(db)

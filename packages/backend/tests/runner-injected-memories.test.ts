@@ -352,7 +352,7 @@ describe('RFC-046 — runner.ts source-code grep guards', () => {
     // RFC-046 followup helper must be called from runner only (scheduler
     // and other services have no business reading attempt 0's snapshot).
     expect(src).toContain('memoryInjectionQueries.loadFirstAttemptSnapshot(')
-    expect(src).not.toContain("from '@/services/memoryInject'")
+    expect(src).not.toContain("from '@/modules/memory/application/injection/injectMemory'")
   })
 
   test('R6: scheduler.ts does not call the followup-inherit helper', () => {

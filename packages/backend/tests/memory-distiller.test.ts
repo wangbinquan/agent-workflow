@@ -35,7 +35,7 @@ import {
 } from '../src/services/memoryDistiller'
 import { rowToDistillJob } from '../src/services/memoryDistiller'
 import { promoteCandidate } from '../src/services/memory'
-import { injectMemoryForRun } from '../src/services/memoryInject'
+import { injectMemoryForRun } from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'

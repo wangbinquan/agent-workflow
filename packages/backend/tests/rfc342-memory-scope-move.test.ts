@@ -29,7 +29,7 @@ import {
   moveMemory as moveMemoryWithAuthorization,
   promoteCandidate,
 } from '../src/services/memory'
-import { loadInjectableMemories } from '../src/services/memoryInject'
+import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 import { createUser } from '../src/services/users'
 import { MEMORY_CHANNEL, memoryBroadcaster, resetBroadcastersForTests } from '../src/ws/broadcaster'

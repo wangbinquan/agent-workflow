@@ -42,7 +42,7 @@ import { Paths } from '@/util/paths'
 import type { RuntimeKind } from '@/services/runtime/types'
 import { extractLastEnvelope } from '@/services/envelope'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
-import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/services/distillerSourceContext'
+import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/modules/memory/domain/sourceContext'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 import type {

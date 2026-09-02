@@ -18,7 +18,7 @@ import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cachedRepos } from '../src/db/schema'
-import { loadInjectableMemories } from '../src/services/memoryInject'
+import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
