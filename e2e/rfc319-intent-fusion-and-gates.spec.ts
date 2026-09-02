@@ -989,10 +989,12 @@ test('RFC-319 INTENT-59: 融合待审期间技能被别人改过——批准与�
   ).toBeVisible({ timeout: 30_000 })
   await approveBanner.getByText('Raw error message', { exact: true }).click()
   await expect(
-    approveBanner.getByText(
-      'the target skill changed since this fusion started; re-initiate the fusion',
-      { exact: false },
-    ),
+    // 断的是**判据**不是逐字文案：必须说清「目标技能变了」并给出「重新发起」这条出路。
+    // RFC-349 把「身份不合法」与「快照已过期」两条守卫并成了一条
+    // （services/fusion.ts:806-812「the target skill changed or no longer exists;
+    // re-initiate the fusion」），逐字断言会在这种无害改写上误报；而原因整段丢失、
+    // 或退化成只剩域级标题，仍然照红。
+    approveBanner.getByText(/target skill changed[\s\S]*re-initiate/i),
     '横幅展开之后仍然找不到具体原因 ⇒ 用户只看到「Fusion action failed」，' +
       '不知道是自己没权限、还是技能被人改过、还是这条融合早就作废了——三者的修法完全不同',
   ).toBeVisible()
@@ -1060,10 +1062,8 @@ test('RFC-319 INTENT-59: 融合待审期间技能被别人改过——批准与�
   ).toBeVisible({ timeout: 30_000 })
   await rejectBanner.getByText('Raw error message', { exact: true }).click()
   await expect(
-    rejectBanner.getByText(
-      'the target skill changed since this fusion started; re-initiate the fusion',
-      { exact: false },
-    ),
+    // 同上：判据是「说清技能变了 + 给出重新发起」，不是某一句逐字文案。
+    rejectBanner.getByText(/target skill changed[\s\S]*re-initiate/i),
     '弹窗里的报错展开之后也没有具体原因 ⇒ 用户只能反复点「Send & re-run」，' +
       '而每一次都会以同一条 409 收场',
   ).toBeVisible()
