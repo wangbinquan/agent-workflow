@@ -37,6 +37,38 @@ describe('RFC-349 evidence latency stats survive a full-tier sample count', () =
     expect(latencyStats([])).toMatchObject({ count: 0, maxMs: 0, p50Ms: 0, p95Ms: 0 })
   })
 
+  // 维护等待窗从「死的 900 秒」改成停滞判据：同一个 harness 自己把 `eventsArchive` 配成
+  // 要归档约 900 万行（`globalRows = expectedEvents / 10`），而归档按 RFC-338 合同走每片
+  // 1000 行的有界切片——本机实测 2303 片 / 977 秒（0.42 秒一片、983 行一片，完全符合设计），
+  // 900 万行要约 65 分钟，和 15 分钟的等待窗差了四倍多。判据必须是「还在推进吗」。
+  test('the maintenance wait fails on a stall, not on a fixed clock', () => {
+    const source = readFileSync(
+      resolve(ROOT, 'packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts'),
+      'utf8',
+    )
+    const wait = source.slice(source.indexOf('async function waitForMaintenanceJobs'))
+    expect(wait).toContain('const STALL_MS')
+    expect(wait).toContain('lastProgressAt')
+    expect(wait).toContain('PostgreSQL maintenance stalled for')
+    // 每一轮的推进签名必须同时看 state 与 slice——只看 state 的话，一个长跑 job 从头到尾
+    // 都是 `running`，停滞判据会把「正常推进」误判成卡住。
+    expect(wait).toContain('sliceNo')
+  })
+
+  // 相位测量一测完就记下来：之前它们是局部变量，任何**之后**的步骤抛错都会把整整 50 分钟
+  // 跑出来的证据一起丢掉（实撞：维护等待窗超时，报告里只剩一行 failure、没有相位表）。
+  test('a late failure still carries the phase evidence into the report', () => {
+    const source = readFileSync(
+      resolve(ROOT, 'packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts'),
+      'utf8',
+    )
+    expect(source).toContain('const collectedPhases: RuntimePhaseReport[] = []')
+    expect(source).toContain('await recordPhase(collectedPhases, {')
+    expect(source).toContain('salvagedRuntimePhases(error)')
+    // 三个相位都必须走收集器，漏一个就等于那一相位的证据仍会丢。
+    expect(source.split('await recordPhase(collectedPhases, {').length - 1).toBe(3)
+  })
+
   test('neither soak harness spreads a sample array into Math.max/min', () => {
     for (const relative of [
       'packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts',

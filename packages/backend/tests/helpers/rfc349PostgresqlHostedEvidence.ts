@@ -1568,9 +1568,34 @@ async function waitForMaintenanceJobs(
   store: ReturnType<typeof createPostgresqlMaintenanceRunStore>,
   queued: readonly { readonly runId: string; readonly job: MaintenanceJobKey }[],
 ): Promise<readonly MaintenanceJobReport[]> {
-  const deadline = Date.now() + 900_000
+  // RFC-349 —— 判据是「还在推进吗」，不是「多少秒内做完」。
+  //
+  // 这里原本是死的 900 秒，而同一个 harness 自己把 `eventsArchive` 的阈值配成
+  // `globalRows = expectedEvents / 10`：full 种子 1000 万事件，也就是要归档掉约 900 万行。
+  // 归档按 RFC-338 的合同走**每片 1000 行**的有界切片，本机实测 2303 片 / 977 秒工作时间
+  // （0.42 秒一片、983 行一片，完全符合设计），照这个速度 900 万行需要约 65 分钟——15 分钟
+  // 的等待窗与它自己配置的工作量差了四倍多，跟产品无关。
+  //
+  // 所以改成停滞判据：只要有任何一个 job 的 slice 在推进就继续等；连续 STALL_MS 没有任何
+  // 推进才算真卡住（另有一个绝对上限兜底，防止无限等）。这样种子再变大也不用重新调数。
+  const STALL_MS = 300_000
+  const deadline = Date.now() + 7_200_000
+  let lastProgressAt = Date.now()
+  let lastSignature = ''
   while (Date.now() < deadline) {
     const rows = await Promise.all(queued.map(async ({ runId }) => await store.read(runId)))
+    const signature = rows.map((row) => `${row?.state ?? '-'}:${row?.sliceNo ?? 0}`).join('|')
+    if (signature !== lastSignature) {
+      lastSignature = signature
+      lastProgressAt = Date.now()
+    } else if (Date.now() - lastProgressAt > STALL_MS) {
+      const stalled = rows
+        .map((row, index) => ({ job: queued[index]!.job, state: row?.state ?? 'missing' }))
+        .filter((entry) => !['succeeded', 'failed'].includes(entry.state))
+      throw new Error(
+        `PostgreSQL maintenance stalled for ${Math.round(STALL_MS / 1000)}s: ${JSON.stringify(stalled)}`,
+      )
+    }
     if (rows.every((row) => row !== null && ['succeeded', 'failed'].includes(row.state))) {
       return Object.freeze(
         rows.map((row, index) => ({
@@ -1600,6 +1625,15 @@ function futureDailySchedule(): {
     at: `${String(future.getUTCHours()).padStart(2, '0')}:${String(future.getUTCMinutes()).padStart(2, '0')}`,
     timezone: 'UTC',
   }
+}
+
+async function recordPhase(
+  collected: RuntimePhaseReport[],
+  input: Parameters<typeof runRuntimePhase>[0],
+): Promise<RuntimePhaseReport> {
+  const phase = await runRuntimePhase(input)
+  collected.push(phase)
+  return phase
 }
 
 async function runLargeSoak(
@@ -1634,6 +1668,10 @@ async function runLargeSoak(
   }
   let daemon: DaemonHandle | null = null
   let maintenanceRuntime: ReturnType<typeof createPostgresqlDatabaseRuntime> | null = null
+  // RFC-349 —— 相位测量一测完就记下来。此前它们是局部变量，任何**之后**的步骤抛错
+  // （实撞：维护等待窗超时）都会把整整 50 分钟跑出来的相位证据一起丢掉，报告里只剩一行
+  // failure，没法判断产品侧到底绿没绿。
+  const collectedPhases: RuntimePhaseReport[] = []
   try {
     daemon = await startDaemon({
       binary: args.binary,
@@ -1665,7 +1703,7 @@ async function runLargeSoak(
       { length: dataset.tasks },
       (_, index) => `perftask${String(index).padStart(7, '0')}`,
     )
-    const sqliteNormal = await runRuntimePhase({
+    const sqliteNormal = await recordPhase(collectedPhases, {
       label: 'sqlite-normal',
       daemon,
       args,
@@ -1677,7 +1715,7 @@ async function runLargeSoak(
     if (runtime.provider !== 'postgresql') {
       throw new Error(`large migration selected ${runtime.provider}, expected postgresql`)
     }
-    const postgresqlNormal = await runRuntimePhase({
+    const postgresqlNormal = await recordPhase(collectedPhases, {
       label: 'postgresql-normal',
       daemon,
       args,
@@ -1690,7 +1728,7 @@ async function runLargeSoak(
       expectedEvents: dataset.events,
     })
     maintenanceRuntime = maintenance.runtime
-    const postgresqlMaintenance = await runRuntimePhase({
+    const postgresqlMaintenance = await recordPhase(collectedPhases, {
       label: 'postgresql-maintenance',
       daemon,
       args,
@@ -1713,6 +1751,16 @@ async function runLargeSoak(
       runtimePhases: Object.freeze([sqliteNormal, postgresqlNormal, postgresqlMaintenance]),
       maintenanceJobs,
     }
+  } catch (error) {
+    // Carry whatever was already measured out with the failure so the report
+    // can still show it. Losing 50 minutes of phase evidence to a late step is
+    // how a run becomes undiagnosable.
+    if (collectedPhases.length > 0 && typeof error === 'object' && error !== null) {
+      ;(error as { runtimePhases?: readonly RuntimePhaseReport[] }).runtimePhases = Object.freeze([
+        ...collectedPhases,
+      ])
+    }
+    throw error
   } finally {
     if (maintenanceRuntime !== null) await maintenanceRuntime.close().catch(() => undefined)
     if (daemon !== null) await daemon.stop().catch(() => undefined)
@@ -1900,6 +1948,13 @@ function writeReport(path: string, report: EvidenceReport): void {
   console.log(rendered)
 }
 
+/** Phase reports a failing large-soak carried out with it (see runLargeSoak). */
+function salvagedRuntimePhases(error: unknown): { runtimePhases?: readonly RuntimePhaseReport[] } {
+  if (typeof error !== 'object' || error === null) return {}
+  const phases = (error as { runtimePhases?: readonly RuntimePhaseReport[] }).runtimePhases
+  return phases === undefined || phases.length === 0 ? {} : { runtimePhases: phases }
+}
+
 export async function runRfc349PostgresqlHostedEvidence(
   args: Rfc349EvidenceArgs = parseRfc349EvidenceArgs(),
 ): Promise<EvidenceReport> {
@@ -1976,7 +2031,7 @@ export async function runRfc349PostgresqlHostedEvidence(
       tier: { clients: args.clients, durationMs: args.durationMs, scale: args.scale },
       ...(compiledSmoke === undefined ? {} : { compiledSmoke }),
       ...(crashMatrix === undefined ? {} : { crashMatrix }),
-      ...(large === undefined ? {} : large),
+      ...(large === undefined ? salvagedRuntimePhases(error) : large),
       failures: [error instanceof Error ? error.message : String(error)],
     }
     writeReport(args.reportPath, report)
