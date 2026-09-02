@@ -45498,7 +45498,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:895f0fb015acc02616322b1b1af0266b2b8e1e9de450449a7a268f049ad8c921",
+  "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -47583,22 +47583,6 @@
       },
       {
         "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "transitionPostgresqlHumanGateTaskTx",
-        "controlSubtype": null,
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#304:tasks",
-        "line": 304,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#transitionPostgresqlHumanGateTaskTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "transitionPostgresqlHumanGateTaskTx"
-      },
-      {
-        "allowedTables": [
           "taskExecutionOwners"
         ],
         "authorityKind": "worker-epoch",
@@ -47606,12 +47590,28 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionOwners",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#75:taskExecutionOwners",
-        "line": 75,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#113:taskExecutionOwners",
+        "line": 113,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#assertPostgresqlTaskOwnerTx",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "assertPostgresqlTaskOwnerTx"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "transitionPostgresqlHumanGateTaskTx",
+        "controlSubtype": null,
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#342:tasks",
+        "line": 342,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts#transitionPostgresqlHumanGateTaskTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "transitionPostgresqlHumanGateTaskTx"
       },
       {
         "allowedTables": [
@@ -47862,8 +47862,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1360:tasks",
-        "line": 1360,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1370:tasks",
+        "line": 1370,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -47878,8 +47878,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1489:tasks",
-        "line": 1489,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1499:tasks",
+        "line": 1499,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#retryNode",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -47894,8 +47894,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1836:tasks",
-        "line": 1836,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#1846:tasks",
+        "line": 1846,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#deleteTask",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -47910,8 +47910,8 @@
         "controlSubtype": "membership-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#657:tasks",
-        "line": 657,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#666:tasks",
+        "line": 666,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#replaceTaskMembers",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

@@ -398,8 +398,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 476,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 477,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-349 把「读—改—写同一聚合」的任务成员替换从 SERIALIZABLE 换成聚合根行锁 + READ COMMITTED：新增导出 withPostgresqlTaskAggregateTransaction 及其事务回调。起因是托管取证里 31 个用户可见的 500 全是这条路径的 SERIALIZABLE 冲突耗尽重试预算；对着真 PostgreSQL 的合成实验（10 万行 / 32 并发）逐项排除后定位到 predicate lock 落在索引页而非行，改不同任务的事务互判读写依赖（22.9%），而聚合根行锁实测 0.0%。跨聚合不变量仍留在 SERIALIZABLE 上。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -475,12 +478,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25671,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25672,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 把「读—改—写同一聚合」的任务成员替换从 SERIALIZABLE 换成聚合根行锁 + READ COMMITTED：新增导出 withPostgresqlTaskAggregateTransaction 及其事务回调。起因是托管取证里 31 个用户可见的 500 全是这条路径的 SERIALIZABLE 冲突耗尽重试预算；对着真 PostgreSQL 的合成实验（10 万行 / 32 并发）逐项排除后定位到 predicate lock 落在索引页而非行，改不同任务的事务互判读写依赖（22.9%），而聚合根行锁实测 0.0%。跨聚合不变量仍留在 SERIALIZABLE 上。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:895f0fb015acc02616322b1b1af0266b2b8e1e9de450449a7a268f049ad8c921",
+    "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +499,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9ac7c78d450421fd122d4147ad39472d3a17d74b",
-    "contentDigest": "sha256:67f280130c18508f4737ce44582e40bfc3c700f8d3c747642c255a90f432351b",
+    "currentSnapshotSha": "12333eb8811848c32393e08adeb22e5f949ec74f",
+    "contentDigest": "sha256:38e405fc70c7b2a7b936a85f4620a248f515cf070ee78ed0a531e9f63f8ec05e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

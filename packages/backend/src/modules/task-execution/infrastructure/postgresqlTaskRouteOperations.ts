@@ -96,6 +96,7 @@ import {
   appendPostgresqlTaskLifecycleTransitionTx,
   appendPostgresqlTaskNodeStatusesTx,
   withPostgresqlSerializableTaskExecution,
+  withPostgresqlTaskAggregateTransaction,
 } from './postgresqlTaskLifecycleTransaction'
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 
@@ -622,72 +623,81 @@ async function replaceTaskMembers(
     })
   }
 
-  const committed = await withPostgresqlSerializableTaskExecution(dependencies.db, async (tx) => {
-    const taskRows = await tx
-      .select({ ownerUserId: tasks.ownerUserId })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    const task = taskRows[0]
-    if (task === undefined) {
-      throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-    }
-    if (!canManageMembers(actor, task.ownerUserId)) {
-      throw new ForbiddenError(
-        'forbidden',
-        'only the task owner or an actor with resource-acl:bypass can manage members',
-      )
-    }
-    const previousRows = await tx
-      .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
-      .from(taskCollaborators)
-      .where(eq(taskCollaborators.taskId, taskId))
-    const current = previousRows.flatMap((row) =>
-      row.role === 'collaborator' || row.role === 'observer'
-        ? [{ userId: row.userId, role: row.role }]
-        : [],
-    )
-    const planned = planMembers({
-      previousOwnerUserId: task.ownerUserId,
-      ownerUserId: body.ownerUserId,
-      requested: body.members,
-      current,
-    })
-    if (planned.ownerUserId !== task.ownerUserId) {
-      await tx
-        .update(tasks)
-        .set({ ownerUserId: planned.ownerUserId })
+  // RFC-349 —— 成员替换的不变量是**每任务**的：读的 owner 与 collaborators 都属于同一个
+  // 任务。SERIALIZABLE 在这种「读一批 → delete 同一批 → insert 回去」的形状上会因为
+  // predicate lock 落在索引**页**而不是行，把改不同任务的事务也判成读写依赖（实测 32 并发
+  // 下 22.9% 冲突率，逃逸成 500）。锁住聚合根即可，判据见
+  // `withPostgresqlTaskAggregateTransaction` 的适用条件。
+  const committed = await withPostgresqlTaskAggregateTransaction(
+    dependencies.db,
+    taskId,
+    async (tx) => {
+      const taskRows = await tx
+        .select({ ownerUserId: tasks.ownerUserId })
+        .from(tasks)
         .where(eq(tasks.id, taskId))
-        .run()
-    }
-    await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, taskId)).run()
-    const values: (typeof taskCollaborators.$inferInsert)[] = []
-    if (planned.ownerUserId !== null) {
-      values.push({
-        taskId,
-        userId: planned.ownerUserId,
-        role: 'owner',
-        addedBy: actor.user.id,
-        addedAt: dependencies.now?.() ?? Date.now(),
+        .limit(1)
+      const task = taskRows[0]
+      if (task === undefined) {
+        throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+      }
+      if (!canManageMembers(actor, task.ownerUserId)) {
+        throw new ForbiddenError(
+          'forbidden',
+          'only the task owner or an actor with resource-acl:bypass can manage members',
+        )
+      }
+      const previousRows = await tx
+        .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
+        .from(taskCollaborators)
+        .where(eq(taskCollaborators.taskId, taskId))
+      const current = previousRows.flatMap((row) =>
+        row.role === 'collaborator' || row.role === 'observer'
+          ? [{ userId: row.userId, role: row.role }]
+          : [],
+      )
+      const planned = planMembers({
+        previousOwnerUserId: task.ownerUserId,
+        ownerUserId: body.ownerUserId,
+        requested: body.members,
+        current,
       })
-    }
-    for (const [userId, role] of planned.members) {
-      values.push({
-        taskId,
-        userId,
-        role,
-        addedBy: actor.user.id,
-        addedAt: dependencies.now?.() ?? Date.now(),
-      })
-    }
-    if (values.length > 0) await tx.insert(taskCollaborators).values(values).run()
-    return {
-      previousOwnerUserId: task.ownerUserId,
-      ownerUserId: planned.ownerUserId,
-      previousMemberUserIds: previousRows.map((row) => row.userId),
-      memberUserIds: [...planned.members.keys()],
-    }
-  })
+      if (planned.ownerUserId !== task.ownerUserId) {
+        await tx
+          .update(tasks)
+          .set({ ownerUserId: planned.ownerUserId })
+          .where(eq(tasks.id, taskId))
+          .run()
+      }
+      await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, taskId)).run()
+      const values: (typeof taskCollaborators.$inferInsert)[] = []
+      if (planned.ownerUserId !== null) {
+        values.push({
+          taskId,
+          userId: planned.ownerUserId,
+          role: 'owner',
+          addedBy: actor.user.id,
+          addedAt: dependencies.now?.() ?? Date.now(),
+        })
+      }
+      for (const [userId, role] of planned.members) {
+        values.push({
+          taskId,
+          userId,
+          role,
+          addedBy: actor.user.id,
+          addedAt: dependencies.now?.() ?? Date.now(),
+        })
+      }
+      if (values.length > 0) await tx.insert(taskCollaborators).values(values).run()
+      return {
+        previousOwnerUserId: task.ownerUserId,
+        ownerUserId: planned.ownerUserId,
+        previousMemberUserIds: previousRows.map((row) => row.userId),
+        memberUserIds: [...planned.members.keys()],
+      }
+    },
+  )
   await dependencies.membershipEvents.committed({ taskId, ...committed })
   return await taskMembers(dependencies, actor, taskId)
 }
