@@ -413,10 +413,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 493,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-349 把 SQLite daemon 的 post-commit 投影泵从裸注册改成 provider session handle（与 PostgreSQL daemon 同构）；handle 的 stop() 因此多一处 registerAfterCommitEventPump(null) 撤销调用。净效果是冻结窗口内泵被摘掉，源库不再被投影写脏（大迁移曾以 sqlite-source-mutated 收场）。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -497,7 +494,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "06795e1d5f106b3d17bac66a4ff4fe4e5847551a",
-    "contentDigest": "sha256:d835068ec287a2290832949914bc5f9fa49c471283334191f9bb48768a4f12f5",
+    "contentDigest": "sha256:aaa9c59d86a7004fbd800405cfd35759aeb0a71467015d2ffc36b8e1def423ba",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
