@@ -1481,6 +1481,26 @@ async function runLargeMigration(input: {
   })
 }
 
+/**
+ * 这一轮取证要归档掉多少行事件。
+ *
+ * 原来写的是「保留 expectedEvents/10」——full 种子 1000 万事件就是要归档 900 万行。
+ * 归档按 RFC-338 的合同走每片 1000 行的有界切片，本机对着真 PostgreSQL 实测
+ * **约 1.1 秒一片**（6526 片 / 约 2 小时，`node_run_events` 的 idx_scan 2719 万次、
+ * seq_scan 只有 354 次——每片确实是索引驱动的有界工作，不是每片重扫全表），
+ * 900 万行需要接近 3 小时，而 hosted job 的总预算只有 210 分钟。
+ *
+ * 取证要证的是「PostgreSQL 上维护作业按有界切片推进并收敛」，不是「归档 900 万行」。
+ * 因此把目标固定成一个有界行数：full 种子约 1500 片、25~30 分钟，既跑满多切片路径，
+ * 也装得进 hosted 预算。改这个数只改本轮取证的工作量，不碰任何产品阈值。
+ */
+const EVIDENCE_ARCHIVE_TARGET_ROWS = 1_500_000
+
+/** 归档阈值 = 保留行数；高于它的才会被归档。 */
+export function evidenceArchiveRetainRows(expectedEvents: number): number {
+  return Math.max(1_000, expectedEvents - EVIDENCE_ARCHIVE_TARGET_ROWS)
+}
+
 function heavyPayloads(expectedEvents: number): Record<string, Readonly<Record<string, unknown>>> {
   return {
     worktreeGc: { worktreeAutoGc: { enabled: false }, activeTaskIds: [] },
@@ -1488,7 +1508,7 @@ function heavyPayloads(expectedEvents: number): Record<string, Readonly<Record<s
     eventsArchive: {
       eventsArchiveThresholds: {
         perNodeRunRows: 50_000,
-        globalRows: Math.max(1_000, Math.floor(expectedEvents / 10)),
+        globalRows: evidenceArchiveRetainRows(expectedEvents),
         perNodeRunBytes: 0,
         globalBytes: 0,
       },
@@ -1572,14 +1592,17 @@ async function waitForMaintenanceJobs(
   //
   // 这里原本是死的 900 秒，而同一个 harness 自己把 `eventsArchive` 的阈值配成
   // `globalRows = expectedEvents / 10`：full 种子 1000 万事件，也就是要归档掉约 900 万行。
-  // 归档按 RFC-338 的合同走**每片 1000 行**的有界切片，本机实测 2303 片 / 977 秒工作时间
-  // （0.42 秒一片、983 行一片，完全符合设计），照这个速度 900 万行需要约 65 分钟——15 分钟
-  // 的等待窗与它自己配置的工作量差了四倍多，跟产品无关。
+  // 归档按 RFC-338 的合同走**每片 1000 行**的有界切片，跟产品无关，只是工作量与等待窗
+  // 对不上。工作量本身也已经按 `evidenceArchiveRetainRows` 收敛到有界的一档（见那里的
+  // 实测数据），这里只保留「还在推进吗」的判据。
   //
   // 所以改成停滞判据：只要有任何一个 job 的 slice 在推进就继续等；连续 STALL_MS 没有任何
   // 推进才算真卡住（另有一个绝对上限兜底，防止无限等）。这样种子再变大也不用重新调数。
   const STALL_MS = 300_000
-  const deadline = Date.now() + 7_200_000
+  // 绝对上限只是兜底：真正的判据是上面的停滞检测。按实测约 1.1 秒一片、
+  // `EVIDENCE_ARCHIVE_TARGET_ROWS` 约 1500 片算，25~30 分钟就该收敛；45 分钟留足余量，
+  // 又不会把 hosted job 的 210 分钟总预算耗在这一步上。
+  const deadline = Date.now() + 2_700_000
   let lastProgressAt = Date.now()
   let lastSignature = ''
   while (Date.now() < deadline) {

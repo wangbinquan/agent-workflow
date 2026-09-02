@@ -15,7 +15,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { latencyStats } from './helpers/rfc349PostgresqlHostedEvidence'
+import { evidenceArchiveRetainRows, latencyStats } from './helpers/rfc349PostgresqlHostedEvidence'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -83,5 +83,34 @@ describe('RFC-349 evidence latency stats survive a full-tier sample count', () =
         )
       expect(`${relative}: ${JSON.stringify(offenders)}`).toBe(`${relative}: []`)
     }
+  })
+})
+
+// 2026-09-03 —— 本机全量取证在 `eventsArchive` 上耗尽 2 小时仍未收敛：harness 自己把
+// 归档目标配成「保留 expectedEvents/10」，full 种子就是要归档 900 万行，按实测约 1.1 秒
+// 一片（1000 行/片）需要接近 3 小时，而 hosted job 总预算只有 210 分钟。取证要证的是
+// 「有界切片推进并收敛」，不是归档 900 万行。
+describe('RFC-349 evidence archive workload is bounded', () => {
+  test('the full seed archives a bounded slice count, not nine million rows', () => {
+    const fullSeedEvents = 10_000_000
+    const retained = evidenceArchiveRetainRows(fullSeedEvents)
+    const archived = fullSeedEvents - retained
+
+    expect(archived).toBe(1_500_000)
+    // 1000 行一片 ⇒ 约 1500 片；按实测 ~1.1s/片 约 27 分钟，装得进 hosted 预算。
+    expect(archived / 1_000).toBeLessThan(2_000)
+    // 仍然要跑满多切片路径，不能退化成一两片。
+    expect(archived / 1_000).toBeGreaterThan(500)
+  })
+
+  test('a small seed still archives, and never asks to retain less than the floor', () => {
+    expect(evidenceArchiveRetainRows(100_000)).toBe(1_000)
+    expect(evidenceArchiveRetainRows(0)).toBe(1_000)
+    expect(evidenceArchiveRetainRows(1_500_500)).toBe(1_000)
+  })
+
+  test('retention grows with the seed once the seed exceeds the target', () => {
+    expect(evidenceArchiveRetainRows(4_000_000)).toBe(2_500_000)
+    expect(evidenceArchiveRetainRows(20_000_000)).toBe(18_500_000)
   })
 })
