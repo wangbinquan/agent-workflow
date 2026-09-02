@@ -3704,13 +3704,11 @@
         "import:c445a51ac945ccdc26c8"
       ],
       "exportedSymbols": [
-        "OrphanReconcileLoopHandle",
         "ReconcileDeps",
         "ReconcileResult",
         "ReconcileRun",
         "probeRunProcessAlive",
-        "reconcileDeadRunningRuns",
-        "startOrphanReconcileLoop"
+        "reconcileDeadRunningRuns"
       ],
       "file": "packages/backend/src/services/orphanReconcile.ts",
       "id": "facade:packages/backend/src/services/orphanReconcile.ts",
@@ -7630,5 +7628,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c760c510569b081692886aee3b34dbef8a7eb54aac087932b9a5524436e2d570"
+  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb"
 }

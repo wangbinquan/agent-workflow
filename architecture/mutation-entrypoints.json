@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1911,
+    "entries": 1910,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -39847,30 +39847,6 @@
       "controls": {
         "audit": false,
         "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/orphanReconcile.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/orphanReconcile.ts#startOrphanReconcileLoop",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/orphanReconcile.ts#startOrphanReconcileLoop",
-      "symbol": "startOrphanReconcileLoop",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -45566,7 +45542,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c760c510569b081692886aee3b34dbef8a7eb54aac087932b9a5524436e2d570",
+  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

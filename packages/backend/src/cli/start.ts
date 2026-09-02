@@ -1735,11 +1735,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
       routeLaunch: {
         configPath: Paths.config,
-        executionFor: (actor) =>
-          Object.freeze({
-            ...taskStartDepsFor(actor.user.id),
-            deferRepoPreparation: true,
-          }),
+        // No `deferRepoPreparation` here on purpose. RFC-287 G7 defers repo
+        // preparation for the JSON `/api/tasks` launch (see
+        // `sqliteTaskRouteOperations`); the Agent and Workgroup launches kept
+        // the synchronous contract, and the task wizard depends on it: an
+        // unresolvable ref must be refused in the HTTP call with the server's
+        // own message and the available refs, and must not mint a task row that
+        // can only fail later.
+        executionFor: (actor) => Object.freeze({ ...taskStartDepsFor(actor.user.id) }),
       },
       routes: ({ readModels }) => {
         const routeCollaborationContext = createCollaborationCommandContext({

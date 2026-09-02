@@ -10,6 +10,11 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       autoRepair: 300_000,
       stuckTaskScan: 300_000,
       orphanReconcile: 600_000,
+      // RFC-349 修复新增（非调参）：周期孤儿对账的监督拍。循环按它醒来、醒来时才
+      // 判断这一拍要不要真扫，于是 `periodicOrphanReconcileMs` 改动最迟一分钟生效；
+      // 上面那条 600s 退化成「关着时的兜底睡眠」以外不再决定任何节奏。
+      // 取值 = 该旋钮允许的最小正周期（settingsNumericBounds `positiveMin`）。
+      orphanReconcileSupervisory: 60_000,
       lifecycleInvariants: 3_600_000,
       worktreeGc: 3_600_000,
       fusionReconcile: 60_000,

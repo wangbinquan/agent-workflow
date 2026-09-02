@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2468",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2471",
       "kind": "register-call",
-      "line": 2468,
+      "line": 2471,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3132",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3135",
       "kind": "register-call",
-      "line": 3132,
+      "line": 3135,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +47,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2700",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2703",
       "kind": "register-call",
-      "line": 2700,
+      "line": 2703,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -80,9 +80,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2713",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2716",
       "kind": "global-setter",
-      "line": 2713,
+      "line": 2716,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -5369,17 +5369,6 @@
       "targetContext": "bootstrap"
     },
     {
-      "callee": "registerConfigAppliedListener",
-      "file": "packages/backend/src/services/orphanReconcile.ts",
-      "id": "ambient:packages/backend/src/services/orphanReconcile.ts#registerConfigAppliedListener:323",
-      "kind": "register-call",
-      "line": 323,
-      "ownerEntryId": "owner:packages/backend/src/services/orphanReconcile.ts#startOrphanReconcileLoop",
-      "removeAfterWave": "W6/W9",
-      "symbol": "startOrphanReconcileLoop",
-      "targetContext": "task-execution"
-    },
-    {
       "callee": "setRuntimeEnabled",
       "file": "packages/backend/src/services/runtimeRegistry.ts",
       "id": "ambient:packages/backend/src/services/runtimeRegistry.ts#setRuntimeEnabled:1154",
@@ -5441,11 +5430,11 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 493,
-    "disabled": 12,
+    "ambientWiring": 492,
+    "disabled": 11,
     "entries": 366,
     "executionLocal": 52,
-    "longRunning": 81,
+    "longRunning": 82,
     "managed": 11,
     "periodic": 221
   },
@@ -8436,7 +8425,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:85",
+      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:108",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8450,7 +8439,28 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:85",
+      "symbol": "$setTimeout:108",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#isPeriodicReconcileDue",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#isPeriodicReconcileDue",
+      "phase": "unknown",
+      "symbol": "isPeriodicReconcileDue",
       "targetContext": "task-execution"
     },
     {
@@ -12398,29 +12408,6 @@
     },
     {
       "dependencies": [
-        "config"
-      ],
-      "file": "packages/backend/src/services/orphanReconcile.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/services/orphanReconcile.ts#startOrphanReconcileLoop",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "disabled",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/orphanReconcile.ts#startOrphanReconcileLoop",
-      "phase": "unknown",
-      "symbol": "startOrphanReconcileLoop",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [
         "timer"
       ],
       "file": "packages/backend/src/services/plantuml.ts",
@@ -13533,5 +13520,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c760c510569b081692886aee3b34dbef8a7eb54aac087932b9a5524436e2d570"
+  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb"
 }

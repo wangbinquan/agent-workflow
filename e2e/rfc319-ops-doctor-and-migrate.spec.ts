@@ -834,10 +834,14 @@ test('RFC-319 OPS-014: 停机后 db compact 真把空洞还给文件系统；无
         `\`agent-workflow ${args.join(' ')}\` 没有以退出码 2 拒绝 ⇒ 脚本分不清「命令写错了」` +
           '和「压缩失败了」，会对一个永远不可能成功的写法一直重试',
       ).toBe(2)
+      // RFC-349 给 `db` 加了 preflight / migrate / migration / legacy 等子命令，
+      // 用法从单行 `usage: agent-workflow db compact` 变成一段 `usage:` 清单。
+      // 判据不变：被拒时必须把正确写法印出来。
       expect(
         misuse.out,
         `\`agent-workflow ${args.join(' ')}\` 被拒时不给正确写法 ⇒ 用户只能去翻文档`,
-      ).toContain('usage: agent-workflow db compact')
+      ).toContain('usage:')
+      expect(misuse.out).toContain('agent-workflow db compact')
     }
   } finally {
     rmSync(home, { recursive: true, force: true })

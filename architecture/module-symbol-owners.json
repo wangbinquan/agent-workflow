@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2657,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25627
+    "symbolsIncludingFileRoots": 25626
   },
   "entries": [
     {
@@ -125388,6 +125388,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#isPeriodicReconcileDue",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "isPeriodicReconcileDue",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#log",
@@ -181105,18 +181117,6 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/orphanReconcile.ts",
-      "id": "owner:packages/backend/src/services/orphanReconcile.ts#OrphanReconcileLoopHandle",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "OrphanReconcileLoopHandle",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/orphanReconcile.ts",
       "id": "owner:packages/backend/src/services/orphanReconcile.ts#probeRunProcessAlive",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -181169,18 +181169,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "ReconcileRun",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/orphanReconcile.ts",
-      "id": "owner:packages/backend/src/services/orphanReconcile.ts#startOrphanReconcileLoop",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "startOrphanReconcileLoop",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -308196,5 +308184,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c760c510569b081692886aee3b34dbef8a7eb54aac087932b9a5524436e2d570"
+  "sourceDigest": "sha256:3a31481b5e4d35f265bbc7fe0303705cbb9d5cfbbe4236da865b0eef1f38e1bb"
 }

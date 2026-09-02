@@ -15,7 +15,7 @@
 // rfc319-workgroup-launch-and-config (WG-41) 等 @nightly 用例。
 
 import { afterEach, beforeEach, expect, test, describe } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
@@ -112,5 +112,22 @@ describe('RFC-349 REST launch ownership', () => {
       body: JSON.stringify({ members: [] }),
     })
     expect(members.status, await members.clone().text()).toBeLessThan(400)
+  })
+
+  // RFC-287 G7 只把**JSON `/api/tasks`** 的仓库准备推迟到任务行落库之后
+  //（见 `sqliteTaskRouteOperations`）；代理 / 工作组启动保持同步语义。RFC-349 的
+  // `routeLaunch` 组装把 `deferRepoPreparation: true` 一并加了上去，于是解析不出的
+  // ref 不再当场 422 带服务端原话与可用引用，而是先铸一行注定失败的任务
+  //（e2e `rfc319-task-wizard` TASK-06 两条断言同时红）。
+  test('the Agent/Workgroup route launch keeps its synchronous repo-preparation contract', () => {
+    const source = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+    const routeLaunch = /routeLaunch: \{[\s\S]*?\n {6}\},/.exec(source)?.[0]
+    expect(routeLaunch, 'routeLaunch 组装块没找到（结构变了？）').toBeDefined()
+    expect(routeLaunch).toContain('executionFor')
+    // 只看**赋值**，别被解释这条裁决的注释绊倒。
+    expect(
+      routeLaunch,
+      '代理 / 工作组启动又推迟了仓库准备 ⇒ 非法 ref 不再当场被拒，而是留下一行必然失败的任务',
+    ).not.toMatch(/deferRepoPreparation\s*:/)
   })
 })

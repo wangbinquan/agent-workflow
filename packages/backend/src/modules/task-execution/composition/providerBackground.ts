@@ -63,6 +63,29 @@ interface ProviderBackgroundRuntime {
   readonly buildScheduleLaunch: BuildScheduleLaunch
 }
 
+/**
+ * Is a periodic sweep due right now?
+ *
+ * Split out because it is the whole reason the knob is hot-apply: the loop that
+ * calls this wakes on a fixed supervisory tick (DAEMON_CADENCE.orphanReconcileSupervisory)
+ * and decides HERE whether this wake-up owes a sweep.  Deriving the sleep from
+ * the cadence instead — what the loop did between RFC-349 and this fix — means a
+ * change to the knob is only observed after the PREVIOUS cadence elapses, and
+ * with the knob off that was ten minutes: turning periodic reconciliation on
+ * looked exactly like a knob that needs a daemon restart.
+ *
+ * `configuredMs <= 0` is the off position and yields no sweep at all — not a
+ * sweep that reads rows and spares them.
+ */
+export function isPeriodicReconcileDue(input: {
+  readonly configuredMs: number
+  readonly lastReconcileAt: number
+  readonly now: number
+}): boolean {
+  if (!Number.isFinite(input.configuredMs) || input.configuredMs <= 0) return false
+  return input.now - input.lastReconcileAt >= input.configuredMs
+}
+
 function createRestartableLoop(input: {
   readonly name: string
   readonly delayMs: () => number
@@ -177,15 +200,26 @@ function createProviderLoops(
     },
   })
 
+  // The cadence knob is hot-apply, so the sleep must NOT be derived from it:
+  // a loop that sleeps the configured cadence only observes a change after the
+  // PREVIOUS one elapses, and switched off that was DAEMON_CADENCE.orphanReconcile
+  // — ten minutes of "I turned it on and nothing happened", indistinguishable
+  // from a knob that needs a daemon restart (the pre-RFC-349
+  // `startOrphanReconcileLoop` re-armed from a config-applied listener instead).
+  // Wake on a fixed supervisory tick and decide there whether a sweep is due.
+  let lastReconcileAt = Date.now()
   const orphanReconcile = createRestartableLoop({
     name: 'orphan-reconcile',
-    delayMs: () => {
-      const configured = loadConfig(dependencies.configPath).periodicOrphanReconcileMs
-      return configured > 0 ? configured : DAEMON_CADENCE.orphanReconcile
-    },
+    delayMs: () => DAEMON_CADENCE.orphanReconcileSupervisory,
     async run() {
-      const current = loadConfig(dependencies.configPath)
-      if (current.periodicOrphanReconcileMs <= 0) return
+      const now = Date.now()
+      const due = isPeriodicReconcileDue({
+        configuredMs: loadConfig(dependencies.configPath).periodicOrphanReconcileMs,
+        lastReconcileAt,
+        now,
+      })
+      if (!due) return
+      lastReconcileAt = now
       await reconcileDeadRunningRuns({
         operations: runtime.recovery,
         taskHasDriver: runtime.taskHasDriver,

@@ -33,8 +33,20 @@ export const DAEMON_CADENCE = {
   autoRepair: 5 * MINUTE_MS,
   /** stuck-task 检测（services/stuckTaskDetector.ts；阈值 S1-S5 见该模块）。 */
   stuckTaskScan: 5 * MINUTE_MS,
-  /** 孤儿进程周期回收（services/orphanReconcile.ts；可由 opts 覆盖）。 */
+  /**
+   * 孤儿进程周期回收（services/orphanReconcile.ts）的**默认**周期：真正的周期是
+   * `periodicOrphanReconcileMs` 这个旋钮（0 = 关），本值只是它的出厂默认，两者由
+   * `tests/rfc349-orphan-reconcile-hot-apply.test.ts` 钉在一起。
+   */
   orphanReconcile: 10 * MINUTE_MS,
+  /**
+   * 上面那条的**监督拍**：循环实际睡多久、多久看一眼旋钮。循环按本拍醒来、在醒来
+   * 时才判断这一拍要不要真扫（modules/task-execution/composition/providerBackground.ts `isPeriodicReconcileDue`），
+   * 于是旋钮改动最迟一分钟生效——关→开、以及把节奏改小，都不必重启 daemon。
+   * 取值等于该旋钮允许的最小正周期（settingsNumericBounds.ts `positiveMin: 60_000`），
+   * 所以监督拍永远不会比用户配得出来的最细节奏更粗。
+   */
+  orphanReconcileSupervisory: MINUTE_MS,
   /** 生命周期不变量扫描（services/lifecycleInvariants.ts）。 */
   lifecycleInvariants: HOUR_MS,
   /** worktree/iso GC ticker（services/gc.ts）。 */

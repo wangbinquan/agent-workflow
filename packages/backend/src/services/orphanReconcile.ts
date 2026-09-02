@@ -24,10 +24,10 @@
 //     no pid.
 //
 // The process probe and the driver gate are injected so the sweep is
-// unit-testable without real processes; startOrphanReconcileLoop wires the real
+// unit-testable without real processes; the provider session's orphan-reconcile
+// loop (modules/task-execution/composition/providerBackground.ts) wires the real
 // isProcessAlive + binary-identity check and the real activeTasks registry.
 
-import { loadConfig } from '@/config'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -49,9 +49,6 @@ import {
   migrateWorkflowDefinitionToLatest,
 } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import { DAEMON_CADENCE } from './daemonCadence'
-import { registerConfigAppliedListener } from './configAppliedListeners'
-import { createManagedPeriodicJob } from './managedPeriodicJob'
 
 const log = createLogger('orphan-reconcile')
 
@@ -274,60 +271,5 @@ function loadTaskDefinition(snapshot: string | null): WorkflowDefinition | null 
     return parsed.success ? migrateWorkflowDefinitionToLatest(parsed.data) : null
   } catch {
     return null
-  }
-}
-
-export interface OrphanReconcileLoopHandle {
-  stop: () => void
-  reconfigure: (intervalMs: unknown) => boolean
-}
-
-/** Periodic reconciler ticker. `periodicOrphanReconcileMs <= 0` disables it. */
-export function startOrphanReconcileLoop(opts: {
-  operations: TaskRecoveryOperations
-  taskHasDriver: (taskId: string) => boolean
-  configPath: string
-  graceMs?: number
-}): OrphanReconcileLoopHandle {
-  const graceMs = opts.graceMs ?? 60_000
-  const tick = async (): Promise<void> => {
-    try {
-      await reconcileDeadRunningRuns({
-        operations: opts.operations,
-        taskHasDriver: opts.taskHasDriver,
-        graceMs,
-      })
-    } catch (err) {
-      log.warn('orphan reconcile tick failed', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-  }
-  let intervalMs = DAEMON_CADENCE.orphanReconcile
-  try {
-    const cfg = loadConfig(opts.configPath)
-    intervalMs = cfg.periodicOrphanReconcileMs
-  } catch {
-    // unreadable config → default cadence
-  }
-  const job = createManagedPeriodicJob({
-    run: tick,
-    minPositiveMs: 60_000,
-    onInvalid: (value) => log.error('orphan reconcile interval invalid; loop disabled', { value }),
-    onError: (error) =>
-      log.warn('orphan reconcile job failed', {
-        error: error instanceof Error ? error.message : String(error),
-      }),
-  })
-  job.reconfigure(intervalMs)
-  const unregister = registerConfigAppliedListener(opts.configPath, (config) => {
-    job.reconfigure(config.periodicOrphanReconcileMs)
-  })
-  return {
-    reconfigure: job.reconfigure,
-    stop: () => {
-      unregister()
-      job.stop()
-    },
   }
 }
