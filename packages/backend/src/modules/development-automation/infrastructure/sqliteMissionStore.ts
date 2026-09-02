@@ -8,6 +8,7 @@
 import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   developmentActionRuns,
   developmentAgentAttempts,
@@ -90,7 +91,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
     to: EffectRow['state'],
     patch: Record<string, unknown>,
   ): void {
-    db.transaction(() => {
+    dbTxSync(db, () => {
       const row = db.select().from(developmentEffects).where(eq(developmentEffects.id, id)).get()
       if (row === undefined) {
         throw new ValidationError('development-effect-not-found', `effect not found: ${id}`)
@@ -136,7 +137,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
       return row === undefined ? null : toMissionRow(row)
     },
     occUpdate(missionId, expectedRevision, expectedEpoch, patch): OccResult {
-      return db.transaction(() => {
+      return dbTxSync(db, () => {
         const row = db
           .select()
           .from(developmentMissions)
@@ -159,7 +160,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
       })
     },
     bumpEpoch(missionId, expectedRevision, patch): OccResult {
-      return db.transaction(() => {
+      return dbTxSync(db, () => {
         const row = db
           .select()
           .from(developmentMissions)
@@ -283,7 +284,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
       }
     },
     consumeWakeHints(missionId, now) {
-      return db.transaction(() => {
+      return dbTxSync(db, () => {
         const open = db
           .select()
           .from(developmentWakeHints)
@@ -346,7 +347,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
         .run()
     },
     obsoleteFeedbackForOtherHeads(missionId, currentHeadSha, now) {
-      return db.transaction(() => {
+      return dbTxSync(db, () => {
         const stale = db
           .select({ id: developmentFeedbackLedger.id })
           .from(developmentFeedbackLedger)
@@ -397,7 +398,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
       return row === undefined ? null : toWakeRow(row)
     },
     fireWake(id, _now) {
-      return db.transaction(() => {
+      return dbTxSync(db, () => {
         const row = db
           .select()
           .from(developmentDeferredWakes)
@@ -690,7 +691,7 @@ export function createSqliteMissionStore(db: DbClient): MissionStore {
     },
 
     inTx(fn) {
-      return db.transaction(() => fn())
+      return dbTxSync(db, () => fn())
     },
   }
 }
@@ -702,7 +703,7 @@ export function createSqliteMissionPersistence(db: DbClient): MissionPersistence
   const uploads = createSqliteUploadSessionStore(db)
   return {
     async commitMissionLaunch(input) {
-      return db.transaction(() => {
+      return dbTxSync(db, () => {
         const created = store.createMission(input.mission)
         if (!created.created) return created
         if (input.upload !== null) {

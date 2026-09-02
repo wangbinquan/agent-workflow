@@ -10,6 +10,7 @@ import { and, eq, inArray, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import { missionInputUploads } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { UploadSessionRow, UploadSessionStore } from '../application/ports/uploadSessionStore'
@@ -80,7 +81,7 @@ export function createSqliteUploadSessionStore(db: DbClient): UploadSessionStore
       db.delete(missionInputUploads).where(eq(missionInputUploads.id, id)).run()
     },
     claimUploads(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const rows: UploadSessionRow[] = []
         for (const ref of input.uploadRefs) {
           const row = tx

@@ -18,7 +18,7 @@ import {
 import { EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
-import type { DbTxSync } from '@/db/txSync'
+import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
   employeeAttentionBindings,
   employeeCaseEventOrigins,
@@ -265,7 +265,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
   const maxEmployeeOutcomeGroups = 50_000
   return {
     createCase(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         for (const claim of input.uploadClaims) {
           const upload = tx
             .select()
@@ -433,7 +433,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     recordMetering(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         if (
           !Number.isSafeInteger(input.durationMs) ||
           input.durationMs < 0 ||
@@ -502,7 +502,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     replaceCaseMembers(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = tx
           .select({ id: employeeCases.id, ownerUserId: employeeCases.ownerUserId })
           .from(employeeCases)
@@ -822,7 +822,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     createInvocation(record) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const existing = tx
           .select()
           .from(employeeInvocations)
@@ -866,7 +866,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     acceptInvocation(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const invocation = tx
           .select()
           .from(employeeInvocations)
@@ -989,7 +989,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     settleChannelResult(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         tx.insert(employeeChannelResults)
           .values({
             id: input.result.id,
@@ -1025,7 +1025,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     detachOpenChannelsForRound(roundId, now) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const invocations = tx
           .select({ id: employeeInvocations.id })
           .from(employeeInvocations)
@@ -1178,7 +1178,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     acceptDelivery(caseId, id, delivery, priority, now) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const existing = tx
           .select({ id: employeeCaseInbox.id })
           .from(employeeCaseInbox)
@@ -1238,7 +1238,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     createRound(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = tx
           .select()
           .from(employeeCases)
@@ -1341,7 +1341,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     retryRound(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const round = tx
           .select()
           .from(employeeReactionRounds)
@@ -1391,7 +1391,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     settleRound(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const round = tx
           .select()
           .from(employeeReactionRounds)
@@ -1681,7 +1681,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     blockCase(caseId, reason, now) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const current = tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)).get()
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
@@ -1709,7 +1709,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     resumeCase(caseId, now) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)).get()
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)
@@ -1758,7 +1758,7 @@ export function createSqliteRuntimeStore(db: DbClient): RuntimeCaseStorePort {
     },
 
     terminateCase(caseId, terminalKind, now) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = tx.select().from(employeeCases).where(eq(employeeCases.id, caseId)).get()
         if (current === undefined) {
           throw new NotFoundError('employee-case-not-found', `employee case not found: ${caseId}`)

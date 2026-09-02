@@ -554,7 +554,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
     },
 
     publishTool(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const identity = tx
           .select({ id: employeeToolRegistrations.id })
           .from(employeeToolRegistrations)
@@ -596,7 +596,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
     },
 
     retireTool(id, retiredAt) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const result = tx
           .update(employeeToolRegistrations)
           .set({ retiredAt, updatedAt: retiredAt })
@@ -721,7 +721,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
     },
 
     publishJobTemplate(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         tx.insert(employeeJobTemplateRevisions)
           .values({
             templateId: input.ref.id,
@@ -802,7 +802,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
 
     saveEmployeeDefinition(input) {
       try {
-        db.transaction((tx) => {
+        dbTxSync(db, (tx) => {
           if (input.definitionMutation.kind === 'create') {
             const record = input.definitionMutation.record
             tx.insert(employeeDefinitions)
@@ -957,7 +957,7 @@ export function createSqliteDigitalEmployeeAuthoringStore(
     },
 
     ensureExecutionPolicy(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = tx
           .select({ revision: employeeOsSettings.executionPolicyRevision })
           .from(employeeOsSettings)

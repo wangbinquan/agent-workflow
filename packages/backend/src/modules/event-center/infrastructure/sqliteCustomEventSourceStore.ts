@@ -1,6 +1,7 @@
 import { desc, eq, and, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   customEventSourceDefinitions,
   customEventSourceRevisions,
@@ -122,7 +123,7 @@ export function createSqliteCustomEventSourceStore(db: DbClient): CustomEventSou
     },
 
     async publish(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         const current = tx
           .select()
           .from(customEventSourceDefinitions)

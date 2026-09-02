@@ -1,6 +1,7 @@
 import { desc, eq } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   cachedRepos,
   employeeApprovalSagas,
@@ -125,7 +126,7 @@ export function createSqliteEmployeePlatformWorkItemPersistence(
         .run()
     },
     async publishCandidateAndWorkspace(input) {
-      db.transaction((tx) => {
+      dbTxSync(db, (tx) => {
         tx.update(employeeChangeCandidates)
           .set({
             state: 'published',

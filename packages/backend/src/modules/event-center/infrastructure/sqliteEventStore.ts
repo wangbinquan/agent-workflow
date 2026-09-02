@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { TriggerContextSchema } from '@agent-workflow/shared'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   eventDeliveries,
   eventObserverRuns,
@@ -327,7 +328,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         }
       }
 
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         tx.insert(eventSubscriptions)
           .values({
             id: input.id,
@@ -478,7 +479,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         .get()
       if (current === undefined) return null
 
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         tx.update(eventSubscriptions)
           .set({
             state: 'cancelled',
@@ -638,7 +639,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
         }
       }
 
-      return db.transaction((tx): ObservationStoreReceipt => {
+      return dbTxSync(db, (tx): ObservationStoreReceipt => {
         const inserted = tx
           .insert(eventRecords)
           .values({
@@ -1177,7 +1178,7 @@ export function createSqliteEventStore(db: DbClient): EventStorePort {
     },
 
     async settleObserver(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const activation = tx
           .select()
           .from(observerActivations)

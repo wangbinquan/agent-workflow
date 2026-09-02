@@ -3,6 +3,7 @@
 import { and, asc, count, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import {
   developmentApprovalSagas,
   developmentMissionLinks,
@@ -66,7 +67,7 @@ export function createSqliteDigitalEmployeeWriterCutoverPersistence(
       )
     },
     async activate(input) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = writerState(
           tx
             .select()
@@ -95,7 +96,7 @@ export function createSqliteDigitalEmployeeWriterCutoverPersistence(
       })
     },
     async refresh(now) {
-      return db.transaction((tx) => {
+      return dbTxSync(db, (tx) => {
         const current = writerState(
           tx
             .select()

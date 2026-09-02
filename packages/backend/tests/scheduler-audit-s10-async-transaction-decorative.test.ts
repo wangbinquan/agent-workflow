@@ -195,21 +195,36 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
  * 于是「谁在绕过它直接调 drizzle 的 db.transaction」必须是**可枚举的**——新增一处要么
  * 改用 dbTxSync，要么在这张表里登记并说清为什么。
  *
- * 现存 37 处全部在 store / infrastructure 层：那里的对象**拥有**自己的事务边界，
- * 回调体是同步的 drizzle 执行面（上面那条零容忍断言持续证明它们不含 async 体）。
- * 这张表不是「豁免」，是**可见性**：它让「又多了一个绕过内核的事务点」变成 diff 里
- * 必然出现的一行数字变化，而不是淹没在几百行 store 代码里的一次静默新增。
+ * 【RFC-351 订正】此前这段写的是「回调体是同步的 ⇒ 安全」。那句话只关闭了**一半**危害。
+ * `dbTxSync` 承担两个互相独立的职责：
+ *
+ *   1. 同步体（S-10）：拒绝 async 回调，避免 bun:sqlite 在第一个 await 处提前 COMMIT；
+ *   2. `{ behavior: 'immediate' }`（RFC-338 AC-2）：在事务边界预占 writer。deferred 事务
+ *      先读取快照、再去升级成写，只要别的连接在这中间完成一次短提交，升级就以
+ *      `SQLITE_BUSY_SNAPSHOT` **立即**失败并**绕过 busy_timeout**（`db/txSync.ts:51-57`）。
+ *      裸 `SQLiteError` 不是 `DomainError`，`util/errors.ts` 于是兜成 500 `internal-error`。
+ *
+ * 只答第 1 条的理由会让第 2 条看起来「已评估」。2026-09-02 主干 CI run `33638907352` 上
+ * DE-07 的两次工具发布 500 就是第 2 条：`sqliteAuthoringStore.publishTool` 当时正是一处裸
+ * deferred 的「先读后写」。RFC-351 把除纯读外的站点全部收敛到 `dbTxSync`，本表因此只剩
+ * 纯读事务，并要求每条 `why` **同时**回答这两类危害（下面的守卫强制）。
  */
-const RAW_TRANSACTION_SITES: Record<string, number> = {
-  'modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts': 1,
-  'modules/development-automation/infrastructure/sqliteMissionStore.ts': 8,
-  'modules/development-automation/infrastructure/sqliteUploadSessionStore.ts': 1,
-  'modules/digital-employee/infrastructure/sqliteAuthoringStore.ts': 5,
-  // RFC-330：+1 replaceCaseMembers；RFC-336：+1 recordMetering exact-once receipt + Case totals。
-  'modules/digital-employee/infrastructure/sqliteRuntimeStore.ts': 14,
-  'modules/digital-employee/infrastructure/writerCutoverPersistence.ts': 3,
-  'modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts': 1,
-  'modules/event-center/infrastructure/sqliteEventStore.ts': 4,
+interface RawTransactionSite {
+  /** 该文件里裸 `db.transaction(` 的处数，与磁盘逐条相等。 */
+  readonly count: number
+  /** 必须同时回答 S-10（同步体）与 RFC-338 AC-2（BEGIN IMMEDIATE）两类危害。 */
+  readonly why: string
+}
+
+const RAW_TRANSACTION_SITES: Record<string, RawTransactionSite> = {
+  'modules/digital-employee/infrastructure/writerCutoverPersistence.ts': {
+    count: 1,
+    why:
+      'migrationSnapshot 是纯读事务（只有 select，无任何写语句）。S-10 的同步体要求满足：回调体是同步 ' +
+      'drizzle 执行面；RFC-338 AC-2 的 BEGIN IMMEDIATE 在这里**不适用且有害**——纯读改成 immediate 会无谓 ' +
+      '预占 writer，把一次快照读变成写锁竞争者。既然没有「读后升级为写」这一步，就不存在 ' +
+      'SQLITE_BUSY_SNAPSHOT 暴露面。RFC-351 保留本处。',
+  },
 }
 
 describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必须逐处可见', () => {
@@ -228,8 +243,11 @@ describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必�
   }
 
   test('语料非空：确实扫得到一批站点（扫成空说明判据失效，此刻零预言力）', () => {
-    expect(Object.keys(RAW_TRANSACTION_SITES).length).toBeGreaterThanOrEqual(8)
-    expect(Object.values(RAW_TRANSACTION_SITES).reduce((sum, count) => sum + count, 0)).toBe(37)
+    // RFC-351 之后本表只剩纯读事务；语料非空判据改为「扫得到源码树」+「账本非空」。
+    expect(Object.keys(RAW_TRANSACTION_SITES).length).toBeGreaterThanOrEqual(1)
+    expect(
+      Object.values(RAW_TRANSACTION_SITES).reduce((sum, site) => sum + site.count, 0),
+    ).toBeGreaterThanOrEqual(1)
     expect(walkTsFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
   })
 
@@ -239,7 +257,21 @@ describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必�
       '有人绕过 dbTxSync 直接调了 drizzle 的 db.transaction。dbTxSync 的两道防线' +
         '（类型层把返回 promise 的回调塌成 never、运行期对 thenable 抛错并回滚）都不作用于' +
         '直调；确有理由直调就在 RAW_TRANSACTION_SITES 里登记这一处',
-    ).toEqual(RAW_TRANSACTION_SITES)
+    ).toEqual(
+      Object.fromEntries(
+        Object.entries(RAW_TRANSACTION_SITES).map(([file, site]) => [file, site.count]),
+      ),
+    )
+  })
+
+  // RFC-351 —— 只答「回调体是同步的」不够：那只关闭 S-10，没关闭 RFC-338 AC-2。
+  test('每条保留理由都同时回答两类危害（只答同步体 ⇒ 红）', () => {
+    for (const [file, site] of Object.entries(RAW_TRANSACTION_SITES)) {
+      expect(site.why, `${file}: 未说明同步体/半提交这一类`).toMatch(/同步|async|半提交/)
+      expect(site.why, `${file}: 未说明 BEGIN IMMEDIATE / BUSY_SNAPSHOT 这一类`).toMatch(
+        /IMMEDIATE|BUSY_SNAPSHOT|预占/,
+      )
+    }
   })
 
   test('账本里的文件都还在（文件没了 ⇒ 这一行是空白许可证，必须删）', () => {

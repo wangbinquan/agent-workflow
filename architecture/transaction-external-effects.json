@@ -796,20 +796,20 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:128",
-      "line": 128,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#dbTxSync:129",
+      "line": 129,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createSqliteEmployeePlatformWorkItemPersistence",
       "status": "clear",
       "symbol": "createSqliteEmployeePlatformWorkItemPersistence",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:196",
-      "line": 196,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:197",
+      "line": 197,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
       "status": "clear",
       "symbol": "createPostgresqlEmployeePlatformWorkItemPersistence",
@@ -820,8 +820,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:276",
-      "line": 276,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#transaction:277",
+      "line": 277,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence.ts#createPostgresqlEmployeePlatformWorkItemPersistence",
       "status": "clear",
       "symbol": "createPostgresqlEmployeePlatformWorkItemPersistence",
@@ -1028,73 +1028,73 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:139",
-      "line": 139,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:140",
+      "line": 140,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:162",
-      "line": 162,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:163",
+      "line": 163,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:286",
-      "line": 286,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:287",
+      "line": 287,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:349",
-      "line": 349,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:350",
+      "line": 350,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:400",
-      "line": 400,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:401",
+      "line": 401,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:693",
-      "line": 693,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:694",
+      "line": 694,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -1102,25 +1102,25 @@
       ],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:705",
-      "line": 705,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:706",
+      "line": 706,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionPersistence",
       "status": "co-located-risk",
       "symbol": "createSqliteMissionPersistence",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#transaction:93",
-      "line": 93,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#dbTxSync:94",
+      "line": 94,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteMissionStore.ts#createSqliteMissionStore",
       "status": "clear",
       "symbol": "createSqliteMissionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -1129,13 +1129,13 @@
       ],
       "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#transaction:83",
-      "line": 83,
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#dbTxSync:84",
+      "line": 84,
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteUploadSessionStore.ts#createSqliteUploadSessionStore",
       "status": "co-located-risk",
       "symbol": "createSqliteUploadSessionStore",
       "targetContext": "development-automation",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -1421,157 +1421,157 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#transaction:557",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#dbTxSync:557",
       "line": 557,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#createSqliteDigitalEmployeeAuthoringStore",
       "status": "clear",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#transaction:599",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#dbTxSync:599",
       "line": 599,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#createSqliteDigitalEmployeeAuthoringStore",
       "status": "clear",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#transaction:724",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#dbTxSync:724",
       "line": 724,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#createSqliteDigitalEmployeeAuthoringStore",
       "status": "clear",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#transaction:805",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#dbTxSync:805",
       "line": 805,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#createSqliteDigitalEmployeeAuthoringStore",
       "status": "clear",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#transaction:960",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#dbTxSync:960",
       "line": 960,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteAuthoringStore.ts#createSqliteDigitalEmployeeAuthoringStore",
       "status": "clear",
       "symbol": "createSqliteDigitalEmployeeAuthoringStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1028",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1028",
       "line": 1028,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1181",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1181",
       "line": 1181,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1241",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1241",
       "line": 1241,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1344",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1344",
       "line": 1344,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1394",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1394",
       "line": 1394,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1684",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1684",
       "line": 1684,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1712",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1712",
       "line": 1712,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:1761",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:1761",
       "line": 1761,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -1579,80 +1579,104 @@
       ],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:268",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:268",
       "line": 268,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "co-located-risk",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:436",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:436",
       "line": 436,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:505",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:505",
       "line": 505,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:825",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:825",
       "line": 825,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:869",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:869",
       "line": 869,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#transaction:992",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#dbTxSync:992",
       "line": 992,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/sqliteRuntimeStore.ts#createSqliteRuntimeStore",
       "status": "clear",
       "symbol": "createSqliteRuntimeStore",
       "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:130",
-      "line": 130,
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#dbTxSync:70",
+      "line": 70,
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "status": "clear",
+      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "targetContext": "digital-employee",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#dbTxSync:99",
+      "line": 99,
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "status": "clear",
+      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
+      "targetContext": "digital-employee",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:131",
+      "line": 131,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
       "status": "clear",
       "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
@@ -1663,8 +1687,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:206",
-      "line": 206,
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:207",
+      "line": 207,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
       "status": "clear",
       "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
@@ -1675,8 +1699,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:244",
-      "line": 244,
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:245",
+      "line": 245,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
       "status": "clear",
       "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
@@ -1687,35 +1711,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:281",
-      "line": 281,
+      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:282",
+      "line": 282,
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createPostgresqlDigitalEmployeeWriterCutoverPersistence",
       "status": "clear",
       "symbol": "createPostgresqlDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:69",
-      "line": 69,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "status": "clear",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "targetContext": "digital-employee",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#transaction:98",
-      "line": 98,
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#createSqliteDigitalEmployeeWriterCutoverPersistence",
-      "status": "clear",
-      "symbol": "createSqliteDigitalEmployeeWriterCutoverPersistence",
       "targetContext": "digital-employee",
       "transactionCallee": "transaction"
     },
@@ -1791,13 +1791,13 @@
       ],
       "file": "packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#transaction:125",
-      "line": 125,
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#dbTxSync:126",
+      "line": 126,
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#createSqliteCustomEventSourceStore",
       "status": "co-located-risk",
       "symbol": "createSqliteCustomEventSourceStore",
       "targetContext": "event-center",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -1805,37 +1805,37 @@
       ],
       "file": "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#transaction:1180",
-      "line": 1180,
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#dbTxSync:1181",
+      "line": 1181,
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#createSqliteEventStore",
       "status": "co-located-risk",
       "symbol": "createSqliteEventStore",
       "targetContext": "event-center",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#transaction:330",
-      "line": 330,
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#dbTxSync:331",
+      "line": 331,
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#createSqliteEventStore",
       "status": "clear",
       "symbol": "createSqliteEventStore",
       "targetContext": "event-center",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#transaction:481",
-      "line": 481,
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#dbTxSync:482",
+      "line": 482,
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#createSqliteEventStore",
       "status": "clear",
       "symbol": "createSqliteEventStore",
       "targetContext": "event-center",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [
@@ -1843,13 +1843,13 @@
       ],
       "file": "packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#transaction:641",
-      "line": 641,
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#dbTxSync:642",
+      "line": 642,
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteEventStore.ts#createSqliteEventStore",
       "status": "co-located-risk",
       "symbol": "createSqliteEventStore",
       "targetContext": "event-center",
-      "transactionCallee": "transaction"
+      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
@@ -5852,7 +5852,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:75936708431a759d35fd785230bdb46863faf8a16bfc01b3ff960a96afba1c9b",
+  "sourceDigest": "sha256:085f26995fa7a4f9d61696707bf21b32f75b647c0d990653aab3944b8c7fe978",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
