@@ -3019,8 +3019,7 @@
         "EnforceLimitsResult",
         "enforceLimits",
         "parseCallHumanWait",
-        "readTaskResourceUsage",
-        "startLimitsTicker"
+        "readTaskResourceUsage"
       ],
       "file": "packages/backend/src/services/limits.ts",
       "id": "facade:packages/backend/src/services/limits.ts",
@@ -7626,5 +7625,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304"
+  "sourceDigest": "sha256:084f9d5937bc8f02e92b5228eac7241c1faab90a28edd22e93f48553c8c51d80"
 }

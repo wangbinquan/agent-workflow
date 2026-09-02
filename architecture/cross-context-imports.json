@@ -203266,7 +203266,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304",
+  "sourceDigest": "sha256:084f9d5937bc8f02e92b5228eac7241c1faab90a28edd22e93f48553c8c51d80",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

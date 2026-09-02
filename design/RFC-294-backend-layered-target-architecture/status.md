@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1e0b6316f6741988d4cb2054a8854e8735515753358dcc5554b6a60c6585d304`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:084f9d5937bc8f02e92b5228eac7241c1faab90a28edd22e93f48553c8c51d80`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -18,9 +18,9 @@
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 492 |
-| background work entries | 366 |
-| direct native `setInterval`（call / files） | 24 / 21 |
-| direct native timers（全部） | 78 |
+| background work entries | 364 |
+| direct native `setInterval`（call / files） | 23 / 20 |
+| direct native timers（全部） | 77 |
 | RFC-317 boundary census（inbound / outbound） | 323 / 11 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
@@ -31,12 +31,12 @@
 | --- | --- |
 | `ambientWiring` | 492 |
 | `architectureExceptions` | 6044 |
-| `backgroundJobs` | 366 |
+| `backgroundJobs` | 364 |
 | `crossContextImports` | 6248 |
 | `facades` | 354 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25626 |
-| `mutationEntrypoints` | 1911 |
+| `moduleSymbolOwners` | 25625 |
+| `mutationEntrypoints` | 1910 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 945 |
 | `transactionExternalEffects` | 476 |

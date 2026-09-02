@@ -18,7 +18,6 @@ import {
 } from '@/modules/system-operations/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import { createLogger, type Logger } from '@/util/log'
-import { DAEMON_CADENCE } from './daemonCadence'
 
 const log: Logger = createLogger('limits')
 
@@ -217,23 +216,3 @@ export async function readTaskResourceUsage(
  * db, returning a stopper. The daemon wires this in main.ts; tests call
  * enforceLimits directly.
  */
-export function startLimitsTicker(
-  source: ResourceLimitSource,
-  intervalMs: number = DAEMON_CADENCE.resourceLimits,
-): { stop: () => void } {
-  let running = false
-  const handle = setInterval(() => {
-    if (running) return
-    running = true
-    enforceLimits(source)
-      .catch((err: unknown) => {
-        log.error('enforceLimits failed', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-      })
-      .finally(() => {
-        running = false
-      })
-  }, intervalMs)
-  return { stop: () => clearInterval(handle) }
-}

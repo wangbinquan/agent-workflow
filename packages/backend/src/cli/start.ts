@@ -65,7 +65,6 @@ import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { composeSqliteAppDeps, composeSqliteDaemonProviderCore, createComposedApp } from '@/server'
 import { reconcileRunningFusions } from '@/services/fusion'
-import { startLimitsTicker } from '@/services/limits'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
   resumeQueuedIntentWorkingSets,
@@ -2667,48 +2666,112 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 
   // 8. Background loops. RFC-338 owns every DB/FS-heavy maintenance cadence;
   // limits and the in-memory batch-import Map remain lightweight on main.
-  const limitsTicker = startLimitsTicker(composeLegacySqliteResourceLimitOperations(db))
+  //
+  // All four are provider-session handles, not free-running tickers: a database
+  // migration freezes the SQLite source and then proves it did not move
+  // (`sqliteLogicalSource.assertUnchanged`). A writer that is not registered here
+  // keeps running straight through that freeze — the 1Hz limit enforcer above
+  // all — and the copy fails with `sqlite-source-mutated` having named nothing.
+  // The PostgreSQL daemon already composes the same four as pausable handles;
+  // this is the SQLite side of that symmetry.
+  const limitsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'resource-limits',
+    intervalMs: DAEMON_CADENCE.resourceLimits,
+    run: () => enforceLimits(composeLegacySqliteResourceLimitOperations(db)).then(() => undefined),
+    onError(error) {
+      log.error('enforceLimits failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
   // Scheduled backup creation keeps its own cadence; retention is admitted to
   // the maintenance Worker both by the configured heavy schedule and after a
   // backup settles.
-  const backupTicker = startBackupScheduler({
-    db,
-    intervalMs: config.backupIntervalMs,
-    retentionCount: config.backupRetentionCount,
-    retentionDays: config.backupRetentionDays,
-    maxTotalBytes: config.backupMaxTotalBytes,
-    protectedKeepCount: config.backupProtectedKeepCount,
-    // 每拍热读:改了设置不必重启(实现门 P1-5)。
-    loadRetention: () => {
-      const cfg = loadConfig(Paths.config)
-      return {
-        retentionCount: cfg.backupRetentionCount,
-        retentionDays: cfg.backupRetentionDays,
-        maxTotalBytes: cfg.backupMaxTotalBytes,
-        protectedKeepCount: cfg.backupProtectedKeepCount,
-      }
+  const backupRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'scheduled-backup',
+    start() {
+      const current = loadConfig(Paths.config)
+      const ticker = startBackupScheduler({
+        db,
+        intervalMs: current.backupIntervalMs,
+        retentionCount: current.backupRetentionCount,
+        retentionDays: current.backupRetentionDays,
+        maxTotalBytes: current.backupMaxTotalBytes,
+        protectedKeepCount: current.backupProtectedKeepCount,
+        // 每拍热读:改了设置不必重启(实现门 P1-5)。
+        loadRetention: () => {
+          const cfg = loadConfig(Paths.config)
+          return {
+            retentionCount: cfg.backupRetentionCount,
+            retentionDays: cfg.backupRetentionDays,
+            maxTotalBytes: cfg.backupMaxTotalBytes,
+            protectedKeepCount: cfg.backupProtectedKeepCount,
+          }
+        },
+        appHome: Paths.root,
+        pruneMode: 'external',
+        onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
+      })
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          ticker.stop()
+        },
+        drain() {
+          if (!stopped) throw new Error('scheduled-backup-drain-before-stop')
+        },
+      })
     },
-    appHome: Paths.root,
-    pruneMode: 'external',
-    onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
   })
   // RFC-210 G7: keep cached mirrors (and their submodules) from going stale when
   // nobody launches a task against them. Reads its own enable flag each tick.
-  const submoduleRefreshTicker = startSubmoduleRefreshLoop(
-    repositoryWorkspaceStore,
-    () => loadConfig(Paths.config),
-    undefined,
-    Paths.root,
-    secretBox,
-  )
-  const unregisterSubmoduleRefreshConfig = registerConfigAppliedListener(Paths.config, () => {
-    submoduleRefreshTicker.reconfigure()
+  const submoduleRefreshRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'submodule-refresh',
+    start() {
+      const ticker = startSubmoduleRefreshLoop(
+        repositoryWorkspaceStore,
+        () => loadConfig(Paths.config),
+        undefined,
+        Paths.root,
+        secretBox,
+      )
+      const unregister = registerConfigAppliedListener(Paths.config, () => ticker.reconfigure())
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          unregister()
+          ticker.stop()
+        },
+        drain() {
+          if (!stopped) throw new Error('submodule-refresh-drain-before-stop')
+        },
+      })
+    },
   })
-  const batchImportCfg = loadConfig(Paths.config)
-  const batchImportGcTicker = startBatchImportGc(
-    undefined,
-    batchImportCfg.repoBatchImportRetentionMs,
-  )
+  const batchImportRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'batch-import-gc',
+    start() {
+      const ticker = startBatchImportGc(
+        undefined,
+        loadConfig(Paths.config).repoBatchImportRetentionMs,
+      )
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          ticker.stop()
+        },
+        drain() {
+          if (!stopped) throw new Error('batch-import-gc-drain-before-stop')
+        },
+      })
+    },
+  })
   // RFC-050: register an ambient provider so enqueueDistillJob callers
   // pick up the current `config.memoryDistillLang` without us having to
   // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
@@ -2722,6 +2785,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }
   })
 
+  // 引导期快照。distill 的这几项此前就是启动时读一次（改了要重启），本次只是把它
+  // 从 batch-import 那条共用的 `loadConfig` 上摘下来，行为逐字不变。
+  const distillBootConfig = loadConfig(Paths.config)
   // RFC-041 — the provider session owns the distill loop. Stopping prevents a
   // new claim and draining waits for the exact in-flight LLM turn before the
   // selected provider can close.
@@ -2732,12 +2798,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       await memoryOperations.distillWorker.recoverRunning()
     },
     async run() {
-      if (batchImportCfg.memoryDistillerEnabled === false) return
+      if (distillBootConfig.memoryDistillerEnabled === false) return
       await memoryOperations.distillWorker.tick({
-        runtimeName: batchImportCfg.memoryDistillRuntime ?? null,
-        defaultRuntime: batchImportCfg.defaultRuntime ?? null,
-        model: batchImportCfg.memoryDistillModel ?? null,
-        sourceContextBudget: batchImportCfg.memoryDistillSourceContext,
+        runtimeName: distillBootConfig.memoryDistillRuntime ?? null,
+        defaultRuntime: distillBootConfig.defaultRuntime ?? null,
+        model: distillBootConfig.memoryDistillModel ?? null,
+        sourceContextBudget: distillBootConfig.memoryDistillSourceContext,
       })
     },
     onError(err) {
@@ -3022,6 +3088,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     mcpRuntimeTestBindings.runtimeFactory,
   ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
   const providerBackgroundWriterFactories = Object.freeze([
+    limitsRuntimeFactory,
+    backupRuntimeFactory,
+    submoduleRefreshRuntimeFactory,
+    batchImportRuntimeFactory,
     humanGateContinuationRuntimeFactory,
     committedEventRuntimeFactory,
     memoryDistillRuntimeFactory,
@@ -3132,11 +3202,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     if (shuttingDown) return
     shuttingDown = true
     log.info('shutting down', { signal })
-    limitsTicker.stop()
-    backupTicker.stop()
-    submoduleRefreshTicker.stop()
-    unregisterSubmoduleRefreshConfig()
-    batchImportGcTicker.stop()
     await memoryOperations.distillWorker.recoverRunning()
     registerAfterCommitEventPump(null)
     await webhookTerminalControl.stop()

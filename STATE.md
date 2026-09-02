@@ -60,11 +60,20 @@
 >     `intent-context-authorization-not-composed` 收场，变更被判 failed。
 > 13. `rfc213-restore` 整份文件改为显式 30s 预算：每条用例都在做 tar+gzip+迁移的真实 I/O，本机 ~0.5s，
 >     bun 默认 5s 上限在 CI 四分片同跑时卡满而红（run 33583792341）。不是性能门，别当重跑借口。
+> 14. SQLite daemon 的四条周期写手（limits / backup / submoduleRefresh / batchImportGc）此前在 §8 直接
+>     起裸 ticker，**不在 provider session 的可暂停集合里**——而迁移的「冻结」就是把 session 上注册的
+>     handle 全部 stop+drain。没注册的写手会一路写穿整个冻结窗口（resource-limits 还是 1Hz 的），
+>     随后 `assertUnchanged` 只能报一句 `sqlite-source-mutated`。PostgreSQL daemon 早就把同样四条
+>     组装成可暂停 handle；这次把 SQLite 侧补齐（顺带删掉再无调用者的 `startLimitsTicker`）。
+>     守卫见 `rfc349-sqlite-daemon-pausable-writers.test.ts`。**注意**：这是冻结正确性上的对称性补齐，
+>     不等于已证明它就是 T10 那条红的成因——见下面「仍未关闭」。
 >
 > **仍未关闭**：`postgresql-evidence` 的 large migration 仍以 `sqlite-source-mutated` 收场（copying 阶段），
-> 冻结窗内仍有写手/checkpoint 漏出——下一次 hosted run 会带上漂移信号名，据此定位后再修；另需复核
-> `cli/start.ts` §8 的四个 background ticker（limits / backup / submoduleRefresh / batchImportGc）起在 provider session
-> 可暂停 factory **之外**（PostgreSQL daemon 侧同类是可暂停 handle）。AC-14 / AC-15 未满足前 RFC-349 不得标 Done。
+> 冻结窗内仍有写手/checkpoint 漏出。2026-09-02 已按 exact SHA `f2be9a531` 手动 dispatch 了一次
+> hosted run（`postgresql-evidence` run 33588161408），它带上了 `c2423c3ec` 的**漂移信号名**
+> （`sqlite-source-mutated.data-version` / `.page-count` / `.file-bytes`）——data-version 单独变化意味着
+> 「有别的连接写了/checkpoint 了」，page-count / file-bytes 变化意味着文件本身长了，两者的修法不同。
+> 结果出来前不要把上面第 14 条当成已定的成因。AC-14 / AC-15 未满足前 RFC-349 不得标 Done。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表
