@@ -74,6 +74,11 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts': 4,
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts': 1,
   'modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts': 2,
+  // RFC-350：不活跃超时收割在**已经落进 canceled** 的行上覆盖终态原因文案
+  // （`error_summary` / `error_message`），不翻状态——写入门本身要求
+  // `status='canceled' AND error_summary = cancelTask 的默认值`，抢不到就是空操作。
+  // 与上面两条 ResourceLimitPersistence 的 writeLimitReason 完全同形。
+  'modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts': 1,
   'platform/persistence/sqlite/systemWorkspaceGc.ts': 8,
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
   'services/task.ts': 3,
