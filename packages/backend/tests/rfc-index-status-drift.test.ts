@@ -146,6 +146,9 @@ describe('RFC 索引状态漂移守卫', () => {
     // RFC-340：proposal 的全部 AC 已逐条投影到 plan 证据表，缺口为零。
     'RFC-340-node-scoped-comment-reviewers': 0,
     'RFC-341-lifecycle-committed-events-collaboration-commands': 0,
+    // RFC-345：2026-09-02 的进度对账给 plan §7.2 加了逐 AC 证据表（此前只有 proposal 的 AC 列表，
+    // 本守卫按上面 RFC-329 的规则跳过）。表一落地就必须在这里显式登记，缺口保持为零。
+    'RFC-345-resource-catalog-contract-cutover': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

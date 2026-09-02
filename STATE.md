@@ -255,11 +255,20 @@ called before any query`。十九处判据统一补上 `errno`；守卫
 > `33317698270` 与同 SHA 8 个 scheduled workflows 9/9 `completed/success`。RFC-owning docs 已发布为
 > `abf484d8b08c9ff64b1ed150e4ca45e49b88d1e9`；本 RFC 只关闭 W4-E7。
 
-> 🚧 **RFC 实施中（Approved / In Progress，2026-08-30）：[RFC-345 Resource Catalog 与 ResourcePackage 合同归位（RFC-294 W4-C）](design/RFC-345-resource-catalog-contract-cutover/proposal.md)。**
-> T1 contracts、T2 ACL/grant 分层、T3 classic-six catalog/selector/dump 与 T6 BundleApply 七 writer adapter 已进入 published ancestry；
-> `c5c4faaf` checkpoint 的 Main + 8 schedules 全绿，后续 architecture repairs 也由 `7ede76a8` 的 9/9 hosted gates覆盖。但 plan 的
-> T4～T9 尚未完成，不能 formal closeout：下一 cohort 是 T5-M MCP aggregate，以 data-only commands/queries、named participant 和最窄
-> `server.ts` bootstrap composition injection切 production caller；不得用 internal barrel、ambient singleton 或 DB-shaped public surface伪装完成。
+> 🚧 **RFC 实施中（Approved / In Progress；进度对账于 2026-09-02，HEAD `ea9a30187`）：[RFC-345 Resource Catalog 与 ResourcePackage 合同归位（RFC-294 W4-C）](design/RFC-345-resource-catalog-contract-cutover/proposal.md)。**
+> **本条 2026-09-02 重写**：此前记的「下一 cohort 是 T5-M」已过期——2026-08-31 一整批 cohort 直接进了 `main`，而 RFC 文档停在 `fbc0ec093`。
+> 实际已落：T4a～T4d 四个 named participant（`2adacced3` / `892dd1c32` / `bc3d0f1b7` / `5bd020dee`）、T5 六个 aggregate cohort
+> （agent `a39432577`、skill `3edfa32b5`、MCP `56fa9e88e`、plugin `51808662c`、workflow `7ba2789cc`、workgroup `f8e23d54d`）、
+> T6 package 七 participant（`c609fd655`）与 T8 operation binding（`ffcff7428` / `ac93aba5e`）；`services/{skill,mcp,plugin}.ts` 已删除，
+> `services/{agent,workflow*,workgroup*,workgroups}.ts` 收成 3～5 行 facade，`services/resourceAcl.ts` 由 1064 行收成 70 行纯 re-export。
+> AC-1～AC-11 现场可验（`bun test packages/backend/tests/rfc345-*.test.ts` = 14 文件 71 用例绿）。
+> **仍未完成**：T9（facade / deep-import / debt closeout）未开始、T10（exact-SHA hosted closeout）未做、AC-12 未满足，
+> 因此 W4-C 仍不得标 Done。T9 的 exact 输入已落在 RFC-345 `plan.md §7`：32 个 `removeAfterWave=W4-C` facade（13 thin / 19 legacy，
+> 全部仍有生产 consumer，可直接删除数 = 0）、19 处 `@/services/resourceAcl` import、以及 task-execution / intent / collaboration
+> 三处仍未归零的跨 context deep import。**注意两个分母问题**：①`removeAfterWave` 由文件名关键词派生（`rfc294Canonical.ts:407-451`），
+> 把 9 个 agent/workflow 运行时文件误归 W4-C、又把 `resourceAcl` / `bundle/**` / `resourcePackage/**` 误归 W4-E1/W4/W5/W4-E0，
+> 属 review-2026-08-30 §B3/§C3 已列的待重生成项；②RFC-349 双 provider 把 W4-C 例外桶从 212 抬到 915，其中大头是
+> RC→`db/schema.ts`(340)/`util/errors.ts`(190)/`db/client.ts`(80) 等平台原语边，不应由 W4-C 承担。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-344 OperationCatalog 与 transport cutover（RFC-294 W4-A）](design/RFC-344-operation-catalog-transport-cutover/proposal.md)。**
 > 472 条 HTTP route 获 stable operation identity，52/52 MCP tool 进入 closed binding 并调用同一 mounted handler chain；第二套

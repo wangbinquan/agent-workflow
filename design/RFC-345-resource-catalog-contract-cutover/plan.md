@@ -1,7 +1,9 @@
 # RFC-345 实施计划 — Resource Catalog 与 ResourcePackage 合同归位
 
-状态：Approved / In Progress（2026-08-30）；D1～D10 已获用户明确批准；T1、T3 已完成，T2 core/SQLite/facade 已完成且
-caller cutover 随 T4/T5/T7/T8 继续。
+状态：Approved / In Progress（对账于 2026-09-02，HEAD `ea9a30187`）；D1～D10 已获用户明确批准。
+T1～T3 完成；T4a～T4d、T5 六个 cohort 的 aggregate 面、T6 与 T8 已于 2026-08-31 进入 published `main`；
+T7 主路径已切但 deep-import 未归零；**T9 未开始、T10 未做、AC-12 未满足**，RFC-345 / W4-C 不得标 Done。
+逐条判据见 §7「2026-09-02 实施对账」。
 
 Current-source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`（`HEAD=origin/main`；RFC-344 published implementation
 candidate）。生产实现开始前仍须 fresh fetch；OperationCatalog binding cohort 还必须等待 RFC-344 hosted closeout 后 re-pin 最终
@@ -134,27 +136,31 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 #### T4a — Task execution snapshot
 
-- [ ] 适配 workflow launch、agent injection、call workflow/workgroup freeze；
-- [ ] 只返回 frozen task execution fields，保持 current launch/injection errors；
-- [ ] `task-execution` 不再 deep import classic resource service/ACL/row loader。
+- [x] 适配 workflow launch、agent injection、call workflow/workgroup freeze；（`2adacced3`）
+- [x] 只返回 frozen task execution fields，保持 current launch/injection errors；
+- [ ] `task-execution` 不再 deep import classic resource service/ACL/row loader。（未归零：`composition/agentActionExecution.ts`、
+      `infrastructure/legacyCallClosure.ts`、`infrastructure/sqliteTaskRouteOperations.ts` 仍走 `@/services/resourceAcl`，
+      `infrastructure/agentLaunchResourceOperations.ts` 仍 deep import RC `infrastructure/legacy/*`；见 §7.3）
 
 #### T4b — Intent apply participant
 
-- [ ] 把 six prepare/commit arms包成 six closed variants；
-- [ ] Intent journal/claim/prestage/finalize/converger 留在 Intent；
-- [ ] Intent apply 不 import `ACL_TABLES` 或 classic writer internals。
+- [x] 把 six prepare/commit arms包成 six closed variants；（`892dd1c32`）
+- [x] Intent journal/claim/prestage/finalize/converger 留在 Intent；
+- [ ] Intent apply 不 import `ACL_TABLES` 或 classic writer internals。（`ACL_TABLES` 已归零；但
+      `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts:20-33` 仍 import RC
+      `infrastructure/legacy/{skillFsPublish,skillHash,skillIdentityPaths}`）
 
 #### T4c — Integration trigger snapshot
 
-- [ ] 适配 scheduled workflow/agent/workgroup 与 webhook workflow/digital-employee exact variants；
-- [ ] launch-shape/input mapping/trigger preflight 留各 current owner；
-- [ ] delegated mutation/binding cutover 以前置 current-authority seam 为门，不伪造 direct context。
+- [x] 适配 scheduled workflow/agent/workgroup 与 webhook workflow/digital-employee exact variants；（`bc3d0f1b7`）
+- [x] launch-shape/input mapping/trigger preflight 留各 current owner；
+- [x] delegated mutation/binding cutover 以前置 current-authority seam 为门，不伪造 direct context。（前置 RFC-347/W4-E0 已 Done）
 
 #### T4d — Memory scope authorization
 
-- [ ] agent/workflow scope view/edit 改走 `ResourceScopeAuthorizationInTx`；
-- [ ] global/repo/repo_group 分支留 memory/source-control owner；
-- [ ] memory 不获得 resource detail loader。
+- [x] agent/workflow scope view/edit 改走 `ResourceScopeAuthorizationInTx`；（`5bd020dee`）
+- [x] global/repo/repo_group 分支留 memory/source-control owner；
+- [x] memory 不获得 resource detail loader。（memory 侧只保留 `hasResourceAclBypass` 一个符号）
 
 **退出门**：四个 consumer 的 cross-context edge 只指向具名 participant；每个字段 ledger exact，generic participant mutation 红。
 
@@ -175,12 +181,14 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 每个 cohort：
 
-- [ ] 建 public command/query/types/operation descriptor factory；
-- [ ] internal repository/mapper/prepare/commit 只留本 aggregate；
-- [ ] route/CLI/MCP current binding 改 public operation（T8 前可先经 compatibility adapter）；
-- [ ] Intent/task/package 引用改具名 participant；
-- [ ] old service facade 只适配且 consumer 有 exact ledger；
-- [ ] list/get/filter/create/update/delete 与 aggregate-specific error/fence corpus不改判。
+- [x] 建 public command/query/types/operation descriptor factory；（六 cohort commit 见 §7.1）
+- [x] internal repository/mapper/prepare/commit 只留本 aggregate；
+- [x] route/CLI/MCP current binding 改 public operation（T8 前可先经 compatibility adapter）；
+- [x] Intent/task/package 引用改具名 participant；
+- [ ] old service facade 只适配且 consumer 有 exact ledger；（agent/skill/workflow/workgroup 已收成 3～5 行 facade，
+      `services/{skill,mcp,plugin}.ts` 已删除；但 plugin installer/closure/revision/GC 与 MCP probe/store/surface/closure/revision
+      共 9 个文件、约 1.9K 行仍是 legacy implementation，逐条去向见 §7.3.1）
+- [x] list/get/filter/create/update/delete 与 aggregate-specific error/fence corpus不改判。（`rfc345-*` 14 文件 71 用例绿）
 
 **退出门**：六个 aggregate 各自 typed；不存在 universal CRUD switch/detail union/generic repository。
 
@@ -188,14 +196,15 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 ### T6 — ResourcePackage public operations 与七 participant adapter
 
-- [ ] 把 parse/inspect/preview/apply/receipt/export 组织到 `resource-catalog/application/package`；
-- [ ] 建 `ResourcePackageOperations` descriptor factory 与 REST/CLI 共用的 application handler；
-- [ ] 建 `ResourcePackageApplyTx` 七个 exact fields；
-- [ ] 经典六类 participant 来自 T5，capability-template participant 来自 current writer owner；
-- [ ] `bundle/apply.ts` 不再 direct import 七类 writer，只调 typed participants；
-- [ ] 保持 current BundleApply claim/prestage/big-tx/tail/converger；
-- [ ] 落 future `ResourcePackageApplyProvider` scenario type/adapter，但不新增 AtomicApply engine/journal；
-- [ ] package current new/reuse/overwrite/export/secret/human/replay/recovery/capability-template corpus不改判。
+- [ ] 把 parse/inspect/preview/apply/receipt/export 组织到 `resource-catalog/application/package`；（只落了
+      `application/package/{packageApplication,ports}.ts`；`services/resourcePackage/**` 仍有 12 个文件）
+- [x] 建 `ResourcePackageOperations` descriptor factory 与 REST/CLI 共用的 application handler；（`c609fd655`、`c19845794`）
+- [x] 建 `ResourcePackageApplyTx` 七个 exact fields；（`public/participants.ts:350`）
+- [x] 经典六类 participant 来自 T5，capability-template participant 来自 current writer owner；
+- [x] `bundle/apply.ts` 不再 direct import 七类 writer，只调 typed participants；（`bundle/apply.ts` 已是 thin-facade）
+- [x] 保持 current BundleApply claim/prestage/big-tx/tail/converger；
+- [x] 落 future `ResourcePackageApplyProvider` scenario type/adapter，但不新增 AtomicApply engine/journal；
+- [x] package current new/reuse/overwrite/export/secret/human/replay/recovery/capability-template corpus不改判。
 
 **退出门**：7/7 exact participant；ResourcePackage public contract 与 engine lifecycle 分离；AtomicApply implementation 仍为 0。
 
@@ -203,11 +212,11 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 ### T7 — Named consumer production cutover
 
-- [ ] 按 T4a～T4d 逐 consumer 切 active path；
-- [ ] 每个 consumer 切换后删除自身 old deep import；
-- [ ] 不保留 shadow read/double mutation；
-- [ ] source locks 防旧 cross-context edge复辟；
-- [ ] 更新 public symbol+field ledger、current owner 与保留债。
+- [x] 按 T4a～T4d 逐 consumer 切 active path；（四个 consumer 均已走具名 participant）
+- [ ] 每个 consumer 切换后删除自身 old deep import；（未完成，exact 残留见 §7.3.3）
+- [x] 不保留 shadow read/double mutation；
+- [x] source locks 防旧 cross-context edge复辟；（`rfc345-resource-acl-facade-retirement.test.ts` 等）
+- [x] 更新 public symbol+field ledger、current owner 与保留债。
 
 **退出门**：task/Intent/integration/memory 只经具名 participant；current用户行为保持。
 
@@ -215,13 +224,13 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 **前置**：RFC-344 hosted closeout 的最终 published exact SHA + T5/T6/T7 对应 use case完成。
 
-- [ ] 为 catalog/ACL/classic aggregates/package 建 versioned exact operation descriptors；
-- [ ] HTTP/MCP/CLI binding 指向同一 module operation；
-- [ ] 按 use case删除对应 `legacy-http.*` compatibility debt；
-- [ ] 保持 method/path/tool/command、input/output/status/public error；
-- [ ] 不修改 OperationCatalog kernel、route registry、MCP root 或 `server.ts`；若 existing binding API 不足，停止并另行协调 RFC-344 owner，
+- [x] 为 catalog/ACL/classic aggregates/package 建 versioned exact operation descriptors；（`public/operations.ts` 513 行）
+- [x] HTTP/MCP/CLI binding 指向同一 module operation；（`ffcff7428`、`ac93aba5e`）
+- [x] 按 use case删除对应 `legacy-http.*` compatibility debt；（全仓 `legacy-http` 例外 = 0）
+- [x] 保持 method/path/tool/command、input/output/status/public error；
+- [x] 不修改 OperationCatalog kernel、route registry、MCP root 或 `server.ts`；若 existing binding API 不足，停止并另行协调 RFC-344 owner，
       不在本 RFC扩展 generic framework；
-- [ ] same-operation REST/MCP/CLI parity 与 descriptor codec tests。
+- [x] same-operation REST/MCP/CLI parity 与 descriptor codec tests。
 
 **退出门**：RFC-345 cohort compatibility operation debt=0；全局其他 W4-B/E debt不冒领。
 
@@ -298,3 +307,153 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 每个 commit exact-stage owned paths；不使用 `git add .`，不包含当前 RFC-344 architecture dirty files。发布时只有一个 session进入 Git
 critical section，其他 session 可继续不冲突开发但暂避可能被同步/生成器更新的文件。
+
+## 7. 2026-09-02 实施对账（HEAD `ea9a30187`）
+
+本节是一次**事后对账**。2026-08-31 有一整批 cohort 直接进了 `main`，但本 RFC 文档最后一次改动停在 `fbc0ec093`（08-30），
+`STATE.md` 也仍写着「下一 cohort 是 T5-M」。下面只记录当前事实并给可复跑判据，**不放宽 §0 的完成口径**——
+T9 未开始、T10 未做、AC-12 未满足，RFC-345 / W4-C 仍是 In Progress。
+
+### 7.1 已进入 published `main` 的实现
+
+| 任务                             | 实现 commit                           | 现场判据（HEAD）                                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T4a task execution snapshot      | `2adacced3`                           | `modules/resource-catalog/composition/taskExecution.ts` 构造 `createTaskExecutionResourceSnapshotInTx`；consumer 为 `task-execution` 的 `composition/triggerExecution.ts`、`application/taskExecutionCallClosure.ts`、`public/commands.ts` |
+| T4b intent apply participant     | `892dd1c32`                           | `application/participants/intentApplyResourceParticipant.ts` + `infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts`                                                                                                 |
+| T4c integration trigger snapshot | `bc3d0f1b7`                           | `composition/integrationTrigger.ts`；consumer 为 `modules/integration/composition/scheduledTasks.ts`                                                                                                                                       |
+| T4d memory scope authorization   | `5bd020dee`                           | `application/participants/resourceAuthorization.ts` → `composition/resourceAcl.ts#createResourceScopeAuthorizationInTx`                                                                                                                    |
+| T5-A agent                       | `a39432577`、`2e298b8e9`              | `application/agents/`（9 文件）；`services/agent.ts` 收成 5 行 facade                                                                                                                                                                      |
+| T5-S skill                       | `3edfa32b5`、`5e1161771`              | `application/skills/`（5 文件）；`services/skill.ts` 已删除                                                                                                                                                                                |
+| T5-M MCP                         | `56fa9e88e`、`a07179869`              | `application/mcps/`（3 文件）；`services/mcp.ts` 已删除                                                                                                                                                                                    |
+| T5-P plugin                      | `51808662c`、`c1987049b`              | `application/plugins/`（2 文件）；`services/plugin.ts` 已删除                                                                                                                                                                              |
+| T5-WF workflow                   | `7ba2789cc`                           | `application/workflows/`；`services/workflow*.ts` 全部收成 3 行 facade                                                                                                                                                                     |
+| T5-WG workgroup                  | `f8e23d54d`、`82d99ed59`、`19b86b450` | `application/workgroups/`（5 文件）；`services/workgroups.ts`、`services/workgroup/*.ts` 收成 3 行 facade                                                                                                                                  |
+| T6 ResourcePackage               | `c609fd655`、`c19845794`              | `public/participants.ts:350` 的 `ResourcePackageApplyTx` 覆盖七类；`services/bundle/apply.ts` 已是 thin-facade                                                                                                                             |
+| T8 operation binding             | `ffcff7428`、`ac93aba5e`              | `public/operations.ts`（513 行 descriptor）；`routes/{agents,skills,mcps,plugins,workflows,workgroups,workgroupTasks,resourcePackages}.ts` 与 `cli/package.ts` 只 import RC `public/`                                                      |
+| T9 起手（非全部）                | `bd7a8a049`、`944e49528`、`2660044e5` | `services/resourceAcl.ts` 从 1064 行收成 70 行纯 re-export                                                                                                                                                                                 |
+| RFC-349 叠加                     | `6474b3ec3`、`1e8799196`、`a5b61f059` | dual-provider catalog 组合；RC 因此多出一整套 `infrastructure/postgresql*` 镜像                                                                                                                                                            |
+
+守卫现场：`bun test packages/backend/tests/rfc345-*.test.ts` = 14 文件 / 71 用例 / 0 fail（2026-09-02 本机）。
+
+### 7.2 AC-1～AC-12 现状
+
+| AC                                                 | 状态          | 判据                                                                                                                                        |
+| -------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-1 四 roster 15/16/7/6                           | ✅            | `rfc345-resource-catalog-contracts.test.ts` 绿                                                                                              |
+| AC-2 `ResourceCatalogQuery` 只回 `ResourceSummary` | ✅            | `public/queries.ts:63-65` 的 `listVisible` / `getVisibleSummary`                                                                            |
+| AC-3 Intent 两份 catalog 合一                      | ✅            | `services/intent/resourceCatalog.ts:15-20` 消费同一 query；`dumpBuilder.ts:50` 只用 RC public types                                         |
+| AC-4 `ACL_TABLES` 仅 RC infrastructure 可见        | ✅            | 全仓 `ACL_TABLES` 外部 importer = 0（`platform/persistence/postgresqlForeignResourceAcl.ts` 的是同名前缀的 `FOREIGN_ACL_TABLES`，非本符号） |
+| AC-5 四 named participant 字段闭合                 | ✅            | `public/participants.ts` 四个 `*InTx` 均为具名闭合类型，无 generic snapshot                                                                 |
+| AC-6 经典六类各自 typed                            | ✅            | 六个 `application/<aggregate>/` 目录；无 universal CRUD switch                                                                              |
+| AC-7 package 四操作走 module public                | ✅            | `routes/resourcePackages.ts` / `cli/package.ts` 均只 import RC `public/`                                                                    |
+| AC-8 package participant 7/7                       | ✅            | `ResourcePackageApplyTx` 七臂 + `code-capability` 侧 capability-template owner                                                              |
+| AC-9 package 既有语义不改判                        | ✅            | RFC-345 守卫组绿；无 schema/wire 变化                                                                                                       |
+| AC-10 只在 RFC-344 最终 baseline 上切 binding      | ✅            | T8 commit 均晚于 RFC-344 final `c5c4faafc`                                                                                                  |
+| AC-11 无 migration / 无 route/tool/CLI 增删        | ✅            | 本 RFC 提交无 `migrations/` 触及                                                                                                            |
+| AC-12 exact-SHA hosted closeout                    | ❌ **未满足** | 未做：T9 未开始，也未按本 RFC 的 exact SHA 跟踪 Main + 定时 workflows                                                                       |
+
+### 7.3 T9 exact 清单（本节即 T9 的输入）
+
+#### 7.3.1 32 个 `removeAfterWave=W4-C` facade（13 thin / 19 legacy-implementation）
+
+**32 个全部仍有 ≥1 生产 consumer，因此按 §T9 第一条「删除 consumer=0 的 facade」当前可删数为 0**；T9 的真实工作是逐条给出
+remaining consumer + remove owner。
+
+| 文件（`packages/backend/src/` 下）      | LOC | 账本 status           | 生产 consumer | consumer 归属                                        | 裁决                                                        |
+| --------------------------------------- | --: | --------------------- | ------------: | ---------------------------------------------------- | ----------------------------------------------------------- |
+| `services/agentDeps.ts`                 | 255 | legacy-implementation |             1 | W4-E1×1                                              | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/agentLaunch.ts`               | 470 | legacy-implementation |             3 | legacy-flat×2、W4-E1×1                               | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/agentLaunchReservation.ts`    |  40 | legacy-implementation |             3 | W4-C×1、W4-E1×1、legacy-flat×1                       | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/dynamicWorkflowRunner.ts`     | 475 | legacy-implementation |             5 | W4-E1×4、W4-C×1                                      | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/execution/agentInjection.ts`  | 403 | legacy-implementation |             9 | legacy-flat×9                                        | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/execution/agentProcess.ts`    | 221 | legacy-implementation |             3 | legacy-flat×3                                        | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/mcpClosure.ts`                |  75 | legacy-implementation |             1 | W4-E1×1                                              | → W4-E6（RFC-294 §8 已指定落点，未立项）                    |
+| `services/mcpOperationRevision.ts`      |  16 | legacy-implementation |             2 | legacy-flat×2                                        | → W4-E6（RFC-294 §8 已指定落点，未立项）                    |
+| `services/mcpProbe.ts`                  | 664 | legacy-implementation |             2 | route×1、legacy-flat×1                               | → W4-E6（RFC-294 §8 已指定落点，未立项）                    |
+| `services/mcpProbeStore.ts`             |  96 | legacy-implementation |             4 | bootstrap×2、route×1、其它×1                         | → W4-E6（RFC-294 §8 已指定落点，未立项）                    |
+| `services/mcpSurface.ts`                |  25 | legacy-implementation |             3 | route×2、其它×1                                      | → W4-E6（RFC-294 §8 已指定落点，未立项）                    |
+| `services/mergeAgent.ts`                | 333 | legacy-implementation |             2 | W4-E1×1、legacy-flat×1                               | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/orchestratorAgent.ts`         | 348 | legacy-implementation |             8 | W4-E1×4、W4-C×2、bootstrap×1、legacy-flat×1          | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/pluginClosure.ts`             |  76 | legacy-implementation |             1 | W4-E1×1                                              | RC 未迁完实体 → 本 RFC T9 或紧邻 successor                  |
+| `services/pluginGenerationGc.ts`        | 156 | legacy-implementation |             2 | 其它×2                                               | RC 未迁完实体 → 本 RFC T9 或紧邻 successor                  |
+| `services/pluginInstaller.ts`           | 800 | legacy-implementation |             6 | legacy-flat×3、bootstrap×1、W4-E4a×1、W4-C×1         | RC 未迁完实体 → 本 RFC T9 或紧邻 successor                  |
+| `services/pluginOperationRevision.ts`   |  16 | legacy-implementation |             2 | legacy-flat×2                                        | RC 未迁完实体 → 本 RFC T9 或紧邻 successor                  |
+| `services/resourcePackage/skillTree.ts` |  17 | legacy-implementation |             3 | legacy-flat×3                                        | RC package 面 → 随 T6 尾巴收口                              |
+| `services/systemAgentRun.ts`            | 821 | legacy-implementation |             6 | legacy-flat×5、其它×1                                | **改判**：执行面，targetContext 应为 task-execution → W4-E1 |
+| `services/agent.ts`                     |   5 | thin-facade           |             6 | W4-E1×2、bootstrap×1、W4×1、W4-E9×1、其它×1          | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/skill-zip.ts`                 |   4 | thin-facade           |             1 | legacy-flat×1                                        | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/skillBootVerify.ts`           |   3 | thin-facade           |             1 | W4-E1×1                                              | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workflow.ts`                  |   3 | thin-facade           |             7 | 其它×2、legacy-flat×2、bootstrap×1、W4-E9×1、W4-E1×1 | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workflow.validator.ts`        |   3 | thin-facade           |             6 | legacy-flat×4、bootstrap×1、其它×1                   | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workflow.yaml.ts`             |   3 | thin-facade           |             2 | W4-E7×1、其它×1                                      | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workflowLaunchInputs.ts`      |   3 | thin-facade           |             4 | legacy-flat×3、W4-E1×1                               | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workgroup/askerKey.ts`        |   3 | thin-facade           |             1 | W4×1                                                 | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workgroup/constants.ts`       |   3 | thin-facade           |             1 | W4×1                                                 | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workgroup/engine.ts`          |   3 | thin-facade           |             1 | W4-E1×1                                              | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workgroup/launch.ts`          |   3 | thin-facade           |             2 | W4-E1×1、legacy-flat×1                               | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workgroup/state.ts`           |   3 | thin-facade           |             1 | legacy-flat×1                                        | consumer 迁走后删除（owner = 各 consumer wave）             |
+| `services/workgroups.ts`                |   3 | thin-facade           |             3 | bootstrap×1、W4-E1×1、其它×1                         | consumer 迁走后删除（owner = 各 consumer wave）             |
+
+#### 7.3.2 19 处 `@/services/resourceAcl` import
+
+共 19 处 import（`services/resourceAcl.ts` 已收成 70 行纯 re-export，零 DB/事务实现）：
+
+| importer                                                                | 引用符号                                                                                                                                                | owner wave       |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `modules/collaboration/infrastructure/legacySqliteReview.ts`            | `resolveTaskRole`                                                                                                                                       | W4               |
+| `modules/integration/composition/developmentAdapterConfigOperations.ts` | `assertNameUnchangedForEditor, canEditResource, canViewResource, filterVisibleRows, listGrantedResourceIds, requireResourceEdit, requireResourceGovern` | W4-B             |
+| `modules/integration/composition/digitalEmployeeToolConnections.ts`     | `isVisibleToAudienceSnapshot`                                                                                                                           | W4-B             |
+| `modules/task-execution/composition/agentActionExecution.ts`            | `initialBuiltinResourceAcl`                                                                                                                             | W4-E1            |
+| `modules/task-execution/infrastructure/legacyCallClosure.ts`            | `isVisibleRow, listGrantedResourceIds`                                                                                                                  | W4-E1            |
+| `modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts`    | `canViewResource`                                                                                                                                       | W4-E1            |
+| `modules/memory/infrastructure/sqliteMemoryCatalog.ts`                  | `hasResourceAclBypass`                                                                                                                                  | W4-E2            |
+| `cli/postgresqlDaemonApplication.ts`                                    | `assertNameUnchangedForEditor`                                                                                                                          | W9 bootstrap     |
+| `cli/start.ts`                                                          | `assertNameUnchangedForEditor`                                                                                                                          | W9 bootstrap     |
+| `platform/persistence/sqlite/systemOverviewReadModel.ts`                | `visibleRowsCondition, type AclColumnRef`                                                                                                               | W9 platform      |
+| `services/fusion.ts`                                                    | `hasResourceAclBypass`                                                                                                                                  | legacy flat      |
+| `services/resourcePackage/closure.ts`                                   | `isVisibleRow`                                                                                                                                          | legacy flat      |
+| `services/resourcePackage/export.ts`                                    | `isVisibleRow`                                                                                                                                          | legacy flat      |
+| `services/resourcePackage/preview.ts`                                   | `isVisibleRow`                                                                                                                                          | legacy flat      |
+| `services/scheduledTasks.ts`                                            | `canEditAccess, canGovernAccess`                                                                                                                        | legacy flat      |
+| `services/taskLaunchGate.ts`                                            | `canViewResource`                                                                                                                                       | legacy flat      |
+| `routes/fusions.ts`                                                     | `hasResourceAclBypass`                                                                                                                                  | 各域 route slice |
+| `routes/memories.ts`                                                    | `hasResourceAclBypass`                                                                                                                                  | 各域 route slice |
+| `routes/scheduledTasks.ts`                                              | `canEditAccess, canGovernAccess`                                                                                                                        | 各域 route slice |
+
+#### 7.3.3 仍未归零的跨 context deep import（T7 尾巴）
+
+外部模块对 RC 非 `public/` 层的 import：`composition` 65 处 / 11 文件、`infrastructure` 78 处 / 37 文件、
+`application` 13 处 / 11 文件、`domain` 7 处 / 7 文件（`public/` 正常消费为 97 处 / 57 文件）。其中**不属于 bootstrap 且不属于
+已登记 thin facade** 的真实违例样本：
+
+- `modules/task-execution/infrastructure/agentLaunchResourceOperations.ts:8-14` → RC `application/resourceDefaults`、
+  `infrastructure/legacy/agent`、`infrastructure/legacy/workflow.validator`、`composition/resourceAcl`；
+- `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts:20-33` → RC `infrastructure/legacy/skillFsPublish`、
+  `skillHash`、`skillIdentityPaths`（即 T4b 第三条所说的 classic writer internals，未归零）；
+- `modules/collaboration/infrastructure/sqliteReviewTaskAccess.ts:5-6` → RC `application/resourceDefaults`、`domain/resourceAccess`。
+
+#### 7.3.4 账本分桶与本 RFC 的分母（B3/C3 的延伸）
+
+1. `removeAfterWave` 由 `targetContextFor()`（`packages/backend/tests/architecture/rfc294Canonical.ts:407-451`）的**文件名关键词**
+   派生，fallback 是 `task-execution`。因此当前分桶与实际归属存在系统性偏差，两个方向都有：
+   - 归进 W4-C 但其实是执行面的：上表 9 个 agent/workflow 运行时文件（`agentLaunch` / `agentInjection` / `orchestratorAgent` /
+     `systemAgentRun` / `dynamicWorkflowRunner` 等，合计约 3.4K 行）；
+   - 真属 RC 却归进别处的：`services/resourceAcl.ts`→W4-E1（关键词全不匹配走 fallback）、`services/bundle/**` 与
+     `services/resourcePackage/**` 多数→W4-E1、`resourcePackage/preview.ts`→W4（"preview" 命中 `review`）、
+     `resourcePackage/commit.ts`→W5（命中 `commit`）、`resourcePackage/importPermissions.ts`→W4-E0（命中 `permission`）。
+     这与 review-2026-08-30 §B3/§C3 是同一类问题，且已在该 review §6 列为「下一次由单一 owner 做 canonical 重生成时一并做」。
+     **本 RFC 不单方面改生成器**；T9 收口时按上表给 exact 转交记录，分桶修正随那次重生成。
+2. 分母已被 RFC-349 放大：`4aa832064`(08-31) → HEAD 的 canonical 分母为 cross-context 1926→6248、exception 1881→6044、
+   public 596→946、owner 19960→25631。W4-C 桶从 212 涨到 915。**其中 RC 的 outbound 边 1054 条里，top target 是
+   `db/schema.ts` 340、`util/errors.ts` 190、`db/client.ts` 80、`db/txSync.ts` 66、`postgresqlDatabaseClient.ts` 56、
+   `auth/actor.ts` 49** —— 主要是双 provider 镜像与平台原语边，不是 RC 自身的业务耦合。T9 的退出门若照 915 逐条清，会把
+   W9 平台合同的活提前吞进 W4-C；建议 T9 只认「inbound 504 条 + RC→非平台 outbound」，其余按 §7.3.4-1 转交。
+
+### 7.4 下一步（不改变 §2 依赖图）
+
+1. T9：按 §7.3.1 / §7.3.2 给出 exact 转交记录，清掉 consumer 已归零的 facade，并把三个 legacy 依赖桥
+   （`services/intent/legacyIntentApplyResourceDependencies.ts` 50 条、`services/resourceAcl.ts` 49 条、
+   `services/bundle/legacyResourcePackageMutationDependencies.ts` 47 条）与 bootstrap（`server.ts` 39 / `cli/*` 43）
+   的 inbound 例外逐条定性；
+2. T10：exact-SHA hosted closeout（Main + 8 条定时 workflow），然后才更新三件套 / `design/plan.md` / `STATE.md` 为 Done；
+3. RFC-349 仍在途且其 `postgresql-evidence` 未绿，T10 的 exact-SHA 跟踪需避开其红窗口。
