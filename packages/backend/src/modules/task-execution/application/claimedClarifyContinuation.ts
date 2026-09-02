@@ -39,10 +39,25 @@ export function decodeClaimedClarifyContinuation(raw: string): ClaimedClarifyCon
     typeof gateValue.ref !== 'string' ||
     gateValue.ref.length === 0 ||
     !Array.isArray(sourceNodeRunIds) ||
+    !Array.isArray(rerunNodeRunIds)
+  ) {
+    throw new TaskExecutionError(
+      'task-continuation-conflict',
+      'clarify gate continuation payload does not match its durable decision',
+    )
+  }
+  // Question dispatch releases the SAME clarify park, and collaboration writes
+  // it with `{ sourceNodeRunIds: [], rerunNodeRunIds }` — it has no single
+  // origin run, and the questions it just dispatched are by definition not
+  // undispatched work. There is therefore no clarify convergence to run: the
+  // continuation is ready. Demanding the answer shape here made every
+  // question-dispatch continuation unrecoverable after a restart (the review
+  // gate never reappeared), because the decode threw before the drive began.
+  if (sourceNodeRunIds.length === 0) return null
+  if (
     sourceNodeRunIds.length !== 1 ||
     typeof sourceNodeRunIds[0] !== 'string' ||
     sourceNodeRunIds[0].length === 0 ||
-    !Array.isArray(rerunNodeRunIds) ||
     rerunNodeRunIds.length !== 0
   ) {
     throw new TaskExecutionError(

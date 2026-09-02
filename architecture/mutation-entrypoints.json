@@ -45566,7 +45566,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b6fe74c86f9bae8d787df157321797126b61a77cbd2e3d5f0bb7edd451facb8d",
+  "sourceDigest": "sha256:9c0f350d6b577e7d59c38cad86fd258a9d08093ea2fa6d1f1c16797984b92d60",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
