@@ -618,6 +618,11 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
    - **一处残留耦合**：`rfc294Canonical.ts` 静态 import 了
      `src/modules/task-execution/domain/codeHostRecovery.ts`，这一份读的是**真实工作树**；
      该文件被别人改脏时这条路子不干净，用之前先确认它等于 HEAD。
+   - **provenance 要另外补**：导出树不是 git 仓库，driver 跑不了 `--snapshot-sha`
+     （`fullSha()` 走的是 `git rev-parse`，cwd 落在导出树里必然失败），而上表第 4 条那四份
+     governance artifact 的 `provenance.contentDigest` 是**去掉 provenance 后的 payload 摘要**
+     （`withArtifactProvenance` / `artifactContentDigest`）。产物拷回真实仓库后，要在真实仓库
+     里把 provenance 重钉一次，否则 N1a「content-addressed provenance」红。
    - 同一套姿势还能用来**判定账本到底同步了没有**：把 tip 导出来整体重跑一次，与 committed
      的 `architecture/*.json` + `status.md` 逐字节比。2026-09-02 就是这么确认「并发 session
      的重生成已经把我的改动一起收进去了、我不必再提一笔」的——他们的生成器读的是含我已提交
