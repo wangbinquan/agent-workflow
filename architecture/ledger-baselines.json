@@ -440,7 +440,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 6071,
+      "baseline": 5220,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -480,7 +480,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196",
+    "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +493,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "06795e1d5f106b3d17bac66a4ff4fe4e5847551a",
-    "contentDigest": "sha256:aaa9c59d86a7004fbd800405cfd35759aeb0a71467015d2ffc36b8e1def423ba",
+    "currentSnapshotSha": "ae23150e14a8252f61f991e00a16fb7d8ab94acd",
+    "contentDigest": "sha256:3defed83f96a07011255f538cb2b1019270bd549dd4d473ba0c180030f53fbca",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

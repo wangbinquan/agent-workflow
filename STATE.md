@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> ✅ **RFC-294 账本重分桶与分母重设完成（2026-09-02，零生产改动、零 wave credit）。**
+> 起于 `plan.md §14` 那条挂了两天的「必须在下一个 wave 立项时裁决的输入」：RFC-349 双 provider 把 canonical 分母抬了
+> 三倍，各波退出门无法再照抄 exact id 总数。用户当日裁决取「provider adapter 归 infrastructure 层不计」这一支，并把
+> review-2026-08-30 §6 推迟的分桶修正一起做完（两个阻塞——RFC-345 在制品、RFC-344 收口——均已解除）。
+> 生成器 `packages/backend/tests/architecture/rfc294Canonical.ts` 落四条规则，账本与 `status.md` 全量重采：
+> **R1** `db/**` + `util/{errors,hash,log}.ts` 判 `platform` 归 W9（此前按导入符号名散进各波，`util/errors.ts` 更是直接
+> 掉进兜底的 `task-execution`——单这两个文件就把 1836 条平台边记成了子波的债）；**R2** `infrastructure/` 直连受管
+> external 记 `infrastructure-external` 不计债（394 条，层外的 5 条仍是真债）；**R3** provider 精确孪生只计一次
+> （`provider-mirror` 457 条，**只对 `legacy-outbound`**）；**R4** `legacy-inbound` 打到模块 public 面的按**消费者**记账
+> （用户给 RFC-345 T9 定的「修法落在谁的代码里就归谁的波」的机器化）。同批把 8 条 `KNOWN_VIOLATIONS` 钉上
+> `removeWave: 'W5'`（review §B4）。
+> 结果：exception `6071→5220`、W4-E1 `2528→837`、W4-C `916→435`、W4-E2 `96→67`、W9 `514→2679`。
+> **此后各波退出门以重分桶后的 exact ids 为唯一分母**，`plan.md §14` 冻结的手抄快照与膨胀期的中间数一律作废。
+> **踩坑**：R3 起初对所有 role 折叠，`rfc294-architecture-preflight` 的「cross-context internals are covered by exact,
+> expiring canonical exceptions」当场红 5 条——`temporary-internal-debt` / `off-dag-offered` 是**逐站点**的边界主张，
+> 两个 provider 各违一次就得各修一次，不能折叠。守卫是对的，规则已收窄。
+> **下一刀**：W4-E2 memory（用户 2026-09-02 选定）。它今天的实剩是 67 条 exact edge + 8 个 legacy facade
+> （`services/memory*` 家族 2577 行）+ 3 个路由 824 行；`modules/memory` 骨架与双 provider store 已在，
+> 最难的正确性部分由 RFC-342/P0-A 交付。前置件：SC offered `RepositoryScopeAuthorizationInTx` 薄 participant
+> 今天只存在于 `design.md:3429/3441`，源码里还没有。
+
 > ✅ **RFC 完工（Done，2026-09-02）：[RFC-350 任务不活跃超时收割（僵尸任务）与 interrupted 树归档补齐](design/RFC-350-task-idle-timeout-reaper/proposal.md)。**
 > 起于用户「配置里有终态任务自动归档，也要有任务超时自动归档——任务最后一次没有动作之后多久就当僵尸自动归档」。
 > 新增 `taskIdleTimeout{enabled,idleHours}`（**默认关 / 168 小时 = 7 天**）：整棵树超过阈值无动作且仍有非终态成员 ⇒

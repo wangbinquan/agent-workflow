@@ -410,6 +410,7 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 | N12  | RFC-344 / W4-A（Done）              | stable OperationCatalog、52/52 MCP closed binding、single handler root、identity/development pilots 与 API docs projection 已落                                                                                     | final `c5c4faafc`；Main `33298828254` 与同 SHA 8 schedules terminal success；只额外关闭 W4-D duplicate-root residual       |
 | N13  | RFC-347 / W4-E0（Done）             | trusted direct/delegated request authority factory、presence/WS 收编、central `Actor` constructor 与 DB-keyed module cache 退役；remaining legacy projection按 E1/E2/E3/E8/E9/E10 精确入账                          | final `7ede76a8`；Main `33317698270` 与同 SHA 8 schedules terminal success；不等于其余 W4-E slices Done                    |
 | N14  | RFC-345 / W4-C（Done）              | 四 roster、`ResourceCatalogQuery`、四 named participant、六 aggregate cohort、package 七 participant 与 operation binding 已落；T9 退役 11 条 exact debt edge 并删掉第 11 个 facade，其余 11 条按 consumer 归属转交 | 功能链 `50e2b3e47` → `f4c1e4ceb`；Main CI `33633631833`（`78dcc5999`，35/35）与 8 条定时 workflow terminal success         |
+| N15  | 账本重分桶与分母重设（Done）        | 生成器落 R1～R4 记账规则、8 条 `KNOWN_VIOLATIONS` 钉 `removeWave: W5`、七份 canonical manifest 与 `status.md` 全量重采                                                                                              | 零生产改动、零 wave credit；关闭 review §6 的 B3/C3/B4；exception `6071→5220`、W4-E1 `2528→837`                            |
 | OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                                                            | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
 
 P0-A、P0-B、W3、W4-A、W4-E0 与 W4-E7 已关闭各自 successor；它们不再被错误地用作其它 wave 已经落地的证明，也不倒签后续
@@ -1214,6 +1215,31 @@ import=0；终局指标全绿。
 > 双 provider 里同一条逻辑债有两份镜像，且 RC→`db/schema.ts`/`util/errors.ts` 这类平台原语边应归 W9 平台合同，
 > 不由 W4 子波承担。处置二选一（须呈用户裁决）：把 provider adapter 归为 infrastructure 层不计 `legacy-outbound`，
 > 或显式重设各 wave 的分母与目标。
+
+> **2026-09-02 裁决与落地（上一条的处置结果，用户当日逐项拍板）**：取「provider adapter 归 infrastructure 层不计」这一支，
+> 并在同一批里连同 review-2026-08-30 §6 推迟的分桶修正一起做完（该 review 的两个阻塞——RFC-345 在制品与 RFC-344 收口——已解除）。
+> 生成器 `packages/backend/tests/architecture/rfc294Canonical.ts` 落四条规则，`architecture/*` 与 [`status.md`](./status.md) 按此重生成：
+>
+> - **R1 平台原语归 W9**：`packages/backend/src/db/**` 与 `util/{errors,hash,log}.ts` 在 `targetContextFor()` 里直接判 `platform`。
+>   此前它们走文件名关键词级联，按**导入符号名**被散进各波（`db/schema.ts#memories`→W4-E2、`#tasks`→W4-E1），而
+>   `util/errors.ts` 不匹配任何关键词、直接掉进兜底的 `task-execution`——单这两个文件就把 1836 条平台边记成了子波的债。
+> - **R2 infrastructure 直连受管 external 不计债**：`infrastructure/` 层 import drizzle 等是分层规则允许的落点，改记
+>   `infrastructure-external` 观察边（394 条）；`infrastructure/` 之外的直连仍是真债（5 条）。
+> - **R3 provider 孪生只计一次**：同 target/符号/edgeKind/syntax/role 的 sqlite↔postgresql 精确孪生，保留先落地的 SQLite
+>   侧为债，另一侧记 `provider-mirror` 观察边（457 条）。**不采用「provider adapter 一律不计 `legacy-outbound`」的字面读法**
+>   ——实测扣掉平台原语后，provider adapter 仍有指向 `services/task.ts`(24)、`services/intent/manifest.ts`(16)、
+>   `services/lifecycle.ts`(13) 的真耦合，一刀切会把 W4-E1/W4-E4a 的活藏起来。折叠**只对 `legacy-outbound`**：
+>   `temporary-internal-debt` 与 `off-dag-offered` 是逐站点的边界主张，两个 provider 各违一次就得各修一次，折叠会让其中
+>   一处失去 exact 覆盖（实撞：`rfc294-architecture-preflight` 的「cross-context internals are covered by exact, expiring
+>   canonical exceptions」当场红 5 条）。
+> - **R4 legacy-inbound 按消费者记账**：legacy 文件消费模块**已发布 public 面**的边，归**消费者**所属的波（深入模块内部的
+>   仍归被调模块）。这是用户当日给 RFC-345 T9 定的「修法落在谁的代码里就归谁的波」的机器化；不这么记，已 Done 的
+>   W4-C/W4-E0/W4-E7 桶里会永远挂着别人的活。
+>
+> 同批把 `scripts/depcheck.ts` 里 8 条 `KNOWN_VIOLATIONS` 逐条钉上 `removeWave: 'W5'`（review §B4；此前 `removeWhen` 写
+> 「属独立切片（未编号）」的条目被兜进 `RFC-owner-cutover`，在任何 wave 的退出门里都不出现）。结果：exception
+> `6071→5220`、W4-E1 `2528→837`、W4-C `916→435`、W4-E2 `96→67`、W9 `514→2679`。**重分桶后的 exact ids 是此后各波退出门
+> 的唯一分母**，上表冻结的手抄快照与膨胀期的中间数一律作废；下一个子波按 `status.md` 的当期值定门。
 
 所有 architecture debt 必须逐 exact id 不增、new violation/edge=0，不能靠“总数没升”用新债替换旧债。N1 已把
 RFC-297～343 的已发布 module/register/worker/facade 纳入分母；这只建立 lifecycle 分类与 debt owner，不宣称 265 个存量

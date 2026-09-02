@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,7 +30,7 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 6071 |
+| `architectureExceptions` | 5220 |
 | `backgroundJobs` | 366 |
 | `crossContextImports` | 6275 |
 | `facades` | 353 |
@@ -132,8 +132,8 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 205 |
-| platform | 126 |
+| task-execution | 193 |
+| platform | 138 |
 | identity-access | 52 |
 | runtime-management | 45 |
 | resource-catalog | 44 |
@@ -197,48 +197,51 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3918 |
+| legacy-outbound | 3461 |
 | legacy-inbound | 1555 |
-| external-layer-debt | 399 |
+| provider-mirror | 457 |
+| infrastructure-external | 394 |
 | offered-consumption | 122 |
 | temporary-internal-debt | 107 |
 | off-dag-offered | 84 |
 | authority-type-only | 63 |
 | required-implementation | 27 |
+| external-layer-debt | 5 |
 
 ### 5.2 exact exceptions 按 rule
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3918 |
+| legacy-outbound | 3461 |
 | legacy-inbound | 1555 |
-| external-layer-debt | 399 |
 | temporary-internal-debt | 107 |
 | off-dag-offered | 84 |
 | no-circular | 6 |
+| external-layer-debt | 5 |
 | no-util-to-upper | 2 |
 
 ### 5.3 exact exceptions 按清偿波次
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 2528 |
-| W4-C | 916 |
-| W9 | 514 |
-| W4-E0 | 367 |
-| W4 | 363 |
-| W4-B | 280 |
-| W5 | 243 |
-| W4-E4a | 218 |
-| W4-E8 | 197 |
-| W4-E9 | 165 |
-| W4-E2 | 96 |
-| W4-E4b | 76 |
-| W4-E7 | 65 |
-| W4-E3 | 18 |
+| W9 | 2679 |
+| W4-E1 | 837 |
+| W4-C | 435 |
+| W4-E0 | 214 |
+| W4 | 207 |
+| W4-B | 187 |
+| W4-E4a | 176 |
+| W5 | 145 |
+| W4-E8 | 113 |
+| W4-E2 | 67 |
+| W4-E9 | 61 |
+| W4-E7 | 42 |
+| W4-E4b | 33 |
 | W9-E | 10 |
-| RFC-owner-cutover | 8 |
-| W4-E10 | 7 |
+| W2-D/W3/W5 | 7 |
+| W4-E10 | 3 |
+| W4-E3 | 2 |
+| W4-E5 | 2 |
 
 ## 6. Public surface（`public-surfaces.json`）
 

@@ -2,7 +2,7 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 6071,
+    "architectureExceptions": 5220,
     "backgroundJobs": 366,
     "crossContextImports": 6275,
     "facades": 353,
@@ -164,5 +164,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196"
+  "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877"
 }

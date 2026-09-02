@@ -199,7 +199,7 @@
       "ownerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
       "status": "clear",
       "symbol": "dbTxSync",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "transactionCallee": "transaction"
     },
     {
@@ -5852,7 +5852,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196",
+  "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

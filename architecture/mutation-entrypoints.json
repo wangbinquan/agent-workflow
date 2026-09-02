@@ -1564,7 +1564,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/client.ts#createInMemoryDb",
       "symbol": "createInMemoryDb",
-      "targetContext": "memory",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1587,7 +1587,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/client.ts#CreateInMemoryDbOptions",
       "symbol": "CreateInMemoryDbOptions",
-      "targetContext": "memory",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1609,7 +1609,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/client.ts#openDb",
       "symbol": "openDb",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1632,7 +1632,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/client.ts#OpenDbOptions",
       "symbol": "OpenDbOptions",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1656,7 +1656,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/schema.ts#committedEventAggregateHeads",
       "symbol": "committedEventAggregateHeads",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1678,7 +1678,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/schema.ts#committedEventDeliveries",
       "symbol": "committedEventDeliveries",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1701,7 +1701,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/schema.ts#committedEventFamilyCutovers",
       "symbol": "committedEventFamilyCutovers",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1722,7 +1722,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/schema.ts#committedEvents",
       "symbol": "committedEvents",
-      "targetContext": "source-control",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1744,7 +1744,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/schema.ts#runtimes",
       "symbol": "runtimes",
-      "targetContext": "runtime-management",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1766,7 +1766,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/schema.ts#runtimeSessionLeases",
       "symbol": "runtimeSessionLeases",
-      "targetContext": "runtime-management",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1790,7 +1790,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/sqliteWriteRetry.ts#retryableSqliteWriteErrorCode",
       "symbol": "retryableSqliteWriteErrorCode",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1815,7 +1815,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/sqliteWriteRetry.ts#retrySqliteWrite",
       "symbol": "retrySqliteWrite",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1840,7 +1840,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/db/sqliteWriteRetry.ts#RetrySqliteWriteOptions",
       "symbol": "RetrySqliteWriteOptions",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -44978,7 +44978,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/hash.ts#createSha256DigestBuilder",
       "symbol": "createSha256DigestBuilder",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -45027,7 +45027,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
       "symbol": "createLogger",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -45052,7 +45052,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/log.ts#setLoggerStdoutWriterForTest",
       "symbol": "setLoggerStdoutWriterForTest",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -45702,7 +45702,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196",
+  "sourceDigest": "sha256:b365654450157c0c592bf5cff00108dece00c6f9ea9f186e049b655640c49877",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

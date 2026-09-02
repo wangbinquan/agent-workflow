@@ -394,6 +394,19 @@ const BOOTSTRAP_ADMIN_AGGREGATE_FILES = new Set([
   'packages/backend/src/services/rfc295DowngradeAudit.ts',
 ])
 
+// RFC-294 W4-C 收口后的记账裁决（用户 2026-09-02）：模块 infrastructure 层引用平台持久化 /
+// 错误 / 摘要 / 日志原语，在目标架构里是**合法形态**，不是某个 bounded context 的跨域债。
+// 在此之前它们按 `db/schema.ts#<导入符号名>` 走下面的关键词级联被散进各波（`#memories` 判 W4-E2、
+// `#tasks` 判 W4-E1），而 `util/errors.ts` 因为不匹配任何关键词直接掉进兜底的 `task-execution`——
+// 单是这两个文件就把 1836 条平台边记成了子波的债（RFC-345 `plan.md §7.3.4-2` 已量到这个偏差，
+// RFC-294 `plan.md §14` 2026-09-02 记账事实要求下一个 wave 立项前裁决）。
+// 现在它们统一归 `platform` / W9 平台合同，由 W9-A/B/C 一次性处置。
+const PLATFORM_PRIMITIVE_FILES = new Set([
+  'packages/backend/src/util/errors.ts',
+  'packages/backend/src/util/hash.ts',
+  'packages/backend/src/util/log.ts',
+])
+
 const RFC346_W9_E_COMPATIBILITY_FILES = new Set([
   'packages/backend/src/cli/rfc295-downgrade-audit.ts',
   'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
@@ -415,6 +428,9 @@ export function targetContextFor(path: string, symbol = ''): TargetOwner {
   if (path.startsWith('packages/frontend/src/')) return 'frontend'
   if (path.startsWith('packages/shared/src/')) return 'shared-contracts'
   if (path.startsWith('packages/backend/src/platform/')) return 'platform'
+  if (path.startsWith('packages/backend/src/db/') || PLATFORM_PRIMITIVE_FILES.has(path)) {
+    return 'platform'
+  }
   if (path === 'packages/backend/src/server.ts' || path === 'packages/backend/src/cli/start.ts') {
     return 'bootstrap'
   }
@@ -819,6 +835,10 @@ function requiredPortLocation(path: string): { context: string } | null {
 type ObservedEdgeRole =
   | ContextEdgeRole
   | 'external-layer-debt'
+  // infrastructure 层直连受管 external（drizzle 等）：分层规则允许的落点，观察但不计 wave 债。
+  | 'infrastructure-external'
+  // sqlite/postgresql 双 provider 的精确孪生：同一条逻辑债只在先落地的 provider 上计一次。
+  | 'provider-mirror'
   | 'temporary-internal-debt'
   | 'off-dag-offered'
   | 'legacy-inbound'
@@ -888,11 +908,18 @@ function observedContextEdges(
           item.toFile ===
             'packages/backend/src/modules/task-execution/composition/taskDriveLegacy.ts'
             ? 'W4'
-            : targetRemoveAfterWaveFor(
-                item.toFile,
-                item.importedName,
-                toLocation!.context as TargetContext,
-              )
+            : // 用户 2026-09-02 给 RFC-345 T9 定的归属规则（「修法落在谁的代码里就归谁的波」）在此机器化：
+              // legacy 调用者消费模块**已发布的 public 面**是目标形态本身，剩下的活是把**调用者**搬进
+              // 它自己的 context，因此这条边归消费者所属的波；深入模块内部（composition / infrastructure /
+              // application）的 legacy-inbound 才是被调模块自己的债，仍记在被调模块的波上。
+              // 不这么记，已经 Done 的波（W4-C / W4-E0 / W4-E7）桶里会永远挂着别人的活。
+              publicLocation(item.toFile) !== null
+              ? targetRemoveAfterWaveFor(unit.path, '$file')
+              : targetRemoveAfterWaveFor(
+                  item.toFile,
+                  item.importedName,
+                  toLocation!.context as TargetContext,
+                )
       } else if (toLocation === null) {
         role = 'legacy-outbound'
         removeAfterWave = targetRemoveAfterWaveFor(item.toFile, item.importedName)
@@ -962,9 +989,14 @@ function observedContextEdges(
       for (const item of importEdges(unit)) {
         if (!GOVERNED_EXTERNAL_SPECIFIERS.has(item.specifier)) continue
         const toFile = `external:${item.specifier}`
-        const identity = [unit.path, toFile, item.kind, item.syntax, 'external-layer-debt'].join(
-          '|',
-        )
+        // 记账裁决的另一半（用户 2026-09-02）：infrastructure 层直连受管 external（drizzle 等）是
+        // 分层规则允许的落点——RFC-349 双 provider 之后这类边有 394 条，全部记成「该模块的 wave 债」
+        // 会让每个子波替平台买单。这里改记 `infrastructure-external` 观察边、不计债；
+        // infrastructure 之外的直连（当前 5 条）仍是真债，照旧记在该模块的波上。
+        const externalRole: ObservedEdgeRole = fromLocation.rest.startsWith('infrastructure/')
+          ? 'infrastructure-external'
+          : 'external-layer-debt'
+        const identity = [unit.path, toFile, item.kind, item.syntax, externalRole].join('|')
         edges.push({
           id: `import:${digestText(identity).slice('sha256:'.length, 'sha256:'.length + 20)}`,
           fromFile: unit.path,
@@ -977,19 +1009,88 @@ function observedContextEdges(
           specifier: item.specifier,
           edgeKind: item.kind,
           syntax: item.syntax,
-          role: 'external-layer-debt',
+          role: externalRole,
           owner: fromLocation.context,
-          removeAfterWave: targetRemoveAfterWaveFor(
-            unit.path,
-            '$file',
-            fromLocation.context as TargetContext,
-          ),
+          removeAfterWave:
+            externalRole === 'infrastructure-external'
+              ? null
+              : targetRemoveAfterWaveFor(
+                  unit.path,
+                  '$file',
+                  fromLocation.context as TargetContext,
+                ),
         })
       }
     }
   }
   const unique = new Map(edges.map((edge) => [edge.id, edge]))
-  return [...unique.values()].sort((left, right) => left.id.localeCompare(right.id))
+  return [...collapseProviderMirrors([...unique.values()])].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )
+}
+
+/**
+ * `modules/<context>/infrastructure/{sqlite,postgresql}<Name>.ts` 的孪生键。
+ * 不是 provider adapter 时返回 `null`。
+ */
+function providerTwinKey(path: string): string | null {
+  const match = /^(packages\/backend\/src\/modules\/[^/]+\/infrastructure\/)(?:sqlite|postgresql)([A-Z][A-Za-z0-9]*\.ts)$/.exec(
+    path,
+  )
+  return match === null ? null : `${match[1]}@provider-twin/${match[2]}`
+}
+
+/**
+ * RFC-294 记账裁决（用户 2026-09-02，「孪生只计一次」）：RFC-349 之后同一条逻辑依赖会在
+ * SQLite / PostgreSQL 两个 adapter 上各出现一次。两条都计会让 wave 分母凭空翻倍，而一刀切「provider
+ * adapter 一律不计」又会把真耦合藏起来（实测：扣掉平台原语后，provider adapter 仍有指向
+ * `services/task.ts` / `services/intent/manifest.ts` / `services/lifecycle.ts` 的真实边）。
+ * 因此只折叠**精确孪生**——同 target、同符号、同 edgeKind/syntax/role 的那一对：先落地的 SQLite 侧
+ * 保留为债，PostgreSQL 侧记 `provider-mirror` 观察边、不计 wave 债。任一侧独有的边不受影响。
+ *
+ * **只折叠 `legacy-outbound`**（模块 → legacy 实现）。`temporary-internal-debt` 与 `off-dag-offered`
+ * 是**逐站点**的边界主张：跨 context 深入模块内部、或消费 DAG 外的 public 面，两个 provider 各违一次
+ * 就得各修一次，折叠等于让其中一处失去 exact 覆盖——`rfc294-architecture-preflight` 的
+ * 「cross-context internals are covered by exact, expiring canonical exceptions」会当场红（实撞 5 条）。
+ */
+function collapseProviderMirrors(edges: readonly ObservedContextEdge[]): ObservedContextEdge[] {
+  const groups = new Map<string, ObservedContextEdge[]>()
+  for (const edge of edges) {
+    if (edge.removeAfterWave === null || edge.role !== 'legacy-outbound') continue
+    const twin = providerTwinKey(edge.fromFile)
+    if (twin === null) continue
+    const key = [twin, edge.toFile, edge.targetSymbol, edge.edgeKind, edge.syntax, edge.role].join(
+      '|',
+    )
+    groups.set(key, [...(groups.get(key) ?? []), edge])
+  }
+  const mirrors = new Set<string>()
+  for (const group of groups.values()) {
+    if (group.length < 2) continue
+    const primary = group.find((edge) => /\/sqlite[A-Z]/.test(edge.fromFile))
+    if (primary === undefined || !group.some((edge) => /\/postgresql[A-Z]/.test(edge.fromFile))) {
+      continue
+    }
+    for (const edge of group) if (edge !== primary) mirrors.add(edge.id)
+  }
+  if (mirrors.size === 0) return [...edges]
+  return edges.map((edge) => {
+    if (!mirrors.has(edge.id)) return edge
+    const identity = [
+      edge.fromFile,
+      edge.toFile,
+      edge.targetSymbol,
+      edge.edgeKind,
+      edge.syntax,
+      'provider-mirror',
+    ].join('|')
+    return {
+      ...edge,
+      id: `import:${digestText(identity).slice('sha256:'.length, 'sha256:'.length + 20)}`,
+      role: 'provider-mirror' as const,
+      removeAfterWave: null,
+    }
+  })
 }
 
 function memberNames(node: ts.Node): string[] {
