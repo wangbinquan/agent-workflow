@@ -11,7 +11,10 @@
 > 顺带修掉既有缺口：`services/taskArchive.ts` 的 `TERMINAL` 漏了 `interrupted`，导致每次 daemon 重启残留的那批任务
 > 既不可 cancel 又永远等不到归档（先红后绿锁定）。用户四轮拍板 D1–D14 + 能力影响清单 I-1～I-5；设计门与实现门均明示跳过。
 >
-> 提交链：`d335ea0fa`（主实现）→ `1fe123e4d`（审计诚实性 + 账本按提交本身重采）→ `1152b076a`（前端卡片计数锁）→ 收口笔。
+> 提交链：`d335ea0fa`（主实现）→ `1fe123e4d`（审计诚实性 + 账本按提交本身重采）→ `1152b076a`（前端卡片计数锁）
+> → `b56a20d2e`（默认阈值 7 天 + 审计精度 + 收口）→ `78dcc5999`（CI 两条红：S-14 写点棘轮登记、e2e 卡片计数 8→9）。
+> **最终验收：exact SHA `78dcc5999` 的 Main CI run `33633631833` = 35/35 attempt-1 terminal success**，
+> 同 SHA `visual-regression-nightly` success。设计门与实现门均由用户明示跳过。
 > **踩坑记录**：首次架构重采用的是**工作树**的 `cli/start.ts`（含他人未提交改动，3456 行），而提交的是重放版（3460 行），
 > 三处 ambient 锚点与 sourceDigest 全偏——正确姿势是 `git archive <要推的 commit>` 导出提交本身、软链真仓库 `.git` 后
 > 跑 `architecture:write --snapshot-sha HEAD`（已由 agent-workflow-f9 写进 `docs/dev-gotchas.md`）。
