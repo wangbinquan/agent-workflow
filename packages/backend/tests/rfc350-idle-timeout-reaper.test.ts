@@ -290,6 +290,39 @@ describe('RFC-350 runTaskIdleTimeoutSweep', () => {
     ])
   })
 
+  test('审计里的 killOutcomes 按任务分桶，不写进兄弟任务杀掉的进程', async () => {
+    const tree: IdleTimeoutTreeSnapshot = {
+      rootTaskId: 'root',
+      members: [
+        member('root', 'running', NOW - 40 * HOUR),
+        member('quiet', 'awaiting_human', NOW - 40 * HOUR),
+      ],
+      // 只有 root 有活进程；quiet 停在人工门上，一个 run 都没有。
+      liveRuns: [run('root', 'root-run-a'), run('root', 'root-run-b')],
+    }
+    const { operations, recorder } = makeOperations({ trees: [tree] })
+    await runTaskIdleTimeoutSweep(operations, IDLE_CONFIG, { now: NOW })
+    const byTask = new Map(recorder.audits.map((audit) => [audit.taskId, audit.killOutcomes]))
+    expect(byTask.get('root')).toEqual({ killed: 2 })
+    // 这条是重点：quiet 自己没有任何进程，它的恢复记录不能显示 root 杀掉的那两个。
+    expect(byTask.get('quiet')).toEqual({})
+  })
+
+  test('整棵树都在窗口里自己跑完 ⇒ 不算收了一棵树', async () => {
+    const tree: IdleTimeoutTreeSnapshot = {
+      rootTaskId: 'root',
+      members: [member('root', 'running', NOW - 40 * HOUR)],
+      liveRuns: [],
+    }
+    const { operations, recorder } = makeOperations({
+      trees: [tree],
+      unclaimableTasks: ['root'],
+    })
+    const result = await runTaskIdleTimeoutSweep(operations, IDLE_CONFIG, { now: NOW })
+    expect(result).toEqual({ scanned: 1, reapedTrees: 0, reapedTasks: 0, skipped: 0 })
+    expect(recorder.audits).toEqual([])
+  })
+
   test('T-14 单拍上限传给 persistence，可被调用方收窄（F-7 / F-8）', async () => {
     const trees = Array.from({ length: 5 }, (_, i) => idleTree(`root-${i}`))
     const { operations, recorder } = makeOperations({ trees })

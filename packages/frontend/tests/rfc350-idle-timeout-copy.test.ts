@@ -63,6 +63,8 @@ describe('RFC-350 小时单位', () => {
     expect(formatUnitValue(23, 'hours', t)).toBe(t('unit.hour', { count: 23 }))
     expect(formatUnitValue(24, 'hours', t)).toBe(t('unit.day', { count: 1 }))
     expect(formatUnitValue(48, 'hours', t)).toBe(t('unit.day', { count: 2 }))
+    // 出厂默认就是 168 小时 = 7 天，设置页上必须显示成「7 天」而不是一个裸数字。
+    expect(formatUnitValue(168, 'hours', t)).toBe(t('unit.day', { count: 7 }))
     expect(formatUnitValue(8760, 'hours', t)).toBe(t('unit.day', { count: 365 }))
     // 25 小时不是整天：按 formatUnitValue 的既有约定**不**退回小时档（那会把
     // 「1.04 天」说成「25 小时」，隐藏真实量级），而是不给紧凑提示。与 ms 档

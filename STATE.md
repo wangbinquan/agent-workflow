@@ -2,8 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **RFC 实施中（Approved / In Progress，2026-09-02）：[RFC-350 任务不活跃超时收割（僵尸任务）与 interrupted 树归档补齐](design/RFC-350-task-idle-timeout-reaper/proposal.md)。**
-> 起于用户「配置里有终态任务自动归档，也要有任务超时自动归档——任务最后一次没有动作之后多久就当僵尸自动归档」。源码对账后确认这条链今天一条都不接（归档器要整树终态、卡死检测明写不修、自动修复的取消/判失败选项都不是 auto-apply、资源上限只看总时长），并顺带查出 `interrupted` 树永远不会被归档这个既有缺口。用户四轮逐条拍板 D1–D14（见 proposal §4）。**用户 2026-09-02 已批准 D1–D14 与能力影响清单并授权完整实现、commit 与 push；明示跳过设计门。**
+> ✅ **RFC 完工（Done，2026-09-02）：[RFC-350 任务不活跃超时收割（僵尸任务）与 interrupted 树归档补齐](design/RFC-350-task-idle-timeout-reaper/proposal.md)。**
+> 起于用户「配置里有终态任务自动归档，也要有任务超时自动归档——任务最后一次没有动作之后多久就当僵尸自动归档」。
+> 新增 `taskIdleTimeout{enabled,idleHours}`（**默认关 / 168 小时 = 7 天**）：整棵树超过阈值无动作且仍有非终态成员 ⇒
+> 先杀活着的 runtime 子进程树、再把非终态任务判 `canceled` + 专用原因文案 + `recovery_events` 审计；**出库仍由既有
+> `taskArchive` 按 `retentionDays` 完成**，两道开关各管一段。「动作」= agent 事件 + node_run 铸行 + 已 committed 的
+> `collaboration_gate_operations` decide 行 + 任务自身 started/finished；评论与成员变更不算。判定单位是整棵树。
+> 顺带修掉既有缺口：`services/taskArchive.ts` 的 `TERMINAL` 漏了 `interrupted`，导致每次 daemon 重启残留的那批任务
+> 既不可 cancel 又永远等不到归档（先红后绿锁定）。用户四轮拍板 D1–D14 + 能力影响清单 I-1～I-5；设计门与实现门均明示跳过。
+>
+> 提交链：`d335ea0fa`（主实现）→ `1fe123e4d`（审计诚实性 + 账本按提交本身重采）→ `1152b076a`（前端卡片计数锁）→ 收口笔。
+> **踩坑记录**：首次架构重采用的是**工作树**的 `cli/start.ts`（含他人未提交改动，3456 行），而提交的是重放版（3460 行），
+> 三处 ambient 锚点与 sourceDigest 全偏——正确姿势是 `git archive <要推的 commit>` 导出提交本身、软链真仓库 `.git` 后
+> 跑 `architecture:write --snapshot-sha HEAD`（已由 agent-workflow-f9 写进 `docs/dev-gotchas.md`）。
 >
 > 🚧 **RFC 实施中（Approved / In Progress，2026-08-31）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
 > 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：

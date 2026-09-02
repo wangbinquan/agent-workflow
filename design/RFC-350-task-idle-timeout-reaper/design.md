@@ -155,7 +155,7 @@ reapTree(verdict):
 
 **杀不掉怎么办（D11）**：`window-expired`（run 的 `started_at` 早于
 `STALE_RUN_PID_MAX_AGE_MS = 48h`，`util/process.ts:181`）与 `command-mismatch`、`kill-failed` 三种 outcome
-**都不阻断**终结。特别注意：阈值一旦配到 ≥24 小时，`window-expired` 会是**常见**结果而不是罕见异常——
+**都不阻断**终结。特别注意：阈值一旦配到 ≥48 小时（出厂默认 7 天就远超），`window-expired` 会是**常见**结果而不是罕见异常——
 一个跑了 3 天、最后 25 小时没动静的 run，其 `started_at` 早就超出 48 小时窗口，helper 会拒绝发信号
 （它保护的是 PID 复用，不能为本功能放宽）。这不是缺陷，是既有安全网的正确行为；本功能的责任是
 **如实记录**并让任务照常终结，剩下的无主进程交给既有孤儿回收。
@@ -173,8 +173,8 @@ reapTree(verdict):
 
 `stuckTaskDetector` 的 S1–S5 判据是**「静默 + 缺证据」**，并带一串专用豁免：工作组任务的
 `awaiting_*` 全豁免（引擎自有 parking）、仓库准备期 45 分钟豁免、call 子任务 pending 30 分钟豁免
-（`stuckTaskDetector.ts:110-118`）。这些豁免是为「30 分钟」这个尺度设计的告警降噪，对「24 小时不活跃」
-这个尺度既无必要（45 分钟的准备窗口早被 24 小时覆盖）又有害（工作组任务会被永久豁免，而用户 D3 明确
+（`stuckTaskDetector.ts:110-118`）。这些豁免是为「30 分钟」这个尺度设计的告警降噪，对「数天不活跃」
+这个尺度既无必要（45 分钟的准备窗口早被数天的阈值覆盖）又有害（工作组任务会被永久豁免，而用户 D3 明确
 要求**全部非终态状态**纳入）。因此本功能**独立扫描、独立判据**，与 S1–S6 并存互不影响（N6）。
 
 ### 3.5 执行位置与节奏（D14）
@@ -187,7 +187,7 @@ reapTree(verdict):
   RFC-349 的迁移冻结窗口，随后 `sqliteLogicalSource.assertUnchanged` 只能报一句
   `sqlite-source-mutated` 却指不出是谁（STATE.md 2026-09-02 第 14 条实撞）。AC-15 锁这一条。
 - 节奏：`DAEMON_CADENCE.taskIdleTimeout = 5 * MINUTE_MS`（`services/daemonCadence.ts:29-` 登记）。
-  阈值最细 1 小时，5 分钟巡检把判定延迟控制在阈值的 8% 以内，且扫描面只有**活任务**，成本远低于
+  阈值最细 1 小时（出厂默认 168 小时），5 分钟巡检把判定延迟控制在最细阈值的 8% 以内，且扫描面只有**活任务**，成本远低于
   1Hz 的 `enforceLimits`。非 hourly 循环不进 `MAINTENANCE_PHASE`（该表只收周期性重维护，见
   `daemonCadence.ts:22-25`）。
 - 单拍上限 `MAX_TREES_PER_SWEEP = 20`（模块常量，**不做成用户旋钮**——D8 已把配置面压到两个字段）。
@@ -274,7 +274,7 @@ taskIdleTimeout: z
     enabled: z.boolean().default(false),
     idleHours: z.number().int().min(1).max(8760).default(24),
   })
-  .default({ enabled: false, idleHours: 24 }),
+  .default({ enabled: false, idleHours: 168 }),
 ```
 
 - `packages/shared/src/settingsNumericBounds.ts` 加 `'taskIdleTimeout.idleHours': { min: 1, max: 8760, unit: 'hours' }`。

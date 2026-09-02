@@ -27,8 +27,11 @@ export interface IdleTimeoutTreeSnapshot {
 
 export interface TaskIdleTimeoutPersistence {
   /**
-   * 未软删且**仍有非终态成员**的任务树根 id，按树内最早活动升序、最多 `limit` 个。
-   * 起手式只扫活任务，不碰全表（RFC-311 性能纪律）。
+   * 未软删且**仍有非终态成员**的任务树根 id，最多 `limit` 个。
+   *
+   * 排序是「**最老的活任务**优先」，不是「树内活动最早优先」——后者要先把每棵候选树
+   * 都载出来算一遍活动时刻，正是这条起手式要避免的开销。它只影响一拍收不完时的取样
+   * 顺序（下一拍会接着收），不影响判据。起手式只扫活任务，不碰全表（RFC-311 性能纪律）。
    */
   listIdleCandidateRoots(limit: number): Promise<readonly string[]>
   /** 整棵树的活动快照；树不存在（并发删除）时返回 null。 */

@@ -93,7 +93,10 @@ export async function runTaskIdleTimeoutSweep(
         thresholdMs,
       })
       if (!verdict.idle) continue
-      reapedTasks += await reapTree(operations, snapshot, verdict, thresholdMs, now)
+      const reapedHere = await reapTree(operations, snapshot, verdict, thresholdMs, now)
+      // 整棵树都在判定后的窗口里自己跑完时 reapedHere = 0：那不算「收了一棵树」。
+      if (reapedHere === 0) continue
+      reapedTasks += reapedHere
       reapedTrees += 1
     } catch (err) {
       // 一棵树失败不拖累其它树（与归档器 runTaskArchiveSweep 的隔离同款）。
@@ -127,7 +130,9 @@ async function reapTree(
   now: number,
 ): Promise<number> {
   const live = new Set(verdict.liveTaskIds)
-  const killOutcomes: Record<string, number> = {}
+  // 按**任务**分桶，不是整棵树合计：审计行挂在单个任务上，写进兄弟任务杀掉的进程
+  // 会让「这个任务当时有没有活进程」这个问题在恢复记录里读不出来。
+  const killOutcomesByTask = new Map<string, Record<string, number>>()
   for (const run of snapshot.liveRuns) {
     // 树里可能混着已终态成员的历史 run；只对要收割的任务动手。
     if (!live.has(run.taskId)) continue
@@ -141,7 +146,9 @@ async function reapTree(
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    killOutcomes[outcome] = (killOutcomes[outcome] ?? 0) + 1
+    const bucket = killOutcomesByTask.get(run.taskId) ?? {}
+    bucket[outcome] = (bucket[outcome] ?? 0) + 1
+    killOutcomesByTask.set(run.taskId, bucket)
   }
 
   // 根先取消：cancelTask 自带父→子级联，一次就能带走整棵子树；剩下的逐个补，
@@ -180,7 +187,7 @@ async function reapTree(
       reason: reason.message,
       silentMs: verdict.silentMs,
       thresholdMs,
-      killOutcomes: Object.freeze({ ...killOutcomes }),
+      killOutcomes: Object.freeze({ ...(killOutcomesByTask.get(taskId) ?? {}) }),
       now,
     })
   }

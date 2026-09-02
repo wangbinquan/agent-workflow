@@ -1415,7 +1415,7 @@ export function GcTab({ config }: TabProps) {
             setState({
               ...state,
               taskIdleTimeout: {
-                ...(state.taskIdleTimeout ?? { idleHours: 24 }),
+                ...(state.taskIdleTimeout ?? { idleHours: 168 }),
                 enabled: v,
               },
             })
@@ -1436,7 +1436,7 @@ export function GcTab({ config }: TabProps) {
                 ...state,
                 taskIdleTimeout: {
                   ...(state.taskIdleTimeout ?? { enabled: false }),
-                  idleHours: v ?? 24,
+                  idleHours: v ?? 168,
                 },
               })
             }

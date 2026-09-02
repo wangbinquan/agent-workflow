@@ -360,9 +360,9 @@ export const ConfigSchema = z.object({
   taskIdleTimeout: z
     .object({
       enabled: z.boolean().default(false),
-      idleHours: z.number().int().min(1).max(8760).default(24),
+      idleHours: z.number().int().min(1).max(8760).default(168),
     })
-    .default({ enabled: false, idleHours: 24 }),
+    .default({ enabled: false, idleHours: 168 }),
 
   /** RFC-349: live database provider. The existing flat sqlite* tuning fields
    * remain the SQLite adapter's settings; PostgreSQL-specific pool settings
@@ -784,7 +784,7 @@ export const DEFAULT_CONFIG: Config = {
   eventStreamRetentionDays: 30,
   webhookTriggerFiresRetentionDays: 90,
   taskArchive: { enabled: false, retentionDays: 90, maxTreesPerSweep: 50 },
-  taskIdleTimeout: { enabled: false, idleHours: 24 },
+  taskIdleTimeout: { enabled: false, idleHours: 168 },
   database: { provider: 'sqlite' },
   backupOnMigration: true,
   sqliteSynchronous: 'NORMAL',

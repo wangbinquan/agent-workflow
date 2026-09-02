@@ -102,7 +102,7 @@ function renderGc(overrides: Partial<Config> = {}) {
 }
 
 describe('RFC-350 · 任务不活跃超时设置卡', () => {
-  test('默认关闭：开关未选中，阈值默认 24 小时', async () => {
+  test('默认关闭：开关未选中，阈值默认 168 小时（7 天）', async () => {
     install()
     renderGc()
 
@@ -112,16 +112,16 @@ describe('RFC-350 · 任务不活跃超时设置卡', () => {
     expect(toggle.checked).toBe(false)
     // 开关的可及名字就是它的中/英文标签——role 断言是公共组件契约的一部分。
     expect(screen.getByRole('checkbox', { name: /reap idle tasks automatically/i })).toBe(toggle)
-    expect(DEFAULT_CONFIG.taskIdleTimeout).toEqual({ enabled: false, idleHours: 24 })
+    expect(DEFAULT_CONFIG.taskIdleTimeout).toEqual({ enabled: false, idleHours: 168 })
 
     const threshold = screen.getByTestId('settings-task-idle-timeout-hours') as HTMLInputElement
-    expect(threshold.value).toBe('24')
+    expect(threshold.value).toBe('168')
   })
 
   test('AC-13：开了收割但工作区回收关着 ⇒ 提示磁盘不会自动释放', async () => {
     install()
     renderGc({
-      taskIdleTimeout: { enabled: true, idleHours: 24 },
+      taskIdleTimeout: { enabled: true, idleHours: 168 },
       worktreeAutoGc: { enabled: false },
     })
     expect(await waitFor(() => screen.getByText(/workspace auto-reclaim is off/i))).toBeTruthy()
@@ -130,7 +130,7 @@ describe('RFC-350 · 任务不活跃超时设置卡', () => {
   test('两个都开 ⇒ 不提示；收割没开 ⇒ 也不提示（条件性提示，不是常驻噪音）', async () => {
     install()
     const { unmount } = renderGc({
-      taskIdleTimeout: { enabled: true, idleHours: 24 },
+      taskIdleTimeout: { enabled: true, idleHours: 168 },
       worktreeAutoGc: { enabled: true, olderThanDays: 7 },
     })
     await waitFor(() => screen.getByTestId('settings-task-idle-timeout-enabled'))
@@ -138,7 +138,7 @@ describe('RFC-350 · 任务不活跃超时设置卡', () => {
     unmount()
 
     renderGc({
-      taskIdleTimeout: { enabled: false, idleHours: 24 },
+      taskIdleTimeout: { enabled: false, idleHours: 168 },
       worktreeAutoGc: { enabled: false },
     })
     await waitFor(() => screen.getByTestId('settings-task-idle-timeout-enabled'))
@@ -157,6 +157,6 @@ describe('RFC-350 · 任务不活跃超时设置卡', () => {
     fireEvent.click(screen.getByRole('button', { name: /save/i }))
 
     await waitFor(() => expect(configPuts).toHaveLength(1))
-    expect(configPuts[0]!.taskIdleTimeout).toEqual({ enabled: true, idleHours: 24 })
+    expect(configPuts[0]!.taskIdleTimeout).toEqual({ enabled: true, idleHours: 168 })
   })
 })

@@ -12,7 +12,7 @@
 | id         | 任务                                                                                                                                                                | 依赖 | 产物                   |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | ---------------------- |
 | RFC-350-T1 | `domain/idleTimeoutPolicy.ts`：`TaskActivityRecord` / `IdleTreeVerdict` / `judgeIdleTree`，零依赖纯函数；头注释写明「为什么评论/成员变更不算活动」与 F-9 的竞态语义 | —    | 新文件 + 单测 T-1～T-7 |
-| RFC-350-T2 | 配置：`config.ts` 加 `taskIdleTimeout{enabled,idleHours}`（默认关 / 24h）；`settingsNumericBounds.ts` 加 `taskIdleTimeout.idleHours` 与 `'hours'` 单位              | —    | schema + bounds        |
+| RFC-350-T2 | 配置：`config.ts` 加 `taskIdleTimeout{enabled,idleHours}`（默认关 / 168h = 7 天）；`settingsNumericBounds.ts` 加 `taskIdleTimeout.idleHours` 与 `'hours'` 单位      | —    | schema + bounds        |
 | RFC-350-T3 | 前端单位支持：`formatUnit.ts` 的 `NumberRangeUnit` 加 `'hours'` + `UNIT_STEPS.hours`；parity 测试跟上                                                               | T2   | 前端 lib + 单测        |
 
 ### 阶段 B —— 端口与两个 provider
@@ -53,10 +53,10 @@
 
 ### 阶段 F —— 收口
 
-| id          | 任务                                                                                                                                  | 依赖 | 产物                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------- |
-| RFC-350-T20 | 文档：`design/plan.md` RFC 索引状态改 Done；`STATE.md` 已完成表加行；如踩到通用坑补 `docs/dev-gotchas.md`                             | 全部 | 文档                |
-| RFC-350-T21 | Codex 实现门（只审功能，明写「安全类一律不扫描不提」——`CLAUDE.md` 2026-08-26 硬规则），findings 分「纯实现我改」/「涉及方向你定」两堆 | 全部 | 门记录写回本文件 §3 |
+| id          | 任务                                                                                                      | 依赖 | 产物   |
+| ----------- | --------------------------------------------------------------------------------------------------------- | ---- | ------ |
+| RFC-350-T20 | 文档：`design/plan.md` RFC 索引状态改 Done；`STATE.md` 已完成表加行；如踩到通用坑补 `docs/dev-gotchas.md` | 全部 | 文档   |
+| RFC-350-T21 | ~~Codex 实现门~~ —— 用户明示不跑，见 §3                                                                   | 全部 | 不执行 |
 
 ---
 
@@ -75,7 +75,7 @@
 ## 3. 门记录
 
 - 设计门：**用户明示跳过**（2026-09-02，同 RFC-325 / RFC-330 的先例）。
-- 实现门：待跑（T21）。
+- 实现门：**用户 2026-09-02 明示不跑**（「不跑 codex」），同 RFC-325 / RFC-330 先例。T21 未执行。
 
 ---
 
@@ -92,7 +92,7 @@
 - [ ] AC-9 收割后可被既有归档按 `retentionDays` 出库
 - [ ] AC-10 只开收割不开归档 → 只终结不出库
 - [ ] AC-11 全 `interrupted` 树能被归档出库
-- [ ] AC-12 `idleHours` 1–8760 双端同源校验
+- [ ] AC-12 `idleHours` 1–8760 双端同源校验、出厂默认 168（7 天）
 - [ ] AC-13 设置页卡片 + worktree 提示
 - [ ] AC-14 软删除任务豁免
 - [ ] AC-15 两 provider 行为一致 + 注册为可暂停写手
