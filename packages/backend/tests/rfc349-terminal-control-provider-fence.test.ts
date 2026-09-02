@@ -84,8 +84,8 @@ describe('RFC-349 terminal-control worker inside the provider fence', () => {
     )
 
     const rejections: unknown[] = []
-    const onRejection = (event: PromiseRejectionEvent): void => {
-      rejections.push(event.reason)
+    const onRejection = (reason: unknown): void => {
+      rejections.push(reason)
     }
     // Bun surfaces an unhandled drain rejection here before it kills the process.
     process.on('unhandledRejection', onRejection)
