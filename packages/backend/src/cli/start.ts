@@ -2538,7 +2538,28 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     projectionLedger: committedEventProjectionLedger,
     nudgeDispatcher: committedEventWorkerDefinition.nudge,
   })
-  registerAfterCommitEventPump(committedEventPump)
+  // RFC-349 —— 与 PostgreSQL daemon 同构：post-commit 投影泵必须归 provider session 管。
+  // 裸注册的泵在迁移冻结窗口内依然挂着，任何一笔漏出的提交（含 `/api/database/*`
+  // 这条被有意豁免的控制面）都会让它 `publishNow` 往**源库**写投影/账本行，拷贝阶段
+  // 随后以 `sqlite-source-mutated` 收场。停泵是安全的：`publishCommittedEventsAfterCommit`
+  // 明确允许 pump 缺席，durable delivery 是恢复路径（`platform/events/committed/runtime.ts`）。
+  const afterCommitPumpFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
+    id: 'after-commit-event-pump',
+    start() {
+      registerAfterCommitEventPump(committedEventPump)
+      let stopped = false
+      return Object.freeze({
+        stop() {
+          if (stopped) return
+          stopped = true
+          registerAfterCommitEventPump(null)
+        },
+        drain() {
+          if (!stopped) throw new Error('after-commit-event-pump-drain-before-stop')
+        },
+      })
+    },
+  })
   const humanGateContinuationRuntimeFactory = createManagedWorkerRuntimeHandleFactory({
     id: 'human-gate-continuation',
     stopReason: 'provider-session-paused',
@@ -3211,6 +3232,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   const providerBackgroundWriterFactories = Object.freeze([
     webhookTerminalControlRuntimeFactory,
+    afterCommitPumpFactory,
     limitsRuntimeFactory,
     idleTimeoutRuntimeFactory,
     backupRuntimeFactory,

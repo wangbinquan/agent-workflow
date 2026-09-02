@@ -1,7 +1,7 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 492,
+    "ambientWiring": 493,
     "architectureExceptions": 6071,
     "backgroundJobs": 366,
     "crossContextImports": 6275,
@@ -14,7 +14,7 @@
     "transactionExternalEffects": 476
   },
   "metrics": {
-    "ambientWiringEntries": 492,
+    "ambientWiringEntries": 493,
     "appDepsConsumers": [],
     "backendProductionFiles": 1887,
     "backendValueSccs": [
@@ -164,5 +164,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:085f26995fa7a4f9d61696707bf21b32f75b647c0d990653aab3944b8c7fe978"
+  "sourceDigest": "sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196"
 }

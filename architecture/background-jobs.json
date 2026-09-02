@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2541",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2549",
       "kind": "register-call",
-      "line": 2541,
+      "line": 2549,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,20 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3337",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2555",
       "kind": "register-call",
-      "line": 3337,
+      "line": 2555,
+      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
+      "removeAfterWave": "W6/W9",
+      "symbol": "startCommand",
+      "targetContext": "bootstrap"
+    },
+    {
+      "callee": "registerAfterCommitEventPump",
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3359",
+      "kind": "register-call",
+      "line": 3359,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -47,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2835",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2856",
       "kind": "register-call",
-      "line": 2835,
+      "line": 2856,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -80,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2875",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2896",
       "kind": "global-setter",
-      "line": 2875,
+      "line": 2896,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -5430,7 +5441,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 492,
+    "ambientWiring": 493,
     "disabled": 11,
     "entries": 366,
     "executionLocal": 52,
@@ -13521,5 +13532,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:085f26995fa7a4f9d61696707bf21b32f75b647c0d990653aab3944b8c7fe978"
+  "sourceDigest": "sha256:eccf1de03c14a2fe2dcf164ef24cb101a86dbc9a32a6ad27d6f94c04c14d9196"
 }
