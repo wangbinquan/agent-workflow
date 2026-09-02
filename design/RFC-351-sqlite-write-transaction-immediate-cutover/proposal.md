@@ -3,7 +3,7 @@
 - 状态：Draft（2026-09-02；待用户批准）
 - current-source pin：`f4e3f3ca2`（`HEAD=origin/main`）
 - 前置：[RFC-093](../RFC-093-db-tx-sync/design.md)（`dbTxSync` 原语）、
-  [RFC-338](../RFC-338-maintenance-worker/proposal.md) AC-2（`BEGIN IMMEDIATE`）、
+  [RFC-338](../RFC-338-maintenance-worker-daily-window/proposal.md) AC-2（`BEGIN IMMEDIATE`）、
   RFC-317 T37 / CC-04（`RAW_TRANSACTION_SITES` 站点账本）
 - 影响域：`digital-employee` / `development-automation` / `event-center` 三个 bounded context 的 infrastructure 层
 
