@@ -385,10 +385,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1908,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-349 割接质量三修：①拷贝后对目标库逐表 ANALYZE（新增一处 mutation entrypoint 与一个模块私有符号）——没有统计的目标库把索引查询规划成顺序扫描，而顺序扫描在 SERIALIZABLE 下持整表 predicate lock，本机实测割接后头一分钟 3210 次 40001；②割接前排空在途请求（新增 listener traffic 计数器与其类型），否则组装目标时翻转的进程级表投影会让在途请求打出 `no such table: agent_workflow.*` 的 500；③重试预算 6→10。本机 100 客户端小规模取证从 3 条 HTTP 错误降到 0，三相位全绿。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -479,10 +476,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25667,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349 割接质量三修：①拷贝后对目标库逐表 ANALYZE（新增一处 mutation entrypoint 与一个模块私有符号）——没有统计的目标库把索引查询规划成顺序扫描，而顺序扫描在 SERIALIZABLE 下持整表 predicate lock，本机实测割接后头一分钟 3210 次 40001；②割接前排空在途请求（新增 listener traffic 计数器与其类型），否则组装目标时翻转的进程级表投影会让在途请求打出 `no such table: agent_workflow.*` 的 500；③重试预算 6→10。本机 100 客户端小规模取证从 3 条 HTTP 错误降到 0，三相位全绿。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -500,7 +494,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "15b0a7cb7222d5e327436ecb16d8b368cde6f0c1",
-    "contentDigest": "sha256:8779371857bd4c5871fa9d918709874b64fdd701ce7fd4d62d347cfe267a9da1",
+    "contentDigest": "sha256:5a73313485adca203b3d8c87d31c549d1bc2dcf06c8ee23e7016114534d037c3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
