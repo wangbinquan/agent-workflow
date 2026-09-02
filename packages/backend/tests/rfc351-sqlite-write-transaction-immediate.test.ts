@@ -17,11 +17,13 @@
 // 改造前本文件红（publishTool 抛 SQLITE_BUSY_SNAPSHOT），改造后绿。
 
 import { describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { openDb } from '@/db/client'
+import { createInMemoryDb, openDb } from '@/db/client'
+import { dbTxSync } from '@/db/txSync'
 import { employeeToolRegistrations } from '@/db/schema'
 import { createSqliteDigitalEmployeeAuthoringStore } from '@/modules/digital-employee/infrastructure/sqliteAuthoringStore'
 import { MIGRATIONS } from './migration-freeze'
@@ -119,5 +121,68 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
       ;(db as unknown as { $client: { close(): void } }).$client.close()
       rmSync(root, { recursive: true, force: true })
     }
+  })
+
+  // RFC-351 —— 本 RFC 把若干**互相嵌套**的裸事务一起改成了 dbTxSync（典型：mission store 的
+  // `commitMissionLaunch` 在自己的事务里再调 `createMission`，而后者也有自己的事务）。
+  // `BEGIN IMMEDIATE` 只对最外层生效，内层由 bun:sqlite 走 SAVEPOINT——这条测试把该语义钉死：
+  // 嵌套照常提交，内层抛错整体回滚。没有它，这次改动在一条**零测试覆盖**的路径上就是盲改。
+  test('嵌套 dbTxSync 仍是一个原子单位：一起提交，内层抛错一起回滚', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const seed = (id: string, revision: number | null): void => {
+      db.insert(employeeToolRegistrations)
+        .values({
+          id,
+          typeId: 'development',
+          typeRevision: 10,
+          workItemRef: 'analyze-implement',
+          draftJson: '{}',
+          publishedRevision: revision,
+          name: id,
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        .run()
+    }
+    const publishedRevisions = (): Array<number | null> =>
+      db
+        .select({ v: employeeToolRegistrations.publishedRevision })
+        .from(employeeToolRegistrations)
+        .all()
+        .map((row) => row.v)
+
+    seed('outer', null)
+    seed('inner', null)
+
+    dbTxSync(db, () => {
+      db.update(employeeToolRegistrations)
+        .set({ publishedRevision: 1 })
+        .where(eq(employeeToolRegistrations.id, 'outer'))
+        .run()
+      dbTxSync(db, () => {
+        db.update(employeeToolRegistrations)
+          .set({ publishedRevision: 2 })
+          .where(eq(employeeToolRegistrations.id, 'inner'))
+          .run()
+        return null
+      })
+      return null
+    })
+    expect(publishedRevisions().sort()).toEqual([1, 2])
+
+    expect(() =>
+      dbTxSync(db, () => {
+        db.update(employeeToolRegistrations)
+          .set({ publishedRevision: 9 })
+          .where(eq(employeeToolRegistrations.id, 'outer'))
+          .run()
+        dbTxSync(db, () => {
+          throw new Error('inner fails')
+        })
+        return null
+      }),
+    ).toThrow('inner fails')
+    // 内层失败必须把外层那次写一起带走，否则就是半提交。
+    expect(publishedRevisions().sort()).toEqual([1, 2])
   })
 })
