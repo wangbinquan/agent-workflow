@@ -571,6 +571,22 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
 - 把别人引起的 baseline **上涨**写进 `ledger-baselines.json`（实测 842→870、859→928、
   17083→…）。账本只许降，涨要写 `allowGrowth` 并点名 RFC——替别人涨等于帮他们绕过高水位。
 
+**先把污染面收窄**（2026-09-02 源码对账）：真正会被工作树脏文件影响的只有
+`packages/{backend,shared,frontend}/src/**/*.{c,m}ts{,x}`（`census.ts` 的 `walkTsFiles` /
+`packageSrcUnits`）、`sourceDigest` 额外吃的 `.dependency-cruiser.cjs` 与 `scripts/depcheck.ts`，
+外加 `packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts`——只有它被
+`upsertCanonicalGuard` 从磁盘现采（连行数一起写进 `guard-manifest.json`）。四份 governance
+artifact 的其余部分是**已提交种子 + 投影**（`readSeedJson`）。也就是说别人的在制品若全落在
+`tests/`（除上面那一个）/ `docs/` / `design/` / `e2e/` / 未追踪的新测试里，**直接在真实仓库跑
+生成器是安全的**，不必绕。判据一行：
+
+```bash
+git status --porcelain -- packages/backend/src packages/shared/src packages/frontend/src \
+  .dependency-cruiser.cjs scripts/depcheck.ts \
+  packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts
+# 空 → 直接 `bun run architecture:write --snapshot-sha HEAD`；非空 → 走下面的导出树
+```
+
 **替代做法（RFC-329 实测可行）**：
 
 1. `sourceDigest`（第 3 条）：**可以本地算准，不必等 CI**（2026-08-26 修正——原先以为只能从
@@ -623,6 +639,19 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
      governance artifact 的 `provenance.contentDigest` 是**去掉 provenance 后的 payload 摘要**
      （`withArtifactProvenance` / `artifactContentDigest`）。产物拷回真实仓库后，要在真实仓库
      里把 provenance 重钉一次，否则 N1a「content-addressed provenance」红。
+   - **省掉那道手工重钉：把真仓库的 `.git` 软链进导出树**（2026-09-02 实测）。链好之后
+     `fullSha()` 的 `git rev-parse` 就能用，可以直接在导出树里跑
+     `bun run architecture:write --snapshot-sha HEAD`，census 与四份 provenance 一次做完。
+     **代价**：那棵树从此共享真实仓库的 HEAD / index，只能在里面跑生成器与只读 git 命令；
+     任何 `checkout` / `add` / `commit` / `reset` 都会作用在**真实仓库**上。
+   - **导出的必须是「你要推的那个 commit 本身」**（`git archive <commit>`），不要「archive HEAD
+     + 逐个从工作树拷自己改过的文件」。2026-09-02 实撞（`d335ea0fa`）：拷贝发生在把
+     `cli/start.ts` 重放成干净版**之前**，于是账本采的是含并发 session 未提改动的磁盘版
+     （3456 行）、提交的却是重放版（3460 行）——账本里三处
+     `ambient:…start.ts#registerAfterCommitEventPump` 全部差 4 行（记 2540、需要 2544），
+     `sourceDigest` 也对不上，推上去当场 N1b 红。**采样源与提交内容是两个东西**，只有从提交
+     本身导出才恒等；推之前再自验一遍（导出目标 commit 整体重跑、与 committed 逐字节比）就
+     能在推之前拦住。
    - 同一套姿势还能用来**判定账本到底同步了没有**：把 tip 导出来整体重跑一次，与 committed
      的 `architecture/*.json` + `status.md` 逐字节比。2026-09-02 就是这么确认「并发 session
      的重生成已经把我的改动一起收进去了、我不必再提一笔」的——他们的生成器读的是含我已提交
