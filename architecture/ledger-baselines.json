@@ -420,10 +420,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6275,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-351：净 +7。DE/DA/EC 三个 context 的 8 个 SQLite infrastructure 文件把裸 `db.transaction(...)` 换成平台原语 `dbTxSync`（RFC-338 AC-2 的 BEGIN IMMEDIATE），因此各新增一条 `@/db/txSync` 值导入边。这不是新增耦合类别——这些文件本来就 import `@/db/schema` / `@/db/client` 等同族平台原语；它替换掉的正是「绕过平台事务内核直调 drizzle」这一更差的形态，站点账本 RAW_TRANSACTION_SITES 同批从 37 降到 1。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -444,10 +441,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 6071,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-351：净 +7。DE/DA/EC 三个 context 的 8 个 SQLite infrastructure 文件把裸 `db.transaction(...)` 换成平台原语 `dbTxSync`（RFC-338 AC-2 的 BEGIN IMMEDIATE），因此各新增一条 `@/db/txSync` 值导入边。这不是新增耦合类别——这些文件本来就 import `@/db/schema` / `@/db/client` 等同族平台原语；它替换掉的正是「绕过平台事务内核直调 drizzle」这一更差的形态，站点账本 RAW_TRANSACTION_SITES 同批从 37 降到 1。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -499,8 +493,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "046f859ef58a9725f523cbe5cbbdbac7ac3eb503",
-    "contentDigest": "sha256:5607b60ec735b5f1bb3f4c85c984bf4ad9c0e0944bff8bc6c4a473bbe886eb1e",
+    "currentSnapshotSha": "a3177b34ecc9fcfbb50665071c24a7e1a98d90d7",
+    "contentDigest": "sha256:e1f6d76a29de234406956763b737a6449a2ce0d9de1560f6eef394d8d0546dcd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

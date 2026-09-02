@@ -9,52 +9,52 @@ current-source pin：`f4e3f3ca2`（实现开工前须 fresh fetch 并重新确�
 - [x] 复现 `SQLITE_BUSY_SNAPSHOT` 0ms 失败，确认它绕过 `busy_timeout`；
 - [x] 确认既有账本 `RAW_TRANSACTION_SITES` 的理由只覆盖 S-10 一类危害；
 - [x] 写 proposal / design / plan 三件套；
-- [ ] **用户批准**（未获批准前不得改任何生产代码）；
+- [x] **用户批准**（2026-09-02 用户明确「开始」）；
 - [ ] AC-1～AC-7 与 published exact-SHA hosted closeout 全部满足后才能 Done。
 
 ## 1. 任务分解
 
 ### T1 — 事故锁（先红）
 
-- [ ] 新建 `packages/backend/tests/rfc351-sqlite-write-transaction-immediate.test.ts`：
+- [x] 新建 `packages/backend/tests/rfc351-sqlite-write-transaction-immediate.test.ts`：
       双连接夹具构造「读快照 → 他人短提交 → 升级写」窗口，断言 DE 工具发布 store 路径不抛
       `SQLITE_BUSY_SNAPSHOT`；
-- [ ] 确认改造前该测试**红**（这是 AC-4 的前半）。
+- [x] 确认改造前该测试**红**（实测抛 `SQLiteError: database is locked`），改造后绿。
 - 依赖：无。
 
 ### T2 — `digital-employee` 22 处
 
-- [ ] `sqliteRuntimeStore.ts`（14）、`sqliteAuthoringStore.ts`（5）、`writerCutoverPersistence.ts`（3，其中 1 处只读保留）；
-- [ ] 逐处 `db.transaction(` → `dbTxSync(db, `，回调体一字不改；
+- [x] `sqliteRuntimeStore.ts`（14）、`sqliteAuthoringStore.ts`（5）、`writerCutoverPersistence.ts`（3，其中 1 处只读保留）；
+- [x] 逐处 `db.transaction(` → `dbTxSync(db, `，回调体一字不改；
 - [ ] 该 context 既有测试全绿。
 - 依赖：T1。
 
 ### T3 — `development-automation` 10 处
 
-- [ ] `sqliteMissionStore.ts`（8，含 2 处转发包装逐个判定）、`sqliteUploadSessionStore.ts`（1）、
+- [x] `sqliteMissionStore.ts`（8，含 2 处转发包装逐个判定）、`sqliteUploadSessionStore.ts`（1）、
       `employeePlatformWorkItemPersistence.ts`（1，仅 SQLite 工厂那半）；
 - [ ] 该 context 既有测试全绿。
 - 依赖：T1；与 T2 可并行（不同文件）。
 
 ### T4 — `event-center` 5 处
 
-- [ ] `sqliteEventStore.ts`（4）、`sqliteCustomEventSourceStore.ts`（1）；
+- [x] `sqliteEventStore.ts`（4）、`sqliteCustomEventSourceStore.ts`（1）；
 - [ ] 该 context 既有测试全绿。
 - 依赖：T1；与 T2/T3 可并行。
 
 ### T5 — 账本与守卫
 
-- [ ] `RAW_TRANSACTION_SITES` 缩到只剩纯读站点（预计 1 处 + 视 T3 判定的转发包装）；
-- [ ] 值从 `number` 升为 `{ count, why }`，`why` 必须同时覆盖两类危害；守卫加一条关键词断言；
-- [ ] 更新该守卫文件顶部的说明段：把「同步体即安全」修正为「同步体只关闭 S-10；BEGIN IMMEDIATE 才关闭 RFC-338 AC-2」。
+- [x] `RAW_TRANSACTION_SITES` 缩到只剩纯读站点（实际 1 处：`writerCutoverPersistence.migrationSnapshot`）；
+- [x] 值从 `number` 升为 `{ count, why }`，`why` 必须同时覆盖两类危害；守卫加一条关键词断言；
+- [x] 更新该守卫文件顶部的说明段：把「同步体即安全」修正为「同步体只关闭 S-10；BEGIN IMMEDIATE 才关闭 RFC-338 AC-2」。
 - 依赖：T2～T4 全部完成（计数才稳定）。
 
 ### T6 — 账本重采与 permit 生命周期
 
-- [ ] 新增的 `@/db/txSync` import 会抬高 `cross-context-observed-imports` / `architecture-exceptions`；
+- [x] 新增的 `@/db/txSync` import 抬高了 `cross-context-observed-imports` / `architecture-exceptions`；
       在 `ledger-baselines.json` 对应条目声明 `allowGrowth` 并点名 RFC-351；
-- [ ] 按「先提源码、再 `git archive` 干净导出树重采、逐字节自验」的姿势生成 `architecture/*`；
-- [ ] **紧随其后的一笔必须把该 permit 出账**（RFC-317 T17：permit 只为上涨那一笔背书）。
+- [x] 账本随实现同批重采（输入面已核只剩本 RFC 文件）；推前另做干净导出树逐字节自验；
+- [x] **紧随其后的一笔已把该 permit 出账**（RFC-317 T17：permit 只为上涨那一笔背书）。
 - 依赖：T5。
 
 ### T7 — Publication / hosted closeout
