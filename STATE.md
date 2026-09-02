@@ -100,6 +100,34 @@ memory-distill / development-wake / digital-employee-os / event-center / fusion-
 >   「相位切到 copying 之后第一次被触发的某个一次性写」。当前最可疑的是**状态轮询触发的写**
 >   （夹具用 4 个 client 持续打 `/api/database/migrations/:id`，另有 1Hz 打 `/api/maintenance/status`）。
 >   下一步就从这条查：把 daemon 主连接的写语句在冻结窗内打栈，或先停掉状态轮询做对照。
+>
+> **T10 根因已定位（2026-09-02）：冻结管不到 HTTP 请求路径，而请求路径每秒会写一次源库。**
+>
+> 给 `openDb` 挂一个 `AW_PROBE_WRITES=1` 的临时写探针（记录每条 INSERT/UPDATE/DELETE/BEGIN/COMMIT
+> 与调用栈）跑本机复现，失败前 29ms 的那条写是：
+>
+> ```
+> update "user_sessions" set "last_used_at" = ? where "user_sessions"."id" = ?
+> ```
+>
+> 它来自 `auth/infrastructure/legacySqliteSessionStore.ts:160`（PostgreSQL 侧同形，
+> `postgresqlAuthPersistence.ts:383`）：**每个带 session 的 HTTP 请求都会 touch 一次
+> `last_used_at`，按 `SESSION_LAST_USED_WRITE_INTERVAL_MS = 1_000` 每会话每秒最多写一次**。
+> 冻结停的是 provider session 上的 14 个后台 handle，**HTTP 请求路径不在其中**——而迁移偏偏
+> 是被人从设置页盯着的：进度轮询本身就是带 session 的请求。于是只要拷贝超过 1 秒（4.3GB 那次
+> 是 5.8 分钟），源库必然被写、`assertUnchanged` 必然红。这也解释了为什么它「每次都在 copying
+> 阶段失败」而与表数、并发数无关。
+>
+> 顺带解释了一条早先的困惑：用 **daemon token** 打 12,656 个请求一次都不涨 `data_version`
+> （daemon 身份没有 session 行可 touch），换成 session token 就每秒一次。
+>
+> **修法是设计取舍，留给用户拍板**（本条只报不改）：
+> ① 冻结期间跳过这次 touch——注释里写明它「是活动投影，不是凭据有效性围栏」，维护窗内不写它
+> 不丢任何语义，改动面最小；
+> ② 让整条请求路径在冻结期间拒绝/推迟写入（更彻底：请求路径大概率还有别的写手，本次探针只在
+> 夹具打的那两个端点上取样，真实 UI 的面更宽）；
+> ③ 放松源完整性判据——**不可取**，那道判据正是这次迁移敢做的前提。
+> 建议先做 ①，再按 ② 的口径把请求路径的写手扫一遍。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表
