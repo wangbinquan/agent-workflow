@@ -258,8 +258,7 @@ describe('RFC-349 Integration provider adapters', () => {
     expect(postgresqlResourceLoads).toBe(1)
     expect(postgresql.executions[0]?.sql.trim().toLowerCase()).toBe('begin')
     expect(postgresql.executions[4]?.sql.trim().toLowerCase()).toBe('commit')
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(postgresql.releases).toBe(2)
+    expect(postgresql.releases).toBe(1)
   })
 
   test('PostgreSQL launch reservation serializes on the MR stream before checking open state', async () => {
@@ -295,8 +294,7 @@ describe('RFC-349 Integration provider adapters', () => {
     expect(lockIndex).toBeGreaterThanOrEqual(0)
     expect(streamReadIndex).toBeGreaterThan(lockIndex)
     expect(guardInsertIndex).toBeGreaterThan(streamReadIndex)
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('PostgreSQL verified ingress returns the existing fact and revives its pending effect', async () => {
@@ -339,8 +337,7 @@ describe('RFC-349 Integration provider adapters', () => {
         statement.includes('update "agent_workflow"."webhook_mr_control_effects"'),
       ),
     ).toBe(true)
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('terminal ingress and launch reservation share one transaction lock key', () => {

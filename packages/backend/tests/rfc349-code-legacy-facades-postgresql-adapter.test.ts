@@ -155,7 +155,7 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
     // begin/marker/fence/write/commit for the first write, begin/fence/write/
     // commit for the two that follow — the marker is one-shot per process.
     expect(fake.executions).toHaveLength(13)
-    expect(fake.executions[0]?.sql).toContain('WITH marked AS (UPDATE "agent_workflow_meta"')
+    expect(fake.executions[1]?.sql).toContain('WITH marked AS (UPDATE "agent_workflow_meta"')
     expect(fake.executions[2]?.sql).toContain('SELECT generation_id FROM "agent_workflow_meta"')
     expect(fake.executions[3]?.sql).toContain('insert into "agent_workflow"."capability_templates"')
     expect(fake.executions[7]?.sql).toContain('update "agent_workflow"."capability_templates"')

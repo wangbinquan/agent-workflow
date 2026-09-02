@@ -392,10 +392,8 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       }),
     ).resolves.toBe(true)
     expect(postgresqlUnapprove.executions.map(({ sql }) => sql)).toEqual([
-      // The one-shot marker commits on its own reserved session, ahead of the
-      // transaction it belongs to.
-      expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
       'BEGIN',
+      expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
       expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."doc_versions"'),
       'COMMIT',

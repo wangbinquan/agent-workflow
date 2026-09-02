@@ -153,16 +153,13 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     ).resolves.toBe(true)
 
     expect(fake.statements.map((statement) => statement.trim().toLowerCase())).toEqual([
-      // The one-shot live-write marker commits on its own reserved session,
-      // ahead of the transaction it belongs to.
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       'begin',
+      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       expect.stringContaining('select generation_id from "agent_workflow_meta"'),
       expect.stringContaining('update "agent_workflow"."maintenance_runs"'),
       'commit',
     ])
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('rejects a stale generation before the lease row mutates', async () => {
@@ -179,8 +176,7 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
 
     expect(fake.statements.some((statement) => statement.includes('maintenance_runs'))).toBe(false)
     expect(fake.statements.at(-1)?.trim().toLowerCase()).toBe('rollback')
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('health projection executes through the PostgreSQL provider client', async () => {
@@ -261,8 +257,8 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     expect(deleteStatement).toContain('"agent_workflow"."memory_distill_events"')
     expect(deleteStatement).not.toContain('rowid')
     expect(statements.map((statement) => statement.trim().toLowerCase())).toEqual([
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       'begin',
+      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       expect.stringContaining('select generation_id from "agent_workflow_meta"'),
       expect.stringContaining('with candidates'),
       'commit',
@@ -342,15 +338,18 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     await store.deleteNodeRunEventsThrough('run-1', 50)
     const deleteIndex = statements.findIndex((statement) => /delete\s+from/i.test(statement))
     expect(deleteIndex).toBeGreaterThan(0)
+    // BEGIN, the one-shot live-write marker, the generation fence, the delete,
+    // COMMIT — all on the one reserved session.
     const fencedDelete = statements
-      .slice(deleteIndex - 2, deleteIndex + 2)
+      .slice(deleteIndex - 3, deleteIndex + 2)
       .map((statement) => statement.trim())
     expect(fencedDelete[0]).toBe('BEGIN')
-    expect(fencedDelete[1]).toContain('SELECT generation_id FROM "agent_workflow_meta"')
-    expect(fencedDelete[2]?.toLowerCase()).toContain(
+    expect(fencedDelete[1]).toContain('WITH marked AS (UPDATE "agent_workflow_meta"')
+    expect(fencedDelete[2]).toContain('SELECT generation_id FROM "agent_workflow_meta"')
+    expect(fencedDelete[3]?.toLowerCase()).toContain(
       'delete from "agent_workflow"."node_run_events"',
     )
-    expect(fencedDelete[3]).toBe('COMMIT')
+    expect(fencedDelete[4]).toBe('COMMIT')
     expect(statements[deleteIndex]).not.toContain('rowid')
   })
 })

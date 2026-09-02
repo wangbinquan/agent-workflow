@@ -191,8 +191,7 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
     for (const statement of inserts) {
       expect(statement).not.toMatch(/"intent_(?:sessions|turns)"\."[a-z_]+"/)
     }
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fixture.releases).toBe(2)
+    expect(fixture.releases).toBe(1)
   })
 
   test('PostgreSQL update assignments keep table qualification out of SET targets', async () => {
@@ -214,7 +213,6 @@ describe('RFC-349 Intent SQL persistence identifier rendering', () => {
     expect(updates[0]).toContain('SET "status" =')
     expect(updates[0]).toContain('"updated_at" =')
     expect(updates[0]).not.toMatch(/SET\s+"intent_sessions"\./)
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fixture.releases).toBe(2)
+    expect(fixture.releases).toBe(1)
   })
 })

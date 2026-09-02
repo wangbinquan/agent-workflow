@@ -234,9 +234,8 @@ describe('RFC-349 PostgreSQL OIDC identity cross-context transaction', () => {
       expect.stringContaining('"agent_workflow"."user_identities"'),
     ])
     expect(fake.executions.every((execution) => execution.client === 'reserved')).toBe(true)
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.reserves).toBe(2)
-    expect(fake.releases).toBe(2)
+    expect(fake.reserves).toBe(1)
+    expect(fake.releases).toBe(1)
     expect(fake.remaining()).toBe(0)
   })
 })

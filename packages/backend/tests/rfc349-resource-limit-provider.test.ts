@@ -172,8 +172,7 @@ describe('RFC-349 resource-limit provider seam', () => {
     ).toBe(true)
     // One process-wide live-write marker plus a generation fence per write.
     expect(statements.filter((query) => query.includes('database_generations'))).toHaveLength(3)
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fixture.releases).toBe(3)
+    expect(fixture.releases).toBe(2)
   })
 
   test('service and PostgreSQL adapter prohibit direct DB facade casts and SQLite fallback', () => {

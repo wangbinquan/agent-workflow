@@ -13477,5 +13477,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:377e73cf5118ad82b48845a0717c017083394cd6f633c78381e06666a7dfad50"
+  "sourceDigest": "sha256:b1631891e5776594b14391d822ae406acd46dc9e3ac7b5e691fc541e9cc2f8fb"
 }

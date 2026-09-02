@@ -188,8 +188,7 @@ describe('RFC-349 PostgreSQL auth adapter', () => {
       statements.some((statement) => statement.includes('update "agent_workflow"."user_sessions"')),
     ).toBe(true)
     expect(revocations).toEqual(['session-revoked'])
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(3)
+    expect(fake.releases).toBe(2)
   })
 
   test('policy mutation is serializable and generation-fenced', async () => {
@@ -212,8 +211,7 @@ describe('RFC-349 PostgreSQL auth adapter', () => {
       expect.stringContaining('update "agent_workflow"."auth_login_policy"'),
       'commit',
     ])
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('session and PAT resolution stay atomic on one reserved connection', async () => {

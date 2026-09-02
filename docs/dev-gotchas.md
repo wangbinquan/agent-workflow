@@ -501,6 +501,33 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 - **权限点与路由必须同批落地——这是结构性的，不是约定**。RFC-247 的启动自检会遍历 `ROUTE_BACKED_POINTS`，任何没有 `RouteMeta` 引用的点位让 daemon **拒绝启动**。这次先加了 8 个点、路由还没写，于是**全仓 20 条测试失败全是这一条拒绝**（凡是 `createApp` 的用例都挂）——症状离原因很远，但只要想到「刚加过点位」就一步到位。反向同理：删路由不删点位一样起不来。
 
+## 本机 bun 低于 `package.json` 的 `engines.bun` 会伪造出「产品 bug」（RFC-349 实测，2026-09-02）
+
+`package.json` 写着 `"bun": ">=1.4.0"`，CI 四条 workflow 也都 `bun-version: '1.4.0'`；本机
+若停在 1.3.13，跑出来的红**可能根本不存在于 CI**。实撞：RFC-349 的外置 PostgreSQL 取证跑
+在本机稳定出 44 次 `SET TRANSACTION ISOLATION LEVEL must be called before any query`，
+按 daemon 日志一路查到「连接被 `reserve()` 交出来时还没干净」，最后用一段**不依赖本仓的
+20 行 Bun.SQL 复现**定死：同一段代码在 1.3.13 上 144 次失败 / 42k 次迭代，在 1.4.0 上
+**0 次**。是 Bun 的连接池 bug，1.4.0 已修。
+
+- 排查任何「只在本机复现」的运行时怪象前，先 `bun --version` 对一眼 `engines.bun`。
+- 不确定时把可疑行为剥成**不 import 本仓任何东西**的最小脚本，再拿两个 bun 版本各跑一遍；
+  下载一个临时 bun 到 scratchpad 就行（`https://github.com/oven-sh/bun/releases/download/
+bun-v<ver>/bun-darwin-aarch64.zip`），不必动本机工具链。
+- 编译产物同理：`bun run build:binary:e2e` 用的是**当前** bun，本机版本不对 = 你测的不是
+  CI 会跑的那个二进制。
+
+## 临时探针在工作树里时不要跑 census（RFC-349 实测，2026-09-02）
+
+`scripts/architecture-census.ts` 扫的是**工作树**，不是 HEAD。带着临时 `console.log` 探针
+跑一次 census，写出的 `sourceDigest` 就绑在探针版源码上；把探针删掉再提交，committed 的
+`architecture/*.json` 与 committed 源码对不上，RFC-294 N1b「seven canonical manifests are
+exact generated projections」在 CI 上红，而本地（探针还在时）是绿的。顺序固定为：
+**先把所有临时改动去干净 → 再跑 census → 再提交**。
+
+同一段还有一条：**census 的生成物不要进 `prettier --write` 批处理**。它们必须与生成器逐字
+相等，被 prettier 重排一次就红（实撞的是 `design/RFC-294-…/status.md`，A2 投影守卫）。
+
 ## 架构账本的联动点：动一次代码要同步 8 处（RFC-329 实测，2026-08-26 连推红六轮）
 
 一次 PR 里加了**一个守卫文件 + 一条账本条目**，主干连红四轮，每轮暴露一个此前不知道的
@@ -508,16 +535,16 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 
 按撞到的顺序列全（新增守卫 / 账本 / 路由、**以及任何改了行数的编辑**，逐条过一遍，别等 CI）：
 
-| #   | 改了什么                                                                                 | 必须同步                                                                          | 不同步的表现                                                                                                                                                                                                                       |
-| --- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 新 RFC 同时有 AC 列表和证据表                                                            | `tests/rfc-index-status-drift.test.ts` 的 `AC_EVIDENCE_GAP`                       | 「AC 证据索引的缺口逐字相等」红。**缺口为 0 也必须登记**——它按「measured 与台账逐字相等」判定，漏登记 = 台账少一个键                                                                                                               |
-| 2   | 新增守卫测试文件                                                                         | `architecture/guard-manifest.json` 的 `guards[]`                                  | 「清单与磁盘逐条相等」红。字段值不是随便填：`assertsAbsence` / `negativeFixture` / `corpusScanner` 都由 `census.ts` 从源码**检测**出来，账本要与检测结果相等                                                                       |
-| 3   | 新增/修改任何 `.ts` 源码                                                                 | 全部 12 份 `architecture/*.json` 的 `sourceDigest`                                | RFC-294 N1b「seven canonical manifests are exact generated projections」红。这是**全局**digest（`allUnits` 路径+内容），12 处共用一个值                                                                                            |
+| #   | 改了什么                                                                                 | 必须同步                                                                          | 不同步的表现                                                                                                                                                                                                                                                                                                                                                                                      |
+| --- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 新 RFC 同时有 AC 列表和证据表                                                            | `tests/rfc-index-status-drift.test.ts` 的 `AC_EVIDENCE_GAP`                       | 「AC 证据索引的缺口逐字相等」红。**缺口为 0 也必须登记**——它按「measured 与台账逐字相等」判定，漏登记 = 台账少一个键                                                                                                                                                                                                                                                                              |
+| 2   | 新增守卫测试文件                                                                         | `architecture/guard-manifest.json` 的 `guards[]`                                  | 「清单与磁盘逐条相等」红。字段值不是随便填：`assertsAbsence` / `negativeFixture` / `corpusScanner` 都由 `census.ts` 从源码**检测**出来，账本要与检测结果相等                                                                                                                                                                                                                                      |
+| 3   | 新增/修改任何 `.ts` 源码                                                                 | 全部 12 份 `architecture/*.json` 的 `sourceDigest`                                | RFC-294 N1b「seven canonical manifests are exact generated projections」红。这是**全局**digest（`allUnits` 路径+内容），12 处共用一个值                                                                                                                                                                                                                                                           |
 | 4   | 改了 `architecture/{commons-manifest,commons-debt,guard-manifest,ledger-baselines}.json` | 这四份的 `provenance`                                                             | RFC-294 N1a「carries content-addressed provenance reachable from HEAD」红。**一笔提交即可**（2026-08-30 review §A3 起）：`contentDigest` 必须等于当前 payload 的 digest，`currentSnapshotSha` 必须是 HEAD 历史上可达的 40 位 SHA（语义是「生成器对照的已提交祖先」，直接用 `--snapshot-sha HEAD`）；此前「`git show <sha>:<path>` 与当前文件 byte-equal、内容先落一笔再回填 sha」的两笔协议已作废 |
-| 5   | 往 `ledger-baselines.json` 加条目                                                        | 条目**位置**                                                                      | N1b 红。`projectGovernanceArtifacts` 投影成「非-N1-spec（原序）+ `n1LedgerSpecs`（末尾）」，而 `toEqual` 对数组顺序敏感。append 到最末尾会落在四条 `rfc294-*` spec 之后                                                            |
-| 6   | 改了任何生产 `.ts` 文件                                                                  | `architecture/module-symbol-owners.json` 里**该文件每个符号**的 `signatureDigest` | N1b 红。改一个函数体就会让 `$file` 与它所在的那几个 top-level 符号的签名全变                                                                                                                                                       |
-| 7   | **新增一条路由**（`registerRoute`） | `packages/backend/tests/contracts/registry.ts` 的 `ENDPOINTS` | RFC-317 T52「运行期预言」+ `api-contract-coverage` 双红。RFC-329 PR-B 实撞：加了 `GET /api/workgroup-tasks/pending` 忘了登记，backend shard 2/4 双 OS 红 |
-| 8   | **任何让文件行数变化的改动**（含**纯加注释**） | `architecture/background-jobs.json` 的 `ambientWiringEntries` | N1b 红。ambient wiring 把每个 `registerRoute` 记成 `...#registerRoute:<line>`，行号进 id。RFC-329 PR-B 实撞：给一条路由加 7 行注释，后面每条的行号全挪 |
+| 5   | 往 `ledger-baselines.json` 加条目                                                        | 条目**位置**                                                                      | N1b 红。`projectGovernanceArtifacts` 投影成「非-N1-spec（原序）+ `n1LedgerSpecs`（末尾）」，而 `toEqual` 对数组顺序敏感。append 到最末尾会落在四条 `rfc294-*` spec 之后                                                                                                                                                                                                                           |
+| 6   | 改了任何生产 `.ts` 文件                                                                  | `architecture/module-symbol-owners.json` 里**该文件每个符号**的 `signatureDigest` | N1b 红。改一个函数体就会让 `$file` 与它所在的那几个 top-level 符号的签名全变                                                                                                                                                                                                                                                                                                                      |
+| 7   | **新增一条路由**（`registerRoute`）                                                      | `packages/backend/tests/contracts/registry.ts` 的 `ENDPOINTS`                     | RFC-317 T52「运行期预言」+ `api-contract-coverage` 双红。RFC-329 PR-B 实撞：加了 `GET /api/workgroup-tasks/pending` 忘了登记，backend shard 2/4 双 OS 红                                                                                                                                                                                                                                          |
+| 8   | **任何让文件行数变化的改动**（含**纯加注释**）                                           | `architecture/background-jobs.json` 的 `ambientWiringEntries`                     | N1b 红。ambient wiring 把每个 `registerRoute` 记成 `...#registerRoute:<line>`，行号进 id。RFC-329 PR-B 实撞：给一条路由加 7 行注释，后面每条的行号全挪                                                                                                                                                                                                                                            |
 
 ### `bun run architecture:write` 在多人共享工作树上**不能跑**
 
@@ -555,6 +582,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
    用 `git ls-tree -r --name-only <ref>` + `git show <ref>:` 复算，对上了再用。RFC-329 就是
    这么验的（在 `7131812a4` 上复算 = CI 的 `5d55ae91…`，逐字节相等）。第二个交叉信号：
    units 数应当等于 `module-symbol-owners.json` 的 `denominator.productionFiles`。
+
 2. `signatureDigest`（第 6 条）：**可以本地算**——它只依赖单文件内容，不受别人的在制品影响。
    跑生成器 → 按 `id` 精确挑出**只属于自己改过的文件**的条目 → 逐字段应用到 HEAD 版本 →
    其余全部 `git checkout --` 回退。RFC-329 用这法子把 89+223 条里的 6 条摘了出来，

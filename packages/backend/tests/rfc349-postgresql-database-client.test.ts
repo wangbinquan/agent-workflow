@@ -118,8 +118,8 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('normalizes mutation count and supports object-mode raw queries', async () => {
     const fake = fixture()
     fake.queued.push(
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] },
       { count: 0 },
+      { objects: [{ generation_id: 'dbg_pg_client_01' }] },
       { objects: [{ generation_id: 'dbg_pg_client_01' }] },
       { count: 1 },
       { count: 0 },
@@ -138,8 +138,7 @@ describe('RFC-349 PostgreSQL database client', () => {
     expect(
       fake.executions.some((execution) => execution.sql.includes('database_generations')),
     ).toBe(true)
-    // The write's own reserved session plus the one-shot marker's.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('pins begin, business statements and commit to one reserved connection', async () => {
@@ -162,9 +161,8 @@ describe('RFC-349 PostgreSQL database client', () => {
     })
 
     expect(receipt).toBe(1)
-    // The one-shot live-write marker is the only statement that leaves the
-    // transaction: it commits on its own reserved connection so concurrent
-    // first writers cannot abort each other's SERIALIZABLE transaction.
+    // Marker and fence both ride the caller's own reserved session: reserving a
+    // nested connection here is a measured Bun.SQL pooling hazard.
     expect(fake.executions.map((execution) => execution.sql.trim().toLowerCase())).toEqual([
       'begin',
       expect.stringContaining('with marked as (update "agent_workflow_meta"'),
@@ -172,7 +170,7 @@ describe('RFC-349 PostgreSQL database client', () => {
       expect.stringContaining('insert into "agent_workflow"."agents"'),
       'commit',
     ])
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('rolls back and releases the reserved connection on failure', async () => {
@@ -204,7 +202,7 @@ describe('RFC-349 PostgreSQL database client', () => {
 
   test('fails closed and rolls back when the generation is no longer active', async () => {
     const fake = fixture()
-    fake.queued.push({ objects: [] }, { count: 0 }, { objects: [] }, { count: 0 })
+    fake.queued.push({ count: 0 }, { objects: [] }, { objects: [] }, { count: 0 })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     let failure: unknown
@@ -215,12 +213,12 @@ describe('RFC-349 PostgreSQL database client', () => {
     }
     expect((failure as { cause?: unknown }).cause).toBeInstanceOf(PostgresqlGenerationFenceError)
     expect(fake.executions.map((execution) => execution.sql.trim().toLowerCase())).toEqual([
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       'begin',
+      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
       expect.stringContaining('select generation_id from "agent_workflow_meta"'),
       'rollback',
     ])
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   // RFC-349 —— 托管取证跑（真外置 PostgreSQL、2 客户端、12 秒）里，这一条曾经
@@ -232,8 +230,8 @@ describe('RFC-349 PostgreSQL database client', () => {
   test('the live-write marker never rewrites a generation it already marked', async () => {
     const fake = fixture()
     fake.queued.push(
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] }, // one-shot marker
       { count: 0 }, // begin
+      { objects: [{ generation_id: 'dbg_pg_client_01' }] }, // one-shot marker
       { objects: [{ generation_id: 'dbg_pg_client_01' }] }, // fence
       { count: 1 }, // insert
       { count: 0 }, // commit
@@ -249,7 +247,7 @@ describe('RFC-349 PostgreSQL database client', () => {
 
     const markers = fake.executions.filter((execution) => execution.sql.startsWith('WITH marked'))
     expect(markers).toHaveLength(1)
-    // Its own reserved session, never the caller's — see markFirstGenerationWrite.
+    // The caller's own reserved session — never a nested reservation.
     expect(markers[0]?.owner).toBe('reserved')
     expect(markers[0]?.sql).toContain('first_live_write_at IS NULL')
     expect(markers[0]?.sql).not.toContain('COALESCE')

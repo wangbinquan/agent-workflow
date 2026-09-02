@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2657,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25632
+    "symbolsIncludingFileRoots": 25631
   },
   "entries": [
     {
@@ -149596,18 +149596,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "markedGenerations",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "id": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#MARKER_RESERVE_TIMEOUT_MS",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "MARKER_RESERVE_TIMEOUT_MS",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -308255,5 +308243,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:377e73cf5118ad82b48845a0717c017083394cd6f633c78381e06666a7dfad50"
+  "sourceDigest": "sha256:b1631891e5776594b14391d822ae406acd46dc9e3ac7b5e691fc541e9cc2f8fb"
 }

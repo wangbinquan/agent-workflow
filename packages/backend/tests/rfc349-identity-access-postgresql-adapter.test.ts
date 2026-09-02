@@ -196,8 +196,7 @@ describe('RFC-349 PostgreSQL identity-access adapter', () => {
       expect.stringContaining('update "agent_workflow"."users"'),
       'commit',
     ])
-    // +1 reserved session: the one-shot RFC-349 live-write marker.
-    expect(fake.releases).toBe(2)
+    expect(fake.releases).toBe(1)
   })
 
   test('undeclared decision reads fail closed before persistence', async () => {
