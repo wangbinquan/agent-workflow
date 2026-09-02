@@ -44,14 +44,16 @@ describe('RFC-299 — every settings surface uses semantic SettingsCard groups',
     expect(count(between(settings, start, end), '<SettingsCard')).toBe(expected)
   })
 
-  test('GC owns the maintenance card plus five retention cards and backup/restore', () => {
+  test('GC owns the maintenance card plus six retention cards and backup/restore', () => {
     const gc = between(settings, 'export function GcTab', '// GET /api/restore')
     // RFC-311 实现门 P1-5:第四张卡是「保留期与清理」——三个会删文件/删行的旋钮
     // (备份每族保留数 / 事件流水保留 / webhook 触发记录保留)此前只能改
     // config.json,而 C4/C6 承诺的缓解正是「可配」。
     // RFC-311 T19:第五张是「终态任务归档」——开启后任务从界面消失,开关与保留期
     // 必须在设置页上可见。
-    expect(count(gc, '<SettingsCard')).toBe(6)
+    // RFC-350:第六张是「任务不活跃超时」——开启后**没人管的任务会被自动取消**,
+    // 与上面那张同理必须在设置页上可见可调。
+    expect(count(gc, '<SettingsCard')).toBe(7)
     expect(gc).toContain("usePermission('backup:run')")
     expect(gc).toContain('<BackupCard canRun={canRunBackup} />')
     expect(
