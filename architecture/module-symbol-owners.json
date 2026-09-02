@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2657,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25625
+    "symbolsIncludingFileRoots": 25628
   },
   "entries": [
     {
@@ -147,6 +147,18 @@
       "currentLayer": "auth",
       "exported": true,
       "file": "packages/backend/src/auth/application/authPersistence.ts",
+      "id": "owner:packages/backend/src/auth/application/authPersistence.ts#ALWAYS_WRITABLE_DATABASE_SOURCE",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "ALWAYS_WRITABLE_DATABASE_SOURCE",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/application/authPersistence.ts",
       "id": "owner:packages/backend/src/auth/application/authPersistence.ts#AuthAccountStatus",
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
@@ -259,6 +271,18 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "BootstrapAdminRecord",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/application/authPersistence.ts",
+      "id": "owner:packages/backend/src/auth/application/authPersistence.ts#DatabaseSourceWriteWindow",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "DatabaseSourceWriteWindow",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -5239,6 +5263,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "acquireStartLock",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#BoundDatabaseMigrationBootstrap",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "BoundDatabaseMigrationBootstrap",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -308171,5 +308207,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:084f9d5937bc8f02e92b5228eac7241c1faab90a28edd22e93f48553c8c51d80"
+  "sourceDigest": "sha256:f95170aab21d2214723c8728f185d2c316f3cea8c12c98b44b3950cbf721caff"
 }

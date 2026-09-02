@@ -13,6 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
 import { DomainError, ForbiddenError } from '@/util/errors'
+import { ALWAYS_WRITABLE_DATABASE_SOURCE } from './authPersistence'
 import type {
   ActiveAuthPat,
   ActiveAuthSession,
@@ -236,6 +237,13 @@ export function createAuthRuntime(input: {
   readonly options?: AuthRuntimeOptions
 }): AuthRuntime {
   const { persistence } = input
+  // RFC-349 T10: the last-used projections are the only writes the request path
+  // still makes while a migration has frozen the source (the route gate cannot
+  // see them — they happen in authentication, on the deliberately exempt
+  // migration-control path). Drop them for the duration instead of failing the
+  // copy; see `DatabaseSourceWriteWindow`.
+  const sourceWritable = (): boolean =>
+    input.options?.sourceWriteWindow?.writable() ?? ALWAYS_WRITABLE_DATABASE_SOURCE.writable()
   const notify = (reason: AuthCredentialRevocationReason): void => {
     input.options?.onCredentialRevoked?.(reason)
   }
@@ -244,7 +252,7 @@ export function createAuthRuntime(input: {
     now = Date.now(),
     opts = {},
   ) => {
-    const touch = opts.touch ?? true
+    const touch = (opts.touch ?? true) && sourceWritable()
     const active = await persistence.resolveSessionByHash({
       hash,
       now,
@@ -261,7 +269,7 @@ export function createAuthRuntime(input: {
     const active = await persistence.resolvePatByHash({
       hash,
       now,
-      touch: opts.touch ?? true,
+      touch: (opts.touch ?? true) && sourceWritable(),
     })
     return active === null ? null : resolvedPat(active)
   }

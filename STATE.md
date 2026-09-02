@@ -141,8 +141,26 @@ memory-distill / development-wake / digital-employee-os / event-center / fusion-
 > 否则进度页自己就打不开）；
 > ③ 放松源完整性判据 —— **不可取**，那道判据正是这次迁移敢做的前提。
 >
-> 修法是设计取舍（在哪一层拒、拒了给前端什么、维护窗内哪些写算合法例外），**留给用户拍板，
-> 本条只报不改**。
+> 修法是设计取舍（在哪一层拒、拒了给前端什么、维护窗内哪些写算合法例外）。
+>
+> **用户 2026-09-02 拍板：按方案②做，路由层拒写、返回 503 维护中。落地时又订正了一次**——
+> 路由层的维护门**本来就有**：`runBusinessRequest`（`start.ts` 的 `Bun.serve.fetch` 上）在
+> `phase !== 'open'` 时对业务请求直接回 503 `database-maintenance`，`daemonProviderHttpAdmission`
+> 还有同口径的第二道。实测冻结窗内被门看到的 49 条请求里 48 条是豁免的
+> `GET /api/database/migrations/:id`、1 条被拒。**漏的是这两道门都拦不到的东西**：
+>
+> - 迁移必须能被盯着看，所以 `/api/database/*` 与 `/api/health` 故意豁免；
+> - 而这些请求照样过认证，认证顺手写 `user_sessions.last_used_at`（每会话每秒最多一次）与
+>   `user_pats.last_used_at`（每次都写）；PAT 请求结束后还补一条 token-call 审计。
+>   三者都跑在**路由门之前**，任何路由层的门都看不见它们。
+>
+> 落地：新增具名端口 `DatabaseSourceWriteWindow`（`auth/application/authPersistence.ts`）+ 默认值
+> `ALWAYS_WRITABLE_DATABASE_SOURCE`；`authRuntime` 的两处 touch 与 `server.ts` 的审计中间件都问它；
+> `start.ts` 的 `_createDeferredDatabaseMigrationAdmission()` 顺带提供这个窗口（`bind` 改成收整个
+> bootstrap，从而能读 `live().phase`），两个 provider 的 core 装配各接一份。省略即「一直可写」，
+> 所以除 daemon 之外的所有组装（含 `createApp` 兼容面与全部测试）行为逐字不变。
+> 守卫：`tests/rfc349-frozen-source-request-writes.test.ts`（关着不写 / 开着照写 / 省略即照写 /
+> 审计中间件问同一个窗口 / daemon 确实接了真窗口，共 5 条）。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表

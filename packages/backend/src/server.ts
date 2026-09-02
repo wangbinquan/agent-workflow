@@ -25,6 +25,10 @@ import {
   createSqliteAuthRuntime,
   createSqliteTokenCallAudit,
 } from '@/auth/composition'
+import {
+  ALWAYS_WRITABLE_DATABASE_SOURCE,
+  type DatabaseSourceWriteWindow,
+} from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
 import { admitDaemonIdentity, multiAuth } from '@/auth/session'
 import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/services/tokenAudit'
@@ -476,6 +480,11 @@ export type DaemonCredentialRevocationReason = Parameters<SqliteAuthRevalidation
 interface DaemonProviderCoreCommonInput {
   readonly appHome: string
   readonly secretBox: SecretBox | undefined
+  /**
+   * RFC-349 T10 — false while a migration has frozen the selected source. Only
+   * daemon bootstrap supplies one; everything else stays always-writable.
+   */
+  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
   readonly realtimePolicy: RealtimeCompositionPolicy
   readonly onCredentialRevoked: (reason: DaemonCredentialRevocationReason) => void
   readonly identityEvents: DaemonIdentityAccessEventSink
@@ -511,6 +520,8 @@ export interface DaemonProviderCore<
   readonly provider: 'sqlite' | 'postgresql'
   readonly authRuntime: AuthRuntime
   readonly tokenCallAudit: TokenCallAuditParticipant
+  /** The one window both the auth runtime and the token-call audit consult. */
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly identityAccess: IdentityAccessRuntime
   readonly healthDatabase: HealthDatabaseReadModel
   readonly runtimeRegistry: RuntimeRegistryOperations
@@ -543,9 +554,11 @@ export function composeSqliteDaemonProviderCore(
   const repositoryTransportCredentialRepository = new SQLiteRepositoryTransportCredentialRepository(
     input.db,
   )
+  const sourceWriteWindow = input.sourceWriteWindow ?? ALWAYS_WRITABLE_DATABASE_SOURCE
   const authRuntime = createSqliteAuthRuntime({
     db: input.db,
     revalidate: input.onCredentialRevoked,
+    sourceWriteWindow,
   })
   const identityAccess = createIdentityAccessRuntime({
     db: input.db,
@@ -555,6 +568,7 @@ export function composeSqliteDaemonProviderCore(
   return Object.freeze({
     provider: 'sqlite',
     authRuntime,
+    sourceWriteWindow,
     tokenCallAudit: createSqliteTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createSqliteHealthDatabaseReadModel(input.db),
@@ -594,9 +608,11 @@ export function composePostgresqlDaemonProviderCore(
   )
   const repositoryTransportCredentialRepository =
     new PostgresqlRepositoryTransportCredentialRepository(input.db)
+  const sourceWriteWindow = input.sourceWriteWindow ?? ALWAYS_WRITABLE_DATABASE_SOURCE
   const authRuntime = createPostgresqlAuthRuntime({
     db: input.db,
     onCredentialRevoked: input.onCredentialRevoked,
+    sourceWriteWindow,
   })
   const identityAccess = createPostgresqlIdentityAccessRuntime({
     db: input.db,
@@ -607,6 +623,7 @@ export function composePostgresqlDaemonProviderCore(
   return Object.freeze({
     provider: 'postgresql',
     authRuntime,
+    sourceWriteWindow,
     tokenCallAudit: createPostgresqlTokenCallAudit(input.db),
     identityAccess,
     healthDatabase: createPostgresqlHealthDatabaseReadModel(input.db),
@@ -987,7 +1004,7 @@ export interface AppApiRouteMounts {
 
 export type AppHttpProviderCore = Pick<
   DaemonProviderCore,
-  'provider' | 'authRuntime' | 'tokenCallAudit' | 'identityAccess'
+  'provider' | 'authRuntime' | 'tokenCallAudit' | 'identityAccess' | 'sourceWriteWindow'
 >
 
 /**
@@ -2045,6 +2062,8 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
             authRuntime,
             tokenCallAudit,
             identityAccess,
+            // Compatibility `createApp` has no migration admission to consult.
+            sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
           })
         : Object.freeze({ ...effectiveDeps.providerCore, identityAccess }),
     publicRoutes: Object.freeze({
@@ -3000,6 +3019,9 @@ export function createComposedApp(deps: ComposedAppDeps): Hono {
     await next()
     const actor = tryActorOf(c)
     if (actor === null || actor.source !== 'pat' || c.req.path === '/api/mcp') return
+    // RFC-349 T10: the migration-control path stays reachable while the source
+    // is frozen, so this projection would be the request path's other writer.
+    if (!deps.core.sourceWriteWindow.writable()) return
     void deps.core.tokenCallAudit.record({
       actor,
       channel: 'rest',

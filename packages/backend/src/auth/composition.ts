@@ -1,5 +1,5 @@
 import { createAuthRuntime, type AuthRuntime } from './application/authRuntime'
-import type { AuthRuntimeOptions } from './application/authPersistence'
+import type { AuthRuntimeOptions, DatabaseSourceWriteWindow } from './application/authPersistence'
 import {
   createTokenCallAuditParticipant,
   type TokenCallAuditParticipant,
@@ -16,6 +16,8 @@ import { SqliteTokenCallAuditPersistence } from './infrastructure/sqliteTokenCal
 export function createSqliteAuthRuntime(input: {
   readonly db: DbClient
   readonly revalidate?: (reason: Parameters<typeof triggerRevalidation>[0]) => void
+  /** RFC-349 T10: omitted everywhere except daemon bootstrap (always writable). */
+  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
 }): AuthRuntime {
   return createAuthRuntime({
     provider: 'sqlite',
@@ -26,6 +28,9 @@ export function createSqliteAuthRuntime(input: {
         if (input.revalidate !== undefined) input.revalidate(reason)
         else triggerRevalidation(reason)
       },
+      ...(input.sourceWriteWindow === undefined
+        ? {}
+        : { sourceWriteWindow: input.sourceWriteWindow }),
     },
   })
 }
@@ -34,11 +39,18 @@ export function createPostgresqlAuthRuntime(input: {
   readonly db: PostgresqlDatabaseClient
   /** Required post-commit transport invalidation; never receives a DB handle. */
   readonly onCredentialRevoked: NonNullable<AuthRuntimeOptions['onCredentialRevoked']>
+  /** RFC-349 T10: omitted everywhere except daemon bootstrap (always writable). */
+  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
 }): AuthRuntime {
   return createAuthRuntime({
     provider: 'postgresql',
     persistence: new PostgresqlAuthPersistence(input.db),
-    options: { onCredentialRevoked: input.onCredentialRevoked },
+    options: {
+      onCredentialRevoked: input.onCredentialRevoked,
+      ...(input.sourceWriteWindow === undefined
+        ? {}
+        : { sourceWriteWindow: input.sourceWriteWindow }),
+    },
   })
 }
 

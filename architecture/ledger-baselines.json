@@ -475,12 +475,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25625,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25628,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 T10：冻结源库期间请求路径不许写。新增一个具名端口 `DatabaseSourceWriteWindow` + 其默认值 `ALWAYS_WRITABLE_DATABASE_SOURCE`（auth application），以及 start.ts 里承载它的 `BoundDatabaseMigrationBootstrap` —— 共 +3 个 top-level symbol。路由层的维护门（503）早就在，漏的是它拦不到的两处：认证顺手写的 `user_sessions/user_pats.last_used_at` 与 PAT 的 token-call 审计，它们跑在路由门之前、且落在故意豁免的 `/api/database/*` 上（迁移必须能被盯着看）。一页写就足以让拷贝以 `sqlite-source-mutated` 收场——本机复现每次必中。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:084f9d5937bc8f02e92b5228eac7241c1faab90a28edd22e93f48553c8c51d80",
+    "sourceDigest": "sha256:f95170aab21d2214723c8728f185d2c316f3cea8c12c98b44b3950cbf721caff",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +496,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f2be9a5315c683f9e57c14850ed8a45a0ba499bb",
-    "contentDigest": "sha256:2e106ef57db38921b48b6c84322d6f9da45b13f4d863476d3fc99f0098d68b2e",
+    "currentSnapshotSha": "0f6c79977f4a93e9e86a87e278c8916beb5bab27",
+    "contentDigest": "sha256:07307edb6611cda585709a78c583489cbd52cdf9f36ae73cb3c145ded8a7d1e3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

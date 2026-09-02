@@ -1412,13 +1412,13 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:084f9d5937bc8f02e92b5228eac7241c1faab90a28edd22e93f48553c8c51d80",
+    "sourceDigest": "sha256:f95170aab21d2214723c8728f185d2c316f3cea8c12c98b44b3950cbf721caff",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "f2be9a5315c683f9e57c14850ed8a45a0ba499bb",
-    "contentDigest": "sha256:8ee53e3dbf9d65073df911f027c636d3402ce03fa4d1f395c942aea412462706",
+    "currentSnapshotSha": "0f6c79977f4a93e9e86a87e278c8916beb5bab27",
+    "contentDigest": "sha256:2c3b4c51cacde21ac68bdc3d1369832959f5a3c3f0ca6669ab5e4062cf1a11fa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

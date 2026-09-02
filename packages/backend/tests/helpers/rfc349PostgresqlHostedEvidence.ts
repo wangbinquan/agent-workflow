@@ -1039,6 +1039,35 @@ async function waitForBootMaintenance(daemon: DaemonHandle): Promise<void> {
   throw new Error('boot maintenance did not drain before the hosted soak')
 }
 
+/**
+ * The manifest reaches `accepting-writes` a beat BEFORE business admission
+ * reopens, and that ordering is deliberate: the durable record has to advance
+ * first so a crash between the two replays into a well-defined state
+ * (`databaseMigrationRunner`, case 'health-checked'). Every real client sees the
+ * same millisecond window and answers it the same way — retry the 503. Waiting
+ * here keeps the post-migration phase measuring the runtime instead of the
+ * handover.
+ */
+async function waitForBusinessAdmission(daemon: DaemonHandle): Promise<void> {
+  const deadline = Date.now() + 60_000
+  let lastStatus = 0
+  while (Date.now() < deadline) {
+    const response = await fetchWithTimeout(
+      `${daemon.baseUrl}/api/maintenance/status`,
+      { headers: { authorization: `Bearer ${daemon.token}` } },
+      15_000,
+    )
+    await response.text()
+    if (response.ok) return
+    lastStatus = response.status
+    if (response.status !== 503) {
+      throw new Error(`business admission probe -> ${response.status}`)
+    }
+    await Bun.sleep(100)
+  }
+  throw new Error(`business admission stayed closed after the migration (last ${lastStatus})`)
+}
+
 async function openSocketProbe(
   daemon: DaemonHandle,
   allowProviderSwitchClose = false,
@@ -1367,14 +1396,35 @@ async function runLargeMigration(input: {
     clearInterval(rssTimer)
     closeSocketProbes(sockets)
   }
-  const artifact = await fetchWithTimeout(
-    `${input.daemon.baseUrl}/api/database/migrations/${started.operationId}/artifacts/logical-backup`,
-    {
-      headers: { authorization: `Bearer ${input.daemon.token}` },
-    },
+  // The phase loop above exits the moment the manifest says `accepting-writes`,
+  // which is one beat BEFORE admission actually reopens (the durable record has
+  // to advance first so a crash between the two replays cleanly). Artifact reads
+  // are migration-control requests and therefore exempt from the maintenance
+  // gate, but the provider handover itself still has a window where the listener
+  // has no serving session. Retry the 503 the way any client would, and report
+  // the body when it is something else — an opaque status here costs a whole
+  // round-trip to diagnose.
+  const artifactUrl = `${input.daemon.baseUrl}/api/database/migrations/${started.operationId}/artifacts/logical-backup`
+  const artifactDeadline = Date.now() + 60_000
+  let artifact = await fetchWithTimeout(
+    artifactUrl,
+    { headers: { authorization: `Bearer ${input.daemon.token}` } },
     60_000,
   )
-  if (!artifact.ok) throw new Error(`logical backup artifact returned ${artifact.status}`)
+  while (artifact.status === 503 && Date.now() < artifactDeadline) {
+    await artifact.text()
+    await Bun.sleep(200)
+    artifact = await fetchWithTimeout(
+      artifactUrl,
+      { headers: { authorization: `Bearer ${input.daemon.token}` } },
+      60_000,
+    )
+  }
+  if (!artifact.ok) {
+    throw new Error(
+      `logical backup artifact returned ${artifact.status} ${(await artifact.text()).slice(0, 300)}`,
+    )
+  }
   await artifact.arrayBuffer()
   const digest = artifact.headers.get('x-agent-workflow-artifact-digest')
   if (digest === null) throw new Error('logical backup artifact omitted its digest header')
@@ -1606,6 +1656,7 @@ async function runLargeSoak(
       taskIds: taskIds.slice(0, Math.floor(taskIds.length / 3)),
     })
     const migration = await runLargeMigration({ daemon, args, url })
+    await waitForBusinessAdmission(daemon)
     const runtime = databaseRuntimeOverviewSchema.parse(await apiJson(daemon, '/api/database'))
     if (runtime.provider !== 'postgresql') {
       throw new Error(`large migration selected ${runtime.provider}, expected postgresql`)

@@ -78,6 +78,7 @@ import {
   prepareTaskExecutionRecovery,
 } from '@/services/taskExecutionParticipants'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import {
   composeHumanGateContinuationDriver,
@@ -376,9 +377,22 @@ interface DaemonProviderRuntimeComposition {
 
 type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModule>[0]['admission']
 
+/** The bootstrap face this holder needs: the module port plus the live phase. */
+interface BoundDatabaseMigrationBootstrap {
+  readonly databaseMigration: DatabaseMigrationAdmission
+  readonly live: () => { readonly phase: string }
+}
+
 interface DeferredDatabaseMigrationAdmission {
   readonly admission: DatabaseMigrationAdmission
-  readonly bind: (admission: DatabaseMigrationAdmission) => void
+  /**
+   * RFC-349 T10 — the request path's own writes (session/PAT last-used, token
+   * call audit) must stop while a migration has frozen the source. They run in
+   * authentication, before the route gate, and on the deliberately exempt
+   * `/api/database/*` path, so nothing else can see them.
+   */
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
+  readonly bind: (bootstrap: BoundDatabaseMigrationBootstrap) => void
 }
 
 interface DeferredSchedulerDriver {
@@ -431,10 +445,10 @@ function _bindTaskExecutionProviderBackground(
  * remain fail-closed until this exact daemon binds its controller-owned port.
  */
 function _createDeferredDatabaseMigrationAdmission(): DeferredDatabaseMigrationAdmission {
-  let bound: DatabaseMigrationAdmission | null = null
+  let bound: BoundDatabaseMigrationBootstrap | null = null
   const requireBound = (): DatabaseMigrationAdmission => {
     if (bound === null) throw new Error('database-migration-admission-not-bound')
-    return bound
+    return bound.databaseMigration
   }
   return Object.freeze({
     admission: Object.freeze({
@@ -449,11 +463,16 @@ function _createDeferredDatabaseMigrationAdmission(): DeferredDatabaseMigrationA
         input: Parameters<DatabaseMigrationAdmission['openPostgresqlAdmission']>[0],
       ) => requireBound().openPostgresqlAdmission(input),
     }),
-    bind(admission: DatabaseMigrationAdmission) {
-      if (bound !== null && bound !== admission) {
+    // Before bootstrap binds there is no operation and therefore no freeze, so
+    // "writable" is the honest answer rather than a fail-closed guess.
+    sourceWriteWindow: Object.freeze({
+      writable: () => bound === null || bound.live().phase === 'open',
+    }),
+    bind(bootstrap: BoundDatabaseMigrationBootstrap) {
+      if (bound !== null && bound !== bootstrap) {
         throw new Error('database-migration-admission-already-bound')
       }
-      bound = admission
+      bound = bootstrap
     },
   })
 }
@@ -520,6 +539,7 @@ async function composePostgresqlProviderSession(input: {
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
   readonly migrationAdmission: DatabaseMigrationAdmission
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly log: ReturnType<typeof createLogger>
 }): Promise<ComposedPostgresqlProviderSession> {
   if (input.config.database.provider !== 'postgresql') {
@@ -552,6 +572,7 @@ async function composePostgresqlProviderSession(input: {
     daemonInfoPath: Paths.daemonInfo,
     lockPath: Paths.lock,
     secretBox: input.secretBox,
+    sourceWriteWindow: input.sourceWriteWindow,
     databaseMigration,
     dbVersion: input.dbVersion,
     maintenanceStatus() {
@@ -1433,6 +1454,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       secretBox,
       dbVersion,
       migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+      sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
       log,
     })
     const daemonProviderBootstrap = createDaemonProviderBootstrap({
@@ -1465,6 +1487,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
               secretBox,
               dbVersion,
               migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+              sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
               log,
             })
           ).session
@@ -1472,7 +1495,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       },
       createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
     })
-    deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap.databaseMigration)
+    deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
     await initial.session.resume(initialLifecycle)
     await servePostgresqlDaemon({
       bootstrap: daemonProviderBootstrap,
@@ -1562,6 +1585,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const realtimePolicy = createDaemonRealtimePolicyBinding()
   const providerCore = composeSqliteDaemonProviderCore({
     db,
+    sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
     appHome: Paths.root,
     dbPath: Paths.db,
     lockPath: Paths.lock,
@@ -3146,6 +3170,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
             secretBox,
             dbVersion,
             migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+            sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
             log,
           })
         ).session
@@ -3153,7 +3178,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
     createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
   })
-  deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap.databaseMigration)
+  deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
   await initialProviderSession.resume(providerSessionLifecycle)
 
   const server = Bun.serve({

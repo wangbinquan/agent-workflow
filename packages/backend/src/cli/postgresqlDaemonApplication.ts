@@ -11,6 +11,7 @@ import {
   type Config,
 } from '@agent-workflow/shared'
 import { join } from 'node:path'
+import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { eq } from 'drizzle-orm'
 
 import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
@@ -340,6 +341,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
+  /** RFC-349 T10 — see `DatabaseSourceWriteWindow`; bootstrap supplies the live one. */
+  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
   readonly databaseMigration: DatabaseMigrationModule
   readonly dbVersion: number
   readonly maintenanceStatus: NonNullable<
@@ -395,6 +398,9 @@ export async function composePostgresqlDaemonApplication(
   const realtimePolicy = createDaemonRealtimePolicyBinding()
   const core = composePostgresqlDaemonProviderCore({
     db: input.db,
+    ...(input.sourceWriteWindow === undefined
+      ? {}
+      : { sourceWriteWindow: input.sourceWriteWindow }),
     runtime: input.provider.runtime,
     databaseConfig: input.config.database,
     appHome: input.appHome,

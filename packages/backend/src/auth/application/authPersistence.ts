@@ -141,9 +141,37 @@ export type AuthCredentialRevocationReason =
   | 'pat-revoked'
   | 'bootstrap-completed'
 
+/**
+ * RFC-349 T10 — is the selected database source accepting writes right now?
+ *
+ * A migration freezes the source and then proves it did not change while the
+ * copy runs (`sqliteLogicalSource.assertUnchanged`). The route layer already
+ * refuses business requests with 503 for the duration, but the migration must
+ * stay watchable, so `/api/database/*` and `/api/health` are deliberately
+ * exempt — and those requests still run authentication, which writes two
+ * best-effort *activity projections*: `user_sessions.last_used_at` (throttled
+ * to once per second) and `user_pats.last_used_at` (every request). One such
+ * page write is enough to fail the copy with `sqlite-source-mutated`, so
+ * watching a migration was guaranteed to break it.
+ *
+ * These projections are not the credential validity fence: skipping them costs
+ * a few minutes of "last used" resolution inside a maintenance window, which is
+ * strictly better than being unable to migrate at all.
+ */
+export interface DatabaseSourceWriteWindow {
+  writable(): boolean
+}
+
+/** The default for every composition that has no migration admission. */
+export const ALWAYS_WRITABLE_DATABASE_SOURCE: DatabaseSourceWriteWindow = Object.freeze({
+  writable: () => true,
+})
+
 export interface AuthRuntimeOptions {
   readonly allowLegacyDaemonTestAccess?: boolean
   readonly onCredentialRevoked?: (reason: AuthCredentialRevocationReason) => void
+  /** Defaults to always-writable; only daemon bootstrap supplies a real one. */
+  readonly sourceWriteWindow?: DatabaseSourceWriteWindow
 }
 
 export type AuthProvider = 'sqlite' | 'postgresql'
