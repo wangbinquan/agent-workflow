@@ -99,12 +99,6 @@ export function reportDiskReclaimable(
   }
 }
 
-/** `rmSync` 在权限上撞墙时的错误码。其余错误照旧穿出去，不吞。 */
-function isPermissionDenied(err: unknown): boolean {
-  const code = (err as NodeJS.ErrnoException | null)?.code
-  return code === 'EACCES' || code === 'EPERM'
-}
-
 /**
  * 给整棵树里的**目录**补上 owner 写位，让随后的 `rmSync` 能 unlink 里面的文件。
  *
@@ -159,9 +153,13 @@ export function cleanupRetiredStores(appHome: string = Paths.root): { removedByt
   try {
     rmSync(storePath, { recursive: true, force: true })
   } catch (err) {
-    if (!isPermissionDenied(err)) throw err
-    // 首轮已经删掉了一部分：剩下的树从 storePath 开始补写位，然后整棵重删。
+    // 判据是「树里还有没有只读目录」，不是 errno：Bun 只报**顶层**路径 + 最后一次失败
+    // 系统调用的错误码，同一棵密封树在不同平台上给的码并不一样（本机 macOS 报 EACCES ——
+    // unlink 被父目录拒了；CI 的 macOS runner 报 ENOTEMPTY —— 文件没删掉、随后的 rmdir
+    // 落空）。按码白名单必漏，所以改成：补写位；一个都没补到说明不是这类原因，原样把
+    // 首个错误抛出去。首轮已经删掉的部分不影响重删。
     const unsealed = grantOwnerWriteToDirectories(storePath)
+    if (unsealed === 0) throw err
     log.warn('retired store had read-only directories; granted owner write and retried', {
       path: storePath,
       unsealed,
