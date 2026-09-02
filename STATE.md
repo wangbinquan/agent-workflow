@@ -14,7 +14,8 @@
 > 提交链：`d335ea0fa`（主实现）→ `1fe123e4d`（审计诚实性 + 账本按提交本身重采）→ `1152b076a`（前端卡片计数锁）
 > → `b56a20d2e`（默认阈值 7 天 + 审计精度 + 收口）→ `78dcc5999`（CI 两条红：S-14 写点棘轮登记、e2e 卡片计数 8→9）。
 > **最终验收：exact SHA `78dcc5999` 的 Main CI run `33633631833` = 35/35 attempt-1 terminal success**，
-> 同 SHA `visual-regression-nightly` success。设计门与实现门均由用户明示跳过。
+> 同 SHA 的 `visual-regression-nightly` / `e2e-full-nightly` / `e2e-webkit-nightly` 亦全部 success
+> （后两条正是上一轮咬出 e2e 卡片计数锁的腿，是对该修复的真正验证）。设计门与实现门均由用户明示跳过。
 > **踩坑记录**：首次架构重采用的是**工作树**的 `cli/start.ts`（含他人未提交改动，3456 行），而提交的是重放版（3460 行），
 > 三处 ambient 锚点与 sourceDigest 全偏——正确姿势是 `git archive <要推的 commit>` 导出提交本身、软链真仓库 `.git` 后
 > 跑 `architecture:write --snapshot-sha HEAD`（已由 agent-workflow-f9 写进 `docs/dev-gotchas.md`）。
