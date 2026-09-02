@@ -15,7 +15,8 @@
 >   RFC-345 仍保持其独立 In Progress 真值，重叠 consumer 必须先协调稳定 ownership，不覆盖其在途内容。
 >
 > **2026-09-02 接手修复（provider cutover 回归 + 主干 CI 复绿）**：`b9f5b1ef8` 的 Main CI / e2e-full / e2e-webkit /
-> postgresql-evidence 四条全红，逐条归因后修掉 6 处**真实产品回归**与 3 处测试面漂移：
+> postgresql-evidence 四条全红（主干自 2026-08-31 `4aa832064` 之后就没绿过），逐条归因后修掉 **9 处真实产品回归**与
+> 3 处测试面漂移。提交链 `9c192ff92` → `f3b624ec0` → `2dd8de607` → `cebe053aa` → `a5b61f059`：
 >
 > 1. MCP runtime playground 的 `loadMcp` 用 legacy daemon-token 铸身份，首个管理员 bootstrap 完成后必然
 >    `mcp-runtime-test-authority-not-admitted`，回合永久挂在飞行中（新增 `admitDaemonIdentity` 进程内守护身份）。
@@ -23,13 +24,26 @@
 >    `GET /api/tasks/:id` 吃 404、加协作者吃 403（改 actor-scoped `executionFor`）。
 > 3. `call-workgroup` 子启动用整行 `WorkgroupSchema.parse` 校验 RFC-345 已收窄的冻结快照，父任务必然
 >    `child-launch-failed`（新增 `FrozenWorkgroupGroupSchema`，两个 provider 同用）。
-> 4. RFC-310 两条 system-mock E2E：`eventCenter.commands.observe` 随本 RFC 变成 Promise，测试未 await。
-> 5. `migrate(` → `migrateSqlite(` 与 `services/workgroup/strategies/leaderWorker.ts` 迁位后的两处 source-lock 失配。
-> 6. `sqliteLogicalSource.assertUnchanged` 现在点名漂移信号（实测：另一条连接一次裸 `wal_checkpoint`，零逻辑变更也会把
->    `data_version` 加一），否则 4.3GB hosted 迁移失败后无法归因。
+> 4. PostgreSQL `markCaptureTerminal` / `failBeforeRun` 开事务却不 `await`，调用方在写入仍在飞时就返回、失败变成
+>    unhandled rejection（SQLite 孪生是同步 `dbTxSync`，所以这处不对称一直看不见）。
+> 5. 内置工具目录只交给了 `employeeOs`，没交给 `createComposedApp`：SQLite daemon 的
+>    `/work-items/:ref/tools` 恒空，岗位模版编辑器没有可绑定的默认工具，零配置上手流程整条断掉。
+> 6. 问题派发续跑的血统是 `{sourceNodeRunIds: [], rerunNodeRunIds}`，而 `decodeClaimedClarifyContinuation` 只认答复形状，
+>    于是重启后 pre-drive 解码即抛，评审门永远不再出现。
+> 7. 三处 ACL 挂载点切到 composition 的 `updateResourceAcl` 后不再发 `resource-acl-changed`：升/降档的人一直停在旧控件上。
+>    通知已收归 composition 自身，并且不再吞掉调用方自己的 `afterCommit`。
+> 8. RFC-310 两条 system-mock E2E：`eventCenter.commands.observe` 随本 RFC 变成 Promise，测试未 await。
+> 9. `migrate(` → `migrateSqlite(` 与 `services/workgroup/strategies/leaderWorker.ts` 迁位后的两处 source-lock 失配；
+>    W0-R capability 扫描的 30s 预算不够（语料随 216 个 provider adapter 变大）；migration Settings e2e 的
+>    `getByText('Live provider')` 与段落描述撞成 strict-mode violation。
+>
+> `sqliteLogicalSource.assertUnchanged` 另外改为**点名漂移信号**（实测：另一条连接一次裸 `wal_checkpoint`，零逻辑变更也会把
+> `data_version` 加一），否则 4.3GB hosted 迁移失败后无法归因。
 >
 > **仍未关闭**：`postgresql-evidence` 的 large migration 仍以 `sqlite-source-mutated` 收场（copying 阶段），
-> 冻结窗内仍有写手/checkpoint 漏出——下一次 hosted run 会带上漂移信号名，据此定位后再修。
+> 冻结窗内仍有写手/checkpoint 漏出——下一次 hosted run 会带上漂移信号名，据此定位后再修；另需复核
+> `cli/start.ts` §8 的四个 background ticker（limits / backup / submoduleRefresh / batchImportGc）起在 provider session
+> 可暂停 factory **之外**（PostgreSQL daemon 侧同类是可暂停 handle）。AC-14 / AC-15 未满足前 RFC-349 不得标 Done。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表

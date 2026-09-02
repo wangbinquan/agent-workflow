@@ -479,8 +479,13 @@ describe('RFC-212 T6 — write-surface ratchet', () => {
         reason: 'task-members-changed',
       },
       {
+        // The notification belongs to the ACL write itself, not to one of its
+        // callers. Anchoring on `composeResourceAclOperationApplication` used to
+        // leave the mounts that call `updateResourceAcl` directly (digital
+        // employee, development config, capability template) unguarded — and
+        // they did stop notifying when RFC-345 cut them over.
         file: 'modules/resource-catalog/composition/resourceAcl.ts',
-        marker: /export function composeResourceAclOperationApplication</,
+        marker: /export function updateResourceAcl\(/,
         reason: 'resource-acl-changed',
       },
     ]
