@@ -230,6 +230,12 @@ describe('RFC-338 mutation receipts', () => {
     expect(soak).toContain('Array.from({ length: input.args.clients }')
     expect(soak).toContain('HEAVY_MAINTENANCE_JOB_KEYS')
     expect(soak).toContain('SQLite statement p95 exceeded 50ms')
+    // The freeze judgement is two-sided on purpose: a slow *stretch* (>0.1% of
+    // statements over 250ms) and a single hard stall (>=1s). A single-sample
+    // `max >= 250ms` cap measured shared-runner scheduling noise, not the
+    // product — it flapped red/green across unrelated commits.
+    expect(soak).toContain('SQLite statements over 250ms exceeded 0.1%')
+    expect(soak).toContain('>= 1000ms')
     expect(soak).toContain('perNodeRunBytes: 0')
     expect(soak).toContain('globalBytes: 0')
   })

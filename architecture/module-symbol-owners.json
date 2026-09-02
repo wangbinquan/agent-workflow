@@ -6,7 +6,7 @@
     "moduleFiles": 1247,
     "productionFiles": 2657,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25631
+    "symbolsIncludingFileRoots": 25632
   },
   "entries": [
     {
@@ -116106,6 +116106,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DatabaseMigrationCoordinatorOptions",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#isDatabaseMigrationTargetProbeUnavailable",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isDatabaseMigrationTargetProbeUnavailable",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -308243,5 +308255,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ceda6c71c8635405868ab385a1aa00ea02bd44f566640c2139f8f840266c58a"
+  "sourceDigest": "sha256:5204efb5cb3caa4d0a431fb98755c666de66efcc11016bff7fe63b48a7001007"
 }

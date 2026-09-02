@@ -475,15 +475,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25631,
+      "baseline": 25632,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-349：PostgreSQL 客户端把「generation 围栏」与「首笔实时写标记」拆成两件事，共 +3 个 top-level symbol（`assertActiveGeneration`、`markedGenerations`、`MARKER_RESERVE_TIMEOUT_MS`）。原来的一条语句 `SET first_live_write_at = COALESCE(first_live_write_at, now)` 在每一条业务语句上重写同一行，任意两个并发 SERIALIZABLE 事务（含每个已认证请求顺手做的 session touch）必然互撞——托管取证跑里 12 秒打出 38 次 `could not serialize access due to concurrent update`，全是与调用方无关的 500。围栏是每事务必须做的读，标记是每进程一次的写；拆开之后稳态没有写者，也就没有冲突。"
+        "why": "RFC-349：+1 个 top-level symbol `isDatabaseMigrationTargetProbeUnavailable`（system-operations coordinator）。割接完成到 finalize 之间，读一次迁移状态会去开一个target runtime 并抢 operation 级 advisory lock；daemon 每个 provider composition 各有一个coordinator，握着锁的往往不是回答轮询的那一个。托管取证跑里每个并发轮询都因此吃到 `another process owns the PostgreSQL logical migration target`。这个判据把「锁被别人握着」读成「这次不探」而不是「状态请求失败」，单独导出是为了能被直接测到。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:1ceda6c71c8635405868ab385a1aa00ea02bd44f566640c2139f8f840266c58a",
+    "sourceDigest": "sha256:5204efb5cb3caa4d0a431fb98755c666de66efcc11016bff7fe63b48a7001007",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -496,8 +496,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "109290e740d46fe4e751b8581137b8c6d0491c78",
-    "contentDigest": "sha256:c79de331975f737434a2930ecb1e6c4a91eb822f8bfe85e5af6e2730265e66e5",
+    "currentSnapshotSha": "022c4ca1d68672d13f8648aea0e96d2da94852e1",
+    "contentDigest": "sha256:b4c4d88e15161464ae75dbdf7158210559eac9194c3db66242f49e8c2752bde9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

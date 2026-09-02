@@ -1052,8 +1052,12 @@ async function waitForBusinessAdmission(daemon: DaemonHandle): Promise<void> {
   const deadline = Date.now() + 60_000
   let lastStatus = 0
   while (Date.now() < deadline) {
+    // Must be a *business* route. `/api/maintenance/status`, `/api/health` and
+    // the `/api/database*` control plane are exempt from the maintenance gate
+    // by design — polling one of those answers 200 while business traffic is
+    // still refused, and the phase below then opens its WebSockets too early.
     const response = await fetchWithTimeout(
-      `${daemon.baseUrl}/api/maintenance/status`,
+      `${daemon.baseUrl}/api/tasks?limit=1`,
       { headers: { authorization: `Bearer ${daemon.token}` } },
       15_000,
     )

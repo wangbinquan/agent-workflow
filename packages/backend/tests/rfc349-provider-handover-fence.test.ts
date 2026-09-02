@@ -109,9 +109,23 @@ describe('RFC-349 provider handover fence', () => {
     await Bun.sleep(20)
     expect(settled).toBe(false)
 
+    // A WebSocket upgrade authenticates too, so it is fenced the same way.
+    let upgradeSettled = false
+    const upgrade = Promise.resolve(
+      router.tryUpgrade(new Request('http://localhost/ws/tasks'), {
+        upgrade: () => true,
+      } as never),
+    ).then((result) => {
+      upgradeSettled = true
+      return result
+    })
+    await Bun.sleep(20)
+    expect(upgradeSettled).toBe(false)
+
     releaseCompose()
     await switching
     expect(await (await inFlight).text()).toBe('postgresql:fetch')
+    expect(await upgrade).toBe(false)
     expect(controller.handover()).toBeNull()
   })
 

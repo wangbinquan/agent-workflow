@@ -20,6 +20,7 @@ import type {
   SqlRows,
 } from './postgresqlRuntime'
 import { assertPostgresqlBusinessStatement, compilePostgresqlSql } from './postgresqlSql'
+import { timeoutSignal } from '@/util/timeoutSignal'
 
 export interface DatabaseMutationResult extends SqliteRemoteResult {
   readonly changes: number
@@ -118,12 +119,13 @@ async function markFirstGenerationWrite(
   // fall back to the caller's own session rather than deadlocking. The fallback
   // only reintroduces the one-time race between the very first writers.
   let dedicated: PostgresqlReservedConnection | null = null
+  const deadline = timeoutSignal(MARKER_RESERVE_TIMEOUT_MS)
   try {
-    dedicated = await runtime
-      .providerPool()
-      .reserve({ signal: AbortSignal.timeout(MARKER_RESERVE_TIMEOUT_MS) })
+    dedicated = await runtime.providerPool().reserve({ signal: deadline.signal })
   } catch {
     dedicated = null
+  } finally {
+    deadline.cancel()
   }
   try {
     const rows = await (dedicated ?? caller).unsafe(

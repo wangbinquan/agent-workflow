@@ -130,6 +130,24 @@ function sameTarget(
   )
 }
 
+/**
+ * A status probe that loses the operation-scoped advisory lock means "someone
+ * else is driving this operation right now", not "the status request failed".
+ * The daemon composes one coordinator per provider composition, so the runner
+ * holding that lock is routinely a different instance from the one serving the
+ * poll — reporting the durable manifest is the correct answer for the caller.
+ */
+export function isDatabaseMigrationTargetProbeUnavailable(error: unknown): boolean {
+  // Matched structurally: the error class lives in `platform/persistence`, and
+  // this context has no reason to take a value dependency on it just to read a
+  // code that is already part of that port's contract.
+  return (
+    error instanceof Error &&
+    error.name === 'PostgresqlLogicalTargetError' &&
+    (error as { readonly code?: unknown }).code === 'postgresql-target-lock-held'
+  )
+}
+
 export function createDatabaseMigrationCoordinator(
   options: DatabaseMigrationCoordinatorOptions,
 ): DatabaseMigrationCoordinatorPort {
@@ -334,6 +352,55 @@ export function createDatabaseMigrationCoordinator(
     }
   }
 
+  // RFC-349 —— status 是只读的，但 `withRunner` 会为它新建一个 target runtime
+  // （自带 poolMax 条 PostgreSQL 连接）并抢 operation 级 advisory lock。割接完成
+  // 到 finalize 之间，每一次 `GET /api/database/migrations/:id` 与 `GET /api/database`
+  // 都走这条路：托管取证跑里 8 个并发轮询因此既互相抢锁
+  // （`another process owns the PostgreSQL logical migration target`），又把服务端
+  // 连接数打爆（`sorry, too many clients already`），随后整条 PostgreSQL 面级联失败。
+  //
+  // 真正需要 target 的只有一件事：manifest 还没记下 firstLiveWriteAt 时去探一次。
+  // 记下之后再探没有任何意义。所以：只在确实要探时开 runner，并且同一 operation
+  // 的并发探测共用同一次。
+  const statusProbes = new Map<string, Promise<DatabaseMigrationStatusView>>()
+  const probeStatus = (operationId: string): Promise<DatabaseMigrationStatusView> => {
+    const active = statusProbes.get(operationId)
+    if (active !== undefined) return active
+    const probe = withRunner(operationId, (runner) => runner.status(operationId), false).finally(
+      () => {
+        statusProbes.delete(operationId)
+      },
+    )
+    statusProbes.set(operationId, probe)
+    return probe
+  }
+  const projectStatus = async (
+    status: DatabaseMigrationStatusView,
+  ): Promise<DatabaseMigrationStatusView> => {
+    if (
+      status.phase !== 'accepting-writes' ||
+      status.rolledBackAt !== null ||
+      status.firstLiveWriteAt !== null
+    ) {
+      return status
+    }
+    // The operation reaches `accepting-writes` one beat before its own runner
+    // releases the operation-scoped advisory lock, and the daemon composes one
+    // coordinator per provider composition — so the runner that still holds the
+    // lock is not necessarily this instance's. The probe is only an
+    // optimisation (the run records the marker itself), so a lock conflict must
+    // read as "not right now" and fall back to the durable manifest instead of
+    // failing every concurrent status request with
+    // `another process owns the PostgreSQL logical migration target`.
+    if (activeRuns.has(status.operationId)) return status
+    try {
+      return await probeStatus(status.operationId)
+    } catch (error) {
+      if (isDatabaseMigrationTargetProbeUnavailable(error)) return status
+      throw error
+    }
+  }
+
   const runOperation = (
     operationId: string,
     runOptions?: { readonly resumeFailed?: boolean },
@@ -486,29 +553,12 @@ export function createDatabaseMigrationCoordinator(
     },
 
     async get(input: DatabaseMigrationOperationInput) {
-      const status = controlPlane.get(input.operationId)
-      if (status.phase !== 'accepting-writes') return status
-      return await withRunner(
-        input.operationId,
-        (runner) => runner.status(input.operationId),
-        false,
-      )
+      return await projectStatus(controlPlane.get(input.operationId))
     },
 
     async list() {
-      const statuses = controlPlane.list()
       const projected = []
-      for (const status of statuses) {
-        projected.push(
-          status.phase === 'accepting-writes' && status.rolledBackAt === null
-            ? await withRunner(
-                status.operationId,
-                (runner) => runner.status(status.operationId),
-                false,
-              )
-            : status,
-        )
-      }
+      for (const status of controlPlane.list()) projected.push(await projectStatus(status))
       return projected
     },
 

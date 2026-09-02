@@ -66,8 +66,14 @@ export function createDaemonProviderRuntimeRouter<WebSocket = DaemonProviderList
       if (handover !== null) await handover
       return await controller.current().runtime.fetch(request)
     },
-    tryUpgrade(request: Request, server: DaemonProviderUpgradeServer) {
-      return controller.current().runtime.tryUpgrade(request, server)
+    async tryUpgrade(request: Request, server: DaemonProviderUpgradeServer) {
+      // Same fence as `fetch`: a WebSocket upgrade authenticates, and doing that
+      // against the outgoing composition mid-switch fails on provider-shaped SQL
+      // (`upgrade-token-resolve-threw`), which the client only ever sees as a
+      // transport error before hello.
+      const handover = controller.handover()
+      if (handover !== null) await handover
+      return await controller.current().runtime.tryUpgrade(request, server)
     },
     websocketHandlers: Object.freeze({
       open(webSocket: WebSocket) {
