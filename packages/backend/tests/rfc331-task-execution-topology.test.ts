@@ -267,6 +267,11 @@ describe('RFC-331 purpose-specific read models', () => {
 })
 
 describe('RFC-331 architecture cuts', () => {
+  // 预算而非性能门：这条断的是「三刀切齐 + consumer 只走 public + 生产语料不 import 测试拓扑」，
+  // 判据是 AST 结构，与耗时无关。但它每次都要把 `packages/backend/src` 整棵树（>800 文件）解析一遍，
+  // 本机单跑约 2s，CI 四分片同跑时曾整整卡满 bun 默认的 5s 上限而红
+  // （run 33652905661，macos/ubuntu shard 3/4 各一次，实测 5909ms）。语料只会继续长，
+  // 所以给一个说得出理由的显式预算，而不是等它再红一次。
   test('production corpus has all three cuts, public-only consumers and no test topology import', () => {
     const units = backendUnits(REPO_ROOT)
     expect(units.length).toBeGreaterThan(800)
@@ -275,7 +280,7 @@ describe('RFC-331 architecture cuts', () => {
     ).toBe(true)
     expect(legacyDeepImports(units)).toEqual([...REGISTERED_PREEXISTING_DEEP_IMPORTS].sort())
     expect(topologyBoundaryViolations(units)).toEqual([])
-  })
+  }, 30_000)
 
   test('each forbidden edge has an independent negative fixture', () => {
     const mutations = [
