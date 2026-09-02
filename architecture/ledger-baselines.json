@@ -56,10 +56,7 @@
       "file": "packages/backend/src/db/schemaAdmission.ts",
       "symbol": "LEGACY_MIGRATION_HASHES",
       "baseline": 9,
-      "why": "历史迁移文件的可接受哈希（内容曾被改动过的迁移）。新迁移绝不该进这张表",
-      "allowGrowth": {
-        "why": "0111_rfc223_agent_refs_to_id 的字节在发布并被现网应用之后被改过（`json_group_array(x ORDER BY y)` → 有序子查询，好让语句在 SQLite < 3.44 上也能解析），而它替换掉的那条回执没有重钉；每一个既有库因此卡在 migration-history-preflight 上开不了机。+1 条正是 RFC-278 这张表的既定用途——把旧字节的 sha256 钉回来。等价性不是口头承诺：migration-0111-rfc223.test.ts 锁住「新旧两版落下同样的行」，不等价就说明该走新的前向迁移而不是别名。"
-      }
+      "why": "历史迁移文件的可接受哈希（内容曾被改动过的迁移）。新迁移绝不该进这张表"
     },
     {
       "id": "rfc294-cross-context-pilot-debt",
@@ -496,8 +493,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "39dacbc87a838da4be34ec3dd78f7c43e217ac69",
-    "contentDigest": "sha256:ef4459ededced580a6a2c18026adac59f206f99fa5ea48f25ffdd8eeb99f6b43",
+    "currentSnapshotSha": "90e940dc98caaff678dcacfcf96668337cafadff",
+    "contentDigest": "sha256:8e36aab18e503f5a636596ffa8908273267d07dea1888fcc35d8980e671d3f83",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
