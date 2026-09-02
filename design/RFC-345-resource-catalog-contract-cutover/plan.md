@@ -1,9 +1,9 @@
 # RFC-345 实施计划 — Resource Catalog 与 ResourcePackage 合同归位
 
-状态：Approved / In Progress（2026-09-02）；D1～D10 已获用户明确批准。
-T1～T3 完成；T4a～T4d、T5 六个 cohort 的 aggregate 面、T6 与 T8 已于 2026-08-31 进入 published `main`；
-**T9 已完成**（11 条 edge 真退役 + 删掉第 11 个 facade `services/skill-zip.ts`，其余 11 条按 consumer 归属逐条转交；
-账本里 owner 仍为「RFC-345 T9」的 edge = 0），只差账本重采；**T10 未做、AC-12 未满足**，RFC-345 / W4-C 不得标 Done。
+状态：**Done（2026-09-02）**；D1～D10 已获用户明确批准，T0～T10 全部完成，AC-1～AC-12 全部满足。
+T1～T3 完成；T4a～T4d、T5 六个 cohort 的 aggregate 面、T6 与 T8 于 2026-08-31 进入 published `main`；
+T9 退役 11 条 exact debt edge 并删掉第 11 个 facade `services/skill-zip.ts`，其余 11 条按 consumer 归属逐条转交，
+账本里 owner 仍为「RFC-345 T9」的 edge = 0；T10 的 hosted closeout 取证见 §7.6。
 逐条判据见 §7「2026-09-02 实施对账」，T9 结果见 §7.5。
 
 Current-source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`（`HEAD=origin/main`；RFC-344 published implementation
@@ -18,7 +18,7 @@ exact SHA。
 - [x] 写 proposal/design/plan 草案；
 - [x] 用户明确批准 D1～D10；
 - [x] 生产实现开始前 fresh fetch、确认 main/origin ancestry、共享 index 与 RFC-344 published baseline；
-- [ ] AC-1～AC-12 与 published exact-SHA hosted closeout 全部满足后，RFC-345/W4-C 才能 Done。
+- [x] AC-1～AC-12 与 published exact-SHA hosted closeout 全部满足后，RFC-345/W4-C 才能 Done。（2026-09-02 满足，取证见 §7.6）
 
 本 RFC 可以拆成多个小 cohort commit，但它们共同关闭一个 W4-C。任何中间 contract、某一个 aggregate 或 package adapter 完成，都不能
 提前标记 RFC-345/W4-C Done。
@@ -248,13 +248,13 @@ T2、T3 和六个 T5 aggregate cohort 在 contracts 稳定后可以由不同 ses
 
 ### T10 — Publication / hosted closeout
 
-- [ ] 按 shared-main policy fresh fetch；若 remote advance，安全同步并只做比例化复核；
-- [ ] 确认 cached index为空；exact-stage 本 RFC allowlist，核对完整 staged path/diff；
-- [ ] commit message 与实际 material contributors 的 trailers准确；
-- [ ] commit 后核对 committed paths/message，push 前再 fetch/compare；
-- [ ] push 后验证 `HEAD=origin/main`、divergence 0/0、remote ancestry；
-- [ ] 跟踪 published exact SHA Main CI 与项目要求的定时 workflows；
-- [ ] 全部 terminal success 后更新 RFC-345 三件套、RFC-294 W4-C、`design/plan.md`、`STATE.md` 为 Done。
+- [x] 按 shared-main policy fresh fetch；若 remote advance，安全同步并只做比例化复核；（并发 RFC-349/350 期间反复 ff-merge 后重采）
+- [x] 确认 cached index为空；exact-stage 本 RFC allowlist，核对完整 staged path/diff；
+- [x] commit message 与实际 material contributors 的 trailers准确；
+- [x] commit 后核对 committed paths/message，push 前再 fetch/compare；
+- [x] push 后验证 `HEAD=origin/main`、divergence 0/0、remote ancestry；
+- [x] 跟踪 published exact SHA Main CI 与项目要求的定时 workflows；（§7.6）
+- [x] 全部 terminal success 后更新 RFC-345 三件套、RFC-294 W4-C、`design/plan.md`、`STATE.md` 为 Done。
 
 ## 4. 预计源码范围
 
@@ -338,20 +338,20 @@ T9 未开始、T10 未做、AC-12 未满足，RFC-345 / W4-C 仍是 In Progress�
 
 ### 7.2 AC-1～AC-12 现状
 
-| AC                                                 | 状态          | 判据                                                                                                                                        |
-| -------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| AC-1 四 roster 15/16/7/6                           | ✅            | `rfc345-resource-catalog-contracts.test.ts` 绿                                                                                              |
-| AC-2 `ResourceCatalogQuery` 只回 `ResourceSummary` | ✅            | `public/queries.ts:63-65` 的 `listVisible` / `getVisibleSummary`                                                                            |
-| AC-3 Intent 两份 catalog 合一                      | ✅            | `services/intent/resourceCatalog.ts:15-20` 消费同一 query；`dumpBuilder.ts:50` 只用 RC public types                                         |
-| AC-4 `ACL_TABLES` 仅 RC infrastructure 可见        | ✅            | 全仓 `ACL_TABLES` 外部 importer = 0（`platform/persistence/postgresqlForeignResourceAcl.ts` 的是同名前缀的 `FOREIGN_ACL_TABLES`，非本符号） |
-| AC-5 四 named participant 字段闭合                 | ✅            | `public/participants.ts` 四个 `*InTx` 均为具名闭合类型，无 generic snapshot                                                                 |
-| AC-6 经典六类各自 typed                            | ✅            | 六个 `application/<aggregate>/` 目录；无 universal CRUD switch                                                                              |
-| AC-7 package 四操作走 module public                | ✅            | `routes/resourcePackages.ts` / `cli/package.ts` 均只 import RC `public/`                                                                    |
-| AC-8 package participant 7/7                       | ✅            | `ResourcePackageApplyTx` 七臂 + `code-capability` 侧 capability-template owner                                                              |
-| AC-9 package 既有语义不改判                        | ✅            | RFC-345 守卫组绿；无 schema/wire 变化                                                                                                       |
-| AC-10 只在 RFC-344 最终 baseline 上切 binding      | ✅            | T8 commit 均晚于 RFC-344 final `c5c4faafc`                                                                                                  |
-| AC-11 无 migration / 无 route/tool/CLI 增删        | ✅            | 本 RFC 提交无 `migrations/` 触及                                                                                                            |
-| AC-12 exact-SHA hosted closeout                    | ❌ **未满足** | 未做：T9 未开始，也未按本 RFC 的 exact SHA 跟踪 Main + 定时 workflows                                                                       |
+| AC                                                 | 状态 | 判据                                                                                                                                        |
+| -------------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-1 四 roster 15/16/7/6                           | ✅   | `rfc345-resource-catalog-contracts.test.ts` 绿                                                                                              |
+| AC-2 `ResourceCatalogQuery` 只回 `ResourceSummary` | ✅   | `public/queries.ts:63-65` 的 `listVisible` / `getVisibleSummary`                                                                            |
+| AC-3 Intent 两份 catalog 合一                      | ✅   | `services/intent/resourceCatalog.ts:15-20` 消费同一 query；`dumpBuilder.ts:50` 只用 RC public types                                         |
+| AC-4 `ACL_TABLES` 仅 RC infrastructure 可见        | ✅   | 全仓 `ACL_TABLES` 外部 importer = 0（`platform/persistence/postgresqlForeignResourceAcl.ts` 的是同名前缀的 `FOREIGN_ACL_TABLES`，非本符号） |
+| AC-5 四 named participant 字段闭合                 | ✅   | `public/participants.ts` 四个 `*InTx` 均为具名闭合类型，无 generic snapshot                                                                 |
+| AC-6 经典六类各自 typed                            | ✅   | 六个 `application/<aggregate>/` 目录；无 universal CRUD switch                                                                              |
+| AC-7 package 四操作走 module public                | ✅   | `routes/resourcePackages.ts` / `cli/package.ts` 均只 import RC `public/`                                                                    |
+| AC-8 package participant 7/7                       | ✅   | `ResourcePackageApplyTx` 七臂 + `code-capability` 侧 capability-template owner                                                              |
+| AC-9 package 既有语义不改判                        | ✅   | RFC-345 守卫组绿；无 schema/wire 变化                                                                                                       |
+| AC-10 只在 RFC-344 最终 baseline 上切 binding      | ✅   | T8 commit 均晚于 RFC-344 final `c5c4faafc`                                                                                                  |
+| AC-11 无 migration / 无 route/tool/CLI 增删        | ✅   | 本 RFC 提交无 `migrations/` 触及                                                                                                            |
+| AC-12 exact-SHA hosted closeout                    | ✅   | Main CI 与 8 条定时 workflow 全部 terminal success，逐条 SHA / run id 见 §7.6                                                               |
 
 ### 7.3 T9 exact 清单（本节即 T9 的输入）
 
@@ -498,11 +498,44 @@ W4-E1 25、W4-B 5、RFC-349 provider cutover 4、W4-E6 3、W6 3、W4-E7 2、W4-E
 - T9 要求的另外四类 source-lock 已存在，未重复造：`ACL_TABLES` 作用域（`rfc345-resource-catalog-contracts.test.ts:443`）、
   generic loader/writer（`:395`）、package writer direct arm（`:1636`）、classic deep import（facade 退役账本本身）。
 
-### 7.4 下一步（不改变 §2 依赖图）
+### 7.4 收尾结果
 
-1. T9：按 §7.3.1 / §7.3.2 给出 exact 转交记录，清掉 consumer 已归零的 facade，并把三个 legacy 依赖桥
-   （`services/intent/legacyIntentApplyResourceDependencies.ts` 50 条、`services/resourceAcl.ts` 49 条、
-   `services/bundle/legacyResourcePackageMutationDependencies.ts` 47 条）与 bootstrap（`server.ts` 39 / `cli/*` 43）
-   的 inbound 例外逐条定性；
-2. T10：exact-SHA hosted closeout（Main + 8 条定时 workflow），然后才更新三件套 / `design/plan.md` / `STATE.md` 为 Done；
-3. RFC-349 仍在途且其 `postgresql-evidence` 未绿，T10 的 exact-SHA 跟踪需避开其红窗口。
+1. **T9 已完成**：11 条 edge 真退役 + 删掉第 11 个 facade，其余 11 条逐条转交（§7.5）；三个 legacy 依赖桥
+   （`services/intent/legacyIntentApplyResourceDependencies.ts`、`services/resourceAcl.ts`、
+   `services/bundle/legacyResourcePackageMutationDependencies.ts`）与 bootstrap 的 inbound 例外保持在
+   `commons-debt.json` 里逐条具名，随各自 owner wave 清偿；
+2. **T10 已完成**：Main CI + 8 条定时 workflow 全绿，取证见 §7.6；
+3. `postgresql-evidence` 仍红且属 RFC-349，按用户裁决记为例外、不阻塞本 RFC（§7.6）。
+
+### 7.6 T10 hosted closeout 取证（2026-09-02）
+
+**功能性提交链**：`50e2b3e47`（T9 源码 + 账本重采）→ `f4c1e4ceb`（把 T9 那对一次性 `allowGrowth` 出账；只动四份
+governance artifact，canonical 八份与 `status.md` 逐字节未变）→ 本文档批。两笔都在推之前用 `git archive <commit>`
+导出干净树整体重跑 census，与 committed 产物 **17/17 逐字节相同**才推。
+
+| 门                        | 结论                               | 取证 SHA                                           | run           |
+| ------------------------- | ---------------------------------- | -------------------------------------------------- | ------------- |
+| Main CI                   | success（35/35，attempt 1 一次过） | `78dcc5999`（含 `50e2b3e47` + `f4c1e4ceb`）        | `33633631833` |
+| e2e-full-nightly          | success                            | `78dcc5999`                                        | `33633908180` |
+| e2e-webkit-nightly        | success                            | `78dcc5999`                                        | `33633911465` |
+| visual-regression-nightly | success                            | `50e2b3e47`（另在 `78dcc5999` 再绿一次）           | `33629309828` |
+| evidence-soak-nightly     | success                            | `50e2b3e47`                                        | `33629299097` |
+| git-protocols-e2e         | success                            | `50e2b3e47`                                        | `33629302272` |
+| integration-opencode      | success                            | `50e2b3e47`                                        | `33629305938` |
+| windows-platform          | success                            | `50e2b3e47`                                        | `33629313260` |
+| maintenance-soak-nightly  | success                            | `099c4f639`（exact SHA 上的 run 被并发 push 取消） | `33629556093` |
+
+**分栏口径**：`f4c1e4ceb` 之后本 RFC 再无源码改动，因此在 `50e2b3e47` 上取得的定时 workflow 绿依然有效——它们测的
+面一个字节没变。需要落在 containing SHA 上的三条各有其原因：Main CI 与 `maintenance-soak` 在 exact SHA 上被并发
+push 按 `ci.yml` 的 `${{ github.workflow }}-${{ github.ref }}` concurrency 取消；两条 e2e nightly 首轮在 `50e2b3e47`
+上红，**红因不属于本 RFC**——是 RFC-350 新增的「任务不活跃超时」设置卡撞了 `e2e/ux-consistency.spec.ts:428` 的
+卡片计数锁，由 RFC-350 owner 在 `78dcc5999` 修复后两条 e2e 腿都验过。
+
+**已知例外（按用户 2026-09-02 裁决记录在案，不阻塞本 RFC 收口）**：`postgresql-evidence` 在 `099c4f639` 上仍
+failure（run `33630568115`，失败码 `sqlite-source-mutated`，发生在 large migration 的 copying 阶段）。该 workflow 与其
+失败均属 **RFC-349 owned**，与 resource-catalog 无关；用户裁定 T10 以「Main CI + 8 条既有定时 workflow 全绿」为准。
+
+**同批并发**：整个 T9/T10 窗口内主干上还有 RFC-349 与 RFC-350 两个 session 在推。`architecture/*.json` 因此发生过
+三次互相覆盖，最终统一为「先提源码、再用 `git archive` 干净导出树重采、逐字节自验后才推」的姿势；另外发现
+`allowGrowth` 是一次性授权，加它的人必须在下一笔出账，否则撞上过期判据（T17）——本 RFC 先后为 RFC-349 与自己
+各出账过一次。这两条已由并发 session 补进 `docs/dev-gotchas.md`。

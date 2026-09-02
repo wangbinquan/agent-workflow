@@ -273,20 +273,23 @@ called before any query`。十九处判据统一补上 `errno`；守卫
 > `33317698270` 与同 SHA 8 个 scheduled workflows 9/9 `completed/success`。RFC-owning docs 已发布为
 > `abf484d8b08c9ff64b1ed150e4ca45e49b88d1e9`；本 RFC 只关闭 W4-E7。
 
-> 🚧 **RFC 实施中（Approved / In Progress；进度对账于 2026-09-02，HEAD `ea9a30187`）：[RFC-345 Resource Catalog 与 ResourcePackage 合同归位（RFC-294 W4-C）](design/RFC-345-resource-catalog-contract-cutover/proposal.md)。**
-> **本条 2026-09-02 重写**：此前记的「下一 cohort 是 T5-M」已过期——2026-08-31 一整批 cohort 直接进了 `main`，而 RFC 文档停在 `fbc0ec093`。
-> 实际已落：T4a～T4d 四个 named participant（`2adacced3` / `892dd1c32` / `bc3d0f1b7` / `5bd020dee`）、T5 六个 aggregate cohort
-> （agent `a39432577`、skill `3edfa32b5`、MCP `56fa9e88e`、plugin `51808662c`、workflow `7ba2789cc`、workgroup `f8e23d54d`）、
-> T6 package 七 participant（`c609fd655`）与 T8 operation binding（`ffcff7428` / `ac93aba5e`）；`services/{skill,mcp,plugin}.ts` 已删除，
-> `services/{agent,workflow*,workgroup*,workgroups}.ts` 收成 3～5 行 facade，`services/resourceAcl.ts` 由 1064 行收成 70 行纯 re-export。
-> AC-1～AC-11 现场可验（`bun test packages/backend/tests/rfc345-*.test.ts` = 14 文件 71 用例绿）。
-> **仍未完成**：T9（facade / deep-import / debt closeout）未开始、T10（exact-SHA hosted closeout）未做、AC-12 未满足，
-> 因此 W4-C 仍不得标 Done。T9 的 exact 输入已落在 RFC-345 `plan.md §7`：32 个 `removeAfterWave=W4-C` facade（13 thin / 19 legacy，
-> 全部仍有生产 consumer，可直接删除数 = 0）、19 处 `@/services/resourceAcl` import、以及 task-execution / intent / collaboration
-> 三处仍未归零的跨 context deep import。**注意两个分母问题**：①`removeAfterWave` 由文件名关键词派生（`rfc294Canonical.ts:407-451`），
-> 把 9 个 agent/workflow 运行时文件误归 W4-C、又把 `resourceAcl` / `bundle/**` / `resourcePackage/**` 误归 W4-E1/W4/W5/W4-E0，
-> 属 review-2026-08-30 §B3/§C3 已列的待重生成项；②RFC-349 双 provider 把 W4-C 例外桶从 212 抬到 915，其中大头是
-> RC→`db/schema.ts`(340)/`util/errors.ts`(190)/`db/client.ts`(80) 等平台原语边，不应由 W4-C 承担。
+> ✅ **RFC 已完成（Done，2026-09-02）：[RFC-345 Resource Catalog 与 ResourcePackage 合同归位（RFC-294 W4-C）](design/RFC-345-resource-catalog-contract-cutover/proposal.md)。**
+> T1～T8 于 2026-08-31 进入 published `main`（四个 named participant、六个 aggregate cohort、package 七 participant、operation binding），
+> 2026-09-02 补完 T9/T10。**T9 的收口口径由用户当日裁定**：修法完全落在 `modules/resource-catalog/**` 内部的由本 RFC 退役，
+> 需要往别的 context 塞注入或需要新开公共合同的转交该 consumer 所属 wave。据此退役 11 条 exact debt edge——bootstrap 过去把
+> Resource Catalog **自己的**行映射器（`rowToAgent` / `rowToWorkflowDetail` / `rowToWorkgroup`）当参数喂回 RC composition，
+> 而 PostgreSQL 孪生从来不需要它们，正是这条改动成立的现成证据；另有 `buildWorkflowValidationContext`（新增
+> `composeSqliteDynamicWorkflowValidationContext`）与 `assertNameUnchangedForEditor`（挂上 `ResourceAuthorizationApplication`）各 2 条，
+> 以及 `decodeZip` 1 条——后者让 **`services/skill-zip.ts` 生产 consumer 归零并被删除**，成为第 11 个 `RETIRED_FACADE`。
+> 其余 11 条按 consumer 归属转交 W4-E1（7）/ W4（1）/ W4-E4a（2）/ W9-E（1），理由逐条落在 `plan.md §7.5.2`；其中
+> `StagedSkillVersion` 那条**试过就地退役并回退**：journal 把暂存句柄整个 round-trip 回 RC、`noop` 是一整行 `skill_versions`，
+> 干净退役需要公共 staged DTO，而 AC-2 明令 public type 不含 Drizzle row。
+> 结果：`EXACT_COMPATIBILITY_DEBT` 63 → 52，**owner 仍写「RFC-345 T9」的 edge = 0**；`RETIRED_FACADES` 10 → 11。
+> 功能性提交链 `50e2b3e47`（T9 源码 + 账本重采）→ `f4c1e4ceb`（T9 那对一次性 `allowGrowth` 出账），两笔都在推之前用
+> `git archive <commit>` 导出干净树整体重跑 census、与 committed 产物 **17/17 逐字节相同**才推。
+> 取证：Main CI `33633631833`（`78dcc5999`，35/35 attempt 1）+ 8 条定时 workflow 全部 terminal success，逐条 SHA/run 见
+> `plan.md §7.6`；`postgresql-evidence` 仍红但属 **RFC-349 owned**（`sqlite-source-mutated`），按用户 2026-09-02 裁决记为例外、不阻塞。
+> **本 RFC 只关闭 W4-C**：W4-B、W4-D 余项与 E1/E2/E3/E4a/E4b/E5/E6/E8/E9/E10 仍须逐个立 RFC。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-344 OperationCatalog 与 transport cutover（RFC-294 W4-A）](design/RFC-344-operation-catalog-transport-cutover/proposal.md)。**
 > 472 条 HTTP route 获 stable operation identity，52/52 MCP tool 进入 closed binding 并调用同一 mounted handler chain；第二套

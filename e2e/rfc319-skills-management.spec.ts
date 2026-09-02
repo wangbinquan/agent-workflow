@@ -82,7 +82,8 @@
 //   packages/frontend/src/components/skills/ImportZipPanel.tsx:364-374   parseError 的 ErrorBanner + Retry 按钮
 //   packages/frontend/src/components/skills/ImportZipPanel.tsx:475-503   rows 为空 → 「无候选」EmptyState（此时**不渲染**提交按钮）
 //   packages/frontend/src/components/skills/ImportZipPanel.tsx:536-570   提交按钮只在 rows.length > 0 时存在
-//   packages/backend/src/services/skill-zip.ts:109-113         zip-decode-failed 的唯一来源
+//   packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts
+//                                                              zip-decode-failed 的唯一来源（RFC-345 T9 迁位）
 //   packages/frontend/src/i18n/en-US.ts:8004                   errors['zip-decode-failed'] 有 exact 译文 ⇒ 只显示标题
 //   packages/frontend/src/components/SkillFileTree.tsx:100-110 validateNewPath：主文件保护挡在 stage 之前
 //   packages/frontend/src/components/SkillFileTree.tsx:127-131 isPathReadonly（readonlyPaths + 词法判定）

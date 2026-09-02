@@ -1,6 +1,6 @@
 # RFC-345 — Resource Catalog 与 ResourcePackage 合同归位（RFC-294 W4-C）
 
-- 状态：Approved / In Progress（2026-08-30；D1～D10 已获用户明确批准）
+- 状态：**Done（2026-09-02）**；D1～D10 已获用户明确批准，AC-1～AC-12 全部满足（hosted closeout 取证见 `plan.md §7.6`）
 - current-source pin：`625017c084db2f7eb6c9ec34c87eba41ffaf04cd`（`HEAD=origin/main`；RFC-344 published
   implementation candidate，hosted closeout 尚待完成）
 - 前置：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W0-R / W3、

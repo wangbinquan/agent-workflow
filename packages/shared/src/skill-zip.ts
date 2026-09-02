@@ -1,9 +1,11 @@
 // RFC-019: pure logic for turning a decoded ZIP (list of `ZipEntryRef`) into
 // a set of skill candidates ready to be written to disk.
 //
-// The decoding itself (fflate / safety limits / zip-slip) lives in the
-// backend `services/skill-zip.ts`; this module only sees already-normalised
-// entries (posix paths, no `..`, no leading `/`).
+// The decoding itself (fflate / safety limits / zip-slip) lives in the backend
+// at `modules/resource-catalog/infrastructure/legacy/skill-zip.ts` (RFC-345 T9
+// deleted the `services/skill-zip.ts` compatibility facade once its last
+// production consumer read the owner module directly); this module only sees
+// already-normalised entries (posix paths, no `..`, no leading `/`).
 
 import { parseSkillMarkdown } from './skill-md'
 import { SKILL_NAME_RE } from './schemas/skill'
