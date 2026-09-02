@@ -1671,7 +1671,9 @@ describe('RFC-294 W0-R current modules ratchet', () => {
           publicSurfaceForRoot(violation.split(': ')[0]!) === undefined,
       ),
     ).toEqual([])
-  }, 15_000)
+    // 同批放宽：15s 对一条 hosted macOS 实测 6.3s 的全量扫描只剩 2.4 倍余量，
+    // 而同一轮里 5s 的那条正是这么红的。
+  }, 60_000)
 
   test('module capability ownership cannot be structurally forged or serialized', () => {
     expect(capabilityForgeViolations(modules)).toEqual(CAPABILITY_COMPATIBILITY_DEBT)
@@ -1714,7 +1716,11 @@ describe('RFC-294 W0-R current modules ratchet', () => {
       return amount > limit
     })
     expect(uncovered).toEqual([])
-  })
+    // 与上面两条同类的全量 AST 扫描，却漏了预算，一直吃 bun 的 5s 默认值：
+    // 2026-09-02 在 hosted macOS 上实测 7.5s（本机 2.5s），当场把 main 推红。
+    // 语料还在长（RFC-349 一次加进 216 个 provider adapter），预算按「够宽到
+    // 不会因运行器负载抖动而红，又窄到真卡死时仍会红」取。
+  }, 60_000)
 })
 
 // RFC-317 T13 —— 语料非空（守卫的守卫：architecture/rfc317-guard-corpus-floor.test.ts）。
