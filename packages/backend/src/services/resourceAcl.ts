@@ -3,7 +3,6 @@
 // this file contains no database, ORM or transaction implementation.
 
 import { updateResourceAcl as updateResourceAclComposition } from '@/modules/resource-catalog/composition/resourceAcl'
-import { triggerRevalidation } from '@/ws/revalidationHook'
 
 export { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 export {
@@ -65,13 +64,7 @@ export {
 } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 export type { ResourceAclIdentityPersistence } from '@/modules/resource-catalog/application/ports/resourceAclPersistence'
 
-/** Preserve the legacy WebSocket post-commit notification without owning DB logic. */
-export function updateResourceAcl(
-  ...args: Parameters<typeof updateResourceAclComposition>
-): ReturnType<typeof updateResourceAclComposition> {
-  const [db, actor, type, row, body, options = {}] = args
-  return updateResourceAclComposition(db, actor, type, row, body, {
-    ...options,
-    afterCommit: () => triggerRevalidation('resource-acl-changed'),
-  })
-}
+/** Compatibility re-export. The WebSocket post-commit notification now belongs
+ *  to the composition itself, so this wrapper no longer overrides the caller's
+ *  own `afterCommit` (it used to spread the options and then replace it). */
+export const updateResourceAcl = updateResourceAclComposition

@@ -260,7 +260,16 @@ export function updateResourceAcl(
     lifecycle,
   }).acl.updateResourceAcl(actor, type, row, body, {
     updatedAt: options.updatedAt,
-    afterCommit: async () => options.afterCommit?.(db),
+    afterCommit: async () => {
+      await options.afterCommit?.(db)
+      // Every ACL write wakes live sockets from HERE, not from each mount.
+      // The retired `services/resourceAcl` facade attached this, so when the
+      // digital-employee / development-config / capability-template mounts were
+      // cut over to call this composition directly they silently stopped
+      // notifying: a downgraded or upgraded viewer kept the old controls until
+      // they happened to reload, which they have no reason to do.
+      triggerRevalidation('resource-acl-changed')
+    },
   })
 }
 
@@ -322,7 +331,6 @@ export function composeResourceAclOperationApplication<Context extends Actor, Ro
       updateResourceAcl(input.db, authority, input.type, row, body, {
         updatedAt,
         afterWriteInTx: input.afterWriteInTx,
-        afterCommit: () => triggerRevalidation('resource-acl-changed'),
       }),
     linearizer: input.linearizer,
     afterUpdated: input.afterUpdated,
