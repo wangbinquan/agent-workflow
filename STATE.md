@@ -74,6 +74,32 @@
 > （`sqlite-source-mutated.data-version` / `.page-count` / `.file-bytes`）——data-version 单独变化意味着
 > 「有别的连接写了/checkpoint 了」，page-count / file-bytes 变化意味着文件本身长了，两者的修法不同。
 > 结果出来前不要把上面第 14 条当成已定的成因。AC-14 / AC-15 未满足前 RFC-349 不得标 Done。
+>
+> **T10 定位进展（2026-09-02，已把它从「只能靠 hosted run 猜」变成「本机 1 分钟一轮」）**：
+>
+> - **本机可复现**：机器上已有一个常驻 PostgreSQL 容器（`agent-workflow-rfc349-pg-0831`，映射
+>   `127.0.0.1:62815`，凭据在 `docker inspect … .Config.Env`）。跑
+>   `RFC349_DATABASE_URL='postgresql://postgres:<pw>@127.0.0.1:62815/agent_workflow' E2E_VERBOSE=1
+bun run packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts --mode large-soak
+--scale small --clients 4 --duration-seconds 10`（先 `bun run build:binary:e2e`，daemon 起的是
+>   `dist/` 那个二进制，改了生产代码要重新 build）——**45MB 种子、约 1 分钟，稳定复现
+>   `sqlite-source-mutated.data-version`**。不必再等 hosted run（那边约 15 分钟一轮）。
+> - **已排除**：`scheduledTasksEnabled=false` 无效；MR terminal-control worker（5s 拍）停掉无效；
+>   maintenance 的 admission 在冻结窗内一次都没落；安全备份（read-only `VACUUM INTO`）与
+>   `advance()` 各相位都不动源库（冻结后连着四次 advance，data_version 纹丝不动）。
+> - **冻结确实执行了**：给 `freezeRuntime` 加日志实测，14 个 handle 全部 stop+drain
+>   （`task-execution / maintenance / mcp-runtime-tests / resource-limits / scheduled-backup /
+submodule-refresh / batch-import-gc / human-gate-continuation / committed-event-dispatcher /
+memory-distill / development-wake / digital-employee-os / event-center / fusion-reconcile`）。
+>   所以**写手在 provider session 之外**。
+> - **写的是真事务，不是 checkpoint**：在 `assertUnchanged` 里同时采 `-wal` 文件大小，drift 那一刻
+>   WAL 从 2,031,192 涨到 2,035,312（+4120 = 一个 4096 页 + 24 字节帧头），data_version 2→3。
+>   也就是说有人**真提交了一页**，不是「裸 checkpoint 空转」那一类。
+> - **时间形态**：这一轮整个 copy 只花了 765ms，写就落在其中；`copy()` 是**每张表**查一次
+>   （184 张表），两次复现分别在第 82 / 第 40 张表上炸——不是固定表、也不是固定拍，更像是
+>   「相位切到 copying 之后第一次被触发的某个一次性写」。当前最可疑的是**状态轮询触发的写**
+>   （夹具用 4 个 client 持续打 `/api/database/migrations/:id`，另有 1Hz 打 `/api/maintenance/status`）。
+>   下一步就从这条查：把 daemon 主连接的写语句在冻结窗内打栈，或先停掉状态轮询做对照。
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表

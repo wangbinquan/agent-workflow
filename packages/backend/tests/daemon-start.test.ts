@@ -336,7 +336,10 @@ printf '%s\\n' 'stub-opencode custom-build'
       first.kill('SIGTERM')
       await first.exited
     }
-  })
+    // 它自己起两个 daemon 进程、`waitForReady` 一条就给到 10s、handoff 又是 3s——
+    // 内部等待之和早就超过 bun 默认的 5s 总预算，漏写显式预算纯属疏忽（同文件邻近
+    // 三条分别写着 30s / 20s / 15s）。CI run 33589653435（macos shard 3/4）咬到 5013ms。
+  }, 30_000)
 
   test('dev watcher replacement drains the previous generation before taking its lock', async () => {
     const devEnv = { ...env, AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '3000' }
