@@ -26,7 +26,7 @@ id: 01J9YJ2P0K7DC9G2X8Q1W6P0XA # ULID; new workflows have this filled
 name: code-audit-fix
 description: Run worker → audit → fix in a loop until clean.
 definition:
-  $schema_version: 4
+  $schema_version: 6
   inputs: [...] # launcher form fields
   nodes: [...]
   edges: [...]
@@ -161,23 +161,22 @@ trigger rule is attached, but they are only populated for Webhook-launched tasks
 - id: wrap_fan
   kind: wrapper-fanout
   nodeIds: [a_auditor, a_aggregator]
-  inputs:
-    - name: docs
-      kind: list<path<md>>
-      isShardSource: true
-    - name: policy
-      kind: string # broadcast input
+  shardSourcePort: docs # the parameter whose items are sharded
   expectedShardCount: 20 # sizing / nested-cartesian estimate
   position: { x: 280, y: 80 }
   size: { width: 720, height: 420 }
 ```
 
-Exactly one `inputs[]` port must be `isShardSource: true` and have `list<T>`
-kind. A `boundary: wrapper-input` edge maps one item to every per-shard run;
-non-shard inputs are broadcast. An optional inner `role: aggregator` agent
-runs once after the join and its outputs become wrapper outlets (renamed by the
-agent's `outputWrapperPortNames`). With no aggregator, the wrapper exposes the
-`__done__: signal` outlet.
+A fan-out's parameters are its inbound edges, like on every other node: the
+target port name of an ordinary edge into `wrap_fan` is a parameter (`docs`,
+`policy`, …). `shardSourcePort` names the one that is split — its feeding edge
+must come from a `list<T>` port (`wrapper-fanout-shard-source-must-be-list`),
+and it must actually be fed (`wrapper-fanout-shard-source-missing`). A
+`boundary: wrapper-input` edge maps one item of the shard source to every
+per-shard run; every other parameter is broadcast. An optional inner
+`role: aggregator` agent runs once after the join and its outputs become
+wrapper outlets (renamed by the agent's `outputWrapperPortNames`). With no
+aggregator, the wrapper exposes the `__done__: signal` outlet.
 
 The current v1 runtime accepts only `agent-single` inner nodes (plus at most one
 aggregator); other inner kinds fail closed with
@@ -189,12 +188,15 @@ aggregator); other inner kinds fail closed with
 - id: out_audit
   kind: output
   position: { x: 600, y: 80 }
-  ports:
-    - name: audit_findings
-      bind: { nodeId: a_worker, portName: findings }
+# wired by an ordinary edge; the target port name IS the surfaced port:
+# - id: e_audit
+#   source: { nodeId: a_worker, portName: findings }
+#   target: { nodeId: out_audit, portName: audit_findings }
 ```
 
-Surfaces a port on the task detail page's **Outputs** panel.
+An output node declares nothing of its own: each inbound edge is one port,
+surfaced on the task detail page's **Outputs** panel under the edge's target
+port name.
 
 ### `wrapper-git`
 
@@ -225,16 +227,24 @@ node reads the outer value as it was when the wrapper was entered.
   nodeIds: [a_worker, a_checker]
   maxIterations: 5
   exitCondition:
-    kind: port-empty # also port-not-empty | port-equals | port-count-lt
-    nodeId: a_checker
-    portName: findings
+    kind: port-empty # also port-not-empty | port-equals | port-count-lt | port-inactive
+    portName: final_findings # one of the loop's OWN return ports (below)
     # value: 'CLEAN' # port-equals only
     # n: 1           # port-count-lt only
     # separator: "\n"
-  outputBindings:
-    - name: final_findings
-      bind: { nodeId: a_checker, portName: findings }
+# the loop's return values are `wrapper-output` edges from a body node to the loop:
+# - id: e_final
+#   boundary: wrapper-output
+#   source: { nodeId: a_checker, portName: findings }
+#   target: { nodeId: wrap_loop, portName: final_findings }
 ```
+
+A loop returns through `boundary: wrapper-output` edges whose source is a
+direct body member (`wrapper-loop-output-binding-out-of-scope` otherwise); the
+target port name is the return port other nodes read. At the end of every
+round the loop first promotes those return values, then evaluates
+`exitCondition` against its own return port named by `portName` — a name no
+return edge declares is `wrapper-loop-exit-port-missing`.
 
 **v1 has no cross-iteration feedback ports** — share state via worktree
 files only. Each iteration's inner scope runs against the most recent
@@ -246,10 +256,8 @@ they nest to any depth — `wrapper-loop` inside `wrapper-loop` included. Every
 entry into a wrapper opens a fresh _generation_: the inner scope's node runs
 are keyed by the frame `(generation, iteration)`, so an outer loop's second
 round re-executes the inner loop from its first iteration instead of reusing
-the first round's rows, and the inner `exitCondition` / `outputBindings` only
-ever read the current generation. A node referenced by `exitCondition` from
-outside the loop is read as a closure (the value captured when the loop was
-entered).
+the first round's rows, and the inner loop's return edges only ever read the
+current generation.
 
 ### `review`
 
@@ -257,16 +265,20 @@ entered).
 - id: review_design
   kind: review
   title: Approve design
-  inputSource: { nodeId: a_worker, portName: answer }
   rerunnableOnReject: []
   rerunnableOnIterate: []
   rollbackFilesOnReject: false
   rollbackFilesOnIterate: false
+# the reviewed source is the single edge into `__review_input__`:
+# - id: e_review
+#   source: { nodeId: a_worker, portName: answer }
+#   target: { nodeId: review_design, portName: __review_input__ }
 ```
 
-Wire the reviewed source to `__review_input__`. Approval exposes
-`approved_doc`; reject/iterate behavior is controlled by the declared rerun and
-rollback fields.
+The reviewed source is the one edge wired to `__review_input__` (none is
+`review-input-source-missing`, two is `review-input-edge-conflict`). Approval
+exposes `approved_doc`; reject/iterate behavior is controlled by the declared
+rerun and rollback fields.
 
 ### `clarify`
 
@@ -474,7 +486,12 @@ Fanout boundary plumbing is explicit:
 
 Boundary edges describe container plumbing, not ordinary DAG dependencies.
 `wrapper-git` and `wrapper-loop` use the same `wrapper-input` plumbing for their
-parameters. Wrapper containment must form a tree and may nest to any depth
+parameters, and `wrapper-loop` uses `wrapper-output` edges for its return values
+exactly like a fan-out's aggregator outlets. Since schema v6 there is no other
+way to reference a port: a review's source, an output node's ports and a
+loop's returns are all edges (older `inputSource` / `ports[].bind` /
+`outputBindings` / `exitCondition.nodeId` documents are upgraded on import).
+Wrapper containment must form a tree and may nest to any depth
 (loop-in-loop, git-in-loop, loop-in-git, …); the one exclusion is a wrapper
 inside a `wrapper-fanout` scope (`wrapper-fanout-unsupported-inner-kind`) —
 a fan-out shard is a single agent run.
@@ -484,7 +501,7 @@ a fan-out shard is a single agent run.
 `POST /api/workflows/:id/validate` accepts the exact workflow revision fence
 (`expectedVersion` and `expectedSnapshotHash`) and validates references, ports,
 topology, wrapper containment/boundaries, agent resources, input declarations,
-output bindings, review/clarify channels, and prompt variables. The launcher
+output / review / loop-return edges, clarify channels, and prompt variables. The launcher
 reruns the gate and refuses to start a task if any error remains; warnings do
 not block launch.
 

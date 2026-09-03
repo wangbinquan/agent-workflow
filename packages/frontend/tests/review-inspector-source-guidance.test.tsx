@@ -1,9 +1,12 @@
 // Review source UX contract. A review node does not accept an arbitrary text
 // parameter: it snapshots exactly one agent output declared with a Markdown
-// kind. The inspector must teach that contract, explain unavailable choices,
-// and remove the two-field tax when an agent has one eligible output.
+// kind. RFC-354 (schema v6): that source IS the review's single
+// `__review_input__` edge, wired on the canvas — the inspector must teach the
+// contract from that edge (ready / invalid / unavailable), show what is
+// wired, and let the author disconnect it; it offers no second picker.
 
-import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import type { Agent, WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
+import { REVIEW_INPUT_PORT_NAME } from '@agent-workflow/shared'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
@@ -33,14 +36,22 @@ function agentNode(id: string, agent: Agent): WorkflowNode {
   } as unknown as WorkflowNode
 }
 
-function reviewNode(source = { nodeId: '', portName: '' }): WorkflowNode {
+function reviewNode(): WorkflowNode {
   return {
     id: 'review',
     kind: 'review',
-    inputSource: source,
     rerunnableOnReject: [],
     rerunnableOnIterate: [],
   } as unknown as WorkflowNode
+}
+
+/** RFC-354: the review input is this one edge. */
+function reviewEdge(sourceNodeId: string, portName: string): WorkflowEdge {
+  return {
+    id: 'review-in',
+    source: { nodeId: sourceNodeId, portName },
+    target: { nodeId: 'review', portName: REVIEW_INPUT_PORT_NAME },
+  }
 }
 
 function Host({
@@ -69,7 +80,7 @@ function Host({
 
 function definitionOf(nodes: WorkflowNode[], edges: WorkflowDefinition['edges'] = []) {
   return {
-    $schema_version: 4 as const,
+    $schema_version: 6 as const,
     inputs: [],
     nodes,
     edges,
@@ -133,52 +144,72 @@ describe('review inspector source guidance', () => {
     expect(screen.getByRole('link', { name: /Configure agent outputs/ }).getAttribute('href')).toBe(
       '/agents',
     )
-
-    fireEvent.click(screen.getByTestId('review-source-node'))
-    const writerOption = screen.getByRole('option', { name: /writer.*no output port/i })
-    expect(writerOption.getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByTestId('review-source-unwired')).toBeTruthy()
   })
 
-  test('auto-fills the only eligible Markdown port and creates the matching input edge', () => {
+  test('an unwired review with an eligible upstream tells the author to wire the edge — no form picker', () => {
     const writer = storedAgent('agent-writer', 'writer', ['draft', 'diagnostics'], {
       draft: 'markdown',
       diagnostics: 'string',
     })
-    const onChangeSpy = vi.fn()
     render(
       <Host
         initial={definitionOf([agentNode('source', writer), reviewNode()])}
         agents={[writer]}
+      />,
+    )
+    const guide = screen.getByTestId('review-source-guide')
+    expect(guide.textContent).toContain('Only one required input remains')
+    expect(guide.textContent).toContain('input handle on the canvas')
+    expect(screen.getByTestId('review-source-unwired')).toBeTruthy()
+    expect(screen.queryByTestId('review-source-node')).toBeNull()
+    expect(screen.queryByTestId('review-source-port')).toBeNull()
+  })
+
+  test('a wired Markdown edge reads as ready and Disconnect removes exactly that edge', () => {
+    const writer = storedAgent('agent-writer', 'writer', ['draft'], { draft: 'markdown' })
+    const onChangeSpy = vi.fn()
+    render(
+      <Host
+        initial={definitionOf(
+          [agentNode('source', writer), reviewNode()],
+          [reviewEdge('source', 'draft')],
+        )}
+        agents={[writer]}
         onChangeSpy={onChangeSpy}
       />,
     )
+    const guide = screen.getByTestId('review-source-guide')
+    expect(guide.textContent).toContain('Review content is ready')
+    expect(guide.textContent).toContain('single-document review')
+    expect(screen.getByTestId('review-source-summary').textContent).toContain('draft')
 
-    expect(screen.getByTestId('review-source-guide').textContent).toContain(
-      'Only one required input remains',
-    )
-    fireEvent.click(screen.getByTestId('review-source-node'))
-    fireEvent.mouseDown(screen.getByRole('option', { name: /writer.*1 available/i }))
-
+    fireEvent.click(screen.getByTestId('review-source-disconnect'))
     const latest = onChangeSpy.mock.calls.at(-1)?.[0] as WorkflowDefinition
+    expect(latest.edges).toEqual([])
     const review = latest.nodes.find((node) => node.id === 'review') as unknown as Record<
       string,
       unknown
     >
-    expect(review.inputSource).toEqual({ nodeId: 'source', portName: 'draft' })
-    expect(latest.edges).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          source: { nodeId: 'source', portName: 'draft' },
-          target: { nodeId: 'review', portName: '__review_input__' },
-        }),
-      ]),
-    )
+    expect('inputSource' in review).toBe(false)
     expect(screen.getByTestId('review-source-guide').textContent).toContain(
-      'Review content is ready',
+      'Only one required input remains',
     )
-    expect(screen.getByTestId('review-source-guide').textContent).toContain(
-      'single-document review',
+  })
+
+  test('a wired non-Markdown edge is flagged as not reviewable', () => {
+    const writer = storedAgent('agent-writer', 'writer', ['result'], { result: 'string' })
+    render(
+      <Host
+        initial={definitionOf(
+          [agentNode('source', writer), reviewNode()],
+          [reviewEdge('source', 'result')],
+        )}
+        agents={[writer]}
+      />,
     )
+    expect(screen.getByTestId('review-source-guide').textContent).toContain('cannot be reviewed')
+    expect(screen.getByTestId('review-source-summary').textContent).toContain('result')
   })
 
   test('identifies list<path<md>> as a multi-document review input', () => {
@@ -187,10 +218,10 @@ describe('review inspector source guidance', () => {
     })
     render(
       <Host
-        initial={definitionOf([
-          agentNode('source', writer),
-          reviewNode({ nodeId: 'source', portName: 'docs' }),
-        ])}
+        initial={definitionOf(
+          [agentNode('source', writer), reviewNode()],
+          [reviewEdge('source', 'docs')],
+        )}
         agents={[writer]}
       />,
     )
@@ -201,7 +232,7 @@ describe('review inspector source guidance', () => {
     expect(guide.textContent).toContain('list<path<md>>')
   })
 
-  test('re-run pickers offer only the selected source and its reachable upstream', () => {
+  test('re-run pickers offer only the wired source and its reachable upstream', () => {
     const sourceAgent = storedAgent('agent-source', 'writer', ['draft'], { draft: 'markdown' })
     const ancestorAgent = storedAgent('agent-ancestor', 'researcher', ['notes'], {
       notes: 'string',
@@ -216,7 +247,7 @@ describe('review inspector source guidance', () => {
             agentNode('ancestor', ancestorAgent),
             agentNode('source', sourceAgent),
             agentNode('unrelated', unrelatedAgent),
-            reviewNode({ nodeId: 'source', portName: 'draft' }),
+            reviewNode(),
           ],
           [
             {
@@ -224,6 +255,7 @@ describe('review inspector source guidance', () => {
               source: { nodeId: 'ancestor', portName: 'notes' },
               target: { nodeId: 'source', portName: 'notes' },
             },
+            reviewEdge('source', 'draft'),
           ],
         )}
         agents={[sourceAgent, ancestorAgent, unrelatedAgent]}

@@ -643,6 +643,10 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
   session**，另有 223 条是他们的新增文件；
 - 把别人引起的 baseline **上涨**写进 `ledger-baselines.json`（实测 842→870、859→928、
   17083→…）。账本只许降，涨要写 `allowGrowth` 并点名 RFC——替别人涨等于帮他们绕过高水位。
+- **退许可笔要先手删 `allowGrowth` 再重采**（2026-09-04 实撞）：`architecture:write` 会把账本里已有的
+  `allowGrowth` 键**原样保留**，在上涨笔的导出树里直接重采得到的产物仍带着许可，提交上去就是一条
+  「本 commit 未涨、allowGrowth 应删除」的红。正确顺序：导出树里先删掉三处 `allowGrowth`、
+  `prettier --write`，再 `architecture:write --snapshot-sha <上涨笔 sha>`，拷回提交。
 - **任何新增顶层符号都算涨**（2026-09-04 实测）：`rfc294-module-symbol-owners` 数的是文件里的全部
   顶层声明，**未 `export` 的本地 `interface` / `type` 也计**——给收红补一个 5 字段的本地 report 类型
   就让账本 +1、被迫走两笔 allowGrowth。一次性的小类型优先内联到参数位，另一处用
@@ -792,6 +796,12 @@ CLAUDE.md 警告过裸 `git commit` 会提交整个暂存区。**加了 pathspec
 是目录**：`git commit -- architecture/` 提交的是该目录下的全部改动。RFC-329 就这样把并发
 session 未提交的两个 e2e 覆盖账本推上了主干，当场引发 T16 红
 （`rfc319-e2e-endpoint-coverage: 源码 66 vs 基线 96`——artifact 提了一半，配套基线还在对方手里）。
+
+**pathspec 的粒度是文件，不是 hunk**（2026-09-04 实撞，另一 session 用精确到文件的
+`git add` + `git commit -- packages/shared/src/index.ts …` 仍把我工作树里**未提交**的一行删除一起带上了
+main，`@agent-workflow/shared` 少了 4 个导出、backend 全体 import 断裂）：共享树上只要你要提的文件
+**别人也改过**，就必须 `git diff --cached -- <file>` 逐 hunk 认领；`--name-only` 只回答「哪些文件」，
+不回答「文件里有谁的东西」。
 
 **pathspec 必须精确到文件**：`git commit -- a.json b.json`。撤回误提时，把对方的在制品内容
 先 `cp` 到 scratchpad，`git checkout <误提前的commit> -- <files>` 恢复并提交，再把备份原样

@@ -178,10 +178,11 @@ describe('RFC-146 — fanout 出口对下游边可见（曾 false-error 并阻�
     expect(codes).not.toContain('edge-source-port-missing')
   })
 
-  test('impl-gate 修复：普通边打进 fanout 未声明端口 → edge-target-port-missing（typo 不再绿灯空跑）', () => {
-    // Codex 实现门 high：shardSource 名 docs、上游边却接 fan.docz——旧 validator
-    // 对 fanout 目标口零检查，运行时 resolveUpstreamInputs 取不到 docs、
-    // rawContent 空、wrapper 走 empty-source 捷径直接 done（绿灯垃圾）。
+  test('RFC-354：打进 fanout 非 shard 口的边是广播参数；shard 口无边喂入 → wrapper-fanout-shard-source-missing（typo 仍不绿灯）', () => {
+    // Codex 实现门 high（RFC-146）：shardSource 名 docs、上游边却接 fan.docz——
+    // 旧 validator 对 fanout 目标口零检查，运行时取不到 docs、rawContent 空、
+    // wrapper 走 empty-source 捷径直接 done（绿灯垃圾）。RFC-354 起 fanout 的参数
+    // 就是入边（任何端口名都是一个广播参数），typo 改由「shard 口没有边喂入」拦截。
     const def = makeDef({
       nodes: [
         { id: 'up', kind: 'agent-single', agentName: 'lister' },
@@ -208,8 +209,9 @@ describe('RFC-146 — fanout 出口对下游边可见（曾 false-error 并阻�
       ],
       skills: EMPTY_SKILLS,
     }).issues
-    const hit = issues.filter((i) => i.code === 'edge-target-port-missing')
-    expect(hit.map((i) => i.pointer)).toEqual(['e-typo'])
+    expect(issues.filter((i) => i.code === 'edge-target-port-missing')).toEqual([])
+    const hit = issues.filter((i) => i.code === 'wrapper-fanout-shard-source-missing')
+    expect(hit.map((i) => i.pointer)).toEqual(['fan'])
     // boundary 边豁免：wrapper-output 复用 fanout 作 target、端口名是输出名，
     // 不得被本分支误伤（boundary-output 规则族另管）。
     const def2 = makeDef({

@@ -34,10 +34,8 @@
 //   packages/frontend/src/components/canvas/inspector/InputEdit.tsx:88-95   报错时 blur **不提交**
 //   packages/frontend/src/components/canvas/inspector/InputEdit.tsx:294-298 targetDir 非法判定（.. / 绝对路径 / 盘符）
 //   packages/frontend/src/components/canvas/inspector/InputEdit.tsx:355-369 onConflict 分段控件
-//   packages/frontend/src/components/canvas/inspector/OutputEdit.tsx:44-46  端口列表经 set-output-ports 事务
-//   packages/frontend/src/components/canvas/inspector/OutputEdit.tsx:147    未选上游节点时端口下拉禁用
-//   packages/frontend/src/lib/workflow-transition.ts:521-532                output 端口绑定同步生成边
-//   packages/frontend/src/lib/workflow-transition.ts:444-452                review 内容来源同步生成 `__review_input__` 边
+//   packages/frontend/src/components/canvas/inspector/OutputEdit.tsx        端口列表 = 入边（RFC-354 schema v6），Remove 即删边
+//   packages/frontend/src/components/canvas/inspector/ReviewEdit.tsx        内容来源 = `__review_input__` 入边的只读摘要 + 断开
 //   packages/frontend/src/components/canvas/inspector/ReviewEdit.tsx:118-131 端口是否可评审由 outputKinds 判定
 //   packages/frontend/src/components/canvas/inspector/ReviewEdit.tsx:152-159 重跑候选 = 内容来源的可达上游
 //   packages/frontend/src/components/canvas/inspector/ReviewEdit.tsx:99-102  文件回滚开关的默认值（驳回 true / 迭代 false）
@@ -616,70 +614,55 @@ test('WF-27 input 检查器：重复 / 空的 input key 会被拒绝提交，改
 // WF-28 —— output 节点检查器
 // ---------------------------------------------------------------------------
 
-test('WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步 @nightly', async ({
+test('WF-28 output 检查器：端口就是入边——逐边列出、Remove 即删边、删空后回到空态 @nightly', async ({
   page,
 }) => {
+  // RFC-354（schema v6）：output 节点不再自带 `ports[]`，每一条入边就是一个端口。
   const workflowId = await seedWorkflow({
     nodes: [
       agentNode('maker', 'rfc319-ins-maker', 0, 0),
-      { id: 'out', kind: 'output', ports: [], position: { x: 460, y: 0 } },
+      { id: 'out', kind: 'output', position: { x: 460, y: 0 } },
+    ],
+    edges: [
+      {
+        id: 'e_final',
+        source: { nodeId: 'maker', portName: 'answer' },
+        target: { nodeId: 'out', portName: 'final' },
+      },
     ],
   })
   await openEditor(page, workflowId)
   await selectNode(page, 'out')
 
-  const binding = fieldAnchor(page, 'out', 'output-binding')
-  // 这是一组输入、下拉和按钮，必须由 <Field group> 承载。若退回包住整组控件的
-  // <label>，WebKit 会在 Remove 删除当前首控件后把同一次 label 激活转发给此按钮，
-  // 结果刚删空又立刻添回 port_1；逐字可及名同时锁住正确的分组语义。
-  await binding.getByRole('button', { name: '+ Add port', exact: true }).click()
-
-  const row = binding.locator('li.inspector__output-port-row').first()
-  const nodeSelect = row.getByRole('combobox', { name: 'upstream nodeId' })
-  const portSelect = row.getByRole('combobox', { name: 'port' })
-  await expect(
-    portSelect,
-    '还没选上游节点就能选端口 ⇒ 用户会绑定到一个不属于任何节点的端口名上',
-  ).toBeDisabled()
-  await expectPersisted(
-    workflowId,
-    (definition) => ({ ports: node(definition, 'out').ports, edges: edgeSignatures(definition) }),
-    { ports: [{ name: 'port_1', bind: { nodeId: '', portName: '' } }], edges: [] },
-    '新增端口没落库、或绑定还不完整就先画了一条边 ⇒ 画布上出现一条无源之边',
+  const ports = inspector(page).getByTestId('output-ports')
+  const row = ports.locator('li.inspector__output-port-row').first()
+  await expect(row, '入边没有作为端口行列出 ⇒ 作者看不出任务详情页会出现哪张结果卡').toContainText(
+    'final',
   )
+  await expect(row, '端口行不标来源 ⇒ 作者无法确认这张结果卡装的是谁的产物').toContainText('answer')
 
-  await row.locator('input.form-input').first().fill('final')
-  await pickSelectOption(page, nodeSelect, 'rfc319-ins-maker (maker)')
-  await expect(portSelect, '选完上游节点端口下拉仍禁用 ⇒ 绑定永远补不完').toBeEnabled()
-  await pickSelectOption(page, portSelect, 'answer')
-
-  await expectPersisted(
-    workflowId,
-    (definition) => ({ ports: node(definition, 'out').ports, edges: edgeSignatures(definition) }),
-    {
-      ports: [{ name: 'final', bind: { nodeId: 'maker', portName: 'answer' } }],
-      // 表单里的绑定与画布上的边是同一件事的两个面（workflow-transition.ts:521-532）。
-      edges: ['maker.answer→out.final'],
-    },
-    '表单绑好了但没生成对应的边 ⇒ 画布上看不出数据在流，任务详情页也不会有这张结果卡',
-  )
-
+  // Remove 删的是那条边——端口与边是同一件事，不存在「删了端口边还在」的分叉。
   await row.getByRole('button', { name: 'Remove', exact: true }).click()
   await expectPersisted(
     workflowId,
-    (definition) => ({ ports: node(definition, 'out').ports, edges: edgeSignatures(definition) }),
-    { ports: [], edges: [] },
+    (definition) => edgeSignatures(definition),
+    [],
     '删掉端口后边还留着 ⇒ 一条指向不存在端口的边会让校验器永久判红',
   )
+  await expect(
+    inspector(page).getByTestId('output-ports-empty'),
+    '删空后不显示空态 ⇒ 作者不知道该去画布上连一条边',
+  ).toBeVisible()
 })
 
 // ---------------------------------------------------------------------------
 // WF-29 —— review（人工门）检查器
 // ---------------------------------------------------------------------------
 
-test('WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库 @nightly', async ({
+test('WF-29 review 检查器：内容来源就是 __review_input__ 入边（只读摘要 + 断开），重跑集合只给可达上游，回滚开关落库 @nightly', async ({
   page,
 }) => {
+  // RFC-354（schema v6）：review 没有 `inputSource` 字段，内容来源即那条入边。
   const workflowId = await seedWorkflow({
     nodes: [
       agentNode('planner', 'rfc319-ins-planner', 0, 0),
@@ -694,50 +677,25 @@ test('WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集
         source: { nodeId: 'planner', portName: 'plan' },
         target: { nodeId: 'author', portName: 'plan' },
       },
+      {
+        id: 'e_review',
+        source: { nodeId: 'author', portName: 'doc' },
+        target: { nodeId: 'gate', portName: '__review_input__' },
+      },
     ],
   })
   await openEditor(page, workflowId)
   await selectNode(page, 'gate')
 
+  const source = inspector(page).getByTestId('review-source-summary')
   await expect(
-    inspector(page).getByTestId('review-source-guide'),
-    '人工门唯一的必填项没有引导 ⇒ 作者以为要把待评审内容粘进描述框里',
-  ).toContainText('Only one required input remains')
-
-  const sourceNode = inspector(page).getByTestId('review-source-node')
-  await sourceNode.click()
-  const sourceList = page.locator('ul[role="listbox"].select__listbox--portal')
-  await expect(sourceList).toBeVisible()
-  await expect(
-    sourceList.getByRole('option', { name: 'plain (plain)' }),
-    '只有 string 端口的代理却能被选作评审来源 ⇒ 人工门开出来是一片空白，审阅者无从下手',
-  ).toHaveAttribute('aria-disabled', 'true')
-  await expect(
-    sourceList.getByRole('option', { name: 'plain (plain)' }),
-    '禁用了却不说为什么 ⇒ 作者只会觉得这个下拉坏了',
-  ).toContainText('no output port declared with a Markdown kind')
-  await sourceList.getByRole('option', { name: 'rfc319-ins-author (author)' }).click()
-  await expect(sourceList).toBeHidden()
-
-  // author 只有一个可评审端口（doc: markdown；notes: string 不算），
-  // 所以端口应当被自动补齐——这是 ReviewEdit.tsx:346-351 的唯一候选自动填充。
-  await expectPersisted(
-    workflowId,
-    (definition) => ({
-      inputSource: node(definition, 'gate').inputSource,
-      edges: edgeSignatures(definition),
-    }),
-    {
-      inputSource: { nodeId: 'author', portName: 'doc' },
-      edges: ['author.doc→gate.__review_input__', 'planner.plan→author.plan'],
-    },
-    '内容来源没落库、或没同步出 __review_input__ 边 ⇒ 任务跑到人工门时不知道该快照哪个产物',
+    source,
+    '接好的来源边没有摘要成「节点.端口」⇒ 作者不知道人工门开出来审的是谁的产物',
+  ).toContainText('doc')
+  await expect(source, '摘要不带来源节点 ⇒ 同名端口的多个上游分不清').toContainText('author')
+  await expect(source, '摘要不带端口 kind ⇒ 作者无法确认这是一份可评审的 Markdown').toContainText(
+    'markdown',
   )
-
-  await expect(
-    await readSelectOptions(page, inspector(page).getByTestId('review-source-port')),
-    '非 Markdown 端口没有被标成不可选 ⇒ 作者能把人工门指到一段裸字符串上',
-  ).toEqual(expect.arrayContaining([expect.stringContaining('not a reviewable Markdown')]))
 
   // 重跑候选 = 内容来源的**可达上游**（ReviewEdit.tsx:52-75 的反向 BFS）。
   // island / plain 与 author 之间没有边，选中它们只会让校验器拒绝启动。
@@ -958,9 +916,11 @@ test('WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出�
   ).toContainText('inside')
 })
 
-test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库 @nightly', async ({
+test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、返回值就是 wrapper-output 边、退出条件只认自己的返回口 @nightly', async ({
   page,
 }) => {
+  // RFC-354（schema v6）：loop 的返回值是 `wrapper-output` 边（成员端口 → loop 返回口），
+  // exitCondition 只指向 loop 自己的返回口，不再有 nodeId。
   const workflowId = await seedWorkflow({
     nodes: [
       agentNode('outside', 'rfc319-ins-worker', 0, 0),
@@ -970,9 +930,16 @@ test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只�
         kind: 'wrapper-loop',
         nodeIds: ['member'],
         maxIterations: 2,
-        exitCondition: { kind: 'port-empty', nodeId: 'member', portName: 'status' },
-        outputBindings: [],
+        exitCondition: { kind: 'port-empty', portName: 'final' },
         position: { x: 520, y: 0 },
+      },
+    ],
+    edges: [
+      {
+        id: 'e_ret',
+        source: { nodeId: 'member', portName: 'status' },
+        target: { nodeId: 'loop', portName: 'final' },
+        boundary: 'wrapper-output',
       },
     ],
   })
@@ -1005,19 +972,22 @@ test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只�
     '迭代上限 / 触顶继续开关没落库 ⇒ 循环要么跑错轮数，要么触顶时整条工作流直接失败',
   )
 
-  // 退出条件的候选**只能**是当前 loop 的直接成员（wrapperCandidates.ts:84-93）。
-  // 指到 loop 外的节点，那个端口在循环体里永远不会更新，退出条件永远不成立。
-  const exitNode = inspector(page).getByTestId('loop-exit-node-select')
-  const exitCandidates = await readSelectOptions(page, exitNode)
+  // 返回值只读列出（返回口 ← 成员.端口）；退出条件的候选**只能**是 loop 自己的返回口。
+  await expect(
+    inspector(page).getByTestId('loop-return-list'),
+    '返回边没有列出 ⇒ 作者看不出循环体的哪些产物能出这个包装器',
+  ).toContainText('final')
+  await expect(inspector(page).getByTestId('loop-return-list')).toContainText('member')
+  const exitPort = inspector(page).getByTestId('loop-exit-port-select')
+  const exitCandidates = await readSelectOptions(page, exitPort)
   expect(
-    exitCandidates.some((label) => label.includes('(member)')),
-    '当前成员反而不在候选里 ⇒ 退出条件根本无从设置（也让下面那条排除断言变成空断言）',
+    exitCandidates.some((label) => label === 'final'),
+    '自己的返回口反而不在候选里 ⇒ 退出条件根本无从设置',
   ).toBe(true)
   expect(
-    exitCandidates.some((label) => label.includes('(outside)')),
-    '退出条件能指向非成员节点 ⇒ 循环每轮都探测一个不会变的端口，必然跑到触顶',
+    exitCandidates.some((label) => label.includes('status') || label.includes('outside')),
+    '退出条件能指向成员端口或 loop 外的节点 ⇒ 谓词读的不是本轮提升出来的返回值',
   ).toBe(false)
-
   await pickSelectOption(
     page,
     inspector(page).getByRole('combobox', { name: 'Exit condition kind' }),
@@ -1029,46 +999,29 @@ test('WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只�
     '选了 port-equals 却不给比较值字段 ⇒ 退出条件恒等于「等于空串」',
   ).toBeVisible()
   await equalsValue.fill('DONE')
-  await pickSelectOption(page, exitNode, 'rfc319-ins-worker (member)')
-  await pickSelectOption(page, inspector(page).getByTestId('loop-exit-port-select'), 'status')
+  await pickSelectOption(page, exitPort, 'final')
   await expectPersisted(
     workflowId,
     (definition) => node(definition, 'loop').exitCondition,
-    { kind: 'port-equals', nodeId: 'member', portName: 'status', value: 'DONE' },
+    { kind: 'port-equals', portName: 'final', value: 'DONE' },
     '退出条件没整体落库 ⇒ 循环按另一套条件判定是否再来一轮',
   )
-
-  await expandSection(page, 'Advanced')
-  const bindings = fieldAnchor(page, 'loop', 'loop-output-bindings')
-  // 同 WF-28：按钮在 <label> 里，可及名被整段 label 文本吞掉，只能按文本定位。
-  await bindings.locator('button').filter({ hasText: 'Add binding' }).click()
-  const bindingRow = bindings.locator('li.inspector__output-port-row').first()
-  const bindPort = bindingRow.getByRole('combobox', { name: '— pick a port —' })
-  await expect(
-    bindPort,
-    '没选成员节点就能选端口 ⇒ 绑定会指向一个不属于任何成员的端口名',
-  ).toBeDisabled()
-  await pickSelectOption(
-    page,
-    bindingRow.getByRole('combobox', { name: '— pick a loop member —' }),
-    'rfc319-ins-worker (member)',
-  )
-  await pickSelectOption(page, bindPort, 'status')
-  await expectPersisted(
-    workflowId,
-    (definition) => node(definition, 'loop').outputBindings,
-    [{ name: 'out_1', bind: { nodeId: 'member', portName: 'status' } }],
-    '输出绑定没落库 ⇒ 循环体的产物出不了这个包装器，下游节点收不到任何东西',
-  )
+  const persisted = await readDefinition(workflowId)
+  expect(
+    'outputBindings' in node(persisted, 'loop'),
+    '检查器把退役的 outputBindings 又写回了定义 ⇒ v6 文档里长出 v5 字段',
+  ).toBe(false)
 })
 
 // ---------------------------------------------------------------------------
 // WF-32 —— wrapper-fanout 检查器
 // ---------------------------------------------------------------------------
 
-test('WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现 @nightly', async ({
+test('WF-32 wrapper-fanout 检查器：参数就是入边、分片源是其中一条的 Select、派生输出如实呈现 @nightly', async ({
   page,
 }) => {
+  // RFC-354（schema v6）：fan-out 不再声明 `inputs[]`，每条入边就是一个参数，
+  // `shardSourcePort` 点名被逐项拆开的那一个。
   const workflowId = await seedWorkflow({
     nodes: [
       agentNode('feeder', 'rfc319-ins-lister', 0, 0),
@@ -1077,10 +1030,7 @@ test('WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，
         id: 'fan',
         kind: 'wrapper-fanout',
         nodeIds: ['inner'],
-        inputs: [
-          { name: 'items', kind: 'list<string>', isShardSource: true },
-          { name: 'context', kind: 'string' },
-        ],
+        shardSourcePort: 'items',
         position: { x: 560, y: 0 },
       },
     ],
@@ -1090,64 +1040,54 @@ test('WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，
         source: { nodeId: 'feeder', portName: 'items' },
         target: { nodeId: 'fan', portName: 'items' },
       },
+      {
+        id: 'e_context',
+        source: { nodeId: 'feeder', portName: 'items' },
+        target: { nodeId: 'fan', portName: 'context' },
+      },
     ],
   })
   await openEditor(page, workflowId)
   await selectNode(page, 'fan')
 
-  const inputs = fieldAnchor(page, 'fan', 'fanout-inputs')
-  const rows = inputs.locator('.fanout-input-row-wrap')
-  await expect(rows, '声明的入站端口没有逐行列出 ⇒ 作者看不出扇出到底吃几个输入').toHaveCount(2)
+  const rows = inspector(page)
+    .getByTestId('fanout-parameter-list')
+    .locator('.fanout-input-row-wrap')
+  await expect(rows, '入边没有逐条列成参数行 ⇒ 作者看不出扇出到底吃几个输入').toHaveCount(2)
   await expect(
     rows.nth(0).locator('.fanout-input-wired'),
-    '接好的入边不在对应端口行上显示 ⇒ 作者无法确认分片源的数据是谁喂的',
+    '参数行不显示是谁喂的 ⇒ 作者无法确认分片源的数据来源',
   ).toContainText('feeder')
   await expect(
-    rows.nth(1).locator('.fanout-input-wired'),
-    '没接线的端口不标出来 ⇒ 一个永远拿不到值的广播输入会被当成配好了',
-  ).toContainText('(not wired)')
+    rows.nth(0),
+    '分片源那一行没有标记 ⇒ 两个参数长得一样，作者分不清哪个会被逐项拆开',
+  ).toContainText('items')
 
-  // 分片源是单例不变量：把第二个打开，第一个必须自动关掉。
-  await rows.nth(1).getByRole('checkbox', { name: 'shard source' }).check()
+  // 分片源是单例：Select 只能在既有参数里选一个，选另一个即换掉原来的。
+  const shardSelect = inspector(page).getByTestId('fanout-shard-source-select')
+  const shardOptions = await readSelectOptions(page, shardSelect)
+  expect(
+    shardOptions.some((label) => label === 'context'),
+    '候选里没有另一个参数 ⇒ 分片源换不掉，作者只能删边重连',
+  ).toBe(true)
+  await pickSelectOption(page, shardSelect, 'context')
   await expectPersisted(
     workflowId,
-    (definition) =>
-      (node(definition, 'fan').inputs as Array<{ name: string; isShardSource?: boolean }>).map(
-        (port) => `${port.name}:${String(port.isShardSource === true)}`,
-      ),
-    ['items:false', 'context:true'],
-    '一个扇出出现两个分片源（或一个都不剩）⇒ 校验器判 shard-source-duplicate / -missing，而作者只是拨了个开关',
-  )
-
-  // 负向：分片源的 kind 必须是 list<T>——否则「逐项分片」无从谈起。
-  await expect(
-    rows.nth(1).getByText('shard source kind must be list<T>'),
-    '非 list 的端口被设成分片源却不警告 ⇒ 作者要到启动被拒时才知道，且看不出是这一行',
-  ).toBeVisible()
-
-  // 正向：改成 list<markdown> 后警告消失，且 kind 原样落库。
-  await pickSelectOption(
-    page,
-    rows.nth(1).getByRole('combobox', { name: 'Output kind' }),
-    'markdown',
-  )
-  await rows.nth(1).getByRole('checkbox', { name: 'list', exact: true }).check()
-  await expect(
-    rows.nth(1).getByText('shard source kind must be list<T>'),
-    '已经是 list<T> 却仍警告 ⇒ 这条提示是常亮的，作者会学会无视它',
-  ).toBeHidden()
-  await expectPersisted(
-    workflowId,
-    (definition) =>
-      (node(definition, 'fan').inputs as Array<{ name: string; kind: string }>).map(
-        (port) => `${port.name}:${port.kind}`,
-      ),
-    ['items:list<string>', 'context:list<markdown>'],
-    '端口 kind 没落库 ⇒ 连线时的兼容性判定与运行时的分片行为基于两份不同的声明',
+    (definition) => ({
+      shardSourcePort: node(definition, 'fan').shardSourcePort,
+      edges: edgeSignatures(definition),
+      hasInputs: 'inputs' in node(definition, 'fan'),
+    }),
+    {
+      shardSourcePort: 'context',
+      edges: ['feeder.items→fan.context', 'feeder.items→fan.items'],
+      hasInputs: false,
+    },
+    '换分片源没落库、或把退役的 inputs[] 又写回了定义 ⇒ 运行时按另一份声明分片',
   )
 
   // 内层没有 role='aggregator' 的代理 ⇒ 只派生一个 __done__ 信号出口
-  // （wrapperFanout.ts:156-159）。作者据此决定下游能不能取到数据。
+  // （wrapperFanout.ts）。作者据此决定下游能不能取到数据。
   await expect(
     inspector(page).locator('label.form-field').filter({ hasText: 'Derived outputs' }),
     '不展示派生出口 ⇒ 作者以为能从扇出取到数据，实际只有一个控制流信号',

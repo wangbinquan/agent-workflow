@@ -44,12 +44,7 @@ const DEF: WorkflowDefinition = {
       agentName: 'coder',
       position: { x: 200, y: 30 },
     },
-    {
-      id: 'o1',
-      kind: 'output',
-      ports: [{ name: 'final', bind: { nodeId: 'a1', portName: 'code' } }],
-      position: { x: 400, y: 40 },
-    },
+    { id: 'o1', kind: 'output', position: { x: 400, y: 40 } },
   ],
   edges: [
     {
@@ -87,7 +82,7 @@ describe('computePorts', () => {
   // RFC-060 PR-E: agent-multi removed. wrapper-fanout (covered in PR-D
   // tests) replaces it; no auto-appended errors port on agent-single.
 
-  test('output node: inputs from ports[].name', () => {
+  test('output node: inputs from its inbound edges (RFC-354 — the edge IS the port)', () => {
     const ports = computePorts(DEF.nodes[2]!, byName, DEF)
     expect(ports.inputs).toEqual(['final'])
   })
@@ -100,20 +95,32 @@ describe('computePorts', () => {
     expect(ports.outputs).toEqual(['git_diff'])
   })
 
-  test('wrapper-loop: outputs from outputBindings[].name', () => {
+  test('wrapper-loop: outputs are its wrapper-output return edges (RFC-354)', () => {
     const ports = computePorts(
       {
         id: 'wl',
         kind: 'wrapper-loop',
         nodeIds: ['a1'],
         maxIterations: 3,
-        exitCondition: { kind: 'port-empty' },
-        outputBindings: [{ name: 'final', bind: { nodeId: 'a1', portName: 'code' } }],
+        exitCondition: { kind: 'port-empty', portName: 'final' },
       },
       byName,
-      { ...DEF, nodes: [] },
+      {
+        ...DEF,
+        nodes: [],
+        edges: [
+          {
+            id: 'ret',
+            source: { nodeId: 'a1', portName: 'code' },
+            target: { nodeId: 'wl', portName: 'final' },
+            boundary: 'wrapper-output',
+          },
+        ],
+      },
     )
     expect(ports.outputs).toEqual(['final'])
+    // The return edge is an OUTPUT of the loop — it must not draw a left-side input row.
+    expect(ports.inputs).toEqual([])
   })
 
   test('unknown agent → no outputs (port inventory is empty rather than crash)', () => {
@@ -191,11 +198,12 @@ describe('computePorts', () => {
   })
 
   // RFC-079/081 regression: the canvas review outlet must be DERIVED from the
-  // inputSource kind, not hard-coded `approved_doc`. Locks the bug where a
-  // multi-doc review node (inputSource = list<path<md>> port) rendered a
-  // phantom `approved_doc` outlet on the canvas while the validator (and
-  // runtime) used `accepted` — so an edge wired to the real `accepted` port
-  // looked correct yet tripped `edge-source-port-missing` at validate time.
+  // reviewed port's kind, not hard-coded `approved_doc`. Locks the bug where a
+  // multi-doc review node (a list<path<md>> port wired into __review_input__)
+  // rendered a phantom `approved_doc` outlet on the canvas while the validator
+  // (and runtime) used `accepted` — so an edge wired to the real `accepted`
+  // port looked correct yet tripped `edge-source-port-missing` at validate
+  // time. RFC-354: the reviewed port is the review's input EDGE.
   const REVIEW_DEF = (inputSource: { nodeId: string; portName: string }): WorkflowDefinition => ({
     ...DEF,
     nodes: [
@@ -213,9 +221,15 @@ describe('computePorts', () => {
         agentName: 'tester',
         position: { x: 0, y: 0 },
       },
-      { id: 'rev', kind: 'review', inputSource, position: { x: 0, y: 0 } },
+      { id: 'rev', kind: 'review', position: { x: 0, y: 0 } },
     ],
-    edges: [],
+    edges: [
+      {
+        id: 'review-in',
+        source: inputSource,
+        target: { nodeId: 'rev', portName: '__review_input__' },
+      },
+    ],
   })
   const reviewByName = new Map<string, Agent>([
     [
@@ -240,20 +254,20 @@ describe('computePorts', () => {
     ],
   ])
 
-  test('review node: single-doc inputSource (path<md>) → approved_doc outlet', () => {
+  test('review node: single-doc input edge (path<md>) → approved_doc outlet', () => {
     const def = REVIEW_DEF({ nodeId: 'doc', portName: 'docpath' })
     const ports = computePorts(def.nodes[2]!, reviewByName, def)
     expect(ports.outputs).toEqual(['approved_doc', 'approval_meta'])
   })
 
-  test('review node: multi-doc inputSource (list<path<md>>) → accepted outlet (NOT approved_doc)', () => {
+  test('review node: multi-doc input edge (list<path<md>>) → accepted outlet (NOT approved_doc)', () => {
     const def = REVIEW_DEF({ nodeId: 'tester', portName: 'cases' })
     const ports = computePorts(def.nodes[2]!, reviewByName, def)
     expect(ports.outputs).toEqual(['accepted', 'approval_meta'])
     expect(ports.outputs).not.toContain('approved_doc')
   })
 
-  test('review node: unresolvable inputSource falls back to approved_doc', () => {
+  test('review node: unresolvable input edge falls back to approved_doc', () => {
     const def = REVIEW_DEF({ nodeId: 'ghost', portName: 'nope' })
     const ports = computePorts(def.nodes[2]!, reviewByName, def)
     expect(ports.outputs).toEqual(['approved_doc', 'approval_meta'])

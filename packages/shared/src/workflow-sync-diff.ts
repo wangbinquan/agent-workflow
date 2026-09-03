@@ -21,12 +21,12 @@
 //     `wrapper-structure-changed-with-live-state` BLOCKER (not a warning).
 
 import { isWrapperKind } from './schemas/workflow'
-import { touchesSystemChannelPort } from './systemChannelPorts'
+import { touchesSystemChannelPort } from './nodePorts'
 import { canonicalJson } from './workflow-canonical'
 import type { WorkflowDefinition, WorkflowNode, WorkflowEdge } from './schemas/workflow'
 
-// RFC-147: the private 5-port set moved to the shared system-channel-port
-// registry (systemChannelPorts.ts). This diff view keeps its deliberately
+// RFC-147 → RFC-354 D6: the private 5-port set is a projection of the port
+// table (`nodePorts.ts`, `DeclaredPort.channel`). This diff view keeps its deliberately
 // WIDE either-side match (`touchesSystemChannelPort`) — a channel port name
 // on the wrong side of a corrupt edge must still be filtered out of the
 // "data edge changed" rows.

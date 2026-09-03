@@ -38,7 +38,6 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
     // split(',') = ['a', '', 'b', ''] → filter(length > 0) = ['a', 'b'] → count 2
     const cond: ExitCondition = {
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: 3,
       separator: ',',
@@ -54,7 +53,6 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
     // → count 1. Prove count === 1 via the n:1 → false / n:2 → true pair.
     const base = {
       kind: 'port-count-lt' as const,
-      nodeId: 'a',
       portName: 'p',
       separator: ', ',
     }
@@ -67,7 +65,6 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
     // 'one, two, three'.split(', ') = ['one','two','three'] → count 3
     const cond: ExitCondition = {
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: 4,
       separator: ', ',
@@ -81,7 +78,6 @@ describe('evaluateExitCondition — port-count-lt custom separator + empty-token
   test('empty content short-circuits to count 0 regardless of custom separator', () => {
     const cond: ExitCondition = {
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: 1,
       separator: ', ',
@@ -94,29 +90,24 @@ describe('parseExitCondition — port-count-lt boundary coercions', () => {
   test('non-finite, missing, and non-positive n are rejected', () => {
     const cond = parseExitCondition({
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: NaN,
       separator: '',
     })
     expect(cond).toBeNull()
-    expect(parseExitCondition({ kind: 'port-count-lt', nodeId: 'a', portName: 'p' })).toBeNull()
-    expect(
-      parseExitCondition({ kind: 'port-count-lt', nodeId: 'a', portName: 'p', n: 0 }),
-    ).toBeNull()
+    expect(parseExitCondition({ kind: 'port-count-lt', portName: 'p' })).toBeNull()
+    expect(parseExitCondition({ kind: 'port-count-lt', portName: 'p', n: 0 })).toBeNull()
   })
 
   test('a valid custom separator is preserved verbatim', () => {
     const cond = parseExitCondition({
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: 2,
       separator: ', ',
     })
     expect(cond).toEqual({
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: 2,
       separator: ', ',

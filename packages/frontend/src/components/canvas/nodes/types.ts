@@ -11,6 +11,12 @@ import type { ClarifyDirective, NodeKind } from '@agent-workflow/shared'
  * a fresh node land somewhere. */
 export const INBOUND_HANDLE_ID = '__inbound__'
 
+/** RFC-354 — catch-all RIGHT-side target handle on a wrapper-loop. A member's
+ * output dropped here declares a new RETURN VALUE: WorkflowCanvas translates
+ * the connection into target.portName = source.portName (de-conflicted against
+ * the loop's existing returns) and the planner tags it `wrapper-output`. */
+export const RETURN_HANDLE_ID = '__return__'
+
 /** Discriminated selection emitted by WorkflowCanvas.onSelect. RFC-003. */
 export type CanvasSelection = { kind: 'node'; id: string } | { kind: 'edge'; id: string }
 
@@ -82,13 +88,20 @@ export interface CanvasNodeData extends Record<string, unknown> {
    */
   sourcePort?: { nodeId: string; portName: string }
   /**
-   * RFC-060 wrapper-fanout only: name of the single input port marked
-   * `isShardSource: true` in the WorkflowNode's `inputs[]`. WrapperNodes
-   * uses this to render that port row with shard-source chrome (accent
-   * stripe + "shard" badge) so authors see at a glance which port drives
-   * the fan-out. Undefined on every other node kind.
+   * RFC-060 wrapper-fanout only: the WorkflowNode's `shardSourcePort` (RFC-354
+   * schema v6 — the one parameter whose items are split; every other inbound
+   * edge is a broadcast). WrapperNodes uses this to render that port row with
+   * shard-source chrome (accent stripe + "shard" badge) so authors see at a
+   * glance which port drives the fan-out. Undefined on every other node kind.
    */
   shardSourcePort?: string
+  /**
+   * RFC-354 review only: the source `(nodeId, portName)` of the review's single
+   * inbound edge on `__review_input__`, plus that source node's display title
+   * on the editor surface. Derived from `definition.edges`; absent when the
+   * review is not wired yet.
+   */
+  reviewSource?: { nodeId: string; portName: string; title?: string }
   /**
    * RFC-120 D13: number of pending (non-terminal) questions that originate at
    * this node. When `> 0` the "asking" node renderers (agent / clarify /

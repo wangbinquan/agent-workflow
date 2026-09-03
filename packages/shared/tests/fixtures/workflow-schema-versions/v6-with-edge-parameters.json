@@ -1,0 +1,57 @@
+{
+  "$schema_version": 6,
+  "inputs": [],
+  "nodes": [
+    {
+      "id": "writer",
+      "kind": "agent-single",
+      "agentName": "v6-writer",
+      "promptTemplate": "Write {{topic}}"
+    },
+    {
+      "id": "checker",
+      "kind": "agent-single",
+      "agentName": "v6-checker"
+    },
+    {
+      "id": "loop",
+      "kind": "wrapper-loop",
+      "nodeIds": ["writer", "checker"],
+      "maxIterations": 2,
+      "exitCondition": { "kind": "port-equals", "portName": "verdict", "value": "STOP" }
+    },
+    {
+      "id": "rv",
+      "kind": "review",
+      "rerunnableOnReject": [],
+      "rerunnableOnIterate": []
+    },
+    {
+      "id": "out",
+      "kind": "output"
+    }
+  ],
+  "edges": [
+    {
+      "id": "writer_to_checker",
+      "source": { "nodeId": "writer", "portName": "draft" },
+      "target": { "nodeId": "checker", "portName": "draft" }
+    },
+    {
+      "id": "checker_verdict_to_loop_verdict",
+      "source": { "nodeId": "checker", "portName": "verdict" },
+      "target": { "nodeId": "loop", "portName": "verdict" },
+      "boundary": "wrapper-output"
+    },
+    {
+      "id": "loop_verdict_to_rv",
+      "source": { "nodeId": "loop", "portName": "verdict" },
+      "target": { "nodeId": "rv", "portName": "__review_input__" }
+    },
+    {
+      "id": "loop_verdict_to_out",
+      "source": { "nodeId": "loop", "portName": "verdict" },
+      "target": { "nodeId": "out", "portName": "verdict" }
+    }
+  ]
+}

@@ -79,13 +79,16 @@ async function buildHarness(opts?: {
     inputs: [],
     nodes: [
       { id: 'doc', kind: 'agent-single', agentName: 'doc', promptTemplate: '' } as WorkflowNode,
-      {
-        id: 'rev_1',
-        kind: 'review',
-        inputSource: { nodeId: 'doc', portName: 'docpath' },
-      } as unknown as WorkflowNode,
+      { id: 'rev_1', kind: 'review' } as unknown as WorkflowNode,
     ],
-    edges: [],
+    edges: [
+      // RFC-354 (schema v6): the reviewed source is the review's inbound edge.
+      {
+        id: 'e_review',
+        source: { nodeId: 'doc', portName: 'docpath' },
+        target: { nodeId: 'rev_1', portName: '__review_input__' },
+      },
+    ],
   }
   const workflowId = ulid()
   await db.insert(workflows).values({
@@ -771,14 +774,18 @@ describe('review decision concurrency — one complete winner, zero loser side e
 
   test('reject cascade and sibling approve serialize at task scope', async () => {
     h = await buildHarness()
-    const siblingNode = {
-      id: 'rev_2',
-      kind: 'review',
-      inputSource: { nodeId: 'doc', portName: 'docpath' },
-    } as unknown as WorkflowNode
+    const siblingNode = { id: 'rev_2', kind: 'review' } as unknown as WorkflowNode
     const definition: WorkflowDefinition = {
       ...h.definition,
       nodes: [...h.definition.nodes, siblingNode],
+      edges: [
+        ...h.definition.edges,
+        {
+          id: 'e_review_2',
+          source: { nodeId: 'doc', portName: 'docpath' },
+          target: { nodeId: 'rev_2', portName: '__review_input__' },
+        },
+      ],
     }
     await h.db
       .update(tasks)

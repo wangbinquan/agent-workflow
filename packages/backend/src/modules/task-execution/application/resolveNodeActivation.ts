@@ -29,11 +29,7 @@ import {
   type EdgeActivation,
   type NodeActivation,
 } from '../domain/branchActivation'
-import {
-  collectDataflowInboundEdges,
-  collectImplicitInboundRefs,
-  nodeKindIndex,
-} from '../domain/inboundEdges'
+import { collectDataflowInboundEdges, nodeKindIndex } from '../domain/inboundEdges'
 import type { NodeActivationSnapshotReader } from './ports/nodeActivationSnapshotReader'
 
 export interface NodeActivationDecision {
@@ -65,19 +61,15 @@ export async function resolveNodeActivationForDispatch(args: {
   // chain resolves it to, exactly like resolveUpstreamInputs will a moment
   // later (requirement 1 above).
   const chain = await loadFrameChain((id) => reader.findRun(id), frame)
-  // Explicit dataflow edges + the implicit references the scheduler already
-  // treats as dependencies (review.inputSource / output ports[].bind). Design
-  // gate P1#2: judging activation on edges alone leaves review and output nodes
-  // reading as edgeless roots, so a closed branch would still open a human
-  // review and still produce a `done` output node.
-  const incoming: Array<{ source: PortRef; targetPortName: string }> = [
-    ...collectDataflowInboundEdges(definition.edges, node.id, nodeKindIndex(definition)).map(
-      (e) => ({ source: e.source, targetPortName: e.target.portName }),
-    ),
-    ...collectImplicitInboundRefs(
-      node as { kind: string; inputSource?: unknown; ports?: unknown },
-    ).map((ref) => ({ source: ref, targetPortName: ref.portName })),
-  ]
+  // RFC-354 (schema v6): every dependency is an edge — a review's reviewed
+  // source is its `__review_input__` edge and an output node's ports are its
+  // inbound edges — so the dataflow edges ARE the complete set (design gate
+  // P1#2's implicit `inputSource` / `ports[].bind` walk retired with the fields).
+  const incoming: Array<{ source: PortRef; targetPortName: string }> = collectDataflowInboundEdges(
+    definition.edges,
+    node.id,
+    nodeKindIndex(definition),
+  ).map((e) => ({ source: e.source, targetPortName: e.target.portName }))
 
   const consumed: Record<string, string> = {}
   const edges: NodeActivationDecision['edges'] = []

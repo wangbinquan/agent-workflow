@@ -35,7 +35,7 @@ describe('reconcileFlowNodeChanges', () => {
 describe('applyWorkflowTransition delete-selection', () => {
   test('recursively deletes nested wrapper descendants and prunes every surviving reference', () => {
     const definition: WorkflowDefinition = {
-      $schema_version: 4,
+      $schema_version: 6,
       inputs: [],
       nodes: [
         { id: 'outer', kind: 'wrapper-git', nodeIds: ['loop'] },
@@ -43,28 +43,34 @@ describe('applyWorkflowTransition delete-selection', () => {
           id: 'loop',
           kind: 'wrapper-loop',
           nodeIds: ['child'],
-          exitCondition: { kind: 'port-not-empty', nodeId: 'child', portName: 'out' },
-          outputBindings: [{ name: 'looped', bind: { nodeId: 'child', portName: 'out' } }],
+          exitCondition: { kind: 'port-not-empty', portName: 'looped' },
         },
         { id: 'child', kind: 'agent-single' },
         {
           id: 'review',
           kind: 'review',
-          inputSource: { nodeId: 'child', portName: 'out' },
           rerunnableOnReject: ['child'],
           rerunnableOnIterate: ['child'],
         },
-        {
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'final', bind: { nodeId: 'child', portName: 'out' } }],
-        },
+        { id: 'output', kind: 'output' },
       ],
+      // RFC-354: the loop return, the review input and the output port are edges.
       edges: [
+        {
+          id: 'looped',
+          source: { nodeId: 'child', portName: 'out' },
+          target: { nodeId: 'loop', portName: 'looped' },
+          boundary: 'wrapper-output',
+        },
         {
           id: 'incident',
           source: { nodeId: 'child', portName: 'out' },
-          target: { nodeId: 'review', portName: 'in' },
+          target: { nodeId: 'review', portName: '__review_input__' },
+        },
+        {
+          id: 'final',
+          source: { nodeId: 'child', portName: 'out' },
+          target: { nodeId: 'output', portName: 'final' },
         },
       ],
       outputs: [{ name: 'top', bind: { nodeId: 'child', portName: 'out' } }],
@@ -78,14 +84,13 @@ describe('applyWorkflowTransition delete-selection', () => {
     expect(result.next.nodes.map((node) => node.id)).toEqual(['review', 'output'])
     expect(result.next.edges).toEqual([])
     expect(result.next.outputs).toEqual([])
-    expect(result.next.nodes[0]).toMatchObject({
-      inputSource: { nodeId: '', portName: '' },
+    expect(result.next.nodes[0]).toEqual({
+      id: 'review',
+      kind: 'review',
       rerunnableOnReject: [],
       rerunnableOnIterate: [],
     })
-    expect(result.next.nodes[1]).toMatchObject({
-      ports: [{ name: 'final', bind: { nodeId: '', portName: '' } }],
-    })
+    expect(result.next.nodes[1]).toEqual({ id: 'output', kind: 'output' })
     expect(result.warnings.length).toBeGreaterThan(0)
     expect(definition.nodes.map((node) => node.id)).toEqual([
       'outer',

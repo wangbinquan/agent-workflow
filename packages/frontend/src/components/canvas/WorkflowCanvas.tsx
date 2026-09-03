@@ -64,7 +64,9 @@ import {
   isWrapperKind,
   lensIsTransparent,
   privilegedProjectionChange,
+  reviewInputSource,
   WORKFLOW_SCHEMA_VERSION,
+  wrapperOutputPortNames,
   type WorkflowByRef,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
@@ -114,6 +116,7 @@ import { ReviewNode } from './nodes/ReviewNode'
 import { ScriptNode, type ScriptNodeData } from './nodes/ScriptNode'
 import {
   INBOUND_HANDLE_ID,
+  RETURN_HANDLE_ID,
   type CanvasNodeData,
   type CanvasSelection,
   type WorkflowCanvasSurface,
@@ -1447,8 +1450,11 @@ function CanvasInner({
         } else {
           // RFC-007/RFC-106: preserve exact NEW/REUSE geometric resolution;
           // only the graph application moves into the shared planner.
-          let translated = translateInboundConnection(conn)
-          let mode: 'new' | 'reuse' = conn.targetHandle === INBOUND_HANDLE_ID ? 'new' : 'reuse'
+          let translated = translateReturnConnection(definition, translateInboundConnection(conn))
+          let mode: 'new' | 'reuse' =
+            conn.targetHandle === INBOUND_HANDLE_ID || conn.targetHandle === RETURN_HANDLE_ID
+              ? 'new'
+              : 'reuse'
           const targetNode =
             conn.targetHandle === INBOUND_HANDLE_ID
               ? definition.nodes.find((node) => node.id === conn.target)
@@ -1830,8 +1836,15 @@ function CanvasInner({
             designerNodeId: crossDrop.designerNodeId,
           }
         } else {
-          const translated = translateInboundConnection(guardConn)
-          const mode = guardConn.targetHandle === INBOUND_HANDLE_ID ? 'new' : 'reuse'
+          const translated = translateReturnConnection(
+            definition,
+            translateInboundConnection(guardConn),
+          )
+          const mode =
+            guardConn.targetHandle === INBOUND_HANDLE_ID ||
+            guardConn.targetHandle === RETURN_HANDLE_ID
+              ? 'new'
+              : 'reuse'
           const targetNode = definition.nodes.find((node) => node.id === translated.target)
           const targetPortName =
             mode === 'new' &&
@@ -3755,21 +3768,18 @@ function toFlowNodes(
       ).exitConditionKind = exitKind
     }
     if (n.kind === 'review') {
-      // RFC-007: surface inputSource onto node data so ReviewNode can show
-      // the configured upstream `node.port` summary inside the card body.
-      const raw = (n as unknown as { inputSource?: { nodeId?: unknown; portName?: unknown } })
-        .inputSource
-      if (raw !== undefined) {
-        const nodeId = typeof raw.nodeId === 'string' ? raw.nodeId : ''
-        const portName = typeof raw.portName === 'string' ? raw.portName : ''
-        const reviewData = data as CanvasNodeData & {
-          inputSource?: { nodeId: string; portName: string }
-          inputSourceTitle?: string
-        }
-        reviewData.inputSource = { nodeId, portName }
-        const sourceNode = definition.nodes.find((candidate) => candidate.id === nodeId)
-        if (sourceNode !== undefined) {
-          reviewData.inputSourceTitle = nodeTitle(sourceNode, agentByName)
+      // RFC-007 / RFC-354: surface the review's input — the source of its
+      // `__review_input__` edge — onto node data so ReviewNode can show the
+      // `node.port` summary inside the card body.
+      const source = reviewInputSource(definition, n.id)
+      if (source !== null) {
+        const sourceNode = definition.nodes.find((candidate) => candidate.id === source.nodeId)
+        data.reviewSource = {
+          nodeId: source.nodeId,
+          portName: source.portName,
+          ...(sourceNode === undefined
+            ? {}
+            : { title: nodeTitle(sourceNode, agentByName, definition) }),
         }
       }
     }
@@ -3847,21 +3857,13 @@ function toFlowNodes(
     }
     // RFC-060 PR-E: agent-multi sourcePort mirroring removed.
     if (n.kind === 'wrapper-fanout') {
-      // Surface the shard-source input port name (if any) so WrapperNodes
-      // can render that left-side row with shard-source chrome — gives
-      // authors a glance-distinguishable cue for which input port drives
-      // the fan-out vs which ones broadcast.
-      const declaredInputs = Array.isArray((n as Record<string, unknown>).inputs)
-        ? ((n as Record<string, unknown>).inputs as Array<{
-            name?: unknown
-            isShardSource?: unknown
-          }>)
-        : []
-      const shardSrc = declaredInputs.find(
-        (p) => p.isShardSource === true && typeof p.name === 'string',
-      )
-      if (shardSrc !== undefined && typeof shardSrc.name === 'string') {
-        ;(data as CanvasNodeData & { shardSourcePort?: string }).shardSourcePort = shardSrc.name
+      // Surface `shardSourcePort` (RFC-354: the one parameter whose items are
+      // split) so WrapperNodes can render that left-side row with shard-source
+      // chrome — a glance-distinguishable cue for which input port drives the
+      // fan-out vs which ones broadcast.
+      const shardSrc = (n as Record<string, unknown>).shardSourcePort
+      if (typeof shardSrc === 'string' && shardSrc !== '') {
+        ;(data as CanvasNodeData & { shardSourcePort?: string }).shardSourcePort = shardSrc
       }
     }
     return {
@@ -4055,6 +4057,32 @@ export function translateInboundConnection(conn: Connection): Connection {
     return { ...conn, targetHandle: conn.sourceHandle ?? null }
   }
   return conn
+}
+
+/**
+ * RFC-354 — translate a drop on a wrapper-loop's RIGHT-side return catch-all
+ * (`__return__`) into a return-value connection: the loop's new return port
+ * is named after the member's source port, de-conflicted against the loop's
+ * existing returns (`_2`, `_3`, …). The planner then tags the edge
+ * `wrapper-output` because its source is a direct loop member. Connections to
+ * a specific return handle pass through untouched (they REUSE that return).
+ *
+ * Exported for unit tests.
+ */
+export function translateReturnConnection(
+  definition: WorkflowDefinition,
+  conn: Connection,
+): Connection {
+  if (conn.targetHandle !== RETURN_HANDLE_ID) return conn
+  const loop = definition.nodes.find((node) => node.id === conn.target)
+  const desired = conn.sourceHandle ?? ''
+  if (loop?.kind !== 'wrapper-loop' || desired === '') {
+    return { ...conn, targetHandle: conn.sourceHandle ?? null }
+  }
+  return {
+    ...conn,
+    targetHandle: nextFreeInputPort(wrapperOutputPortNames(definition, loop.id), desired),
+  }
 }
 
 /**
@@ -4257,7 +4285,6 @@ export function buildEdgeFromConnection(
 // connection paths consume these only through workflow-connection-plan /
 // workflow-transition.
 export {
-  ensureWrapperFanoutInputForEdge,
   markBoundaryWrapperInput,
   markBoundaryWrapperOutput,
 } from '../../lib/workflow-connection-boundary'

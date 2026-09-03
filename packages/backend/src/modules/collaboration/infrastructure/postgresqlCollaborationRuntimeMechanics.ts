@@ -32,6 +32,7 @@ import {
   type WorkgroupAssignmentStatus,
   splitListItems,
   splitMarkdownDocs,
+  reviewInputSource,
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
@@ -1036,15 +1037,6 @@ async function inspectPostgresqlCrossClarify(
   return { kind: 'short-circuit-stop' as const }
 }
 
-function reviewInputSource(node: WorkflowDefinition['nodes'][number]) {
-  const value = (node as Record<string, unknown>).inputSource
-  if (value === null || typeof value !== 'object') return null
-  const record = value as Record<string, unknown>
-  return typeof record.nodeId === 'string' && typeof record.portName === 'string'
-    ? { nodeId: record.nodeId, portName: record.portName }
-    : null
-}
-
 async function postgresqlUpstreamPortKind(
   db: PostgresqlDatabaseClient,
   definition: WorkflowDefinition,
@@ -1406,11 +1398,12 @@ async function dispatchPostgresqlReviewNode(
       message: 'review-task-not-dispatchable',
     }
   }
-  const configured = reviewInputSource(input.node)
+  // RFC-354 (schema v6): the reviewed source is the review node's `__review_input__` edge.
+  const configured = reviewInputSource(input.definition, input.node.id)
   if (configured === null) {
     return {
       kind: 'failed',
-      summary: `review node ${input.node.id} missing inputSource`,
+      summary: `review node ${input.node.id} has no __review_input__ edge`,
       message: 'review-input-source-missing',
     }
   }

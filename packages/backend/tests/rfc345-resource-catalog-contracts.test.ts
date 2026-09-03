@@ -959,7 +959,9 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     ]) {
       expect(execution).not.toContain(legacyResourceImport)
     }
-    expect(execution.split('taskExecutionResources.injection(').length - 1).toBe(5)
+    // RFC-354 (schema v6): +1 — a fan-out reads its shard source's declared
+    // output kind from the source agent (`sourcePortKindOf`).
+    expect(execution.split('taskExecutionResources.injection(').length - 1).toBe(6)
     expect(execution.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(3)
     expect(node).toContain('req.agent.id === ORCHESTRATOR_AGENT_ID')
     expect(wrapperData).toContain('WrapperFanoutAgentResolution')

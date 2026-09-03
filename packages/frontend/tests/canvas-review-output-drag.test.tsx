@@ -1,19 +1,24 @@
-// RFC-007 — integration coverage for the "field ↔ edge double-bookkeeping"
-// the canvas now performs when the user wires a review / output node.
+// RFC-007 → RFC-354 (schema v6) — integration coverage for the review /
+// output inspectors on top of the edge-only model.
 //
 // We can't simulate xyflow's drag-and-drop in JSDOM, so the connect path
 // itself is exercised by the pure-function suite (connection-sync.test.ts).
 // What this file locks in is the user-facing surface area that DOES render
 // in JSDOM:
-//   - NodeInspector typing into inputSource (review) / port.bind (output)
-//     produces the matching edge in `definition.edges`
-//   - removing an output port via the Remove button drops the edge
-//   - ReviewNode renders the new __review_input__ Handle so xyflow has
+//   - the review inspector shows the source of the `__review_input__` edge
+//     (or the "not wired" hint) and its Disconnect button drops that edge —
+//     there is no second, form-side way to pick the source any more
+//   - the output inspector lists one row per inbound edge and Remove drops
+//     that edge (the port IS the edge)
+//   - deleting a review / output edge in the EdgeInspector leaves no stale
+//     node field behind and the load boundary does not resurrect the edge
+//   - ReviewNode renders the `__review_input__` Handle so xyflow has
 //     somewhere to land an inbound connection
 //
-// Reference: design/RFC-007-canvas-review-output-drag/design.md §8.2.
+// Reference: design/RFC-007-canvas-review-output-drag/design.md §8.2,
+//            design/RFC-354-*/design.md (D10: every PortRef is an edge).
 
-import { render, fireEvent, screen, cleanup, within } from '@testing-library/react'
+import { render, fireEvent, screen, cleanup } from '@testing-library/react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -22,10 +27,8 @@ import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/sh
 import { EdgeInspector } from '../src/components/canvas/EdgeInspector'
 import { NodeInspector } from '../src/components/canvas/NodeInspector'
 import { ReviewNode } from '../src/components/canvas/nodes/ReviewNode'
-import {
-  healFieldEdgeConsistency,
-  REVIEW_INPUT_HANDLE_ID,
-} from '../src/components/canvas/connectionSync'
+import { REVIEW_INPUT_HANDLE_ID } from '../src/components/canvas/connectionSync'
+import { healLoadedDefinition } from '../src/routes/workflows.edit'
 import i18n from '../src/i18n'
 
 afterEach(() => {
@@ -39,8 +42,8 @@ const STUB_AGENT: Agent = {
   id: 'agent-stub',
   name: 'stub',
   description: '',
-  outputs: ['design'],
-  outputKinds: { design: 'markdown' },
+  outputs: ['design', 'audit'],
+  outputKinds: { design: 'markdown', audit: 'markdown' },
   syncOutputsOnIterate: true,
   permission: {},
   skills: [],
@@ -54,49 +57,49 @@ const STUB_AGENT: Agent = {
   updatedAt: 0,
 }
 
-function pickSelect(trigger: HTMLElement, label: string): void {
-  fireEvent.click(trigger)
-  fireEvent.mouseDown(within(screen.getByRole('listbox')).getByText(label))
+function agentNode(): WorkflowNode {
+  return {
+    id: 'a',
+    kind: 'agent-single',
+    agentId: STUB_AGENT.id,
+    agentName: 'stub',
+  } as unknown as WorkflowNode
 }
 
-function makeReviewDef(inputSource = { nodeId: '', portName: '' }): WorkflowDefinition {
+function makeReviewDef(wired: boolean): WorkflowDefinition {
   return {
-    $schema_version: 2,
+    $schema_version: 6,
     inputs: [],
-    nodes: [
-      {
-        id: 'a',
-        kind: 'agent-single',
-        agentId: STUB_AGENT.id,
-        agentName: 'stub',
-      } as unknown as WorkflowNode,
-      { id: 'r', kind: 'review', inputSource } as unknown as WorkflowNode,
-    ],
-    edges: [],
+    nodes: [agentNode(), { id: 'r', kind: 'review' } as unknown as WorkflowNode],
+    edges: wired
+      ? [
+          {
+            id: 'e1',
+            source: { nodeId: 'a', portName: 'design' },
+            target: { nodeId: 'r', portName: REVIEW_INPUT_HANDLE_ID },
+          },
+        ]
+      : [],
   }
 }
 
 function makeOutputDef(): WorkflowDefinition {
   return {
-    $schema_version: 2,
+    $schema_version: 6,
     inputs: [],
-    nodes: [
+    nodes: [agentNode(), { id: 'o', kind: 'output' } as unknown as WorkflowNode],
+    edges: [
       {
-        id: 'a',
-        kind: 'agent-single',
-        agentId: STUB_AGENT.id,
-        agentName: 'stub',
-      } as unknown as WorkflowNode,
+        id: 'e1',
+        source: { nodeId: 'a', portName: 'design' },
+        target: { nodeId: 'o', portName: 'final_doc' },
+      },
       {
-        id: 'o',
-        kind: 'output',
-        ports: [
-          { name: 'final_doc', bind: { nodeId: '', portName: '' } },
-          { name: 'audit_report', bind: { nodeId: '', portName: '' } },
-        ],
-      } as unknown as WorkflowNode,
+        id: 'e2',
+        source: { nodeId: 'a', portName: 'audit' },
+        target: { nodeId: 'o', portName: 'audit_report' },
+      },
     ],
-    edges: [],
   }
 }
 
@@ -126,133 +129,82 @@ function Host({
   )
 }
 
-describe('Review NodeInspector — RFC-007 form ↔ edge sync', () => {
-  test('selecting inputSource.portName → adds matching edge to definition.edges', () => {
-    const spy = vi.fn()
-    render(
-      <Host
-        initialDef={makeReviewDef({ nodeId: 'a', portName: '' })}
-        selectedNodeId="r"
-        onChangeSpy={spy}
-      />,
-    )
-    // RFC-199 migrated the editable node/port ids to searchable selectors.
-    // Pick the declared port — both halves are now non-empty, so an edge
-    // should materialize through the single transition path.
-    pickSelect(screen.getByRole('combobox', { name: 'Markdown output port' }), 'design')
-    expect(spy).toHaveBeenCalled()
-    const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
-    expect(last.edges).toHaveLength(1)
-    const edge = last.edges[0]!
-    expect(edge.source).toEqual({ nodeId: 'a', portName: 'design' })
-    expect(edge.target).toEqual({ nodeId: 'r', portName: REVIEW_INPUT_HANDLE_ID })
-    // The field itself is also updated (it's how we know the form path ran).
-    const r = last.nodes.find((n) => n.id === 'r')! as unknown as {
-      inputSource: { nodeId: string; portName: string }
-    }
-    expect(r.inputSource).toEqual({ nodeId: 'a', portName: 'design' })
+function nodeRecord(def: WorkflowDefinition, id: string): Record<string, unknown> {
+  return def.nodes.find((n) => n.id === id) as unknown as Record<string, unknown>
+}
+
+describe('Review NodeInspector — RFC-354 edge-derived source', () => {
+  test('unwired review shows the not-wired hint and offers no source picker', () => {
+    render(<Host initialDef={makeReviewDef(false)} selectedNodeId="r" onChangeSpy={vi.fn()} />)
+    expect(screen.getByTestId('review-source-unwired')).toBeTruthy()
+    expect(screen.queryByTestId('review-source-summary')).toBeNull()
+    expect(screen.queryByTestId('review-source-node')).toBeNull()
   })
 
-  test('clearing inputSource via the upstream <select> → drops the edge', () => {
+  test('wired review shows the edge source (title · port · kind)', () => {
+    render(<Host initialDef={makeReviewDef(true)} selectedNodeId="r" onChangeSpy={vi.fn()} />)
+    const summary = screen.getByTestId('review-source-summary')
+    expect(summary.textContent).toContain('stub')
+    expect(summary.textContent).toContain('design')
+    expect(summary.textContent).toContain('markdown')
+  })
+
+  test('Disconnect drops the __review_input__ edge and writes no node field', () => {
     const spy = vi.fn()
-    const def = makeReviewDef({ nodeId: 'a', portName: 'design' })
-    // Seed an existing review-input edge to mirror the post-drag state.
-    def.edges = [
-      {
-        id: 'e1',
-        source: { nodeId: 'a', portName: 'design' },
-        target: { nodeId: 'r', portName: REVIEW_INPUT_HANDLE_ID },
-      },
-    ]
-    render(<Host initialDef={def} selectedNodeId="r" onChangeSpy={spy} />)
-    // The upstream nodeId picker is the shared <Select>; clearing = picking
-    // the leading "—" (empty) option from its portaled listbox.
-    const upstream = screen.getByRole('combobox', { name: 'Content source' })
-    pickSelect(upstream, '—')
+    render(<Host initialDef={makeReviewDef(true)} selectedNodeId="r" onChangeSpy={spy} />)
+    fireEvent.click(screen.getByTestId('review-source-disconnect'))
     expect(spy).toHaveBeenCalled()
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
     expect(last.edges).toHaveLength(0)
+    expect('inputSource' in nodeRecord(last, 'r')).toBe(false)
+    expect(screen.getByTestId('review-source-unwired')).toBeTruthy()
   })
 })
 
-describe('Output NodeInspector — RFC-007 form ↔ edge sync', () => {
-  test('selecting a port.bind → adds matching edge', () => {
-    const spy = vi.fn()
-    render(<Host initialDef={makeOutputDef()} selectedNodeId="o" onChangeSpy={spy} />)
-    // Each row now has searchable upstream-node and port selectors. Target
-    // the first row (final_doc) and choose the agent's declared output.
-    const upstreams = screen.getAllByRole('combobox', { name: 'upstream nodeId' })
-    pickSelect(upstreams[0]!, 'stub (a)')
-    const ports = screen.getAllByRole('combobox', { name: 'port' })
-    pickSelect(ports[0]!, 'design')
-    const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
-    expect(last.edges).toHaveLength(1)
-    const edge = last.edges[0]!
-    expect(edge.source).toEqual({ nodeId: 'a', portName: 'design' })
-    expect(edge.target).toEqual({ nodeId: 'o', portName: 'final_doc' })
-    // The other port stays empty — no second edge.
-    expect(last.edges).toHaveLength(1)
+describe('Output NodeInspector — RFC-354 ports are inbound edges', () => {
+  test('lists one row per inbound edge, named by the edge target port', () => {
+    render(<Host initialDef={makeOutputDef()} selectedNodeId="o" onChangeSpy={vi.fn()} />)
+    const rows = screen.getByTestId('output-ports').querySelectorAll('li')
+    expect(rows.length).toBe(2)
+    expect(rows[0]!.textContent).toContain('final_doc')
+    expect(rows[0]!.textContent).toContain('design')
+    expect(rows[1]!.textContent).toContain('audit_report')
+    // No port editor left: nothing to type a name or pick an upstream into.
+    expect(screen.queryByRole('combobox', { name: 'upstream nodeId' })).toBeNull()
   })
 
-  test('removing a bound port → drops the corresponding edge', () => {
+  test('removing a port row → drops the corresponding edge only', () => {
     const spy = vi.fn()
-    const def = makeOutputDef()
-    // Pre-bind the first port and seed the matching edge.
-    ;(
-      def.nodes[1] as unknown as {
-        ports: Array<{ name: string; bind: { nodeId: string; portName: string } }>
-      }
-    ).ports[0]!.bind = { nodeId: 'a', portName: 'design' }
-    def.edges = [
-      {
-        id: 'e1',
-        source: { nodeId: 'a', portName: 'design' },
-        target: { nodeId: 'o', portName: 'final_doc' },
-      },
-    ]
-    render(<Host initialDef={def} selectedNodeId="o" onChangeSpy={spy} />)
-    // Click the first Remove button (the per-port delete in the table).
-    const removeButtons = screen.getAllByRole('button', { name: /remove|删除/i })
+    render(<Host initialDef={makeOutputDef()} selectedNodeId="o" onChangeSpy={spy} />)
+    const removeButtons = screen.getAllByRole('button', { name: /remove|移除/i })
     fireEvent.click(removeButtons[0]!)
     const last = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
-    expect(last.edges).toHaveLength(0)
+    expect(last.edges.map((edge) => edge.id)).toEqual(['e2'])
+    expect('ports' in nodeRecord(last, 'o')).toBe(false)
+  })
+
+  test('an output with no inbound edge shows the empty hint', () => {
+    render(
+      <Host
+        initialDef={{ ...makeOutputDef(), edges: [] }}
+        selectedNodeId="o"
+        onChangeSpy={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('output-ports-empty')).toBeTruthy()
   })
 })
 
 describe('EdgeInspector — RFC-007 delete sync', () => {
   // Regression for "edge gets deleted then ~2s later reappears": before
   // this fix EdgeInspector.remove() bypassed WorkflowCanvas.commitChange,
-  // so `review.inputSource` / `output.ports[].bind` stayed populated. The
-  // auto-save round-trip then refetched the workflow, healLoadedDefinition
-  // ran its bi-directional heal, saw "field has value but no matching
-  // edge" and dutifully re-materialized the edge.
-  test('deleting a review inbound edge also clears inputSource (no resurrection on heal)', () => {
-    const def: WorkflowDefinition = {
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'a',
-          kind: 'agent-single',
-          agentId: STUB_AGENT.id,
-          agentName: 'stub',
-        } as unknown as WorkflowNode,
-        {
-          id: 'r',
-          kind: 'review',
-          inputSource: { nodeId: 'a', portName: 'design' },
-        } as unknown as WorkflowNode,
-      ],
-      edges: [
-        {
-          id: 'e1',
-          source: { nodeId: 'a', portName: 'design' },
-          target: { nodeId: 'r', portName: REVIEW_INPUT_HANDLE_ID },
-        },
-      ],
-    }
+  // so the v5 mirror stayed populated and the load-time heal re-materialized
+  // the edge. RFC-354 removed the mirror altogether; the load boundary now
+  // only upgrades the schema, so a deleted edge stays deleted.
+  test('deleting a review inbound edge leaves no node field behind (no resurrection on load)', () => {
+    const def = makeReviewDef(true)
     const spy = vi.fn()
-    function Host() {
+    function EdgeHost() {
       const [d, setD] = useState(def)
       const edge = d.edges.find((e) => e.id === 'e1')
       if (edge === undefined) return null
@@ -270,56 +222,19 @@ describe('EdgeInspector — RFC-007 delete sync', () => {
         </I18nextProvider>
       )
     }
-    render(<Host />)
+    render(<EdgeHost />)
     fireEvent.click(screen.getByRole('button', { name: /delete|删除/i }))
     expect(spy).toHaveBeenCalled()
     const afterDelete = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
     expect(afterDelete.edges).toHaveLength(0)
-    const r = afterDelete.nodes.find((n) => n.id === 'r')! as unknown as {
-      inputSource: { nodeId: string; portName: string }
-    }
-    expect(r.inputSource).toEqual({ nodeId: '', portName: '' })
-    // Run the same heal pass the post-save refetch would: the edge must
-    // NOT come back because the field is already cleared.
-    const healed = healFieldEdgeConsistency(afterDelete)
-    expect(healed.edges).toHaveLength(0)
+    expect('inputSource' in nodeRecord(afterDelete, 'r')).toBe(false)
+    expect(healLoadedDefinition(afterDelete).edges).toHaveLength(0)
   })
 
-  test('deleting an output inbound edge also clears that port.bind', () => {
-    const def: WorkflowDefinition = {
-      $schema_version: 2,
-      inputs: [],
-      nodes: [
-        {
-          id: 'a',
-          kind: 'agent-single',
-          agentId: STUB_AGENT.id,
-          agentName: 'stub',
-        } as unknown as WorkflowNode,
-        {
-          id: 'o',
-          kind: 'output',
-          ports: [
-            { name: 'final_doc', bind: { nodeId: 'a', portName: 'design' } },
-            { name: 'audit_report', bind: { nodeId: 'a', portName: 'audit' } },
-          ],
-        } as unknown as WorkflowNode,
-      ],
-      edges: [
-        {
-          id: 'e1',
-          source: { nodeId: 'a', portName: 'design' },
-          target: { nodeId: 'o', portName: 'final_doc' },
-        },
-        {
-          id: 'e2',
-          source: { nodeId: 'a', portName: 'audit' },
-          target: { nodeId: 'o', portName: 'audit_report' },
-        },
-      ],
-    }
+  test('deleting an output inbound edge drops that port only', () => {
+    const def = makeOutputDef()
     const spy = vi.fn()
-    function Host() {
+    function EdgeHost() {
       const [d, setD] = useState(def)
       const edge = d.edges.find((e) => e.id === 'e1')
       if (edge === undefined) return null
@@ -337,18 +252,12 @@ describe('EdgeInspector — RFC-007 delete sync', () => {
         </I18nextProvider>
       )
     }
-    render(<Host />)
+    render(<EdgeHost />)
     fireEvent.click(screen.getByRole('button', { name: /delete|删除/i }))
     const afterDelete = spy.mock.calls[spy.mock.calls.length - 1]![0] as WorkflowDefinition
-    expect(afterDelete.edges).toHaveLength(1)
-    const o = afterDelete.nodes.find((n) => n.id === 'o')! as unknown as {
-      ports: Array<{ name: string; bind: { nodeId: string; portName: string } }>
-    }
-    // Only the deleted edge's port had bind cleared; the other survives.
-    expect(o.ports[0]?.bind).toEqual({ nodeId: '', portName: '' })
-    expect(o.ports[1]?.bind).toEqual({ nodeId: 'a', portName: 'audit' })
-    const healed = healFieldEdgeConsistency(afterDelete)
-    expect(healed.edges).toHaveLength(1) // no resurrection
+    expect(afterDelete.edges.map((edge) => edge.target.portName)).toEqual(['audit_report'])
+    expect('ports' in nodeRecord(afterDelete, 'o')).toBe(false)
+    expect(healLoadedDefinition(afterDelete).edges).toHaveLength(1) // no resurrection
   })
 })
 
@@ -385,6 +294,38 @@ describe('ReviewNode — RFC-007 left target Handle', () => {
     )
     expect(reviewInput).toBeDefined()
     expect(reviewInput!.getAttribute('aria-label')).toBe('review-input')
+  })
+
+  test('card summary reads the edge-derived reviewSource slot', () => {
+    const props = {
+      id: 'r',
+      type: 'review',
+      data: {
+        surface: 'task',
+        nodeId: 'r',
+        kind: 'review' as const,
+        title: 'review-target',
+        inputPorts: [],
+        outputPorts: ['approved_doc', 'approval_meta'],
+        reviewSource: { nodeId: 'writer', portName: 'draft' },
+      },
+      selected: false,
+      dragging: false,
+      isConnectable: true,
+      positionAbsoluteX: 0,
+      positionAbsoluteY: 0,
+      zIndex: 0,
+    }
+    render(
+      <ReactFlowProvider>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <ReviewNode {...(props as any)} />
+      </ReactFlowProvider>,
+    )
+    const root = document.querySelector('.canvas-node--review') as HTMLElement
+    expect(root.getAttribute('data-review-input-state')).toBe('configured')
+    expect(root.textContent).toContain('writer')
+    expect(root.textContent).toContain('draft')
   })
 
   // Regression: review node_run becomes `done` after approval, but the

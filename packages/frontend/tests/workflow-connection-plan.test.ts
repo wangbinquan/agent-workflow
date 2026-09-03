@@ -22,7 +22,7 @@ function agent(id: string, agentName = id): WorkflowNode {
 }
 
 function definition(nodes: WorkflowNode[], edges: WorkflowEdge[] = []): WorkflowDefinition {
-  return { $schema_version: 4, inputs: [], nodes, edges }
+  return { $schema_version: 6, inputs: [], nodes, edges }
 }
 
 function context(
@@ -163,11 +163,7 @@ describe('planWorkflowConnection fixed review policy', () => {
       agent('unloaded-source', 'missing-agent'),
       node({ id: 'malformed-source', kind: 'agent-single' }),
       node({ id: 'plain-input', kind: 'input', inputKey: 'doc' }),
-      node({
-        id: 'review',
-        kind: 'review',
-        inputSource: { nodeId: 'markdown-source', portName: 'doc' },
-      }),
+      node({ id: 'review', kind: 'review' }),
     ],
     [
       {
@@ -336,15 +332,15 @@ describe('planWorkflowConnection domain requests', () => {
     ])
   })
 
-  test('fan-out input requires a legal shard and demotes every prior shard immutably', () => {
+  test('fan-out input requires a legal shard and demotes the prior shard immutably', () => {
+    // RFC-354: the fan-out's parameters are its inbound edges; the one node
+    // fact is `shardSourcePort`. A shard request re-points it (the previous
+    // shard becomes a broadcast — previewed as a demotion).
     const fanout = node({
       id: 'fanout',
       kind: 'wrapper-fanout',
       nodeIds: ['inner'],
-      inputs: [
-        { name: 'old_a', kind: 'list<string>', isShardSource: true },
-        { name: 'old_b', kind: 'list<string>', isShardSource: true },
-      ],
+      shardSourcePort: 'old_a',
     })
     const def = definition([agent('outer'), agent('inner'), fanout])
     deepFreeze(def)
@@ -361,6 +357,22 @@ describe('planWorkflowConnection domain requests', () => {
       context(),
     )
     expect(blocked).toMatchObject({ ok: false, reason: { code: 'fanout-shard-kind-not-list' } })
+    // Without a kind hint the outer source's declared kind decides.
+    const blockedBySource = planWorkflowConnection(
+      def,
+      {
+        kind: 'fanout-boundary-input',
+        wrapperNodeId: 'fanout',
+        outerEndpoint: { nodeId: 'outer', portName: 'items' },
+        innerEndpoint: { nodeId: 'inner', portName: 'item' },
+        port: { portName: 'next', role: 'shard' },
+      },
+      context({ outer: { outputs: ['items'], outputKinds: { items: 'string' } } }),
+    )
+    expect(blockedBySource).toMatchObject({
+      ok: false,
+      reason: { code: 'fanout-shard-kind-not-list' },
+    })
 
     const plan = planWorkflowConnection(
       def,
@@ -375,18 +387,14 @@ describe('planWorkflowConnection domain requests', () => {
       context({ outer: { outputs: ['items'], outputKinds: { items: 'list<string>' } } }),
     )
 
-    expect(plan).toMatchObject({ ok: true, compatibility: 'compatible' })
+    expect(plan).toMatchObject({
+      ok: true,
+      compatibility: 'compatible',
+      preview: { fanoutShardDemotions: ['old_a'] },
+    })
     if (!plan.ok) return
     expect(plan.nodePatches).toEqual([
-      {
-        kind: 'set-fanout-inputs',
-        wrapperNodeId: 'fanout',
-        inputs: [
-          { name: 'old_a', kind: 'list<string>' },
-          { name: 'old_b', kind: 'list<string>' },
-          { name: 'next', kind: 'list<string>', isShardSource: true },
-        ],
-      },
+      { kind: 'set-fanout-shard-source', wrapperNodeId: 'fanout', shardSourcePort: 'next' },
     ])
     expect(plan.addEdges).toEqual([
       {
@@ -407,7 +415,7 @@ describe('planWorkflowConnection domain requests', () => {
     const def = definition([
       agent('outer'),
       agent('inner'),
-      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] }),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'] }),
     ])
     const plan = planWorkflowConnection(
       def,
@@ -427,12 +435,7 @@ describe('planWorkflowConnection domain requests', () => {
     const def = definition([
       agent('outer'),
       agent('inner'),
-      node({
-        id: 'fanout',
-        kind: 'wrapper-fanout',
-        nodeIds: ['inner'],
-        inputs: [{ name: 'items', kind: 'list<string>', isShardSource: true }],
-      }),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'items' }),
     ])
     const plan = planWorkflowConnection(
       def,
@@ -447,23 +450,87 @@ describe('planWorkflowConnection domain requests', () => {
     )
     expect(plan).toMatchObject({ ok: true, compatibility: 'compatible' })
     if (!plan.ok) return
-    expect(plan.nodePatches).toEqual([
+    expect(plan.nodePatches).toEqual([])
+    expect(plan.addEdges.map((edge) => edge.target)).toEqual([
+      { nodeId: 'fanout', portName: 'context' },
+      { nodeId: 'inner', portName: 'context' },
+    ])
+  })
+
+  test('legacy drag into a fan-out with no shard source makes that parameter the shard source', () => {
+    const def = definition([
+      agent('outer'),
+      agent('inner'),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'] }),
+    ])
+    const plan = planWorkflowConnection(
+      def,
       {
-        kind: 'set-fanout-inputs',
-        wrapperNodeId: 'fanout',
-        inputs: [
-          { name: 'items', kind: 'list<string>', isShardSource: true },
-          { name: 'context', kind: 'string' },
-        ],
+        kind: 'generic',
+        edgeId: 'first',
+        source: { nodeId: 'outer', portName: 'items' },
+        targetNodeId: 'fanout',
+        target: { mode: 'new', portName: 'items' },
+        legacyFanoutInputInference: true,
+      },
+      context(),
+    )
+    expect(plan).toMatchObject({ ok: true })
+    if (!plan.ok) return
+    expect(plan.nodePatches).toEqual([
+      { kind: 'set-fanout-shard-source', wrapperNodeId: 'fanout', shardSourcePort: 'items' },
+    ])
+    expect(plan.addEdges).toEqual([
+      {
+        id: 'first',
+        source: { nodeId: 'outer', portName: 'items' },
+        target: { nodeId: 'fanout', portName: 'items' },
       },
     ])
+    expect(plan.warnings).toContainEqual(
+      expect.objectContaining({ code: 'legacy-fanout-kind-inference' }),
+    )
+
+    // A later legacy drop is a broadcast parameter: the shard source stays.
+    const withShard = definition([
+      agent('outer'),
+      agent('inner'),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'items' }),
+    ])
+    const broadcast = planWorkflowConnection(
+      withShard,
+      {
+        kind: 'generic',
+        edgeId: 'second',
+        source: { nodeId: 'outer', portName: 'config' },
+        targetNodeId: 'fanout',
+        target: { mode: 'new', portName: 'config' },
+        legacyFanoutInputInference: true,
+      },
+      context(),
+    )
+    expect(broadcast).toMatchObject({ ok: true, nodePatches: [] })
+
+    // Guided (non-legacy) NEW onto the wrapper itself still needs the role.
+    expect(
+      planWorkflowConnection(
+        withShard,
+        {
+          kind: 'generic',
+          source: { nodeId: 'outer', portName: 'config' },
+          targetNodeId: 'fanout',
+          target: { mode: 'new', portName: 'config' },
+        },
+        context(),
+      ),
+    ).toMatchObject({ ok: false, reason: { code: 'fanout-explicit-port-required' } })
   })
 
   test('fan-out output request encodes inner boundary and outer connection sides explicitly', () => {
     const def = definition([
       agent('inner'),
       agent('outer'),
-      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] }),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'docs' }),
     ])
     const plan = planWorkflowConnection(
       def,
@@ -505,7 +572,7 @@ describe('planWorkflowConnection domain requests', () => {
     const def = definition([
       agent('inner'),
       agent('outer'),
-      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] }),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'docs' }),
     ])
     const plan = planWorkflowConnection(
       def,
@@ -531,8 +598,8 @@ describe('planWorkflowConnection domain requests', () => {
   test('fan-out output also applies fixed target authority to its outer connection', () => {
     const def = definition([
       agent('inner'),
-      node({ id: 'review', kind: 'review', inputSource: { nodeId: '', portName: '' } }),
-      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] }),
+      node({ id: 'review', kind: 'review' }),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'docs' }),
     ])
     const plan = planWorkflowConnection(
       def,

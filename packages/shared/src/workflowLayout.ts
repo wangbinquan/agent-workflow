@@ -8,7 +8,7 @@ import {
 import { tryParseKind } from './kindParser'
 import { declaredPorts, type PortAgentLookup } from './nodePorts'
 import { tryHandlerForParsedKind } from './outputKinds'
-import { isSystemChannelEdge } from './systemChannelPorts'
+import { isSystemChannelEdge } from './nodePorts'
 import {
   buildWorkflowScopeParentMap,
   projectWorkflowDependency,

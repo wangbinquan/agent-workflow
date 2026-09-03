@@ -165,7 +165,7 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
 
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {
@@ -313,7 +313,7 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
     await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {
@@ -384,7 +384,7 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
     })
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {
@@ -473,7 +473,7 @@ describe('scheduler-audit S-18/S-19 — wrapper-fanout failure semantics (regres
     // spawn 计数纯粹等于 shard 数。
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {

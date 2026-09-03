@@ -16,26 +16,25 @@ import {
 } from '../src/modules/task-execution/domain/loopExitCondition'
 
 describe('parseExitCondition', () => {
-  test('parses port-empty with nodeId + portName', () => {
-    const cond = parseExitCondition({ kind: 'port-empty', nodeId: 'agent', portName: 'design' })
-    expect(cond).toEqual({ kind: 'port-empty', nodeId: 'agent', portName: 'design' })
+  test('parses port-empty with portName (RFC-354: the loop return port)', () => {
+    const cond = parseExitCondition({ kind: 'port-empty', portName: 'design' })
+    expect(cond).toEqual({ kind: 'port-empty', portName: 'design' })
   })
 
-  test('parses port-not-empty with nodeId + portName (RFC-023 clarify use case)', () => {
-    const cond = parseExitCondition({ kind: 'port-not-empty', nodeId: 'agent', portName: 'design' })
-    expect(cond).toEqual({ kind: 'port-not-empty', nodeId: 'agent', portName: 'design' })
+  test('parses port-not-empty with portName (RFC-023 clarify use case)', () => {
+    const cond = parseExitCondition({ kind: 'port-not-empty', portName: 'design' })
+    expect(cond).toEqual({ kind: 'port-not-empty', portName: 'design' })
   })
 
   test('parses port-equals with value default of "" when missing', () => {
-    const cond = parseExitCondition({ kind: 'port-equals', nodeId: 'a', portName: 'p' })
-    expect(cond).toEqual({ kind: 'port-equals', nodeId: 'a', portName: 'p', value: '' })
+    const cond = parseExitCondition({ kind: 'port-equals', portName: 'p' })
+    expect(cond).toEqual({ kind: 'port-equals', portName: 'p', value: '' })
   })
 
   test('parses port-count-lt with default separator "\\n" when missing', () => {
-    const cond = parseExitCondition({ kind: 'port-count-lt', nodeId: 'a', portName: 'p', n: 3 })
+    const cond = parseExitCondition({ kind: 'port-count-lt', portName: 'p', n: 3 })
     expect(cond).toEqual({
       kind: 'port-count-lt',
-      nodeId: 'a',
       portName: 'p',
       n: 3,
       separator: '\n',
@@ -45,13 +44,13 @@ describe('parseExitCondition', () => {
   test('returns null for malformed input (missing fields, unknown kind, non-object)', () => {
     expect(parseExitCondition(null)).toBeNull()
     expect(parseExitCondition('port-empty')).toBeNull()
-    expect(parseExitCondition({ kind: 'port-empty' })).toBeNull() // missing nodeId
-    expect(parseExitCondition({ kind: 'unknown', nodeId: 'a', portName: 'p' })).toBeNull()
+    expect(parseExitCondition({ kind: 'port-empty' })).toBeNull() // missing portName
+    expect(parseExitCondition({ kind: 'unknown', portName: 'p' })).toBeNull()
   })
 })
 
 describe('evaluateExitCondition — port-empty', () => {
-  const cond: ExitCondition = { kind: 'port-empty', nodeId: 'a', portName: 'p' }
+  const cond: ExitCondition = { kind: 'port-empty', portName: 'p' }
   test('true for "" / whitespace-only', () => {
     expect(evaluateExitCondition(cond, { content: '', active: true })).toBe(true)
     expect(evaluateExitCondition(cond, { content: '   \n\t', active: true })).toBe(true)
@@ -63,7 +62,7 @@ describe('evaluateExitCondition — port-empty', () => {
 })
 
 describe('evaluateExitCondition — port-not-empty (RFC-023 clarify exit)', () => {
-  const cond: ExitCondition = { kind: 'port-not-empty', nodeId: 'a', portName: 'p' }
+  const cond: ExitCondition = { kind: 'port-not-empty', portName: 'p' }
   test('true the moment the port produces any non-whitespace content', () => {
     expect(evaluateExitCondition(cond, { content: 'design content', active: true })).toBe(true)
     expect(evaluateExitCondition(cond, { content: '\nfoo\n', active: true })).toBe(true)
@@ -73,7 +72,7 @@ describe('evaluateExitCondition — port-not-empty (RFC-023 clarify exit)', () =
     expect(evaluateExitCondition(cond, { content: '   \n\t', active: true })).toBe(false)
   })
   test('is the exact inverse of port-empty over the same input', () => {
-    const inv: ExitCondition = { kind: 'port-empty', nodeId: 'a', portName: 'p' }
+    const inv: ExitCondition = { kind: 'port-empty', portName: 'p' }
     for (const sample of ['', ' ', '\n', 'x', 'multi\nline\n']) {
       expect(evaluateExitCondition(cond, { content: sample, active: true })).toBe(
         !evaluateExitCondition(inv, { content: sample, active: true }),
@@ -83,7 +82,7 @@ describe('evaluateExitCondition — port-not-empty (RFC-023 clarify exit)', () =
 })
 
 describe('evaluateExitCondition — port-equals', () => {
-  const cond: ExitCondition = { kind: 'port-equals', nodeId: 'a', portName: 'p', value: 'done' }
+  const cond: ExitCondition = { kind: 'port-equals', portName: 'p', value: 'done' }
   test('true only on exact match (no trim)', () => {
     expect(evaluateExitCondition(cond, { content: 'done', active: true })).toBe(true)
     expect(evaluateExitCondition(cond, { content: 'done\n', active: true })).toBe(false)
@@ -94,7 +93,6 @@ describe('evaluateExitCondition — port-equals', () => {
 describe('evaluateExitCondition — port-count-lt', () => {
   const cond: ExitCondition = {
     kind: 'port-count-lt',
-    nodeId: 'a',
     portName: 'p',
     n: 2,
     separator: '\n',

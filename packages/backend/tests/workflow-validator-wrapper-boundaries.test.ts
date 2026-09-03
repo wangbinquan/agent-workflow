@@ -150,7 +150,9 @@ describe('workflow wrapper boundary validation', () => {
     expect(result).not.toContain('wrapper-output-boundary-missing')
   })
 
-  test('loop inner output may leave only through a matching outputBinding', () => {
+  test('loop inner output may leave only through a wrapper-output return edge', () => {
+    // RFC-354: a loop returns through `wrapper-output` edges; the exit
+    // condition reads one of those return ports (here `final`).
     const nodes = [
       node('inner'),
       node('sink'),
@@ -159,22 +161,22 @@ describe('workflow wrapper boundary validation', () => {
         kind: 'wrapper-loop',
         nodeIds: ['inner'],
         maxIterations: 2,
-        exitCondition: { kind: 'port-empty', nodeId: 'inner', portName: 'result' },
+        exitCondition: { kind: 'port-empty', portName: 'final' },
       } as WorkflowNode,
     ]
     const outgoing = [edge('out', 'inner', 'result', 'sink', 'request')]
 
     expect(codes(definition(nodes, outgoing))).toContain('wrapper-output-boundary-missing')
 
-    const exposed = nodes.map((candidate) =>
-      candidate.id === 'loop'
-        ? ({
-            ...candidate,
-            outputBindings: [{ name: 'final', bind: { nodeId: 'inner', portName: 'result' } }],
-          } as WorkflowNode)
-        : candidate,
+    const returned: WorkflowEdge = {
+      id: 'ret',
+      source: { nodeId: 'inner', portName: 'result' },
+      target: { nodeId: 'loop', portName: 'final' },
+      boundary: 'wrapper-output',
+    }
+    expect(codes(definition(nodes, [returned, ...outgoing]))).not.toContain(
+      'wrapper-output-boundary-missing',
     )
-    expect(codes(definition(exposed, outgoing))).not.toContain('wrapper-output-boundary-missing')
   })
 
   test('git inner output cannot bypass the wrapper git_diff contract', () => {
@@ -192,24 +194,36 @@ describe('workflow wrapper boundary validation', () => {
     ).toContain('wrapper-output-boundary-missing')
   })
 
-  test('loop implicit references must stay inside the loop body', () => {
+  test('loop return edges must come from the loop body', () => {
+    // RFC-354: a return edge whose source is not a direct body member is the
+    // one out-of-scope shape left (the exit condition can only name a return
+    // port, so it can no longer point outside by itself).
     const result = codes(
-      definition([
-        node('source'),
-        node('inner'),
-        {
-          id: 'loop',
-          kind: 'wrapper-loop',
-          nodeIds: ['inner'],
-          maxIterations: 2,
-          exitCondition: { kind: 'port-empty', nodeId: 'source', portName: 'result' },
-          outputBindings: [{ name: 'leak', bind: { nodeId: 'source', portName: 'result' } }],
-        } as WorkflowNode,
-      ]),
+      definition(
+        [
+          node('source'),
+          node('inner'),
+          {
+            id: 'loop',
+            kind: 'wrapper-loop',
+            nodeIds: ['inner'],
+            maxIterations: 2,
+            exitCondition: { kind: 'port-empty', portName: 'leak' },
+          } as WorkflowNode,
+        ],
+        [
+          {
+            id: 'leak',
+            source: { nodeId: 'source', portName: 'result' },
+            target: { nodeId: 'loop', portName: 'leak' },
+            boundary: 'wrapper-output',
+          },
+        ],
+      ),
     )
 
-    expect(result).toContain('wrapper-loop-exit-node-out-of-scope')
     expect(result).toContain('wrapper-loop-output-binding-out-of-scope')
+    expect(result).not.toContain('wrapper-loop-exit-port-missing')
   })
 
   test('output and review implicit bindings cannot read an unexposed git inner row', () => {

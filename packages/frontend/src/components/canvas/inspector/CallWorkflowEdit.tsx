@@ -90,10 +90,17 @@ export function CallWorkflowEdit({ node, workflowId, onPatch, onHistoryBoundary 
             ? [{ key: row.key, kind: typeof row.kind === 'string' ? row.kind : undefined }]
             : []
         })
+  // RFC-354 (schema v6): a child output node's ports are its inbound edges
+  // (target port name = the child's output name). A child fetched from the API
+  // may still be pre-v6, so its legacy `ports[]` declaration is read as well.
   const childOutputs: string[] = []
   if (child !== null && child !== 'forbidden') {
     for (const n of child.nodes) {
       if (n.kind !== 'output') continue
+      for (const edge of child.edges ?? []) {
+        if (edge.target.nodeId !== n.id || edge.boundary === 'wrapper-output') continue
+        if (!childOutputs.includes(edge.target.portName)) childOutputs.push(edge.target.portName)
+      }
       const ports = (n as unknown as { ports?: unknown }).ports
       if (!Array.isArray(ports)) continue
       for (const p of ports) {

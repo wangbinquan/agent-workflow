@@ -138,7 +138,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 function fanoutDef(): WorkflowDefinition {
   return {
     $schema_version: 4,
-    inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+    inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
     nodes: [
       { id: 'inp', kind: 'input', inputKey: 'docs' },
       {

@@ -11,7 +11,7 @@ const definition: WorkflowDefinition = {
   inputs: [],
   nodes: [
     { id: 'author', kind: 'agent-single', agentName: 'writer' } as WorkflowNode,
-    { id: 'review', kind: 'review', inputSource: { nodeId: '', portName: '' } } as WorkflowNode,
+    { id: 'review', kind: 'review' } as WorkflowNode,
   ],
   edges: [
     {

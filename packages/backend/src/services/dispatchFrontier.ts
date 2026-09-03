@@ -153,48 +153,9 @@ export function wrapperExternalUpstreamSources(
     const resolved = resolveWorkflowSourceRef(definition, e.source, e.target.nodeId, parents)
     sources.add(resolved.ok ? resolved.source.nodeId : e.source.nodeId)
   }
-  const addImplicitSource = (
-    source: { nodeId: string; portName: string },
-    targetNodeId: string,
-  ): void => {
-    if (scope.has(source.nodeId)) return
-    const resolved = resolveWorkflowSourceRef(definition, source, targetNodeId, parents)
-    sources.add(resolved.ok ? resolved.source.nodeId : source.nodeId)
-  }
-
-  // review.inputSource and output.ports[].bind are implicit upstream deps (no
-  // user-authored edge). Mirror buildScopeUpstreams here so the wrapper's
-  // consumed-generation stamp covers every value that can delay or influence
-  // its inner scope. In-scope sources remain ordinary intra-wrapper dataflow.
-  for (const n of definition.nodes) {
-    if (!scope.has(n.id)) continue
-    if (n.kind === 'review') {
-      const inp = (n as Record<string, unknown>).inputSource as
-        | { nodeId?: unknown; portName?: unknown }
-        | undefined
-      if (inp !== undefined && typeof inp.nodeId === 'string') {
-        addImplicitSource(
-          {
-            nodeId: inp.nodeId,
-            portName: typeof inp.portName === 'string' ? inp.portName : '',
-          },
-          n.id,
-        )
-      }
-    }
-    if (n.kind === 'output') {
-      const ports = (n as Record<string, unknown>).ports
-      if (!Array.isArray(ports)) continue
-      for (const port of ports) {
-        if (port === null || typeof port !== 'object') continue
-        const bind = (port as Record<string, unknown>).bind
-        if (bind === null || typeof bind !== 'object') continue
-        const source = bind as Record<string, unknown>
-        if (typeof source.nodeId !== 'string' || typeof source.portName !== 'string') continue
-        addImplicitSource({ nodeId: source.nodeId, portName: source.portName }, n.id)
-      }
-    }
-  }
+  // RFC-354 (schema v6): review / output dependencies are ordinary edges, so the
+  // edge walk above already covers them (the implicit `inputSource` /
+  // `ports[].bind` mirror of buildScopeUpstreams retired with those fields).
   return sources
 }
 

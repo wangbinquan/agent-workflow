@@ -37,7 +37,7 @@ describe('findNewInputTarget (pointer hit-test)', () => {
   const d = def([
     { id: 'A', kind: 'agent-single', agentName: 'a' },
     { id: 'C', kind: 'agent-single', agentName: 'c' },
-    { id: 'R', kind: 'review', inputSource: { nodeId: 'A', portName: 'o' } },
+    { id: 'R', kind: 'review' },
   ])
   const boxes = [box('A', 0, 0), box('C', 200, 0), box('R', 400, 0)]
 

@@ -10,6 +10,7 @@
 //   - estimateShardTotal multiplies nested expectedShardCount
 
 import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
+import { migrateWorkflowDefinitionToLatest } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
 import {
   applyAutoPromote,
@@ -43,11 +44,14 @@ function baseAgent(name: string, fields: Partial<Agent> = {}): Agent {
   }
 }
 
+// Fixtures are written in the v5 shape (`inputs[].isShardSource`) and go
+// through the RFC-354 upgrader, exactly like a stored snapshot does: the
+// fan-out ends up with `shardSourcePort` and edge-declared parameters.
 function defWith(
   nodes: WorkflowDefinition['nodes'],
   edges: WorkflowDefinition['edges'] = [],
 ): WorkflowDefinition {
-  return {
+  return migrateWorkflowDefinitionToLatest({
     $schema_version: 4,
     inputs: [],
     nodes: nodes.map((node) =>
@@ -58,7 +62,7 @@ function defWith(
         : node,
     ),
     edges,
-  }
+  })
 }
 
 function fanoutScope(

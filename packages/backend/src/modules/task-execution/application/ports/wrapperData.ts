@@ -24,6 +24,14 @@ export interface WrapperDataPort {
 
   fanoutAgentKey(node: WorkflowNode): string | null
   resolveFanoutAgent(node: WorkflowNode): Promise<WrapperFanoutAgentResolution>
+  /**
+   * RFC-354 — the declared kind of a producer port (`null` when the producer
+   * declares none). A wrapper's PARAMETERS are its inbound edges, so the kind
+   * of a parameter is the kind of the source port that feeds it: the fan-out
+   * shard source must be `list<T>`, and boundary hand-offs carry it to the
+   * runner's `{{port}}` checks.
+   */
+  sourcePortKind(nodeId: string, portName: string): Promise<string | null>
   consumedProvenanceMatches(priorJson: string, current: Readonly<Record<string, string>>): boolean
   reportDiagnostic(input: {
     readonly level: 'info' | 'warn'

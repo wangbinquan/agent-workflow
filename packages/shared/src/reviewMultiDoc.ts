@@ -79,6 +79,26 @@ export const REVIEW_APPROVED_PORT_MULTI = 'accepted' as const
  * reference this shared constant instead of re-spelling the sentinel.
  */
 export const REVIEW_INPUT_PORT_NAME = '__review_input__' as const
+
+/**
+ * RFC-354 (schema v6) — the reviewed source is the review node's ONE inbound
+ * edge on `__review_input__` (the v5 `inputSource` PortRef is gone). Returns
+ * null when no such edge exists; a second one is a validator error
+ * (`review-input-edge-conflict`), so the first in edge order is the source.
+ */
+export function reviewInputSource(
+  definition: { edges: ReadonlyArray<{ source: PortRefLike; target: PortRefLike }> },
+  reviewNodeId: string,
+): PortRefLike | null {
+  const edge = definition.edges.find(
+    (candidate) =>
+      candidate.target.nodeId === reviewNodeId &&
+      candidate.target.portName === REVIEW_INPUT_PORT_NAME,
+  )
+  return edge === undefined ? null : { nodeId: edge.source.nodeId, portName: edge.source.portName }
+}
+
+type PortRefLike = { nodeId: string; portName: string }
 /**
  * RFC-149: the metadata port every review node publishes alongside its
  * approved-document port (nodePorts.ts declaration + review.ts publish sites).

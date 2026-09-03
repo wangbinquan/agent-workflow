@@ -6,32 +6,6 @@ import {
   projectWorkflowDependency,
   resolveWorkflowSourceRef,
 } from '@agent-workflow/shared'
-import { parseExitCondition } from '../domain/loopExitCondition'
-
-interface Binding {
-  readonly name: string
-  readonly bind: { readonly nodeId: string; readonly portName: string }
-}
-
-function readBindings(node: WorkflowNode, key: string): Binding[] {
-  const value = (node as Record<string, unknown>)[key]
-  if (!Array.isArray(value)) return []
-  const bindings: Binding[] = []
-  for (const item of value) {
-    if (typeof item !== 'object' || item === null) continue
-    const itemRecord = item as Record<string, unknown>
-    if (typeof itemRecord.name !== 'string') continue
-    const bind = itemRecord.bind
-    if (typeof bind !== 'object' || bind === null) continue
-    const record = bind as Record<string, unknown>
-    if (typeof record.nodeId !== 'string' || typeof record.portName !== 'string') continue
-    bindings.push({
-      name: itemRecord.name,
-      bind: { nodeId: record.nodeId, portName: record.portName },
-    })
-  }
-  return bindings
-}
 
 /**
  * Detect a cycle in one scope's structural upstream graph. The map contains
@@ -98,36 +72,10 @@ export function buildScopeUpstreams(
     addProjected(resolved.ok ? resolved.source.nodeId : edge.source.nodeId, edge.target.nodeId)
   }
 
-  for (const node of definition.nodes) {
-    if (node.kind === 'review') {
-      const input = (node as Record<string, unknown>).inputSource as
-        | { nodeId?: unknown; portName?: unknown }
-        | undefined
-      if (input !== undefined && typeof input.nodeId === 'string') {
-        const portName = typeof input.portName === 'string' ? input.portName : ''
-        const resolved = resolveWorkflowSourceRef(
-          definition,
-          { nodeId: input.nodeId, portName },
-          node.id,
-          parents,
-        )
-        addProjected(resolved.ok ? resolved.source.nodeId : input.nodeId, node.id)
-      }
-    }
-    if (node.kind === 'output') {
-      for (const binding of readBindings(node, 'ports')) {
-        const resolved = resolveWorkflowSourceRef(definition, binding.bind, node.id, parents)
-        addProjected(resolved.ok ? resolved.source.nodeId : binding.bind.nodeId, node.id)
-      }
-    }
-    if (node.kind === 'wrapper-loop') {
-      const condition = parseExitCondition((node as Record<string, unknown>).exitCondition)
-      if (condition !== null) addProjected(condition.nodeId, node.id)
-      for (const binding of readBindings(node, 'outputBindings')) {
-        addProjected(binding.bind.nodeId, node.id)
-      }
-    }
-  }
+  // RFC-354 (schema v6): review / output / loop dependencies are all edges now
+  // (a loop's returns are `wrapper-output` boundary edges from its own body,
+  // which the boundary skip above keeps out of the DAG exactly like fan-out's),
+  // so no implicit-reference walk remains.
 
   for (const list of upstreams.values()) list.sort()
   return upstreams

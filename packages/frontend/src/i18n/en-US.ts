@@ -6338,18 +6338,18 @@ export const enUS: Resources = {
       'Shown on the canvas card. When empty, falls back to the agent name / input key / node id.',
     fieldReviewDescription: 'Review description',
     fieldReviewDescriptionHint: 'Optional context shown to reviewers; it does not supply content.',
-    fieldReviewInputSourceNode: 'Content source',
-    fieldReviewInputSourceNodeHint:
-      'Choose an agent with a reviewable Markdown output; its only eligible port is filled automatically.',
-    fieldReviewInputSourcePort: 'Markdown output port',
-    fieldReviewInputSourcePortHint:
-      'Supports markdown, markdown_file / path<md>, list<markdown>, and list<path<md>>; you can also wire the canvas ports directly.',
+    fieldReviewSource: 'Review content (input edge)',
+    fieldReviewSourceHint:
+      'The one edge wired into this node’s __review_input__ handle on the canvas is the reviewed content: connect an agent’s Markdown output there. Supports markdown, markdown_file / path<md>, list<markdown>, and list<path<md>>.',
+    fieldReviewSourceUnwired:
+      'Not wired yet — drag an upstream Markdown output onto this node’s input handle.',
+    fieldReviewSourceDisconnect: 'Disconnect',
     fieldReviewGuideReadyTitle: 'Review content is ready',
     fieldReviewGuideReadyBody:
       '{{source}}.{{port}} · {{kind}}. The task pauses here and opens a {{mode}}.',
     fieldReviewGuideEmptyTitle: 'Only one required input remains',
     fieldReviewGuideEmptyBody:
-      'Do not paste the review body here. Wire an upstream agent’s Markdown output into this node, or choose Content source + Output port below. Title, description, and re-run policies are optional.',
+      'Do not paste the review body here. Wire an upstream agent’s Markdown output into this node’s input handle on the canvas. Title, description, and re-run policies are optional.',
     fieldReviewGuideUnavailableTitle: 'No reviewable output is available',
     fieldReviewGuideUnavailableBody:
       'First declare a Markdown output port on an upstream agent. A plain string cannot be reviewed; markdown, path<md>, and their single-level lists are supported.',
@@ -6386,12 +6386,11 @@ export const enUS: Resources = {
     fieldReviewCommentTemplateHint:
       'Optional override of how {{__review_comments__}} is rendered. Empty = framework default.',
     fieldOutputPorts: 'Output ports',
-    fieldOutputPortsHint: 'Each port = a card on the task detail page; bind to (nodeId, portName).',
-    portNamePlaceholder: 'port name',
-    upstreamPlaceholder: 'upstream nodeId',
-    portPlaceholder: 'port',
+    fieldOutputPortsHint:
+      'Each port = a card on the task detail page. A port IS the edge wired into this node: the edge’s target port name is the card name, its source is where the value comes from. Rename it in the edge inspector; delete the edge to drop the port.',
+    outputPortsNone:
+      'No ports yet — connect an upstream output into this node on the canvas to create one.',
     remove: 'Remove',
-    addPort: '+ Add port',
     innerNodeIds: 'Inner node ids',
     innerNodeIdsHint: 'Edit by composing nodes via the canvas menu.',
     wrapperParams: 'Parameters (inbound edges)',
@@ -6399,15 +6398,16 @@ export const enUS: Resources = {
       'Edges into the wrapper are its parameters; after `→` is the boundary edge handing that parameter to an inner node. Connect them on the canvas, exactly like any node.',
     wrapperParamsNone:
       'No parameters yet — connect an edge from an outside node into this wrapper to declare one.',
-    fanoutInputs: 'Inputs',
-    fanoutInputsHint:
-      'Declared input ports. EXACTLY ONE must be marked as shard source and its kind must be list<T>; others are broadcast to every shard.',
-    fanoutInputNamePlaceholder: 'port name',
-    fanoutInputShardSource: 'shard source',
-    fanoutInputShardSourceMustBeList: 'shard source kind must be list<T>',
-    fanoutInputAdd: '+ add input',
-    fanoutInputRemove: 'remove input',
-    fanoutInputUnwired: '(not wired)',
+    fanoutParams: 'Parameters (inbound edges)',
+    fanoutParamsHint:
+      'Every edge into the fan-out is a parameter; after `→` is the boundary edge handing it to an inner node. The shard source is split into one shard per list item; every other parameter is broadcast to every shard.',
+    fanoutParamsNone:
+      'No parameters yet — connect an edge from an outside node into this wrapper to declare one.',
+    fanoutShardSourcePort: 'Shard source',
+    fanoutShardSourcePortHint:
+      'The parameter whose list<T> items become the shards. Pick one of the inbound edges.',
+    fanoutShardSourceUnfed:
+      "No edge feeds '{{port}}' — connect one on the canvas or pick another parameter.",
     fanoutDerivedOutputs: 'Derived outputs',
     fanoutDerivedOutputsHint:
       'Auto-derived from the wrapper-fanout body: aggregator agent outputs (when present), or a single __done__ signal port (no aggregator).',
@@ -6422,20 +6422,19 @@ export const enUS: Resources = {
     fieldExitConditionKindHint:
       'port-empty: trimmed value empty · port-not-empty: trimmed value non-empty (clarify use case — exit when the agent finally produces an output instead of asking again) · port-equals: exact match · port-count-lt: count < n · port-inactive: the producer marked the port inactive this round (RFC-306 branch ports)',
     fieldExitConditionTarget: 'Exit condition target',
-    fieldExitConditionTargetHint: '(nodeId, portName) probed each iteration',
+    fieldExitConditionTargetHint: 'One of this loop’s return ports, probed after each round',
     fieldExitConditionValue: 'Equals value',
     fieldExitConditionN: 'n',
     fieldExitConditionSeparator: "Separator (default '\\n')",
-    fieldOutputBindings: 'Output bindings',
-    fieldOutputBindingsHint: 'Each binding exposes an inner port as a wrapper output port.',
-    outputNamePlaceholder: 'output name',
-    addBinding: '+ Add binding',
-    // RFC-016: candidate-driven selects for loop exit + outputBindings.
-    loopExitNodeIdSelect: '— pick a loop member —',
-    loopExitPortNameSelect: '— pick a port —',
-    loopExitInvalidNodeId:
-      "'{{nodeId}}' is no longer a direct member of this loop; pick a current member.",
-    loopExitInvalidPortName: "'{{portName}}' is not declared by this node; pick a current port.",
+    loopReturns: 'Return values (wrapper-output edges)',
+    loopReturnsHint:
+      'Each return is an edge from a loop member’s output to this loop, authored on the canvas by dropping the member’s output on the loop’s right edge. Downstream edges and the exit condition read these ports.',
+    loopReturnsNone:
+      'No return values yet — drop a member’s output on the loop’s right edge to declare one.',
+    // RFC-016 / RFC-354: the exit target is picked among the loop's return ports.
+    loopExitPortNameSelect: '— pick a return port —',
+    loopExitInvalidPortName:
+      "'{{portName}}' is not one of this loop’s return ports; pick a current return.",
     fieldAgent: 'Agent',
     pickAgent: '— pick an agent —',
     openReferencedResource: 'View details',
@@ -7699,8 +7698,6 @@ export const enUS: Resources = {
       'mcp-not-found': 'An agent used by a node references an unknown MCP.',
       'plugin-not-found': 'An agent used by a node references an unknown plugin.',
       'plugin-disabled': 'An agent used by a node references a disabled plugin.',
-      'binding-node-missing': 'An output port binds to an unknown node.',
-      'binding-port-missing': 'An output port binds to an unknown port.',
       'boundary-input-port-not-declared':
         'A wrapper-input edge references an undeclared input port.',
       'boundary-input-source-not-wrapper':
@@ -7762,9 +7759,7 @@ export const enUS: Resources = {
       'prompt-template-unresolved': 'The prompt references a token with no matching inbound port.',
       'review-input-list-item-not-markdown': 'The review list input item kind must be markdown.',
       'review-input-edge-conflict': 'Review nodes can receive only one input edge.',
-      'review-input-edge-mismatch':
-        'The review input edge does not match the selected input source.',
-      'review-input-source-missing': 'The review node is missing its input source.',
+      'review-input-source-missing': 'The review node has no input edge.',
       'review-input-source-not-markdown':
         'The review input source must be declared markdown or path kind.',
       'review-rerunnable-out-of-scope':
@@ -7820,17 +7815,15 @@ export const enUS: Resources = {
       'wrapper-containment-cycle': 'Wrapper containment must not contain a cycle.',
       'wrapper-empty': 'The wrapper has no inner nodes.',
       'wrapper-fanout-nested': 'Fan-out wrappers cannot nest inside each other.',
-      'wrapper-fanout-shard-source-duplicate':
-        'A fan-out wrapper must have exactly one shard-source port (found several).',
-      'wrapper-fanout-shard-source-missing': 'The fan-out wrapper has no shard-source port.',
-      'wrapper-fanout-shard-source-must-be-list': 'The shard-source port must declare a list kind.',
+      'wrapper-fanout-shard-source-missing':
+        'The fan-out wrapper names no shard source, or no edge feeds it.',
+      'wrapper-fanout-shard-source-must-be-list':
+        'The edge feeding the shard source must carry a list kind.',
       'wrapper-input-boundary-missing':
         'Data entering a fan-out wrapper must use its declared input boundary.',
       'wrapper-loop-exit-condition': 'The loop wrapper is missing its exit condition.',
-      'wrapper-loop-exit-node-missing': 'The loop exit condition references an unknown node.',
-      'wrapper-loop-exit-node-out-of-scope':
-        'The loop exit condition must reference a direct member of the loop body.',
-      'wrapper-loop-exit-port-missing': 'The loop exit condition references an unknown port.',
+      'wrapper-loop-exit-port-missing':
+        'The loop exit condition names a return port no wrapper-output edge declares.',
       'exit-condition-port-not-branch':
         'The loop exits on “port inactive”, but that port is not a branch port — the condition can never become true.',
       'wrapper-loop-inner-data-cycle': 'The loop wrapper has a data cycle between its inner nodes.',
@@ -7840,7 +7833,7 @@ export const enUS: Resources = {
       'wrapper-fanout-unsupported-inner-kind':
         'A fan-out wrapper body may only contain single-agent nodes.',
       'wrapper-loop-output-binding-out-of-scope':
-        'A loop output binding must reference a direct member of the loop body.',
+        'A loop return edge must come from a direct member of the loop body.',
       'wrapper-output-boundary-missing':
         'Data leaving a wrapper must be exposed through the wrapper output boundary.',
       // RFC-243 — call-workflow nodes (design §9 error-code closed set).

@@ -51,12 +51,13 @@ export function projectWorkflowValidationIssues(
         break
       }
       case 'workflow-output': {
+        // RFC-354: an output node's ports are its inbound edges.
         const owners = definition.nodes.filter(
           (node) =>
             node.kind === 'output' &&
-            Array.isArray((node as unknown as { ports?: unknown }).ports) &&
-            ((node as unknown as { ports: Array<{ name?: unknown }> }).ports ?? []).some(
-              (port) => port?.name === target.outputName,
+            (definition.edges ?? []).some(
+              (edge) =>
+                edge.target.nodeId === node.id && edge.target.portName === target.outputName,
             ),
         )
         if (owners.length === 1) increment(nodes, owners[0]!.id, issue)

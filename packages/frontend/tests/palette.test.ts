@@ -112,9 +112,9 @@ describe('makeNode', () => {
     expect((n as Record<string, unknown>).inputKey).toBe('requirement')
   })
 
-  test('output node starts with empty ports list', () => {
+  test('output node declares no ports field (RFC-354: its ports are inbound edges)', () => {
     const n = makeNode({ kind: 'output' }, { x: 0, y: 0 }, { existingIds: new Set() })
-    expect((n as Record<string, unknown>).ports).toEqual([])
+    expect('ports' in (n as Record<string, unknown>)).toBe(false)
   })
 
   test('wrapper-loop seeds maxIterations=3 + exitCondition=port-empty', () => {

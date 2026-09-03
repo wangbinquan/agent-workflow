@@ -14,8 +14,8 @@
 //
 // Scope: every card with OPEN, edge-derived named inputs shares this target
 // contract. review (single `__review_input__`), call-workflow (closed child-
-// declared inputs), wrapper-fanout (typed boundary handles) and wrapper-loop/git
-// (reject inbound edges in v1) are NOT body-drop targets.
+// declared inputs) and the wrappers (fanout / loop / git: parameters are
+// declared on their boundary handles, RFC-354) are NOT body-drop targets.
 
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { declaredPorts, CLARIFY_SOURCE_PORT_NAME } from '@agent-workflow/shared'

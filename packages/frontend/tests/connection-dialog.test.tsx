@@ -206,7 +206,7 @@ describe('ConnectionDialog', () => {
 
   test('fan-out boundary names inner/outer endpoints and requires explicit kind and role', async () => {
     const fanoutDefinition: WorkflowDefinition = {
-      $schema_version: 4,
+      $schema_version: 6,
       inputs: [],
       nodes: [
         { ...agentNode('outer', 'outer'), agentId: 'outer-agent' } as WorkflowNode,
@@ -214,7 +214,6 @@ describe('ConnectionDialog', () => {
           id: 'fanout',
           kind: 'wrapper-fanout',
           nodeIds: ['inner'],
-          inputs: [],
           position: { x: 100, y: 0 },
         } as WorkflowNode,
         { ...agentNode('inner', 'inner'), agentId: 'inner-agent' } as WorkflowNode,
@@ -249,10 +248,9 @@ describe('ConnectionDialog', () => {
         expect.objectContaining({ target: { nodeId: 'fanout', portName: 'items' } }),
       ]),
     )
-    expect(plan.nodePatches[0]).toMatchObject({
-      kind: 'set-fanout-inputs',
-      wrapperNodeId: 'fanout',
-      inputs: [{ name: 'items', kind: 'list<string>', isShardSource: true }],
-    })
+    // RFC-354: the parameter is the edge; the shard role is the one node patch.
+    expect(plan.nodePatches).toEqual([
+      { kind: 'set-fanout-shard-source', wrapperNodeId: 'fanout', shardSourcePort: 'items' },
+    ])
   })
 })

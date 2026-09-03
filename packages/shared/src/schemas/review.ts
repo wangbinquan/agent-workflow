@@ -16,7 +16,6 @@ import {
   isRegisteredKindString,
   isReviewableBodyKindString,
 } from '../kindParser'
-import { PortRefSchema } from './workflow'
 import { GateDecisionReceiptSchema } from './humanGate'
 import { ReviewAccessScopeSchema, ReviewCapabilitiesSchema } from './reviewCollab'
 
@@ -83,16 +82,10 @@ export const ReviewNodeSchema = z
     kind: z.literal('review'),
     position: z.object({ x: z.number(), y: z.number() }).optional(),
 
-    /**
-     * The upstream (nodeId, portName) being reviewed. RFC-007: the canvas
-     * exposes a single named target Handle (`__review_input__`) so the user
-     * can wire this by drag; the connect / disconnect / form-edit paths all
-     * keep `inputSource` and the matching `definition.edges[]` entry in
-     * lock-step. The runtime still reads from this field (scheduler /
-     * dispatchReviewNode) — it's what tells the engine which port to
-     * snapshot into doc_versions and which port is the iterate-merge target.
-     */
-    inputSource: PortRefSchema,
+    // RFC-354 (schema v6): the reviewed source is the review node's ONE inbound
+    // edge (target port `__review_input__`) — the v5 `inputSource` PortRef that
+    // the canvas kept in lock-step with that edge is gone; the runtime and the
+    // validator read the edge.
 
     /** Human-facing label / description (shown in Reviews list + detail). */
     title: z.string().default(''),

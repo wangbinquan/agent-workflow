@@ -8,9 +8,13 @@ import type {
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
-  WrapperFanoutPort,
 } from '@agent-workflow/shared'
-import { DEFAULT_PROTOCOL_RETRY_BUDGET, stringifyKind, tryParseKind } from '@agent-workflow/shared'
+import {
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  declaredPorts,
+  stringifyKind,
+  tryParseKind,
+} from '@agent-workflow/shared'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
@@ -132,6 +136,7 @@ export function createWrapperMechanicsPorts(
       const resolution = await state.taskExecutionResources.injection(agentId)
       return resolution.kind === 'ok' ? { kind: 'ok', agent: resolution.spec.agent } : resolution
     },
+    sourcePortKind: (nodeId, portName) => sourcePortKindOf(state, nodeId, portName),
     consumedProvenanceMatches(priorJson, current) {
       return consumedMapsEqual(parseConsumedJson(priorJson), current)
     },
@@ -666,36 +671,36 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   }
 
   // RFC-060 D.T7: build inputPortKinds from boundary edges so the runner can
-  // refuse `{{port}}` references against signal-kind inputs. We look up each
-  // boundary edge's source port on the wrapper itself to find its declared
-  // kind (signal / list<T> / etc.) and stash that against the target
-  // (inner's local) port name.
+  // refuse `{{port}}` references against signal-kind inputs. RFC-354 (schema
+  // v6): a fan-out PARAMETER is declared by the wrapper's inbound edge, so its
+  // kind is the kind of the source port feeding that edge; the boundary edge
+  // then hands it to the inner's local port name.
   const inputPortKinds: Record<string, string> = {}
   const wrapper = args.state.definition.nodes.find((n) => n.id === args.wrapperId)
   if (wrapper !== undefined && wrapper.kind === 'wrapper-fanout') {
-    const wrapperInputs = ((wrapper as Record<string, unknown>).inputs ?? []) as WrapperFanoutPort[]
+    const paramKinds = new Map<string, string>()
+    for (const inbound of args.state.definition.edges) {
+      if (inbound.boundary !== undefined || inbound.target.nodeId !== args.wrapperId) continue
+      const kind = await sourcePortKindOf(
+        args.state,
+        inbound.source.nodeId,
+        inbound.source.portName,
+      )
+      if (kind !== null) paramKinds.set(inbound.target.portName, kind)
+    }
     for (const e of boundaryEdges) {
-      const wp = wrapperInputs.find((p) => p.name === e.source.portName)
-      if (wp !== undefined) {
-        // For shardSource ports, the inner receives ONE item (the shard
+      const kind = paramKinds.get(e.source.portName)
+      if (kind === undefined) continue
+      if (e.source.portName === shardSourcePortName) {
+        // For the shardSource parameter the inner receives ONE item (the shard
         // value); the item's effective kind is the list's item kind, not
-        // `list<T>`. For non-shard broadcast boundary ports, the kind is
-        // the wrapper's declared input kind verbatim.
-        if (wp.isShardSource === true) {
-          const lk = tryParseKind(wp.kind)
-          if (lk !== null && lk.kind === 'list') {
-            // The shard item's effective kind is the list's ITEM kind, stringified
-            // so the runner can re-parse it. Use the canonical stringifyKind rather
-            // than a hand-rolled per-kind switch: the old inline version dropped a
-            // nested list<list<...>> item to a bare 'list' (losing the inner kind);
-            // stringifyKind round-trips path<md> / list<...> items intact.
-            inputPortKinds[e.target.portName] = stringifyKind(lk.item)
-          } else {
-            inputPortKinds[e.target.portName] = wp.kind
-          }
-        } else {
-          inputPortKinds[e.target.portName] = wp.kind
-        }
+        // `list<T>` — stringified so the runner can re-parse it (nested
+        // list<list<...>> items survive intact).
+        const lk = tryParseKind(kind)
+        inputPortKinds[e.target.portName] =
+          lk !== null && lk.kind === 'list' ? stringifyKind(lk.item) : kind
+      } else {
+        inputPortKinds[e.target.portName] = kind
       }
     }
   }
@@ -1819,3 +1824,27 @@ async function mergeBackWrapperIso(
 // -----------------------------------------------------------------------------
 // helpers
 // -----------------------------------------------------------------------------
+
+/**
+ * RFC-354 — the declared kind of a producer port. Agents resolve through the
+ * injection registry (id-first, like every other agent read in this module);
+ * every other kind answers through the shared port table.
+ */
+async function sourcePortKindOf(
+  state: SchedulerState,
+  nodeId: string,
+  portName: string,
+): Promise<string | null> {
+  const node = state.definition.nodes.find((candidate) => candidate.id === nodeId)
+  if (node === undefined) return null
+  if (node.kind === 'agent-single') {
+    const agentId = fanoutInnerAgentRefKey(node as Record<string, unknown>)
+    if (agentId === null) return null
+    const resolution = await state.taskExecutionResources.injection(agentId)
+    return resolution.kind === 'ok' ? (resolution.spec.agent.outputKinds?.[portName] ?? null) : null
+  }
+  return (
+    declaredPorts(node, state.definition, {}).dataOutputs.find((port) => port.name === portName)
+      ?.kind ?? null
+  )
+}

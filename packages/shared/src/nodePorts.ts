@@ -36,11 +36,16 @@ import {
   CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
   CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
   NODE_KIND,
+  WORKFLOW_SCHEMA_VERSION,
   type NodeKind,
 } from './schemas/workflow'
 import { declaredScriptOutputs } from './scriptNode'
 import { deriveWrapperFanoutOutputs, resolveNodeAgent, type AgentLookup } from './wrapperFanout'
-import { REVIEW_APPROVAL_META_PORT, reviewApprovedPortName } from './reviewMultiDoc'
+import {
+  REVIEW_APPROVAL_META_PORT,
+  reviewApprovedPortName,
+  reviewInputSource,
+} from './reviewMultiDoc'
 
 /**
  * The structural slice of `Agent` that port declaration actually reads.
@@ -83,6 +88,36 @@ export interface DeclaredPort {
    *  what `sourcePortKind` historically derived — do NOT add kinds to
    *  those without auditing control-flow-edge classification. */
   kind?: string
+  /**
+   * RFC-354 (D6, folding RFC-147's registry into this table) — a framework
+   * channel port. Present only on the clarify / cross-clarify system ports;
+   * the side is the group the port sits in (`systemInputs` = target side,
+   * `systemOutputs` = source side).
+   *  - `promptInjected`: content arrives via a dedicated prompt block, so
+   *    prompt auto-append must skip the empty `## <port>` header;
+   *  - `dataflow`: whether an edge on this port is a dispatch dependency —
+   *    'never' skips it; 'unless-target-clarify' skips it only when the
+   *    TARGET is an RFC-023 `clarify` node (dispatched out-of-band), so an
+   *    RFC-056 `clarify-cross-agent` target keeps the edge as a real
+   *    dependency (2026-05-22: skipping it made cross-clarify a no-upstream
+   *    leaf that re-fired every tick).
+   */
+  channel?: SystemChannelBehaviour
+}
+
+export interface SystemChannelBehaviour {
+  promptInjected: boolean
+  dataflow: 'never' | 'unless-target-clarify'
+}
+
+/** The port kind a workflow input's value arrives as (undefined = no declared kind). */
+export function workflowInputPortKind(
+  input: { readonly kind: string } | undefined,
+): string | undefined {
+  if (input === undefined) return undefined
+  if (input.kind === 'files') return 'list<path<*>>'
+  if (input.kind === 'upload') return 'path<*>'
+  return undefined
 }
 
 export interface DeclaredPorts {
@@ -150,16 +185,17 @@ export function callWorkflowSelector(node: WorkflowNode): WorkflowRefSelector {
 
 /** `{ name: string }[]`-ish field reader (output.ports / loop.outputBindings /
  *  fanout.inputs) — tolerant of malformed rows, keeps declaration order. */
-function readNamedList(node: WorkflowNode, key: string): Array<{ name: string; kind?: string }> {
-  const v = (node as unknown as Record<string, unknown>)[key]
-  if (!Array.isArray(v)) return []
-  const out: Array<{ name: string; kind?: string }> = []
-  for (const item of v) {
-    const rec = item as { name?: unknown; kind?: unknown } | null
-    if (typeof rec?.name !== 'string') continue
-    out.push(typeof rec.kind === 'string' ? { name: rec.name, kind: rec.kind } : { name: rec.name })
+/**
+ * RFC-354 — the wrapper's return-value port names: the deduped `target.portName`
+ * of every `wrapper-output` edge into the wrapper, in edge order.
+ */
+export function wrapperOutputPortNames(defn: WorkflowDefinition, wrapperId: string): string[] {
+  const names: string[] = []
+  for (const edge of defn.edges) {
+    if (edge.boundary !== 'wrapper-output' || edge.target.nodeId !== wrapperId) continue
+    if (!names.includes(edge.target.portName)) names.push(edge.target.portName)
   }
-  return out
+  return names
 }
 
 /**
@@ -174,11 +210,9 @@ export function resolveReviewInputKind(
   defn: WorkflowDefinition,
   agents: PortAgentLookup,
 ): string | undefined {
-  const src = (node as unknown as Record<string, unknown>).inputSource as
-    | { nodeId?: unknown; portName?: unknown }
-    | null
-    | undefined
-  if (typeof src?.nodeId !== 'string' || typeof src.portName !== 'string') return undefined
+  // RFC-354 (schema v6): the reviewed source is the review's `__review_input__` edge.
+  const src = reviewInputSource(defn, node.id)
+  if (src === null) return undefined
   const sourceNode = defn.nodes.find((n) => n.id === src.nodeId)
   if (sourceNode === undefined || sourceNode.kind !== 'agent-single') return undefined
   // RFC-223 (PR-3a): resolve the upstream agent id-first (rename/ABA-safe).
@@ -190,18 +224,27 @@ export function resolveReviewInputKind(
  * adding a NodeKind without declaring its port shape a compile error.
  */
 const PORT_DERIVERS = {
-  input: ({ node }: DeriverCtx): DeclaredPorts => ({
-    ...NO_PORTS,
+  input: ({ node, defn }: DeriverCtx): DeclaredPorts => {
     // canvas historically fell back to 'out' when inputKey is missing
     // (malformed node); the validator was stricter (no port at all). The
     // single source keeps the tolerant form — a malformed input node fails
     // loudly at runtime input resolution, not with a phantom edge error.
-    dataOutputs: [{ name: readString(node, 'inputKey') ?? 'out' }],
-  }),
-  output: ({ node }: DeriverCtx): DeclaredPorts => ({
-    ...NO_PORTS,
-    dataInputs: readNamedList(node, 'ports').map((p) => ({ name: p.name })),
-  }),
+    const inputKey = readString(node, 'inputKey')
+    // RFC-354 (schema v6): the port's kind is the workflow input's value shape
+    // — a `files` picker hands over a newline-delimited path list, an `upload`
+    // one path; text / enum / git values carry no port kind (a fan-out sharding
+    // such a value splits it as list<string>, see fanoutStrategy).
+    const kind = workflowInputPortKind(
+      inputKey === undefined ? undefined : defn.inputs?.find((input) => input.key === inputKey),
+    )
+    return {
+      ...NO_PORTS,
+      dataOutputs: [{ name: inputKey ?? 'out', ...(kind === undefined ? {} : { kind }) }],
+    }
+  },
+  // RFC-354 (schema v6): an output node's ports are its inbound edges (edge-
+  // derived like agent inputs) — nothing to declare here.
+  output: (): DeclaredPorts => NO_PORTS,
   'agent-single': ({ node, agents }: DeriverCtx): DeclaredPorts => {
     // RFC-223 (PR-3a): resolve id-first (rename/ABA-safe) via the shared resolver.
     const agent = resolveNodeAgent(node, agents)
@@ -222,14 +265,24 @@ const PORT_DERIVERS = {
       // RFC-023/RFC-056 framework channels: __clarify__ outbound is accepted
       // on every agent; __clarify_response__ / __external_feedback__ inbound
       // likewise (canvas hides these Handles until an edge exists).
-      // RFC-147: names via the shared constants — the registry↔declaredPorts
-      // drift test (rfc147-system-channel-ports.test.ts) cross-locks that
-      // every registry port is declared on its owner kind here.
+      // RFC-147 → RFC-354 D6: the channel behaviour lives HERE, on the port —
+      // this table is the only source (`systemChannelPorts()` projects it).
       systemInputs: [
-        { name: CLARIFY_RESPONSE_TARGET_PORT_NAME },
-        { name: CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT },
+        {
+          name: CLARIFY_RESPONSE_TARGET_PORT_NAME,
+          channel: { promptInjected: true, dataflow: 'never' },
+        },
+        {
+          name: CROSS_CLARIFY_EXTERNAL_FEEDBACK_PORT,
+          channel: { promptInjected: true, dataflow: 'never' },
+        },
       ],
-      systemOutputs: [{ name: CLARIFY_SOURCE_PORT_NAME }],
+      systemOutputs: [
+        {
+          name: CLARIFY_SOURCE_PORT_NAME,
+          channel: { promptInjected: false, dataflow: 'unless-target-clarify' },
+        },
+      ],
     }
   },
   // RFC-354 — wrapper-git / wrapper-loop PARAMETERS are edge-derived exactly
@@ -242,9 +295,12 @@ const PORT_DERIVERS = {
     ...NO_PORTS,
     dataOutputs: [{ name: 'git_diff', kind: 'list<path<*>>' }],
   }),
-  'wrapper-loop': ({ node }: DeriverCtx): DeclaredPorts => ({
+  // RFC-354 (schema v6): a loop's RETURN VALUES are its `wrapper-output`
+  // boundary edges (body port → loop port), exactly like fan-out's promoted
+  // outlets; the declaration is the deduped list of those target port names.
+  'wrapper-loop': ({ node, defn }: DeriverCtx): DeclaredPorts => ({
     ...NO_PORTS,
-    dataOutputs: readNamedList(node, 'outputBindings').map((p) => ({ name: p.name })),
+    dataOutputs: wrapperOutputPortNames(defn, node.id).map((name) => ({ name })),
   }),
   'wrapper-fanout': ({ node, defn, agents }: DeriverCtx): DeclaredPorts => {
     // Outlets derived from the inner aggregator (or the implicit __done__
@@ -259,9 +315,11 @@ const PORT_DERIVERS = {
     for (const p of deriveWrapperFanoutOutputs(defn, node.id, agents as AgentLookup)) {
       if (!dataOutputs.some((d) => d.name === p.name)) dataOutputs.push({ ...p })
     }
+    // RFC-354 (schema v6): fan-out PARAMETERS are inbound edges like on every
+    // other node (`shardSourcePort` names the one whose items are sharded);
+    // nothing is declared here.
     return {
       ...NO_PORTS,
-      dataInputs: readNamedList(node, 'inputs'),
       dataOutputs,
     }
   },
@@ -286,8 +344,14 @@ const PORT_DERIVERS = {
     // RFC-056 fixed 1-in/2-out shape.
     systemInputs: [{ name: 'questions' }],
     systemOutputs: [
-      { name: CROSS_CLARIFY_OUT_TO_DESIGNER_PORT },
-      { name: CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT },
+      {
+        name: CROSS_CLARIFY_OUT_TO_DESIGNER_PORT,
+        channel: { promptInjected: false, dataflow: 'never' },
+      },
+      {
+        name: CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
+        channel: { promptInjected: false, dataflow: 'never' },
+      },
     ],
   }),
   // RFC-243 §5.2 — call-workflow: inputs mirror the CHILD definition's
@@ -308,11 +372,13 @@ const PORT_DERIVERS = {
         typeof rec.kind === 'string' ? { name: rec.key, kind: rec.kind } : { name: rec.key },
       )
     }
+    // RFC-354 (schema v6): a child output node's ports are its inbound edges.
     const dataOutputs: DeclaredPort[] = []
-    for (const n of child.nodes) {
-      if (n.kind !== 'output') continue
-      for (const p of readNamedList(n, 'ports')) {
-        if (!dataOutputs.some((d) => d.name === p.name)) dataOutputs.push({ name: p.name })
+    const outputIds = new Set(child.nodes.filter((n) => n.kind === 'output').map((n) => n.id))
+    for (const edge of child.edges) {
+      if (!outputIds.has(edge.target.nodeId)) continue
+      if (!dataOutputs.some((d) => d.name === edge.target.portName)) {
+        dataOutputs.push({ name: edge.target.portName })
       }
     }
     return { ...NO_PORTS, dataInputs, dataOutputs }
@@ -377,3 +443,103 @@ export function declaredPorts(
 /** All NodeKind values whose declaration derives from PORT_DERIVERS —
  *  re-exported for table-shape tests. */
 export const PORT_DECLARED_KINDS: readonly NodeKind[] = NODE_KIND
+
+// ---------------------------------------------------------------------------
+// RFC-354 D6 — system-channel projections, derived from the port table.
+//
+// RFC-147 collapsed six hand-written copies of "which port names are
+// framework channels and how does each behave" into one registry; the
+// registry itself was a second table next to this one, kept in sync by a
+// drift test. The behaviour now sits on the ports (`DeclaredPort.channel`)
+// and these projections walk the table — there is nothing left to drift.
+//
+// The deliberate semantic split stays: topologicalOrder / canvas use the
+// uniform side-respecting classifier (`isSystemChannelEdge`), dispatch gating
+// uses the nuanced `channelEdgeDataflowSkip`.
+// ---------------------------------------------------------------------------
+
+export interface SystemChannelPortSpec extends SystemChannelBehaviour {
+  /** Which side of a well-formed channel edge this port name appears on. */
+  side: 'source' | 'target'
+}
+
+let systemChannelIndex: ReadonlyMap<string, SystemChannelPortSpec> | null = null
+
+/**
+ * name → behaviour for every channel port the table declares (a synthetic
+ * node of each kind is projected once; channel ports are static per kind).
+ */
+export function systemChannelPorts(): ReadonlyMap<string, SystemChannelPortSpec> {
+  if (systemChannelIndex !== null) return systemChannelIndex
+  const index = new Map<string, SystemChannelPortSpec>()
+  const defn: WorkflowDefinition = {
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
+    inputs: [],
+    nodes: [],
+    edges: [],
+  }
+  for (const kind of NODE_KIND) {
+    const node = { id: '__probe__', kind } as unknown as WorkflowNode
+    const ports = declaredPorts(node, defn, new Map())
+    for (const port of ports.systemInputs) {
+      if (port.channel !== undefined) index.set(port.name, { ...port.channel, side: 'target' })
+    }
+    for (const port of ports.systemOutputs) {
+      if (port.channel !== undefined) index.set(port.name, { ...port.channel, side: 'source' })
+    }
+  }
+  systemChannelIndex = index
+  return index
+}
+
+type EdgeEnds = {
+  source: { nodeId: string; portName: string }
+  target: { nodeId: string; portName: string }
+}
+
+/** Side-respecting membership: is this edge one of the clarify / cross-clarify channel edges? */
+export function isSystemChannelEdge(e: EdgeEnds): boolean {
+  const index = systemChannelPorts()
+  return (
+    index.get(e.source.portName)?.side === 'source' ||
+    index.get(e.target.portName)?.side === 'target'
+  )
+}
+
+/**
+ * Either-side wide match — deliberately WIDER than `isSystemChannelEdge`: a
+ * channel port name on the wrong side (corrupt / hand-edited definition)
+ * still counts. Display-defensive (workflow-sync-diff never shows a malformed
+ * channel edge as a "data edge changed" row).
+ */
+export function touchesSystemChannelPort(e: EdgeEnds): boolean {
+  const index = systemChannelPorts()
+  return index.has(e.source.portName) || index.has(e.target.portName)
+}
+
+/** Prompt-injected target ports: the prompt auto-append skip set. */
+export function promptInjectedPortNames(): ReadonlySet<string> {
+  const names = new Set<string>()
+  for (const [name, spec] of systemChannelPorts()) if (spec.promptInjected) names.add(name)
+  return names
+}
+
+/**
+ * Dataflow-dependency skip for dispatch-gating graph walks (taskDagGraph /
+ * inboundEdges / dispatchFrontier). Returns true when the edge must be
+ * SKIPPED (it is not a dataflow dependency). `kindOfTarget` resolves the
+ * target node's kind — scope-local or whole-definition lookup, per caller.
+ */
+export function channelEdgeDataflowSkip(
+  e: EdgeEnds,
+  kindOfTarget: (nodeId: string) => string | undefined,
+): boolean {
+  const index = systemChannelPorts()
+  const src = index.get(e.source.portName)
+  if (src !== undefined && src.side === 'source') {
+    if (src.dataflow === 'never') return true
+    if (src.dataflow === 'unless-target-clarify') return kindOfTarget(e.target.nodeId) === 'clarify'
+  }
+  const tgt = index.get(e.target.portName)
+  return tgt !== undefined && tgt.side === 'target' && tgt.dataflow === 'never'
+}

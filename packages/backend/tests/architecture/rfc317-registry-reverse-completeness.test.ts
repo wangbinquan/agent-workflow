@@ -47,7 +47,7 @@ import {
   sourceUnit,
   type SourceUnit,
 } from './census'
-import { NODE_KIND_BEHAVIORS, SYSTEM_CHANNEL_PORTS } from '@agent-workflow/shared'
+import { NODE_KIND_BEHAVIORS } from '@agent-workflow/shared'
 import { DISABLED_RESOURCE_POLICY } from '@/services/execution/resourcePolicy'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { REPAIR_OPTIONS } from '@/services/lifecycleRepair'
@@ -98,13 +98,8 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
     keyExemptions: { isAgent: 'isAgentNodeKind' },
     why: '表的维度（列）。RFC-146 的准入标准就是「每一维都有 grep 可证的运行时消费者」，这条把那句话变成可执行判据。',
   },
-  {
-    symbol: 'SYSTEM_CHANNEL_PORTS',
-    declaringFile: 'packages/shared/src/systemChannelPorts.ts',
-    keys: Object.keys(SYSTEM_CHANNEL_PORTS),
-    consumption: { via: 'PROMPT_INJECTED_PORT_NAMES' },
-    why: '表本身只被同文件的派生常量与 specFor 读；对外的活链是 PROMPT_INJECTED_PORT_NAMES → shared/prompt.ts。',
-  },
+  // RFC-354 D6：`SYSTEM_CHANNEL_PORTS` 注册表已折进端口表（`DeclaredPort.channel`，
+  // nodePorts.ts），不再是一张独立可反查的表——它的键就是各 kind 声明的系统口。
   {
     symbol: 'DISABLED_RESOURCE_POLICY',
     declaringFile: 'packages/backend/src/services/execution/resourcePolicy.ts',

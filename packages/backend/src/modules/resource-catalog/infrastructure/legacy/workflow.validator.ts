@@ -92,6 +92,7 @@ import {
   type WorkflowByRef,
   type WorkflowRefSelector,
   describeWrapperKind,
+  reviewInputSource,
 } from '@agent-workflow/shared'
 import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
 import { asc, inArray } from 'drizzle-orm'
@@ -629,25 +630,26 @@ function createWorkflowValidationTargets(def: WorkflowDefinition): WorkflowValid
   const nodeIdCounts = count((def.nodes ?? []).map((node) => node.id))
   const edgeIdCounts = count((def.edges ?? []).map((edge) => edge.id))
   const inputKeyCounts = count((def.inputs ?? []).map((input) => input.key))
+  // RFC-354 (schema v6): an output node's ports and a fan-out's parameters are
+  // its inbound edges (target port = port / parameter name), so the identity
+  // universe for both is the edge set.
+  const edgeDeclaredTargetKinds = new Set(['output', 'wrapper-fanout'])
+  const nodeKindById = new Map((def.nodes ?? []).map((node) => [node.id, node.kind]))
   const outputNameCounts = count(
-    (def.nodes ?? [])
-      .filter((node) => node.kind === 'output')
-      .flatMap((node) => readBindings(node, 'ports').map((binding) => binding.name)),
+    (def.edges ?? [])
+      .filter(
+        (edge) => edge.boundary === undefined && nodeKindById.get(edge.target.nodeId) === 'output',
+      )
+      .map((edge) => edge.target.portName),
   )
   const nodePortCounts = count(
-    (def.nodes ?? []).flatMap((node) => {
-      if (node.kind === 'output') {
-        return readBindings(node, 'ports').map(
-          (binding) => `${node.id}\u0000input\u0000${binding.name}`,
-        )
-      }
-      if (node.kind === 'wrapper-fanout') {
-        return readWrapperFanoutInputs(node).map(
-          (input) => `${node.id}\u0000input\u0000${input.name}`,
-        )
-      }
-      return []
-    }),
+    (def.edges ?? [])
+      .filter(
+        (edge) =>
+          edge.boundary === undefined &&
+          edgeDeclaredTargetKinds.has(nodeKindById.get(edge.target.nodeId) ?? ''),
+      )
+      .map((edge) => `${edge.target.nodeId}\u0000input\u0000${edge.target.portName}`),
   )
   const workflow = (): WorkflowValidationTarget => ({ kind: 'workflow' })
   const uniqueNode = (nodeId: string, target: WorkflowValidationTarget) =>
@@ -687,9 +689,14 @@ export function validateWorkflowDefinition(
 }
 
 export function validateWorkflowDef(
-  def: WorkflowDefinition,
+  rawDef: WorkflowDefinition,
   ctx: ValidatorContext,
 ): WorkflowValidationResult {
+  // RFC-354 (schema v6): the validator judges the CURRENT grammar. A v5
+  // definition (PortRef fields instead of edges) is upgraded first — the same
+  // pure cascade the read paths apply — so every rule below reads edges only
+  // and a legacy draft gets the v6 diagnostics instead of confusing ones.
+  const def = migrateWorkflowDefinitionToLatest(rawDef)
   const issues: WorkflowValidationIssue[] = []
   const target = createWorkflowValidationTargets(def)
 
@@ -887,46 +894,18 @@ export function validateWorkflowDef(
       }
     }
 
-    // RFC-060 PR-C — wrapper-fanout required fields.
-    //
-    // Inner subgraph reuses wrapper-git/loop's flat `nodeIds[]` reference
-    // (design §1.1); empty inner is allowed only when the shardSource list
-    // is also empty (runtime fanout-empty path). The validator can't see
-    // shardSource's runtime cardinality, so it just warns when both are
-    // empty rather than hard-failing — authors often start with the
-    // wrapper card alone and fill nodeIds[] next.
-    //
-    // Shard source: EXACTLY ONE input port must have `isShardSource: true`
-    // and the port's `kind` must parse as `list<T>`. Other inputs are
-    // broadcast.
+    // RFC-354 (schema v6) — wrapper-fanout names its sharded PARAMETER with
+    // `shardSourcePort`; the parameter itself is an inbound edge (checked with
+    // its source kind once the port sets exist, rule 4d-fanout below).
     if (node.kind === 'wrapper-fanout') {
-      const inputs = readWrapperFanoutInputs(node)
-      const shardSources = inputs.filter((p) => p.isShardSource === true)
-      if (shardSources.length === 0) {
+      const shardSourcePort = readString(node, 'shardSourcePort')
+      if (shardSourcePort === undefined || shardSourcePort.length === 0) {
         issues.push({
           code: 'wrapper-fanout-shard-source-missing',
-          message: `wrapper-fanout '${node.id}' has no input port marked isShardSource: true (exactly one required)`,
+          message: `wrapper-fanout '${node.id}' has no shardSourcePort (name the parameter whose list<T> items are sharded)`,
           pointer: node.id,
           target: target.nodeField(node.id, 'fanout-inputs'),
         })
-      } else if (shardSources.length > 1) {
-        issues.push({
-          code: 'wrapper-fanout-shard-source-duplicate',
-          message: `wrapper-fanout '${node.id}' has ${shardSources.length} input ports marked isShardSource: true (exactly one allowed)`,
-          pointer: node.id,
-          target: target.nodeField(node.id, 'fanout-inputs'),
-        })
-      } else {
-        const shardPort = shardSources[0]!
-        const parsed = tryParseKind(shardPort.kind)
-        if (parsed === null || parsed.kind !== 'list') {
-          issues.push({
-            code: 'wrapper-fanout-shard-source-must-be-list',
-            message: `wrapper-fanout '${node.id}' shardSource input '${shardPort.name}' must declare kind: list<T> (got '${shardPort.kind}')`,
-            pointer: node.id,
-            target: target.nodePort(node.id, 'input', shardPort.name),
-          })
-        }
       }
     }
   }
@@ -1078,51 +1057,21 @@ export function validateWorkflowDef(
         })
       }
     }
-    // Output and agent-input ports are accepted: output node declares its
-    // inputs explicitly; agent nodes accept any port name (the runner exposes
-    // them as prompt vars). RFC-354: wrapper-git / wrapper-loop accept any
-    // port name too — an inbound edge IS a wrapper parameter, edge-derived
-    // exactly like an agent input; the body reads it through a
-    // `wrapper-input` boundary edge (rule 4e checks that edge's source port
-    // against these parameters).
-    if (tgt.kind === 'output') {
-      const ins = inputPorts.get(tgt.id) ?? new Set()
-      if (!ins.has(edge.target.portName)) {
-        issues.push({
-          code: 'edge-target-port-missing',
-          message: `edge '${edge.id}': output node '${tgt.id}' has no input port '${edge.target.portName}'`,
-          pointer: edge.id,
-          target: target.nodePort(tgt.id, 'input', edge.target.portName),
-        })
-      }
-    } else if (tgt.kind === 'review' && edge.target.portName !== REVIEW_INPUT_PORT_NAME) {
+    // Target ports: agent nodes accept any port name (the runner exposes them
+    // as prompt vars). RFC-354 (schema v6): output nodes, wrapper-git /
+    // wrapper-loop and wrapper-fanout accept any port name too — an inbound
+    // edge IS the output port / wrapper parameter, edge-derived exactly like
+    // an agent input (a wrapper body reads a parameter through a
+    // `wrapper-input` boundary edge; rule 4e checks that edge's source port
+    // against these parameters). Only review and call-workflow keep a fixed
+    // inbound port set.
+    if (tgt.kind === 'review' && edge.target.portName !== REVIEW_INPUT_PORT_NAME) {
       issues.push({
         code: 'edge-target-port-missing',
         message: `edge '${edge.id}': review node '${tgt.id}' only accepts input port '${REVIEW_INPUT_PORT_NAME}'`,
         pointer: edge.id,
         target: target.nodePort(tgt.id, 'input', edge.target.portName),
       })
-    } else if (tgt.kind === 'wrapper-fanout' && edge.boundary === undefined) {
-      // RFC-146 impl-gate fix (Codex high): a PLAIN inbound edge into a
-      // wrapper-fanout must land on a declared input port. Before the
-      // declared-ports consolidation the validator had no fanout inputPorts
-      // at all, so a typo'd target (fan.docz vs declared fan.docs) sailed
-      // through — at runtime resolveUpstreamInputs finds nothing under the
-      // shardSource name, rawContent is '', and the wrapper takes the
-      // empty-source shortcut: the task goes green on garbage. Boundary
-      // edges are exempt: 'wrapper-input' re-uses the wrapper as SOURCE
-      // (checked by boundary-input rules) and 'wrapper-output' re-uses the
-      // wrapper as TARGET with an OUTPUT port name (checked by
-      // boundary-output rules).
-      const ins = inputPorts.get(tgt.id) ?? new Set()
-      if (!ins.has(edge.target.portName)) {
-        issues.push({
-          code: 'edge-target-port-missing',
-          message: `edge '${edge.id}': wrapper-fanout '${tgt.id}' has no declared input port '${edge.target.portName}'`,
-          pointer: edge.id,
-          target: target.nodePort(tgt.id, 'input', edge.target.portName),
-        })
-      }
     } else if (tgt.kind === 'call-workflow') {
       // RFC-243 §5.4(5): call nodes accept DATA inbound edges only, and only
       // on the ports mirrored from the referenced definition's inputs[]
@@ -1191,7 +1140,7 @@ export function validateWorkflowDef(
         if (wrapper?.kind === 'wrapper-fanout' && !sourceInsideBody) {
           issues.push({
             code: 'wrapper-input-boundary-missing',
-            message: `edge '${edge.id}' enters wrapper-fanout '${enteredWrapper}' without a boundary='wrapper-input' edge through the wrapper's declared input port`,
+            message: `edge '${edge.id}' enters wrapper-fanout '${enteredWrapper}' without a boundary='wrapper-input' edge through one of the wrapper's parameters (its inbound edges)`,
             pointer: edge.id,
             target: target.edge(edge.id),
           })
@@ -1884,158 +1833,121 @@ export function validateWorkflowDef(
       // validation rules deleted. wrapper-fanout (validated above in rule 4d)
       // is now the sole fan-out mechanism.
     }
-    if (node.kind === 'output') {
-      const bindings = readBindings(node, 'ports')
-      for (const b of bindings) {
-        if (!nodeById.has(b.bind.nodeId)) {
+    // 4d-fanout (RFC-354, schema v6): the sharded parameter must be fed by an
+    // inbound edge whose source port is list<T>.
+    if (node.kind === 'wrapper-fanout') {
+      const shardSourcePort = readString(node, 'shardSourcePort')
+      if (shardSourcePort !== undefined && shardSourcePort.length > 0) {
+        const feed = edges.find(
+          (e) =>
+            e.boundary === undefined &&
+            e.target.nodeId === node.id &&
+            e.target.portName === shardSourcePort,
+        )
+        if (feed === undefined) {
           issues.push({
-            code: 'binding-node-missing',
-            message: `output node '${node.id}' port '${b.name}' binds to unknown node '${b.bind.nodeId}'`,
+            code: 'wrapper-fanout-shard-source-missing',
+            message: `wrapper-fanout '${node.id}' shardSourcePort '${shardSourcePort}' has no inbound edge — a parameter is declared by connecting an upstream port to '${node.id}.${shardSourcePort}'`,
             pointer: node.id,
-            target: target.outputBinding(node.id, b.name),
+            target: target.nodePort(node.id, 'input', shardSourcePort),
           })
         } else {
-          const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
-          if (!outs.has(b.bind.portName)) {
-            // RFC-243 §5.4: binding a call-workflow port whose child is
-            // unresolved degrades to warning (same rationale as rule 2).
-            const boundNode = nodeById.get(b.bind.nodeId)
-            const degraded = boundNode?.kind === 'call-workflow' && !callChildResolved(boundNode)
+          const src = nodeById.get(feed.source.nodeId)
+          const portsKnown =
+            src === undefined
+              ? false
+              : src.kind === 'agent-single'
+                ? resolveNodeAgent(src, agentByIdOrName) !== undefined
+                : src.kind === 'call-workflow'
+                  ? callChildResolved(src)
+                  : true
+          const kind =
+            src === undefined
+              ? undefined
+              : declaredPorts(src, defnForPorts, agentByIdOrName, {
+                  workflowByRef,
+                }).dataOutputs.find((port) => port.name === feed.source.portName)?.kind
+          // A source that declares no kind at all (an `input` node, an unresolved
+          // child) cannot be judged here — the runtime's list split reports it.
+          const parsed = kind === undefined ? null : tryParseKind(kind)
+          if (portsKnown && kind !== undefined && (parsed === null || parsed.kind !== 'list')) {
             issues.push({
-              code: 'binding-port-missing',
-              message: `output node '${node.id}' port '${b.name}' binds to unknown port '${b.bind.portName}' on '${b.bind.nodeId}'`,
+              code: 'wrapper-fanout-shard-source-must-be-list',
+              message: `wrapper-fanout '${node.id}' shardSourcePort '${shardSourcePort}' is fed by '${feed.source.nodeId}.${feed.source.portName}' of kind '${kind ?? 'unknown'}'; the shard source must be list<T>`,
               pointer: node.id,
-              target: target.outputBinding(node.id, b.name),
-              ...(degraded ? { severity: 'warning' as const } : {}),
-            })
-          }
-          const sourceResolution = resolveWorkflowSourceRef(
-            defnForPorts,
-            b.bind,
-            node.id,
-            scopeParents,
-          )
-          if (!sourceResolution.ok) {
-            issues.push({
-              code: 'wrapper-output-boundary-missing',
-              message: `output node '${node.id}' port '${b.name}' reads '${b.bind.nodeId}.${b.bind.portName}' outside ${describeWrapperKind(sourceResolution.wrapperKind)} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
-              pointer: node.id,
-              target: target.outputBinding(node.id, b.name),
+              target: target.nodePort(node.id, 'input', shardSourcePort),
             })
           }
         }
       }
     }
     if (node.kind === 'wrapper-loop') {
-      const bindings = readBindings(node, 'outputBindings')
+      // RFC-354 (schema v6): a loop's RETURN VALUES are its `wrapper-output`
+      // edges (body port → loop port). Node / port existence of those edges is
+      // covered by the generic edge rules; here the loop-specific shape: the
+      // source must be a DIRECT member, and the exit predicate must read one
+      // of the loop's own return ports.
       const loopMembers = new Set(readStringArray(node, 'nodeIds'))
-      for (const b of bindings) {
-        if (!nodeById.has(b.bind.nodeId)) {
-          issues.push({
-            code: 'binding-node-missing',
-            message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references unknown node '${b.bind.nodeId}'`,
-            pointer: node.id,
-            target: target.nodeField(node.id, 'loop-output-bindings'),
-          })
-        } else {
-          const outs = outputPorts.get(b.bind.nodeId) ?? new Set()
-          if (!outs.has(b.bind.portName)) {
-            // RFC-243 §5.4: loop-in-git/loop-over-call compositions are legal;
-            // an unresolved call child degrades this to warning (rule-2 twin).
-            const boundNode = nodeById.get(b.bind.nodeId)
-            const degraded = boundNode?.kind === 'call-workflow' && !callChildResolved(boundNode)
-            issues.push({
-              code: 'binding-port-missing',
-              message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references unknown port '${b.bind.portName}' on '${b.bind.nodeId}'`,
-              pointer: node.id,
-              target: target.nodeField(node.id, 'loop-output-bindings'),
-              ...(degraded ? { severity: 'warning' as const } : {}),
-            })
-          }
-        }
-        if (nodeById.has(b.bind.nodeId) && !loopMembers.has(b.bind.nodeId)) {
+      const returns = edges.filter(
+        (e) => e.boundary === 'wrapper-output' && e.target.nodeId === node.id,
+      )
+      for (const e of returns) {
+        if (nodeById.has(e.source.nodeId) && !loopMembers.has(e.source.nodeId)) {
           issues.push({
             code: 'wrapper-loop-output-binding-out-of-scope',
-            message: `wrapper-loop '${node.id}' outputBinding '${b.name}' references '${b.bind.nodeId}.${b.bind.portName}', but '${b.bind.nodeId}' is not a direct member of the loop body`,
-            pointer: node.id,
-            target: target.nodeField(node.id, 'loop-output-bindings'),
+            message: `wrapper-loop '${node.id}' return port '${e.target.portName}' reads '${e.source.nodeId}.${e.source.portName}' (edge '${e.id}'), but '${e.source.nodeId}' is not a direct member of the loop body`,
+            pointer: e.id,
+            target: target.edge(e.id),
           })
         }
       }
-      // exitCondition must reference a real node + port. At runtime
-      // readPortAtIteration returns '' for a dangling reference, which silently
-      // satisfies a port-empty/-count condition and exits the loop early (no
-      // error surfaced). Node existence is always checked. The port check only
-      // runs when the node's output ports are genuinely known — for an
-      // agent-single that means its agent is in the validation context (always
-      // true for validateWorkflowById; absent for standalone def validation,
-      // where we must not false-positive). See
-      // scheduler-boundary-loop-exit-condition-validation.test.ts.
       const exitCond = (node as Record<string, unknown>).exitCondition
       if (exitCond !== null && typeof exitCond === 'object') {
         const ec = exitCond as Record<string, unknown>
-        const exitNodeId = typeof ec.nodeId === 'string' ? ec.nodeId : undefined
         const exitPortName = typeof ec.portName === 'string' ? ec.portName : undefined
-        if (exitNodeId !== undefined && !nodeById.has(exitNodeId)) {
+        const feed =
+          exitPortName === undefined
+            ? undefined
+            : returns.find((e) => e.target.portName === exitPortName)
+        if (exitPortName !== undefined && feed === undefined) {
           issues.push({
-            code: 'wrapper-loop-exit-node-missing',
-            message: `wrapper-loop '${node.id}' exitCondition references unknown node '${exitNodeId}'`,
+            code: 'wrapper-loop-exit-port-missing',
+            message: `wrapper-loop '${node.id}' exitCondition reads return port '${exitPortName}', but no boundary='wrapper-output' edge into '${node.id}.${exitPortName}' declares it`,
             pointer: node.id,
             target: target.nodeField(node.id, 'loop-exit-condition'),
           })
-        } else if (exitNodeId !== undefined && exitPortName !== undefined) {
-          if (!loopMembers.has(exitNodeId)) {
-            issues.push({
-              code: 'wrapper-loop-exit-node-out-of-scope',
-              message: `wrapper-loop '${node.id}' exitCondition references '${exitNodeId}.${exitPortName}', but '${exitNodeId}' is not a direct member of the loop body`,
-              pointer: node.id,
-              target: target.nodeField(node.id, 'loop-exit-condition'),
-            })
-          }
-          const exitNode = nodeById.get(exitNodeId)
+        } else if (feed !== undefined && readExitConditionKind(node) === 'port-inactive') {
+          // RFC-306: `port-inactive` asks "did the producer close this branch?".
+          // A port that is not declared as a BRANCH port can never be closed, so
+          // the condition would be false on every iteration and the loop would
+          // silently run to max_iterations. Refused at save time — the author
+          // meant something, and it is not this. The branch flag lives on the
+          // body port the return edge promotes.
+          const exitNode = nodeById.get(feed.source.nodeId)
           const portsKnown =
             exitNode?.kind === 'agent-single'
-              ? // RFC-223 (PR-3a impl-gate H3): id-first existence check.
-                resolveNodeAgent(exitNode, agentByIdOrName) !== undefined
+              ? resolveNodeAgent(exitNode, agentByIdOrName) !== undefined
               : exitNode?.kind === 'call-workflow'
-                ? // RFC-243 §5.4: loop-around-call ("loop until the audit is
-                  // clean") is a designed composition; only judge the exit
-                  // port when the referenced definition actually resolved.
-                  callChildResolved(exitNode)
+                ? callChildResolved(exitNode)
                 : true
-          if (portsKnown && !(outputPorts.get(exitNodeId) ?? new Set<string>()).has(exitPortName)) {
+          const exitNodeDecl =
+            exitNode === undefined
+              ? undefined
+              : declaredPorts(exitNode, defnForPorts, agentByIdOrName, { workflowByRef })
+          const isBranchPort =
+            exitNodeDecl?.dataOutputs.find((p) => p.name === feed.source.portName)?.branch === true
+          if (portsKnown && !isBranchPort) {
             issues.push({
-              code: 'wrapper-loop-exit-port-missing',
-              message: `wrapper-loop '${node.id}' exitCondition references unknown port '${exitPortName}' on node '${exitNodeId}'`,
+              code: 'exit-condition-port-not-branch',
+              message: `wrapper-loop '${node.id}' exitCondition uses kind 'port-inactive' on return port '${exitPortName}' (promoted from '${feed.source.nodeId}.${feed.source.portName}'), which is not declared as a branch port — the condition could never become true`,
               pointer: node.id,
               target: target.nodeField(node.id, 'loop-exit-condition'),
             })
-          } else if (portsKnown && readExitConditionKind(node) === 'port-inactive') {
-            // RFC-306: `port-inactive` asks "did the producer close this branch?".
-            // A port that is not declared as a BRANCH port can never be closed, so
-            // the condition would be false on every iteration and the loop would
-            // silently run to max_iterations. Refused at save time — the author
-            // meant something, and it is not this.
-            const exitNodeDecl =
-              exitNode === undefined
-                ? undefined
-                : declaredPorts(exitNode, defnForPorts, agentByIdOrName, { workflowByRef })
-            const isBranchPort =
-              exitNodeDecl?.dataOutputs.find((p) => p.name === exitPortName)?.branch === true
-            if (!isBranchPort) {
-              issues.push({
-                code: 'exit-condition-port-not-branch',
-                message: `wrapper-loop '${node.id}' exitCondition uses kind 'port-inactive' on '${exitNodeId}.${exitPortName}', which is not declared as a branch port — the condition could never become true`,
-                pointer: node.id,
-                target: target.nodeField(node.id, 'loop-exit-condition'),
-              })
-            }
           }
         }
       }
     }
   }
-
   // Input key uniqueness (part of rule 4).
   const seenKeys = new Set<string>()
   for (const inp of inputs) {
@@ -2168,7 +2080,7 @@ export function validateWorkflowDef(
   }
 
   // 4b. review (RFC-005) -----------------------------------------------------
-  // - inputSource must reference an existing (node, port).
+  // - the reviewed source (the `__review_input__` edge) must be a markdownish agent port.
   // - sourcePort must be declared kind ∈ {markdown, markdown_file} on the
   //   producing agent (only agents declare outputKinds; wrappers/input/output
   //   are explicitly not eligible upstreams in v1).
@@ -2192,74 +2104,33 @@ export function validateWorkflowDef(
     }
     for (const node of nodes) {
       if (node.kind !== 'review') continue
-      const inputSource = (node as Record<string, unknown>).inputSource
-      if (
-        inputSource === undefined ||
-        inputSource === null ||
-        typeof inputSource !== 'object' ||
-        typeof (inputSource as Record<string, unknown>).nodeId !== 'string' ||
-        typeof (inputSource as Record<string, unknown>).portName !== 'string'
-      ) {
+      // RFC-354 (schema v6): the reviewed source is the ONE inbound edge on
+      // `__review_input__`; node / port existence of that edge is covered by
+      // the generic edge rules, so only review-specific shape is judged here.
+      const inputSource = reviewInputSource(def, node.id)
+      if (inputSource === null) {
         issues.push({
           code: 'review-input-source-missing',
-          message: `review node '${node.id}' missing or malformed inputSource`,
+          message: `review node '${node.id}' has no inbound edge on '${REVIEW_INPUT_PORT_NAME}' — connect the reviewed port to it`,
           pointer: node.id,
           target: target.nodeField(node.id, 'review-source'),
         })
         continue
       }
-      const srcNodeId = (inputSource as Record<string, unknown>).nodeId as string
-      const srcPort = (inputSource as Record<string, unknown>).portName as string
+      const srcNodeId = inputSource.nodeId
+      const srcPort = inputSource.portName
       const src = nodeById.get(srcNodeId)
-      if (src === undefined) {
-        issues.push({
-          code: 'review-input-source-missing',
-          message: `review node '${node.id}' inputSource references unknown node '${srcNodeId}'`,
-          pointer: node.id,
-          target: target.nodeField(node.id, 'review-source'),
-        })
-        continue
-      }
+      if (src === undefined) continue
       const outs = outputPorts.get(src.id) ?? new Set()
-      if (!outs.has(srcPort)) {
-        issues.push({
-          code: 'review-input-source-missing',
-          message: `review node '${node.id}' inputSource references unknown port '${srcPort}' on '${srcNodeId}'`,
-          pointer: node.id,
-          target: target.nodeField(node.id, 'review-source'),
-        })
-        continue
-      }
-      const sourceResolution = resolveWorkflowSourceRef(
-        def,
-        { nodeId: srcNodeId, portName: srcPort },
-        node.id,
-        scopeParents,
-      )
-      if (!sourceResolution.ok) {
-        issues.push({
-          code: 'wrapper-output-boundary-missing',
-          message: `review node '${node.id}' reads '${srcNodeId}.${srcPort}' outside ${describeWrapperKind(sourceResolution.wrapperKind)} '${sourceResolution.wrapperId}', but that value is not exposed on the wrapper output boundary`,
-          pointer: node.id,
-          target: target.nodeField(node.id, 'review-source'),
-        })
-      }
+      if (!outs.has(srcPort)) continue
+      // (a reviewed source hidden behind a wrapper boundary is reported once,
+      // on the edge, by the generic `wrapper-output-boundary-missing` rule)
       const reviewInputEdges = edges.filter((edge) => edge.target.nodeId === node.id)
       if (reviewInputEdges.length > 1) {
         issues.push({
           code: 'review-input-edge-conflict',
           message: `review node '${node.id}' has ${reviewInputEdges.length} inbound edges; review accepts exactly one wired source`,
           pointer: node.id,
-          target: target.nodeField(node.id, 'review-source'),
-        })
-      }
-      for (const edge of reviewInputEdges) {
-        if (edge.target.portName !== REVIEW_INPUT_PORT_NAME) continue
-        if (edge.source.nodeId === srcNodeId && edge.source.portName === srcPort) continue
-        issues.push({
-          code: 'review-input-edge-mismatch',
-          message: `review node '${node.id}' input edge '${edge.id}' does not match inputSource '${srcNodeId}.${srcPort}'`,
-          pointer: edge.id,
           target: target.nodeField(node.id, 'review-source'),
         })
       }
@@ -2287,7 +2158,7 @@ export function validateWorkflowDef(
           if (!isMultiDocReviewInput(kind ?? '')) {
             issues.push({
               code: 'review-input-list-item-not-markdown',
-              message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' has list kind '${kind}' whose item is not a markdown document; multi-document review requires list<path<md>> | list<markdown>.`,
+              message: `review node '${node.id}' reviewed source '${srcNodeId}.${srcPort}' has list kind '${kind}' whose item is not a markdown document; multi-document review requires list<path<md>> | list<markdown>.`,
               pointer: node.id,
               target: target.nodeField(node.id, 'review-source'),
             })
@@ -2295,7 +2166,7 @@ export function validateWorkflowDef(
         } else if (!isMarkdownish) {
           issues.push({
             code: 'review-input-source-not-markdown',
-            message: `review node '${node.id}' inputSource '${srcNodeId}.${srcPort}' must be declared kind: markdown | path<md> | markdown_file on agent '${readString(src, 'agentName') ?? ''}'`,
+            message: `review node '${node.id}' reviewed source '${srcNodeId}.${srcPort}' must be declared kind: markdown | path<md> | markdown_file on agent '${readString(src, 'agentName') ?? ''}'`,
             pointer: node.id,
             target: target.nodeField(node.id, 'review-source'),
           })
@@ -2304,12 +2175,12 @@ export function validateWorkflowDef(
         // Non-agent upstream — we don't model markdown kind on these in v1.
         issues.push({
           code: 'review-input-source-not-markdown',
-          message: `review node '${node.id}' inputSource must come from an agent node (got kind '${src.kind}')`,
+          message: `review node '${node.id}' reviewed source must come from an agent node (got kind '${src.kind}')`,
           pointer: node.id,
           target: target.nodeField(node.id, 'review-source'),
         })
       }
-      // rerunnable subsets must be reachable upstream of inputSource.
+      // rerunnable subsets must be reachable upstream of the reviewed source.
       const reachable = collectReachableUpstream(srcNodeId, reverseAdj)
       // The direct upstream itself is always rerunnable; include it.
       reachable.add(srcNodeId)
@@ -2319,7 +2190,7 @@ export function validateWorkflowDef(
         if (!reachable.has(id)) {
           issues.push({
             code: 'review-rerunnable-out-of-scope',
-            message: `review node '${node.id}' rerunnableOnReject id '${id}' is not in the reachable upstream of inputSource '${srcNodeId}'`,
+            message: `review node '${node.id}' rerunnableOnReject id '${id}' is not in the reachable upstream of the reviewed source '${srcNodeId}'`,
             pointer: node.id,
             target: target.nodeField(node.id, 'review-rerunnable-on-reject'),
           })
@@ -2329,7 +2200,7 @@ export function validateWorkflowDef(
         if (!reachable.has(id)) {
           issues.push({
             code: 'review-rerunnable-out-of-scope',
-            message: `review node '${node.id}' rerunnableOnIterate id '${id}' is not in the reachable upstream of inputSource '${srcNodeId}'`,
+            message: `review node '${node.id}' rerunnableOnIterate id '${id}' is not in the reachable upstream of the reviewed source '${srcNodeId}'`,
             pointer: node.id,
             target: target.nodeField(node.id, 'review-rerunnable-on-iterate'),
           })
@@ -2962,15 +2833,18 @@ export function validateWorkflowDef(
       // deriver dedupes first-wins for rendering stability, so a collision
       // would silently drop one binding at the call boundary — reject it.
       // (Zero output nodes stays legal: a pure write-to-worktree child.)
+      // RFC-354 (schema v6): a child output node's ports are its inbound edges.
       const childOutputNameCounts = new Map<string, number>()
-      for (const childNode of childDef.nodes ?? []) {
-        if (childNode.kind !== 'output') continue
-        for (const binding of readBindings(childNode, 'ports')) {
-          childOutputNameCounts.set(
-            binding.name,
-            (childOutputNameCounts.get(binding.name) ?? 0) + 1,
-          )
-        }
+      const childOutputIds = new Set(
+        (childDef.nodes ?? []).filter((n) => n.kind === 'output').map((n) => n.id),
+      )
+      for (const childEdge of childDef.edges ?? []) {
+        if (childEdge.boundary !== undefined || !childOutputIds.has(childEdge.target.nodeId))
+          continue
+        childOutputNameCounts.set(
+          childEdge.target.portName,
+          (childOutputNameCounts.get(childEdge.target.portName) ?? 0) + 1,
+        )
       }
       for (const [portName, count] of childOutputNameCounts) {
         if (count < 2) continue
@@ -3081,9 +2955,9 @@ export function validateWorkflowDef(
     if (edge.boundary === undefined) continue
     if (edge.boundary === 'wrapper-input') {
       const wrapper = nodeById.get(edge.source.nodeId)
-      // RFC-354: every wrapper kind has parameters now. A fanout declares them
-      // (`inputs[]`, shard-source typing); wrapper-git / wrapper-loop derive
-      // them from their plain inbound edges, exactly like agent inputs.
+      // RFC-354: every wrapper kind has parameters — its plain inbound edges,
+      // exactly like agent inputs (a fan-out's `shardSourcePort` just names the
+      // one whose items are sharded).
       if (wrapper === undefined || !isWrapperKind(wrapper.kind)) {
         issues.push({
           code: 'boundary-input-source-not-wrapper',
@@ -3093,21 +2967,15 @@ export function validateWorkflowDef(
         })
         continue
       }
-      const parameterNames =
-        wrapper.kind === 'wrapper-fanout'
-          ? new Set(readWrapperFanoutInputs(wrapper).map((p) => p.name))
-          : new Set(
-              edges
-                .filter((e) => e.boundary === undefined && e.target.nodeId === wrapper.id)
-                .map((e) => e.target.portName),
-            )
+      const parameterNames = new Set(
+        edges
+          .filter((e) => e.boundary === undefined && e.target.nodeId === wrapper.id)
+          .map((e) => e.target.portName),
+      )
       if (!parameterNames.has(edge.source.portName)) {
         issues.push({
           code: 'boundary-input-port-not-declared',
-          message:
-            wrapper.kind === 'wrapper-fanout'
-              ? `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not declared in wrapper-fanout '${wrapper.id}' inputs[]`
-              : `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not a parameter of ${wrapper.kind} '${wrapper.id}' — connect an upstream edge to '${wrapper.id}.${edge.source.portName}' first`,
+          message: `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not a parameter of ${wrapper.kind} '${wrapper.id}' — connect an upstream edge to '${wrapper.id}.${edge.source.portName}' first`,
           pointer: edge.id,
           target: target.nodePort(wrapper.id, 'input', edge.source.portName),
         })
@@ -3134,15 +3002,22 @@ export function validateWorkflowDef(
       }
     } else if (edge.boundary === 'wrapper-output') {
       const wrapper = nodeById.get(edge.target.nodeId)
-      if (wrapper === undefined || wrapper.kind !== 'wrapper-fanout') {
+      // RFC-354 (schema v6): a `wrapper-output` edge is a RETURN VALUE — of a
+      // fan-out (promoted aggregator port) or of a loop (any direct body port,
+      // rule 4d-loop). wrapper-git exposes only its own `git_diff`.
+      if (
+        wrapper === undefined ||
+        (wrapper.kind !== 'wrapper-fanout' && wrapper.kind !== 'wrapper-loop')
+      ) {
         issues.push({
           code: 'boundary-output-target-not-wrapper',
-          message: `edge '${edge.id}' boundary='wrapper-output' target.nodeId '${edge.target.nodeId}' is not a wrapper-fanout node`,
+          message: `edge '${edge.id}' boundary='wrapper-output' target.nodeId '${edge.target.nodeId}' is not a wrapper-fanout / wrapper-loop node`,
           pointer: edge.id,
           target: target.edge(edge.id),
         })
         continue
       }
+      if (wrapper.kind === 'wrapper-loop') continue
       const wrapperInner = new Set(readStringArray(wrapper, 'nodeIds'))
       if (!wrapperInner.has(edge.source.nodeId)) {
         issues.push({
@@ -3255,29 +3130,6 @@ export function validateWorkflowDef(
 // RFC-060 PR-E: shardingInvalidMessage removed alongside RFC-055
 // agent-multi shardingStrategy validator rule.
 
-interface WrapperFanoutInputView {
-  name: string
-  kind: string
-  isShardSource?: boolean
-}
-
-function readWrapperFanoutInputs(node: unknown): WrapperFanoutInputView[] {
-  if (typeof node !== 'object' || node === null) return []
-  const raw = (node as Record<string, unknown>).inputs
-  if (!Array.isArray(raw)) return []
-  const out: WrapperFanoutInputView[] = []
-  for (const item of raw) {
-    if (typeof item !== 'object' || item === null) continue
-    const rec = item as Record<string, unknown>
-    if (typeof rec.name !== 'string' || rec.name.length === 0) continue
-    if (typeof rec.kind !== 'string' || rec.kind.length === 0) continue
-    const view: WrapperFanoutInputView = { name: rec.name, kind: rec.kind }
-    if (rec.isShardSource === true) view.isShardSource = true
-    out.push(view)
-  }
-  return out
-}
-
 function readString(node: unknown, key: string): string | undefined {
   if (typeof node !== 'object' || node === null) return undefined
   const v = (node as Record<string, unknown>)[key]
@@ -3295,30 +3147,6 @@ function readStringArray(node: unknown, key: string): string[] {
   const v = (node as Record<string, unknown>)[key]
   if (!Array.isArray(v)) return []
   return v.filter((s): s is string => typeof s === 'string')
-}
-
-interface Binding {
-  name: string
-  bind: { nodeId: string; portName: string }
-}
-
-function readBindings(node: unknown, key: string): Binding[] {
-  if (typeof node !== 'object' || node === null) return []
-  const arr = (node as Record<string, unknown>)[key]
-  if (!Array.isArray(arr)) return []
-  const out: Binding[] = []
-  for (const item of arr) {
-    if (typeof item !== 'object' || item === null) continue
-    const rec = item as Record<string, unknown>
-    const name = rec.name
-    const bind = rec.bind
-    if (typeof name !== 'string') continue
-    if (typeof bind !== 'object' || bind === null) continue
-    const bindRec = bind as Record<string, unknown>
-    if (typeof bindRec.nodeId !== 'string' || typeof bindRec.portName !== 'string') continue
-    out.push({ name, bind: { nodeId: bindRec.nodeId, portName: bindRec.portName } })
-  }
-  return out
 }
 
 function buildLoopMembership(nodes: WorkflowDefinition['nodes']): Map<string, string> {

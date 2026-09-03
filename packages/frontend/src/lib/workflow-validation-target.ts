@@ -4,6 +4,7 @@ import type {
   WorkflowValidationIssue,
   WorkflowValidationTarget,
 } from '@agent-workflow/shared'
+import { inboundPortNames } from '@/components/canvas/connectionSync'
 
 export type ResolvedWorkflowIssueTarget = WorkflowValidationTarget | { kind: 'unknown' }
 
@@ -30,6 +31,8 @@ const EDGE_POINTER_CODES = new Set([
   'boundary-output-source-not-inner',
   'boundary-output-source-must-be-aggregator',
   'wrapper-input-boundary-missing',
+  // RFC-354: a loop return edge whose source is not a direct member.
+  'wrapper-loop-output-binding-out-of-scope',
 ])
 
 const NODE_POINTER_CODES = new Set([
@@ -62,12 +65,9 @@ const NODE_FIELD_CODES: Readonly<Record<string, WorkflowNodeFieldKey>> = {
   'wrapper-loop-max-iterations': 'loop-max-iterations',
   'wrapper-loop-continue-on-max-iterations': 'loop-continue-on-max-iterations',
   'wrapper-loop-exit-condition': 'loop-exit-condition',
-  'wrapper-loop-exit-node-missing': 'loop-exit-condition',
-  'wrapper-loop-exit-node-out-of-scope': 'loop-exit-condition',
   'wrapper-loop-exit-port-missing': 'loop-exit-condition',
-  'wrapper-loop-output-binding-out-of-scope': 'loop-output-bindings',
+  'exit-condition-port-not-branch': 'loop-exit-condition',
   'wrapper-fanout-shard-source-missing': 'fanout-inputs',
-  'wrapper-fanout-shard-source-duplicate': 'fanout-inputs',
   'wrapper-fanout-shard-source-must-be-list': 'fanout-inputs',
   'agent-not-found': 'agent',
   'aggregator-agent-outside-fanout': 'agent',
@@ -90,17 +90,12 @@ function counts(values: string[]): Map<string, number> {
   return result
 }
 
+/** RFC-354: an output node's ports are its inbound edges (target port names). */
 function outputNames(definition: WorkflowDefinition): string[] {
   const names: string[] = []
   for (const node of definition.nodes ?? []) {
     if (node.kind !== 'output') continue
-    const ports = (node as Record<string, unknown>).ports
-    if (!Array.isArray(ports)) continue
-    for (const port of ports) {
-      if (port === null || typeof port !== 'object') continue
-      const name = (port as Record<string, unknown>).name
-      if (typeof name === 'string') names.push(name)
-    }
+    names.push(...inboundPortNames({ ...definition, edges: definition.edges ?? [] }, node.id))
   }
   return names
 }
@@ -210,11 +205,6 @@ export function resolveWorkflowIssueTarget(
   if (node !== undefined) {
     const field = NODE_FIELD_CODES[issue.code]
     if (field !== undefined) return { kind: 'node-field', nodeId: node.id, field }
-    if (issue.code === 'binding-node-missing' || issue.code === 'binding-port-missing') {
-      return node.kind === 'wrapper-loop'
-        ? { kind: 'node-field', nodeId: node.id, field: 'loop-output-bindings' }
-        : { kind: 'node', nodeId: node.id }
-    }
     if (
       issue.code === 'clarify-questions-port-missing' ||
       issue.code === 'clarify-multiple-source-agents' ||

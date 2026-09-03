@@ -1,4 +1,4 @@
-import type { WorkflowNode } from '@agent-workflow/shared'
+import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { NodeStepOutcome } from '../../domain/nodeExecution'
 import type { WrapperSettlement } from '../../domain/wrapperExecution'
 
@@ -7,24 +7,23 @@ export interface WrapperOutputBinding {
   readonly bind: { readonly nodeId: string; readonly portName: string }
 }
 
-export function readWrapperOutputBindings(
-  node: WorkflowNode,
-  key: string,
+/**
+ * RFC-354 (schema v6) — a wrapper's RETURN VALUES are its `wrapper-output`
+ * boundary edges: `body port → (wrapper, return port)`. One binding per edge,
+ * in edge order (a return port bound twice keeps its first edge, the validator
+ * rejects the duplicate).
+ */
+export function wrapperOutputBindings(
+  definition: WorkflowDefinition,
+  wrapperId: string,
 ): readonly WrapperOutputBinding[] {
-  const value = (node as Record<string, unknown>)[key]
-  if (!Array.isArray(value)) return []
   const bindings: WrapperOutputBinding[] = []
-  for (const item of value) {
-    if (typeof item !== 'object' || item === null) continue
-    const record = item as Record<string, unknown>
-    if (typeof record.name !== 'string') continue
-    const bind = record.bind
-    if (typeof bind !== 'object' || bind === null) continue
-    const target = bind as Record<string, unknown>
-    if (typeof target.nodeId !== 'string' || typeof target.portName !== 'string') continue
+  for (const edge of definition.edges) {
+    if (edge.boundary !== 'wrapper-output' || edge.target.nodeId !== wrapperId) continue
+    if (bindings.some((binding) => binding.name === edge.target.portName)) continue
     bindings.push({
-      name: record.name,
-      bind: { nodeId: target.nodeId, portName: target.portName },
+      name: edge.target.portName,
+      bind: { nodeId: edge.source.nodeId, portName: edge.source.portName },
     })
   }
   return bindings

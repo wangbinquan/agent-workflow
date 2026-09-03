@@ -32,30 +32,31 @@ function issue(def: WorkflowDefinition, code: string) {
 }
 
 describe('RFC-199 strict workflow validation targets', () => {
-  test('output binding issues focus the output node input row, never the upstream port', () => {
+  test('output port rows are inbound edges: a broken source focuses the edge row', () => {
+    // RFC-354: an output node declares no ports of its own — each inbound edge
+    // IS one port, so its issues anchor on the edge (the canvas row).
     const found = issue(
       definition({
-        nodes: [
+        nodes: [{ id: 'publish', kind: 'output' }],
+        edges: [
           {
-            id: 'publish',
-            kind: 'output',
-            ports: [{ name: 'artifact', bind: { nodeId: 'missing', portName: 'wrong' } }],
+            id: 'artifact-edge',
+            source: { nodeId: 'missing', portName: 'wrong' },
+            target: { nodeId: 'publish', portName: 'artifact' },
           },
         ],
       }),
-      'binding-node-missing',
+      'edge-source-node-missing',
     )
 
-    expect(found.target).toEqual({
-      kind: 'node-port',
-      nodeId: 'publish',
-      direction: 'input',
-      portName: 'artifact',
-    })
+    expect(found.target).toEqual({ kind: 'edge', edgeId: 'artifact-edge' })
   })
 
-  test('loop outputBinding and exitCondition failures focus their semantic rows', () => {
+  test('loop return edges and exitCondition failures focus their semantic rows', () => {
+    // RFC-354: a loop returns through `wrapper-output` edges and its exit
+    // condition names one of its OWN return ports.
     const def = definition({
+      $schema_version: 6,
       nodes: [
         { id: 'input', kind: 'input', inputKey: 'request' },
         {
@@ -63,20 +64,24 @@ describe('RFC-199 strict workflow validation targets', () => {
           kind: 'wrapper-loop',
           nodeIds: ['input'],
           maxIterations: 2,
-          exitCondition: { kind: 'port-empty', nodeId: 'missing-exit', portName: 'done' },
-          outputBindings: [
-            { name: 'final', bind: { nodeId: 'missing-output', portName: 'result' } },
-          ],
+          exitCondition: { kind: 'port-empty', portName: 'done' },
+        },
+      ],
+      edges: [
+        {
+          id: 'final-edge',
+          source: { nodeId: 'missing-output', portName: 'result' },
+          target: { nodeId: 'loop', portName: 'final' },
+          boundary: 'wrapper-output',
         },
       ],
     })
 
-    expect(issue(def, 'binding-node-missing').target).toEqual({
-      kind: 'node-field',
-      nodeId: 'loop',
-      field: 'loop-output-bindings',
+    expect(issue(def, 'edge-source-node-missing').target).toEqual({
+      kind: 'edge',
+      edgeId: 'final-edge',
     })
-    expect(issue(def, 'wrapper-loop-exit-node-missing').target).toEqual({
+    expect(issue(def, 'wrapper-loop-exit-port-missing').target).toEqual({
       kind: 'node-field',
       nodeId: 'loop',
       field: 'loop-exit-condition',
@@ -131,25 +136,24 @@ describe('RFC-199 strict workflow validation targets', () => {
     expect(affected.every((entry) => entry.target?.kind === 'workflow')).toBe(true)
   })
 
-  test('duplicate fanout input identities never target an arbitrary port row', () => {
+  test('fanout shard-source issues focus the wrapper shard port row', () => {
+    // RFC-354: the fan-out's parameters are its inbound edges and
+    // `shardSourcePort` names the one that is split — an unfed shard port
+    // anchors on that port row, never on an arbitrary edge.
     const found = issue(
       definition({
-        nodes: [
-          {
-            id: 'fan',
-            kind: 'wrapper-fanout',
-            nodeIds: [],
-            inputs: [
-              { name: 'docs', kind: 'string', isShardSource: true },
-              { name: 'docs', kind: 'string' },
-            ],
-          },
-        ],
+        $schema_version: 6,
+        nodes: [{ id: 'fan', kind: 'wrapper-fanout', nodeIds: [], shardSourcePort: 'docs' }],
       }),
-      'wrapper-fanout-shard-source-must-be-list',
+      'wrapper-fanout-shard-source-missing',
     )
 
-    expect(found.target).toEqual({ kind: 'workflow' })
+    expect(found.target).toEqual({
+      kind: 'node-port',
+      nodeId: 'fan',
+      direction: 'input',
+      portName: 'docs',
+    })
   })
 
   test('multi-object clarify multiplicity does not preserve the arbitrary legacy pointer as target', () => {
@@ -238,7 +242,21 @@ describe('RFC-199 strict workflow validation targets', () => {
     // inbound edges" branch — an inbound edge is a wrapper parameter) and adds
     // one (`wrapper-fanout-unsupported-inner-kind`, the schema-time mirror of
     // the runtime fan-out body rejection) ⇒ 145.
-    expect(emissions).toHaveLength(145)
+    // RFC-354 PR-2 (schema v6: every node-level PortRef is an edge) retires the
+    // whole implicit-binding family — `binding-node-missing` ×2 and
+    // `binding-port-missing` ×2 (output ports / loop bindings are edges now and
+    // fall under the ordinary edge-source-* rules), `wrapper-loop-exit-node-missing`
+    // and `wrapper-loop-exit-node-out-of-scope` (the exit condition names the
+    // loop's own return port), `review-input-edge-mismatch` and two of the three
+    // `review-input-source-missing` sites (the review input IS its edge),
+    // `wrapper-fanout-shard-source-duplicate` (one `shardSourcePort` string
+    // cannot duplicate), two of the four `edge-target-port-missing` sites (the
+    // output / fan-out target branches: their ports are edge-declared), and two
+    // of the four `wrapper-output-boundary-missing` sites (output / review reads
+    // are edges, covered once by the generic edge rule): 14 retired, plus one
+    // new `wrapper-fanout-shard-source-missing` site (the named shard port has
+    // no feeding edge) ⇒ 145 − 14 + 1 = 132.
+    expect(emissions).toHaveLength(132)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

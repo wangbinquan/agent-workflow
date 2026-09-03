@@ -2353,7 +2353,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     })
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {

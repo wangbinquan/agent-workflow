@@ -67,14 +67,13 @@ function sizedWrapperById(d: WorkflowDefinition, id: string): SizedWrapper {
 }
 
 describe('fitWrapperToInner', () => {
-  test('never shrinks a port-heavy loop below its intrinsic output row width', () => {
+  // RFC-354: loop returns render as right-side boundary rows (like fan-out),
+  // so a return-heavy loop's intrinsic constraint is its HEIGHT — one row per
+  // return — not a bottom-strip width.
+  test('never shrinks a return-heavy loop below its intrinsic side-row height', () => {
     const loop = {
       ...wrapper('w', ['a'], { x: 0, y: 0 }, { width: 900, height: 600 }),
       kind: 'wrapper-loop',
-      outputBindings: ['1', '2', '3', '4', '5', '6'].map((suffix) => ({
-        name: `result_${suffix}`,
-        bind: { nodeId: 'a', portName: 'out' },
-      })),
     } as unknown as WorkflowNode
     const minimumSizes = buildWrapperPortMinimumSizes([
       {
@@ -93,7 +92,9 @@ describe('fitWrapperToInner', () => {
       minimumSizes,
     )
     const fitted = sizedWrapperById(next, 'w')
-    expect(fitted.size.width).toBe(532)
+    // 30 top + 6 bottom + 6 rows × 28 + 5 gaps × 6 = 234 (mirrors the fan-out rule).
+    expect(minimumSizes.get('w')?.height).toBe(234)
+    expect(fitted.size.height).toBeGreaterThanOrEqual(234)
     expect(fitted.position.x).toBe(100 - LEFT_CLEAR)
   })
 

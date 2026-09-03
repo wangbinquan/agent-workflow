@@ -6,18 +6,21 @@ import {
   workflowInspectorPortId,
 } from '../src/lib/workflow-inspector-target'
 
+// RFC-354: an output node's ports are its inbound edges.
 const definition: WorkflowDefinition = {
-  $schema_version: 4,
+  $schema_version: 6,
   inputs: [{ kind: 'text', key: 'request', label: 'Request' }],
   nodes: [
     { id: 'input', kind: 'input', inputKey: 'request' },
+    { id: 'publish', kind: 'output' },
+  ],
+  edges: [
     {
-      id: 'publish',
-      kind: 'output',
-      ports: [{ name: 'result', bind: { nodeId: 'input', portName: 'out' } }],
+      id: 'result',
+      source: { nodeId: 'input', portName: 'out' },
+      target: { nodeId: 'publish', portName: 'result' },
     },
   ],
-  edges: [],
 }
 
 describe('RFC-199 validation → inspector navigation plan', () => {
@@ -63,10 +66,14 @@ describe('RFC-199 validation → inspector navigation plan', () => {
       nodes: [
         ...definition.nodes,
         { id: 'input-2', kind: 'input', inputKey: 'request' },
+        { id: 'publish-2', kind: 'output' },
+      ],
+      edges: [
+        ...definition.edges,
         {
-          id: 'publish-2',
-          kind: 'output',
-          ports: [{ name: 'result', bind: { nodeId: 'input', portName: 'out' } }],
+          id: 'result-2',
+          source: { nodeId: 'input', portName: 'out' },
+          target: { nodeId: 'publish-2', portName: 'result' },
         },
       ],
     }

@@ -6,19 +6,25 @@ import { NodeInspector } from '../src/components/canvas/NodeInspector'
 
 function Host({ onChangeSpy }: { onChangeSpy: (def: WorkflowDefinition) => void }) {
   const [definition, setDefinition] = useState<WorkflowDefinition>({
-    $schema_version: 1,
+    $schema_version: 6,
     inputs: [],
     nodes: [
       { id: 'source', kind: 'agent-single', agentName: 'writer' } as unknown as WorkflowNode,
       {
         id: 'review',
         kind: 'review',
-        inputSource: { nodeId: 'source', portName: 'document' },
         rerunnableOnReject: ['source'],
         rerunnableOnIterate: [],
       } as unknown as WorkflowNode,
     ],
-    edges: [],
+    // RFC-354: the review input is its `__review_input__` edge.
+    edges: [
+      {
+        id: 'review-in',
+        source: { nodeId: 'source', portName: 'document' },
+        target: { nodeId: 'review', portName: '__review_input__' },
+      },
+    ],
   })
   return (
     <NodeInspector

@@ -83,19 +83,14 @@ export function planWorkflowIssueNavigation(
           }
     }
     case 'workflow-output': {
-      const owners = definition.nodes.filter((node) => {
-        if (node.kind !== 'output') return false
-        const ports = (node as unknown as { ports?: unknown }).ports
-        return (
-          Array.isArray(ports) &&
-          ports.some(
-            (port) =>
-              port !== null &&
-              typeof port === 'object' &&
-              (port as { name?: unknown }).name === target.outputName,
-          )
-        )
-      })
+      // RFC-354: an output node's ports are its inbound edges.
+      const owners = definition.nodes.filter(
+        (node) =>
+          node.kind === 'output' &&
+          (definition.edges ?? []).some(
+            (edge) => edge.target.nodeId === node.id && edge.target.portName === target.outputName,
+          ),
+      )
       const owner = unique(owners)
       return owner === undefined
         ? { selection: null, focusId: null }

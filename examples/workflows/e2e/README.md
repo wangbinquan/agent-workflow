@@ -18,7 +18,7 @@ SQLite、scheduler 和 OpenCode 测试桩执行的工作流。
 | `linear-fan-in.yaml`                    | done                           | 并行根节点、同端口 fan-in、确定性拼接、下游调度与最终 output                                |
 | `wrapper-git-change-set.yaml`           | done                           | 外部输入到 wrapper 内节点、tracked/untracked 变更、`git_diff` 路径列表、下游消费            |
 | `wrapper-git-noop.yaml`                 | done                           | 内部成功但无文件变化时，wrapper 以空 diff 正常结束                                          |
-| `wrapper-loop-port-empty.yaml`          | done / 2 轮                    | `port-empty`、迭代行、loop outputBindings                                                   |
+| `wrapper-loop-port-empty.yaml`          | done / 2 轮                    | `port-empty`、迭代行、loop 返回边（`wrapper-output`）                                       |
 | `wrapper-loop-port-equals.yaml`         | done / 2 轮                    | `port-equals`                                                                               |
 | `wrapper-loop-port-count-lt.yaml`       | done / 2 轮                    | `port-count-lt` 与自定义阈值                                                                |
 | `wrapper-fanout-aggregate.yaml`         | done、empty done 或 fail-all   | list 分片、broadcast、重复值稳定 shard key、join、失败汇合、aggregator、output rename       |

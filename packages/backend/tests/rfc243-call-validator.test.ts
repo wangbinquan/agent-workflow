@@ -381,8 +381,8 @@ describe('RFC-243 §5.4 — call-workflow validator (4f + rule-2 degradation)', 
     const bySeverity = (code: string) =>
       r.issues.filter((i) => i.code === code).map((i) => i.severity)
     expect(bySeverity('edge-target-port-missing')).toEqual(['warning']) // p_e1 → call1.topic
-    expect(bySeverity('edge-source-port-missing')).toEqual(['warning']) // p_e2 ← call1.result
-    expect(bySeverity('binding-port-missing')).toEqual(['warning']) // p_out.final ← call1.result
+    // p_e2 ← call1.result (RFC-354: the v5 p_out.final bind upgrades into this same edge)
+    expect(bySeverity('edge-source-port-missing')).toEqual(['warning'])
     // 4f ref/shape/cycle checks need the resolver — silently skipped here.
     expect(codesOf(r)).not.toContain('call-workflow-ref-missing')
   })

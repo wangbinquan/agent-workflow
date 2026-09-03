@@ -3,9 +3,10 @@
 //
 // This intentionally composes the same production helpers used by the live
 // drag path. The fixture covers the two geometric outcomes (NEW / REUSE), the
-// review and output field mirrors, the paired clarify channel, and fan-out
+// review and output edge shapes, the paired clarify channel, and fan-out
 // boundary tagging. B5 may change the implementation shape, but these exact
-// graph results remain the equivalence oracle.
+// graph results remain the equivalence oracle. RFC-354 (schema v6): the
+// review / output "field mirrors" are gone — the edge IS the whole write.
 
 import type { WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'vitest'
@@ -36,7 +37,7 @@ function node(value: Record<string, unknown>): WorkflowNode {
 
 function definition(nodes: WorkflowNode[], edges: WorkflowEdge[] = []): WorkflowDefinition {
   return {
-    $schema_version: 3,
+    $schema_version: 6,
     inputs: [],
     nodes,
     edges,
@@ -162,15 +163,10 @@ describe('RFC-199 T0.5 legacy drag-connect golden', () => {
     ])
   })
 
-  test('review drag writes the fixed input edge and inputSource mirror together', () => {
+  test('review drag writes the fixed input edge and nothing else', () => {
     const def = definition([
       agent('source'),
-      node({
-        id: 'review',
-        kind: 'review',
-        inputSource: { nodeId: '', portName: '' },
-        position: { x: 300, y: 0 },
-      }),
+      node({ id: 'review', kind: 'review', position: { x: 300, y: 0 } }),
     ])
     const built = buildEdgeFromConnection(def, {
       source: 'source',
@@ -186,15 +182,15 @@ describe('RFC-199 T0.5 legacy drag-connect golden', () => {
         target: { nodeId: 'review', portName: REVIEW_INPUT_HANDLE_ID },
       },
     ])
-    expect(next.nodes.find((candidate) => candidate.id === 'review')).toMatchObject({
-      inputSource: { nodeId: 'source', portName: 'document' },
-    })
+    expect(next.nodes.find((candidate) => candidate.id === 'review')).toEqual(
+      def.nodes.find((candidate) => candidate.id === 'review'),
+    )
   })
 
-  test('output catch-all drag appends the named port and bind mirror', () => {
+  test('output catch-all drag appends the named port as an edge', () => {
     const def = definition([
       agent('source'),
-      node({ id: 'output', kind: 'output', ports: [], position: { x: 300, y: 0 } }),
+      node({ id: 'output', kind: 'output', position: { x: 300, y: 0 } }),
     ])
     const built = buildEdgeFromConnection(def, {
       source: 'source',
@@ -206,9 +202,9 @@ describe('RFC-199 T0.5 legacy drag-connect golden', () => {
       viaCatchAll: true,
     })
 
-    expect(next.nodes.find((candidate) => candidate.id === 'output')).toMatchObject({
-      ports: [{ name: 'report', bind: { nodeId: 'source', portName: 'report' } }],
-    })
+    expect(next.nodes.find((candidate) => candidate.id === 'output')).toEqual(
+      def.nodes.find((candidate) => candidate.id === 'output'),
+    )
     expect(next.edges.map(edgeShape)).toEqual([
       {
         source: { nodeId: 'source', portName: 'report' },
@@ -266,7 +262,7 @@ describe('RFC-199 T0.5 legacy drag-connect golden', () => {
       id: 'fanout',
       kind: 'wrapper-fanout',
       nodeIds: ['inner'],
-      inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+      shardSourcePort: 'docs',
       position: { x: 0, y: 0 },
     })
     const def = definition([wrapper, agent('inner')])
@@ -363,15 +359,8 @@ describe('RFC-199 B5 planner adapter equivalence', () => {
     ])
   })
 
-  test('review/output mirrors and clarify pair remain one atomic result', () => {
-    const reviewDef = definition([
-      agent('source'),
-      node({
-        id: 'review',
-        kind: 'review',
-        inputSource: { nodeId: '', portName: '' },
-      }),
-    ])
+  test('review/output edges and clarify pair remain one atomic result', () => {
+    const reviewDef = definition([agent('source'), node({ id: 'review', kind: 'review' })])
     const review = applyRequest(reviewDef, {
       kind: 'generic',
       edgeId: 'review-edge',
@@ -389,14 +378,14 @@ describe('RFC-199 B5 planner adapter equivalence', () => {
       reviewEdge,
     )
     expect(JSON.stringify(review)).toBe(JSON.stringify(legacyReview))
-    expect(review.nodes.find((candidate) => candidate.id === 'review')).toMatchObject({
-      inputSource: { nodeId: 'source', portName: 'document' },
-    })
-
-    const outputDef = definition([
-      agent('source'),
-      node({ id: 'output', kind: 'output', ports: [] }),
+    expect(review.edges.map(edgeShape)).toEqual([
+      {
+        source: { nodeId: 'source', portName: 'document' },
+        target: { nodeId: 'review', portName: REVIEW_INPUT_HANDLE_ID },
+      },
     ])
+
+    const outputDef = definition([agent('source'), node({ id: 'output', kind: 'output' })])
     const output = applyRequest(outputDef, {
       kind: 'generic',
       edgeId: 'output-edge',
@@ -415,9 +404,12 @@ describe('RFC-199 B5 planner adapter equivalence', () => {
       { viaCatchAll: true },
     )
     expect(JSON.stringify(output)).toBe(JSON.stringify(legacyOutput))
-    expect(output.nodes.find((candidate) => candidate.id === 'output')).toMatchObject({
-      ports: [{ name: 'report', bind: { nodeId: 'source', portName: 'report' } }],
-    })
+    expect(output.edges.map(edgeShape)).toEqual([
+      {
+        source: { nodeId: 'source', portName: 'report' },
+        target: { nodeId: 'output', portName: 'report' },
+      },
+    ])
 
     const clarifyDef = definition([agent('source'), node({ id: 'clarify', kind: 'clarify' })])
     const clarify = applyRequest(clarifyDef, {
@@ -440,12 +432,7 @@ describe('RFC-199 B5 planner adapter equivalence', () => {
 
   test('generic inner crossings keep the same fan-out boundary tags', () => {
     const def = definition([
-      node({
-        id: 'fanout',
-        kind: 'wrapper-fanout',
-        nodeIds: ['inner'],
-        inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
-      }),
+      node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'docs' }),
       agent('inner'),
     ])
     const withInput = applyRequest(def, {

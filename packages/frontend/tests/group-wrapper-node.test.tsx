@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { render } from '@testing-library/react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { GroupWrapperNode, type WrapperNodeData } from '../src/components/canvas/nodes/WrapperNodes'
-import { INBOUND_HANDLE_ID } from '../src/components/canvas/nodes/types'
+import { INBOUND_HANDLE_ID, RETURN_HANDLE_ID } from '../src/components/canvas/nodes/types'
 import '../src/i18n'
 import { setLanguage } from '../src/i18n'
 
@@ -116,9 +116,44 @@ describe('GroupWrapperNode', () => {
     const named = container.querySelectorAll(
       '.canvas-node__handle:not(.canvas-node__handle--catchall)',
     )
-    // Right-side `outputPorts` handles are the only named ones expected.
-    expect(named.length).toBe(1)
-    expect(named[0]?.getAttribute('data-handleid')).toBe('result')
+    // RFC-354: the only named handles are the right-side return row's pair
+    // (inner target + outer source) for `result`.
+    expect(named.length).toBe(2)
+    expect(Array.from(named).map((h) => h.getAttribute('data-handleid'))).toEqual([
+      'result',
+      'result',
+    ])
+  })
+
+  // RFC-354 (schema v6): a loop's returns are `wrapper-output` edges, so the
+  // loop renders them as right-side boundary rows exactly like fan-out — an
+  // inner TARGET dot (where a member's output lands) and an outer SOURCE dot
+  // (where downstream edges start) — and never as bottom ports.
+  test('loop returns render as right-side boundary rows (inner target → label → outer source)', () => {
+    const { container } = renderNode(loopData({ outputPorts: ['final'] }))
+    expect(container.querySelector('.canvas-node__bottom-ports')).toBeNull()
+    const rightRow = container.querySelector(
+      '.canvas-node__port-rows--right .canvas-node__port-row',
+    )
+    expect(rightRow?.classList.contains('canvas-node__port-row--boundary')).toBe(true)
+    const children = Array.from(rightRow?.children ?? [])
+    expect(children.length).toBe(3)
+    expect(children[0]?.classList.contains('canvas-node__handle--boundary-inner')).toBe(true)
+    expect(children[0]?.getAttribute('data-handlepos')).toBe('left')
+    expect(children[1]?.textContent).toBe('final')
+    expect(children[2]?.classList.contains('canvas-node__handle--boundary-outer')).toBe(true)
+    expect(children[2]?.getAttribute('data-handlepos')).toBe('right')
+  })
+
+  test('loop wrapper exposes a right-side __return__ catch-all so a member output can declare a new return', () => {
+    const { container } = renderNode(loopData({ outputPorts: [] }))
+    const strip = container.querySelector('.canvas-node__handle--return-catchall')
+    expect(strip).not.toBeNull()
+    expect(strip?.getAttribute('data-handleid')).toBe(RETURN_HANDLE_ID)
+    expect(strip?.getAttribute('data-handlepos')).toBe('right')
+    // git has no returns: no strip there.
+    const git = renderNode(gitData())
+    expect(git.container.querySelector('.canvas-node__handle--return-catchall')).toBeNull()
   })
 
   test('empty wrapper (innerCount=0) shows the "Drop nodes here" hint', () => {

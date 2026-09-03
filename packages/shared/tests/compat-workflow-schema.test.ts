@@ -32,7 +32,7 @@ const FIXTURES_DIR = join(HERE, 'fixtures', 'workflow-schema-versions')
 
 interface Fixture {
   filename: string
-  schemaVersion: 1 | 2 | 3 | 4 | 5
+  schemaVersion: 1 | 2 | 3 | 4 | 5 | 6
   raw: unknown
 }
 
@@ -41,10 +41,10 @@ function loadFixtures(): Fixture[] {
   return files.map((filename) => {
     const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, filename), 'utf-8'))
     const v = (raw as { $schema_version: number }).$schema_version
-    if (v !== 1 && v !== 2 && v !== 3 && v !== 4 && v !== 5) {
+    if (v !== 1 && v !== 2 && v !== 3 && v !== 4 && v !== 5 && v !== 6) {
       throw new Error(`fixture ${filename}: unexpected $schema_version ${v}`)
     }
-    return { filename, schemaVersion: v as 1 | 2 | 3 | 4 | 5, raw }
+    return { filename, schemaVersion: v as 1 | 2 | 3 | 4 | 5 | 6, raw }
   })
 }
 

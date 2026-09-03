@@ -15,7 +15,7 @@ import type {
   WrapperStrategy,
 } from '../../domain/wrapperExecution'
 import {
-  readWrapperOutputBindings,
+  wrapperOutputBindings,
   wrapperSettlement,
   type WrapperOutputBinding,
 } from './strategySupport'
@@ -85,7 +85,23 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         },
       }
     }
-    const bindings = readWrapperOutputBindings(node, 'outputBindings')
+    // RFC-354 (schema v6): returns are the loop's `wrapper-output` edges. A
+    // return can only hand out what the body produced: a source outside the
+    // direct members is the validator's `wrapper-loop-output-binding-out-of-scope`
+    // shape, which an old snapshot may still carry — fail closed instead of
+    // reading a value the loop never computed (a false exit on round 1).
+    const bindings = wrapperOutputBindings(this.data.definition, node.id)
+    const foreign = bindings.find((binding) => !scope.directNodeIds.includes(binding.bind.nodeId))
+    if (foreign !== undefined) {
+      return {
+        kind: 'rejected',
+        outcome: {
+          kind: 'failed',
+          summary: `wrapper-loop ${node.id} return port '${foreign.name}' reads '${foreign.bind.nodeId}.${foreign.bind.portName}', which is not a direct member of the loop body`,
+          message: 'wrapper-loop-return-source-out-of-scope',
+        },
+      }
+    }
     return {
       kind: 'ready',
       execute: (generation) =>
@@ -98,19 +114,20 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
     }
   }
 
-  private async complete(input: {
-    readonly request: WrapperExecutionRequest<'wrapper-loop'>
-    readonly generation: OpenWrapperGeneration<'wrapper-loop'>
-    readonly workspace: WrapperWorkspaceScene
-    readonly bindings: readonly WrapperOutputBinding[]
-    readonly iteration: number
-    readonly maxIterations: number
-    readonly reason: LoopCompletionReason
-  }): Promise<WrapperSettlement> {
-    const { request, generation, workspace, bindings, iteration, maxIterations, reason } = input
+  /**
+   * RFC-354 (design D3): at the end of EVERY round the loop first promotes its
+   * return values — each `wrapper-output` edge's body port, read in this
+   * generation's frame at this round — onto the generation row, and only then
+   * evaluates the exit predicate against its OWN return port. The promoted
+   * values of the round the loop leaves on are what downstream reads.
+   */
+  private async promoteReturns(
+    generation: OpenWrapperGeneration<'wrapper-loop'>,
+    bindings: readonly WrapperOutputBinding[],
+    iteration: number,
+  ): Promise<ReadonlyMap<string, { content: string; active: boolean }>> {
+    const promoted = new Map<string, { content: string; active: boolean }>()
     for (const binding of bindings) {
-      // RFC-354: the bound body node is read in THIS generation's frame at the
-      // round the loop exited on.
       const value = await this.data.readPort(binding.bind.nodeId, binding.bind.portName, {
         containerRunId: generation.runId,
         iteration,
@@ -123,7 +140,20 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         archiveJson: value.archiveJson,
         active: value.active,
       })
+      promoted.set(binding.name, { content: value.content, active: value.active })
     }
+    return promoted
+  }
+
+  private async complete(input: {
+    readonly request: WrapperExecutionRequest<'wrapper-loop'>
+    readonly generation: OpenWrapperGeneration<'wrapper-loop'>
+    readonly workspace: WrapperWorkspaceScene
+    readonly iteration: number
+    readonly maxIterations: number
+    readonly reason: LoopCompletionReason
+  }): Promise<WrapperSettlement> {
+    const { request, generation, workspace, iteration, maxIterations, reason } = input
 
     if (!workspace.passthrough) {
       const merge = await this.workspace.merge({
@@ -242,11 +272,21 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         iteration,
         phase: 'iter-done',
       })
-      const port = await this.data.readPort(
-        prepared.exitCondition.nodeId,
-        prepared.exitCondition.portName,
-        { containerRunId: generation.runId, iteration },
-      )
+      // RFC-354: promote this round's return values, then decide on the loop's
+      // OWN return port (the v5 body-port read through the wall is gone).
+      const promoted = await this.promoteReturns(generation, prepared.bindings, iteration)
+      const port = promoted.get(prepared.exitCondition.portName)
+      if (port === undefined) {
+        return wrapperSettlement(
+          'failed',
+          {
+            kind: 'failed',
+            summary: `wrapper-loop ${node.id} exitCondition reads return port '${prepared.exitCondition.portName}', which no wrapper-output edge declares`,
+            message: 'wrapper-loop-exit-port-missing',
+          },
+          'wrapper-loop-exit-port-missing',
+        )
+      }
       if (
         evaluateExitCondition(prepared.exitCondition, {
           content: port.content,
@@ -257,7 +297,6 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
           request,
           generation,
           workspace: scene,
-          bindings: prepared.bindings,
           iteration,
           maxIterations: prepared.maxIterations,
           reason: 'exit-condition',
@@ -270,7 +309,6 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         request,
         generation,
         workspace: scene,
-        bindings: prepared.bindings,
         iteration: prepared.maxIterations - 1,
         maxIterations: prepared.maxIterations,
         reason: 'max-iterations-continued',

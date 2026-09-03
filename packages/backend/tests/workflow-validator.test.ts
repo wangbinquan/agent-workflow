@@ -400,7 +400,7 @@ describe('rule 4: reference resolution', () => {
     expect(res.ok).toBe(true)
   })
 
-  test('invalid: agent not found + skill not found + bad binding + duplicate input key', () => {
+  test('invalid: agent not found + skill not found + bad output edge + duplicate input key', () => {
     const a = agent('coder', ['result'], ['missing-skill'])
     const def = makeDef({
       inputs: [
@@ -420,7 +420,9 @@ describe('rule 4: reference resolution', () => {
     const codes = validateWorkflowDef(def, { agents: [a], skills: [] }).issues.map((i) => i.code)
     expect(codes).toContain('agent-not-found')
     expect(codes).toContain('skill-not-found')
-    expect(codes).toContain('binding-port-missing')
+    // RFC-354: the v5 `ports[].bind` upgrades into an inbound edge, so the
+    // broken source port is an ordinary edge issue.
+    expect(codes).toContain('edge-source-port-missing')
     expect(codes).toContain('input-key-duplicate')
   })
 
@@ -584,7 +586,7 @@ describe('rule 4b: review node (RFC-005)', () => {
     expect(codes).toContain('review-input-source-missing')
   })
 
-  test('invalid: inputSource points at unknown node → review-input-source-missing', () => {
+  test('invalid: inputSource points at unknown node → edge-source-node-missing (v5 upgrade)', () => {
     const def = makeDef({
       $schema_version: 2,
       nodes: [
@@ -597,11 +599,12 @@ describe('rule 4b: review node (RFC-005)', () => {
         },
       ],
     })
+    // RFC-354: the v5 inputSource upgrades into the review's inbound edge.
     const codes = validateWorkflowDef(def, EMPTY_CTX).issues.map((i) => i.code)
-    expect(codes).toContain('review-input-source-missing')
+    expect(codes).toContain('edge-source-node-missing')
   })
 
-  test('invalid: inputSource port not declared on source node', () => {
+  test('invalid: inputSource port not declared on source node → edge-source-port-missing', () => {
     const designer = agentWithKinds('designer', ['design'], { design: 'markdown' })
     const def = makeDef({
       $schema_version: 2,
@@ -619,7 +622,7 @@ describe('rule 4b: review node (RFC-005)', () => {
     const codes = validateWorkflowDef(def, { agents: [designer], skills: [] }).issues.map(
       (i) => i.code,
     )
-    expect(codes).toContain('review-input-source-missing')
+    expect(codes).toContain('edge-source-port-missing')
   })
 
   test('invalid: agent port not declared as markdown[_file] → review-input-source-not-markdown', () => {

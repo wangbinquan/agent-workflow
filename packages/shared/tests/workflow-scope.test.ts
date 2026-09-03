@@ -120,11 +120,19 @@ describe('workflow wrapper scope projection', () => {
           kind: 'wrapper-loop',
           nodeIds: ['inner'],
           maxIterations: 2,
-          exitCondition: { kind: 'port-empty', nodeId: 'inner', portName: 'done' },
-          outputBindings: [{ name: 'final', bind: { nodeId: 'inner', portName: 'result' } }],
+          // RFC-354 (schema v6): the return value is a wrapper-output edge and the
+          // exit condition names the loop's own return port.
+          exitCondition: { kind: 'port-empty', portName: 'final' },
         },
       ],
-      edges: [],
+      edges: [
+        {
+          id: 'loop-final',
+          boundary: 'wrapper-output',
+          source: { nodeId: 'inner', portName: 'result' },
+          target: { nodeId: 'loop', portName: 'final' },
+        },
+      ],
     } as unknown as WorkflowDefinition
 
     expect(
@@ -165,15 +173,14 @@ describe('workflow wrapper scope projection', () => {
           id: 'fan',
           kind: 'wrapper-fanout',
           nodeIds: ['aggregator'],
-          inputs: [{ name: 'items', kind: 'list<markdown>', isShardSource: true }],
+          shardSourcePort: 'items',
         },
         {
           id: 'loop',
           kind: 'wrapper-loop',
           nodeIds: ['fan'],
           maxIterations: 2,
-          exitCondition: { kind: 'port-not-empty', nodeId: 'fan', portName: 'summary' },
-          outputBindings: [{ name: 'final', bind: { nodeId: 'fan', portName: 'summary' } }],
+          exitCondition: { kind: 'port-not-empty', portName: 'final' },
         },
       ],
       edges: [
@@ -182,6 +189,12 @@ describe('workflow wrapper scope projection', () => {
           boundary: 'wrapper-output',
           source: { nodeId: 'aggregator', portName: 'result' },
           target: { nodeId: 'fan', portName: 'summary' },
+        },
+        {
+          id: 'loop-final',
+          boundary: 'wrapper-output',
+          source: { nodeId: 'fan', portName: 'summary' },
+          target: { nodeId: 'loop', portName: 'final' },
         },
       ],
     } as unknown as WorkflowDefinition

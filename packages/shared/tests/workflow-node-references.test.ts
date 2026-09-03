@@ -1,7 +1,10 @@
 // RFC-199 T7.1 — node-reference inventory regressions.
 // Locks recursive wrapper closure, full-idMap clipboard rewrite, survivor-set
-// delete pruning, all-PortRef input rename, passthrough ratchet, and deep
-// immutability. Frontend clipboard/history wiring is deliberately out of scope.
+// delete pruning, edge / top-level-output port rename, passthrough ratchet, and
+// deep immutability. Frontend clipboard/history wiring is deliberately out of
+// scope. RFC-354 (schema v6): node-level PortRef fields are gone — the only
+// inventoried node references are node-id lists; PortRefs live on edges and
+// top-level outputs, which the transforms handle directly.
 
 import { describe, expect, test } from 'bun:test'
 import {
@@ -60,11 +63,19 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
     expect(Object.keys(WORKFLOW_NODE_REFERENCE_INVENTORY).sort()).toEqual([...NODE_KIND].sort())
   })
 
+  test('no kind declares a node-level PortRef field any more (RFC-354 schema v6)', () => {
+    for (const descriptor of Object.values(WORKFLOW_NODE_REFERENCE_INVENTORY)) {
+      expect(Object.keys(descriptor).sort()).toEqual(
+        'opaqueFields' in descriptor ? ['nodeIdLists', 'opaqueFields'] : ['nodeIdLists'],
+      )
+    }
+  })
+
   test('passthrough existing-kind reference field fails visible instead of silently leaking', () => {
     const parsed = WorkflowNodeSchema.parse({
       id: 'review',
       kind: 'review',
-      inputSource: { nodeId: 'inside', portName: 'doc' },
+      rerunnableOnReject: ['inside'],
       futureSource: { nodeId: 'outside', portName: 'future' },
       mysteryNodeId: 'outside-top-level',
     })
@@ -75,7 +86,6 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
         ['inside', 'inside-copy'],
       ]),
     )
-
     expect(result.safe).toBe(false)
     expect(result.warnings).toContainEqual(
       expect.objectContaining({
@@ -97,42 +107,31 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
     )
   })
 
-  test('malformed inventoried reference shapes fail closed instead of leaking old node ids', () => {
+  test('a v5 PortRef field left on a node is an unmanaged reference, never silently kept', () => {
+    // The v5 → v6 upgrader strips these; a document that skipped it must not
+    // paste an old node id through the field the inventory no longer owns.
+    const result = rewriteCopiedNodeReferences(
+      node('review', 'review', { inputSource: { nodeId: 'outside', portName: 'doc' } }),
+      new Map([['review', 'review-copy']]),
+    )
+    expect(result.safe).toBe(false)
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        code: 'node-reference-inventory-unmanaged',
+        nodeId: 'review',
+        field: 'inputSource',
+        referencedNodeId: 'outside',
+        action: 'abort',
+      }),
+    )
+  })
+
+  test('malformed inventoried node-id lists fail closed instead of leaking old node ids', () => {
     const cases: Array<{
       node: WorkflowNode
       field: string
       referencedNodeId: string
     }> = [
-      {
-        node: node('review', 'review', {
-          inputSource: { nodeId: 'outside-direct', portName: 123 },
-        }),
-        field: 'inputSource',
-        referencedNodeId: 'outside-direct',
-      },
-      {
-        node: node('loop', 'wrapper-loop', {
-          exitCondition: {
-            kind: 'port-empty',
-            nodeId: 'outside-embedded',
-            portName: false,
-          },
-        }),
-        field: 'exitCondition',
-        referencedNodeId: 'outside-embedded',
-      },
-      {
-        node: node('output', 'output', {
-          ports: [
-            {
-              name: 'broken',
-              bind: { nodeId: 'outside-binding', portName: 42 },
-            },
-          ],
-        }),
-        field: 'ports[0].bind',
-        referencedNodeId: 'outside-binding',
-      },
       {
         node: node('git', 'wrapper-git', {
           nodeIds: ['inside', { nodeId: 'outside-list' }],
@@ -140,8 +139,14 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
         field: 'nodeIds[1]',
         referencedNodeId: 'outside-list',
       },
+      {
+        node: node('review', 'review', {
+          rerunnableOnReject: [{ nodeId: 'outside-rerun' }],
+        }),
+        field: 'rerunnableOnReject[0]',
+        referencedNodeId: 'outside-rerun',
+      },
     ]
-
     for (const fixture of cases) {
       const result = rewriteCopiedNodeReferences(
         fixture.node,
@@ -150,7 +155,6 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
           ['inside', 'inside-copy'],
         ]),
       )
-
       expect(result.safe, fixture.field).toBe(false)
       expect(result.warnings, fixture.field).toContainEqual(
         expect.objectContaining({
@@ -164,15 +168,16 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
     }
   })
 
-  test('reference-free incomplete draft containers do not trip the malformed-shape ratchet', () => {
+  test('reference-free fields do not trip the ratchet', () => {
     const fixtures = [
-      node('review', 'review', { inputSource: {} }),
+      node('review', 'review', { rerunnableOnReject: [], rerunnableOnIterate: [] }),
+      // v6 exit condition: a predicate over the loop's own return port — no node id.
       node('loop', 'wrapper-loop', {
-        exitCondition: { kind: 'port-empty' },
-        outputBindings: [{ name: 'draft' }],
+        nodeIds: [],
+        exitCondition: { kind: 'port-equals', portName: 'verdict', value: 'STOP' },
       }),
+      node('fan', 'wrapper-fanout', { nodeIds: [], shardSourcePort: 'docs' }),
     ]
-
     for (const fixture of fixtures) {
       const result = rewriteCopiedNodeReferences(
         fixture,
@@ -183,23 +188,12 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
     }
   })
 
-  test('known reference containers still ratchet nested passthrough references', () => {
+  test('reference-like passthrough subtrees are ratcheted at any depth', () => {
     const fixtures: Array<{ node: WorkflowNode; field: string }> = [
-      {
-        node: node('review', 'review', {
-          inputSource: {
-            nodeId: 'inside',
-            portName: 'doc',
-            future: { nodeId: 'outside', portName: 'future' },
-          },
-        }),
-        field: 'inputSource.future',
-      },
       {
         node: node('loop', 'wrapper-loop', {
           exitCondition: {
             kind: 'port-empty',
-            nodeId: 'inside',
             portName: 'out',
             future: { nestedNodeId: 'outside' },
           },
@@ -207,35 +201,22 @@ describe('WORKFLOW_NODE_REFERENCE_INVENTORY ratchets', () => {
         field: 'exitCondition.future.nestedNodeId',
       },
       {
-        node: node('output', 'output', {
-          ports: [
-            {
-              name: 'result',
-              bind: {
-                nodeId: 'inside',
-                portName: 'out',
-                future: { nodeId: 'outside', portName: 'future' },
-              },
-            },
-          ],
+        node: node('review', 'review', {
+          policy: { source: { nodeId: 'outside', portName: 'future' } },
         }),
-        field: 'ports[].bind.future',
+        field: 'policy.source',
       },
       {
-        node: node('draft', 'review', {
-          inputSource: { future: { nodeId: 'outside', portName: 'future' } },
+        node: node('output', 'output', {
+          routing: [{ target: { nodeId: 'outside', portName: 'x' } }],
         }),
-        field: 'inputSource.future',
+        field: 'routing[].target',
       },
     ]
-
     for (const fixture of fixtures) {
       const result = rewriteCopiedNodeReferences(
         fixture.node,
-        new Map([
-          [fixture.node.id, `${fixture.node.id}-copy`],
-          ['inside', 'inside-copy'],
-        ]),
+        new Map([[fixture.node.id, `${fixture.node.id}-copy`]]),
       )
       expect(result.safe, fixture.field).toBe(false)
       expect(result.warnings, fixture.field).toContainEqual(
@@ -297,40 +278,29 @@ describe('collectNodeReferenceClosure', () => {
 })
 
 describe('rewriteCopiedWorkflowSlice', () => {
-  test('uses the complete idMap in a second pass, preserves boundary, and clears/filters externals', () => {
+  test('uses the complete idMap in a second pass, preserves boundary, and filters externals', () => {
     const source = {
       nodes: [
         node('git', 'wrapper-git', { nodeIds: ['loop', 'outside', 'legacy-missing'] }),
         node('loop', 'wrapper-loop', {
           nodeIds: ['agent'],
-          exitCondition: {
-            kind: 'port-equals',
-            nodeId: 'agent',
-            portName: 'result',
-            value: 'done',
-          },
-          outputBindings: [
-            { name: 'kept', bind: { nodeId: 'agent', portName: 'result' } },
-            { name: 'cleared', bind: { nodeId: 'outside', portName: 'result' } },
-          ],
+          exitCondition: { kind: 'port-equals', portName: 'kept', value: 'done' },
         }),
         node('review', 'review', {
-          inputSource: { nodeId: 'outside', portName: 'doc' },
           rerunnableOnReject: ['agent', 'outside'],
           rerunnableOnIterate: ['outside', 'agent'],
         }),
-        node('output', 'output', {
-          ports: [
-            { name: 'kept', bind: { nodeId: 'agent', portName: 'result' } },
-            { name: 'cleared', bind: { nodeId: 'outside', portName: 'result' } },
-          ],
-        }),
+        node('output', 'output'),
         // Declared last to lock forward-reference rewriting.
         node('agent', 'agent-single', { metadata: { nested: { untouched: true } } }),
       ],
       edges: [
-        edge('boundary', 'agent', 'loop', 'wrapper-output'),
+        // RFC-354: the loop return value is a wrapper-output edge (kept — inside the slice)
+        edge('kept', 'agent', 'loop', 'wrapper-output'),
+        // … and one bound to a node outside the slice (dropped)
+        edge('cleared', 'outside', 'loop', 'wrapper-output'),
         edge('external', 'outside', 'review'),
+        edge('to-output', 'agent', 'output'),
       ],
     }
     const snapshot = JSON.parse(JSON.stringify(source))
@@ -341,9 +311,7 @@ describe('rewriteCopiedWorkflowSlice', () => {
       ['output', 'output-copy'],
       ['agent', 'agent-copy'],
     ])
-
     const result = rewriteCopiedWorkflowSlice(source, idMap)
-
     expect(result.safe).toBe(true)
     expect(result.nodes.map((entry) => entry.id)).toEqual([
       'git-copy',
@@ -353,36 +321,24 @@ describe('rewriteCopiedWorkflowSlice', () => {
       'agent-copy',
     ])
     expect((result.nodes[0] as Record<string, unknown>).nodeIds).toEqual(['loop-copy'])
-
     const loop = result.nodes[1] as Record<string, unknown>
     expect(loop.nodeIds).toEqual(['agent-copy'])
-    expect(loop.exitCondition).toEqual({
-      kind: 'port-equals',
-      nodeId: 'agent-copy',
-      portName: 'result',
-      value: 'done',
-    })
-    expect(loop.outputBindings).toEqual([
-      { name: 'kept', bind: { nodeId: 'agent-copy', portName: 'result' } },
-      { name: 'cleared', bind: { nodeId: '', portName: '' } },
-    ])
-
+    // The exit condition names the loop's own return port: nothing to rewrite.
+    expect(loop.exitCondition).toEqual({ kind: 'port-equals', portName: 'kept', value: 'done' })
     const review = result.nodes[2] as Record<string, unknown>
-    expect(review.inputSource).toEqual({ nodeId: '', portName: '' })
     expect(review.rerunnableOnReject).toEqual(['agent-copy'])
     expect(review.rerunnableOnIterate).toEqual(['agent-copy'])
-
-    const output = result.nodes[3] as Record<string, unknown>
-    expect(output.ports).toEqual([
-      { name: 'kept', bind: { nodeId: 'agent-copy', portName: 'result' } },
-      { name: 'cleared', bind: { nodeId: '', portName: '' } },
-    ])
     expect(result.edges).toEqual([
       {
-        id: 'boundary',
+        id: 'kept',
         source: { nodeId: 'agent-copy', portName: 'out' },
         target: { nodeId: 'loop-copy', portName: 'in' },
         boundary: 'wrapper-output',
+      },
+      {
+        id: 'to-output',
+        source: { nodeId: 'agent-copy', portName: 'out' },
+        target: { nodeId: 'output-copy', portName: 'in' },
       },
     ])
     expect(result.warnings).toEqual(
@@ -396,9 +352,9 @@ describe('rewriteCopiedWorkflowSlice', () => {
         }),
         expect.objectContaining({
           code: 'copy-reference-outside-slice',
-          nodeId: 'review',
-          field: 'inputSource',
-          action: 'clear',
+          edgeId: 'cleared',
+          field: 'source',
+          action: 'drop',
         }),
         expect.objectContaining({
           code: 'copy-reference-outside-slice',
@@ -407,7 +363,6 @@ describe('rewriteCopiedWorkflowSlice', () => {
         }),
       ]),
     )
-
     // Neither transformation nor later edits to its result may alias source.
     expect(source).toEqual(snapshot)
     ;(
@@ -439,19 +394,21 @@ describe('pruneDeletedNodeReferences', () => {
         node('loop', 'wrapper-loop', {
           nodeIds: ['live', 'doomed'],
           size: { width: 600, height: 400 },
-          exitCondition: { kind: 'port-empty', nodeId: 'doomed', portName: 'result' },
-          outputBindings: [{ name: 'result', bind: { nodeId: 'doomed', portName: 'result' } }],
+          exitCondition: { kind: 'port-empty', portName: 'result' },
         }),
         node('review', 'review', {
-          inputSource: { nodeId: 'doomed', portName: 'doc' },
           rerunnableOnReject: ['live', 'doomed'],
           rerunnableOnIterate: ['doomed'],
         }),
-        node('output', 'output', {
-          ports: [{ name: 'result', bind: { nodeId: 'doomed', portName: 'result' } }],
-        }),
+        node('output', 'output'),
       ],
-      [edge('drop-edge', 'live', 'doomed'), edge('keep-edge', 'live', 'review')],
+      [
+        edge('drop-edge', 'live', 'doomed'),
+        edge('keep-edge', 'live', 'review'),
+        // RFC-354: the loop return bound to the deleted node goes with it
+        edge('drop-return', 'doomed', 'loop', 'wrapper-output'),
+        edge('drop-output', 'doomed', 'output'),
+      ],
       [
         { name: 'kept', bind: { nodeId: 'live', portName: 'result' } },
         { name: 'stale', bind: { nodeId: 'doomed', portName: 'result' } },
@@ -459,9 +416,7 @@ describe('pruneDeletedNodeReferences', () => {
     )
     const snapshot = JSON.parse(JSON.stringify(source))
     const survivors = new Set(['live', 'git', 'fanout', 'loop', 'review', 'output'])
-
     const result = pruneDeletedNodeReferences(source, survivors)
-
     expect(result.safe).toBe(true)
     expect(result.definition.nodes.map((entry) => entry.id)).not.toContain('doomed')
     const git = result.definition.nodes[1] as Record<string, unknown>
@@ -473,19 +428,23 @@ describe('pruneDeletedNodeReferences', () => {
     const loop = result.definition.nodes[3] as Record<string, unknown>
     expect(loop.nodeIds).toEqual(['live'])
     expect(loop.size).toBeUndefined()
-    expect(loop.exitCondition).toEqual({ kind: 'port-empty', nodeId: '', portName: '' })
-    expect(loop.outputBindings).toEqual([{ name: 'result', bind: { nodeId: '', portName: '' } }])
+    expect(loop.exitCondition).toEqual({ kind: 'port-empty', portName: 'result' })
     const review = result.definition.nodes[4] as Record<string, unknown>
-    expect(review.inputSource).toEqual({ nodeId: '', portName: '' })
     expect(review.rerunnableOnReject).toEqual(['live'])
     expect(review.rerunnableOnIterate).toEqual([])
-    expect((result.definition.nodes[5] as Record<string, unknown>).ports).toEqual([
-      { name: 'result', bind: { nodeId: '', portName: '' } },
-    ])
     expect(result.definition.edges.map((entry) => entry.id)).toEqual(['keep-edge'])
     expect(result.definition.outputs).toEqual([
       { name: 'kept', bind: { nodeId: 'live', portName: 'result' } },
     ])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        code: 'deleted-node-reference-pruned',
+        edgeId: 'drop-return',
+        field: 'source',
+        referencedNodeId: 'doomed',
+        action: 'drop',
+      }),
+    )
     expect(result.warnings).toContainEqual(
       expect.objectContaining({
         code: 'deleted-node-reference-pruned',
@@ -499,22 +458,16 @@ describe('pruneDeletedNodeReferences', () => {
 })
 
 describe('rewriteWorkflowPortReferences', () => {
-  test('input node port rename reaches every PortRef without changing declarations/node field', () => {
+  test('input node port rename reaches every edge and top-level output without changing declarations', () => {
     const source = definition(
       [
         node('input', 'input', { inputKey: 'old_key' }),
-        node('review', 'review', {
-          inputSource: { nodeId: 'input', portName: 'old_key' },
-          rerunnableOnReject: [],
-          rerunnableOnIterate: [],
-        }),
-        node('output', 'output', {
-          ports: [{ name: 'result', bind: { nodeId: 'input', portName: 'old_key' } }],
-        }),
+        node('review', 'review', { rerunnableOnReject: [], rerunnableOnIterate: [] }),
+        node('output', 'output'),
         node('loop', 'wrapper-loop', {
           nodeIds: ['input'],
-          exitCondition: { kind: 'port-empty', nodeId: 'input', portName: 'old_key' },
-          outputBindings: [{ name: 'result', bind: { nodeId: 'input', portName: 'old_key' } }],
+          // names the LOOP's return port, which happens to share the input's port name
+          exitCondition: { kind: 'port-empty', portName: 'old_key' },
         }),
       ],
       [
@@ -524,41 +477,50 @@ describe('rewriteWorkflowPortReferences', () => {
           target: { nodeId: 'input', portName: 'old_key' },
           boundary: 'wrapper-input',
         },
+        {
+          id: 'to-review',
+          source: { nodeId: 'input', portName: 'old_key' },
+          target: { nodeId: 'review', portName: '__review_input__' },
+        },
+        {
+          id: 'to-output',
+          source: { nodeId: 'input', portName: 'old_key' },
+          target: { nodeId: 'output', portName: 'result' },
+        },
       ],
       [{ name: 'result', bind: { nodeId: 'input', portName: 'old_key' } }],
     )
     const snapshot = JSON.parse(JSON.stringify(source))
-
     const result = rewriteWorkflowPortReferences(source, [
       { nodeId: 'input', fromPortName: 'old_key', toPortName: 'new_key' },
     ])
-
     expect(result.safe).toBe(true)
     expect(result.warnings).toEqual([])
     // Declaration/key collision policy belongs to the frontend clipboard layer.
     expect((result.definition.nodes[0] as Record<string, unknown>).inputKey).toBe('old_key')
-    expect((result.definition.nodes[1] as Record<string, unknown>).inputSource).toEqual({
-      nodeId: 'input',
-      portName: 'new_key',
-    })
-    expect((result.definition.nodes[2] as Record<string, unknown>).ports).toEqual([
-      { name: 'result', bind: { nodeId: 'input', portName: 'new_key' } },
-    ])
-    const loop = result.definition.nodes[3] as Record<string, unknown>
-    expect(loop.exitCondition).toEqual({
+    // A loop return port is the loop's own name space — untouched by an input rename.
+    expect((result.definition.nodes[3] as Record<string, unknown>).exitCondition).toEqual({
       kind: 'port-empty',
-      nodeId: 'input',
-      portName: 'new_key',
+      portName: 'old_key',
     })
-    expect(loop.outputBindings).toEqual([
-      { name: 'result', bind: { nodeId: 'input', portName: 'new_key' } },
+    expect(result.definition.edges).toEqual([
+      {
+        id: 'boundary',
+        source: { nodeId: 'input', portName: 'new_key' },
+        target: { nodeId: 'input', portName: 'new_key' },
+        boundary: 'wrapper-input',
+      },
+      {
+        id: 'to-review',
+        source: { nodeId: 'input', portName: 'new_key' },
+        target: { nodeId: 'review', portName: '__review_input__' },
+      },
+      {
+        id: 'to-output',
+        source: { nodeId: 'input', portName: 'new_key' },
+        target: { nodeId: 'output', portName: 'result' },
+      },
     ])
-    expect(result.definition.edges[0]).toEqual({
-      id: 'boundary',
-      source: { nodeId: 'input', portName: 'new_key' },
-      target: { nodeId: 'input', portName: 'new_key' },
-      boundary: 'wrapper-input',
-    })
     expect(result.definition.outputs).toEqual([
       { name: 'result', bind: { nodeId: 'input', portName: 'new_key' } },
     ])
@@ -567,20 +529,15 @@ describe('rewriteWorkflowPortReferences', () => {
 })
 
 describe('pruneWorkflowPortReferences', () => {
-  test('drops edges/top-level outputs and clears every inventoried PortRef for a disappeared port', () => {
+  test('drops every edge and top-level output that reads a disappeared port', () => {
     const source = definition(
       [
         node('producer', 'agent-single'),
-        node('review', 'review', {
-          inputSource: { nodeId: 'producer', portName: 'gone' },
-        }),
-        node('output', 'output', {
-          ports: [{ name: 'result', bind: { nodeId: 'producer', portName: 'gone' } }],
-        }),
+        node('review', 'review'),
+        node('output', 'output'),
         node('loop', 'wrapper-loop', {
           nodeIds: ['producer'],
-          exitCondition: { kind: 'port-empty', nodeId: 'producer', portName: 'gone' },
-          outputBindings: [{ name: 'result', bind: { nodeId: 'producer', portName: 'gone' } }],
+          exitCondition: { kind: 'port-empty', portName: 'result' },
         }),
       ],
       [
@@ -595,45 +552,41 @@ describe('pruneWorkflowPortReferences', () => {
           target: { nodeId: 'loop', portName: 'result' },
           boundary: 'wrapper-output',
         },
+        {
+          id: 'to-review',
+          source: { nodeId: 'producer', portName: 'gone' },
+          target: { nodeId: 'review', portName: '__review_input__' },
+        },
+        {
+          id: 'survivor',
+          source: { nodeId: 'producer', portName: 'stays' },
+          target: { nodeId: 'output', portName: 'other' },
+        },
       ],
       [{ name: 'result', bind: { nodeId: 'producer', portName: 'gone' } }],
     )
     const snapshot = JSON.parse(JSON.stringify(source))
-
     const result = pruneWorkflowPortReferences(source, [{ nodeId: 'producer', portName: 'gone' }])
-
     expect(result.safe).toBe(true)
-    expect(result.definition.edges).toEqual([])
+    expect(result.definition.edges.map((entry) => entry.id)).toEqual(['survivor'])
     expect(result.definition.outputs).toEqual([])
-    expect((result.definition.nodes[1] as Record<string, unknown>).inputSource).toEqual({
-      nodeId: '',
-      portName: '',
-    })
-    expect((result.definition.nodes[2] as Record<string, unknown>).ports).toEqual([
-      { name: 'result', bind: { nodeId: '', portName: '' } },
-    ])
-    expect((result.definition.nodes[3] as Record<string, unknown>).exitCondition).toEqual({
-      kind: 'port-empty',
-      nodeId: '',
-      portName: '',
-    })
-    expect((result.definition.nodes[3] as Record<string, unknown>).outputBindings).toEqual([
-      { name: 'result', bind: { nodeId: '', portName: '' } },
-    ])
+    expect(result.definition.nodes).toEqual(source.nodes)
     expect(result.warnings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'disappeared-port-reference-pruned',
-          edgeId: 'ordinary',
+          edgeId: 'boundary',
+          field: 'source',
           referencedNodeId: 'producer',
           referencedPortName: 'gone',
           action: 'drop',
         }),
         expect.objectContaining({
           code: 'disappeared-port-reference-pruned',
-          nodeId: 'review',
-          field: 'inputSource',
-          action: 'clear',
+          field: 'outputs[0].bind',
+          referencedNodeId: 'producer',
+          referencedPortName: 'gone',
+          action: 'drop',
         }),
       ]),
     )

@@ -547,7 +547,8 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const strategyMarkers = {
       'loopStrategy.ts': [
         'evaluateExitCondition(',
-        "readWrapperOutputBindings(node, 'outputBindings')",
+        // RFC-354 (schema v6): returns are the loop's `wrapper-output` edges.
+        'wrapperOutputBindings(this.data.definition, node.id)',
         'this.scopeDriver.drive(',
         'this.workspace.merge(',
       ],

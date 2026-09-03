@@ -133,7 +133,6 @@ const UNDEFINED_CLASS_SNAPSHOT: readonly string[] = [
   'mission-upload-card',
   'mono',
   'multi-select__listbox',
-  'muted--warn',
   'node-runs__clarify-link',
   'node-runs__review-link',
   'notice-banner__body',

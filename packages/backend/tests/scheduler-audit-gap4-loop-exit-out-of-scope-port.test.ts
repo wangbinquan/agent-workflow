@@ -1,11 +1,14 @@
 // REGRESSION — design/scheduler-audit-2026-06-10.md §⑥ 缺口4 + 附录C-4 (WP-6a)
 //
-// loop 的 exitCondition 是隐式依赖，不应绕过包装器作用域：
+// loop 的 exitCondition 不应绕过包装器作用域。RFC-354 schema v6 起 exitCondition
+// 只能指向 loop 自己的返回口，v5 里「exit 读体外节点」升级后变成一条 source 在
+// 体外的 `wrapper-output` 返回边：
 //
-//   1. validator 拒绝引用 loop 体外节点，阻止新任务启动；
-//   2. runTask 仍对直接播种的旧/非法快照 fail-safe：先等待隐式来源完成，再按
-//      last-value 读取 iteration <= 当前轮的最新 done 行。这样旧快照不会在第
-//      2 轮把外层 iteration=0 的真实值误读成空串并静默绿掉。
+//   1. validator 以 `wrapper-loop-output-binding-out-of-scope` 拒绝，阻止新任务启动；
+//   2. runTask 对直接播种的旧/非法快照 fail-closed：loop 在 prepare 阶段就以
+//      `wrapper-loop-return-source-out-of-scope` 失败，不会去读一个 body 从未算出
+//      的值——否则第 1 轮读到空串、`port-count-lt` 为真，静默绿掉（v5 时代的
+//      同一缺口，当年靠「先等隐式来源完成再按 last-value 读」兜底）。
 
 import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -15,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { agents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
@@ -80,9 +83,11 @@ async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise
   })
 }
 
-// exitCondition references 'lister' which lives OUTSIDE the loop body. The
-// validator rejects this definition; the runtime case bypasses the launch
-// gate deliberately to lock old-snapshot fail-safe behavior.
+// exitCondition references 'lister' which lives OUTSIDE the loop body (v5
+// shape; the upgrader turns it into a `wrapper-output` edge lister.findings →
+// loop.findings). The validator rejects this definition; the runtime case
+// bypasses the launch gate deliberately to lock old-snapshot fail-closed
+// behavior.
 function buildDefinition(): WorkflowDefinition {
   return {
     $schema_version: 1,
@@ -184,16 +189,15 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
       skills: [],
     })
     expect(res.ok).toBe(false)
-    expect(res.issues.map((issue) => issue.code)).toEqual(['wrapper-loop-exit-node-out-of-scope'])
+    expect(res.issues.map((issue) => issue.code)).toEqual([
+      'wrapper-loop-output-binding-out-of-scope',
+    ])
   })
 
-  // 15s is a WALL-CLOCK allowance, not tolerance for this test getting slower.
-  // It drives four loop iterations through the real scheduler: ~1.5s on an idle
-  // machine, but `gate:local` runs four shards in parallel and the contention
-  // pushed it past bun's unrelated 5000ms default (measured 5232ms, 2026-08-16).
-  // A timeout reports no assertion at all, so it reads as broken rather than
-  // slow — see docs/dev-gotchas.md on the 5000ms family.
-  test('an old invalid snapshot keeps the latest outer value instead of false-exiting', async () => {
+  // 15s is a WALL-CLOCK allowance, not tolerance for this test getting slower
+  // (`gate:local` runs four shards in parallel; see docs/dev-gotchas.md on the
+  // 5000ms family).
+  test('an old invalid snapshot fails closed instead of false-exiting on an unread value', async () => {
     await seedAgent(h.db, 'lister', ['findings'])
     await seedAgent(h.db, 'worker', ['out'])
     const taskId = await seedWorkflowAndTask(h, buildDefinition())
@@ -207,46 +211,17 @@ describe('gap4 — wrapper-loop exitCondition referencing an out-of-loop node', 
       }),
     )
 
-    // Sanity: the referenced out-of-loop port really held 5 lines (count=5,
-    // so 5 < 3 should NEVER be true under last-value semantics).
-    const listerRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'lister')))
-    expect(listerRuns.length).toBe(1)
-    expect(listerRuns[0]?.iteration).toBe(0)
-    const listerOut = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, listerRuns[0]!.id),
-            eq(nodeRunOutputs.portName, 'findings'),
-          ),
-        )
-    )[0]
-    expect(listerOut?.content).toBe(FINDINGS)
-
-    // Every loop round sees lister@0 as the latest visible value, so 5 < 3
-    // stays false. The invalid snapshot fails closed after maxIterations.
+    // The loop never gets to read `lister.findings` as if it were its own
+    // return value: it is rejected before its first round, and the task fails.
     const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-    expect(`${t?.status}:${t?.errorSummary ?? ''}`).toBe(
-      'failed:wrapper-loop loop exhausted after 4 iterations',
-    )
+    expect(t?.status).toBe('failed')
+    expect(t?.errorMessage).toContain('wrapper-loop-return-source-out-of-scope')
 
-    const loopRun = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
-    )[0]
-    expect(loopRun?.status).toBe('exhausted')
-
+    // No body round ran on the strength of a value the body never produced.
     const workerRuns = await h.db
       .select()
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'worker')))
-    expect(workerRuns.map((r) => r.iteration).sort()).toEqual([0, 1, 2, 3])
+    expect(workerRuns).toHaveLength(0)
   }, 15_000)
 })

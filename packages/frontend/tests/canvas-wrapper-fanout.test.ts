@@ -2,9 +2,9 @@
 //
 // Locks:
 //  1. PaletteItem deserialize accepts 'wrapper-fanout'.
-//  2. makeNode produces a wrapper-fanout with default inputs that includes
-//     ONE shardSource and a non-empty kind grammar string (so the validator
-//     doesn't immediately flag a fresh drop).
+//  2. makeNode produces a wrapper-fanout naming its shard source
+//     (`shardSourcePort`, RFC-354 — parameters are inbound edges) so the
+//     first catch-all drop lands on the shard port.
 //  3. PALETTE_MIME round-trip for wrapper-fanout.
 //  4. buildPalette emits the wrapper-fanout entry under "Wrappers".
 
@@ -22,7 +22,7 @@ describe('PaletteItem — wrapper-fanout', () => {
     expect(deserialize(raw)).toEqual({ kind: 'wrapper-fanout' })
   })
 
-  test('makeNode produces wrapper-fanout with default inputs + shardSource', () => {
+  test('makeNode produces wrapper-fanout with a named shard source and no inputs[] declaration', () => {
     const node = makeNode(
       { kind: 'wrapper-fanout' },
       { x: 100, y: 200 },
@@ -32,11 +32,9 @@ describe('PaletteItem — wrapper-fanout', () => {
     const rec = node as unknown as Record<string, unknown>
     expect(Array.isArray(rec.nodeIds)).toBe(true)
     expect(rec.nodeIds).toEqual([])
-    const inputs = rec.inputs as Array<{ name: string; kind: string; isShardSource?: boolean }>
-    expect(inputs.length).toBeGreaterThanOrEqual(1)
-    const shardSource = inputs.find((p) => p.isShardSource === true)
-    expect(shardSource).not.toBeUndefined()
-    expect(shardSource?.kind.startsWith('list<')).toBe(true)
+    expect(typeof rec.shardSourcePort).toBe('string')
+    expect((rec.shardSourcePort as string).length).toBeGreaterThan(0)
+    expect('inputs' in rec).toBe(false)
   })
 
   test("buildPalette includes wrapper-fanout under 'Wrappers' section", () => {

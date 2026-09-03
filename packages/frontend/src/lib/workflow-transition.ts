@@ -1,10 +1,15 @@
 // RFC-199 B5 — the single semantic write reconciler. Every caller supplies a
-// typed transition; disconnect cascades, mirrors, node patches, workflow input
+// typed transition; disconnect cascades, node patches, workflow input
 // declarations, semantic review renames, and disappeared derived ports run in
 // one deterministic transaction.
+//
+// RFC-354 (schema v6): there are no PortRef mirrors left to keep in step — a
+// review's input, an output node's ports, a loop's returns and a fan-out's
+// parameters are all edges. Connecting / disconnecting an edge is the whole
+// write; the only node-level patch a connection can carry is the fan-out's
+// `shardSourcePort`.
 
 import {
-  REVIEW_INPUT_PORT_NAME,
   collectNodeReferenceClosure,
   declaredPorts,
   isWrapperKind,
@@ -12,28 +17,27 @@ import {
   pruneWorkflowPortReferences,
   reviewApprovedPortName,
   rewriteWorkflowPortReferences,
-  resolveReviewInputKind,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
   type WorkflowNodeReferenceWarning,
   type WorkflowPortRename,
   type WorkflowPortReference,
+  resolveReviewInputKind,
 } from '@agent-workflow/shared'
 import { cascadeRemoveClarifyChannel } from '../components/canvas/clarifyDragHelper'
 import { cascadeRemoveCrossClarifyChannel } from '../components/canvas/crossClarifyDragHelper'
-import {
-  applyConnectionForReviewOutput,
-  applyDisconnectForReviewOutput,
-} from '../components/canvas/connectionSync'
+import { applyConnectionForReviewOutput } from '../components/canvas/connectionSync'
 import { syncInputDefs } from '../components/canvas/syncInputDefs'
-import { ensureLegacyWrapperFanoutInputForEdge } from './workflow-connection-boundary'
 import type {
   ConnectionNodePatch,
   ConnectionPlan,
   WorkflowSemanticContext,
 } from './workflow-connection-plan'
-import { workflowConnectionDefinitionRevision } from './workflow-connection-plan'
+import {
+  readShardSourcePort,
+  workflowConnectionDefinitionRevision,
+} from './workflow-connection-plan'
 
 type SuccessfulConnectionPlan = Extract<ConnectionPlan, { ok: true }>
 
@@ -41,19 +45,6 @@ export type WorkflowTransition =
   | { kind: 'connection'; plan: SuccessfulConnectionPlan }
   | { kind: 'replace-definition'; next: WorkflowDefinition }
   | { kind: 'rename-edge-target-port'; edgeId: string; portName: string }
-  | {
-      kind: 'set-review-input-source'
-      reviewNodeId: string
-      inputSource: { nodeId: string; portName: string }
-    }
-  | {
-      kind: 'set-output-ports'
-      outputNodeId: string
-      ports: ReadonlyArray<{
-        name: string
-        bind: { nodeId: string; portName: string }
-      }>
-    }
   | {
       kind: 'delete-selection'
       nodeIds: readonly string[]
@@ -79,7 +70,11 @@ export interface WorkflowTransitionResult {
   warnings: WorkflowTransitionWarning[]
 }
 
-/** Fixed/system/boundary targets cannot be renamed from EdgeInspector. */
+/**
+ * Fixed/system/boundary targets cannot be renamed from EdgeInspector. RFC-354:
+ * an edge-declared port — an agent input, an output node's port, a wrapper's
+ * parameter — is renamed by renaming the edge's target port.
+ */
 export function isEdgeTargetPortRenameable(
   definition: WorkflowDefinition,
   edge: WorkflowEdge,
@@ -94,7 +89,9 @@ export function isEdgeTargetPortRenameable(
   return (
     targetNode.kind === 'agent-single' ||
     targetNode.kind === 'output' ||
-    targetNode.kind === 'wrapper-fanout'
+    targetNode.kind === 'wrapper-fanout' ||
+    targetNode.kind === 'wrapper-git' ||
+    targetNode.kind === 'wrapper-loop'
   )
 }
 
@@ -108,10 +105,11 @@ function applyConnectionNodePatches(
   const nodes = definition.nodes.map((node) => {
     const patch = byWrapperId.get(node.id)
     if (patch === undefined || node.kind !== 'wrapper-fanout') return node
+    if (readShardSourcePort(node) === patch.shardSourcePort) return node
     changed = true
     return {
       ...(node as Record<string, unknown>),
-      inputs: patch.inputs.map((port) => ({ ...port })),
+      shardSourcePort: patch.shardSourcePort,
     } as unknown as WorkflowNode
   })
   return changed ? { ...definition, nodes } : definition
@@ -181,7 +179,7 @@ function reconcileDerivedPorts(
   let semanticBefore = previous
   let working = candidate
   const warnings: WorkflowTransitionWarning[] = []
-  // A port prune can clear a review inputSource, which in turn changes that
+  // A port prune can remove a review's input edge, which in turn changes that
   // review's derived output. Iterate through that second-order change; the
   // number of reviews bounds the meaningful chain length.
   const maxPasses = working.nodes.filter((node) => node.kind === 'review').length + 2
@@ -273,7 +271,6 @@ function reconcileRemovalAndReferences(
 
   const removed = deletedEdges(previous, staged)
   if (removed.length > 0) {
-    staged = applyDisconnectForReviewOutput(staged, removed)
     staged = cascadeRemoveClarifyChannel(staged, removed)
     staged = cascadeRemoveCrossClarifyChannel(staged, removed)
   }
@@ -359,178 +356,10 @@ function applyConnectionTransition(
         viaCatchAll: meta.targetMode === 'new',
       })
     }
-    if (meta.legacyFanoutInputInference === true) {
-      const reconciledEdge = staged.edges.find((edge) => edge.id === plannedEdge.id) ?? currentEdge
-      staged = ensureLegacyWrapperFanoutInputForEdge(staged, reconciledEdge)
-    }
   }
   staged = applyInputDeclarationSync(staged)
   const derived = reconcileDerivedPorts(previous, staged, context)
   return { next: derived.next, warnings: [...removal.warnings, ...derived.warnings] }
-}
-
-function nextTransitionEdgeId(definition: WorkflowDefinition): string {
-  const ids = new Set(definition.edges.map((edge) => edge.id))
-  for (let index = 1; ; index += 1) {
-    const candidate = `edge_transition_${index}`
-    if (!ids.has(candidate)) return candidate
-  }
-}
-
-function completePortRef(ref: { nodeId: string; portName: string }): boolean {
-  return ref.nodeId !== '' && ref.portName !== ''
-}
-
-function finishSemanticTransition(
-  previous: WorkflowDefinition,
-  staged: WorkflowDefinition,
-  context: WorkflowSemanticContext,
-  warnings: WorkflowTransitionWarning[],
-): WorkflowTransitionResult {
-  const synced = applyInputDeclarationSync(staged)
-  const derived = reconcileDerivedPorts(previous, synced, context)
-  return { next: derived.next, warnings: [...warnings, ...derived.warnings] }
-}
-
-function applyReviewInputSourceTransition(
-  previous: WorkflowDefinition,
-  reviewNodeId: string,
-  inputSource: { nodeId: string; portName: string },
-  context: WorkflowSemanticContext,
-): WorkflowTransitionResult {
-  const review = previous.nodes.find((node) => node.id === reviewNodeId)
-  if (review?.kind !== 'review') {
-    return {
-      next: previous,
-      warnings: [
-        { code: 'edge-transition-subject-missing', message: 'The review node no longer exists.' },
-      ],
-    }
-  }
-  const existing = previous.edges.filter((edge) => edge.target.nodeId === reviewNodeId)
-  const alreadyCanonical =
-    completePortRef(inputSource) &&
-    existing.length === 1 &&
-    existing[0]?.target.portName === REVIEW_INPUT_PORT_NAME &&
-    existing[0]?.source.nodeId === inputSource.nodeId &&
-    existing[0]?.source.portName === inputSource.portName
-  const currentSource = (review as Record<string, unknown>).inputSource as
-    | { nodeId?: unknown; portName?: unknown }
-    | undefined
-  if (
-    alreadyCanonical &&
-    currentSource?.nodeId === inputSource.nodeId &&
-    currentSource.portName === inputSource.portName
-  ) {
-    return { next: previous, warnings: [] }
-  }
-
-  const removedIds = new Set(existing.map((edge) => edge.id))
-  const removal = reconcileRemovalAndReferences(previous, {
-    ...previous,
-    edges: previous.edges.filter((edge) => !removedIds.has(edge.id)),
-  })
-  let staged: WorkflowDefinition = {
-    ...removal.next,
-    nodes: removal.next.nodes.map((node) =>
-      node.id === reviewNodeId
-        ? ({
-            ...(node as Record<string, unknown>),
-            inputSource: { ...inputSource },
-          } as unknown as WorkflowNode)
-        : node,
-    ),
-  }
-  if (completePortRef(inputSource)) {
-    const edge: WorkflowEdge = {
-      id: nextTransitionEdgeId(staged),
-      source: { ...inputSource },
-      target: { nodeId: reviewNodeId, portName: REVIEW_INPUT_PORT_NAME },
-    }
-    staged = { ...staged, edges: [...staged.edges, edge] }
-    staged = applyConnectionForReviewOutput(staged, edge)
-  }
-  return finishSemanticTransition(previous, staged, context, removal.warnings)
-}
-
-function applyOutputPortsTransition(
-  previous: WorkflowDefinition,
-  outputNodeId: string,
-  ports: ReadonlyArray<{
-    name: string
-    bind: { nodeId: string; portName: string }
-  }>,
-  context: WorkflowSemanticContext,
-): WorkflowTransitionResult {
-  const output = previous.nodes.find((node) => node.id === outputNodeId)
-  if (output?.kind !== 'output') {
-    return {
-      next: previous,
-      warnings: [
-        { code: 'edge-transition-subject-missing', message: 'The output node no longer exists.' },
-      ],
-    }
-  }
-  const previousPortsRaw = (output as Record<string, unknown>).ports
-  const previousPorts = Array.isArray(previousPortsRaw)
-    ? (previousPortsRaw as Array<{
-        name?: unknown
-        bind?: { nodeId?: unknown; portName?: unknown }
-      }>)
-    : []
-  const managedNames = new Set<string>()
-  for (const port of previousPorts) if (typeof port.name === 'string') managedNames.add(port.name)
-  for (const port of ports) managedNames.add(port.name)
-  const nextByName = new Map(ports.map((port) => [port.name, port] as const))
-  const keptEdges: WorkflowEdge[] = []
-  const edgesToAdd: WorkflowEdge[] = []
-  const canonicalExisting = new Set<string>()
-  for (const edge of previous.edges) {
-    if (edge.target.nodeId !== outputNodeId || !managedNames.has(edge.target.portName)) {
-      keptEdges.push(edge)
-      continue
-    }
-    const nextPort = nextByName.get(edge.target.portName)
-    const matches =
-      nextPort !== undefined &&
-      completePortRef(nextPort.bind) &&
-      edge.source.nodeId === nextPort.bind.nodeId &&
-      edge.source.portName === nextPort.bind.portName &&
-      !canonicalExisting.has(edge.target.portName)
-    if (matches) {
-      keptEdges.push(edge)
-      canonicalExisting.add(edge.target.portName)
-    }
-  }
-  let idBasis: WorkflowDefinition = { ...previous, edges: keptEdges }
-  for (const port of ports) {
-    if (!completePortRef(port.bind) || canonicalExisting.has(port.name) || port.name === '')
-      continue
-    const edge: WorkflowEdge = {
-      id: nextTransitionEdgeId(idBasis),
-      source: { ...port.bind },
-      target: { nodeId: outputNodeId, portName: port.name },
-    }
-    edgesToAdd.push(edge)
-    idBasis = { ...idBasis, edges: [...idBasis.edges, edge] }
-  }
-  const removal = reconcileRemovalAndReferences(previous, { ...previous, edges: keptEdges })
-  let staged: WorkflowDefinition = {
-    ...removal.next,
-    nodes: removal.next.nodes.map((node) =>
-      node.id === outputNodeId
-        ? ({
-            ...(node as Record<string, unknown>),
-            ports: ports.map((port) => ({ name: port.name, bind: { ...port.bind } })),
-          } as unknown as WorkflowNode)
-        : node,
-    ),
-    edges: [...removal.next.edges, ...edgesToAdd],
-  }
-  for (const edge of edgesToAdd) {
-    staged = applyConnectionForReviewOutput(staged, edge)
-  }
-  return finishSemanticTransition(previous, staged, context, removal.warnings)
 }
 
 function buildDeletionCandidate(
@@ -615,71 +444,68 @@ function renameTargetPortCandidate(
         : candidate,
     )
   } else if (targetNode.kind === 'output') {
-    const record = targetNode as Record<string, unknown>
-    const ports = Array.isArray(record.ports)
-      ? (record.ports as Array<Record<string, unknown>>)
-      : []
+    // RFC-354: the port IS the edge set landing on that name — every edge on
+    // the old name moves together; a name another edge already uses is taken.
     if (
-      !ports.some((port) => port.name === edge.target.portName) ||
-      ports.some((port) => port.name === portName)
+      previous.edges.some(
+        (candidate) =>
+          candidate.target.nodeId === targetNode.id && candidate.target.portName === portName,
+      )
     ) {
       return {
         next: previous,
         warnings: [
           {
             code: 'edge-target-port-conflict',
-            message: 'The output declaration is missing or already uses that port name.',
+            message: 'The output node already uses that port name.',
           },
         ],
       }
     }
-    nodes = previous.nodes.map((node) =>
-      node.id === targetNode.id
-        ? ({
-            ...(node as Record<string, unknown>),
-            ports: ports.map((port) =>
-              port.name === edge.target.portName ? { ...port, name: portName } : { ...port },
-            ),
-          } as unknown as WorkflowNode)
-        : node,
-    )
     edges = previous.edges.map((candidate) =>
       candidate.target.nodeId === targetNode.id &&
       candidate.target.portName === edge.target.portName
         ? { ...candidate, target: { ...candidate.target, portName } }
         : candidate,
     )
-  } else if (targetNode.kind === 'wrapper-fanout') {
-    const record = targetNode as Record<string, unknown>
-    const inputs = Array.isArray(record.inputs)
-      ? (record.inputs as Array<Record<string, unknown>>)
-      : []
+  } else if (isWrapperKind(targetNode.kind)) {
+    // RFC-354: a wrapper parameter is declared by its inbound edge; renaming it
+    // moves the parameter edge(s), the `wrapper-input` hand-off edges sourced
+    // from it, and — for a fan-out — the `shardSourcePort` pointer.
     if (
-      !inputs.some((input) => input.name === edge.target.portName) ||
-      inputs.some((input) => input.name === portName)
+      previous.edges.some(
+        (candidate) =>
+          candidate.boundary === undefined &&
+          candidate.target.nodeId === targetNode.id &&
+          candidate.target.portName === portName,
+      )
     ) {
       return {
         next: previous,
         warnings: [
           {
             code: 'edge-target-port-conflict',
-            message: 'The fan-out declaration is missing or already uses that port name.',
+            message: 'The wrapper already declares a parameter with that name.',
           },
         ],
       }
     }
-    nodes = previous.nodes.map((node) =>
-      node.id === targetNode.id
-        ? ({
-            ...(node as Record<string, unknown>),
-            inputs: inputs.map((input) =>
-              input.name === edge.target.portName ? { ...input, name: portName } : { ...input },
-            ),
-          } as unknown as WorkflowNode)
-        : node,
-    )
+    if (
+      targetNode.kind === 'wrapper-fanout' &&
+      readShardSourcePort(targetNode) === edge.target.portName
+    ) {
+      nodes = previous.nodes.map((node) =>
+        node.id === targetNode.id
+          ? ({
+              ...(node as Record<string, unknown>),
+              shardSourcePort: portName,
+            } as unknown as WorkflowNode)
+          : node,
+      )
+    }
     edges = previous.edges.map((candidate) => {
       if (
+        candidate.boundary === undefined &&
         candidate.target.nodeId === targetNode.id &&
         candidate.target.portName === edge.target.portName
       ) {
@@ -705,22 +531,6 @@ export function applyWorkflowTransition(
 ): WorkflowTransitionResult {
   if (transition.kind === 'connection') {
     return applyConnectionTransition(previous, transition.plan, semanticContext)
-  }
-  if (transition.kind === 'set-review-input-source') {
-    return applyReviewInputSourceTransition(
-      previous,
-      transition.reviewNodeId,
-      transition.inputSource,
-      semanticContext,
-    )
-  }
-  if (transition.kind === 'set-output-ports') {
-    return applyOutputPortsTransition(
-      previous,
-      transition.outputNodeId,
-      transition.ports,
-      semanticContext,
-    )
   }
   if (transition.kind === 'rename-edge-target-port') {
     const renamed = renameTargetPortCandidate(

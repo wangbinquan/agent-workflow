@@ -50,9 +50,10 @@ describe('styles.css wrapper rule migration', () => {
     expect(css).toMatch(/\.wrapper-header-pill\s*\{/)
   })
 
-  // Regression: wrapper output ports (git_diff, loop outputBindings) are
-  // rendered along the BOTTOM edge centered, NOT on the right side. The
-  // shared right-side port-rows path doesn't fit wrappers — wrapper-group
+  // Regression: wrapper-git's `git_diff` output is rendered along the BOTTOM
+  // edge centered, NOT on the right side (RFC-354 moved loop RETURNS to the
+  // fan-out-style right-side boundary rows). The shared right-side
+  // port-rows path doesn't fit wrappers — wrapper-group
   // carries `padding: 0` (so the visible rect matches the bbox xyflow uses
   // for child clipping), and the default -14px right-handle offset would
   // push the dot outside the wrapper. JSDOM doesn't run layout, so we lock
@@ -87,7 +88,7 @@ describe('WrapperNodes.tsx component-level guards', () => {
     expect(src).not.toMatch(/side="left"\s+ports={data\.inputPorts}/)
   })
 
-  test('output ports render along bottom edge (Position.Bottom), not via PortHandles side="right"', async () => {
+  test('git output renders along bottom edge (Position.Bottom), not via PortHandles side="right"', async () => {
     const src = await wrapperNodes()
     // Bottom-port column rendering present.
     expect(src).toMatch(/canvas-node__bottom-ports/)

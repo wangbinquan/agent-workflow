@@ -35,15 +35,16 @@ describe('nextFreeInputPort', () => {
 })
 
 describe('existingInputPorts', () => {
-  test('derives from inbound edges; excludes wrapper-output boundary; adds output declared ports', () => {
+  test('derives from inbound edges; excludes wrapper-output boundary; output ports are edges too (RFC-354)', () => {
     const d = def(
       [
         { id: 'C', kind: 'agent-single', agentName: 'x' },
-        { id: 'O', kind: 'output', ports: [{ name: 'declared' }] },
+        { id: 'O', kind: 'output' },
       ],
       [
         { s: ['A', 'r'], t: ['C', 'in1'] },
         { s: ['B', 'r'], t: ['C', 'in2'] },
+        { s: ['B', 'r'], t: ['O', 'declared'] },
         { s: ['C', 'o'], t: ['O', 'collected'], boundary: 'wrapper-output' }, // excluded
       ],
     )

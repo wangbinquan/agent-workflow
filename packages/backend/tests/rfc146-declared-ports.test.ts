@@ -56,17 +56,10 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
     ])
   })
 
-  test('output：dataInputs = ports[].name', () => {
-    const node = {
-      id: 'o',
-      kind: 'output',
-      ports: [
-        { name: 'report', bind: { nodeId: 'x', portName: 'y' } },
-        { name: 'meta', bind: { nodeId: 'x', portName: 'z' } },
-      ],
-    }
+  test('output：声明为空——端口即入边（RFC-354 schema v6）', () => {
+    const node = { id: 'o', kind: 'output' }
     const d = declaredPorts(node as never, defOf([node]), new Map())
-    expect(names(d.dataInputs)).toEqual(['report', 'meta'])
+    expect(d.dataInputs).toEqual([])
     expect(d.dataOutputs).toEqual([])
   })
 
@@ -95,25 +88,28 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
     expect(names(declaredPorts(git as never, defOf([git]), new Map()).dataOutputs)).toEqual([
       'git_diff',
     ])
-    const loop = {
-      id: 'l',
-      kind: 'wrapper-loop',
-      nodeIds: [],
-      outputBindings: [{ name: 'final', bind: { nodeId: 'x', portName: 'y' } }],
+    // RFC-354 (schema v6): a loop's returns are its `wrapper-output` edges.
+    const loop = { id: 'l', kind: 'wrapper-loop', nodeIds: ['x'] }
+    const body = { id: 'x', kind: 'agent-single', agentName: 'w' }
+    const defn = {
+      ...defOf([loop, body]),
+      edges: [
+        {
+          id: 'ret',
+          source: { nodeId: 'x', portName: 'y' },
+          target: { nodeId: 'l', portName: 'final' },
+          boundary: 'wrapper-output',
+        },
+      ],
     }
-    expect(names(declaredPorts(loop as never, defOf([loop]), new Map()).dataOutputs)).toEqual([
+    expect(names(declaredPorts(loop as never, defn as never, new Map()).dataOutputs)).toEqual([
       'final',
     ])
   })
 
-  test('wrapper-fanout：无聚合器 ⇒ __done__/signal；有聚合器 ⇒ 改名出口；声明输入带 kind', () => {
+  test('wrapper-fanout：无聚合器 ⇒ __done__/signal；有聚合器 ⇒ 改名出口；参数即入边、不声明输入', () => {
     const worker = agent('worker')
-    const fan = {
-      id: 'f',
-      kind: 'wrapper-fanout',
-      nodeIds: ['in1'],
-      inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
-    }
+    const fan = { id: 'f', kind: 'wrapper-fanout', nodeIds: ['in1'], shardSourcePort: 'docs' }
     const inner = {
       id: 'in1',
       kind: 'agent-single',
@@ -122,7 +118,8 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
     }
     const d = declaredPorts(fan as never, defOf([fan, inner]), new Map([[worker.id, worker]]))
     expect(d.dataOutputs).toEqual([{ name: '__done__', kind: 'signal' }])
-    expect(d.dataInputs).toEqual([{ name: 'docs', kind: 'list<path<md>>' }])
+    // RFC-354 (schema v6): the sharded parameter is an inbound edge like any other.
+    expect(d.dataInputs).toEqual([])
 
     const agg = agent('agg', {
       role: 'aggregator',

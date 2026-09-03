@@ -229,7 +229,9 @@ describe('coordProjection', () => {
     expect(w1.style?.height).toBeGreaterThan(0)
   })
 
-  test('port-heavy loop expands its projected shell so bottom handles stay inside', () => {
+  // RFC-354: loop returns render as right-side boundary rows (like fan-out),
+  // so a return-heavy loop grows in HEIGHT (one row per return), not width.
+  test('return-heavy loop expands its projected shell so every side handle row stays inside', () => {
     const outputPorts = ['result_1', 'result_2', 'result_3', 'result_4', 'result_5', 'result_6']
     const d = def([
       wrap('loop', 'wrapper-loop', [], {
@@ -241,8 +243,8 @@ describe('coordProjection', () => {
       flowNode('loop', 'wrapper-loop', { x: 100, y: 100 }, { inputPorts: [], outputPorts }),
     ])
     const loop = projected.find((node) => node.id === 'loop')!
-    expect(loop.style?.width).toBe(532)
-    expect(loop.style?.height).toBe(160)
+    expect(loop.style?.width).toBe(200)
+    expect(loop.style?.height).toBe(234)
     expect(loop.position).toEqual({ x: 100, y: 100 })
   })
 
@@ -257,7 +259,7 @@ describe('coordProjection', () => {
     const projected = projectDefinitionForXyflow(d, [
       flowNode('loop', 'wrapper-loop', { x: 100, y: 100 }, { inputPorts: [], outputPorts }),
     ])
-    expect(projected.find((node) => node.id === 'loop')?.style?.width).toBe(200)
+    expect(projected.find((node) => node.id === 'loop')?.style?.height).toBe(160)
   })
 
   test('port-heavy fanout expands its projected height for every side handle row', () => {
@@ -271,7 +273,7 @@ describe('coordProjection', () => {
           kind: 'wrapper-fanout',
           position: { x: 100, y: 100 },
           nodeIds: [],
-          inputs: [{ name: 'shards', kind: 'list<string>', isShardSource: true }],
+          shardSourcePort: 'shards',
           size: { width: 240, height: 120 },
         } as unknown as WorkflowNode,
       ],
@@ -329,7 +331,7 @@ describe('coordProjection', () => {
           kind: 'wrapper-fanout',
           position: { x: 200, y: 200 },
           nodeIds: [],
-          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+          shardSourcePort: 'docs',
         } as unknown as WorkflowNode,
       ],
       edges: [],

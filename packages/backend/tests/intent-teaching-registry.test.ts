@@ -292,7 +292,8 @@ describe('RFC-348 — node-kind registry', () => {
   })
 
   test('the PortRef sub-table is ONE object referenced from review / edges / outputs', () => {
-    expect(INTENT_NODE_TEACHING.review.fields.inputSource.nested).toBe(WORKFLOW_PORT_REF_TEACHING)
+    // RFC-354 (schema v6): review has no PortRef field — its source is the `__review_input__` edge.
+    expect('inputSource' in INTENT_NODE_TEACHING.review.fields).toBe(false)
     expect(WORKFLOW_EDGE_TEACHING.source.nested).toBe(WORKFLOW_PORT_REF_TEACHING)
     expect(WORKFLOW_EDGE_TEACHING.target.nested).toBe(WORKFLOW_PORT_REF_TEACHING)
     expect(WORKFLOW_OUTPUT_TEACHING.bind.nested).toBe(WORKFLOW_PORT_REF_TEACHING)
@@ -368,12 +369,11 @@ const VALIDATOR_BASELINE = [
   'inputKey',
   'maxIterations',
   'nodeIds',
-  'outputBindings',
-  'ports',
   'promptTemplate',
   'provider',
   'rerunnableOnIterate',
   'rerunnableOnReject',
+  'shardSourcePort',
   'targetDir',
   'workflowName',
   'workgroupName',

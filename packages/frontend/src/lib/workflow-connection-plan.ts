@@ -19,14 +19,13 @@ import {
   kindsEqual,
   reviewApprovedPortName,
   resolveNodeAgent,
-  resolveReviewInputKind,
   tryHandlerForParsedKind,
   tryParseKind,
   type PortLookupAgent,
   type WorkflowDefinition,
   type WorkflowEdge,
   type WorkflowNode,
-  type WrapperFanoutPort,
+  resolveReviewInputKind,
 } from '@agent-workflow/shared'
 import {
   clarifyHasAttachedAgent,
@@ -94,7 +93,11 @@ interface GenericConnectionRequest {
   target: { mode: 'reuse'; portName: string } | { mode: 'new'; portName: string }
   /** Drag supplies its already-minted id; guided callers may omit it. */
   edgeId?: string
-  /** Preserve the pre-RFC-199 first=list<string>, later=string drag contract. */
+  /**
+   * Legacy drag contract into a fan-out: the first parameter dropped on a
+   * wrapper with no `shardSourcePort` becomes the shard source (RFC-354 —
+   * the edge itself declares the parameter; only the shard role is state).
+   */
   legacyFanoutInputInference?: boolean
 }
 
@@ -128,7 +131,9 @@ interface FanoutBoundaryInputRequest {
   innerEndpoint: WorkflowPortRef
   port: {
     portName: string
-    kind: string
+    /** Optional kind hint used for the compatibility advisory only (RFC-354:
+     *  the parameter's kind IS the outer source's declared kind). */
+    kind?: string
     role: 'shard' | 'broadcast'
   }
   edgeIds?: { outer: string; boundary: string }
@@ -141,7 +146,7 @@ interface FanoutBoundaryOutputRequest {
   innerEndpoint: WorkflowPortRef
   /** Existing target outside the wrapper. */
   outerEndpoint: WorkflowPortRef
-  port: { portName: string; kind: string }
+  port: { portName: string; kind?: string }
   edgeIds?: { boundary: string; outer: string }
 }
 
@@ -153,13 +158,14 @@ export type ConnectionRequest =
   | FanoutBoundaryInputRequest
   | FanoutBoundaryOutputRequest
 
-export interface SetFanoutInputsPatch {
-  kind: 'set-fanout-inputs'
+/** RFC-354: the only node-level fan-out state left — which parameter is split. */
+export interface SetFanoutShardSourcePatch {
+  kind: 'set-fanout-shard-source'
   wrapperNodeId: string
-  inputs: ReadonlyArray<WrapperFanoutPort>
+  shardSourcePort: string
 }
 
-export type ConnectionNodePatch = SetFanoutInputsPatch
+export type ConnectionNodePatch = SetFanoutShardSourcePatch
 
 export interface ConnectionMeta {
   edgeId: string
@@ -210,7 +216,6 @@ export interface ConnectionBlockReason {
     | 'fanout-port-kind-invalid'
     | 'fanout-shard-kind-not-list'
     | 'fanout-shard-source-missing'
-    | 'fanout-shard-state-invalid'
     | 'fanout-explicit-port-required'
     | 'edge-insert-ineligible'
     | 'edge-insert-candidate-incompatible'
@@ -456,10 +461,17 @@ function genericCompatibility(
   context: WorkflowSemanticContext,
 ): ConnectionCompatibility {
   if (targetNode.kind === 'agent-single' || targetNode.kind === 'output') return 'compatible'
-  // RFC-354: a wrapper-git / wrapper-loop parameter has no declared kind of
-  // its own (the port table derives it from this very edge), so any source is
-  // acceptable — the inner consumer's kind check happens on the boundary edge.
-  if (targetNode.kind === 'wrapper-git' || targetNode.kind === 'wrapper-loop') return 'compatible'
+  // RFC-354: a wrapper parameter has no declared kind of its own (the port
+  // table derives it from this very edge), so any source is acceptable — the
+  // inner consumer's kind check happens on the boundary edge, and the fan-out
+  // shard port's list-ness is the validator's `wrapper-fanout-shard-source-must-be-list`.
+  if (
+    targetNode.kind === 'wrapper-git' ||
+    targetNode.kind === 'wrapper-loop' ||
+    targetNode.kind === 'wrapper-fanout'
+  ) {
+    return 'compatible'
+  }
   const targetPort = declaredPorts(targetNode, definition, context.agentsByName).dataInputs.find(
     (port) => port.name === targetPortName,
   )
@@ -622,6 +634,7 @@ function planGenericConnection(
       : []
   const edge = markBoundaryWrapperOutput(definition, markBoundaryWrapperInput(definition, rawEdge))
   const warnings: ConnectionAdvisory[] = []
+  const nodePatches: ConnectionNodePatch[] = []
   if (pathExists(definition, target.nodeId, request.source.nodeId, new Set(removeEdgeIds))) {
     warnings.push({
       code: 'topology-cycle',
@@ -639,13 +652,23 @@ function planGenericConnection(
       message:
         'Legacy drag inferred the fan-out input kind; guided creation requires an explicit role.',
     })
+    // RFC-354: the first parameter a legacy drag declares on a fan-out with no
+    // shard source becomes the shard source (the pre-RFC-199 "first drop =
+    // shard" contract, now expressed as the one remaining node field).
+    if (readShardSourcePort(targetNode) === undefined) {
+      nodePatches.push({
+        kind: 'set-fanout-shard-source',
+        wrapperNodeId: targetNode.id,
+        shardSourcePort: target.portName,
+      })
+    }
   }
   const preview = emptyPreview()
   preview.replacedEdgeIds = [...removeEdgeIds]
   return successful(definition, context, {
     removeEdgeIds,
     addEdges: [edge],
-    nodePatches: [],
+    nodePatches,
     connectionMeta: [
       {
         edgeId,
@@ -823,20 +846,23 @@ function planCrossDesigner(
   })
 }
 
-function readFanoutInputs(node: WorkflowNode): WrapperFanoutPort[] {
-  const raw = (node as Record<string, unknown>).inputs
-  if (!Array.isArray(raw)) return []
-  const inputs: WrapperFanoutPort[] = []
-  for (const candidate of raw) {
-    const port = candidate as { name?: unknown; kind?: unknown; isShardSource?: unknown }
-    if (typeof port.name !== 'string' || typeof port.kind !== 'string') continue
-    inputs.push({
-      name: port.name,
-      kind: port.kind,
-      ...(port.isShardSource === true ? { isShardSource: true } : {}),
-    })
-  }
-  return inputs
+/** RFC-354: the fan-out's one node-level parameter fact — which port is split. */
+export function readShardSourcePort(node: WorkflowNode): string | undefined {
+  const raw = (node as Record<string, unknown>).shardSourcePort
+  return typeof raw === 'string' && raw !== '' ? raw : undefined
+}
+
+/** Declared kind of a source port, when the inventory knows it. */
+function declaredSourceKind(
+  definition: WorkflowDefinition,
+  source: WorkflowPortRef,
+  context: WorkflowSemanticContext,
+): string | undefined {
+  const sourceNode = nodeById(definition, source.nodeId)
+  if (sourceNode === undefined) return undefined
+  return declaredPorts(sourceNode, definition, context.agentsByName).dataOutputs.find(
+    (port) => port.name === source.portName,
+  )?.kind
 }
 
 function validateFanoutEndpoints(
@@ -884,49 +910,41 @@ function planFanoutBoundaryInput(
     request.outerEndpoint.nodeId,
   )
   if ('ok' in checked) return checked
-  const parsedKind = tryParseKind(request.port.kind)
-  if (parsedKind === null || !isRegisteredKindString(request.port.kind)) {
-    return blocked('fanout-port-kind-invalid', `Fan-out kind '${request.port.kind}' is malformed.`)
+  // RFC-354: the parameter's kind IS the outer source's declared kind; an
+  // explicit `kind` on the request is only a hint the guided dialog carries
+  // and must at least parse.
+  const hintedKind = request.port.kind
+  const parsedHint = hintedKind === undefined ? null : tryParseKind(hintedKind)
+  if (hintedKind !== undefined && (parsedHint === null || !isRegisteredKindString(hintedKind))) {
+    return blocked('fanout-port-kind-invalid', `Fan-out kind '${hintedKind}' is malformed.`)
   }
-  if (request.port.role === 'shard' && parsedKind.kind !== 'list') {
+  const sourceKind = declaredSourceKind(definition, request.outerEndpoint, context)
+  const parsedSource = sourceKind === undefined ? null : tryParseKind(sourceKind)
+  if (
+    request.port.role === 'shard' &&
+    ((parsedHint !== null && parsedHint.kind !== 'list') ||
+      (parsedSource !== null && parsedSource.kind !== 'list'))
+  ) {
     return blocked('fanout-shard-kind-not-list', 'A fan-out shard source must have kind list<T>.')
   }
 
-  const existing = readFanoutInputs(checked.wrapper)
-  const selectedExists = existing.some((port) => port.name === request.port.portName)
-  let inputs = existing.map((port) => ({ ...port }))
+  const currentShard = readShardSourcePort(checked.wrapper)
   const demotions: string[] = []
+  const nodePatches: ConnectionNodePatch[] = []
   if (request.port.role === 'shard') {
-    inputs = inputs.map((port) => {
-      if (port.name === request.port.portName) {
-        return { name: port.name, kind: request.port.kind, isShardSource: true }
-      }
-      if (port.isShardSource === true) demotions.push(port.name)
-      return { name: port.name, kind: port.kind }
-    })
-    if (!selectedExists) {
-      inputs.push({ name: request.port.portName, kind: request.port.kind, isShardSource: true })
+    if (currentShard !== request.port.portName) {
+      if (currentShard !== undefined) demotions.push(currentShard)
+      nodePatches.push({
+        kind: 'set-fanout-shard-source',
+        wrapperNodeId: request.wrapperNodeId,
+        shardSourcePort: request.port.portName,
+      })
     }
-  } else {
-    if (!selectedExists) inputs.push({ name: request.port.portName, kind: request.port.kind })
-    else {
-      inputs = inputs.map((port) =>
-        port.name === request.port.portName ? { name: port.name, kind: request.port.kind } : port,
-      )
-    }
-    const shardCount = inputs.filter((port) => port.isShardSource === true).length
-    if (shardCount === 0) {
-      return blocked(
-        'fanout-shard-source-missing',
-        'Choose one list<T> input as the shard source before adding broadcasts.',
-      )
-    }
-    if (shardCount !== 1) {
-      return blocked(
-        'fanout-shard-state-invalid',
-        'The wrapper has multiple shard sources; choose one shard to heal it first.',
-      )
-    }
+  } else if (currentShard === undefined) {
+    return blocked(
+      'fanout-shard-source-missing',
+      'Choose one list<T> input as the shard source before adding broadcasts.',
+    )
   }
 
   const reserved = new Set<string>()
@@ -964,16 +982,21 @@ function planFanoutBoundaryInput(
   const preview = emptyPreview()
   preview.replacedEdgeIds = [...removeEdgeIds]
   preview.fanoutShardDemotions = demotions
-  const compatibility = sourceKindCompatibility(
-    definition,
-    request.outerEndpoint,
-    request.port.kind,
-    context,
-  )
+  // Compatibility: with a kind hint, the outer source must declare that kind;
+  // without one, a shard source must declare SOME list kind (a broadcast
+  // accepts anything); an unloaded inventory stays 'unknown'.
+  const compatibility: ConnectionCompatibility =
+    hintedKind !== undefined
+      ? sourceKindCompatibility(definition, request.outerEndpoint, hintedKind, context)
+      : sourceKind === undefined
+        ? 'unknown'
+        : request.port.role === 'broadcast' || parsedSource?.kind === 'list'
+          ? 'compatible'
+          : 'incompatible'
   return successful(definition, context, {
     removeEdgeIds,
     addEdges,
-    nodePatches: [{ kind: 'set-fanout-inputs', wrapperNodeId: request.wrapperNodeId, inputs }],
+    nodePatches,
     connectionMeta: addEdges.map((edge) => ({
       edgeId: edge.id,
       targetMode: 'fixed',
@@ -1004,7 +1027,7 @@ function planFanoutBoundaryOutput(
     request.outerEndpoint.nodeId,
   )
   if ('ok' in checked) return checked
-  if (!isRegisteredKindString(request.port.kind)) {
+  if (request.port.kind !== undefined && !isRegisteredKindString(request.port.kind)) {
     return blocked('fanout-port-kind-invalid', `Fan-out kind '${request.port.kind}' is malformed.`)
   }
   const reserved = new Set<string>()
@@ -1065,6 +1088,8 @@ function planFanoutBoundaryOutput(
         promoted?.kind === undefined
       ) {
         innerCompatibility = 'incompatible'
+      } else if (request.port.kind === undefined) {
+        innerCompatibility = 'compatible'
       } else {
         const requestedKind = tryParseKind(request.port.kind)
         const promotedKind = tryParseKind(promoted.kind)

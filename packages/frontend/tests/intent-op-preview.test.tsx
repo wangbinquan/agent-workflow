@@ -238,7 +238,6 @@ describe('RFC-234 IntentOpPreview', () => {
         {
           id: 'review',
           kind: 'review',
-          inputSource: { nodeId: 'agent', portName: 'result' },
           commentInjectTemplate: 'before review',
         },
         {

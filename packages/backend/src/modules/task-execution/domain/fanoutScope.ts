@@ -30,14 +30,9 @@ export interface ShardScopeInput {
 function getShardSourcePort(defn: WorkflowDefinition, wrapperId: string): string | null {
   const node = defn.nodes.find((n) => n.id === wrapperId)
   if (node === undefined || node.kind !== 'wrapper-fanout') return null
-  const rec = node as Record<string, unknown>
-  const inputs = Array.isArray(rec.inputs) ? (rec.inputs as unknown[]) : []
-  for (const item of inputs) {
-    if (typeof item !== 'object' || item === null) continue
-    const r = item as Record<string, unknown>
-    if (r.isShardSource === true && typeof r.name === 'string') return r.name
-  }
-  return null
+  // RFC-354 (schema v6): the sharded PARAMETER is named by `shardSourcePort`.
+  const port = (node as Record<string, unknown>).shardSourcePort
+  return typeof port === 'string' && port.length > 0 ? port : null
 }
 
 /**

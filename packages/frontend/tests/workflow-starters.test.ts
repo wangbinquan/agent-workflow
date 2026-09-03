@@ -69,10 +69,14 @@ describe('RFC-199 T11 starter catalog', () => {
       kind: 'wrapper-git',
       nodeIds: ['starter_coder'],
     })
-    expect(planned.definition.nodes.find((node) => node.id === 'starter_fanout')).toMatchObject({
+    // RFC-354: the fan-out parameter is the `git_diff` edge; the node only names the shard source.
+    expect(planned.definition.nodes.find((node) => node.id === 'starter_fanout')).toEqual({
+      id: 'starter_fanout',
       kind: 'wrapper-fanout',
+      title: expect.any(String),
       nodeIds: ['starter_auditor', 'starter_aggregator'],
-      inputs: [{ name: 'changed_files', kind: 'list<path<*>>', isShardSource: true }],
+      shardSourcePort: 'changed_files',
+      position: expect.any(Object),
     })
     expect(planned.definition.edges).toEqual(
       expect.arrayContaining([
@@ -109,9 +113,15 @@ describe('RFC-199 T11 starter catalog', () => {
     if (!planned.ok) return
     expect(planned.definition.nodes).toHaveLength(3)
     expect(planned.definition.edges).toHaveLength(2)
-    expect(planned.definition.nodes.at(-1)).toMatchObject({
-      kind: 'output',
-      ports: [{ name: 'audit_report', bind: { nodeId: 'starter_auditor', portName: 'report' } }],
-    })
+    // RFC-354: the output port IS the edge into the output node.
+    const outputNode = planned.definition.nodes.at(-1) as unknown as Record<string, unknown>
+    expect(outputNode).toMatchObject({ id: 'starter_output', kind: 'output' })
+    expect('ports' in outputNode).toBe(false)
+    expect(planned.definition.edges).toContainEqual(
+      expect.objectContaining({
+        source: { nodeId: 'starter_auditor', portName: 'report' },
+        target: { nodeId: 'starter_output', portName: 'audit_report' },
+      }),
+    )
   })
 })

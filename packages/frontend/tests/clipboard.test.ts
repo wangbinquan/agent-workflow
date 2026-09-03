@@ -243,8 +243,8 @@ describe('applyPaste', () => {
           id: 'loop',
           kind: 'wrapper-loop',
           nodeIds: ['input-a', 'input-b', 'review', 'output'],
-          exitCondition: { kind: 'port-not-empty', nodeId: 'input-a', portName: 'docs' },
-          outputBindings: [{ name: 'result', bind: { nodeId: 'input-b', portName: 'docs' } }],
+          // RFC-354: the exit condition names the loop's OWN return port.
+          exitCondition: { kind: 'port-not-empty', portName: 'result' },
           position: { x: 20, y: 20 },
         },
         { id: 'input-a', kind: 'input', inputKey: 'docs', position: { x: 40, y: 40 } },
@@ -252,17 +252,11 @@ describe('applyPaste', () => {
         {
           id: 'review',
           kind: 'review',
-          inputSource: { nodeId: 'input-a', portName: 'docs' },
           rerunnableOnReject: ['input-a', 'input-b'],
           rerunnableOnIterate: ['input-b'],
           position: { x: 280, y: 40 },
         },
-        {
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'final', bind: { nodeId: 'input-b', portName: 'docs' } }],
-          position: { x: 520, y: 40 },
-        },
+        { id: 'output', kind: 'output', position: { x: 520, y: 40 } },
       ],
       edges: [
         {
@@ -271,10 +265,22 @@ describe('applyPaste', () => {
           target: { nodeId: 'input-a', portName: 'docs' },
           boundary: 'wrapper-input',
         },
+        // RFC-354: the review input, the loop return and the output port are all edges.
         {
           id: 'input-to-review',
           source: { nodeId: 'input-a', portName: 'docs' },
-          target: { nodeId: 'review', portName: 'in' },
+          target: { nodeId: 'review', portName: '__review_input__' },
+        },
+        {
+          id: 'loop-return',
+          source: { nodeId: 'input-b', portName: 'docs' },
+          target: { nodeId: 'loop', portName: 'result' },
+          boundary: 'wrapper-output',
+        },
+        {
+          id: 'output-port',
+          source: { nodeId: 'input-b', portName: 'docs' },
+          target: { nodeId: 'output', portName: 'final' },
         },
       ],
     }
@@ -307,23 +313,29 @@ describe('applyPaste', () => {
       'review_copy',
       'output_copy',
     ])
-    expect(copiedLoop.exitCondition).toMatchObject({
-      nodeId: 'input-a_copy',
-      portName: 'docs_copy',
-    })
-    expect(copiedLoop.outputBindings).toEqual([
-      { name: 'result', bind: { nodeId: 'input-b_copy', portName: 'docs_copy' } },
-    ])
-    expect(copiedReview.inputSource).toEqual({
-      nodeId: 'input-a_copy',
-      portName: 'docs_copy',
-    })
+    // The loop's own return port name is a loop-local fact — not a reference.
+    expect(copiedLoop.exitCondition).toEqual({ kind: 'port-not-empty', portName: 'result' })
+    expect('outputBindings' in copiedLoop).toBe(false)
+    expect('inputSource' in copiedReview).toBe(false)
     expect(copiedReview.rerunnableOnReject).toEqual(['input-a_copy', 'input-b_copy'])
     expect(copiedReview.rerunnableOnIterate).toEqual(['input-b_copy'])
-    expect(copiedOutput.ports).toEqual([
-      { name: 'final', bind: { nodeId: 'input-b_copy', portName: 'docs_copy' } },
-    ])
+    expect('ports' in copiedOutput).toBe(false)
     expect(copiedInputs.map((node) => node.inputKey)).toEqual(['docs_copy', 'docs_copy'])
+    // RFC-354: the return edge and the output edge follow the renamed source port.
+    expect(
+      result.definition.edges.find(
+        (edge) => edge.target.nodeId === 'loop_copy' && edge.boundary === 'wrapper-output',
+      ),
+    ).toMatchObject({
+      source: { nodeId: 'input-b_copy', portName: 'docs_copy' },
+      target: { nodeId: 'loop_copy', portName: 'result' },
+    })
+    expect(
+      result.definition.edges.find((edge) => edge.target.nodeId === 'output_copy'),
+    ).toMatchObject({
+      source: { nodeId: 'input-b_copy', portName: 'docs_copy' },
+      target: { nodeId: 'output_copy', portName: 'final' },
+    })
 
     const copiedBoundary = result.definition.edges.find(
       (edge) => edge.source.nodeId === 'outer_copy' && edge.target.nodeId === 'input-a_copy',
@@ -398,12 +410,17 @@ describe('applyPaste', () => {
         {
           id: 'review',
           kind: 'review',
-          inputSource: { nodeId: 'outside', portName: 'report' },
           rerunnableOnReject: ['outside'],
           rerunnableOnIterate: [],
         },
       ],
-      edges: [],
+      edges: [
+        {
+          id: 'outside-review',
+          source: { nodeId: 'outside', portName: 'report' },
+          target: { nodeId: 'review', portName: '__review_input__' },
+        },
+      ],
     }
     const slice = buildSlice(source, ['review'], SOURCE_WORKFLOW_ID)!
     const result = applyPaste(source, slice, { x: 0, y: 0 })
@@ -412,7 +429,9 @@ describe('applyPaste', () => {
       unknown
     >
 
-    expect(copied.inputSource).toEqual({ nodeId: '', portName: '' })
+    // RFC-354: the review input edge crossed the slice boundary → not copied.
+    expect(result.definition.edges.some((edge) => edge.target.nodeId === 'review_copy')).toBe(false)
+    expect('inputSource' in copied).toBe(false)
     expect(copied.rerunnableOnReject).toEqual([])
     expect(result.warnings).toEqual(
       expect.arrayContaining([

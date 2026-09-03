@@ -1,22 +1,25 @@
-// RFC-147 — 系统通道端口注册表：表值锁 + 四投影语义格 + 收敛防回潮棘轮。
+// RFC-147 → RFC-354 D6 — 系统通道端口：端口表是唯一来源 + 四投影语义格 + 收敛防回潮棘轮。
 //
 // 为什么这条测试存在：「哪些端口是系统通道、图遍历该不该当数据流依赖」曾有
-// 6 份拷贝 3 种语义家族（成员集已漂移）。收敛后本文件逐格钉死语义——特别是
-// channelEdgeDataflowSkip 的 nuanced 格（`__clarify__` 仅 target 为 clarify 才
-// 跳、cross-clarify 目标保留为真依赖——2026-05-22 无上游泄洪 bug 的修复语义），
-// 该语义曾以手抄对形式存在于 scheduler.buildScopeUpstreams 与
+// 6 份拷贝 3 种语义家族（成员集已漂移）。RFC-147 先收敛成一张注册表，再用一条
+// drift 测试把它和端口表（declaredPorts）互锁；RFC-354 D6 把注册表折进端口表本身
+// （`DeclaredPort.channel`），四个投影（isSystemChannelEdge / touchesSystemChannelPort /
+// promptInjectedPortNames / channelEdgeDataflowSkip）全部从表派生——没有第二张表可漂。
+// 本文件逐格钉死语义——特别是 channelEdgeDataflowSkip 的 nuanced 格（`__clarify__` 仅
+// target 为 clarify 才跳、cross-clarify 目标保留为真依赖——2026-05-22 无上游泄洪 bug 的
+// 修复语义），该语义曾以手抄对形式存在于 scheduler.buildScopeUpstreams 与
 // dispatchFrontier.wrapperExternalUpstreamSources（注释人肉 "keep in lockstep"）。
 
 import {
-  PROMPT_INJECTED_PORT_NAMES,
-  SYSTEM_CHANNEL_PORTS,
   channelEdgeDataflowSkip,
   declaredPorts,
   isClarifyChannelEdge,
   isSystemChannelEdge,
+  promptInjectedPortNames,
+  systemChannelPorts,
   touchesSystemChannelPort,
 } from '@agent-workflow/shared'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
@@ -25,9 +28,9 @@ const edge = (sourcePort: string, targetPort: string, targetNode = 'T') => ({
   target: { nodeId: targetNode, portName: targetPort },
 })
 
-describe('SYSTEM_CHANNEL_PORTS — 表值锁', () => {
+describe('端口表的通道投影 — 表值锁', () => {
   test('恰好 5 端口，逐行 side/promptInjected/dataflow', () => {
-    expect(SYSTEM_CHANNEL_PORTS).toEqual({
+    expect(Object.fromEntries(systemChannelPorts())).toEqual({
       __clarify__: { side: 'source', promptInjected: false, dataflow: 'unless-target-clarify' },
       __clarify_response__: { side: 'target', promptInjected: true, dataflow: 'never' },
       __external_feedback__: { side: 'target', promptInjected: true, dataflow: 'never' },
@@ -36,11 +39,46 @@ describe('SYSTEM_CHANNEL_PORTS — 表值锁', () => {
     })
   })
 
-  test('派生集一致性：PROMPT_INJECTED = {response, feedback}', () => {
-    expect([...PROMPT_INJECTED_PORT_NAMES].sort()).toEqual([
+  test('派生集一致性：promptInjected = {response, feedback}', () => {
+    expect([...promptInjectedPortNames()].sort()).toEqual([
       '__clarify_response__',
       '__external_feedback__',
     ])
+  })
+
+  test('每个通道端口都是 owner kind 端口表系统组里带 channel 的那一行（side = 组）', () => {
+    const OWNERS: Record<string, { kind: string; group: 'systemInputs' | 'systemOutputs' }> = {
+      __clarify__: { kind: 'agent-single', group: 'systemOutputs' },
+      __clarify_response__: { kind: 'agent-single', group: 'systemInputs' },
+      __external_feedback__: { kind: 'agent-single', group: 'systemInputs' },
+      to_designer: { kind: 'clarify-cross-agent', group: 'systemOutputs' },
+      to_questioner: { kind: 'clarify-cross-agent', group: 'systemOutputs' },
+    }
+    for (const [port, spec] of systemChannelPorts()) {
+      const owner = OWNERS[port]
+      expect(
+        owner,
+        `channel port '${port}' 缺 owner 期望——新端口需同时补端口表与此表`,
+      ).toBeDefined()
+      const node =
+        owner!.kind === 'agent-single'
+          ? { id: 'n', kind: 'agent-single', agentName: 'a' }
+          : { id: 'n', kind: owner!.kind }
+      const defn = { $schema_version: 6, inputs: [], nodes: [node], edges: [] }
+      const declared = declaredPorts(node as never, defn as never, new Map())
+      const row = declared[owner!.group].find((p) => p.name === port)
+      expect(row?.channel, `'${port}' 应带 channel 声明于 ${owner!.kind}.${owner!.group}`).toEqual({
+        promptInjected: spec.promptInjected,
+        dataflow: spec.dataflow,
+      })
+      expect(spec.side).toBe(owner!.group === 'systemInputs' ? 'target' : 'source')
+    }
+  })
+
+  test('注册表文件已删除：没有第二张表', () => {
+    expect(
+      existsSync(resolve(import.meta.dir, '..', '..', 'shared', 'src', 'systemChannelPorts.ts')),
+    ).toBe(false)
   })
 })
 
@@ -150,51 +188,17 @@ describe('家族 D — channelEdgeDataflowSkip nuanced 语义格（先钉后收�
   })
 })
 
-describe('RFC-147 — 注册表 ↔ declaredPorts 漂移互锁（设计门 high 采纳）', () => {
-  // 注册表管「端口家族语义」、declaredPorts 管「哪个 kind 声明哪个口」——两张
-  // 表职责不同但成员必须一致：注册表加了新通道端口而 declaredPorts 没给
-  // owner kind 声明，会出现「调度当通道跳、画布/validator 却不认识」的分裂。
-  // 本测试遍历注册表键，逐一断言其在 owner kind 的 declaredPorts 系统组里；
-  // 出现测试不认识的新键时 fail-loud（提示同时补 declaredPorts 行与此处期望）。
-  test('每个注册表端口都声明在 owner kind 的系统组', () => {
-    const OWNERS: Record<string, { kind: string; group: 'systemInputs' | 'systemOutputs' }> = {
-      __clarify__: { kind: 'agent-single', group: 'systemOutputs' },
-      __clarify_response__: { kind: 'agent-single', group: 'systemInputs' },
-      __external_feedback__: { kind: 'agent-single', group: 'systemInputs' },
-      to_designer: { kind: 'clarify-cross-agent', group: 'systemOutputs' },
-      to_questioner: { kind: 'clarify-cross-agent', group: 'systemOutputs' },
-    }
-    for (const port of Object.keys(SYSTEM_CHANNEL_PORTS)) {
-      const owner = OWNERS[port]
-      expect(
-        owner,
-        `registry port '${port}' 缺 owner 期望——新端口需同时补 declaredPorts 与此表`,
-      ).toBeDefined()
-      const node =
-        owner!.kind === 'agent-single'
-          ? { id: 'n', kind: 'agent-single', agentName: 'a' }
-          : { id: 'n', kind: owner!.kind }
-      const defn = { $schema_version: 4, inputs: [], nodes: [node], edges: [] }
-      const d = declaredPorts(node as never, defn as never, new Map())
-      expect(
-        d[owner!.group].map((p) => p.name),
-        `'${port}' 应声明于 ${owner!.kind}.${owner!.group}`,
-      ).toContain(port)
-    }
-  })
-})
-
 describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
   const read = (rel: string): string =>
     readFileSync(resolve(import.meta.dir, '..', '..', '..', rel), 'utf8')
 
-  test('workflow-sync-diff / prompt 私有集删除，改查注册表投影', () => {
+  test('workflow-sync-diff / prompt 私有集删除，改查端口表投影', () => {
     const syncDiff = read('packages/shared/src/workflow-sync-diff.ts')
     expect(syncDiff).not.toContain('CHANNEL_PORTS')
     expect(syncDiff).toContain('touchesSystemChannelPort')
     const prompt = read('packages/shared/src/prompt.ts')
     expect(prompt).not.toContain('SYSTEM_PORT_NAMES')
-    expect(prompt).toContain('PROMPT_INJECTED_PORT_NAMES')
+    expect(prompt).toContain('promptInjectedPortNames()')
   })
 
   test('taskDagGraph / dispatchFrontier 手抄对收敛为 channelEdgeDataflowSkip', () => {
@@ -205,7 +209,7 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
     for (const src of [taskDagGraph, frontier]) {
       expect(src).toContain('channelEdgeDataflowSkip(')
       // 手写块指纹：response+feedback+to_* 四端口字面量组成的跳边条件不得回潮
-      //（注册表文件本身是唯一的字面量之家）。
+      //（端口表文件本身是唯一的字面量之家）。
       expect(src).not.toMatch(
         /__clarify_response__'[\s\S]{0,200}__external_feedback__'[\s\S]{0,200}to_designer'/,
       )
@@ -224,9 +228,9 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
     expect(implementation).toContain('isClarifyChannelEdge')
   })
 
-  test('五端口字面量比较式全仓禁绝（常量/注册表是唯一之家）——设计门 high 采纳', () => {
+  test('五端口字面量比较式全仓禁绝（常量/端口表是唯一之家）——设计门 high 采纳', () => {
     // 谓词形态（=== '__clarify__' 等）意味着又一份散装语义拷贝。合法家：
-    // schemas/workflow.ts（常量定义）与 systemChannelPorts.ts（注册表）。
+    // schemas/workflow.ts（常量定义）与 nodePorts.ts（端口表）。
     // 人读消息串/注释不受限（只扫比较运算符形态）。
     // RFC-317 T59（findings NK-03）—— **补上 frontend**。
     // 本条测试的标题写着「全仓禁绝」，而根只有两个包；前端当时确实躺着两处违例
@@ -239,7 +243,7 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
       ['shared', resolve(import.meta.dir, '..', '..', 'shared', 'src')],
       ['frontend', resolve(import.meta.dir, '..', '..', 'frontend', 'src')],
     ] as const
-    const ALLOW = new Set(['schemas/workflow.ts', 'systemChannelPorts.ts'])
+    const ALLOW = new Set(['schemas/workflow.ts', 'nodePorts.ts'])
     const LIT =
       /[!=]==\s*'(?:__clarify__|__clarify_response__|__external_feedback__|to_designer|to_questioner)'/
     const violations: string[] = []

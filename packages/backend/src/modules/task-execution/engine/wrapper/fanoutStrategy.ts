@@ -7,7 +7,6 @@ import {
   tryParseKind,
   type Agent,
   type ParsedKind,
-  type WrapperFanoutPort,
 } from '@agent-workflow/shared'
 import {
   applyAutoPromote,
@@ -28,7 +27,8 @@ import type {
 import { wrapperSettlement } from './strategySupport'
 
 interface PreparedFanoutWrapper {
-  readonly shardPort: WrapperFanoutPort
+  /** RFC-354: the sharded PARAMETER (`shardSourcePort`) and its source port's kind. */
+  readonly shardPort: { readonly name: string; readonly kind: string }
   readonly itemKind: ParsedKind
   readonly innerIds: readonly string[]
   readonly agentsMap: ReadonlyMap<string, Agent>
@@ -52,19 +52,50 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
   ): Promise<WrapperPreparation<'wrapper-fanout'>> {
     const { node, scope } = request
     const record = node as Record<string, unknown>
-    const inputs = Array.isArray(record.inputs) ? (record.inputs as WrapperFanoutPort[]) : []
-    const shardPort = inputs.find((port) => port?.isShardSource === true)
-    if (shardPort === undefined) {
+    // RFC-354 (schema v6): parameters are the wrapper's inbound edges;
+    // `shardSourcePort` names the one whose items are sharded, and its kind is
+    // the kind of the source port feeding it.
+    const shardSourcePort =
+      typeof record.shardSourcePort === 'string' && record.shardSourcePort.length > 0
+        ? record.shardSourcePort
+        : null
+    const shardEdge =
+      shardSourcePort === null
+        ? undefined
+        : this.data.definition.edges.find(
+            (edge) =>
+              edge.boundary === undefined &&
+              edge.target.nodeId === node.id &&
+              edge.target.portName === shardSourcePort,
+          )
+    if (shardSourcePort === null || shardEdge === undefined) {
       return {
         kind: 'rejected',
         outcome: {
           kind: 'failed',
-          summary: `wrapper-fanout ${node.id} missing shardSource input`,
+          summary: `wrapper-fanout ${node.id} missing shardSource parameter (no inbound edge for shardSourcePort)`,
           message: 'wrapper-fanout-shard-source-missing',
         },
       }
     }
-    const parsedKind = tryParseKind(shardPort.kind)
+    const declaredKind = await this.data.sourcePortKind(
+      shardEdge.source.nodeId,
+      shardEdge.source.portName,
+    )
+    // A source that declares no kind (a text workflow input, an agent without
+    // `outputKinds`) is split as a plain line list — the shape the v5 canvas
+    // inferred for an undeclared shard source. A DECLARED non-list kind is a
+    // real contradiction and fails closed.
+    if (declaredKind === null) {
+      this.data.reportDiagnostic({
+        level: 'warn',
+        message: 'wrapper-fanout shard source declares no kind; splitting as list<string>',
+        fields: { nodeId: node.id, shardSourcePort, source: shardEdge.source },
+      })
+    }
+    const shardKind = declaredKind ?? 'list<string>'
+    const shardPort = { name: shardSourcePort, kind: shardKind }
+    const parsedKind = tryParseKind(shardKind)
     if (parsedKind === null || parsedKind.kind !== 'list') {
       return {
         kind: 'rejected',

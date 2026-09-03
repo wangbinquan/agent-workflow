@@ -28,12 +28,7 @@ function ordinaryDefinition(): WorkflowDefinition {
     nodes: [
       agentNode('a', 'a', 0),
       agentNode('n-placeholder', 'n', 200),
-      {
-        id: 'b',
-        kind: 'output',
-        position: { x: 500, y: 0 },
-        ports: [{ name: 'existing', bind: { nodeId: 'a', portName: 'doc' } }],
-      } as WorkflowNode,
+      { id: 'b', kind: 'output', position: { x: 500, y: 0 } } as WorkflowNode,
     ],
     edges: [
       {
@@ -46,7 +41,7 @@ function ordinaryDefinition(): WorkflowDefinition {
 }
 
 describe('workflow edge insertion planner', () => {
-  test('atomically preserves the old target port and rewrites its mirror once', () => {
+  test('atomically preserves the old target port name on the rewired edge', () => {
     const definition = ordinaryDefinition()
     definition.nodes = definition.nodes.filter((node) => node.id !== 'n-placeholder')
     const context = createWorkflowSemanticContext(agents)
@@ -72,10 +67,12 @@ describe('workflow edge insertion planner', () => {
       }),
     )
     expect(result.next.edges.some((edge) => edge.id === 'old-edge')).toBe(false)
-    const output = result.next.nodes.find((node) => node.id === 'b') as unknown as {
-      ports: Array<{ name: string; bind: { nodeId: string; portName: string } }>
-    }
-    expect(output.ports).toEqual([{ name: 'existing', bind: { nodeId: 'n', portName: 'out' } }])
+    // RFC-354: the output node carries no port declaration — the edge IS the port.
+    expect(result.next.nodes.find((node) => node.id === 'b')).toEqual({
+      id: 'b',
+      kind: 'output',
+      position: { x: 500, y: 0 },
+    })
   })
 
   test('fails closed for boundary and wrapper-inner edges', () => {

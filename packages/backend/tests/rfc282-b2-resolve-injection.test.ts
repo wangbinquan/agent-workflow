@@ -164,14 +164,16 @@ describe('RFC-282 B2 — zero-resource synthetic agents always resolve ok (P2-9 
 })
 
 describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one resource session', () => {
-  test('TaskExecution has five managed session reads plus three explicit synthetic resolutions', () => {
+  test('TaskExecution has six managed session reads plus three explicit synthetic resolutions', () => {
     const text = [
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
     ].join('\n')
     expect(text).not.toContain('await resolveInjection(')
-    expect(text.split('taskExecutionResources.injection(').length - 1).toBe(5)
+    // RFC-354 (schema v6): the sixth read resolves a fan-out shard source's
+    // declared output kind from its agent (`sourcePortKindOf`).
+    expect(text.split('taskExecutionResources.injection(').length - 1).toBe(6)
     expect(text.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(3)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')

@@ -29,7 +29,7 @@ function fanout(id: string, nodeIds: string[]) {
     kind: 'wrapper-fanout',
     position: { x: 0, y: 0 },
     nodeIds,
-    inputs: [{ name: 'docs', kind: 'list<string>', isShardSource: true }],
+    shardSourcePort: 'docs',
   } as unknown as WorkflowDefinition['nodes'][number]
 }
 

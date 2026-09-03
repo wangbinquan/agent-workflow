@@ -70,6 +70,7 @@ import {
   SIBLING_OUTPUTS_INSTRUCTION,
   TERMINAL_TASK_STATUSES,
   WorkflowDefinitionSchema,
+  reviewInputSource,
 } from '@agent-workflow/shared'
 import {
   acceptedSubsetPaths,
@@ -616,11 +617,12 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     }
   }
 
-  const inputSource = readPortRef(node, 'inputSource')
+  // RFC-354 (schema v6): the reviewed source is the review node's `__review_input__` edge.
+  const inputSource = reviewInputSource(definition, node.id)
   if (inputSource === null) {
     return {
       kind: 'failed',
-      summary: `review node ${node.id} missing inputSource`,
+      summary: `review node ${node.id} has no __review_input__ edge`,
       message: 'review-input-source-missing',
     }
   }
@@ -4179,7 +4181,7 @@ async function planRerun(
     for (const n of definition.nodes) {
       if (n.kind !== 'review') continue
       if (n.id === dv.reviewNodeId) continue
-      const inputSource = readPortRef(n, 'inputSource')
+      const inputSource = reviewInputSource(definition, n.id)
       if (inputSource === null || inputSource.nodeId !== dv.sourceNodeId) continue
       const siblingRuns = await db
         .select()
@@ -4710,14 +4712,6 @@ function rowToReviewComment(row: typeof reviewComments.$inferSelect): ReviewComm
 // ---------------------------------------------------------------------------
 // Misc helpers.
 // ---------------------------------------------------------------------------
-
-function readPortRef(node: WorkflowNode, key: string): { nodeId: string; portName: string } | null {
-  const v = (node as Record<string, unknown>)[key]
-  if (v === undefined || v === null || typeof v !== 'object') return null
-  const rec = v as Record<string, unknown>
-  if (typeof rec.nodeId !== 'string' || typeof rec.portName !== 'string') return null
-  return { nodeId: rec.nodeId, portName: rec.portName }
-}
 
 function readBool(node: WorkflowNode, key: string, fallback: boolean): boolean {
   const v = (node as Record<string, unknown>)[key]

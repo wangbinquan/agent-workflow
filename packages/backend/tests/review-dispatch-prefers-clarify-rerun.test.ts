@@ -71,13 +71,16 @@ describe('dispatchReviewNode upstream selection — clarify rerun must beat stal
       inputs: [],
       nodes: [
         { id: 'doc', kind: 'agent-single', agentName: 'doc', promptTemplate: '' } as WorkflowNode,
-        {
-          id: 'rev_1',
-          kind: 'review',
-          inputSource: { nodeId: 'doc', portName: 'docpath' },
-        } as unknown as WorkflowNode,
+        { id: 'rev_1', kind: 'review' } as unknown as WorkflowNode,
       ],
-      edges: [],
+      edges: [
+        // RFC-354 (schema v6): the reviewed source is the review's inbound edge.
+        {
+          id: 'e_review',
+          source: { nodeId: 'doc', portName: 'docpath' },
+          target: { nodeId: 'rev_1', portName: '__review_input__' },
+        },
+      ],
     }
     const workflowId = ulid()
     await db.insert(workflows).values({

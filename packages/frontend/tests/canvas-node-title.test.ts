@@ -102,28 +102,32 @@ describe('nodeTitle()', () => {
   // `review:<port>` derivation — previously only in the loop-candidates
   // fork — now applies to the canvas card too (the RFC's one deliberate
   // display change).
-  test('review node with wired inputSource derives review:<port>', () => {
-    expect(
-      nodeTitle(mk({ id: 'rev_1', kind: 'review', inputSource: { nodeId: 'a', portName: 'doc' } })),
-    ).toBe('review:doc')
+  // RFC-354 (schema v6): the reviewed port is the source of the review's
+  // `__review_input__` edge, so the rule needs the definition's edges.
+  const REVIEW_WIRED = {
+    edges: [
+      {
+        id: 'e1',
+        source: { nodeId: 'a', portName: 'doc' },
+        target: { nodeId: 'rev_1', portName: '__review_input__' },
+      },
+    ],
+  }
+
+  test('review node with a wired input edge derives review:<port>', () => {
+    expect(nodeTitle(mk({ id: 'rev_1', kind: 'review' }), undefined, REVIEW_WIRED)).toBe(
+      'review:doc',
+    )
   })
 
-  test('review node without a wired port still falls back to id', () => {
-    expect(
-      nodeTitle(mk({ id: 'rev_1', kind: 'review', inputSource: { nodeId: '', portName: '' } })),
-    ).toBe('rev_1')
+  test('review node without a wired edge (or without a definition) still falls back to id', () => {
+    expect(nodeTitle(mk({ id: 'rev_1', kind: 'review' }), undefined, { edges: [] })).toBe('rev_1')
+    expect(nodeTitle(mk({ id: 'rev_1', kind: 'review' }))).toBe('rev_1')
   })
 
   test('explicit title still beats review:<port>', () => {
     expect(
-      nodeTitle(
-        mk({
-          id: 'rev_1',
-          kind: 'review',
-          title: 'Final gate',
-          inputSource: { nodeId: 'a', portName: 'doc' },
-        }),
-      ),
+      nodeTitle(mk({ id: 'rev_1', kind: 'review', title: 'Final gate' }), undefined, REVIEW_WIRED),
     ).toBe('Final gate')
   })
 })

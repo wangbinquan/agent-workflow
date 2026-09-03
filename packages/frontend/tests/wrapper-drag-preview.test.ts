@@ -171,14 +171,10 @@ describe('computeWrapperDragPreviews', () => {
     })
   })
 
-  test('accept preview also honors a port-heavy wrapper intrinsic width', () => {
+  test('accept preview also honors a return-heavy loop intrinsic side-row height', () => {
     const target = {
       ...wrapper('w', [], { x: 100, y: 100 }, { width: 200, height: 160 }),
       kind: 'wrapper-loop',
-      outputBindings: ['1', '2', '3', '4', '5', '6'].map((suffix) => ({
-        name: `result_${suffix}`,
-        bind: { nodeId: 'a', portName: 'out' },
-      })),
     } as unknown as WorkflowNode
     const def = definition([target, agent('a', { x: 110, y: 120 })])
     const projected = flowNodes(def).map((node) =>
@@ -199,7 +195,8 @@ describe('computeWrapperDragPreviews', () => {
       draggedNodeIds: ['a'],
       measuredSizes: new Map([['a', AGENT_SIZE]]),
     })
-    expect(previews.get('w')?.width).toBe(532)
+    // RFC-354: six returns stack down the right edge → 234px minimum height.
+    expect(previews.get('w')?.height).toBeGreaterThanOrEqual(234)
   })
 })
 

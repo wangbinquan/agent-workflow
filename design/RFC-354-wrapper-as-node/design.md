@@ -5,26 +5,26 @@
 
 ## 0. RFC-294 落位（`CLAUDE.md` §RFC workflow 第 8 条）
 
-| 改动                                                                       | bounded context    | 层                                                                                                                       |
-| -------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| schema v6、升级器、端口表（含通道语义）、引用清单、环境链纯函数              | shared（值对象）    | `schemas/{workflow,review}.ts`、`workflowMigration.ts`、`nodePorts.ts`、`workflow-node-references.ts`、`workflowScope.ts` |
-| validator 退役 / 泛化 / 新增规则                                            | `resource-catalog` | `infrastructure/legacy/workflow.validator.ts`（legacy 位置，本 RFC 不搬）                                                 |
-| `node_runs.container_run_id` / `scope_path`、mint、查询过滤                  | `task-execution`   | `application/ports/nodeExecutionPersistence.ts`、`infrastructure/{sqlite,postgresql}*`（双 provider）                     |
+| 改动                                                                                             | bounded context    | 层                                                                                                                        |
+| ------------------------------------------------------------------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| schema v6、升级器、端口表（含通道语义）、引用清单、环境链纯函数                                  | shared（值对象）   | `schemas/{workflow,review}.ts`、`workflowMigration.ts`、`nodePorts.ts`、`workflow-node-references.ts`、`workflowScope.ts` |
+| validator 退役 / 泛化 / 新增规则                                                                 | `resource-catalog` | `infrastructure/legacy/workflow.validator.ts`（legacy 位置，本 RFC 不搬）                                                 |
+| `node_runs.container_run_id` / `scope_path`、mint、查询过滤                                      | `task-execution`   | `application/ports/nodeExecutionPersistence.ts`、`infrastructure/{sqlite,postgresql}*`（双 provider）                     |
 | `TaskScopeArgs.containerRunId`、frontier / freshness / 环境链读点、clarify executor 铸 `skipped` | `task-execution`   | `composition/{taskDagScope,dagFrontier,nodeMechanics,wrapperMechanics,wrapperRunLifecycle}.ts`、`engine/{wrapper,node}/*` |
-| `wrapperRevivalEvidence` / liveness / `containerMemberRuns`                  | `task-execution`   | `services/dispatchFrontier.ts`、`services/freshness.ts`、`services/runLiveness.ts`（legacy 位置的纯模块，§10 债）         |
-| review 读入边、`clarify_rounds.container_run_id`                             | `collaboration`    | `infrastructure/legacySqliteReview.ts:612` 等、`application/prepareClarifyGateOpen.ts` + 双 provider                     |
-| 画布参数 / 返回值行、`connectionSync` 简化、inspector、任务详情              | frontend           | `components/canvas/*`、`routes/tasks.detail.tsx`、`lib/node-history.ts`                                                   |
+| `wrapperRevivalEvidence` / liveness / `containerMemberRuns`                                      | `task-execution`   | `services/dispatchFrontier.ts`、`services/freshness.ts`、`services/runLiveness.ts`（legacy 位置的纯模块，§10 债）         |
+| review 读入边、`clarify_rounds.container_run_id`                                                 | `collaboration`    | `infrastructure/legacySqliteReview.ts:612` 等、`application/prepareClarifyGateOpen.ts` + 双 provider                      |
+| 画布参数 / 返回值行、`connectionSync` 简化、inspector、任务详情                                  | frontend           | `components/canvas/*`、`routes/tasks.detail.tsx`、`lib/node-history.ts`                                                   |
 
 执行链不变：TaskEngine → WrapperRuntime → NodeExecutor → ExecutionKernel。**偏离项：无。**顺手演进见 §10。
 
 ## 1. 统一抽象（全部 14 种 kind）
 
-| 概念   | 定义                                                                                     | 对叶子 kind                    | 对有体 kind（三种 wrapper）                   | 对 call-*                          |
-| ------ | ---------------------------------------------------------------------------------------- | ------------------------------ | -------------------------------------------- | ---------------------------------- |
-| 参数   | 以该节点为 target 的边；参数名 = `target.portName`                                        | 同                             | 同；体内经 `wrapper-input` 边界边取用          | 同；镜像子图 `inputs[].key`         |
-| 返回值 | `declaredPorts(node).dataOutputs`，以该节点为 source 的边只能引用它们                     | kind 固定 / 资源声明            | `wrapper-output` 边界边提升体内端口（git 固定 `git_diff`） | 子图 output 节点的参数集 / 固定 `result` |
-| 闭包   | source 在体外、target 在体内的边；容器执行打开时按词法环境绑定                              | 空（无体）                     | 成立                                         | **无**（跨帧，只能传参）             |
-| 帧     | 每次执行一行 `node_runs`，`container_run_id` = 所属 wrapper 代际行                          | 一行 / 次（clarify 亦然，D8）   | 代际行 + 体行                                | child task                         |
+| 概念   | 定义                                                                  | 对叶子 kind                   | 对有体 kind（三种 wrapper）                                | 对 call-\*                               |
+| ------ | --------------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------- | ---------------------------------------- |
+| 参数   | 以该节点为 target 的边；参数名 = `target.portName`                    | 同                            | 同；体内经 `wrapper-input` 边界边取用                      | 同；镜像子图 `inputs[].key`              |
+| 返回值 | `declaredPorts(node).dataOutputs`，以该节点为 source 的边只能引用它们 | kind 固定 / 资源声明          | `wrapper-output` 边界边提升体内端口（git 固定 `git_diff`） | 子图 output 节点的参数集 / 固定 `result` |
+| 闭包   | source 在体外、target 在体内的边；容器执行打开时按词法环境绑定        | 空（无体）                    | 成立                                                       | **无**（跨帧，只能传参）                 |
+| 帧     | 每次执行一行 `node_runs`，`container_run_id` = 所属 wrapper 代际行    | 一行 / 次（clarify 亦然，D8） | 代际行 + 体行                                              | child task                               |
 
 **参数的消费方式是 kind 的实现细节，不是模型的一部分**：agent 把参数模板进 prompt、script 放进 env、call-workflow 喂给子图
 `input` 节点、review / output 快照端口、clarify 由框架注入 prompt。这层差异保留。
@@ -34,7 +34,7 @@ workgroup `result`、review `approved_doc`/`accepted` + `approval_meta`、input 
 （agent `outputs`、script 声明或 `stdout`）、体内提升（loop / fanout 的 `wrapper-output` 边、call-workflow 子图 output 节点的参数集）。
 
 **由抽象直接推出、不再单独设计的事实**：可见性由环境链决定（不是数值窗口）；闭包在容器执行打开时捕获（外层重跑 → 帧 stale 重开）；
-嵌套即递归；wrapper 与 call-* 是同一抽象的两个帧档位。
+嵌套即递归；wrapper 与 call-\* 是同一抽象的两个帧档位。
 
 ## 2. 裁决
 
@@ -45,12 +45,12 @@ xyflow sub-flow 本就是平铺 + `parentId`；validator / layout / sync-diff / 
 
 ### D2 — 参数 = 入边（边推导），四种 kind 改造
 
-| kind             | 今天                                                        | 本 RFC                                                                                                                       |
-| ---------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `wrapper-loop` / `wrapper-git` | 拒入边（validator ≈`:1084-1088`，code `edge-target-port-missing`） | 删除该分支；`nodePorts.ts:235-242` 声明 `dataInputs: edgeDerivedInputs(defn, node)`；体内经 `wrapper-input` 边界边取参数 |
-| `wrapper-fanout` | 声明式 `inputs[]`（含 `isShardSource`）                       | 删 `inputs[]`；参数 = 入边；新增标量字段 `shardSourcePort: string`（必须是某条入边的 `target.portName`；validator 沿边解析 source 端口 kind 须为 `list<T>`——`:924` 的解析今天已存在）；`expectedShardCount` 不变 |
-| `output`         | 边 + `ports[].bind` 双写                                     | 删 `ports[]`；参数 = 入边（`existingInputPorts` 今天已按边推导，`dropTarget.ts:33-46`）；`runOutputNode`（`nodeMechanics.ts:3345-3359`）改读入边 |
-| `review`         | 边 `__review_input__` + `inputSource` 双写（`schemas/review.ts:88-95`） | 删 `inputSource`；runtime（`legacySqliteReview.ts:612` 等 12 处）改读唯一入边；`rerunnableOnReject` / `rerunnableOnIterate` 保留（重跑策略，不是数据边） |
+| kind                           | 今天                                                                    | 本 RFC                                                                                                                                                                                                           |
+| ------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wrapper-loop` / `wrapper-git` | 拒入边（validator ≈`:1084-1088`，code `edge-target-port-missing`）      | 删除该分支；`nodePorts.ts:235-242` 声明 `dataInputs: edgeDerivedInputs(defn, node)`；体内经 `wrapper-input` 边界边取参数                                                                                         |
+| `wrapper-fanout`               | 声明式 `inputs[]`（含 `isShardSource`）                                 | 删 `inputs[]`；参数 = 入边；新增标量字段 `shardSourcePort: string`（必须是某条入边的 `target.portName`；validator 沿边解析 source 端口 kind 须为 `list<T>`——`:924` 的解析今天已存在）；`expectedShardCount` 不变 |
+| `output`                       | 边 + `ports[].bind` 双写                                                | 删 `ports[]`；参数 = 入边（`existingInputPorts` 今天已按边推导，`dropTarget.ts:33-46`）；`runOutputNode`（`nodeMechanics.ts:3345-3359`）改读入边                                                                 |
+| `review`                       | 边 `__review_input__` + `inputSource` 双写（`schemas/review.ts:88-95`） | 删 `inputSource`；runtime（`legacySqliteReview.ts:612` 等 12 处）改读唯一入边；`rerunnableOnReject` / `rerunnableOnIterate` 保留（重跑策略，不是数据边）                                                         |
 
 `wrapper-input` 边界边的 source 端口必须在该 wrapper 的参数集里：validator `:1098-1115`（今天只对 fanout）泛化为
 `wrapper-input-port-missing`。fanout 的 `wrapper-input-boundary-missing`（`:1173-1190`）**保持 fanout-only**——fanout 体没有闭包
@@ -78,7 +78,7 @@ xyflow sub-flow 本就是平铺 + `parentId`；validator / layout / sync-diff / 
   2. 自由变量 / 参数（source 在祖先 scope 或顶层）→ 沿容器链找到**直接包含 source 的那一帧**（代际行的
      `container_run_id` / `iteration` 就是父帧坐标），读 source 在该帧的 settled 行；顶层帧 = `(null, 0)`；
   3. 找不到 → 响亮失败 `closure-binding-unresolved`（RFC-294 §6 B），不回退。
-  `readPortRowAtIteration` / `resolveUpstreamInputs`（`nodeMechanics.ts:4977` / `:4880`）改调它；`wrapper-input` 边界边按 (2)。
+     `readPortRowAtIteration` / `resolveUpstreamInputs`（`nodeMechanics.ts:4977` / `:4880`）改调它；`wrapper-input` 边界边按 (2)。
 - 捕获已存在（`wrapperExternalUpstreamSources` + `resolveConsumed`）；`wrapperExternalUpstreamSources:139` 已把 wrapper 自身算进
   scope，所以参数与闭包一起进 consumed。帧上的 settled 行在容器执行打开后不变（上游 gating 由 `projectWorkflowDependency` 投影
   保证），「打开时捕获」与「派发时沿环境链读」读到同一行；source 重跑 → consumed 不匹配 → 既有 stale 重开。
@@ -87,10 +87,10 @@ xyflow sub-flow 本就是平铺 + `parentId`；validator / layout / sync-diff / 
 
 **已经存在的一半**：每个 wrapper 代际都有自己的行（`wrapperRunLifecycle.ts:86-154`）。缺的只是体内行指回它。
 
-| 列                 | 类型                                 | 语义                                                                                  |
-| ------------------ | ------------------------------------ | ------------------------------------------------------------------------------------- |
-| `container_run_id` | `TEXT NULL REFERENCES node_runs(id)` | 所属 wrapper 代际行 id（= 帧）；顶层行 NULL                                             |
-| `iteration`        | 既有列，语义收窄                     | 帧内轮次：loop 体 0..n、git / fanout 体 0、顶层 0                                       |
+| 列                 | 类型                                 | 语义                                                                                                 |
+| ------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `container_run_id` | `TEXT NULL REFERENCES node_runs(id)` | 所属 wrapper 代际行 id（= 帧）；顶层行 NULL                                                          |
+| `iteration`        | 既有列，语义收窄                     | 帧内轮次：loop 体 0..n、git / fanout 体 0、顶层 0                                                    |
 | `scope_path`       | `TEXT NOT NULL DEFAULT ''`           | 根→本处 `wrapperId:iteration/…`，mint 时按容器链算出、只写不改；UI / SQL 前缀 / 诊断用；**调度不读** |
 
 嵌套：内层 loop 代际行 `container_run_id` = 外层代际行、`iteration` = 外层轮次；内层体行挂内层代际行。fanout shard 行带帧
@@ -132,17 +132,17 @@ completed 变为 park；答复后该行沿既有路径 `done`（cross 路径 `le
 
 ### D9 — validator
 
-| code                                         | 变更                                                                                          | 严重度  |
-| -------------------------------------------- | --------------------------------------------------------------------------------------------- | ------- |
-| `wrapper-loop-nested`                        | 删除                                                                                          | —       |
-| `edge-target-port-missing`（loop / git 入边分支） | 删除                                                                                       | —       |
-| `wrapper-input-port-missing`                 | 新增：任何 wrapper 的 `wrapper-input` 边 source 端口不在参数集                                 | error   |
-| `wrapper-loop-exit-port-missing`             | 新增：`exitCondition.portName` 不是 loop 自己的返回值端口                                      | error   |
-| `wrapper-fanout-shard-source-*`              | 改读 `shardSourcePort` + 入边 source kind                                                      | error   |
-| `wrapper-fanout-unsupported-inner-kind`      | 新增：fanout 体内非 `agent-single`（镜像 `fanoutStrategy.ts:218-226`）                          | error   |
-| review / output 的绑定类规则（`:1914` 等）      | 改为对入边的规则（`resolveWorkflowSourceRef` 逻辑不变）                                        | 同今天  |
-| `wrapper-input-boundary-missing`             | 保持 fanout-only                                                                              | error   |
-| `wrapper-fanout-nested`                      | 保留                                                                                          | warning |
+| code                                              | 变更                                                                   | 严重度  |
+| ------------------------------------------------- | ---------------------------------------------------------------------- | ------- |
+| `wrapper-loop-nested`                             | 删除                                                                   | —       |
+| `edge-target-port-missing`（loop / git 入边分支） | 删除                                                                   | —       |
+| `wrapper-input-port-missing`                      | 新增：任何 wrapper 的 `wrapper-input` 边 source 端口不在参数集         | error   |
+| `wrapper-loop-exit-port-missing`                  | 新增：`exitCondition.portName` 不是 loop 自己的返回值端口              | error   |
+| `wrapper-fanout-shard-source-*`                   | 改读 `shardSourcePort` + 入边 source kind                              | error   |
+| `wrapper-fanout-unsupported-inner-kind`           | 新增：fanout 体内非 `agent-single`（镜像 `fanoutStrategy.ts:218-226`） | error   |
+| review / output 的绑定类规则（`:1914` 等）        | 改为对入边的规则（`resolveWorkflowSourceRef` 逻辑不变）                | 同今天  |
+| `wrapper-input-boundary-missing`                  | 保持 fanout-only                                                       | error   |
+| `wrapper-fanout-nested`                           | 保留                                                                   | warning |
 
 `rfc199-workflow-validation-targets` 计数棘轮、`rfc203-validation-copy` 文案棘轮随之更新。
 
@@ -197,15 +197,15 @@ outer loop 代际行 R_outer (container=null, iter=0)          │
 
 ## 5. 失败模式
 
-| 场景                                            | 处置                                                                        |
-| ----------------------------------------------- | --------------------------------------------------------------------------- |
-| 环境链找不到自由变量 / 参数的 settled 行         | `failed` + `closure-binding-unresolved`，不静默 `''`                        |
+| 场景                                             | 处置                                                                              |
+| ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 环境链找不到自由变量 / 参数的 settled 行         | `failed` + `closure-binding-unresolved`，不静默 `''`                              |
 | loop 本轮没有提升出 `exitCondition` 引用的返回值 | 视为端口未激活 / 空（RFC-306 口径），谓词照常求值——与今天 `readPort` 得 `''` 一致 |
-| 升级器遇到 `bind` 无对应边（手写 YAML）           | 补边；幂等                                                                  |
-| 升级器遇到 `exitCondition` 引用体外节点           | 保留为 validator error（gap4 语义），不静默改写                              |
-| 回填找不到候选代际行                             | NULL + `''` + WARN；oracle 统计 = 0                                         |
-| clarify `skipped` 行与 park 行竞态               | park 行 id 更新即胜（`isFresherNodeRun`），executor 只在无 open round 时铸   |
-| 三层以上嵌套 resume                              | 逐层 `openGeneration` 续接                                                  |
+| 升级器遇到 `bind` 无对应边（手写 YAML）          | 补边；幂等                                                                        |
+| 升级器遇到 `exitCondition` 引用体外节点          | 保留为 validator error（gap4 语义），不静默改写                                   |
+| 回填找不到候选代际行                             | NULL + `''` + WARN；oracle 统计 = 0                                               |
+| clarify `skipped` 行与 park 行竞态               | park 行 id 更新即胜（`isFresherNodeRun`），executor 只在无 open round 时铸        |
+| 三层以上嵌套 resume                              | 逐层 `openGeneration` 续接                                                        |
 
 ## 6. 迁移（0223）与 PostgreSQL contract
 
@@ -254,3 +254,21 @@ wrapper = 内联 lambda（帧 = container run）；call-workflow = 调用定义�
 - **债**：`services/{freshness,dispatchFrontier,runLiveness}.ts` 不搬家（W4-E1）；`workflow.validator.ts` 仍在 legacy 目录；
   第③批另一半（`row_kind`、`seq`、`node_run_repos`）；fanout 体扩张（W8）；跨轮反馈端口；review `rerunnableOn*` 作为
   控制策略仍是 nodeId 列表（不是边——它们不是数据流）。
+
+### PR-2 实现偏离（2026-09-04，实现时发现、按「面向代码最合理」就地裁决）
+
+- **fan-out 分片源的 kind 来源**（D2 的缺口）：v5 的 `inputs[].kind` 是 fan-out 自己声明的，v6 改由参数边的 source 口决定后，
+  `input` 节点与未声明 `outputKinds` 的代理没有 kind 可给。裁决：端口表 `input` deriver 按工作流输入的值形状给 kind
+  （`files` → `list<path<*>>`、`upload` → `path<*>`，text / enum / git 不给）；运行时 `fanoutStrategy` 对**未声明** kind 的分片源
+  按 `list<string>` 逐行切并打 warn 诊断，对**已声明**的非 list kind 仍 fail-closed；validator 对未声明 kind 不判。
+  代价：v5 里「text 输入 + fan-out 自称 `list<path<md>>`」的文档升级后分片项从 `path<md>` 变成 `string`——作者要的是路径
+  就改用 `files` 输入（32 个示例全部如此，无一受影响）。
+- **loop 返回边 source 不是直接成员**（旧非法快照）：`loopStrategy.prepare` 以 `wrapper-loop-return-source-out-of-scope`
+  拒绝，不再走 v5 的「先等隐式来源再按 last-value 读」兜底——那条路在 v6 里会先读到空串而假退出（gap4 用例改写为此）。
+- **review 穿墙读**：只由通用边规则报一次 `wrapper-output-boundary-missing`（原 review 专属的那条并入），棘轮 145 → 132。
+- **`PROMPT_INJECTED_PORT_NAMES` 常量 → `promptInjectedPortNames()` 函数**（D6）：投影必须在端口表模块初始化后才能算。
+- **示例 YAML 不重写为 v6**：磁盘上的 32 个示例保持 v5 形状，由升级器在导入 / 加载边界升级（`rfc354-examples-v6-golden`
+  锁幂等、零残留、strict schema、零边模型 code）；重写会丢注释与手排格式，换不到任何运行时收益。
+- **复活证据按停驻轮次取窗**（PR-1 收红时补上的 D5 细则）：`containerMemberRunsInRound`——loop 取 progress 记录的轮次，
+  git / fan-out 取 wrapper 行自身 iteration；嵌套代际以其直接成员行的轮次归属整棵子树。成员关系不看轮次会让停驻在第 k 轮的
+  loop 把第 0 轮的旧 pending 当新证据，resume 后又弹回 park（S-3 当年的死循环形态）。

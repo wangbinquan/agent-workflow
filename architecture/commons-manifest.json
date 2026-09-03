@@ -1115,8 +1115,8 @@
       "files": [
         "packages/shared/src/nodePorts.ts"
       ],
-      "singleSourceOf": "Per-kind port-declaration matrix, `as const satisfies Record<NodeKind, (ctx) => DeclaredPorts>`; five historical forks (canvas/validator/loop-candidates/control-flow/drop-target) collapsed into it.",
-      "claimAudit": "Claims to be the single declared-port authority. Verified: all five named forks now call `declaredPorts` (WorkflowCanvas.tsx:3584, workflow.validator.ts:1004, wrapperCandidates.ts:56, controlFlowEdge.ts:86, dropTarget.ts:42). Exhaustiveness is real. One residual leak: wrapperCandidates re-adds a phantom `'out'` port outside the table (F12).",
+      "singleSourceOf": "Per-kind port-declaration matrix, `as const satisfies Record<NodeKind, (ctx) => DeclaredPorts>`; five historical forks (canvas/validator/loop-candidates/control-flow/drop-target) collapsed into it. RFC-354 D6: also the system-channel table \u2014 `DeclaredPort.channel` on the clarify / cross-clarify system ports with the four projections (`systemChannelPorts()` / `isSystemChannelEdge` / `touchesSystemChannelPort` / `promptInjectedPortNames()` / `channelEdgeDataflowSkip`) derived from it; the former `systemChannelPorts.ts` registry folded in, so there is no second table to drift.",
+      "claimAudit": "Claims to be the single declared-port authority. Verified: all five named forks now call `declaredPorts` (WorkflowCanvas.tsx:3584, workflow.validator.ts:1004, wrapperCandidates.ts:56, controlFlowEdge.ts:86, dropTarget.ts:42). Exhaustiveness is real. One residual leak: wrapperCandidates re-adds a phantom `'out'` port outside the table (F12). RFC-354 D6 closes RFC-147's F6 by construction: the clarify NODE-side `questions` / `answers` system ports live in the same table and simply carry no `channel`.",
       "auditedBy": "node-kind-ports-sharding",
       "guards": [],
       "canonicalOwnerEntryIds": [
@@ -1325,23 +1325,6 @@
       "guards": [],
       "canonicalOwnerEntryIds": [
         "owner:packages/shared/src/shardingRegistry.ts#$file"
-      ]
-    },
-    {
-      "id": "system-channel-ports",
-      "title": "SYSTEM_CHANNEL_PORTS",
-      "owner": "shared-contracts",
-      "layer": "domain",
-      "core": true,
-      "files": [
-        "packages/shared/src/systemChannelPorts.ts"
-      ],
-      "singleSourceOf": "Registry of framework channel ports with four projections (side-respecting membership / wide match / prompt-injected set / nuanced dataflow skip). Replaced six hand-copies in three semantic families.",
-      "claimAudit": "Claims to be the single source for 'which port names are framework channel ports and how each behaves'. Holds for the five AGENT-side names, with a strong value-lock plus literal ratchet. Does NOT hold for the clarify NODE-side names `questions` / `answers`, which are declared as system ports in nodePorts.ts:275-284 but have no registry row and no ratchet (F6).",
-      "auditedBy": "node-kind-ports-sharding",
-      "guards": [],
-      "canonicalOwnerEntryIds": [
-        "owner:packages/shared/src/systemChannelPorts.ts#$file"
       ]
     },
     {

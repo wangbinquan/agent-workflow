@@ -84,13 +84,16 @@ describe('RFC-129 — cross-round selection inheritance', () => {
           agentName: 'caseGen',
           promptTemplate: '',
         } as WorkflowNode,
-        {
-          id: 'rev_1',
-          kind: 'review',
-          inputSource: { nodeId: 'src', portName: 'cases' },
-        } as unknown as WorkflowNode,
+        { id: 'rev_1', kind: 'review' } as unknown as WorkflowNode,
       ],
-      edges: [],
+      edges: [
+        // RFC-354 (schema v6): the reviewed source is the review's inbound edge.
+        {
+          id: 'e_review',
+          source: { nodeId: 'src', portName: 'cases' },
+          target: { nodeId: 'rev_1', portName: '__review_input__' },
+        },
+      ],
     }
     const workflowId = ulid()
     await db.insert(workflows).values({

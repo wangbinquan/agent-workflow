@@ -11673,7 +11673,8 @@ details.form-section[open] > summary {
  * header and overflows below the wrapper's small empty footprint, looking
  * like floating ports outside the lower-left corner. */
 .canvas-node--wrapper-group--fanout .canvas-node__port-rows--left,
-.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right {
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right,
+.canvas-node--wrapper-group--loop .canvas-node__port-rows--right {
   position: absolute;
   top: 30px; /* sit below the header strip */
   bottom: 6px;
@@ -11688,11 +11689,13 @@ details.form-section[open] > summary {
   left: 0;
   align-items: flex-start;
 }
-.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right {
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right,
+.canvas-node--wrapper-group--loop .canvas-node__port-rows--right {
   right: 0;
   align-items: flex-end;
 }
-.canvas-node--wrapper-group--fanout .canvas-node__port-row {
+.canvas-node--wrapper-group--fanout .canvas-node__port-row,
+.canvas-node--wrapper-group--loop .canvas-node__port-row {
   pointer-events: auto;
   background: color-mix(in srgb, var(--panel) 85%, transparent);
   border-radius: 3px;
@@ -11714,7 +11717,8 @@ details.form-section[open] > summary {
  * Mirrored on the right side for output rows. This is the "对外连接点和对内
  * 连接点分布于包装器边缘两侧" layout — both connection directions are visible
  * and reachable from the same row. */
-.canvas-node--wrapper-group--fanout .canvas-node__port-row--boundary {
+.canvas-node--wrapper-group--fanout .canvas-node__port-row--boundary,
+.canvas-node--wrapper-group--loop .canvas-node__port-row--boundary {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -11727,10 +11731,32 @@ details.form-section[open] > summary {
 .canvas-node--wrapper-group--fanout .canvas-node__port-rows--left .canvas-node__port-row--boundary {
   transform: translateX(-50%);
 }
-.canvas-node--wrapper-group--fanout
-  .canvas-node__port-rows--right
-  .canvas-node__port-row--boundary {
+.canvas-node--wrapper-group--fanout .canvas-node__port-rows--right .canvas-node__port-row--boundary,
+.canvas-node--wrapper-group--loop .canvas-node__port-rows--right .canvas-node__port-row--boundary {
   transform: translateX(50%);
+}
+/* RFC-354 — wrapper-loop return catch-all: a slim right-border strip a body
+ * member's output can be dropped on to declare a new return value (the
+ * right-side twin of the RFC-003 `__inbound__` strip). */
+.canvas-node--wrapper-group--loop .canvas-node__return-catchall {
+  position: absolute;
+  top: 30px;
+  bottom: 6px;
+  right: 0;
+  width: 10px;
+  pointer-events: none;
+}
+.canvas-node--wrapper-group--loop .canvas-node__handle--return-catchall {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: auto !important;
+  width: 10px !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+  opacity: 0;
+  transform: none !important;
+  pointer-events: auto;
 }
 /* Both boundary handles flow inline within the pill instead of xyflow's
  * default absolute placement. The selector is intentionally specific
@@ -11738,7 +11764,9 @@ details.form-section[open] > summary {
  * .react-flow__handle-left/right { left|right: -14px !important }` rules
  * further down (specificity 0,2,0 vs ours 0,3,0). */
 .canvas-node--wrapper-group--fanout .canvas-node__port-row .canvas-node__handle--boundary-outer,
-.canvas-node--wrapper-group--fanout .canvas-node__port-row .canvas-node__handle--boundary-inner {
+.canvas-node--wrapper-group--fanout .canvas-node__port-row .canvas-node__handle--boundary-inner,
+.canvas-node--wrapper-group--loop .canvas-node__port-row .canvas-node__handle--boundary-outer,
+.canvas-node--wrapper-group--loop .canvas-node__port-row .canvas-node__handle--boundary-inner {
   position: relative !important;
   top: auto !important;
   left: auto !important;

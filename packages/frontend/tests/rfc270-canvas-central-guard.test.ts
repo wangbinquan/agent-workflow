@@ -48,18 +48,8 @@ function definition(): WorkflowDefinition {
         dependencies: ['***'],
         position: { x: 200, y: 0 },
       },
-      {
-        id: 'rv',
-        kind: 'review',
-        position: { x: 300, y: 0 },
-        inputSource: { nodeId: 's1', portName: 'stdout' },
-      },
-      {
-        id: 'out1',
-        kind: 'output',
-        position: { x: 400, y: 0 },
-        ports: [{ name: 'r', bind: { nodeId: 's1', portName: 'stdout' } }],
-      },
+      { id: 'rv', kind: 'review', position: { x: 300, y: 0 } },
+      { id: 'out1', kind: 'output', position: { x: 400, y: 0 } },
     ],
     edges: [
       {
@@ -71,6 +61,17 @@ function definition(): WorkflowDefinition {
         id: 'e2',
         source: { nodeId: 'a1', portName: 'out' },
         target: { nodeId: 's1', portName: 'diff' },
+      },
+      // RFC-354: the review input and the output port are edges.
+      {
+        id: 'e3',
+        source: { nodeId: 's1', portName: 'stdout' },
+        target: { nodeId: 'rv', portName: '__review_input__' },
+      },
+      {
+        id: 'e4',
+        source: { nodeId: 's1', portName: 'stdout' },
+        target: { nodeId: 'out1', portName: 'r' },
       },
     ],
   } as unknown as WorkflowDefinition

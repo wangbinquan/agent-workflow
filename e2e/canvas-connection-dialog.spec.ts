@@ -15,7 +15,7 @@
 // 判据取自源码单一事实源：
 //   components/workflow-editor/ConnectionDialog.tsx:455-495  new / reuse 两支
 //   components/workflow-editor/ConnectionDialog.tsx:525-552  fanoutKind + shard/broadcast
-//   shared/schemas/workflow.ts:841                            wrapper 输入口的 isShardSource
+//   shared/schemas/workflow.ts                                wrapper-fanout 的 shardSourcePort（RFC-354 schema v6）
 
 import { expect, test, type Page } from '@playwright/test'
 
@@ -232,9 +232,10 @@ test('分片扇出边界：选「广播」时每个分片拿整份，选「分�
         id: 'fan',
         kind: 'wrapper-fanout',
         nodeIds: ['inner'],
-        // 分片源必须是 list<T>（shared/schemas/workflow.ts:833 的校验器规则）；
-        // 少了 kind，弹窗会以「先选一个 list<T> 作分片源再加广播」拒绝提交。
-        inputs: [{ name: 'items', kind: 'list<string>', isShardSource: true }],
+        // RFC-354（schema v6）：参数就是入边，shardSourcePort 点名被拆开的那条；
+        // 分片源的 kind 由喂它的 source 口声明（feeder.answer 不是 list，弹窗只按
+        // 「先有一个分片源再加广播」的顺序拒绝 / 放行）。
+        shardSourcePort: 'items',
         position: { x: 320, y: 0 },
       },
       agentNode('inner', 420),
@@ -279,17 +280,20 @@ test('分片扇出边界：选「广播」时每个分片拿整份，选「分�
   await expect(page.getByTestId('connection-submit')).toBeHidden()
   await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
 
-  const afterBroadcast = (await readDefinition(workflowId)).nodes.find(
-    (node) => node.id === 'fan',
-  ) as { inputs: Array<{ name: string; isShardSource?: boolean }> }
+  const afterBroadcast = await readDefinition(workflowId)
+  const fanAfterBroadcast = afterBroadcast.nodes.find((node) => node.id === 'fan') as {
+    shardSourcePort?: string
+  }
   expect(
-    afterBroadcast.inputs.find((port) => port.name === 'items')?.isShardSource,
+    fanAfterBroadcast.shardSourcePort,
     '选「广播」却动了原来的分片源 ⇒ 每个分片拿到的东西被悄悄换掉了',
-  ).toBe(true)
+  ).toBe('items')
   expect(
-    afterBroadcast.inputs.find((port) => port.name === 'context')?.isShardSource ?? false,
-    '广播口被记成分片源 ⇒ 整份数据被切开逐项发，与作者的选择相反',
-  ).toBe(false)
+    afterBroadcast.edges.some(
+      (edge) => edge.target.nodeId === 'fan' && edge.target.portName === 'context',
+    ),
+    '广播参数没有成为 fan 的入边 ⇒ 分片体里的 context 无源可取',
+  ).toBe(true)
 
   // 分片：一个扇出只能有一个分片源，所以再选一次「分片」必然要**降级**原来那个。
   // 这一步是这条能力里最危险的操作——它悄悄改变了既有那条边上每个分片拿到什么。
@@ -307,13 +311,19 @@ test('分片扇出边界：选「广播」时每个分片拿整份，选「分�
   await expect(page.getByTestId('connection-submit')).toBeHidden()
   await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
 
-  const afterShard = (await readDefinition(workflowId)).nodes.find((node) => node.id === 'fan') as {
-    inputs: Array<{ name: string; kind: string; isShardSource?: boolean }>
-  }
+  const afterShard = await readDefinition(workflowId)
   expect(
-    afterShard.inputs.filter((port) => port.isShardSource === true).map((port) => port.name),
-    '一个扇出出现两个分片源（或一个都不剩）⇒ 校验器会判 shard-source-duplicate / -missing，' +
-      '而作者以为自己只是加了一条线',
-  ).toEqual(['slices'])
-  expect(afterShard.inputs.find((port) => port.name === 'slices')?.kind).toBe('list<string>')
+    (afterShard.nodes.find((node) => node.id === 'fan') as { shardSourcePort?: string })
+      .shardSourcePort,
+    '分片源没有换成新参数 ⇒ 校验器会判 shard-source-missing，而作者以为自己只是加了一条线',
+  ).toBe('slices')
+  expect(
+    afterShard.edges.some(
+      (edge) =>
+        edge.source.nodeId === 'lister' &&
+        edge.target.nodeId === 'fan' &&
+        edge.target.portName === 'slices',
+    ),
+    '新分片参数没有成为 fan 的入边 ⇒ shardSourcePort 指向一个没人喂的口',
+  ).toBe(true)
 })

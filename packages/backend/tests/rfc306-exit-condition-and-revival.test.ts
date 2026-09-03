@@ -30,7 +30,7 @@ const INACTIVE = { content: 'reason text', active: false }
 
 describe('RFC-306 §8 — exit conditions vs an inactive port', () => {
   const at = (kind: string, extra: Record<string, unknown> = {}) =>
-    parseExitCondition({ kind, nodeId: 'n', portName: 'p', ...extra })!
+    parseExitCondition({ kind, portName: 'p', ...extra })!
 
   test('port-inactive is TRUE exactly when the port is inactive', () => {
     expect(evaluateExitCondition(at('port-inactive'), INACTIVE)).toBe(true)
@@ -61,13 +61,12 @@ describe('RFC-306 §8 — exit conditions vs an inactive port', () => {
   })
 
   test('port-inactive round-trips through parseExitCondition', () => {
-    expect(parseExitCondition({ kind: 'port-inactive', nodeId: 'n', portName: 'p' })).toEqual({
+    expect(parseExitCondition({ kind: 'port-inactive', portName: 'p' })).toEqual({
       kind: 'port-inactive',
-      nodeId: 'n',
       portName: 'p',
     })
     // Malformed stays malformed (the wrapper hard-fails on null).
-    expect(parseExitCondition({ kind: 'port-inactive', nodeId: '', portName: 'p' })).toBeNull()
+    expect(parseExitCondition({ kind: 'port-inactive', portName: '' })).toBeNull()
   })
 })
 

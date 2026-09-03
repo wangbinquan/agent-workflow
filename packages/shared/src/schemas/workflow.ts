@@ -27,9 +27,9 @@ import { ResourceVisibilitySchema } from './resourceAcl'
 import { WORKGROUP_NAME_RE, WorkgroupNameSchema } from './workgroup'
 
 /** Currently-written schema version. New writes always set this value. */
-export const WORKFLOW_SCHEMA_VERSION = 5
+export const WORKFLOW_SCHEMA_VERSION = 6
 /** Older versions are read-only and auto-upgraded at canonical boundaries. */
-export const WORKFLOW_SCHEMA_VERSIONS = [1, 2, 3, 4, 5] as const
+export const WORKFLOW_SCHEMA_VERSIONS = [1, 2, 3, 4, 5, 6] as const
 
 // --- enums shared across multiple shapes ---
 
@@ -120,8 +120,11 @@ export const LOOP_EXIT_CONDITION_KINDS = [
 export const LoopExitConditionKindSchema = z.enum(LOOP_EXIT_CONDITION_KINDS)
 export type LoopExitConditionKind = z.infer<typeof LoopExitConditionKindSchema>
 
+// RFC-354 (schema v6): the exit condition is a predicate over the loop's OWN
+// return value — `portName` names one of the loop's `wrapper-output` ports.
+// The v5 `nodeId` (a body node reached through the wall) is gone; the v5→v6
+// upgrader rewrites it into a `wrapper-output` edge + the promoted port name.
 const LoopExitConditionPortSchema = z.object({
-  nodeId: z.string().min(1),
   portName: z.string().min(1),
 })
 
@@ -246,8 +249,10 @@ export const PortRefSchema = z.object({
   nodeId: z.string().min(1),
   portName: z.string().min(1),
 })
-/** A (node, port) reference — the shape both edge endpoints and every implicit
- *  binding (review.inputSource, output.ports[].bind) already carry. */
+/** A (node, port) reference — the shape both edge endpoints and the top-level
+ *  workflow `outputs[].bind` carry. RFC-354 (schema v6) retired every node-level
+ *  PortRef field (review.inputSource / output.ports[].bind / loop.outputBindings /
+ *  loop.exitCondition.nodeId): a node's inputs are its inbound edges. */
 export type PortRef = z.infer<typeof PortRefSchema>
 
 /**
@@ -355,7 +360,14 @@ export const WorkflowDefinitionSchema = z.object({
    * read. New writes always set the latest version — the GET path transparently
    * upgrades older docs (see backend services/workflow.ts).
    */
-  $schema_version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  $schema_version: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6),
+  ]),
   inputs: z.array(WorkflowInputSchema).default([]),
   nodes: z.array(WorkflowNodeSchema).default([]),
   edges: z.array(WorkflowEdgeSchema).default([]),
@@ -857,12 +869,14 @@ export type ClarifyCrossAgentNode = z.infer<typeof ClarifyCrossAgentNodeSchema>
 // --- RFC-060 Wrapper-Fanout node --------------------------------------------
 //
 // Container wrapper that fan-outs an inner subgraph across the items of a
-// `list<T>` shardSource port. The wrapper holds:
+// `list<T>` shard-source parameter. The wrapper holds:
 //
-//   - `inputs[]`: declared input ports. EXACTLY ONE input must have
-//     `isShardSource: true`; its kind MUST be `list<T>` for some T. Other
-//     inputs are broadcast (same value passed to every shard's inner
-//     subgraph).
+//   - `shardSourcePort` (RFC-354, schema v6): the name of the PARAMETER whose
+//     `list<T>` items become the shards. Parameters are edge-derived like on
+//     every other node — an ordinary inbound edge's `target.portName` IS the
+//     parameter name — so the v5 declarative `inputs[]` (name / kind /
+//     `isShardSource`) is gone: the shard source's kind is resolved from the
+//     source port of that inbound edge, every other parameter is broadcast.
 //   - `nodeIds[]`: inner subgraph node ids (same convention as
 //     wrapper-git / wrapper-loop). Per RFC-060 design §1.1, inner is
 //     stored flat in the top-level `nodes[]` / `edges[]` arrays; the
@@ -876,26 +890,6 @@ export type ClarifyCrossAgentNode = z.infer<typeof ClarifyCrossAgentNodeSchema>
 // Boundary edges connecting wrapper ports to inner nodes carry the
 // `boundary: 'wrapper-input' | 'wrapper-output'` flag on the edge
 // (see WorkflowEdgeSchema).
-//
-// PR-C ships this schema + validator rules; the scheduler dispatch path
-// lands in PR-D.
-export const WrapperFanoutPortSchema = z.object({
-  name: z.string().min(1),
-  /**
-   * AgentOutputKind grammar string (base / path<ext> / list<...>). The
-   * validator additionally requires that exactly one port is marked
-   * `isShardSource: true` and that its kind parses as `list<T>`.
-   */
-  kind: z.string().min(1),
-  /**
-   * Mark the shard source port. Exactly one input MUST set this to true;
-   * the validator emits `wrapper-fanout-shard-source-missing` /
-   * `-duplicate` otherwise.
-   */
-  isShardSource: z.boolean().optional(),
-})
-export type WrapperFanoutPort = z.infer<typeof WrapperFanoutPortSchema>
-
 export const WrapperFanoutNodeSchema = z
   .object({
     id: z.string().min(1),
@@ -904,8 +898,13 @@ export const WrapperFanoutNodeSchema = z
     title: z.string().optional(),
     /** Inner subgraph node ids — must all exist in workflow.definition.nodes. */
     nodeIds: z.array(z.string().min(1)).default([]),
-    /** Declared input ports. validator enforces ≥1 with isShardSource: true. */
-    inputs: z.array(WrapperFanoutPortSchema).default([]),
+    /**
+     * RFC-354 — the parameter (inbound edge `target.portName`) whose items are
+     * sharded. The validator requires an inbound edge for it and a `list<T>`
+     * source kind (`wrapper-fanout-shard-source-missing` /
+     * `wrapper-fanout-shard-source-must-be-list`).
+     */
+    shardSourcePort: z.string().min(1),
     /**
      * Optional author-supplied hint for the runtime cartesian guard. When
      * a wrapper-fanout is nested inside another one, the outer scheduler

@@ -505,7 +505,12 @@ describe('RFC-076 PR-A — wrapperInnerDescendants (G6 recursive expansion)', ()
 // the channel-edge filtering, which MUST stay in lockstep with
 // buildScopeUpstreams (scheduler.ts) — see the function doc.
 describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
-  type EdgeSpec = { id: string; s: [string, string]; t: [string, string] }
+  type EdgeSpec = {
+    id: string
+    s: [string, string]
+    t: [string, string]
+    b?: 'wrapper-input' | 'wrapper-output'
+  }
   function defWithEdges(
     nodes: Array<Record<string, unknown> & { id: string; kind: NodeKind }>,
     edges: EdgeSpec[],
@@ -516,6 +521,7 @@ describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
         id: e.id,
         source: { nodeId: e.s[0], portName: e.s[1] },
         target: { nodeId: e.t[0], portName: e.t[1] },
+        ...(e.b === undefined ? {} : { boundary: e.b }),
       })),
     } as unknown as WorkflowDefinition
   }
@@ -560,17 +566,16 @@ describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
   test('a source leaving another loop is attributed to that wrapper generation', () => {
     const d = defWithEdges(
       [
-        {
-          id: 'producer-loop',
-          kind: 'wrapper-loop',
-          nodeIds: ['producer'],
-          outputBindings: [{ name: 'final', bind: { nodeId: 'producer', portName: 'doc' } }],
-        },
+        { id: 'producer-loop', kind: 'wrapper-loop', nodeIds: ['producer'] },
         { id: 'producer', kind: 'agent-single' },
         { id: 'consumer-loop', kind: 'wrapper-loop', nodeIds: ['consumer'] },
         { id: 'consumer', kind: 'agent-single' },
       ],
-      [{ id: 'e1', s: ['producer', 'doc'], t: ['consumer', 'doc'] }],
+      [
+        // RFC-354: the producer loop returns `doc` through a wrapper-output edge.
+        { id: 'ret', s: ['producer', 'doc'], t: ['producer-loop', 'final'], b: 'wrapper-output' },
+        { id: 'e1', s: ['producer', 'doc'], t: ['consumer', 'doc'] },
+      ],
     )
 
     expect([...wrapperExternalUpstreamSources('consumer-loop', d)]).toEqual(['producer-loop'])
@@ -603,46 +608,41 @@ describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
     expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['questioner'])
   })
 
-  test('review inputSource: external implicit dep counts; in-scope one does not', () => {
+  test('review input edge: an external source counts; an in-scope one does not', () => {
+    // RFC-354: the review's input is its `__review_input__` edge (the v5
+    // `inputSource` mirror is gone), so it is just another dataflow edge here.
     const d = defWithEdges(
       [
         { id: 'designer', kind: 'agent-single' },
         { id: 'lw', kind: 'wrapper-loop', nodeIds: ['rev', 'author'] },
         { id: 'author', kind: 'agent-single' },
-        {
-          id: 'rev',
-          kind: 'review',
-          inputSource: { nodeId: 'designer', portName: 'doc' },
-        },
+        { id: 'rev', kind: 'review' },
       ],
-      [],
+      [{ id: 'r1', s: ['designer', 'doc'], t: ['rev', '__review_input__'] }],
     )
     expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['designer'])
-    // Same review pointing at an in-scope sibling → intra-wrapper dataflow,
-    // not provenance.
+    // Same review fed by an in-scope sibling → intra-wrapper dataflow, not
+    // provenance.
     const d2 = defWithEdges(
       [
         { id: 'lw', kind: 'wrapper-loop', nodeIds: ['rev', 'author'] },
         { id: 'author', kind: 'agent-single' },
-        { id: 'rev', kind: 'review', inputSource: { nodeId: 'author', portName: 'doc' } },
+        { id: 'rev', kind: 'review' },
       ],
-      [],
+      [{ id: 'r1', s: ['author', 'doc'], t: ['rev', '__review_input__'] }],
     )
     expect(wrapperExternalUpstreamSources('lw', d2).size).toBe(0)
   })
 
-  test('output binding: external implicit dep is wrapper provenance too', () => {
+  test('output port edge: an external source is wrapper provenance too', () => {
+    // RFC-354: an output node's ports are its inbound edges.
     const d = defWithEdges(
       [
         { id: 'producer', kind: 'agent-single' },
         { id: 'lw', kind: 'wrapper-loop', nodeIds: ['capture'] },
-        {
-          id: 'capture',
-          kind: 'output',
-          ports: [{ name: 'snapshot', bind: { nodeId: 'producer', portName: 'doc' } }],
-        },
+        { id: 'capture', kind: 'output' },
       ],
-      [],
+      [{ id: 'o1', s: ['producer', 'doc'], t: ['capture', 'snapshot'] }],
     )
 
     expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['producer'])

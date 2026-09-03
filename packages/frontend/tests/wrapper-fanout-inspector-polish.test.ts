@@ -1,21 +1,20 @@
-// RFC-060 PR-F F.T1 — wrapper-fanout NodeInspector polish.
+// RFC-060 PR-F F.T1 → RFC-354 — wrapper-fanout NodeInspector polish.
 //
 // Source-text contract for the wrapper-fanout inspector branch:
 //
-//   1. Renders Field-based inputs (RFC-035 public form primitive) for
-//      every editable wrapper-fanout field — no naked <input>.
-//   2. Renders the `Field` for fanout inputs[] CRUD (add / remove + name /
-//      kind + isShardSource toggle).
+//   1. Renders Field-based groups (RFC-035 public form primitive) for every
+//      section — no naked <input>.
+//   2. RFC-354 (schema v6): the fan-out's parameters are its inbound edges,
+//      rendered read-only (name ← source, → boundary hand-off), and the only
+//      editable fact is `shardSourcePort`, picked with the shared <Select>
+//      among those parameter names. No `inputs[]` CRUD survives.
 //   3. Renders the derived-outputs read-only section based on
 //      `deriveWrapperFanoutOutputs` (so the user sees the wrapper's
 //      runtime outlets — aggregator outputs OR the __done__ signal).
-//   4. shardSource Switch enforces the singleton invariant: enabling on
-//      one input clears the flag on the others (source-text lock on the
-//      patchInputs callback).
 //
 // Per CLAUDE.md "Frontend UI consistency" — wrapper-fanout MUST reuse
-// `<Field>` / `<TextInput>` / `<Switch>` rather than emitting bespoke
-// chrome. This lock makes a regression to naked `<input>` fail at CI.
+// `<Field>` / `<Select>` rather than emitting bespoke chrome. This lock makes
+// a regression to naked `<input>` (or to a node-level port list) fail at CI.
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -30,12 +29,8 @@ const inspectorSrc = readFileSync(
   'utf-8',
 )
 
-function wrapperFanoutBlock(): string {
-  return inspectorSrc
-}
-
-describe('RFC-060 F.T1 — wrapper-fanout inspector reuses public form primitives', () => {
-  const block = wrapperFanoutBlock()
+describe('RFC-060 F.T1 / RFC-354 — wrapper-fanout inspector reuses public form primitives', () => {
+  const block = inspectorSrc
 
   test('wrapper-fanout Edit component exists and is registered', () => {
     expect(block.length).toBeGreaterThan(100)
@@ -46,37 +41,34 @@ describe('RFC-060 F.T1 — wrapper-fanout inspector reuses public form primitive
     expect(registry).toMatch(/'wrapper-fanout':\s*WrapperFanoutEdit/)
   })
 
-  test('uses Field wrapper for every editable group (no naked DOM input)', () => {
-    // Three Fields: innerNodeIds (read-only summary), fanoutInputs (CRUD),
+  test('uses Field wrapper for every group (no naked DOM input)', () => {
+    // Four Fields: innerNodeIds (read-only summary), fanoutParams (read-only
+    // edge rows), fanoutShardSourcePort (the one editable fact),
     // fanoutDerivedOutputs (read-only).
     expect(block).toMatch(/<Field[\s\S]*?label=\{t\('inspector\.innerNodeIds'\)\}/)
-    expect(block).toMatch(/<Field[\s\S]*?label=\{t\('inspector\.fanoutInputs'\)\}/)
+    expect(block).toMatch(/<Field[\s\S]*?label=\{t\('inspector\.fanoutParams'\)\}/)
+    expect(block).toMatch(/<Field[\s\S]*?label=\{t\('inspector\.fanoutShardSourcePort'\)\}/)
     expect(block).toMatch(/<Field[\s\S]*?label=\{t\('inspector\.fanoutDerivedOutputs'\)\}/)
+    expect(block).not.toMatch(/<input\s/)
   })
 
-  test('inputs[] row uses <TextInput> for name + <KindSelect> for kind (not raw <input>)', () => {
-    // RFC-080 PR-B: the kind editor is the shared KindSelect (replaces the raw
-    // kind <TextInput>); the name field stays a <TextInput>.
-    expect(block).toContain('<TextInput')
-    expect(block).toContain('<KindSelect')
-    // Naked <input is allowed only on the shardSource <Switch> implementation
-    // itself; the wrapper-fanout branch should NOT introduce any.
-    expect(block).not.toMatch(/<input\s[^>]*className="form-input"/)
+  test('shardSourcePort is picked with the shared <Select> among the parameter (edge) names', () => {
+    expect(block).toContain('<Select<string>')
+    expect(block).toMatch(/data-testid="fanout-shard-source-select"/)
+    expect(block).toMatch(/parameterNames\.map\(\(name\)\s*=>\s*\(\{\s*value:\s*name/)
+    expect(block).toMatch(/\{\s*shardSourcePort:\s*next\s*\}/)
   })
 
-  test('shardSource toggle uses <Switch> with singleton-invariant patch', () => {
-    expect(block).toContain('<Switch')
-    // Patch maps over the inputs and sets isShardSource: i === idx ? v : false
-    expect(block).toMatch(/isShardSource:\s*i\s*===\s*idx\s*\?\s*v\s*:\s*false/)
+  test('no node-level inputs[] declaration survives (parameters are edges)', () => {
+    expect(block).not.toMatch(/\binputs\s*:/)
+    expect(block).not.toMatch(/isShardSource/)
+    expect(block).not.toMatch(/KindSelect|<Switch/)
+    expect(block).toMatch(/edge\.boundary === undefined/)
   })
 
   test('derived outputs render the result of deriveWrapperFanoutOutputs', () => {
     expect(block).toContain('deriveWrapperFanoutOutputs(')
     // The derivedOutputs list renders each port's name + kind.
     expect(block).toMatch(/derivedOutputs\.map\(\(o\)\s*=>/)
-  })
-
-  test('add-input fallback marks the first input as shardSource when none is set', () => {
-    expect(block).toMatch(/!inputsList\.some\(\(p\)\s*=>\s*p\.isShardSource\s*===\s*true\)/)
   })
 })

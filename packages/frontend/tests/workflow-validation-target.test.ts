@@ -68,7 +68,7 @@ describe('resolveWorkflowIssueTarget', () => {
     const def = definition({
       nodes: [
         { id: 'source', kind: 'input', inputKey: 'request' },
-        { id: 'target', kind: 'output', ports: [] },
+        { id: 'target', kind: 'output' },
       ],
       edges: [
         {
@@ -127,38 +127,56 @@ describe('resolveWorkflowIssueTarget', () => {
     ).toEqual({ kind: 'node-field', nodeId: 'worker', field: 'prompt' })
   })
 
-  test('legacy binding code is exact for loop field and conservative for output rows', () => {
+  test('RFC-354: a loop return edge out of scope focuses the edge; retired binding codes keep identity only', () => {
     const def = definition({
       nodes: [
         { id: 'loop', kind: 'wrapper-loop', nodeIds: [] },
-        { id: 'publish', kind: 'output', ports: [] },
+        { id: 'publish', kind: 'output' },
+      ],
+      edges: [
+        {
+          id: 'leak',
+          source: { nodeId: 'publish', portName: 'x' },
+          target: { nodeId: 'loop', portName: 'leak' },
+          boundary: 'wrapper-output',
+        },
       ],
     })
 
     expect(
-      resolve({ code: 'binding-node-missing', message: 'legacy', pointer: 'loop' }, def),
-    ).toEqual({ kind: 'node-field', nodeId: 'loop', field: 'loop-output-bindings' })
+      resolve(
+        { code: 'wrapper-loop-output-binding-out-of-scope', message: 'legacy', pointer: 'leak' },
+        def,
+      ),
+    ).toEqual({ kind: 'edge', edgeId: 'leak' })
+    // The v5 `binding-*` family no longer has a semantic row to point at.
     expect(
-      resolve({ code: 'binding-node-missing', message: 'legacy', pointer: 'publish' }, def),
-    ).toEqual({ kind: 'node', nodeId: 'publish' })
+      resolve({ code: 'binding-node-missing', message: 'legacy', pointer: 'loop' }, def),
+    ).toEqual({ kind: 'node', nodeId: 'loop' })
   })
 
   test('duplicate input/output identities fall back to workflow instead of picking a row', () => {
+    // RFC-354: an output node's ports are its inbound edges.
     const def = definition({
       inputs: [
         { kind: 'text', key: 'request', label: 'First' },
         { kind: 'text', key: 'request', label: 'Second' },
       ],
       nodes: [
+        { id: 'source', kind: 'input', inputKey: 'request' },
+        { id: 'output-a', kind: 'output' },
+        { id: 'output-b', kind: 'output' },
+      ],
+      edges: [
         {
-          id: 'output-a',
-          kind: 'output',
-          ports: [{ name: 'result', bind: { nodeId: 'source', portName: 'a' } }],
+          id: 'ra',
+          source: { nodeId: 'source', portName: 'a' },
+          target: { nodeId: 'output-a', portName: 'result' },
         },
         {
-          id: 'output-b',
-          kind: 'output',
-          ports: [{ name: 'result', bind: { nodeId: 'source', portName: 'b' } }],
+          id: 'rb',
+          source: { nodeId: 'source', portName: 'b' },
+          target: { nodeId: 'output-b', portName: 'result' },
         },
       ],
     })

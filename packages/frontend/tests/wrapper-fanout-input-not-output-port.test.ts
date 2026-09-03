@@ -24,18 +24,25 @@ function defWith(
   return { $schema_version: 4, inputs: [], nodes, edges } as WorkflowDefinition
 }
 
-function fanout(
-  id: string,
-  inputs: Array<{ name: string; kind: string; isShardSource?: boolean }>,
-  nodeIds: string[] = [],
-) {
+// RFC-354: the fan-out's parameters are its inbound edges; `shardSourcePort`
+// names the one that is split. `feed()` is the parameter edge that declares
+// the `docs` port on the wrapper.
+function fanout(id: string, shardSourcePort: string, nodeIds: string[] = []) {
   return {
     id,
     kind: 'wrapper-fanout',
     position: { x: 0, y: 0 },
     nodeIds,
-    inputs,
+    shardSourcePort,
   } as unknown as WorkflowDefinition['nodes'][number]
+}
+
+function feed(wrapperId: string, port: string): WorkflowDefinition['edges'][number] {
+  return {
+    id: `feed-${port}`,
+    source: { nodeId: 'src', portName: port },
+    target: { nodeId: wrapperId, portName: port },
+  }
 }
 
 function agent(id: string) {
@@ -50,11 +57,9 @@ function agent(id: string) {
 describe('computePorts: wrapper-fanout boundary-input source does not leak into outputs[]', () => {
   test('boundary-input edge from wrapper input → inner node does not append a phantom output port', () => {
     const def = defWith(
+      [fanout('w1', 'docs', ['a1']), agent('a1'), agent('src')],
       [
-        fanout('w1', [{ name: 'docs', kind: 'list<string>', isShardSource: true }], ['a1']),
-        agent('a1'),
-      ],
-      [
+        feed('w1', 'docs'),
         {
           id: 'e1',
           source: { nodeId: 'w1', portName: 'docs' },
@@ -69,7 +74,7 @@ describe('computePorts: wrapper-fanout boundary-input source does not leak into 
     // __done__ signal outlet. The input port name 'docs' must NOT appear
     // on the output side.
     expect(ports.outputs).not.toContain('docs')
-    // 'docs' DOES belong on the input side via the declaredInputs path.
+    // 'docs' DOES belong on the input side via its parameter edge.
     expect(ports.inputs).toContain('docs')
   })
 
@@ -99,11 +104,9 @@ describe('computePorts: wrapper-fanout boundary-input source does not leak into 
     // leaks into `inputs[]` and the wrapper grows a phantom INPUT port row
     // on its left side mirroring the output name.
     const def = defWith(
+      [fanout('w1', 'docs', ['agg']), agent('agg'), agent('src')],
       [
-        fanout('w1', [{ name: 'docs', kind: 'list<string>', isShardSource: true }], ['agg']),
-        agent('agg'),
-      ],
-      [
+        feed('w1', 'docs'),
         {
           id: 'e1',
           source: { nodeId: 'agg', portName: 'summary' },
@@ -114,8 +117,8 @@ describe('computePorts: wrapper-fanout boundary-input source does not leak into 
     )
     const wrapper = def.nodes.find((n) => n.id === 'w1')!
     const ports = computePorts(wrapper, new Map(), def)
-    // 'summary' must NOT appear on the input side. 'docs' (the declared
-    // input from inputs[]) is the only legitimate left-side port.
+    // 'summary' must NOT appear on the input side. 'docs' (the parameter
+    // edge) is the only legitimate left-side port.
     expect(ports.inputs).not.toContain('summary')
     expect(ports.inputs).toContain('docs')
   })
@@ -126,12 +129,9 @@ describe('computePorts: wrapper-fanout boundary-input source does not leak into 
     // source=w1.__done__ → downstream.in. Should surface '__done__' (already
     // surfaced by the wrapper-fanout case above; this test pins behavior).
     const def = defWith(
+      [fanout('w1', 'docs', ['a1']), agent('a1'), agent('downstream'), agent('src')],
       [
-        fanout('w1', [{ name: 'docs', kind: 'list<string>', isShardSource: true }], ['a1']),
-        agent('a1'),
-        agent('downstream'),
-      ],
-      [
+        feed('w1', 'docs'),
         {
           id: 'e1',
           source: { nodeId: 'w1', portName: 'docs' },

@@ -19,16 +19,13 @@ import { Segmented } from '@/components/Segmented'
 import { atomicNodeInspectorChange, type InspectorChangeMeta } from './historyMeta'
 import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 
-/** Inbound dependency count as the AUTHOR sees it: edges plus the implicit
- *  bindings review/output nodes carry (they have no edges of their own). */
+/** Inbound dependency count as the AUTHOR sees it. RFC-354 (schema v6): every
+ *  dependency — a review's input, an output node's ports included — is an
+ *  edge, so the count is the inbound edge count. */
 function inboundCount(definition: WorkflowDefinition, node: WorkflowNode): number {
-  const edges = definition.edges.filter((e) => e.target.nodeId === node.id).length
-  const rec = node as unknown as Record<string, unknown>
-  if (node.kind === 'review') return edges + (rec.inputSource === undefined ? 0 : 1)
-  if (node.kind === 'output' && Array.isArray(rec.ports)) {
-    return edges + (rec.ports as unknown[]).filter((p) => (p as { bind?: unknown })?.bind).length
-  }
-  return edges
+  return definition.edges.filter(
+    (e) => e.target.nodeId === node.id && e.boundary !== 'wrapper-output',
+  ).length
 }
 
 export function JoinModeField({

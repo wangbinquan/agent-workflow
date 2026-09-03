@@ -142,18 +142,18 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     const buildIdx = src.indexOf('function buildScopeUpstreams')
     expect(buildIdx).toBeGreaterThan(-1)
     const body = src.slice(buildIdx, buildIdx + 3000)
-    // RFC-147: the inline predicate moved to the shared registry — anchor
-    // both hops so neither silently regresses: buildScopeUpstreams consults
-    // channelEdgeDataflowSkip, and the registry marks __clarify__ as
-    // 'unless-target-clarify' (cross-clarify targets KEEP the edge; the
-    // behavior grid lives in rfc147-system-channel-ports.test.ts).
+    // RFC-147 → RFC-354 D6: the inline predicate moved to the port table's
+    // projection — anchor both hops so neither silently regresses:
+    // buildScopeUpstreams consults channelEdgeDataflowSkip, and the port table
+    // marks __clarify__ as 'unless-target-clarify' (cross-clarify targets KEEP
+    // the edge; the behavior grid lives in rfc147-system-channel-ports.test.ts).
     expect(body).toContain('channelEdgeDataflowSkip(')
-    const registrySrc = readFileSync(
-      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'systemChannelPorts.ts'),
+    const portTableSrc = readFileSync(
+      resolve(import.meta.dir, '..', '..', 'shared', 'src', 'nodePorts.ts'),
       'utf-8',
     )
-    expect(registrySrc).toMatch(
-      /\[CLARIFY_SOURCE_PORT_NAME\]:\s*\{[^}]*dataflow:\s*'unless-target-clarify'/,
+    expect(portTableSrc).toMatch(
+      /name:\s*CLARIFY_SOURCE_PORT_NAME,\s*channel:\s*\{[^}]*dataflow:\s*'unless-target-clarify'/,
     )
   })
 

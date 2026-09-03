@@ -4969,10 +4969,10 @@ export interface Resources {
     fieldNodeTitleHint: string
     fieldReviewDescription: string
     fieldReviewDescriptionHint: string
-    fieldReviewInputSourceNode: string
-    fieldReviewInputSourceNodeHint: string
-    fieldReviewInputSourcePort: string
-    fieldReviewInputSourcePortHint: string
+    fieldReviewSource: string
+    fieldReviewSourceHint: string
+    fieldReviewSourceUnwired: string
+    fieldReviewSourceDisconnect: string
     fieldReviewGuideReadyTitle: string
     fieldReviewGuideReadyBody: string
     fieldReviewGuideEmptyTitle: string
@@ -5005,26 +5005,20 @@ export interface Resources {
     fieldReviewCommentTemplateHint: string
     fieldOutputPorts: string
     fieldOutputPortsHint: string
-    portNamePlaceholder: string
-    upstreamPlaceholder: string
-    portPlaceholder: string
+    outputPortsNone: string
     remove: string
-    addPort: string
     innerNodeIds: string
     innerNodeIdsHint: string
     wrapperParams: string
     wrapperParamsHint: string
     wrapperParamsNone: string
-    /** RFC-060 — wrapper-fanout inspector. */
-    fanoutInputs: string
-    fanoutInputsHint: string
-    fanoutInputNamePlaceholder: string
-    fanoutInputShardSource: string
-    fanoutInputShardSourceMustBeList: string
-    fanoutInputAdd: string
-    fanoutInputRemove: string
-    /** RFC-060 — placeholder shown on a fanout input row with no inbound edge. */
-    fanoutInputUnwired: string
+    /** RFC-060 / RFC-354 — wrapper-fanout inspector (parameters are inbound edges). */
+    fanoutParams: string
+    fanoutParamsHint: string
+    fanoutParamsNone: string
+    fanoutShardSourcePort: string
+    fanoutShardSourcePortHint: string
+    fanoutShardSourceUnfed: string
     fanoutDerivedOutputs: string
     fanoutDerivedOutputsHint: string
     none: string
@@ -5039,13 +5033,10 @@ export interface Resources {
     fieldExitConditionValue: string
     fieldExitConditionN: string
     fieldExitConditionSeparator: string
-    fieldOutputBindings: string
-    fieldOutputBindingsHint: string
-    outputNamePlaceholder: string
-    addBinding: string
-    loopExitNodeIdSelect: string
+    loopReturns: string
+    loopReturnsHint: string
+    loopReturnsNone: string
     loopExitPortNameSelect: string
-    loopExitInvalidNodeId: string
     loopExitInvalidPortName: string
     fieldAgent: string
     pickAgent: string
@@ -12674,18 +12665,17 @@ export const zhCN: Resources = {
     fieldNodeTitleHint: '画布卡片上的标题；为空时回退到 agent 名 / input key / 节点 id。',
     fieldReviewDescription: '评审说明',
     fieldReviewDescriptionHint: '可选；展示给评审者，不影响待评内容的来源。',
-    fieldReviewInputSourceNode: '内容来源',
-    fieldReviewInputSourceNodeHint:
-      '选择带有可评审 Markdown 输出的代理；若它只有一个有效端口，会自动补全端口。',
-    fieldReviewInputSourcePort: 'Markdown 输出端口',
-    fieldReviewInputSourcePortHint:
-      '支持 markdown、markdown_file / path<md>、list<markdown>、list<path<md>>；也可直接从画布端口连线。',
+    fieldReviewSource: '评审内容（入边）',
+    fieldReviewSourceHint:
+      '画布上连入本节点 __review_input__ 连接点的那条边就是待评内容：把上游代理的 Markdown 输出连到这里。支持 markdown、markdown_file / path<md>、list<markdown>、list<path<md>>。',
+    fieldReviewSourceUnwired: '尚未连线——把上游 Markdown 输出拖到本节点的输入连接点上。',
+    fieldReviewSourceDisconnect: '断开',
     fieldReviewGuideReadyTitle: '待评内容已就绪',
     fieldReviewGuideReadyBody:
       '{{source}}.{{port}} · {{kind}}。运行到此节点会暂停任务并进入{{mode}}。',
     fieldReviewGuideEmptyTitle: '只需补 1 项必填输入',
     fieldReviewGuideEmptyBody:
-      '评审正文不用手填：从画布把上游代理的 Markdown 输出连到本节点，或在下方选择“内容来源 + 输出端口”。标题、说明和重跑策略均为可选。',
+      '评审正文不用手填：从画布把上游代理的 Markdown 输出连到本节点的输入连接点。标题、说明和重跑策略均为可选。',
     fieldReviewGuideUnavailableTitle: '当前没有可评审的输出',
     fieldReviewGuideUnavailableBody:
       '先给上游代理声明一个 Markdown 输出端口。普通 string 不能作为评审正文；支持 markdown、path<md> 及其单层列表。',
@@ -12717,27 +12707,23 @@ export const zhCN: Resources = {
     fieldReviewCommentTemplate: '评审意见注入模板（高级）',
     fieldReviewCommentTemplateHint: '可选 — 覆盖 {{__review_comments__}} 渲染。留空走框架默认。',
     fieldOutputPorts: '输出端口',
-    fieldOutputPortsHint: '每个端口 = 任务详情页的一张卡片；绑定到 (nodeId, portName)。',
-    portNamePlaceholder: '端口名',
-    upstreamPlaceholder: '上游 nodeId',
-    portPlaceholder: '端口',
+    fieldOutputPortsHint:
+      '每个端口 = 任务详情页的一张卡片。端口就是连入本节点的边：边的目标端口名是卡片名，边的来源是取值处。改名到边设置里改；删掉边即删掉端口。',
+    outputPortsNone: '尚无端口——在画布上把上游输出连到本节点即可创建。',
     remove: '移除',
-    addPort: '+ 增加端口',
     innerNodeIds: '内部节点 id',
     innerNodeIdsHint: '通过画布右键菜单组装。',
     wrapperParams: '参数（入边）',
     wrapperParamsHint:
       '连入包装器的边就是它的参数；`→` 之后是把该参数交给内部节点的边界边。在画布上连线即可，与普通节点一致。',
     wrapperParamsNone: '尚无参数——从外部节点连一条边到本包装器即可声明。',
-    fanoutInputs: '输入端口',
-    fanoutInputsHint:
-      '声明的输入端口列表。有且只有一个必须标记为 shard source 且 kind 必须是 list<T>；其余作为 broadcast 端口、传给每个 shard。',
-    fanoutInputNamePlaceholder: '端口名',
-    fanoutInputShardSource: '分片源',
-    fanoutInputShardSourceMustBeList: '分片源的 kind 必须是 list<T>',
-    fanoutInputAdd: '+ 添加输入',
-    fanoutInputRemove: '删除输入',
-    fanoutInputUnwired: '（未连接）',
+    fanoutParams: '参数（入边）',
+    fanoutParamsHint:
+      '连入扇出包装器的边就是它的参数；`→` 之后是把该参数交给内部节点的边界边。分片源按列表逐项切成 shard，其余参数广播给每个 shard。',
+    fanoutParamsNone: '尚无参数——从外部节点连一条边到本包装器即可声明。',
+    fanoutShardSourcePort: '分片源',
+    fanoutShardSourcePortHint: '按其 list<T> 逐项切分的那个参数；从入边中选一个。',
+    fanoutShardSourceUnfed: '没有边喂入 "{{port}}"——在画布上连一条，或改选别的参数。',
     fanoutDerivedOutputs: '推导出的输出',
     fanoutDerivedOutputsHint:
       '由 wrapper-fanout 内部自动推导：若有 aggregator agent 则用其 outputs；否则单一 __done__ signal 端口。',
@@ -12751,18 +12737,16 @@ export const zhCN: Resources = {
     fieldExitConditionKindHint:
       'port-empty：trim 后为空 · port-not-empty：trim 后非空（反问场景：agent 真正给出 output 才退出）· port-equals：完全相等 · port-count-lt：行数 < n · port-inactive：本轮生产者把该端口标为未激活（RFC-306 分支端口）',
     fieldExitConditionTarget: '退出条件目标',
-    fieldExitConditionTargetHint: '(nodeId, portName)，每轮检查',
+    fieldExitConditionTargetHint: '本循环自己的某个返回端口，每轮结束后检查',
     fieldExitConditionValue: '相等值',
     fieldExitConditionN: 'n',
     fieldExitConditionSeparator: "分隔符（默认 '\\n'）",
-    fieldOutputBindings: '输出绑定',
-    fieldOutputBindingsHint: '把内部端口暴露为 wrapper 的输出端口。',
-    outputNamePlaceholder: '输出名',
-    addBinding: '+ 增加绑定',
-    loopExitNodeIdSelect: '— 选择一个循环内节点 —',
-    loopExitPortNameSelect: '— 选择端口 —',
-    loopExitInvalidNodeId: '"{{nodeId}}" 已不在该循环内，请重新选择当前成员节点。',
-    loopExitInvalidPortName: '"{{portName}}" 不是该节点声明的输出端口，请重新选择。',
+    loopReturns: '返回值（wrapper-output 边）',
+    loopReturnsHint:
+      '每个返回值都是一条从循环成员输出连到本循环的边：在画布上把成员的输出拖到循环右边缘即可声明。下游边与退出条件读的都是这些端口。',
+    loopReturnsNone: '尚无返回值——把成员的输出拖到循环右边缘即可声明。',
+    loopExitPortNameSelect: '— 选择返回端口 —',
+    loopExitInvalidPortName: '"{{portName}}" 不是本循环的返回端口，请重新选择。',
     fieldAgent: '代理',
     pickAgent: '— 选一个代理 —',
     openReferencedResource: '查看详情',
@@ -13941,8 +13925,6 @@ export const zhCN: Resources = {
       'mcp-not-found': '节点使用的代理引用了不存在的 MCP。',
       'plugin-not-found': '节点使用的代理引用了不存在的插件。',
       'plugin-disabled': '节点使用的代理引用了已停用的插件。',
-      'binding-node-missing': '输出端口绑定到了不存在的节点。',
-      'binding-port-missing': '输出端口绑定到了不存在的端口。',
       'boundary-input-port-not-declared': '包装器入界边引用了未声明的输入端口。',
       'boundary-input-source-not-wrapper': '包装器入界边的源头不是扇出包装器。',
       'boundary-input-target-aggregator':
@@ -13985,8 +13967,7 @@ export const zhCN: Resources = {
       'prompt-template-unresolved': '提示词引用的模板变量没有对应的入边端口。',
       'review-input-list-item-not-markdown': '评审节点的列表输入元素类型必须是 markdown。',
       'review-input-edge-conflict': '评审节点只能接收一条输入边。',
-      'review-input-edge-mismatch': '评审节点的输入边与已选择的输入来源不一致。',
-      'review-input-source-missing': '评审节点缺少或错误配置了输入来源。',
+      'review-input-source-missing': '评审节点没有输入边。',
       'review-input-source-not-markdown': '评审节点的输入来源必须声明为 markdown / path 类型。',
       'review-rerunnable-out-of-scope': '评审驳回后可重跑的节点必须在输入来源的上游范围内。',
       'system-port-illegal-source': '答案注入端口只能由反问节点馈入。',
@@ -14034,21 +14015,19 @@ export const zhCN: Resources = {
       'wrapper-containment-cycle': '包装器包含关系不能形成环。',
       'wrapper-empty': '包装器内没有任何节点。',
       'wrapper-fanout-nested': '扇出包装器不能嵌套在另一个扇出包装器里。',
-      'wrapper-fanout-shard-source-duplicate': '扇出包装器只能有一个分片来源端口。',
-      'wrapper-fanout-shard-source-missing': '扇出包装器缺少分片来源端口。',
+      'wrapper-fanout-shard-source-missing': '扇出包装器未指定分片源，或没有边喂入它。',
       'wrapper-fanout-shard-source-must-be-list': '分片来源端口的类型必须是列表（list<T>）。',
       'wrapper-input-boundary-missing': '进入扇出包装器的数据必须经过已声明的输入边界。',
       'wrapper-loop-exit-condition': '循环包装器缺少退出条件。',
-      'wrapper-loop-exit-node-missing': '循环退出条件引用了不存在的节点。',
-      'wrapper-loop-exit-node-out-of-scope': '循环退出条件必须引用循环体的直接成员。',
-      'wrapper-loop-exit-port-missing': '循环退出条件引用了不存在的端口。',
+      'wrapper-loop-exit-port-missing':
+        '循环退出条件引用的返回端口没有任何 wrapper-output 边声明。',
       'exit-condition-port-not-branch':
         '退出条件用的是「端口未激活」，但该端口不是分支端口——这个条件永远不会成立。',
       'wrapper-loop-inner-data-cycle': '循环包装器内部存在数据环。',
       'wrapper-loop-max-iterations': '循环包装器缺少最大迭代次数。',
       'wrapper-loop-continue-on-max-iterations': '循环包装器的迭代上限处理开关必须为开启或关闭。',
       'wrapper-fanout-unsupported-inner-kind': '扇出包装器体内只能放单个代理节点。',
-      'wrapper-loop-output-binding-out-of-scope': '循环输出绑定必须引用循环体的直接成员。',
+      'wrapper-loop-output-binding-out-of-scope': '循环返回边必须来自循环体的直接成员。',
       'wrapper-output-boundary-missing': '离开包装器的数据必须通过包装器输出边界显式暴露。',
       // RFC-243 — call-workflow 节点（design §9 错误码闭集）。
       'workflow-call-cycle': '工作流调用形成了环（含调用自身）。',

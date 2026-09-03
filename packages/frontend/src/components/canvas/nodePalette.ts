@@ -102,7 +102,9 @@ export const PALETTE_DESCRIPTORS = {
     labelKey: 'editor.paletteOutputLabel',
     descKey: 'editor.paletteOutputDesc',
     idPrefix: 'out',
-    makeDefaults: () => ({ ports: [] }),
+    // RFC-354 (schema v6): an output node's ports are its inbound edges —
+    // nothing to declare on drop.
+    makeDefaults: () => ({}),
   },
   'wrapper-git': {
     section: 'wrappers',
@@ -130,15 +132,16 @@ export const PALETTE_DESCRIPTORS = {
     labelKey: 'editor.paletteWrapperFanoutLabel',
     descKey: 'editor.paletteWrapperFanoutDesc',
     idPrefix: 'wrap_fan',
-    // RFC-060 — fresh wrapper-fanout. Author must wire the shardSource
-    // upstream + populate inner subgraph before launch (validator rules
-    // `wrapper-empty` + `wrapper-fanout-shard-source-missing` catch the
-    // unfinished case). Default shape ships a single shardSource input
-    // pre-named `docs` with `list<path<md>>` kind — that's the most
-    // common case (markdown documents per shard). Users free to change.
+    // RFC-060 / RFC-354 — fresh wrapper-fanout. Its parameters are inbound
+    // edges; the one node field left names the parameter whose items are
+    // split. It ships pre-named `docs` (the most common case: markdown
+    // documents per shard) so the first catch-all drop lands on the shard
+    // source; the author must wire it + populate the body before launch
+    // (validator rules `wrapper-empty` + `wrapper-fanout-shard-source-missing`
+    // catch the unfinished case).
     makeDefaults: () => ({
       nodeIds: [],
-      inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+      shardSourcePort: 'docs',
     }),
   },
   review: {
@@ -147,11 +150,10 @@ export const PALETTE_DESCRIPTORS = {
     labelKey: 'editor.paletteReviewLabel',
     descKey: 'editor.paletteReviewDesc',
     idPrefix: 'rev',
-    // inputSource is unset on drop — the user wires it up in
-    // NodeInspector. Validator catches the missing-inputSource case
-    // before Launch.
+    // RFC-354 (schema v6): the review input is its `__review_input__` edge —
+    // wired on the canvas. The validator's `review-input-source-missing`
+    // catches an unwired review before Launch.
     makeDefaults: () => ({
-      inputSource: { nodeId: '', portName: '' },
       title: '',
       description: '',
       rerunnableOnReject: [],

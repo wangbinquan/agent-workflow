@@ -8,7 +8,13 @@
 // the one full rule; callers only choose the empty-fallback (canvas appends
 // `?? id`, candidate labels keep '' so the UI renders the bare nodeId).
 
-import { isCodeHostAction, resolveNodeAgent, type WorkflowNode } from '@agent-workflow/shared'
+import {
+  isCodeHostAction,
+  resolveNodeAgent,
+  type WorkflowNode,
+  reviewInputSource,
+} from '@agent-workflow/shared'
+import type { WorkflowDefinition } from '@agent-workflow/shared'
 import i18n from '@/i18n'
 
 interface DisplayAgent {
@@ -43,13 +49,19 @@ export function nodeAgentDisplayName(n: WorkflowNode, agents?: DisplayAgentLooku
  *      display snapshot; an unresolved node returns '' for the caller's id
  *      fallback rather than claiming that its agent is unset;
  *   3. input → inputKey (or the localized "(unset key)");
- *   4. review → `review:<port>` when inputSource.portName is wired;
+ *   4. review → `review:<port>` when its `__review_input__` edge is wired
+ *      (RFC-354: the edge IS the review input, so this rule needs the
+ *      definition — callers without one fall through to the id fallback);
  *   5. call-workflow → workflowName (or the localized kind label, RFC-243);
  *   6. call-workgroup → workgroupName (same rule, RFC-243 PR-4);
  *   7. code-host-call → localized action label (or the localized kind label);
  *   8. otherwise '' — callers decide the id fallback.
  */
-export function nodeDisplayTitle(n: WorkflowNode, agents?: DisplayAgentLookup): string {
+export function nodeDisplayTitle(
+  n: WorkflowNode,
+  agents?: DisplayAgentLookup,
+  definition?: Pick<WorkflowDefinition, 'edges'>,
+): string {
   const rec = n as unknown as Record<string, unknown>
   if (typeof rec.title === 'string' && rec.title.length > 0) {
     return rec.title
@@ -81,16 +93,21 @@ export function nodeDisplayTitle(n: WorkflowNode, agents?: DisplayAgentLookup): 
   if (n.kind === 'input') {
     return typeof rec.inputKey === 'string' ? rec.inputKey : i18n.t('editor.nodeTitleUnsetKey')
   }
-  if (n.kind === 'review') {
-    // flag-audit W0（§3-4）：schema 字段是 inputSource（shared/schemas/review.ts）。
-    const src = (rec.inputSource as { portName?: unknown } | undefined)?.portName
-    if (typeof src === 'string' && src.length > 0) return `review:${src}`
+  if (n.kind === 'review' && definition !== undefined) {
+    // RFC-354 (schema v6): the reviewed port is the source of the review's
+    // single `__review_input__` edge (the v5 `inputSource` field is gone).
+    const src = reviewInputSource(definition, n.id)
+    if (src !== null && src.portName.length > 0) return `review:${src.portName}`
   }
   return ''
 }
 
 /** Canvas card title: the full rule with the node-id fallback. */
-export function nodeTitle(n: WorkflowNode, agents?: DisplayAgentLookup): string {
-  const derived = nodeDisplayTitle(n, agents)
+export function nodeTitle(
+  n: WorkflowNode,
+  agents?: DisplayAgentLookup,
+  definition?: Pick<WorkflowDefinition, 'edges'>,
+): string {
+  const derived = nodeDisplayTitle(n, agents, definition)
   return derived.length > 0 ? derived : n.id
 }

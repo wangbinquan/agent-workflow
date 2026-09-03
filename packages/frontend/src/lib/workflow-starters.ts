@@ -159,12 +159,6 @@ export function planWorkflowStarter(
             id: 'starter_output',
             kind: 'output',
             title: copy.outputTitle,
-            ports: [
-              {
-                name: 'audit_report',
-                bind: { nodeId: 'starter_auditor', portName: auditOutput },
-              },
-            ],
             position: { x: 780, y: 180 },
           },
         ],
@@ -232,7 +226,9 @@ export function planWorkflowStarter(
           kind: 'wrapper-fanout',
           title: copy.fanoutTitle,
           nodeIds: ['starter_auditor', 'starter_aggregator'],
-          inputs: [{ name: 'changed_files', kind: 'list<path<*>>', isShardSource: true }],
+          // RFC-354: the parameter is the `starter_edge_git_diff` edge below;
+          // this names the one whose items are sharded.
+          shardSourcePort: 'changed_files',
           position: { x: 760, y: 70 },
         },
         {
@@ -266,12 +262,6 @@ export function planWorkflowStarter(
           id: 'starter_output',
           kind: 'output',
           title: copy.outputTitle,
-          ports: [
-            {
-              name: 'result',
-              bind: { nodeId: 'starter_fixer', portName: fixerOutput },
-            },
-          ],
           position: { x: 1780, y: 220 },
         },
       ],

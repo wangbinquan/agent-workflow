@@ -106,7 +106,7 @@ describe('RFC-349 PostgreSQL provider backup application assets', () => {
       id: workflowId,
       name: 'Portable workflow',
       description: 'Backed up from PostgreSQL',
-      definition: { $schema_version: 5, inputs: [], nodes: [], edges: [] },
+      definition: { $schema_version: 6, inputs: [], nodes: [], edges: [] },
     })
     expect(existsSync(join(stagingDirectory, 'worktrees', `${taskId}.json`))).toBe(true)
     expect(existsSync(join(stagingDirectory, 'worktrees', `${taskId}.tar.gz`))).toBe(true)

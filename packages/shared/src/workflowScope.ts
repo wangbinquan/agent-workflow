@@ -76,30 +76,6 @@ function readNodeIds(node: WorkflowNode): string[] {
   return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : []
 }
 
-interface OutputBinding {
-  name: string
-  bind: WorkflowPortReference
-}
-
-function readOutputBindings(node: WorkflowNode): OutputBinding[] {
-  const raw = (node as unknown as { outputBindings?: unknown }).outputBindings
-  if (!Array.isArray(raw)) return []
-  const bindings: OutputBinding[] = []
-  for (const item of raw) {
-    if (item === null || typeof item !== 'object') continue
-    const record = item as Record<string, unknown>
-    if (typeof record.name !== 'string') continue
-    if (record.bind === null || typeof record.bind !== 'object') continue
-    const bind = record.bind as Record<string, unknown>
-    if (typeof bind.nodeId !== 'string' || typeof bind.portName !== 'string') continue
-    bindings.push({
-      name: record.name,
-      bind: { nodeId: bind.nodeId, portName: bind.portName },
-    })
-  }
-  return bindings
-}
-
 /**
  * Analyze the wrapper containment tree once for validators and runtime gates.
  *
@@ -300,33 +276,35 @@ const WRAPPER_BOUNDARY_PROMOTERS = {
   // 这不是「还没实现」，是设计如此——所以它显式写成 null，而不是掉进默认分支。
   'wrapper-git': () => null,
 
-  'wrapper-loop': (_definition, wrapper, source) => {
-    const binding = readOutputBindings(wrapper)
-      .filter(
-        (candidate) =>
-          candidate.bind.nodeId === source.nodeId && candidate.bind.portName === source.portName,
-      )
-      .sort((left, right) => left.name.localeCompare(right.name))[0]
-    return binding === undefined ? null : { nodeId: wrapper.id, portName: binding.name }
-  },
+  // RFC-354 (schema v6): loop RETURN VALUES are `wrapper-output` boundary edges,
+  // the same shape fan-out has always used — one promoter serves both.
+  'wrapper-loop': (definition, wrapper, source) =>
+    promoteThroughWrapperOutputEdge(definition, wrapper, source),
 
-  'wrapper-fanout': (definition, wrapper, source) => {
-    const boundary = definition.edges
-      .filter(
-        (edge) =>
-          edge.boundary === 'wrapper-output' &&
-          edge.source.nodeId === source.nodeId &&
-          edge.source.portName === source.portName &&
-          edge.target.nodeId === wrapper.id,
-      )
-      .sort(
-        (left, right) =>
-          left.target.portName.localeCompare(right.target.portName) ||
-          left.id.localeCompare(right.id),
-      )[0]
-    return boundary === undefined ? null : { ...boundary.target }
-  },
+  'wrapper-fanout': (definition, wrapper, source) =>
+    promoteThroughWrapperOutputEdge(definition, wrapper, source),
 } as const satisfies Record<(typeof WRAPPER_NODE_KINDS)[number], WrapperBoundaryPromoter>
+
+function promoteThroughWrapperOutputEdge(
+  definition: WorkflowDefinition,
+  wrapper: WorkflowNode,
+  source: WorkflowPortReference,
+): WorkflowPortReference | null {
+  const boundary = definition.edges
+    .filter(
+      (edge) =>
+        edge.boundary === 'wrapper-output' &&
+        edge.source.nodeId === source.nodeId &&
+        edge.source.portName === source.portName &&
+        edge.target.nodeId === wrapper.id,
+    )
+    .sort(
+      (left, right) =>
+        left.target.portName.localeCompare(right.target.portName) ||
+        left.id.localeCompare(right.id),
+    )[0]
+  return boundary === undefined ? null : { ...boundary.target }
+}
 
 /**
  * RFC-317 T58（findings NK-02）—— `wrapperKind` 渲染进用户文案时的**唯一**写法。

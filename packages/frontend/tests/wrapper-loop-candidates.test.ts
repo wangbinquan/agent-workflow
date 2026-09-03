@@ -4,13 +4,13 @@
 // reactively in the inspector, and the source of truth is the function.
 
 import { describe, expect, test } from 'vitest'
-import type { WorkflowNode } from '@agent-workflow/shared'
+import type { WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
 import { loopMemberCandidates } from '../src/components/canvas/wrapperCandidates'
 
 // RFC-146: loopMemberCandidates 签名改吃 WorkflowDefinition（声明层需要邻居
 // 节点做 review inputKind 解析）；测试用最小定义包一层。
-const defOf = (nodes: WorkflowNode[]) =>
-  ({ $schema_version: 1, inputs: [], nodes, edges: [] }) as unknown as Parameters<
+const defOf = (nodes: WorkflowNode[], edges: WorkflowEdge[] = []) =>
+  ({ $schema_version: 6, inputs: [], nodes, edges }) as unknown as Parameters<
     typeof loopMemberCandidates
   >[1]
 
@@ -26,15 +26,16 @@ function agent(id: string, agentName: string): WorkflowNode {
     agentName,
   } as unknown as WorkflowNode
 }
-function review(id: string, sourcePort: string): WorkflowNode {
-  // flag-audit W0（§3-4）：schema 字段是 inputSource（旧 fixture 用了不存在的
-  // `source`，导致 review:port 标题分支从未被真正测过）。
+function review(id: string): WorkflowNode {
+  return { id, kind: 'review', position: { x: 0, y: 0 } } as unknown as WorkflowNode
+}
+/** RFC-354 (schema v6): the review input is its `__review_input__` edge. */
+function reviewEdge(reviewId: string, sourcePort: string): WorkflowEdge {
   return {
-    id,
-    kind: 'review',
-    position: { x: 0, y: 0 },
-    inputSource: { nodeId: 'upstream', portName: sourcePort },
-  } as unknown as WorkflowNode
+    id: `${reviewId}-in`,
+    source: { nodeId: 'upstream', portName: sourcePort },
+    target: { nodeId: reviewId, portName: '__review_input__' },
+  }
 }
 function gitWrap(id: string, nodeIds: string[]): WorkflowNode {
   return { id, kind: 'wrapper-git', position: { x: 0, y: 0 }, nodeIds } as unknown as WorkflowNode
@@ -55,8 +56,8 @@ describe('loopMemberCandidates', () => {
     // wrapper-candidates-review-ports.test.ts 修复的 bug。契约改为与
     // WorkflowCanvas.computePorts 同源（多文档 accepted 场景见新测试文件）。
     const l = loop('loop1', ['r1'])
-    const r = review('r1', 'design')
-    const out = loopMemberCandidates(l, defOf([l, r]), [])
+    const r = review('r1')
+    const out = loopMemberCandidates(l, defOf([l, r], [reviewEdge('r1', 'design')]), [])
     expect(out).toEqual([
       { nodeId: 'r1', title: 'review:design', outputPorts: ['approved_doc', 'approval_meta'] },
     ])

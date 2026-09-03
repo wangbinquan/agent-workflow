@@ -9,21 +9,26 @@
 // drop target; the legacy named left input ports are removed — they had no
 // runtime semantics in scheduler.ts and only misled users.
 //
-// Wrapper output ports (git_diff for wrapper-git, outputBindings.name[] for
-// wrapper-loop) render along the BOTTOM edge, centered. Right-side rendering
-// (the shared `<PortHandles side="right">` path used by agent nodes) doesn't
-// fit wrappers — the wrapper's `padding: 0` (required so the visible rect
-// matches the bbox xyflow uses for child clipping) means the default
-// right-handle offset of -14px pushes the dot outside the wrapper. A
-// bottom-centered layout also reads more naturally for a container whose
-// "output" semantically belongs to the whole group, not a side row.
+// wrapper-git's single `git_diff` output renders along the BOTTOM edge,
+// centered. Right-side rendering (the shared `<PortHandles side="right">`
+// path used by agent nodes) doesn't fit wrappers — the wrapper's `padding: 0`
+// (required so the visible rect matches the bbox xyflow uses for child
+// clipping) means the default right-handle offset of -14px pushes the dot
+// outside the wrapper.
+//
+// RFC-354 (schema v6): a wrapper-loop's RETURN VALUES are its `wrapper-output`
+// edges (body member port → loop return port), exactly like a fan-out's
+// promoted outlets — so loops render the same right-side boundary rows fan-out
+// does (inner target dot → label → outer source dot), plus a right-side
+// catch-all (`__return__`) a member's output can be dropped on to declare a
+// NEW return.
 
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { NODE_GLYPHS } from '../nodePalette'
 import { useTranslation } from 'react-i18next'
 import { FANOUT_DONE_PORT_NAME } from '@agent-workflow/shared'
 import { PortHandles } from './PortHandles'
-import { INBOUND_HANDLE_ID, type CanvasNodeData } from './types'
+import { INBOUND_HANDLE_ID, RETURN_HANDLE_ID, type CanvasNodeData } from './types'
 import { NodeValidationBadge } from './NodeValidationBadge'
 import { NodeConfigurationSummary } from './NodeConfigurationSummary'
 import type { WrapperDragPreview } from '../wrapperDragPreview'
@@ -218,12 +223,28 @@ export function GroupWrapperNode({ data, selected }: Props) {
           ) : null}
         </>
       ) : null}
-      {/* Fanout outputs render on the RIGHT (mirrors the agent-node layout
-       *  so the wrapper reads as an agent-shaped block at a glance): inputs
-       *  on the left, outputs on the right. Each output handle still keeps
-       *  the signal-port chrome for `__done__` via the same className
-       *  branch as the bottom-port renderer. */}
-      {kind === 'fanout' && data.outputPorts.length > 0 ? (
+      {/* RFC-354 — loop returns are declared by dropping a member's output on
+       *  this right-side catch-all: WorkflowCanvas.translateReturnConnection
+       *  names the new return after the source port and the planner tags the
+       *  edge `wrapper-output`. */}
+      {kind === 'loop' ? (
+        <div className="canvas-node__return-catchall">
+          <Handle
+            type="target"
+            position={Position.Right}
+            id={RETURN_HANDLE_ID}
+            className="canvas-node__handle canvas-node__handle--catchall canvas-node__handle--return-catchall"
+            aria-hidden="true"
+          />
+        </div>
+      ) : null}
+      {/* Fanout outputs (and RFC-354 loop returns) render on the RIGHT
+       *  (mirrors the agent-node layout so the wrapper reads as an
+       *  agent-shaped block at a glance): inputs on the left, outputs on the
+       *  right. Each output handle still keeps the signal-port chrome for
+       *  `__done__` via the same className branch as the bottom-port
+       *  renderer. */}
+      {(kind === 'fanout' || kind === 'loop') && data.outputPorts.length > 0 ? (
         <div className="canvas-node__port-rows canvas-node__port-rows--right canvas-node__port-rows--wrapper-fanout">
           {data.outputPorts.map((p) => {
             const isSignal = p === FANOUT_DONE_PORT_NAME
@@ -274,12 +295,10 @@ export function GroupWrapperNode({ data, selected }: Props) {
           })}
         </div>
       ) : null}
-      {/* git / loop keep bottom-centered outputs (RFC-016 §3.2). The right-
-       *  side layout that fanout uses doesn't fit them: wrapper-git's single
-       *  `git_diff` output reads better at the bottom because the wrapper is
-       *  typically wider than tall, and wrapper-loop's outputBindings are
-       *  authored downstream of the loop body, not on a side. */}
-      {kind !== 'fanout' && data.outputPorts.length > 0 ? (
+      {/* git keeps its bottom-centered `git_diff` output (RFC-016 §3.2): the
+       *  wrapper is typically wider than tall, so the single declared outlet
+       *  reads better at the bottom than in a side row. */}
+      {kind === 'git' && data.outputPorts.length > 0 ? (
         <div className="canvas-node__bottom-ports">
           {data.outputPorts.map((p) => {
             const isSignal = p === FANOUT_DONE_PORT_NAME

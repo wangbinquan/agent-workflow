@@ -1,7 +1,14 @@
-// RFC-199 T7.1 — single source of truth for node-id / PortRef fields stored in
-// WorkflowDefinition. Clipboard rewrite, deletion prune, and port rename must
-// all walk this inventory so a reference cannot be repaired in one path while
-// remaining stale in another.
+// RFC-199 T7.1 — single source of truth for the node-id list fields stored on
+// WorkflowDefinition nodes. Clipboard rewrite, deletion prune, and port rename
+// must all walk this inventory so a reference cannot be repaired in one path
+// while remaining stale in another.
+//
+// RFC-354 (schema v6): node-level PortRef fields (review.inputSource,
+// output.ports[].bind, loop.outputBindings / exitCondition.nodeId) no longer
+// exist — a node's inputs are its inbound edges and a loop's returns are
+// `wrapper-output` edges. PortRefs now live only on `edges[]` and the top-level
+// `outputs[]`, which every transform below handles directly; the inventory
+// keeps just the node-id lists (wrapper membership, review rerun policy).
 
 import {
   isWrapperKind,
@@ -14,12 +21,6 @@ import {
 export interface WorkflowNodeReferenceDescriptor {
   /** String-array node references; copy/delete filters entries outside the target set. */
   nodeIdLists: readonly string[]
-  /** A field whose whole value is a PortRef, e.g. review.inputSource. */
-  directPortRefs: readonly string[]
-  /** A field containing nodeId/portName plus semantic keys, e.g. loop.exitCondition. */
-  embeddedPortRefs: readonly string[]
-  /** Arrays of `{ ..., bind: PortRef }`, e.g. output.ports / loop.outputBindings. */
-  bindingLists: readonly string[]
   /**
    * RFC-253 — fields whose subtree is OPAQUE USER DATA and can never contain a
    * node/port reference, so the unmanaged-field ratchet must not walk into it.
@@ -38,9 +39,6 @@ export interface WorkflowNodeReferenceDescriptor {
 
 const NO_NODE_REFERENCES = {
   nodeIdLists: [],
-  directPortRefs: [],
-  embeddedPortRefs: [],
-  bindingLists: [],
 } as const satisfies WorkflowNodeReferenceDescriptor
 
 /**
@@ -51,35 +49,25 @@ const NO_NODE_REFERENCES = {
 export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
   'agent-single': NO_NODE_REFERENCES,
   input: NO_NODE_REFERENCES,
-  output: {
-    nodeIdLists: [],
-    directPortRefs: [],
-    embeddedPortRefs: [],
-    bindingLists: ['ports'],
-  },
+  // RFC-354 (schema v6): an output node's ports are its inbound edges — no
+  // node-level PortRef left to rewrite or prune.
+  output: NO_NODE_REFERENCES,
   'wrapper-git': {
     nodeIdLists: ['nodeIds'],
-    directPortRefs: [],
-    embeddedPortRefs: [],
-    bindingLists: [],
   },
+  // RFC-354 (schema v6): loop returns are `wrapper-output` edges and the exit
+  // condition names the loop's own return port (no nodeId) — only `nodeIds`
+  // remains a node reference.
   'wrapper-loop': {
     nodeIdLists: ['nodeIds'],
-    directPortRefs: [],
-    embeddedPortRefs: ['exitCondition'],
-    bindingLists: ['outputBindings'],
   },
   'wrapper-fanout': {
     nodeIdLists: ['nodeIds'],
-    directPortRefs: [],
-    embeddedPortRefs: [],
-    bindingLists: [],
   },
+  // RFC-354 (schema v6): the reviewed source is the inbound edge; the rerun
+  // lists stay (they are control policy over node ids, not data flow).
   review: {
     nodeIdLists: ['rerunnableOnReject', 'rerunnableOnIterate'],
-    directPortRefs: ['inputSource'],
-    embeddedPortRefs: [],
-    bindingLists: [],
   },
   clarify: NO_NODE_REFERENCES,
   'clarify-cross-agent': NO_NODE_REFERENCES,
@@ -95,9 +83,6 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
   // `opaqueFields`) rather than walked by the key-name heuristic.
   script: {
     nodeIdLists: [],
-    directPortRefs: [],
-    embeddedPortRefs: [],
-    bindingLists: [],
     opaqueFields: ['env', 'script'],
   },
   // RFC-269: a code-host call references no other node — its parameters are
@@ -115,18 +100,12 @@ export const WORKFLOW_NODE_REFERENCE_INVENTORY = {
   // right.
   'code-host-call': {
     nodeIdLists: [],
-    directPortRefs: [],
-    embeddedPortRefs: [],
-    bindingLists: [],
     opaqueFields: ['params', 'request'],
   },
   // RFC-304 — synthesized, never user-authored: it carries no node ids, no port
   // refs and no resource bindings. `stage` holds the engine's own opaque state.
   'code-round': {
     nodeIdLists: [],
-    directPortRefs: [],
-    embeddedPortRefs: [],
-    bindingLists: [],
     opaqueFields: ['round'],
   },
 } as const satisfies Record<NodeKind, WorkflowNodeReferenceDescriptor>
@@ -213,12 +192,6 @@ interface NodeReferencePolicy {
     field: string,
     action: 'filter',
   ) => string | null
-  mapPortRef: (
-    ref: PortRefValue,
-    ownerNodeId: string,
-    field: string,
-    action: 'clear',
-  ) => PortRefValue | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -299,9 +272,8 @@ function referencedNodeIdHint(value: unknown): string | undefined {
 
 /**
  * Passthrough schemas let legacy/corrupt values reach these helpers. An
- * inventoried path must not suppress the unmanaged-field ratchet unless its
- * reference shape is actually readable. Reference-free draft containers
- * (`inputSource: {}` / `exitCondition: { kind: ... }`) remain copyable.
+ * inventoried node-id list must not suppress the unmanaged-field ratchet
+ * unless its shape is actually readable.
  */
 function malformedInventoriedReferenceWarnings(node: WorkflowNode): WorkflowNodeReferenceWarning[] {
   const descriptor = descriptorFor(node)
@@ -333,46 +305,6 @@ function malformedInventoriedReferenceWarnings(node: WorkflowNode): WorkflowNode
     }
   }
 
-  const inspectPortRefField = (field: string): void => {
-    if (!hasOwn(record, field)) return
-    const value = record[field]
-    if (value === undefined || value === null || portRefAt(value) !== null) return
-    // An object without either PortRef key is an incomplete, reference-free
-    // editor draft. Any partial PortRef (or non-object value) is ambiguous and
-    // must abort rather than retain an old id under an inventoried path.
-    if (isRecord(value) && !hasOwn(value, 'nodeId') && !hasOwn(value, 'portName')) return
-    report(field, value, 'PortRef')
-  }
-  for (const field of descriptor.directPortRefs) inspectPortRefField(field)
-  for (const field of descriptor.embeddedPortRefs) inspectPortRefField(field)
-
-  for (const field of descriptor.bindingLists) {
-    if (!hasOwn(record, field)) continue
-    const value = record[field]
-    if (value === undefined || value === null) continue
-    if (!Array.isArray(value)) {
-      report(field, value, 'binding list')
-      continue
-    }
-    for (const [index, binding] of value.entries()) {
-      const bindingPath = `${field}[${index}]`
-      if (!isRecord(binding)) {
-        report(bindingPath, binding, 'binding')
-        continue
-      }
-      if (!hasOwn(binding, 'bind')) {
-        // A draft `{ name }` row contains no reference yet. A reference-like
-        // value at the wrong level is malformed and must not bypass rewriting.
-        if (referencedNodeIdHint(binding) !== undefined) report(bindingPath, binding, 'binding')
-        continue
-      }
-      const bind = binding.bind
-      if (bind === undefined || bind === null || portRefAt(bind) !== null) continue
-      if (isRecord(bind) && !hasOwn(bind, 'nodeId') && !hasOwn(bind, 'portName')) continue
-      report(`${bindingPath}.bind`, bind, 'PortRef')
-    }
-  }
-
   return warnings
 }
 
@@ -380,11 +312,6 @@ function unmanagedReferenceWarnings(node: WorkflowNode): WorkflowNodeReferenceWa
   const descriptor = descriptorFor(node)
   const opaqueFields = new Set(descriptor.opaqueFields ?? [])
   const knownNodeIdLists = new Set(descriptor.nodeIdLists)
-  const knownPortRefPaths = new Set([
-    ...descriptor.directPortRefs,
-    ...descriptor.embeddedPortRefs,
-    ...descriptor.bindingLists.map((field) => `${field}[].bind`),
-  ])
   const warnings: WorkflowNodeReferenceWarning[] = []
 
   const report = (field: string, referencedNodeId?: string): void => {
@@ -403,18 +330,6 @@ function unmanagedReferenceWarnings(node: WorkflowNode): WorkflowNodeReferenceWa
     // member is the declared reference itself, so there is no unknown subtree
     // to ratchet here.
     if (knownNodeIdLists.has(path)) return
-    // A known PortRef container only owns its declared `nodeId`/`portName`
-    // leaves. Continue walking every passthrough key: otherwise a future
-    // nested reference can hide inside an otherwise-valid known field and
-    // silently bypass the inventory.
-    if (knownPortRefPaths.has(path)) {
-      if (!isRecord(value)) return
-      for (const [key, child] of Object.entries(value)) {
-        if (key === 'nodeId' || key === 'portName') continue
-        walk(child, `${path}.${key}`)
-      }
-      return
-    }
     if (Array.isArray(value)) {
       for (const entry of value) walk(entry, `${path}[]`)
       return
@@ -491,38 +406,6 @@ function transformNodeReferences(
       if (mapped !== null) next.push(mapped)
     }
     record[field] = next
-  }
-
-  for (const field of descriptor.directPortRefs) {
-    const current = record[field]
-    const ref = portRefAt(current)
-    if (ref === null || !isRecord(current)) continue
-    const mapped = policy.mapPortRef(ref, node.id, field, 'clear')
-    current.nodeId = mapped?.nodeId ?? ''
-    current.portName = mapped?.portName ?? ''
-  }
-
-  for (const field of descriptor.embeddedPortRefs) {
-    const current = record[field]
-    const ref = portRefAt(current)
-    if (ref === null || !isRecord(current)) continue
-    const mapped = policy.mapPortRef(ref, node.id, field, 'clear')
-    current.nodeId = mapped?.nodeId ?? ''
-    current.portName = mapped?.portName ?? ''
-  }
-
-  for (const field of descriptor.bindingLists) {
-    const bindings = record[field]
-    if (!Array.isArray(bindings)) continue
-    for (const [index, binding] of bindings.entries()) {
-      if (!isRecord(binding) || !isRecord(binding.bind)) continue
-      const ref = portRefAt(binding.bind)
-      if (ref === null) continue
-      const path = `${field}[${index}].bind`
-      const mapped = policy.mapPortRef(ref, node.id, path, 'clear')
-      binding.bind.nodeId = mapped?.nodeId ?? ''
-      binding.bind.portName = mapped?.portName ?? ''
-    }
   }
 
   return {
@@ -608,7 +491,7 @@ function copyPolicy(
     referencedNodeId: string,
     ownerNodeId: string,
     field: string,
-    action: 'clear' | 'filter',
+    action: 'filter',
   ): string | null => {
     const mapped = idMap.get(referencedNodeId)
     if (mapped !== undefined) return mapped
@@ -625,10 +508,6 @@ function copyPolicy(
   return {
     mapNodeId: (referencedNodeId, ownerNodeId, field) =>
       resolve(referencedNodeId, ownerNodeId, field, 'filter'),
-    mapPortRef: (ref, ownerNodeId, field) => {
-      const nodeId = resolve(ref.nodeId, ownerNodeId, field, 'clear')
-      return nodeId === null ? null : { nodeId, portName: ref.portName }
-    },
   }
 }
 
@@ -714,7 +593,7 @@ function survivorPolicy(
     referencedNodeId: string,
     ownerNodeId: string,
     field: string,
-    action: 'clear' | 'filter',
+    action: 'filter',
   ): string | null => {
     if (survivorNodeIds.has(referencedNodeId)) return referencedNodeId
     pushWarning(warnings, {
@@ -730,10 +609,6 @@ function survivorPolicy(
   return {
     mapNodeId: (referencedNodeId, ownerNodeId, field) =>
       survive(referencedNodeId, ownerNodeId, field, 'filter'),
-    mapPortRef: (ref, ownerNodeId, field) => {
-      const nodeId = survive(ref.nodeId, ownerNodeId, field, 'clear')
-      return nodeId === null ? null : ref
-    },
   }
 }
 
@@ -827,11 +702,9 @@ function portRenameKey(nodeId: string, portName: string): string {
 }
 
 /**
- * Remove references to derived ports that no longer exist. Edges and
- * top-level workflow outputs are dropped; inventoried node PortRefs are kept
- * as explicit incomplete values so validation can focus the repair field.
- * The same descriptor inventory/ratchet used by copy, delete, and rename is
- * deliberately reused here.
+ * Remove references to derived ports that no longer exist: edges and
+ * top-level workflow outputs are dropped. RFC-354: there are no node-level
+ * PortRefs any more, so the node walk only runs the inventory ratchet.
  */
 export function pruneWorkflowPortReferences(
   definition: WorkflowDefinition,
@@ -846,22 +719,7 @@ export function pruneWorkflowPortReferences(
   const warnings: WorkflowNodeReferenceWarning[] = []
   const isRemoved = (ref: PortRefValue): boolean =>
     removed.has(portRenameKey(ref.nodeId, ref.portName))
-  const policy: NodeReferencePolicy = {
-    mapNodeId: (nodeId) => nodeId,
-    mapPortRef: (ref, ownerNodeId, field) => {
-      if (!isRemoved(ref)) return ref
-      pushWarning(warnings, {
-        code: 'disappeared-port-reference-pruned',
-        nodeId: ownerNodeId,
-        field,
-        referencedNodeId: ref.nodeId,
-        referencedPortName: ref.portName,
-        action: 'clear',
-        message: `node '${ownerNodeId}' field '${field}' referenced disappeared port '${ref.nodeId}.${ref.portName}'`,
-      })
-      return null
-    },
-  }
+  const policy: NodeReferencePolicy = { mapNodeId: (nodeId) => nodeId }
 
   let safe = true
   const nodes = base.nodes.map((node) => {
@@ -914,7 +772,8 @@ export function pruneWorkflowPortReferences(
 }
 
 /**
- * Rewrite a node-scoped port name across every PortRef surface. Intended for
+ * Rewrite a node-scoped port name across every PortRef surface (edges and
+ * top-level outputs — RFC-354 left no node-level PortRef). Intended for
  * input-key remapping after paste, but generic enough for future semantic port
  * renames. It deliberately does not alter input declarations or node fields.
  */
@@ -929,10 +788,7 @@ export function rewriteWorkflowPortReferences(
     nodeId: ref.nodeId,
     portName: renameMap.get(portRenameKey(ref.nodeId, ref.portName)) ?? ref.portName,
   })
-  const policy: NodeReferencePolicy = {
-    mapNodeId: (nodeId) => nodeId,
-    mapPortRef: (ref) => mapRef(ref),
-  }
+  const policy: NodeReferencePolicy = { mapNodeId: (nodeId) => nodeId }
   const base = cloneJsonValue(definition)
   const warnings: WorkflowNodeReferenceWarning[] = []
   let safe = true

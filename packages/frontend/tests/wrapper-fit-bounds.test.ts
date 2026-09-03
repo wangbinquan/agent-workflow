@@ -23,7 +23,9 @@ function agentSingle(id: string, pos: { x: number; y: number }): WorkflowNode {
 }
 
 describe('computeFitBounds', () => {
-  test('port-heavy loop contributes an intrinsic width before any child is added', () => {
+  // RFC-354: loop returns are right-side rows, so a return-heavy loop
+  // contributes an intrinsic HEIGHT (the fan-out rule), not a bottom-row width.
+  test('return-heavy loop contributes an intrinsic height before any child is added', () => {
     const w = {
       ...wrapper('loop', [], { x: 100, y: 200 }),
       kind: 'wrapper-loop',
@@ -38,10 +40,10 @@ describe('computeFitBounds', () => {
         },
       },
     ])
-    expect(minimumSizes.get('loop')).toEqual({ width: 532, height: 120 })
+    expect(minimumSizes.get('loop')).toEqual({ width: 200, height: 234 })
 
     const fit = computeFitBounds(w, [w], undefined, undefined, minimumSizes)
-    expect(fit).toEqual({ width: 532, height: 120, offset: { x: 100, y: 200 } })
+    expect(fit).toEqual({ width: 200, height: 234, offset: { x: 100, y: 200 } })
   })
 
   test('fanout side-port count contributes an intrinsic height', () => {

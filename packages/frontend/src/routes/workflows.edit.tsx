@@ -18,7 +18,12 @@ import type {
   WorkflowDraftSnapshot,
   WorkflowValidationReceipt,
 } from '@agent-workflow/shared'
-import { buildNodeAgentLookup, normalizeResourceDisplayName } from '@agent-workflow/shared'
+import {
+  buildNodeAgentLookup,
+  migrateWorkflowDefinitionToLatest,
+  normalizeResourceDisplayName,
+  WORKFLOW_SCHEMA_VERSION,
+} from '@agent-workflow/shared'
 import { api, ApiError } from '@/api/client'
 import { describeApiError } from '@/i18n'
 import { EditorPaletteContent, EditorSidebar } from '@/components/canvas/EditorSidebar'
@@ -27,7 +32,6 @@ import { EdgeInspector } from '@/components/canvas/EdgeInspector'
 import { NodeInspector } from '@/components/canvas/NodeInspector'
 import { nodeTitle } from '@/components/canvas/nodeTitle'
 import type { InspectorChangeMeta } from '@/components/canvas/inspector/historyMeta'
-import { healFieldEdgeConsistency } from '@/components/canvas/connectionSync'
 import { syncInputDefs } from '@/components/canvas/syncInputDefs'
 import { clearWrapperSize } from '@/components/canvas/wrapperOps'
 import {
@@ -201,20 +205,24 @@ class WorkflowActionRevisionChangedError extends Error {
  * inputs[] back into the draft; the existing 1s auto-save then writes it
  * back to the daemon. No backend migration needed.
  *
- * RFC-007: also reconcile review.inputSource / output.ports[].bind against
- * the canvas edges. Pre-RFC-007 these were authored only through the form;
- * opening such a workflow once materializes the visual edges (and writes
- * back fields for YAML-imported edges that lacked field values). Both
- * passes return the input reference unchanged when there's nothing to fix,
- * so the auto-save useEffect only fires when work was actually done.
+ * RFC-354 (schema v6): the editor only ever sees the latest schema. A v5 (or
+ * older) definition coming off the API is upgraded here — the review
+ * `inputSource`, output `ports[].bind`, loop `outputBindings` /
+ * `exitCondition.nodeId` and fan-out `inputs[]` PortRefs all become edges
+ * (`migrateWorkflowDefinitionToLatest`, pure and idempotent) — and the next
+ * auto-save writes the v6 shape back. A v6 definition passes through by
+ * reference when nothing else needs fixing, so the auto-save useEffect only
+ * fires when work was actually done.
  *
  * Exported pure for testing — see tests/canvas-edit-old-workflow.test.tsx.
  */
 export function healLoadedDefinition(def: WorkflowDefinition): WorkflowDefinition {
-  const synced = syncInputDefs(def.inputs ?? [], def.nodes)
-  const afterInputs =
-    synced === (def.inputs ?? []) ? def : ({ ...def, inputs: synced } as WorkflowDefinition)
-  return healFieldEdgeConsistency(afterInputs)
+  const upgraded =
+    def.$schema_version === WORKFLOW_SCHEMA_VERSION ? def : migrateWorkflowDefinitionToLatest(def)
+  const synced = syncInputDefs(upgraded.inputs ?? [], upgraded.nodes)
+  return synced === (upgraded.inputs ?? [])
+    ? upgraded
+    : ({ ...upgraded, inputs: synced } as WorkflowDefinition)
 }
 
 // /workflows/$id ------------------------------------------------------------

@@ -235,35 +235,59 @@ describe('NodeInspector', () => {
     expect(next.inputKey).toBe('spec')
   })
 
-  test('output node: + Add port appends an empty binding', () => {
-    const { onChange } = setup({
-      id: 'o1',
-      kind: 'output',
-      ports: [{ name: 'final', bind: { nodeId: 'a1', portName: 'code' } }],
-    })
-    fireEvent.click(screen.getByText('+ Add port'))
-    const next = lastPatchedNode(onChange) as unknown as {
-      ports: Array<{ name: string; bind: { nodeId: string; portName: string } }>
-    }
-    expect(next.ports).toHaveLength(2)
-    expect(next.ports[1]).toEqual({ name: 'port_2', bind: { nodeId: '', portName: '' } })
+  test('output node: ports are its inbound edges — no "+ Add port" editor (RFC-354)', () => {
+    setup({ id: 'o1', kind: 'output' })
+    expect(screen.queryByText('+ Add port')).toBeNull()
+    expect(screen.getByTestId('output-ports-empty')).toBeTruthy()
   })
 
-  test('output node: Remove drops the matching row', () => {
-    const { onChange } = setup({
-      id: 'o1',
-      kind: 'output',
-      ports: [
-        { name: 'a', bind: { nodeId: 'x', portName: 'p' } },
-        { name: 'b', bind: { nodeId: 'y', portName: 'q' } },
-      ],
-    })
+  test('output node: Remove on a port row deletes that edge only', () => {
+    const onChange = vi.fn()
+    function EdgeHost() {
+      const [def, setDef] = useState<WorkflowDefinition>({
+        $schema_version: 6,
+        inputs: [],
+        nodes: [
+          { id: 'x', kind: 'agent-single', agentName: 'coder' } as WorkflowNode,
+          { id: 'o1', kind: 'output' } as WorkflowNode,
+        ],
+        edges: [
+          {
+            id: 'pa',
+            source: { nodeId: 'x', portName: 'p' },
+            target: { nodeId: 'o1', portName: 'a' },
+          },
+          {
+            id: 'pb',
+            source: { nodeId: 'x', portName: 'q' },
+            target: { nodeId: 'o1', portName: 'b' },
+          },
+        ],
+      })
+      return (
+        <NodeInspector
+          definition={def}
+          selectedNodeId="o1"
+          agents={[CODER]}
+          onChange={(next) => {
+            setDef(next)
+            onChange(next)
+          }}
+          onClose={() => {}}
+        />
+      )
+    }
+    wrap(<EdgeHost />)
+    const rows = screen.getByTestId('output-ports').querySelectorAll('li')
+    expect(Array.from(rows).map((row) => row.textContent)).toEqual([
+      expect.stringContaining('a'),
+      expect.stringContaining('b'),
+    ])
     // There are two Remove buttons (one per row); click the first.
     fireEvent.click(screen.getAllByText('Remove')[0]!)
-    const next = lastPatchedNode(onChange) as unknown as {
-      ports: Array<{ name: string }>
-    }
-    expect(next.ports.map((p) => p.name)).toEqual(['b'])
+    const next = onChange.mock.calls.at(-1)?.[0] as WorkflowDefinition
+    expect(next.edges.map((edge) => edge.id)).toEqual(['pb'])
+    expect('ports' in (next.nodes[1] as unknown as Record<string, unknown>)).toBe(false)
   })
 
   test('wrapper-git: inner ids list is read-only (chips, not inputs)', () => {
@@ -289,32 +313,25 @@ describe('NodeInspector', () => {
       kind: 'wrapper-loop',
       nodeIds: ['a'],
       maxIterations: 3,
-      exitCondition: { kind: 'port-empty', nodeId: 'a', portName: 'p' },
-      outputBindings: [],
+      exitCondition: { kind: 'port-empty', portName: 'p' },
     })
     pickFromCombobox(comboboxShowing(/port-empty/)!, 'port-equals')
     const after = lastPatchedNode(onChange) as unknown as {
-      exitCondition: { kind: string; nodeId: string; portName: string }
+      exitCondition: { kind: string; portName: string }
     }
-    expect(after.exitCondition.kind).toBe('port-equals')
-    expect(after.exitCondition.nodeId).toBe('a')
-    expect(after.exitCondition.portName).toBe('p')
+    expect(after.exitCondition).toEqual({ kind: 'port-equals', portName: 'p' })
   })
 
-  test('wrapper-loop: + Add binding appends an empty output binding', () => {
-    const { onChange } = setup({
+  test('wrapper-loop: returns are read-only rows — no "+ Add binding" editor (RFC-354)', () => {
+    setup({
       id: 'wl',
       kind: 'wrapper-loop',
       nodeIds: ['a'],
       maxIterations: 3,
       exitCondition: { kind: 'port-empty' },
-      outputBindings: [],
     })
-    fireEvent.click(screen.getByText('+ Add binding'))
-    const after = lastPatchedNode(onChange) as unknown as {
-      outputBindings: Array<{ name: string; bind: { nodeId: string; portName: string } }>
-    }
-    expect(after.outputBindings).toEqual([{ name: 'out_1', bind: { nodeId: '', portName: '' } }])
+    expect(screen.queryByText('+ Add binding')).toBeNull()
+    expect(screen.getByTestId('loop-return-list')).toBeTruthy()
   })
 
   test('agent-single: selecting an agent patches canonical id and display name', () => {
@@ -557,7 +574,7 @@ describe('NodeInspector', () => {
     // Output
     wrap(
       <Host
-        initial={{ id: 'o1', kind: 'output', ports: [] } as unknown as WorkflowNode}
+        initial={{ id: 'o1', kind: 'output' } as unknown as WorkflowNode}
         agents={[]}
         onChangeSpy={() => {}}
         onCloseSpy={() => {}}
@@ -583,7 +600,7 @@ describe('NodeInspector', () => {
       outputs: [],
     }
     const definition: WorkflowDefinition = {
-      $schema_version: 4,
+      $schema_version: 6,
       inputs: [],
       nodes: [
         {
@@ -592,12 +609,8 @@ describe('NodeInspector', () => {
           agentId: 'agent-aggregator',
           agentName: 'aggregator',
         },
-        { id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], inputs: [] },
-        {
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'report', bind: { nodeId: 'fanout', portName: 'promoted' } }],
-        },
+        { id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['inner'], shardSourcePort: 'docs' },
+        { id: 'output', kind: 'output' },
       ],
       edges: [
         {
@@ -625,8 +638,9 @@ describe('NodeInspector', () => {
     expect(screen.getByText(/stale graph reference/i)).toBeTruthy()
     const next = onChange.mock.calls[0]?.[0] as WorkflowDefinition
     expect(next.edges).toEqual([])
-    expect(
-      (next.nodes.find((node) => node.id === 'output') as Record<string, unknown>).ports,
-    ).toEqual([{ name: 'report', bind: { nodeId: '', portName: '' } }])
+    expect(next.nodes.find((node) => node.id === 'output')).toEqual({
+      id: 'output',
+      kind: 'output',
+    })
   })
 })

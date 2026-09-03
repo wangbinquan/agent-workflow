@@ -7,10 +7,9 @@
 //
 // RFC-007: a single named target Handle (id = `__review_input__`) is
 // rendered on the left so the review's evaluation target can be wired by
-// drag instead of forcing the user into the inspector. The connect
-// handler in WorkflowCanvas writes both the edge AND `inputSource`
-// atomically, so the schema-level "explicit upstream reference" guarantee
-// (see review.ts ReviewNodeSchema.inputSource) is preserved.
+// drag instead of forcing the user into the inspector. RFC-354 (schema v6):
+// that edge IS the review's input — the card summary below is derived from
+// it by WorkflowCanvas (`data.reviewSource`), never from a node field.
 
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { NODE_GLYPHS } from '../nodePalette'
@@ -27,11 +26,9 @@ interface Props extends NodeProps {
 
 export function ReviewNode({ data, selected }: Props) {
   const { t } = useTranslation()
-  const inputSource =
-    (data as CanvasNodeData & { inputSource?: { nodeId: string; portName: string } }).inputSource ??
-    null
+  const reviewSource = data.reviewSource ?? null
   const hasInputSource =
-    inputSource !== null && inputSource.nodeId.length > 0 && inputSource.portName.length > 0
+    reviewSource !== null && reviewSource.nodeId.length > 0 && reviewSource.portName.length > 0
   // RFC-158: task-detail canvas marks the click target; clicking routes to the
   // review page. Absent on the editor canvas and on non-clickable reviews.
   const reviewNav = data.reviewNav
@@ -63,12 +60,10 @@ export function ReviewNode({ data, selected }: Props) {
         {hasInputSource ? (
           <div className="canvas-node__review-source-value">
             <code>
-              {data.surface === 'editor'
-                ? ((data as CanvasNodeData & { inputSourceTitle?: string }).inputSourceTitle ?? '?')
-                : inputSource.nodeId}
+              {data.surface === 'editor' ? (reviewSource.title ?? '?') : reviewSource.nodeId}
             </code>
             <span>.</span>
-            <code>{inputSource.portName}</code>
+            <code>{reviewSource.portName}</code>
           </div>
         ) : (
           <span className="canvas-node__review-source-unset">{t('reviewNode.sourceUnset')}</span>

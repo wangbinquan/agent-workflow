@@ -1,12 +1,11 @@
-// RFC-016: derive the select-options list used by the loop wrapper Inspector
-// for `exitCondition.nodeId / portName` and `outputBindings`. Replaces the
-// previous TextInput-based contract where users hand-typed inner node ids
-// and port names from memory.
+// RFC-016: derive the loop wrapper's member candidates (member node + its
+// output ports). RFC-354 (schema v6): a loop's returns are `wrapper-output`
+// edges and its exit condition names one of its OWN return ports, so the
+// inspector no longer picks members here; the list still feeds the loop's
+// return-row display (which member port each return reads).
 //
-// Only direct, non-wrapper members are returned — loop exit conditions and
-// output bindings should reference concrete agent / review nodes, not nested
-// wrappers (their outputs flow through their own outputBindings rather than
-// surfacing a port directly).
+// Only direct, non-wrapper members are returned — a nested wrapper's ports
+// reach the loop through that wrapper's own returns, never directly.
 
 import { buildNodeAgentLookup, declaredPorts, isWrapperKind } from '@agent-workflow/shared'
 import { nodeDisplayTitle } from './nodeTitle'
@@ -51,12 +50,13 @@ function deriveOutputPorts(
   // caller, so only leaf kinds reach here.
   // RFC-223 (PR-3a impl-gate H3): id+name keyed so stamped nodes resolve by id.
   // RFC-243: the optional child-workflow resolver lets a call-workflow loop
-  // member expose its child-mirrored output ports as exitCondition /
-  // outputBindings candidates ("loop 包 call-workflow 直到审计干净").
+  // member expose its child-mirrored output ports as return candidates
+  // ("loop 包 call-workflow 直到审计干净").
+  const lookup = buildNodeAgentLookup(agents, (a) => a)
   const declared = declaredPorts(
     node,
     definition,
-    buildNodeAgentLookup(agents, (a) => a),
+    lookup,
     workflowByRef === undefined ? undefined : { workflowByRef },
   )
   const names = declared.dataOutputs.map((p) => p.name).filter((n) => n.length > 0)
@@ -87,7 +87,7 @@ export function loopMemberCandidates(
     const outputPorts = deriveOutputPorts(n, agents, definition, workflowByRef)
     result.push({
       nodeId: n.id,
-      title: nodeDisplayTitle(n, agentLookup),
+      title: nodeDisplayTitle(n, agentLookup, definition),
       outputPorts,
     })
   }

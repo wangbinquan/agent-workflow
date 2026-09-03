@@ -224,7 +224,7 @@ function valAgent(name: string, fields: Partial<Agent> = {}): Agent {
 function chainWorkflowDef(nodeIds: string[] = ['audit', 'fix']): WorkflowDefinition {
   return {
     $schema_version: 4,
-    inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+    inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
     nodes: [
       { id: 'inp', kind: 'input', inputKey: 'docs' },
       {

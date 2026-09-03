@@ -33,7 +33,6 @@ import {
   type NodeKind,
 } from '@agent-workflow/shared'
 import type { NodeTeachingOf } from './types'
-import { WORKFLOW_PORT_REF_TEACHING } from './workflowParts'
 
 const VALIDATOR =
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts'
@@ -69,28 +68,21 @@ export const INTENT_NODE_TEACHING = {
   },
   output: {
     availability: { kind: 'public' },
-    fields: { ports: { form: 'ports:[{name,bind:{nodeId,portName}}]', required: true } },
-    fieldSources: {
-      ports: {
-        readPoint: {
-          file: 'packages/backend/src/modules/task-execution/domain/inboundEdges.ts',
-          identifier: 'ports',
-        },
-      },
-    },
+    // RFC-354 (schema v6): an output node's ports ARE its inbound edges — the
+    // edge's target port name is the task output name; nothing is declared.
+    fields: {},
+    fieldSources: {},
     notes: [
-      'Every incoming edge target port MUST be declared here with the same binding; omitting `ports` produces no task output.',
+      'An `output` node declares nothing: every edge into it is one task output, named by the edge target port; connect the producing port to the output node.',
     ],
-    mistakes: [
-      'An edge into the `output` node whose target port has no matching `ports[]` binding produces no task output — declare every result port there, with the same `{nodeId,portName}` the edge carries.',
-    ],
+    mistakes: [],
   },
   'wrapper-git': {
     availability: { kind: 'public' },
     fields: { nodeIds: { form: 'nodeIds:[nodeId]', required: true } },
     fieldSources: { nodeIds: { readPoint: { file: VALIDATOR, identifier: 'nodeIds' } } },
     notes: [
-      'Its only output is `git_diff:list<path<*>>`; it accepts no inbound edge itself (outer inputs may target its inner agent nodes).',
+      "Its only output is `git_diff:list<path<*>>`. An inbound edge into the wrapper declares a parameter (the edge target port is the parameter name) that inner nodes read through a `boundary:'wrapper-input'` edge; an edge from outside straight into an inner node is a closure (RFC-354).",
     ],
     mistakes: [],
   },
@@ -100,11 +92,10 @@ export const INTENT_NODE_TEACHING = {
       nodeIds: { form: 'nodeIds:[nodeId]', required: true },
       maxIterations: { form: 'maxIterations', required: true },
       exitCondition: {
-        form: `exitCondition:{kind:${LOOP_EXIT_CONDITION_KINDS.map((kind) => `'${kind}'`).join('|')},nodeId,portName,value?,n?,separator?}`,
+        form: `exitCondition:{kind:${LOOP_EXIT_CONDITION_KINDS.map((kind) => `'${kind}'`).join('|')},portName,value?,n?,separator?}`,
         required: true,
-        note: 'Exit-condition fields by kind: `port-equals` needs `value`, `port-count-lt` needs `n` (plus an optional `separator`), `port-inactive` (RFC-306) is met when the producing node marked that port inactive this iteration; the other kinds need only `nodeId` + `portName`.',
+        note: "The predicate reads the loop's OWN return port (`portName` names one of its `boundary:'wrapper-output'` edges). Fields by kind: `port-equals` needs `value`, `port-count-lt` needs `n` (plus an optional `separator`), `port-inactive` (RFC-306) is met when the promoted port was inactive this iteration; the other kinds need only `portName`.",
       },
-      outputBindings: { form: 'outputBindings:[{name,bind:{nodeId,portName}}]', required: true },
       continueOnMaxIterations: {
         form: 'continueOnMaxIterations',
         required: false,
@@ -120,7 +111,6 @@ export const INTENT_NODE_TEACHING = {
           identifier: 'exitCondition',
         },
       },
-      outputBindings: { readPoint: { file: VALIDATOR, identifier: 'outputBindings' } },
       continueOnMaxIterations: {
         readPoint: {
           file: 'packages/shared/src/loopPolicy.ts',
@@ -128,39 +118,28 @@ export const INTENT_NODE_TEACHING = {
         },
       },
     },
-    notes: [],
+    notes: [
+      "Return values are `boundary:'wrapper-output'` edges from a direct body node to the loop (edge target port = return port name); `exitCondition.portName` must be one of them (RFC-354).",
+    ],
     mistakes: [
-      '`exitCondition.nodeId` and every `outputBindings[].bind.nodeId` must name a node INSIDE the loop (listed in its `nodeIds`); a reference to an outer node does not validate.',
+      'A `wrapper-output` edge must start at a DIRECT member of the loop (listed in its `nodeIds`); an exit condition naming a port with no such edge does not validate.',
     ],
   },
   'wrapper-fanout': {
     availability: { kind: 'public' },
     fields: {
       nodeIds: { form: 'nodeIds:[nodeId]', required: true },
-      inputs: {
-        form: 'inputs:[{name,kind,isShardSource?}]',
-        required: true,
-        nested: {
-          name: { form: 'name', required: true },
-          kind: { form: 'kind', required: true },
-          isShardSource: { form: 'isShardSource', required: false },
-        },
-      },
+      shardSourcePort: { form: 'shardSourcePort', required: true },
       expectedShardCount: { form: 'expectedShardCount', required: false },
     },
     notes: [
-      "Exactly one input has `isShardSource:true` and a `list<T>` kind. v1 inner nodes are agent-single only; at most one inner agent may have payload `role:'aggregator'`. Worker→aggregator is an ordinary inner edge; the runtime groups every shard's worker output into that aggregator input. Never target the aggregator with a `boundary:'wrapper-input'` edge — runtime intentionally does not inject wrapper inputs into aggregators. Aggregator outputs are promoted through `boundary:'wrapper-output'` edges to wrapper outlets (same name unless the aggregator payload maps it with `outputWrapperPortNames`).",
+      "Parameters are the wrapper's inbound edges (edge target port = parameter name); `shardSourcePort` names the one whose `list<T>` source is sharded, every other parameter is broadcast (RFC-354). v1 inner nodes are agent-single only; at most one inner agent may have payload `role:'aggregator'`. Worker→aggregator is an ordinary inner edge; the runtime groups every shard's worker output into that aggregator input. Never target the aggregator with a `boundary:'wrapper-input'` edge — runtime intentionally does not inject wrapper inputs into aggregators. Aggregator outputs are promoted through `boundary:'wrapper-output'` edges to wrapper outlets (same name unless the aggregator payload maps it with `outputWrapperPortNames`).",
     ],
     mistakes: [],
   },
   review: {
     availability: { kind: 'public' },
     fields: {
-      inputSource: {
-        form: 'inputSource:{nodeId,portName}',
-        required: true,
-        nested: WORKFLOW_PORT_REF_TEACHING,
-      },
       rerunnableOnReject: { form: 'rerunnableOnReject:[nodeId]', required: true },
       rerunnableOnIterate: { form: 'rerunnableOnIterate:[nodeId]', required: true },
       rollbackFilesOnReject: { form: 'rollbackFilesOnReject', required: false },
@@ -173,7 +152,7 @@ export const INTENT_NODE_TEACHING = {
       },
     },
     notes: [
-      'Also add the matching source→review edge targeting `__review_input__`; approved single-document output ports are `approved_doc` and `approval_meta`. A comment template may use only `{{__review_comments__}}` plus canonical webhook trigger refs.',
+      'The reviewed source is the ONE edge into the review node targeting `__review_input__` (RFC-354: no `inputSource` field); approved single-document output ports are `approved_doc` and `approval_meta`. A comment template may use only `{{__review_comments__}}` plus canonical webhook trigger refs.',
     ],
     mistakes: [],
   },

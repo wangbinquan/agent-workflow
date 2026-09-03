@@ -128,7 +128,6 @@ export * from './codeHost/path'
 export * from './codeHost/template'
 export * from './codeHost/templateProjection' // RFC-295
 export * from './workflowCalls'
-export * from './systemChannelPorts'
 export * from './scheduleTime' // RFC-159
 export * from './worktree-files'
 // RFC-079 — review multi-document mode pure helpers.

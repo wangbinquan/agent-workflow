@@ -7,7 +7,38 @@ import { describe, expect, test } from 'vitest'
 import { collectPorts } from '../src/components/TaskOutputPanel'
 
 describe('collectPorts', () => {
-  test('extracts ports[] from output nodes', () => {
+  test('RFC-354: derives ports from the edges into output nodes (target port = card name)', () => {
+    const snap = {
+      nodes: [
+        { id: 'a', kind: 'agent-single' },
+        { id: 'o1', kind: 'output' },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'a', portName: 'result' },
+          target: { nodeId: 'o1', portName: 'final' },
+        },
+        {
+          id: 'e2',
+          source: { nodeId: 'a', portName: 'notes' },
+          target: { nodeId: 'o1', portName: 'notes' },
+        },
+        // not into an output node → ignored
+        {
+          id: 'e3',
+          source: { nodeId: 'a', portName: 'x' },
+          target: { nodeId: 'a', portName: 'y' },
+        },
+      ],
+    }
+    expect(collectPorts(snap)).toEqual([
+      { name: 'final', nodeId: 'a', portName: 'result' },
+      { name: 'notes', nodeId: 'a', portName: 'notes' },
+    ])
+  })
+
+  test('extracts ports[] from output nodes of a pre-v6 task snapshot', () => {
     const snap = {
       nodes: [
         { id: 'a', kind: 'agent-single' },

@@ -132,7 +132,7 @@ describe('wrapper-fanout shardKey collision — duplicate shardSource items must
     await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {

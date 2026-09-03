@@ -141,7 +141,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {
@@ -211,7 +211,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
             : { id: `inner-${innerKind}`, kind: innerKind, nodeIds: [] }
       const def: WorkflowDefinition = {
         $schema_version: 4,
-        inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+        inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
         nodes: [
           { id: `inp-${innerKind}`, kind: 'input', inputKey: 'docs' },
           {
@@ -254,7 +254,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {
@@ -328,7 +328,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     })
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {
@@ -404,7 +404,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     const def: WorkflowDefinition = {
       $schema_version: 4,
       inputs: [
-        { kind: 'text', key: 'docs', label: 'docs' },
+        { kind: 'files', key: 'docs', label: 'docs' },
         { kind: 'text', key: 'context', label: 'context' },
       ],
       nodes: [
@@ -477,7 +477,7 @@ describe('wrapper-fanout end-to-end (D.T2 / D.T3 / D.T8 happy path)', () => {
     const workerId = await seedAgent(h.db, 'worker', ['result'])
     const def: WorkflowDefinition = {
       $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'docs', label: 'docs' }],
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
       nodes: [
         { id: 'inp', kind: 'input', inputKey: 'docs' },
         {

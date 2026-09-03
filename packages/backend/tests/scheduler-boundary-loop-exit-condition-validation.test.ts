@@ -20,6 +20,14 @@
 //
 // The SECOND test (valid exitCondition.nodeId pointing at the real inner node)
 // guards against a future over-broad rule and PASSES today.
+//
+// RFC-354 (schema v6): the exit condition names one of the loop's OWN return
+// ports; a v5 `exitCondition.nodeId` upgrades into a `wrapper-output` return
+// edge from that node. A dangling v5 reference therefore surfaces as a dangling
+// return edge (`edge-source-node-missing` / `edge-source-port-missing`, plus
+// `wrapper-loop-output-binding-out-of-scope` when the node is not a member),
+// and `wrapper-loop-exit-port-missing` is what a v6 exit condition gets when it
+// names a return port no edge declares.
 
 import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
@@ -51,7 +59,7 @@ function mkAgent(name: string, outputs: string[]): Agent {
 }
 
 describe('wrapper-loop exitCondition node-reference existence (locks dangling-ref validator gap)', () => {
-  test('RED: exitCondition.nodeId pointing at a non-existent node is flagged as an exit-related issue', () => {
+  test('exitCondition.nodeId pointing at a non-existent node is flagged (dangling return edge)', () => {
     const def = {
       $schema_version: 2,
       inputs: [],
@@ -77,12 +85,11 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
 
     const issues = validateWorkflowDef(def, { agents: [], skills: [] }).issues
 
-    // Headline: a dangling exitCondition reference MUST be flagged. Today the
-    // validator only shallow-checks exitCondition is an object, so no
-    // exit-related issue is produced → this fails (RED). Other unrelated
-    // issues (e.g. agent-not-found for 'auditor') may coexist; we only look
-    // for one that concerns the exit condition.
-    expect(issues.some((i) => /exit/i.test(i.code) || /exit/i.test(i.message))).toBe(true)
+    // Headline: a dangling exitCondition reference MUST be flagged. Other
+    // unrelated issues (e.g. agent-not-found for 'auditor') may coexist.
+    // (the out-of-scope rule is not stacked on top: a node that does not exist
+    // is reported once, as the dangling edge source)
+    expect(issues.map((i) => i.code)).toContain('edge-source-node-missing')
   })
 
   test('GREEN today: a valid exitCondition.nodeId (real inner node) produces NO exit-related issue', () => {
@@ -115,7 +122,7 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
     expect(issues.some((i) => /exit/i.test(i.code) || /exit/i.test(i.message))).toBe(false)
   })
 
-  test('valid node but unknown PORT (agent in ctx) → wrapper-loop-exit-port-missing', () => {
+  test('valid node but unknown PORT (agent in ctx) → edge-source-port-missing on the return edge', () => {
     const def = {
       $schema_version: 2,
       inputs: [],
@@ -142,6 +149,37 @@ describe('wrapper-loop exitCondition node-reference existence (locks dangling-re
     // Agent in ctx → the validator knows 'audit' exposes only ['findings'], so
     // the dangling PORT reference is caught. (Without the agent, the port check
     // is skipped to avoid false positives — that is the GREEN case above.)
+    const issues = validateWorkflowDef(def, {
+      agents: [mkAgent('auditor', ['findings'])],
+      skills: [],
+    }).issues
+    expect(issues.some((i) => i.code === 'edge-source-port-missing')).toBe(true)
+  })
+
+  test('v6: an exit condition naming a return port no wrapper-output edge declares → wrapper-loop-exit-port-missing', () => {
+    const def = {
+      $schema_version: 6,
+      inputs: [],
+      nodes: [
+        { id: 'audit', kind: 'agent-single', agentId: 'agent-auditor', agentName: 'auditor' },
+        {
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['audit'],
+          maxIterations: 3,
+          exitCondition: { kind: 'port-empty', portName: 'ghost-return' },
+        },
+      ] as unknown as WorkflowDefinition['nodes'],
+      edges: [
+        {
+          id: 'ret',
+          source: { nodeId: 'audit', portName: 'findings' },
+          target: { nodeId: 'loop', portName: 'final' },
+          boundary: 'wrapper-output',
+        },
+      ],
+    } as unknown as WorkflowDefinition
+
     const issues = validateWorkflowDef(def, {
       agents: [mkAgent('auditor', ['findings'])],
       skills: [],

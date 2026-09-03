@@ -18,7 +18,6 @@ import {
   type EdgeActivation,
 } from '../src/modules/task-execution/domain/branchActivation'
 import { parseEnvelope, readPortActiveAttr } from '../src/services/envelope'
-import { collectImplicitInboundRefs } from '../src/modules/task-execution/domain/inboundEdges'
 
 const active: EdgeActivation = { kind: 'active' }
 const inactive: EdgeActivation = { kind: 'inactive', reason: 'port-inactive' }
@@ -208,39 +207,6 @@ describe('RFC-306 parseEnvelope — inactive ports vs the existing signals', () 
   })
 })
 
-describe('RFC-306 implicit inbound refs (design-gate P1#2)', () => {
-  test('review nodes expose inputSource as an inbound reference', () => {
-    const refs = collectImplicitInboundRefs({
-      kind: 'review',
-      inputSource: { nodeId: 'a1', portName: 'doc' },
-    })
-    expect(refs).toEqual([{ nodeId: 'a1', portName: 'doc' }])
-  })
-
-  test('output nodes expose every ports[].bind', () => {
-    const refs = collectImplicitInboundRefs({
-      kind: 'output',
-      ports: [
-        { name: 'r', bind: { nodeId: 'a1', portName: 'fix' } },
-        { name: 's', bind: { nodeId: 'a2', portName: 'ok' } },
-      ],
-    })
-    expect(refs).toEqual([
-      { nodeId: 'a1', portName: 'fix' },
-      { nodeId: 'a2', portName: 'ok' },
-    ])
-  })
-
-  test('agent / wrapper kinds expose none (their deps are real edges)', () => {
-    expect(collectImplicitInboundRefs({ kind: 'agent-single' })).toEqual([])
-    // A loop's exitCondition points INWARD; treating it as inbound would make a
-    // wrapper skip itself exactly when its body closed a branch.
-    expect(collectImplicitInboundRefs({ kind: 'wrapper-loop' })).toEqual([])
-  })
-
-  test('malformed shapes are ignored rather than throwing', () => {
-    expect(collectImplicitInboundRefs({ kind: 'review', inputSource: null })).toEqual([])
-    expect(collectImplicitInboundRefs({ kind: 'output', ports: 'nope' })).toEqual([])
-    expect(collectImplicitInboundRefs({ kind: 'output', ports: [{ name: 'x' }] })).toEqual([])
-  })
-})
+// RFC-354 (schema v6): the RFC-306 implicit inbound refs (review.inputSource /
+// output.ports[].bind) retired with those fields — a review's source and an
+// output node's ports are ordinary edges, covered by collectDataflowInboundEdges.

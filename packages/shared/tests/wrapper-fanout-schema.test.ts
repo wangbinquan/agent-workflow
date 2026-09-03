@@ -3,8 +3,9 @@
 // Locks:
 //  1. NODE_KIND enum includes 'wrapper-fanout'.
 //  2. nodeKindParticipatesInRetryCascade('wrapper-fanout') === true.
-//  3. WrapperFanoutNodeSchema parses minimal shape + inputs[] / nodeIds[].
-//  4. WrapperFanoutPortSchema enforces non-empty name + non-empty kind.
+//  3. WrapperFanoutNodeSchema parses minimal shape + shardSourcePort / nodeIds[]
+//     (RFC-354 schema v6: parameters are inbound edges, `inputs[]` is gone).
+//  4. (retired with RFC-354) WrapperFanoutPortSchema no longer exists.
 //  5. WorkflowEdgeSchema accepts optional boundary 'wrapper-input' /
 //     'wrapper-output'; missing boundary stays valid.
 //  6. EdgeBoundarySchema rejects unknown values.
@@ -16,7 +17,6 @@ import {
   NODE_KIND,
   WorkflowEdgeSchema,
   WrapperFanoutNodeSchema,
-  WrapperFanoutPortSchema,
 } from '../src/schemas/workflow'
 // RFC-146: the predicate moved to the behavior table (barrel export
 // unchanged; this deep import follows the new home).
@@ -73,53 +73,34 @@ describe('nodeKindParticipatesInRetryCascade', () => {
   })
 })
 
-describe('WrapperFanoutPortSchema', () => {
-  test('minimal port (name + kind) valid', () => {
-    expect(WrapperFanoutPortSchema.parse({ name: 'docs', kind: 'list<path<md>>' })).toEqual({
-      name: 'docs',
-      kind: 'list<path<md>>',
-    })
-  })
-
-  test('port with isShardSource flag valid', () => {
-    const parsed = WrapperFanoutPortSchema.parse({
-      name: 'docs',
-      kind: 'list<path<md>>',
-      isShardSource: true,
-    })
-    expect(parsed.isShardSource).toBe(true)
-  })
-
-  test('rejects empty name', () => {
-    expect(() => WrapperFanoutPortSchema.parse({ name: '', kind: 'string' })).toThrow()
-  })
-
-  test('rejects empty kind', () => {
-    expect(() => WrapperFanoutPortSchema.parse({ name: 'p', kind: '' })).toThrow()
-  })
-})
-
 describe('WrapperFanoutNodeSchema', () => {
-  test('minimal node valid', () => {
-    const node = WrapperFanoutNodeSchema.parse({ id: 'w1', kind: 'wrapper-fanout' })
+  test('minimal node valid (RFC-354: shardSourcePort names the sharded parameter)', () => {
+    const node = WrapperFanoutNodeSchema.parse({
+      id: 'w1',
+      kind: 'wrapper-fanout',
+      shardSourcePort: 'docs',
+    })
     expect(node.kind).toBe('wrapper-fanout')
     expect(node.nodeIds).toEqual([])
-    expect(node.inputs).toEqual([])
+    expect(node.shardSourcePort).toBe('docs')
+    expect('inputs' in node).toBe(false)
   })
 
-  test('with nodeIds + inputs', () => {
+  test('shardSourcePort is required and non-empty', () => {
+    expect(() => WrapperFanoutNodeSchema.parse({ id: 'w1', kind: 'wrapper-fanout' })).toThrow()
+    expect(() =>
+      WrapperFanoutNodeSchema.parse({ id: 'w1', kind: 'wrapper-fanout', shardSourcePort: '' }),
+    ).toThrow()
+  })
+
+  test('with nodeIds', () => {
     const node = WrapperFanoutNodeSchema.parse({
       id: 'w1',
       kind: 'wrapper-fanout',
       nodeIds: ['agent_a', 'agent_b'],
-      inputs: [
-        { name: 'docs', kind: 'list<path<md>>', isShardSource: true },
-        { name: 'spec', kind: 'path<md>' },
-      ],
+      shardSourcePort: 'docs',
     })
     expect(node.nodeIds).toEqual(['agent_a', 'agent_b'])
-    expect(node.inputs).toHaveLength(2)
-    expect(node.inputs[0]!.isShardSource).toBe(true)
   })
 
   test('expectedShardCount optional integer 1..10_000', () => {
@@ -127,16 +108,23 @@ describe('WrapperFanoutNodeSchema', () => {
       WrapperFanoutNodeSchema.parse({
         id: 'w1',
         kind: 'wrapper-fanout',
+        shardSourcePort: 'docs',
         expectedShardCount: 16,
       }).expectedShardCount,
     ).toBe(16)
     expect(() =>
-      WrapperFanoutNodeSchema.parse({ id: 'w1', kind: 'wrapper-fanout', expectedShardCount: 0 }),
+      WrapperFanoutNodeSchema.parse({
+        id: 'w1',
+        kind: 'wrapper-fanout',
+        shardSourcePort: 'docs',
+        expectedShardCount: 0,
+      }),
     ).toThrow()
     expect(() =>
       WrapperFanoutNodeSchema.parse({
         id: 'w1',
         kind: 'wrapper-fanout',
+        shardSourcePort: 'docs',
         expectedShardCount: 20_000,
       }),
     ).toThrow()

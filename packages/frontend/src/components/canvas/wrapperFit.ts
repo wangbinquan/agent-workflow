@@ -29,8 +29,8 @@ export type {
   WrapperMinimumSizes,
 } from '@agent-workflow/shared'
 
-// Wrapper-git / wrapper-loop output handles sit in one bottom row. These
-// values mirror `.canvas-node__bottom-ports` and `.canvas-node__port-label`.
+// Wrapper-git output handles sit in one bottom row. These values mirror
+// `.canvas-node__bottom-ports` and `.canvas-node__port-label`.
 const BOTTOM_PORTS_HORIZONTAL_PADDING = 20
 const BOTTOM_PORT_GAP = 16
 const PORT_LABEL_HORIZONTAL_PADDING = 8
@@ -38,7 +38,8 @@ const PORT_LABEL_MAX_WIDTH = 140
 const PORT_LABEL_ASCII_GLYPH_WIDTH = 8
 const PORT_LABEL_WIDE_GLYPH_WIDTH = 13
 
-// Wrapper-fanout boundary ports stack down each side.
+// Wrapper-fanout boundary ports (and RFC-354 wrapper-loop return rows) stack
+// down each side.
 const SIDE_PORT_ROW_HEIGHT = 28
 const SIDE_PORT_GAP = 6
 const SIDE_PORT_TOP = 30
@@ -79,7 +80,7 @@ export function buildWrapperPortMinimumSizes(
     let width = WRAPPER_EMPTY_MIN_WIDTH
     let height = WRAPPER_EMPTY_MIN_HEIGHT
 
-    if (node.type === 'wrapper-fanout') {
+    if (node.type === 'wrapper-fanout' || node.type === 'wrapper-loop') {
       const sideCount = Math.max(inputs.length, outputs.length)
       if (sideCount > 0) {
         height = Math.max(

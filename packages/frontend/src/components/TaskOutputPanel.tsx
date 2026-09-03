@@ -324,11 +324,27 @@ export function collectPorts(snapshot: unknown): DeclaredPort[] {
   if (typeof snapshot !== 'object' || snapshot === null) return []
   const rec = snapshot as Record<string, unknown>
   const nodes = Array.isArray(rec.nodes) ? rec.nodes : []
+  const edges = Array.isArray(rec.edges) ? rec.edges : []
   const out: DeclaredPort[] = []
   for (const n of nodes) {
     if (typeof n !== 'object' || n === null) continue
     const nr = n as Record<string, unknown>
     if (nr.kind !== 'output') continue
+    // RFC-354 (schema v6): an output node's ports are its inbound edges —
+    // target port name = the card's name, source = where the value comes from.
+    for (const e of edges) {
+      if (typeof e !== 'object' || e === null) continue
+      const er = e as Record<string, unknown>
+      const target = er.target as Record<string, unknown> | undefined
+      const source = er.source as Record<string, unknown> | undefined
+      if (typeof target !== 'object' || target === null || target.nodeId !== nr.id) continue
+      if (typeof source !== 'object' || source === null) continue
+      if (typeof target.portName !== 'string') continue
+      if (typeof source.nodeId !== 'string' || typeof source.portName !== 'string') continue
+      if (out.some((port) => port.name === target.portName)) continue
+      out.push({ name: target.portName, nodeId: source.nodeId, portName: source.portName })
+    }
+    // Task snapshots taken before schema v6 still carry `ports[].bind`.
     const ports = Array.isArray(nr.ports) ? nr.ports : []
     for (const p of ports) {
       if (typeof p !== 'object' || p === null) continue
@@ -338,6 +354,7 @@ export function collectPorts(snapshot: unknown): DeclaredPort[] {
       if (typeof bind !== 'object' || bind === null) continue
       const br = bind as Record<string, unknown>
       if (typeof br.nodeId !== 'string' || typeof br.portName !== 'string') continue
+      if (out.some((port) => port.name === pr.name)) continue
       out.push({ name: pr.name, nodeId: br.nodeId, portName: br.portName })
     }
   }

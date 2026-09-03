@@ -98,7 +98,10 @@ describe('RFC-199 review fixed-input validator policy', () => {
     )
   })
 
-  test('rejects a canonical edge whose source disagrees with inputSource', () => {
-    expect(codes(definition([edge('mismatch', 'other')]))).toContain('review-input-edge-mismatch')
+  test('a v5 inputSource that disagrees with the wired edge upgrades into a second edge → conflict', () => {
+    // RFC-354: the review input IS its edge; the mirror field is gone, so a
+    // disagreeing v5 `inputSource` becomes one more inbound edge and trips the
+    // single-input rule instead of a mirror-mismatch code.
+    expect(codes(definition([edge('mismatch', 'other')]))).toContain('review-input-edge-conflict')
   })
 })

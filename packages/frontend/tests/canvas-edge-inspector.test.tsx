@@ -131,11 +131,7 @@ describe('EdgeInspector', () => {
 
   test('fixed review target port is visibly disabled', () => {
     const def = makeDef()
-    def.nodes.push({
-      id: 'review',
-      kind: 'review',
-      inputSource: { nodeId: 'in1', portName: 'out' },
-    })
+    def.nodes.push({ id: 'review', kind: 'review' })
     def.edges[0] = {
       id: 'e1',
       source: { nodeId: 'in1', portName: 'out' },

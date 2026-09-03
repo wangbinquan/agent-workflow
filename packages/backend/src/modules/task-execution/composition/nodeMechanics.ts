@@ -19,7 +19,6 @@ import {
 } from '@/modules/task-execution/domain/envelopeRetryPolicy'
 import {
   collectDataflowInboundEdges,
-  collectImplicitInboundRefs,
   nodeKindIndex,
 } from '@/modules/task-execution/domain/inboundEdges'
 import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
@@ -3261,16 +3260,10 @@ export async function judgeBranchActivation(
   // Fast path: a node with NO inbound dependency at all can never be branched
   // away (graph roots included), so a workflow that uses no branch ports pays
   // zero extra queries per dispatch — "existing behavior is unchanged" has to
-  // hold for cost as well as for outcome.
-  //
-  // The implicit refs are part of this test, not just of the judgment below:
-  // review and output nodes carry their dependency in `inputSource` /
-  // `ports[].bind` and often have no edge at all, so an edges-only fast path
-  // would return early for exactly the two kinds design-gate P1#2 is about.
+  // hold for cost as well as for outcome. RFC-354 (schema v6): review / output
+  // dependencies are ordinary edges now, so edges are the whole test.
   const hasInbound =
-    collectDataflowInboundEdges(definition.edges, node.id, nodeKindIndex(definition)).length > 0 ||
-    collectImplicitInboundRefs(node as { kind: string; inputSource?: unknown; ports?: unknown })
-      .length > 0
+    collectDataflowInboundEdges(definition.edges, node.id, nodeKindIndex(definition)).length > 0
   if (!hasInbound) return null
   const existing = await state.opts.persistence.nodeExecution.list({
     taskId,
@@ -3362,15 +3355,16 @@ export async function runOutputNode(
 ): Promise<OneNodeResult> {
   const { taskId, definition } = state
   const { node, iteration } = args
-  // Output nodes are display-only sinks: no subprocess, no envelope. The
-  // node's declared `ports[]` bindings resolve to upstream (nodeId, portName)
-  // pairs (the canonical form, mirroring wrapper-loop's outputBindings; see
-  // workflow.validator.ts §output binding validation). We mint a virtual
-  // `done` node_run and snapshot each bound port's content into
-  // node_run_outputs so the detail page reads outputs uniformly and
-  // lifecycle invariant T3 (task done ⟹ every output node has a done run)
+  // Output nodes are display-only sinks: no subprocess, no envelope. RFC-354
+  // (schema v6): the node's ports ARE its inbound edges — each edge's target
+  // port name is the output port, its source the upstream (nodeId, portName)
+  // pair. We mint a virtual `done` node_run and snapshot each bound port's
+  // content into node_run_outputs so the detail page reads outputs uniformly
+  // and lifecycle invariant T3 (task done ⟹ every output node has a done run)
   // is satisfied.
-  const bindings = readBindings(node, 'ports')
+  const bindings: Binding[] = definition.edges
+    .filter((edge) => edge.target.nodeId === node.id && edge.boundary === undefined)
+    .map((edge) => ({ name: edge.target.portName, bind: { ...edge.source } }))
   const projected: Array<{
     binding: Binding
     row: Awaited<ReturnType<typeof readPortRowAtFrame>>

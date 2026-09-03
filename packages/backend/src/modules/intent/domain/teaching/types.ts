@@ -207,13 +207,13 @@ export type StrictNodeFields<K extends keyof StrictNodeSchemaOf> = Omit<
  *  field roster is declared HERE and locked to real read points by
  *  `fieldSources` + tests/intent-teaching-registry.test.ts. */
 export type PassthroughKeysOf<K> = K extends 'wrapper-loop'
-  ? 'nodeIds' | 'maxIterations' | 'exitCondition' | 'outputBindings' | 'continueOnMaxIterations'
+  ? 'nodeIds' | 'maxIterations' | 'exitCondition' | 'continueOnMaxIterations'
   : K extends 'agent-single'
     ? 'agentRef' | 'promptTemplate'
     : K extends 'input'
       ? 'inputKey'
       : K extends 'output'
-        ? 'ports'
+        ? never // RFC-354: an output node's ports are its inbound edges
         : K extends 'wrapper-git'
           ? 'nodeIds'
           : never

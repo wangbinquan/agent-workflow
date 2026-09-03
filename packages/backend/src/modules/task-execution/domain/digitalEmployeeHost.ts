@@ -184,10 +184,6 @@ export function synthesizeReviewedDigitalEmployeeHostSnapshot(
         kind: 'review',
         title: input.reviewTitle,
         description: input.reviewDescription,
-        inputSource: {
-          nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
-          portName: input.artifactPort,
-        },
         rerunnableOnReject: [DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID],
         rerunnableOnIterate: [DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID],
         commentInjectTemplate: '\n\nHUMAN_REVIEW_COMMENTS\n{{__review_comments__}}',

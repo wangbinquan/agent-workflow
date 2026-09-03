@@ -37,28 +37,48 @@ import { setBaseUrl, setToken } from '../src/stores/auth'
 
 // --- fixtures ---------------------------------------------------------------
 
+// RFC-354 (schema v6): a child output node's ports are its inbound edges, so
+// the child's outputs are the target port names of the edges into its output
+// nodes (`out2.summary` duplicates `out1.summary` — declaration dedups, first
+// wins, for stable rendering).
 const CHILD_DEF: WorkflowDefinition = {
-  $schema_version: 1,
+  $schema_version: 6,
   inputs: [
     { kind: 'text', key: 'requirement', label: 'Requirement' },
     { kind: 'text', key: 'context', label: 'Context' },
   ],
   nodes: [
     {
-      id: 'out1',
-      kind: 'output',
+      id: 'producer',
+      kind: 'agent-single',
+      agentName: 'producer',
       position: { x: 0, y: 0 },
-      ports: [{ name: 'audit_report' }, { name: 'summary' }],
     } as unknown as WorkflowNode,
-    {
-      id: 'out2',
-      kind: 'output',
-      position: { x: 0, y: 0 },
-      // duplicate `summary` — declaration dedups (first wins) for stable rendering
-      ports: [{ name: 'summary' }, { name: 'notes' }],
-    } as unknown as WorkflowNode,
+    { id: 'out1', kind: 'output', position: { x: 0, y: 0 } } as unknown as WorkflowNode,
+    { id: 'out2', kind: 'output', position: { x: 0, y: 0 } } as unknown as WorkflowNode,
   ],
-  edges: [],
+  edges: [
+    {
+      id: 'c1',
+      source: { nodeId: 'producer', portName: 'a' },
+      target: { nodeId: 'out1', portName: 'audit_report' },
+    },
+    {
+      id: 'c2',
+      source: { nodeId: 'producer', portName: 'b' },
+      target: { nodeId: 'out1', portName: 'summary' },
+    },
+    {
+      id: 'c3',
+      source: { nodeId: 'producer', portName: 'c' },
+      target: { nodeId: 'out2', portName: 'summary' },
+    },
+    {
+      id: 'c4',
+      source: { nodeId: 'producer', portName: 'd' },
+      target: { nodeId: 'out2', portName: 'notes' },
+    },
+  ],
 } as unknown as WorkflowDefinition
 
 function workflowRow(id: string, name: string, definition: WorkflowDefinition): Workflow {

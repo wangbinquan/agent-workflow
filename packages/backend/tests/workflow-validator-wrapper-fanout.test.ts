@@ -1,9 +1,11 @@
 // RFC-060 PR-C — wrapper-fanout validator rules.
 //
-// Locks rules:
-//   - wrapper-fanout-shard-source-missing (0 isShardSource)
-//   - wrapper-fanout-shard-source-duplicate (2+ isShardSource)
-//   - wrapper-fanout-shard-source-must-be-list (kind not list<T>)
+// Locks rules (RFC-354 schema v6: the fan-out's parameters are its inbound
+// edges, `shardSourcePort` names the one that is split; the kind comes from the
+// feeding edge's source port — v5 `inputs[]` fixtures reach the validator
+// through the upgrader):
+//   - wrapper-fanout-shard-source-missing (no shardSourcePort / no feeding edge)
+//   - wrapper-fanout-shard-source-must-be-list (source kind not list<T>)
 //   - wrapper-fanout-nested (warning when nested inside another fanout)
 //   - aggregator-agent-outside-fanout (PR-C refinement of PR-B blanket rule)
 //   - multiple-aggregators-in-fanout
@@ -74,54 +76,43 @@ describe('wrapper-fanout — required fields', () => {
     expect(codesOf(def, [agent('reporter')])).toContain('wrapper-fanout-shard-source-missing')
   })
 
-  test('two shardSource inputs → wrapper-fanout-shard-source-duplicate', () => {
-    const def = makeDef({
+  // `up.docs` feeds the shard port; its kind is whatever the `lister` agent declares.
+  function fed(): WorkflowDefinition {
+    return makeDef({
+      $schema_version: 6,
       nodes: [
-        {
-          id: 'w',
-          kind: 'wrapper-fanout',
-          nodeIds: ['a'],
-          inputs: [
-            { name: 'docs', kind: 'list<path<md>>', isShardSource: true },
-            { name: 'codes', kind: 'list<string>', isShardSource: true },
-          ],
-        },
+        { id: 'up', kind: 'agent-single', agentName: 'lister' },
+        { id: 'w', kind: 'wrapper-fanout', nodeIds: ['a'], shardSourcePort: 'docs' },
         { id: 'a', kind: 'agent-single', agentName: 'reporter' },
+      ] as WorkflowDefinition['nodes'],
+      edges: [
+        {
+          id: 'feed',
+          source: { nodeId: 'up', portName: 'docs' },
+          target: { nodeId: 'w', portName: 'docs' },
+        },
       ],
     })
-    expect(codesOf(def, [agent('reporter')])).toContain('wrapper-fanout-shard-source-duplicate')
+  }
+  const listerOf = (kind: string) =>
+    agent('lister', { outputs: ['docs'], outputKinds: { docs: kind } })
+
+  test('shard port fed by a non-list source → wrapper-fanout-shard-source-must-be-list', () => {
+    expect(codesOf(fed(), [agent('reporter'), listerOf('path<md>')])).toContain(
+      'wrapper-fanout-shard-source-must-be-list',
+    )
   })
 
-  test('shardSource not list<T> → wrapper-fanout-shard-source-must-be-list', () => {
-    const def = makeDef({
-      nodes: [
-        {
-          id: 'w',
-          kind: 'wrapper-fanout',
-          nodeIds: ['a'],
-          inputs: [{ name: 'docs', kind: 'path<md>', isShardSource: true }],
-        },
-        { id: 'a', kind: 'agent-single', agentName: 'reporter' },
-      ],
-    })
-    expect(codesOf(def, [agent('reporter')])).toContain('wrapper-fanout-shard-source-must-be-list')
+  test('shardSourcePort naming a port no edge feeds → wrapper-fanout-shard-source-missing', () => {
+    const unfed = { ...fed(), edges: [] }
+    expect(codesOf(unfed, [agent('reporter'), listerOf('list<path<md>>')])).toContain(
+      'wrapper-fanout-shard-source-missing',
+    )
   })
 
   test('valid wrapper-fanout passes shardSource validation', () => {
-    const def = makeDef({
-      nodes: [
-        {
-          id: 'w',
-          kind: 'wrapper-fanout',
-          nodeIds: ['a'],
-          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
-        },
-        { id: 'a', kind: 'agent-single', agentName: 'reporter' },
-      ],
-    })
-    const codes = codesOf(def, [agent('reporter')])
+    const codes = codesOf(fed(), [agent('reporter'), listerOf('list<path<md>>')])
     expect(codes).not.toContain('wrapper-fanout-shard-source-missing')
-    expect(codes).not.toContain('wrapper-fanout-shard-source-duplicate')
     expect(codes).not.toContain('wrapper-fanout-shard-source-must-be-list')
   })
 })

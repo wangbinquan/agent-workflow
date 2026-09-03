@@ -1,4 +1,9 @@
 // RFC-199 B5 — all graph semantics are applied once by one reconciler.
+//
+// RFC-354 (schema v6): a review's input, an output node's ports, a loop's
+// returns and a fan-out's parameters are all edges — no transition writes a
+// PortRef mirror any more, and the fan-out's `shardSourcePort` is the only
+// node-level patch a connection can carry.
 
 import {
   REVIEW_INPUT_PORT_NAME,
@@ -6,6 +11,8 @@ import {
   type WorkflowEdge,
   type WorkflowNode,
 } from '@agent-workflow/shared'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import {
   planWorkflowConnection,
@@ -27,7 +34,7 @@ function definition(
   outputs?: WorkflowDefinition['outputs'],
 ): WorkflowDefinition {
   return {
-    $schema_version: 4,
+    $schema_version: 6,
     inputs: [],
     nodes,
     edges,
@@ -46,35 +53,37 @@ function readNode(def: WorkflowDefinition, id: string): Record<string, unknown> 
   return def.nodes.find((candidate) => candidate.id === id) as unknown as Record<string, unknown>
 }
 
+const RETIRED_PORTREF_FIELDS = ['inputSource', 'ports', 'outputBindings', 'inputs'] as const
+
+function assertNoPortRefFields(def: WorkflowDefinition): void {
+  for (const candidate of def.nodes) {
+    if (candidate.kind === 'input') continue
+    const record = candidate as unknown as Record<string, unknown>
+    for (const field of RETIRED_PORTREF_FIELDS) {
+      expect(field in record, `${candidate.id}.${field} must not be written`).toBe(false)
+    }
+  }
+}
+
 describe('applyWorkflowTransition review semantic rename', () => {
   const semantic = context({
     single: { outputs: ['doc'], outputKinds: { doc: 'markdown' } },
     multi: { outputs: ['docs'], outputKinds: { docs: 'list<markdown>' } },
   })
 
-  test('single → multi → single rewrites all downstream PortRefs atomically', () => {
+  test('single → multi → single rewrites every downstream edge and definition output atomically', () => {
     const start = definition(
       [
         agent('single-source', 'single'),
         agent('multi-source', 'multi'),
-        node({
-          id: 'review',
-          kind: 'review',
-          inputSource: { nodeId: 'single-source', portName: 'doc' },
-        }),
-        node({
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'reviewed', bind: { nodeId: 'review', portName: 'approved_doc' } }],
-        }),
+        node({ id: 'review', kind: 'review' }),
+        node({ id: 'output', kind: 'output' }),
         node({
           id: 'loop',
           kind: 'wrapper-loop',
-          nodeIds: [],
-          exitCondition: { kind: 'port-empty', nodeId: 'review', portName: 'approved_doc' },
-          outputBindings: [
-            { name: 'reviewed', bind: { nodeId: 'review', portName: 'approved_doc' } },
-          ],
+          nodeIds: ['review'],
+          maxIterations: 2,
+          exitCondition: { kind: 'port-empty', portName: 'reviewed' },
         }),
       ],
       [
@@ -87,6 +96,12 @@ describe('applyWorkflowTransition review semantic rename', () => {
           id: 'review-out',
           source: { nodeId: 'review', portName: 'approved_doc' },
           target: { nodeId: 'output', portName: 'reviewed' },
+        },
+        {
+          id: 'loop-return',
+          source: { nodeId: 'review', portName: 'approved_doc' },
+          target: { nodeId: 'loop', portName: 'reviewed' },
+          boundary: 'wrapper-output',
         },
       ],
       [{ name: 'reviewed', bind: { nodeId: 'review', portName: 'approved_doc' } }],
@@ -105,31 +120,29 @@ describe('applyWorkflowTransition review semantic rename', () => {
     )
     if (!toMulti.ok) throw new Error('expected multi review plan')
 
-    const multiResult = applyWorkflowTransition(
+    const multi = applyWorkflowTransition(
       start,
       { kind: 'connection', plan: toMulti },
       semantic,
-    )
-    const multi = multiResult.next
-    expect(readNode(multi, 'review').inputSource).toEqual({
-      nodeId: 'multi-source',
-      portName: 'docs',
-    })
-    expect(multi.edges.find((edge) => edge.id === 'review-out')?.source.portName).toBe('accepted')
-    expect(readNode(multi, 'output').ports).toEqual([
-      { name: 'reviewed', bind: { nodeId: 'review', portName: 'accepted' } },
+    ).next
+    expect(multi.edges.filter((edge) => edge.target.nodeId === 'review')).toEqual([
+      expect.objectContaining({
+        id: 'review-in-multi',
+        source: { nodeId: 'multi-source', portName: 'docs' },
+      }),
     ])
+    expect(multi.edges.find((edge) => edge.id === 'review-out')?.source.portName).toBe('accepted')
+    expect(multi.edges.find((edge) => edge.id === 'loop-return')?.source.portName).toBe('accepted')
+    // The loop's OWN return port name is untouched — only its source moved.
+    expect(multi.edges.find((edge) => edge.id === 'loop-return')?.target.portName).toBe('reviewed')
     expect(readNode(multi, 'loop').exitCondition).toEqual({
       kind: 'port-empty',
-      nodeId: 'review',
-      portName: 'accepted',
+      portName: 'reviewed',
     })
-    expect(readNode(multi, 'loop').outputBindings).toEqual([
-      { name: 'reviewed', bind: { nodeId: 'review', portName: 'accepted' } },
-    ])
     expect(multi.outputs).toEqual([
       { name: 'reviewed', bind: { nodeId: 'review', portName: 'accepted' } },
     ])
+    assertNoPortRefFields(multi)
 
     const toSingle = planWorkflowConnection(
       multi,
@@ -152,10 +165,11 @@ describe('applyWorkflowTransition review semantic rename', () => {
     expect(roundTrip.edges.find((edge) => edge.id === 'review-out')?.source.portName).toBe(
       'approved_doc',
     )
-    expect(readNode(roundTrip, 'output').ports).toEqual([
-      { name: 'reviewed', bind: { nodeId: 'review', portName: 'approved_doc' } },
-    ])
+    expect(roundTrip.edges.find((edge) => edge.id === 'loop-return')?.source.portName).toBe(
+      'approved_doc',
+    )
     expect(roundTrip.outputs?.[0]?.bind.portName).toBe('approved_doc')
+    assertNoPortRefFields(roundTrip)
   })
 })
 
@@ -196,21 +210,13 @@ describe('applyWorkflowTransition graph reconciliation', () => {
     )
   })
 
-  test('review and output form transitions canonicalize mirrors without duplicate edges', () => {
+  test('review and output connections write edges only — never a v5 PortRef mirror', () => {
     const start = definition(
       [
         agent('old'),
         agent('fresh'),
-        node({
-          id: 'review',
-          kind: 'review',
-          inputSource: { nodeId: 'old', portName: 'doc' },
-        }),
-        node({
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'report', bind: { nodeId: 'old', portName: 'doc' } }],
-        }),
+        node({ id: 'review', kind: 'review' }),
+        node({ id: 'output', kind: 'output' }),
       ],
       [
         {
@@ -225,62 +231,64 @@ describe('applyWorkflowTransition graph reconciliation', () => {
         },
       ],
     )
-
-    const reviewResult = applyWorkflowTransition(
+    const semantic = context()
+    const reviewPlan = planWorkflowConnection(
       start,
       {
-        kind: 'set-review-input-source',
-        reviewNodeId: 'review',
-        inputSource: { nodeId: 'fresh', portName: 'doc' },
+        kind: 'generic',
+        edgeId: 'fresh-review',
+        source: { nodeId: 'fresh', portName: 'doc' },
+        targetNodeId: 'review',
+        target: { mode: 'reuse', portName: REVIEW_INPUT_PORT_NAME },
       },
-      context(),
+      semantic,
     )
-    expect(readNode(reviewResult.next, 'review').inputSource).toEqual({
-      nodeId: 'fresh',
-      portName: 'doc',
-    })
+    if (!reviewPlan.ok) throw new Error('expected review plan')
+    const reviewResult = applyWorkflowTransition(
+      start,
+      { kind: 'connection', plan: reviewPlan },
+      semantic,
+    )
     expect(reviewResult.next.edges.filter((edge) => edge.target.nodeId === 'review')).toEqual([
       expect.objectContaining({
+        id: 'fresh-review',
         source: { nodeId: 'fresh', portName: 'doc' },
         target: { nodeId: 'review', portName: REVIEW_INPUT_PORT_NAME },
       }),
     ])
 
-    const outputResult = applyWorkflowTransition(
+    const outputPlan = planWorkflowConnection(
       reviewResult.next,
       {
-        kind: 'set-output-ports',
-        outputNodeId: 'output',
-        ports: [
-          { name: 'report', bind: { nodeId: 'fresh', portName: 'doc' } },
-          { name: 'empty', bind: { nodeId: '', portName: '' } },
-        ],
-      },
-      context(),
-    )
-    expect(readNode(outputResult.next, 'output').ports).toEqual([
-      { name: 'report', bind: { nodeId: 'fresh', portName: 'doc' } },
-      { name: 'empty', bind: { nodeId: '', portName: '' } },
-    ])
-    expect(outputResult.next.edges.filter((edge) => edge.target.nodeId === 'output')).toEqual([
-      expect.objectContaining({
+        kind: 'generic',
+        edgeId: 'fresh-output',
         source: { nodeId: 'fresh', portName: 'doc' },
-        target: { nodeId: 'output', portName: 'report' },
-      }),
+        targetNodeId: 'output',
+        target: { mode: 'new', portName: 'report' },
+      },
+      semantic,
+    )
+    if (!outputPlan.ok) throw new Error('expected output plan')
+    const outputResult = applyWorkflowTransition(
+      reviewResult.next,
+      { kind: 'connection', plan: outputPlan },
+      semantic,
+    )
+    // NEW on a taken name lands on `report_2`; the old port keeps its edge.
+    expect(
+      outputResult.next.edges
+        .filter((edge) => edge.target.nodeId === 'output')
+        .map((edge) => [edge.id, edge.target.portName]),
+    ).toEqual([
+      ['old-output', 'report'],
+      ['fresh-output', 'report_2'],
     ])
+    assertNoPortRefFields(outputResult.next)
   })
 
-  test('output NEW/REUSE updates edge and bind once without duplicate declarations', () => {
+  test('output REUSE replaces the occupying edge once without any node declaration', () => {
     const start = definition(
-      [
-        agent('source'),
-        agent('prior'),
-        node({
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'report', bind: { nodeId: 'prior', portName: 'old' } }],
-        }),
-      ],
+      [agent('source'), agent('prior'), node({ id: 'output', kind: 'output' })],
       [
         {
           id: 'old',
@@ -311,21 +319,20 @@ describe('applyWorkflowTransition graph reconciliation', () => {
         target: { nodeId: 'output', portName: 'report' },
       },
     ])
-    expect(readNode(next, 'output').ports).toEqual([
-      { name: 'report', bind: { nodeId: 'source', portName: 'report' } },
-    ])
+    expect(readNode(next, 'output')).toEqual({ id: 'output', kind: 'output' })
   })
 
-  test('a disappeared derived fan-out outlet prunes ghost edges and mirrors', () => {
+  test('a disappeared derived fan-out outlet prunes ghost edges', () => {
     const start = definition(
       [
         agent('aggregator', 'agg'),
-        node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['aggregator'], inputs: [] }),
         node({
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'report', bind: { nodeId: 'fanout', portName: 'promoted' } }],
+          id: 'fanout',
+          kind: 'wrapper-fanout',
+          nodeIds: ['aggregator'],
+          shardSourcePort: 'docs',
         }),
+        node({ id: 'output', kind: 'output' }),
       ],
       [
         {
@@ -359,14 +366,50 @@ describe('applyWorkflowTransition graph reconciliation', () => {
     )
 
     expect(result.next.edges).toEqual([])
-    expect(readNode(result.next, 'output').ports).toEqual([
-      { name: 'report', bind: { nodeId: '', portName: '' } },
-    ])
+    expect(readNode(result.next, 'output')).toEqual({ id: 'output', kind: 'output' })
     expect(result.warnings).toContainEqual(
       expect.objectContaining({
         code: 'disappeared-port-reference-pruned',
         edgeId: 'ghost-after-change',
       }),
+    )
+  })
+
+  test('removing a loop return edge prunes the downstream edge that read the return', () => {
+    const start = definition(
+      [
+        agent('worker'),
+        node({
+          id: 'loop',
+          kind: 'wrapper-loop',
+          nodeIds: ['worker'],
+          maxIterations: 2,
+          exitCondition: { kind: 'port-empty', portName: 'final' },
+        }),
+        agent('consumer'),
+      ],
+      [
+        {
+          id: 'return',
+          source: { nodeId: 'worker', portName: 'out' },
+          target: { nodeId: 'loop', portName: 'final' },
+          boundary: 'wrapper-output',
+        },
+        {
+          id: 'downstream',
+          source: { nodeId: 'loop', portName: 'final' },
+          target: { nodeId: 'consumer', portName: 'final' },
+        },
+      ],
+    )
+    const result = applyWorkflowTransition(
+      start,
+      { kind: 'delete-selection', nodeIds: [], edgeIds: ['return'] },
+      context(),
+    )
+    expect(result.next.edges).toEqual([])
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'disappeared-port-reference-pruned', edgeId: 'downstream' }),
     )
   })
 
@@ -431,17 +474,9 @@ describe('applyWorkflowTransition graph reconciliation', () => {
     })
   })
 
-  test('output target rename updates its declaration and every matching edge atomically', () => {
+  test('output target rename moves every edge on that port name atomically', () => {
     const start = definition(
-      [
-        agent('a'),
-        agent('b'),
-        node({
-          id: 'output',
-          kind: 'output',
-          ports: [{ name: 'old', bind: { nodeId: 'a', portName: 'result' } }],
-        }),
-      ],
+      [agent('a'), agent('b'), node({ id: 'output', kind: 'output' })],
       [
         {
           id: 'selected',
@@ -461,13 +496,38 @@ describe('applyWorkflowTransition graph reconciliation', () => {
       context(),
     )
     expect(result.warnings).toEqual([])
-    expect(readNode(result.next, 'output').ports).toEqual([
-      { name: 'renamed', bind: { nodeId: 'a', portName: 'result' } },
-    ])
     expect(result.next.edges.map((edge) => edge.target.portName)).toEqual(['renamed', 'renamed'])
+    expect(readNode(result.next, 'output')).toEqual({ id: 'output', kind: 'output' })
   })
 
-  test('fan-out input rename updates the declaration, outer edge, and boundary source', () => {
+  test('output target rename onto a name another edge uses is refused', () => {
+    const start = definition(
+      [agent('a'), agent('b'), node({ id: 'output', kind: 'output' })],
+      [
+        {
+          id: 'selected',
+          source: { nodeId: 'a', portName: 'result' },
+          target: { nodeId: 'output', portName: 'old' },
+        },
+        {
+          id: 'taken',
+          source: { nodeId: 'b', portName: 'result' },
+          target: { nodeId: 'output', portName: 'renamed' },
+        },
+      ],
+    )
+    const result = applyWorkflowTransition(
+      start,
+      { kind: 'rename-edge-target-port', edgeId: 'selected', portName: 'renamed' },
+      context(),
+    )
+    expect(result.next).toBe(start)
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({ code: 'edge-target-port-conflict' }),
+    )
+  })
+
+  test('fan-out parameter rename moves the outer edge, the boundary source and shardSourcePort', () => {
     const start = definition(
       [
         agent('outer'),
@@ -476,7 +536,7 @@ describe('applyWorkflowTransition graph reconciliation', () => {
           id: 'fanout',
           kind: 'wrapper-fanout',
           nodeIds: ['inner'],
-          inputs: [{ name: 'items', kind: 'list<string>', isShardSource: true }],
+          shardSourcePort: 'items',
         }),
       ],
       [
@@ -498,23 +558,57 @@ describe('applyWorkflowTransition graph reconciliation', () => {
       { kind: 'rename-edge-target-port', edgeId: 'outer-edge', portName: 'records' },
       context(),
     )
-    expect(readNode(result.next, 'fanout').inputs).toEqual([
-      { name: 'records', kind: 'list<string>', isShardSource: true },
-    ])
+    expect(readNode(result.next, 'fanout').shardSourcePort).toBe('records')
     expect(result.next.edges[0]?.target.portName).toBe('records')
     expect(result.next.edges[1]?.source.portName).toBe('records')
+  })
+
+  test('wrapper-git parameter rename moves the parameter edge and its wrapper-input hand-off', () => {
+    const start = definition(
+      [
+        agent('outer'),
+        agent('inner'),
+        node({ id: 'git', kind: 'wrapper-git', nodeIds: ['inner'] }),
+      ],
+      [
+        {
+          id: 'param',
+          source: { nodeId: 'outer', portName: 'spec' },
+          target: { nodeId: 'git', portName: 'spec' },
+        },
+        {
+          id: 'handoff',
+          source: { nodeId: 'git', portName: 'spec' },
+          target: { nodeId: 'inner', portName: 'spec' },
+          boundary: 'wrapper-input',
+        },
+      ],
+    )
+    const result = applyWorkflowTransition(
+      start,
+      { kind: 'rename-edge-target-port', edgeId: 'param', portName: 'brief' },
+      context(),
+    )
+    expect(result.warnings).toEqual([])
+    expect(
+      result.next.edges.map((edge) => [edge.id, edge.source.portName, edge.target.portName]),
+    ).toEqual([
+      ['param', 'spec', 'brief'],
+      ['handoff', 'brief', 'spec'],
+    ])
   })
 
   test('review and boundary target ports reject arbitrary rename with zero mutation', () => {
     const start = definition(
       [
         agent('source'),
+        node({ id: 'review', kind: 'review' }),
         node({
-          id: 'review',
-          kind: 'review',
-          inputSource: { nodeId: 'source', portName: 'doc' },
+          id: 'fanout',
+          kind: 'wrapper-fanout',
+          nodeIds: ['source'],
+          shardSourcePort: 'items',
         }),
-        node({ id: 'fanout', kind: 'wrapper-fanout', nodeIds: ['source'], inputs: [] }),
       ],
       [
         {
@@ -541,5 +635,19 @@ describe('applyWorkflowTransition graph reconciliation', () => {
         expect.objectContaining({ code: 'edge-target-port-rename-blocked' }),
       )
     }
+  })
+})
+
+describe('RFC-354 — the reconciler carries no v5 PortRef write', () => {
+  test('workflow-transition.ts source has no inputSource / ports / outputBindings / inputs write', () => {
+    const src = readFileSync(
+      resolve(__dirname, '..', 'src', 'lib', 'workflow-transition.ts'),
+      'utf8',
+    )
+    expect(src).not.toMatch(/inputSource/)
+    expect(src).not.toMatch(/outputBindings/)
+    expect(src).not.toMatch(/\bports\s*:/)
+    expect(src).not.toMatch(/\binputs\s*:\s*patch/)
+    expect(src).not.toMatch(/set-review-input-source|set-output-ports|set-fanout-inputs/)
   })
 })
