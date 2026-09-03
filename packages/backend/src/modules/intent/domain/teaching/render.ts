@@ -324,7 +324,7 @@ export function renderWorkflowInputDeclarations(): string {
 /** Root `definition.outputs[]` (WorkflowOutputBindingSchema) — the task-level output declarations. */
 export function renderOutputDeclarations(): string {
   const form = `outputs:[{${renderFields(WORKFLOW_OUTPUT_TEACHING, ',')}}]`
-  return `  Root-level \`${form}\` (optional) publishes named task outputs by binding each to a node port; the \`output\` node's \`ports\` is the canonical form the canvas writes and uses the same \`{name,bind}\` shape, so declare a result port in one place and keep both consistent when both exist.`
+  return `  Root-level \`${form}\` (optional) publishes named task outputs by binding each to a node port. Prefer an \`output\` node: every edge into it is one task output named by the edge target port (schema v6 has no \`ports\` field on output nodes); use root-level \`outputs\` only for a result that must be named without an output node, and keep the two consistent when both exist.`
 }
 
 export function renderEdgeSentence(): string {

@@ -81,6 +81,11 @@ exit 谓词按帧求值）；PR-3 依赖 PR-2（clarify 通道端口已在端口
   （见 design.md §10「PR-3 实现偏离」末条；rfc040 两条 resume 用例加锁 gate 行 `['done']` + 帧）；P3：前端帧判断改经
   `formatFrameBreadcrumb`（旧 daemon 无 `scopePath` 字段不渲染空帧）；P3：三幕独立 `describe`、拖拽两幕单独串行。
   门同时指出 T17「既有 clarify 用例零改动全绿」不足以验收 wrapper 内 D7（那些用例不断言 gate 行）——已由上述加锁补上。
+- 意图创建（Intent Builder）对 v6 的同步核对（用户追问后补查）：resolve 只认 `$schema_version: 6`、`workflowCreateLayout` 写 6、
+  各 kind 教学行已是 v6（output 端口即入边 / loop 返回 = `wrapper-output` 边 + exit 指自己的返回口 / fanout `shardSourcePort` /
+  review `__review_input__` 入边）、清单里的既有工作流经 resource-catalog 读出时已升级；**漏网两句**已改：根级 `outputs[]`
+  那句仍说「`output` 节点的 `ports` 是画布写的规范形」、边界边那句仍是 fanout 专属措辞（「wrapper declared input」）。
+  intent 会话用的模型来自 daemon 配置（`config.runtime.model`），与本 RFC 无关。
 
 ## 3. 验收清单（对应 proposal §5）
 

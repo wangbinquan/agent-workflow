@@ -30,8 +30,9 @@ export type WorkflowInputKind = (typeof WORKFLOW_INPUT_KIND)[number]
 
 // ───────────────────────── PortRef / edge / output ─────────────────────────
 
-/** The ONE PortRef sub-table. review `inputSource`, edge `source` / `target` and
- *  output `bind` all reference this object (a test asserts identity). */
+/** The ONE PortRef sub-table. Edge `source` / `target` and root-level outputs
+ *  `bind` all reference this object (a test asserts identity). RFC-354 (schema
+ *  v6) retired every node-level PortRef field — a node's inputs are its edges. */
 export const WORKFLOW_PORT_REF_TEACHING = {
   nodeId: { form: 'nodeId', required: true },
   portName: { form: 'portName', required: true },
@@ -52,7 +53,7 @@ export const WORKFLOW_EDGE_TEACHING = {
   boundary: {
     form: "boundary:'wrapper-input'|'wrapper-output'",
     required: false,
-    note: "A fanout boundary edge additionally has `boundary:'wrapper-input'|'wrapper-output'`: wrapper-input runs from wrapper declared input → inner agent input; wrapper-output runs from inner aggregator output → wrapper outlet.",
+    note: "An edge crossing a wrapper wall additionally carries `boundary:'wrapper-input'|'wrapper-output'`: wrapper-input runs from the wrapper node to a DIRECT body node (a parameter — declared by an ordinary inbound edge into the wrapper — reaching its inner consumer); wrapper-output runs from a direct body node to its own wrapper (a loop's return value or a fan-out's promoted outlet, named by the edge target port). An edge from outside straight into a body node has NO boundary: it is a closure the body reads as-is (RFC-354).",
   },
 } as const satisfies TeachingFieldsOf<typeof WorkflowEdgeSchema>
 
