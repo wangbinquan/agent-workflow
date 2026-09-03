@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
-import { composeSqliteFusionPersistence } from '@/modules/memory/composition/fusion'
+import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { RepositoryBackupPreparationParticipant } from '@/modules/source-control/public/participants'
 import {
   composePostgresqlRepositoryWorkspaceStore,
@@ -24,7 +24,7 @@ import {
 } from '@/platform/persistence/postgresqlSchema'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
-import { repairFusionProvenance } from '@/services/fusion'
+import { repairFusionProvenance } from '@/modules/knowledge-evolution/public/operations'
 import {
   createSystemOperationsApplication,
   type SystemOperationsApplication,

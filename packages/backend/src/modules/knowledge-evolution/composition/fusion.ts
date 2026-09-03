@@ -1,13 +1,13 @@
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlFusionPersistence as createPostgresqlFusionPersistenceAdapter } from '../infrastructure/postgresqlFusionPersistence'
-import { createSqliteFusionPersistence as createSqliteFusionPersistenceAdapter } from '../infrastructure/sqliteFusionPersistence'
-import type { MemoryCatalogOperations } from '../public/catalog'
+import { createPostgresqlFusionPersistence as createPostgresqlFusionPersistenceAdapter } from '../infrastructure/postgresqlFusionRepository'
+import { createSqliteFusionPersistence as createSqliteFusionPersistenceAdapter } from '../infrastructure/sqliteFusionRepository'
+import type { MemoryCatalogOperations } from '../../memory/public/catalog'
 import type {
   FusionEngineTaskOperations,
   FusionOperations,
   FusionPersistence,
-} from '../public/fusion'
+} from '../public/participants'
 
 interface FusionCompositionDependencies {
   readonly appHome: string

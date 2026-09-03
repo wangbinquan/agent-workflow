@@ -449,13 +449,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
-    'services/fusion.ts',
-    ['hasResourceAclBypass'],
-    'knowledge-evolution ACL bypass',
-    REMOVE_OWNERS.knowledgeEvolution,
-  ),
-  edge(
-    'services/resourceAcl.ts',
     'services/resourcePackage/closure.ts',
     ['isVisibleRow'],
     'resource-package closure visibility',

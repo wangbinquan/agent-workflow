@@ -199,15 +199,15 @@ const GOD_SURFACE_ALLOWLIST: Readonly<
     why: 'The legacy non-standard Memory catalog entrypoint remains a single selected-provider query group until it moves behind public/queries.',
     removeAfterWave: 'RFC-294 W4-E8',
   },
-  'modules/memory/public/fusion.ts#FusionEngineTaskLaunch': {
+  'modules/knowledge-evolution/public/participants.ts#FusionEngineTaskLaunch': {
     why: 'Fusion task launch currently carries one closed immutable launch envelope; its legacy entrypoint migration is tracked independently of provider cutover.',
     removeAfterWave: 'RFC-294 W4-E8',
   },
-  'modules/memory/public/fusion.ts#FusionPersistence': {
+  'modules/knowledge-evolution/public/participants.ts#FusionPersistence': {
     why: 'Fusion persistence is a selected-provider aggregate whose legacy non-standard public entrypoint is scheduled for contract splitting.',
     removeAfterWave: 'RFC-294 W4-E8',
   },
-  'modules/memory/public/fusion.ts#FusionPersistenceRecord': {
+  'modules/knowledge-evolution/public/types.ts#FusionPersistenceRecord': {
     why: 'The persisted fusion record is an exact closed row projection retained for compatibility while the public query DTO is extracted.',
     removeAfterWave: 'RFC-294 W4-E8',
   },
@@ -1562,15 +1562,24 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
   'modules/task-execution/composition/taskEngineApplication.ts -> modules/source-control/composition.ts [value:static-import] cross-context internal import',
 ]
 
+// RFC-353 T5：原来那 5 条 `modules/memory/public/fusion.ts#…` 换成了下面 3 条
+// `knowledge-evolution/application/fusionOrchestration.ts#…`。落点从 public 文件挪到 application
+// 文件不是笔误——`public/{commands,queries}` 目前是对 application 函数的**薄再导出**，
+// 守卫顺着再导出链把违规归给定义处。这如实反映现状：暴露出去的是
+// `approveFusion(deps, id, actor)` 这样的实现签名，而不是 design §638 要的 typed command。
+// 收窄成真正的命令合同是本 RFC T8 的活（与路由收成 decode/call/map 同一刀），不在归位这一刀做。
+//
+// 同批销账两条：`memory/public/fusion.ts: non-exact public entrypoint`（该文件已拆成 KE 的
+// exact `public/{types,participants}`）与 `memory/public/catalog.ts#MemoryScopeAuthority:
+// forbidden type import`（该符号此前经 `memory/public/fusion.ts` 进入 memory 公共面，fusion
+// 端口迁走后不再在那条面上）。
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
-  'modules/memory/public/catalog.ts#MemoryScopeAuthority: forbidden type import @/auth/actor#Actor',
+  'modules/knowledge-evolution/application/fusionOrchestration.ts#approveFusion: forbidden type Partial',
+  'modules/knowledge-evolution/application/fusionOrchestration.ts#approveFusion: forbidden type import @/auth/actor#Actor',
+  'modules/knowledge-evolution/application/fusionOrchestration.ts#cancelFusion: forbidden type import @/auth/actor#Actor',
+  'modules/knowledge-evolution/application/fusionOrchestration.ts#rejectFusion: forbidden type import @/auth/actor#Actor',
   'modules/memory/public/catalog.ts: non-exact public entrypoint',
-  'modules/memory/public/fusion.ts#FusionApplyCommand: forbidden type import @/auth/actor#Actor',
-  'modules/memory/public/fusion.ts#FusionDecisionClaim: forbidden type import @/auth/actor#Actor',
-  'modules/memory/public/fusion.ts#FusionPersistence: forbidden type import @/auth/actor#Actor',
-  'modules/memory/public/fusion.ts#FusionPersistencePatch: forbidden type Partial',
-  'modules/memory/public/fusion.ts: non-exact public entrypoint',
   'modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts#TaskExecutionResourceAuthority: forbidden type import @/auth/actor#Actor',
   'modules/task-execution/public/taskRoutes.ts#TaskRouteOperations: forbidden type import @/auth/actor#Actor',
   'modules/task-execution/public/taskRoutes.ts#TaskRouteOperations: unsafe/open type FunctionType',

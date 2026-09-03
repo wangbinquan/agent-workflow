@@ -34,12 +34,15 @@ import {
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { fusions, memories, skills, tasks } from '../src/db/schema'
-import { createFusion as createFusionWithAuthority, type FusionDeps } from '../src/services/fusion'
+import {
+  createFusion as createFusionWithAuthority,
+  type FusionDeps,
+} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { forcedPortPathsForTask } from '../src/services/portArtifacts'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSqliteFusionOperations } from '../src/modules/memory/composition/fusion'
+import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import {
   createManagedSkill,
   type SkillFsOptions,

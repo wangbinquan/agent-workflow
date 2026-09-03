@@ -3,9 +3,9 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { fusions, memories, skills, skillVersions } from '../src/db/schema'
-import { repairFusionProvenance } from '../src/services/fusion'
+import { repairFusionProvenance } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
-import { createSqliteFusionPersistence } from '../src/modules/memory/infrastructure/sqliteFusionPersistence'
+import { createSqliteFusionPersistence } from '../src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
 import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

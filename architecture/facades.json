@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 347,
+    "serviceFiles": 346,
     "thinFacades": 77
   },
   "entries": [
@@ -935,6 +935,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:73c33bc45c002b533bf8",
         "import:a63e88ce18ae56ebc49e"
       ],
       "exportedSymbols": [
@@ -1831,52 +1832,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
       "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:186a7c5d8c25cc15f81b",
-        "import:2daffcc3fc05d62b3ccd",
-        "import:3b1cb3376683e9111ba0",
-        "import:3bd00dd7d050ac133fda",
-        "import:56a821162cc89ee4c4d1",
-        "import:6033214396467ef154fd",
-        "import:876806ae9033c19691bc",
-        "import:9c7174f59600b4cbff38",
-        "import:a142fcc2e08ae599e572",
-        "import:a52c57da4a58eccb535f",
-        "import:ae15ad7d98327c9c91e5",
-        "import:ae2bbe78ca5b450d6248",
-        "import:b28fe1b23538bbcc0faa",
-        "import:cdb12dc69f050cf333be",
-        "import:d4f2bdd338aa48bb18bb",
-        "import:dc598dd1d7900ff085db",
-        "import:e5fde5facc8f80195fc8",
-        "import:ec5dbbf5d01066cc4fba",
-        "import:f8065f2b6544779a81d3"
-      ],
-      "exportedSymbols": [
-        "FusionDeps",
-        "approveFusion",
-        "awaitingApprovalFusionOwners",
-        "cancelFusion",
-        "createFusion",
-        "getFusion",
-        "listFusionSummaries",
-        "reconcileFusion",
-        "reconcileRunningFusions",
-        "recoverFusionDecisions",
-        "rejectFusion",
-        "repairFusionProvenance",
-        "seedFusionResources",
-        "startFusionReconcileLoop"
-      ],
-      "file": "packages/backend/src/services/fusion.ts",
-      "id": "facade:packages/backend/src/services/fusion.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
-      "removeAfterWave": "W4-E3",
-      "status": "legacy-implementation",
-      "targetContext": "knowledge-evolution",
       "targetLayer": "application"
     },
     {
@@ -6191,9 +6146,16 @@
         "import:38768ff1ccb8e083d344",
         "import:4d3215216440a2a42aee",
         "import:6222591edf7ab4185f0c",
+        "import:6910412e65f0461cab90",
         "import:8079d8361690363f51e7",
+        "import:8f0c0ec479571bc0e59e",
         "import:918dc9356642be698734",
+        "import:b9dbfc66e1c0c1919a34",
+        "import:bca0895c2fab5a5fdbb7",
+        "import:bfa71a7f887457b8be12",
         "import:d013e33a13b4230993b6",
+        "import:d5b7af18fbc6fb9e80d3",
+        "import:e280422b5e1e8d4440a3",
         "import:ec0dca1f06fcf15569c7",
         "import:fff44c5f4f8a519346e2"
       ],
@@ -7464,5 +7426,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e817605279caf6019cddbd6706815410cb57c0160fb6ad0332566f1ee9f13249"
+  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29"
 }

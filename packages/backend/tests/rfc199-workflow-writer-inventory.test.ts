@@ -25,8 +25,8 @@ const EXPECTED_WRITERS = {
     // single-node snapshot, never user-visible).
     'modules/task-execution/composition/agentActionExecution.ts': 1,
     'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 2,
-    'modules/memory/infrastructure/postgresqlFusionPersistence.ts': 1,
-    'modules/memory/infrastructure/sqliteFusionPersistence.ts': 1,
+    'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts': 1,
+    'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
@@ -36,8 +36,8 @@ const EXPECTED_WRITERS = {
     'modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts': 1,
   },
   updateEditable: {
-    'modules/memory/infrastructure/postgresqlFusionPersistence.ts': 1,
-    'modules/memory/infrastructure/sqliteFusionPersistence.ts': 1,
+    'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts': 1,
+    'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts': 1,
     'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
@@ -166,9 +166,10 @@ describe('RFC-199 workflow writer inventory', () => {
   test('every production insert stores a canonically serialized definition', () => {
     const canonicalMarkerByWriter: Record<string, string> = {
       'cli/postgresqlDaemonApplication.ts': 'serializeWorkflowDefinitionStorageV1(',
-      'modules/memory/infrastructure/postgresqlFusionPersistence.ts':
+      'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts':
         'repairFusionWorkflowDefinition(',
-      'modules/memory/infrastructure/sqliteFusionPersistence.ts': 'repairFusionWorkflowDefinition(',
+      'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts':
+        'repairFusionWorkflowDefinition(',
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts.ts':
         'serializeWorkflowDefinitionStorageV1(',
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts':

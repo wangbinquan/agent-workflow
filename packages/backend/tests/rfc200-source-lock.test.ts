@@ -105,7 +105,9 @@ describe('RFC-200 source wiring locks', () => {
   })
 
   test('fusion and fan-in values remain data inputs, never direct protocol text', () => {
-    const fusion = read('packages/backend/src/services/fusion.ts')
+    const fusion = read(
+      'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
+    )
     expect(fusion).toContain(
       'inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) }',
     )

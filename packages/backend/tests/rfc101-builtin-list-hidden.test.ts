@@ -31,14 +31,14 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createSqliteFusionPersistence } from '../src/modules/memory/infrastructure/sqliteFusionPersistence'
+import { createSqliteFusionPersistence } from '../src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/services/agent'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,
   seedFusionResources,
-} from '../src/services/fusion'
+} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { excludeBuiltinAgents, excludeBuiltinWorkflows } from '../src/services/systemResources'
 import { listWorkflows } from '../src/services/workflow'
 import { createApp } from '../src/server'

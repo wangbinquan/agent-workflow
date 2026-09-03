@@ -79,7 +79,9 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
   })
 
   test('fusion 引擎把 floor 透传进内部 startTask', () => {
-    expect(src('services/fusion.ts')).toContain('defaultPerNodeTimeoutMs')
+    expect(src('modules/knowledge-evolution/application/fusionOrchestration.ts')).toContain(
+      'defaultPerNodeTimeoutMs',
+    )
   })
 
   test('startTask 不再用 per-task 预算 fallback（自动接线已移出）', () => {

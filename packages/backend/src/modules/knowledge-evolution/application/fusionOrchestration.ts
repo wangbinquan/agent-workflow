@@ -42,14 +42,16 @@ import {
 import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
 import type {
   FusionDecisionRecoveryReceipt,
-  FusionEngineTaskOperations,
-  FusionOperations,
-  FusionPersistence,
   FusionPersistencePatch,
   FusionPersistenceRecord,
   FusionProvenanceRepairReceipt,
-} from '@/modules/memory/public/fusion'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
+} from '@/modules/knowledge-evolution/public/types'
+import type {
+  FusionEngineTaskOperations,
+  FusionOperations,
+  FusionPersistence,
+} from '@/modules/knowledge-evolution/public/participants'
+import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
 
@@ -64,7 +66,7 @@ import {
   SKILL_MERGER_AGENT_ID,
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
-import { DAEMON_CADENCE } from './daemonCadence'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
 // RFC-353 T4（RFC-294 W4-E3）—— 纯判据 / 纯文本已迁进 knowledge-evolution 的 domain 层。
 // 这里只剩编排；`isValidFusionTransition` 继续从本模块再导出，既有 import 面不变
 // （consumer 在 T8 随路由与恢复入口一起切到 KE public）。

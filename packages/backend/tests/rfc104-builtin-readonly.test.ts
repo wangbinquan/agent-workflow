@@ -29,7 +29,7 @@ import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,
   seedFusionResources,
-} from '../src/services/fusion'
+} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import {
   QUARANTINED_FUSION_SKILL_ID,
   SKILL_FUSION_WORKFLOW_ID,
@@ -38,7 +38,7 @@ import {
   isBuiltinRow,
 } from '../src/services/systemResources'
 import { WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/constants'
-import { composeSqliteFusionPersistence } from '../src/modules/memory/composition/fusion'
+import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createRuntime } from '../src/services/runtimeRegistry'
 import { listWorkflows } from '../src/services/workflow'
 import { createApp } from '../src/server'

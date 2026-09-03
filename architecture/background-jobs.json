@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2549",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2551",
       "kind": "register-call",
-      "line": 2549,
+      "line": 2551,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2555",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2557",
       "kind": "register-call",
-      "line": 2555,
+      "line": 2557,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3359",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3361",
       "kind": "register-call",
-      "line": 3359,
+      "line": 3361,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2856",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2858",
       "kind": "register-call",
-      "line": 2856,
+      "line": 2858,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2896",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2898",
       "kind": "global-setter",
-      "line": 2896,
+      "line": 2898,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -2247,9 +2247,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:128",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:130",
       "kind": "register-call",
-      "line": 128,
+      "line": 130,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -2258,9 +2258,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:147",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:149",
       "kind": "register-call",
-      "line": 147,
+      "line": 149,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -2269,9 +2269,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:170",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:172",
       "kind": "register-call",
-      "line": 170,
+      "line": 172,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -2280,9 +2280,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:184",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:186",
       "kind": "register-call",
-      "line": 184,
+      "line": 186,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -2291,9 +2291,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:213",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:215",
       "kind": "register-call",
-      "line": 213,
+      "line": 215,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -2302,9 +2302,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:62",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:64",
       "kind": "register-call",
-      "line": 62,
+      "line": 64,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -2313,9 +2313,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:93",
+      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:95",
       "kind": "register-call",
-      "line": 93,
+      "line": 95,
       "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountFusionRoutes",
@@ -7125,6 +7125,157 @@
       "dependencies": [
         "timer"
       ],
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$setInterval:583",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setInterval:583",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "remain disabled or delete",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#reconcileFusion",
+      "kind": "disabled",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "disabled",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#reconcileFusion",
+      "phase": "unknown",
+      "symbol": "reconcileFusion",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#reconcileRunningFusions",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#reconcileRunningFusions",
+      "phase": "unknown",
+      "symbol": "reconcileRunningFusions",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#recoverFusionDecisions",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#recoverFusionDecisions",
+      "phase": "unknown",
+      "symbol": "recoverFusionDecisions",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#startFusionReconcileLoop",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#startFusionReconcileLoop",
+      "phase": "unknown",
+      "symbol": "startFusionReconcileLoop",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#recoverPublishedPlan",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#recoverPublishedPlan",
+      "phase": "unknown",
+      "symbol": "recoverPublishedPlan",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#recoverPublishedPlan",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#recoverPublishedPlan",
+      "phase": "unknown",
+      "symbol": "recoverPublishedPlan",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
       "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/memory/application/distill/schedule.ts#$setInterval:408",
@@ -7230,48 +7381,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#SqliteMemoryDistillRuntimeResolver",
       "phase": "execution",
       "symbol": "SqliteMemoryDistillRuntimeResolver",
-      "targetContext": "memory"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts#recoverPublishedPlan",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts#recoverPublishedPlan",
-      "phase": "unknown",
-      "symbol": "recoverPublishedPlan",
-      "targetContext": "memory"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteFusionPersistence.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/memory/infrastructure/sqliteFusionPersistence.ts#recoverPublishedPlan",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteFusionPersistence.ts#recoverPublishedPlan",
-      "phase": "unknown",
-      "symbol": "recoverPublishedPlan",
       "targetContext": "memory"
     },
     {
@@ -11821,115 +11930,6 @@
       "dependencies": [
         "timer"
       ],
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/fusion.ts#$setInterval:581",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:581",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "remain disabled or delete",
-      "id": "background:packages/backend/src/services/fusion.ts#reconcileFusion",
-      "kind": "disabled",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "disabled",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#reconcileFusion",
-      "phase": "unknown",
-      "symbol": "reconcileFusion",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/fusion.ts#reconcileRunningFusions",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#reconcileRunningFusions",
-      "phase": "unknown",
-      "symbol": "reconcileRunningFusions",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/fusion.ts#recoverFusionDecisions",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#recoverFusionDecisions",
-      "phase": "unknown",
-      "symbol": "recoverFusionDecisions",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/fusion.ts#startFusionReconcileLoop",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#startFusionReconcileLoop",
-      "phase": "unknown",
-      "symbol": "startFusionReconcileLoop",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
       "file": "packages/backend/src/services/gitRepoCache.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/gitRepoCache.ts#$setTimeout:109",
@@ -13553,5 +13553,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e817605279caf6019cddbd6706815410cb57c0160fb6ad0332566f1ee9f13249"
+  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29"
 }

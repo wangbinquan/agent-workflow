@@ -10,9 +10,9 @@ import { buildActor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
 import { memories, skillOperations, skills, skillVersions } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlFusionPersistence } from '@/modules/memory/infrastructure/postgresqlFusionPersistence'
-import { createSqliteFusionPersistence } from '@/modules/memory/infrastructure/sqliteFusionPersistence'
-import type { FusionPersistenceRecord } from '@/modules/memory/public/fusion'
+import { createPostgresqlFusionPersistence } from '@/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository'
+import { createSqliteFusionPersistence } from '@/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
+import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -109,14 +109,20 @@ afterEach(() => {
 describe('RFC-349 fusion provider persistence', () => {
   test('keeps database mechanisms behind provider adapters', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const service = readFileSync(join(sourceRoot, 'services/fusion.ts'), 'utf8')
-    const contract = readFileSync(join(sourceRoot, 'modules/memory/public/fusion.ts'), 'utf8')
+    const service = readFileSync(
+      join(sourceRoot, 'modules/knowledge-evolution/application/fusionOrchestration.ts'),
+      'utf8',
+    )
+    const contract = readFileSync(
+      join(sourceRoot, 'modules/knowledge-evolution/public/participants.ts'),
+      'utf8',
+    )
     const sqlite = readFileSync(
-      join(sourceRoot, 'modules/memory/infrastructure/sqliteFusionPersistence.ts'),
+      join(sourceRoot, 'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts'),
       'utf8',
     )
     const postgresql = readFileSync(
-      join(sourceRoot, 'modules/memory/infrastructure/postgresqlFusionPersistence.ts'),
+      join(sourceRoot, 'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts'),
       'utf8',
     )
 

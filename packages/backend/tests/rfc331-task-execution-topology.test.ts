@@ -34,7 +34,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/routes/taskQuestions.ts',
   'packages/backend/src/routes/tasks.ts',
   'packages/backend/src/services/autoRepair.ts',
-  'packages/backend/src/services/fusion.ts',
+  'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
   'packages/backend/src/services/multipartTaskStart.ts',
   'packages/backend/src/services/scheduler.ts',
   'packages/backend/src/services/startTaskDeps.ts',

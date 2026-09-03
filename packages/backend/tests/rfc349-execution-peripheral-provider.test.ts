@@ -85,11 +85,17 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
       'codeReviewAgentCaller.ts',
       'commitPushRunner.ts',
       'dynamicWorkflowRunner.ts',
-      'fusion.ts',
     ]
 
-    for (const service of services) {
-      const source = readFileSync(resolve(import.meta.dir, '../src/services', service), 'utf8')
+    // RFC-353 T5：`fusion.ts` 已迁出 `services/`，成为
+    // `modules/knowledge-evolution/application/fusionOrchestration.ts`。它不再是
+    // 「外围编排服务」，但这条不变式（编排里不许有数据库机制）对它同样成立且更强
+    // ——application 层本来就不该碰 DbClient / drizzle。所以**保留断言、只换落点**，
+    // 而不是把它从清单里删掉：删掉等于在搬家的同时悄悄少了一条守卫。
+    const modules = ['../src/modules/knowledge-evolution/application/fusionOrchestration.ts']
+
+    for (const service of [...services.map((s) => `../src/services/${s}`), ...modules]) {
+      const source = readFileSync(resolve(import.meta.dir, service), 'utf8')
       expect(source, service).not.toMatch(/from ['"](?:@\/db\/|drizzle-orm)/)
       expect(source, service).not.toMatch(/\b(?:DbClient|PostgresqlDatabaseClient)\b/)
       expect(source, service).not.toMatch(/\bdb\.(?:select|insert|update|delete|transaction)\b/)

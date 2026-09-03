@@ -15725,6 +15725,206 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#cancelFusion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#cancelFusion",
+      "symbol": "cancelFusion",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#cancelFusionEngineTask",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#cancelFusionEngineTask",
+      "symbol": "cancelFusionEngineTask",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#claimFusionDecision",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#claimFusionDecision",
+      "symbol": "claimFusionDecision",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#createFusion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#createFusion",
+      "symbol": "createFusion",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#rejectFusion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#rejectFusion",
+      "symbol": "rejectFusion",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#startFusionReconcileLoop",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#startFusionReconcileLoop",
+      "symbol": "startFusionReconcileLoop",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepositorySupport.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepositorySupport.ts#publishFusionSkillFilesystem",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/fusionRepositorySupport.ts#publishFusionSkillFilesystem",
+      "symbol": "publishFusionSkillFilesystem",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
+      "finalCriterion": "controls-complete",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#createPostgresqlFusionPersistence",
+      "missingControls": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#createPostgresqlFusionPersistence",
+      "symbol": "createPostgresqlFusionPersistence",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
+      "finalCriterion": "controls-complete",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#createSqliteFusionPersistence",
+      "missingControls": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#createSqliteFusionPersistence",
+      "symbol": "createSqliteFusionPersistence",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "system",
         "authorization": true,
@@ -15938,30 +16138,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/fusionPersistenceSupport.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/fusionPersistenceSupport.ts#publishFusionSkillFilesystem",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/fusionPersistenceSupport.ts#publishFusionSkillFilesystem",
-      "symbol": "publishFusionSkillFilesystem",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -16034,24 +16210,6 @@
     },
     {
       "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts#createPostgresqlFusionPersistence",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts#createPostgresqlFusionPersistence",
-      "symbol": "createPostgresqlFusionPersistence",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
@@ -16071,24 +16229,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#publish",
       "symbol": "publish",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteFusionPersistence.ts",
-      "finalCriterion": "controls-complete",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/sqliteFusionPersistence.ts#createSqliteFusionPersistence",
-      "missingControls": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteFusionPersistence.ts#createSqliteFusionPersistence",
-      "symbol": "createSqliteFusionPersistence",
       "targetContext": "memory",
       "targetLayer": "infrastructure"
     },
@@ -38533,146 +38673,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/fusion.ts#cancelFusion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#cancelFusion",
-      "symbol": "cancelFusion",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/fusion.ts#cancelFusionEngineTask",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#cancelFusionEngineTask",
-      "symbol": "cancelFusionEngineTask",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/fusion.ts#claimFusionDecision",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#claimFusionDecision",
-      "symbol": "claimFusionDecision",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/fusion.ts#createFusion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#createFusion",
-      "symbol": "createFusion",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/fusion.ts#rejectFusion",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#rejectFusion",
-      "symbol": "rejectFusion",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/fusion.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/fusion.ts#startFusionReconcileLoop",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/fusion.ts#startFusionReconcileLoop",
-      "symbol": "startFusionReconcileLoop",
-      "targetContext": "knowledge-evolution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -45521,7 +45521,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e817605279caf6019cddbd6706815410cb57c0160fb6ad0332566f1ee9f13249",
+  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

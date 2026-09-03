@@ -13,7 +13,7 @@ import type {
   MemoryCatalogQueries,
   MemoryScopeAuthority,
   MemoryScopeRef,
-} from '../public/catalog'
+} from '../../memory/public/catalog'
 import {
   annotateMemoryManageRights,
   listMemoryPageBatch,

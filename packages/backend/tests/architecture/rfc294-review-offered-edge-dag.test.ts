@@ -97,18 +97,20 @@ interface NamedModuleBinding {
  * an ordinary off-DAG edge until its provider role is reviewed explicitly.
  */
 const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
-  ...([
-    ['WORKGROUP_TURN_LEADER_NODE_ID', 'value'],
-    ['WORKGROUP_TURN_MEMBER_NODE_ID', 'value'],
-    ['WorkgroupHostLedgerMintOperation', 'type'],
-    ['WorkgroupHostLedgerMintReceipt', 'type'],
-    ['WorkgroupHostLedgerRun', 'type'],
-    ['WorkgroupHostLedgerStampOperation', 'type'],
-    ['WorkgroupTurnHostOperations', 'type'],
-    ['WorkgroupTurnHostResult', 'type'],
-    ['WorkgroupTurnLogger', 'type'],
-    ['WorkgroupTurnsOperations', 'type'],
-  ] as const).map(([symbol, edgeKind]) => ({
+  ...(
+    [
+      ['WORKGROUP_TURN_LEADER_NODE_ID', 'value'],
+      ['WORKGROUP_TURN_MEMBER_NODE_ID', 'value'],
+      ['WorkgroupHostLedgerMintOperation', 'type'],
+      ['WorkgroupHostLedgerMintReceipt', 'type'],
+      ['WorkgroupHostLedgerRun', 'type'],
+      ['WorkgroupHostLedgerStampOperation', 'type'],
+      ['WorkgroupTurnHostOperations', 'type'],
+      ['WorkgroupTurnHostResult', 'type'],
+      ['WorkgroupTurnLogger', 'type'],
+      ['WorkgroupTurnsOperations', 'type'],
+    ] as const
+  ).map(([symbol, edgeKind]) => ({
     from: 'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
     specifier: '@/modules/task-execution/public/commands',
     symbol,
@@ -139,16 +141,14 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
         ? ('workgroup-turns-provider' as const)
         : ('workgroup-host-ledger-provider' as const),
   })),
-  ...['WorkgroupTaskRoomEventIdentity', 'WorkgroupTaskRoomTaskParticipantInTx'].map(
-    (symbol) => ({
-      from: 'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts',
-      specifier: '@/modules/task-execution/public/commands',
-      symbol,
-      edgeKind: 'type' as const,
-      syntax: 'static-import' as const,
-      role: 'workgroup-task-room-provider' as const,
-    }),
-  ),
+  ...['WorkgroupTaskRoomEventIdentity', 'WorkgroupTaskRoomTaskParticipantInTx'].map((symbol) => ({
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts',
+    specifier: '@/modules/task-execution/public/commands',
+    symbol,
+    edgeKind: 'type' as const,
+    syntax: 'static-import' as const,
+    role: 'workgroup-task-room-provider' as const,
+  })),
   {
     from: 'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts',
     specifier: '@/modules/task-execution/public/commands',
@@ -183,13 +183,9 @@ function requiredSpiBindingKey(binding: {
   readonly edgeKind: string
   readonly syntax: string
 }): string {
-  return [
-    binding.from,
-    binding.specifier,
-    binding.symbol,
-    binding.edgeKind,
-    binding.syntax,
-  ].join('|')
+  return [binding.from, binding.specifier, binding.symbol, binding.edgeKind, binding.syntax].join(
+    '|',
+  )
 }
 
 const EXACT_REQUIRED_SPI_BINDING_ROLES = new Map(
@@ -348,239 +344,264 @@ export function offDagOfferedEdges(
  */
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-    "to": "memory",
-    "why": "RFC-352 T2 把 `node_runs.injected_memories_json` 的解码器从 legacy `services/memoryInject.ts` 迁进 memory 并经 public/types 提供，于是这条本来就存在的依赖第一次以 offered 边出现在图里（此前是 legacy→legacy，不计跨域）。目标形态是 task-execution 经自己的 TaskMemoryInjectionPort 拿这份编解码，属 TE 侧 adapter 收口。",
-    "removeAfterWave": "W4-E1（task-execution vertical slice：REST 投影改经 TaskMemoryInjectionPort）"
+    from: 'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
+    to: 'knowledge-evolution',
+    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
   },
   {
-    "from": "packages/backend/src/modules/collaboration/application/taskFeedback.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts',
+    to: 'knowledge-evolution',
+    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
   },
   {
-    "from": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts',
+    to: 'knowledge-evolution',
+    why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
   },
   {
-    "from": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/system-operations/composition.ts',
+    to: 'knowledge-evolution',
+    why: "RFC-353 T5：`repairFusionProvenance` 随 fusion 编排迁进 knowledge-evolution，system-operations 的备份恢复序列改经 KE `public/operations` 消费（此前是 legacy→legacy，不计跨域）。目标形态是 system-operations 经 RestoreParticipant<'knowledge-evolution'> 拿这一步，属 W9-E 物理恢复协议那一刀。",
+    removeAfterWave: 'W9-E（物理恢复生成协议独立 RFC）',
   },
   {
-    "from": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    to: 'memory',
+    why: 'RFC-352 T2 把 `node_runs.injected_memories_json` 的解码器从 legacy `services/memoryInject.ts` 迁进 memory 并经 public/types 提供，于是这条本来就存在的依赖第一次以 offered 边出现在图里（此前是 legacy→legacy，不计跨域）。目标形态是 task-execution 经自己的 TaskMemoryInjectionPort 拿这份编解码，属 TE 侧 adapter 收口。',
+    removeAfterWave:
+      'W4-E1（task-execution vertical slice：REST 投影改经 TaskMemoryInjectionPort）',
   },
   {
-    "from": "packages/backend/src/modules/collaboration/public/commands.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/collaboration/application/taskFeedback.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts",
-    "to": "task-execution",
-    "why": "digital-employee adapter 直接 import task-execution `DigitalEmployeeExecutionParticipant`；design §3.1 已记为双向 contract debt，W4-E9 以 DE-owned `ReactionExecutionPortV1`/admission participant 收口后删除。",
-    "removeAfterWave": "W4-E9"
+    from: 'packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/intent/composition/platformInventory.ts",
-    "to": "development-automation",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/intent/composition/platformInventory.ts",
-    "to": "digital-employee",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/memory/application/distillQueries.ts",
-    "to": "runtime-management",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/collaboration/public/commands.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-    "to": "runtime-management",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts',
+    to: 'task-execution',
+    why: 'digital-employee adapter 直接 import task-execution `DigitalEmployeeExecutionParticipant`；design §3.1 已记为双向 contract debt，W4-E9 以 DE-owned `ReactionExecutionPortV1`/admission participant 收口后删除。',
+    removeAfterWave: 'W4-E9',
   },
   {
-    "from": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts",
-    "to": "execution-contract",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/intent/composition/platformInventory.ts',
+    to: 'development-automation',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts",
-    "to": "task-execution",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/intent/composition/platformInventory.ts',
+    to: 'digital-employee',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/system-operations/application/overview.ts",
-    "to": "integration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/memory/application/distillQueries.ts',
+    to: 'runtime-management',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/system-operations/application/overview.ts",
-    "to": "resource-catalog",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts',
+    to: 'runtime-management',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/system-operations/application/overview.ts",
-    "to": "source-control",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts',
+    to: 'execution-contract',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/system-operations/composition.ts",
-    "to": "source-control",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/source-control/application/ports/workspaceMaintenance.ts',
+    to: 'task-execution',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/system-operations/public/queries.ts",
-    "to": "task-execution",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
+    to: 'integration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts",
-    "to": "collaboration",
-    "why": "task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。",
-    "removeAfterWave": "W4"
+    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
+    to: 'resource-catalog',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts",
-    "to": "collaboration",
-    "why": "task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。",
-    "removeAfterWave": "W4"
+    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
+    to: 'source-control',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/system-operations/composition.ts',
+    to: 'source-control',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts",
-    "to": "digital-employee",
-    "why": "task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。",
-    "removeAfterWave": "W4-E9"
+    from: 'packages/backend/src/modules/system-operations/public/queries.ts',
+    to: 'task-execution',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-    "to": "digital-employee",
-    "why": "task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。",
-    "removeAfterWave": "W4-E9"
+    from: 'packages/backend/src/modules/task-execution/application/parkTaskAtHumanGate.ts',
+    to: 'collaboration',
+    why: 'task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。',
+    removeAfterWave: 'W4',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/humanGate.ts",
-    "to": "collaboration",
-    "why": "task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。",
-    "removeAfterWave": "W4"
+    from: 'packages/backend/src/modules/task-execution/application/ports/humanGateOpenParticipant.ts',
+    to: 'collaboration',
+    why: 'task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。',
+    removeAfterWave: 'W4',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/nodeExecution.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/application/ports/humanGateTaskLifecycle.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts',
+    to: 'digital-employee',
+    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
+    removeAfterWave: 'W4-E9',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/required-ports.ts",
-    "to": "digital-employee",
-    "why": "task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。",
-    "removeAfterWave": "W4-E9"
+    from: 'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
+    to: 'digital-employee',
+    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
+    removeAfterWave: 'W4-E9',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/humanGate.ts',
+    to: 'collaboration',
+    why: 'task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。',
+    removeAfterWave: 'W4',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/taskClarifyDirectiveRoutes.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/nodeExecution.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/required-ports.ts',
+    to: 'digital-employee',
+    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
+    removeAfterWave: 'W4-E9',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/taskClarifyDirectiveRoutes.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
-    "to": "memory",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts",
-    "to": "collaboration",
-    "why": "RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。",
-    "removeAfterWave": "W4-E（RFC-294 provider-neutral bounded-context convergence）"
+    from: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteRepairOperations.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    "from": "packages/backend/src/modules/task-execution/public/participants.ts",
-    "to": "digital-employee",
-    "why": "task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。",
-    "removeAfterWave": "W4-E9"
-  }
+    from: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts',
+    to: 'memory',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskParkTransaction.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteOperations.ts',
+    to: 'collaboration',
+    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/public/participants.ts',
+    to: 'digital-employee',
+    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
+    removeAfterWave: 'W4-E9',
+  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)

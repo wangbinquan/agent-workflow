@@ -50,7 +50,7 @@ import {
   recoverFusionDecisions,
   rejectFusion,
   type FusionDeps,
-} from '../src/services/fusion'
+} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { getTask } from '../src/services/task'
 import { withTaskReviewMutationLock } from '../src/services/reviewMutationCoordinator'
 import { sealOpenHumanGatesForTask } from '../src/services/terminalSweep'
@@ -64,7 +64,7 @@ import {
 import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSqliteFusionOperations } from '../src/modules/memory/composition/fusion'
+import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
@@ -705,7 +705,18 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   // behavioral path needs a non-admin owner + manageable memory; this source lock
   // guarantees a refactor can't silently drop the recheck from either path.
   test('approve + reject both re-check current skill ownership (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     // Both decision entry points call the recheck helper before claiming.
     const calls =
       src.match(
@@ -730,9 +741,9 @@ describe('RFC-170 T6 — fusion precondition token', () => {
         '..',
         'src',
         'modules',
-        'memory',
+        'knowledge-evolution',
         'infrastructure',
-        'sqliteFusionPersistence.ts',
+        'sqliteFusionRepository.ts',
       ),
       'utf8',
     )
@@ -749,7 +760,18 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   // RFC-170 T6 (Codex re-review F10): a null precondition token at create time
   // (skill vanished / unpublished) is rejected BEFORE any worktree/task is made.
   test('createFusion rejects a null precondition token before side effects (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     // The null check sits between the token capture and the memory/seed/startTask.
     expect(src).toMatch(/if \(preconditionToken === null\)/)
   })
@@ -775,7 +797,18 @@ describe('RFC-170 T6 — fusion precondition token', () => {
   })
 
   test('reconcile + reject-attach + cancel all write via casFusionStatus (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     // The old unconditional setFusionStatus/failFusion are gone.
     expect(src).not.toMatch(/^function setFusionStatus\(/m)
     expect(src).not.toMatch(/^function failFusion\(/m)
@@ -999,7 +1032,18 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
   })
 
   test('seedFusionFromSnapshot verifies the token skillId around the copy (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     // Generation check keys on the token's skillId, not just (name, version).
     expect(src).toMatch(/identity\.id === skillId && identity\.contentVersion === contentVersion/)
     // No live fallback remains.
@@ -1010,7 +1054,18 @@ describe('RFC-170 T6 F10 — fusion seeds from the version snapshot, not live', 
   // skill row's immutable id, not a by-name re-read that a same-name recreate could
   // repoint to a different (private) skill B.
   test('createFusion binds the token to the authorized skill id (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     expect(src).toMatch(/operations\.persistence\.loadSkillAccess\(actor, input\.skillId\)/)
     expect(src).toMatch(/const preconditionToken = skillAccess\.preconditionToken/)
     expect(src).not.toMatch(/loadSkillAccess\(actor, input\.skillName\)/) // no by-name re-read
@@ -1158,16 +1213,27 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
   })
 
   test('cancel claim captures currentTaskId in the CAS (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     const adapter = readFileSync(
       pjoin(
         __dirname,
         '..',
         'src',
         'modules',
-        'memory',
+        'knowledge-evolution',
         'infrastructure',
-        'sqliteFusionPersistence.ts',
+        'sqliteFusionRepository.ts',
       ),
       'utf8',
     )
@@ -1180,7 +1246,18 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
   // retries until the task is terminal — a state flip between read and cancel no
   // longer silently drops the cancel.
   test('cancelFusionEngineTask retries until terminal, not read-once (source lock)', () => {
-    const src = readFileSync(pjoin(__dirname, '..', 'src', 'services', 'fusion.ts'), 'utf8')
+    const src = readFileSync(
+      pjoin(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'knowledge-evolution',
+        'application',
+        'fusionOrchestration.ts',
+      ),
+      'utf8',
+    )
     // A bounded retry loop that returns only on a gone/terminal task.
     expect(src).toMatch(/for \(let attempt = 0; attempt < 8; attempt\+\+\)/)
     expect(src).toMatch(/if \(task === null \|\| TERMINAL_TASK\.has\(task\.status\)\) return/)

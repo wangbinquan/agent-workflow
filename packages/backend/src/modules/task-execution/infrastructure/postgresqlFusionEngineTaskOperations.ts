@@ -1,7 +1,7 @@
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
-} from '@/modules/memory/public/fusion'
+} from '@/modules/knowledge-evolution/public/participants'
 import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'

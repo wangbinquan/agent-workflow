@@ -41,7 +41,7 @@ import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { resolveCachedRepo as defaultResolveCachedRepo } from '@/services/gitRepoCache'
-import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('repo-batch-import')

@@ -3,8 +3,8 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-08-23",
-    "inboundEdges": 318,
-    "outboundEdges": 20,
+    "inboundEdges": 312,
+    "outboundEdges": 23,
     "registeredFindings": 79,
     "recordedAtShaNote": "采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
   },
@@ -1321,27 +1321,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/fusions.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/memory/public/catalog.ts#MemoryScopeAuthority"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/fusions.ts",
-      "to": "packages/backend/src/modules/memory/public/fusion",
-      "specifier": "@/modules/memory/public/fusion",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "memory",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a8b5c593468505fdd74d"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/fusions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionOperations"
       ],
       "canonicalFacadeIds": []
     },
@@ -3894,112 +3873,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/execution/taskExecutionResources.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/fusion.ts",
-      "to": "packages/backend/src/modules/memory/public/catalog",
-      "specifier": "@/modules/memory/public/catalog",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "memory",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b28fe1b23538bbcc0faa"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/memory/public/catalog.ts#MemoryScopeAuthority"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/fusion.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/fusion.ts",
-      "to": "packages/backend/src/modules/memory/public/fusion",
-      "specifier": "@/modules/memory/public/fusion",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "memory",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:186a7c5d8c25cc15f81b",
-        "import:3b1cb3376683e9111ba0",
-        "import:56a821162cc89ee4c4d1",
-        "import:876806ae9033c19691bc",
-        "import:9c7174f59600b4cbff38",
-        "import:ae15ad7d98327c9c91e5",
-        "import:cdb12dc69f050cf333be"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionDecisionRecoveryReceipt",
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionEngineTaskOperations",
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionOperations",
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionPersistence",
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionPersistencePatch",
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionPersistenceRecord",
-        "owner:packages/backend/src/modules/memory/public/fusion.ts#FusionProvenanceRepairReceipt"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/fusion.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/fusion.ts",
-      "to": "packages/backend/src/modules/source-control/composition",
-      "specifier": "@/modules/source-control/composition",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "source-control",
-      "why": "RFC-294 §G1 规定只有 bootstrap（server.ts / cli/start.ts）可指向模块 composition 入口；此处是 legacy 层直接消费模块装配面，等价于把 composition root 摊给了调用方。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W5（Source-control 边界）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:3bd00dd7d050ac133fda",
-        "import:a142fcc2e08ae599e572"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant",
-        "owner:packages/backend/src/modules/source-control/composition.ts#ensureBoundPlatformWorkspaceDirectory"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/fusion.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/fusion.ts",
-      "to": "packages/backend/src/modules/task-execution/domain/taskLaunchOrigin",
-      "specifier": "@/modules/task-execution/domain/taskLaunchOrigin",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:e5fde5facc8f80195fc8"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#DirectTaskInitiator"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/fusion.ts"
       ]
     },
     {
@@ -8114,33 +7987,77 @@
       ]
     },
     {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/fusion.ts",
-      "to": "packages/backend/src/modules/knowledge-evolution/domain",
-      "specifier": "@/modules/knowledge-evolution/domain",
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "to": "@/services/daemonCadence",
+      "specifier": "@/services/daemonCadence",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "knowledge-evolution",
-      "why": "RFC-353 T4：fusion 的纯状态机 / 纯文本 / 行映射已迁进 knowledge-evolution 的 domain 层，但编排本体这一刀还留在 services/fusion.ts，于是出现一条「legacy 编排消费本模块 domain」的过渡边。它**不经 public**是刻意的：MERGER_BODY 一类内建播种文本不该成为对外合同，为一轮过渡去公开它、下一刀再删掉，正是本仓禁止的过渡态。同 RFC 的 T5 把编排整体迁进 knowledge-evolution/application 之后，这条边随 services/fusion.ts 一起消失。",
+      "why": "application 层反向依赖 legacy 的 daemon 轮询节拍常量（`DAEMON_CADENCE.fusionReconcile`）。它是全平台后台任务的共享节拍表、不是 fusion 私有；在 W9-B ManagedBackgroundRegistry 把节拍收进注册合同之前，没有 port/public 可替代。",
       "introducedByRFC": "RFC-353",
-      "removeAfterWave": "RFC-294 W4-E3（本 RFC T5 内清偿）",
-      "findingId": "KE-01",
+      "removeAfterWave": "RFC-294 W9-B（daemon 背景注册表）",
+      "findingId": "KE-02",
       "canonicalImportEdgeIds": [
-        "import:2daffcc3fc05d62b3ccd",
-        "import:6033214396467ef154fd",
-        "import:a52c57da4a58eccb535f",
-        "import:d4f2bdd338aa48bb18bb",
-        "import:dc598dd1d7900ff085db",
-        "import:ec5dbbf5d01066cc4fba",
-        "import:f8065f2b6544779a81d3"
+        "import:73c33bc45c002b533bf8"
       ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/fusion.ts#$file",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/knowledge-evolution/domain/index.ts#$file"
+        "owner:packages/backend/src/services/daemonCadence.ts#DAEMON_CADENCE"
       ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/fusion.ts"
-      ]
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "to": "@/services/systemResources",
+      "specifier": "@/services/systemResources",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "knowledge-evolution",
+      "why": "内建资源（aw-skill-merger / aw-skill-fusion）的 id / name 与「内建资源不在列表里显示」的过滤器共用同一份清单，事实源在 legacy 的 `systemResources`。RFC-353 design §8 偏离项③已呈用户确认：内建资源播种本刀不切 participant——participant 化会把 resource-catalog 的资源创建面整个拖进来。",
+      "introducedByRFC": "RFC-353",
+      "removeAfterWave": "RFC-294 W4-C（resource-catalog 的内建资源播种面）",
+      "findingId": "KE-03",
+      "canonicalImportEdgeIds": [
+        "import:6910412e65f0461cab90",
+        "import:b9dbfc66e1c0c1919a34",
+        "import:bca0895c2fab5a5fdbb7",
+        "import:d5b7af18fbc6fb9e80d3",
+        "import:e280422b5e1e8d4440a3"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemResources.ts#$file",
+        "owner:packages/backend/src/services/systemResources.ts#SKILL_FUSION_WORKFLOW_ID",
+        "owner:packages/backend/src/services/systemResources.ts#SKILL_FUSION_WORKFLOW_NAME",
+        "owner:packages/backend/src/services/systemResources.ts#SKILL_MERGER_AGENT_ID",
+        "owner:packages/backend/src/services/systemResources.ts#SKILL_MERGER_AGENT_NAME"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
+      "to": "@/services/systemResources",
+      "specifier": "@/services/systemResources",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "knowledge-evolution",
+      "why": "内建资源（aw-skill-merger / aw-skill-fusion）的 id / name 与「内建资源不在列表里显示」的过滤器共用同一份清单，事实源在 legacy 的 `systemResources`。RFC-353 design §8 偏离项③已呈用户确认：内建资源播种本刀不切 participant——participant 化会把 resource-catalog 的资源创建面整个拖进来。",
+      "introducedByRFC": "RFC-353",
+      "removeAfterWave": "RFC-294 W4-C（resource-catalog 的内建资源播种面）",
+      "findingId": "KE-03",
+      "canonicalImportEdgeIds": [
+        "import:8f0c0ec479571bc0e59e",
+        "import:bfa71a7f887457b8be12"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemResources.ts#SKILL_FUSION_WORKFLOW_NAME",
+        "owner:packages/backend/src/services/systemResources.ts#SKILL_MERGER_AGENT_NAME"
+      ],
+      "canonicalFacadeIds": []
     }
   ],
   "registeredFindings": [
@@ -9321,15 +9238,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e817605279caf6019cddbd6706815410cb57c0160fb6ad0332566f1ee9f13249",
+    "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "546c70fd5cb702063ef3eb637b54b444d3252e5d",
-    "contentDigest": "sha256:d8897089ac760fd33fe63128843110dd16db3068e31a35897cce9cd15046748b",
+    "currentSnapshotSha": "1e5a478939003832a8df5c617c1fd5fe86a74ca9",
+    "contentDigest": "sha256:ce9789c2f9c0c76b3b696713dbf8039eae59ab3f4fd16818e37c73d55eb7f746",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

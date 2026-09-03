@@ -38,7 +38,7 @@ import {
   getFusion,
   reconcileFusion,
   type FusionDeps,
-} from '../src/services/fusion'
+} from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import type { ProbedMcpClient } from '../src/services/mcpProbe'
 import { buildSiblingOutputsBlock } from '../src/services/review'
 import {
@@ -61,7 +61,7 @@ import {
 } from './helpers/resourceScopeAuthority'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSqliteFusionOperations } from '../src/modules/memory/composition/fusion'
+import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

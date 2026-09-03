@@ -18,19 +18,21 @@ import {
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type {
-  FusionApplyCommand,
   FusionBuiltinWorkflowSeed,
-  FusionDecisionClaim,
   FusionDecisionRecoveryReceipt,
-  FusionPersistence,
   FusionPersistencePatch,
   FusionPersistenceRecord,
   FusionProvenanceRepairReceipt,
   FusionResourceSeed,
   FusionSkillAccess,
   FusionSkillIdentity,
+} from '../public/types'
+import type {
+  FusionApplyCommand,
+  FusionDecisionClaimInput,
+  FusionPersistence,
   FusionStatusCas,
-} from '../public/fusion'
+} from '../public/participants'
 import {
   QUARANTINED_FUSION_SKILL_ID,
   abortFusionSkillFilesystem,
@@ -42,7 +44,7 @@ import {
   repairFusionWorkflowDefinition,
   resolveFusionSkillAccess,
   type FusionSkillFilesystemPlan,
-} from './fusionPersistenceSupport'
+} from './fusionRepositorySupport'
 import { ConflictError, staleConflictError } from '@/util/errors'
 
 type FusionRow = typeof fusions.$inferSelect
@@ -428,7 +430,7 @@ export function createSqliteFusionPersistence(input: {
     })
   }
 
-  async function claimDecision(command: FusionDecisionClaim): Promise<boolean> {
+  async function claimDecision(command: FusionDecisionClaimInput): Promise<boolean> {
     return dbTxSync(db, (tx) => {
       const row = tx.select().from(fusions).where(eq(fusions.id, command.id)).get()
       if (row === undefined || row.status !== command.from) return false

@@ -17,19 +17,21 @@ import {
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
-  FusionApplyCommand,
   FusionBuiltinWorkflowSeed,
-  FusionDecisionClaim,
   FusionDecisionRecoveryReceipt,
-  FusionPersistence,
   FusionPersistencePatch,
   FusionPersistenceRecord,
   FusionProvenanceRepairReceipt,
   FusionResourceSeed,
   FusionSkillAccess,
   FusionSkillIdentity,
+} from '../public/types'
+import type {
+  FusionApplyCommand,
+  FusionDecisionClaimInput,
+  FusionPersistence,
   FusionStatusCas,
-} from '../public/fusion'
+} from '../public/participants'
 import {
   QUARANTINED_FUSION_SKILL_ID,
   abortFusionSkillFilesystem,
@@ -41,7 +43,7 @@ import {
   repairFusionWorkflowDefinition,
   resolveFusionSkillAccess,
   type FusionSkillFilesystemPlan,
-} from './fusionPersistenceSupport'
+} from './fusionRepositorySupport'
 import { ConflictError, staleConflictError } from '@/util/errors'
 
 type PostgresqlTransaction = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
@@ -458,7 +460,7 @@ export function createPostgresqlFusionPersistence(input: {
     })
   }
 
-  async function claimDecision(command: FusionDecisionClaim): Promise<boolean> {
+  async function claimDecision(command: FusionDecisionClaimInput): Promise<boolean> {
     return await db.transaction(async (tx) => {
       const row = await tx.select().from(fusions).where(eq(fusions.id, command.id)).get()
       if (row === undefined || row.status !== command.from) return false

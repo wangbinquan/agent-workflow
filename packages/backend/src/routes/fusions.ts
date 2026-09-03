@@ -17,14 +17,16 @@ import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inb
 import { registerRoute } from '@/routes/registry'
 import {
   approveFusion,
-  awaitingApprovalFusionOwners,
   cancelFusion,
   createFusion,
-  getFusion,
-  listFusionSummaries,
   rejectFusion,
   type FusionDeps,
-} from '@/services/fusion'
+} from '@/modules/knowledge-evolution/public/commands'
+import {
+  awaitingApprovalFusionOwners,
+  getFusion,
+  listFusionSummaries,
+} from '@/modules/knowledge-evolution/public/queries'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'
@@ -32,7 +34,7 @@ import { Paths } from '@/util/paths'
 import { safeJsonOrEmpty } from '@/util/http'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
-import type { FusionOperations } from '@/modules/memory/public/fusion'
+import type { FusionOperations } from '@/modules/knowledge-evolution/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 export interface FusionRouteDependencies {

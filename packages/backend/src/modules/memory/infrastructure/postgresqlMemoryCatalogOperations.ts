@@ -70,7 +70,7 @@ import type {
   MemoryWithChain,
   MoveMemoryResult,
   PatchMemoryResult,
-} from '../public/catalog'
+} from '../../memory/public/catalog'
 
 export type PostgresqlMemoryTransaction = Parameters<
   Parameters<PostgresqlDatabaseClient['transaction']>[0]

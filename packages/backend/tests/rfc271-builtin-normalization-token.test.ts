@@ -27,8 +27,8 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users, workflows } from '../src/db/schema'
-import { createSqliteFusionPersistence } from '../src/modules/memory/infrastructure/sqliteFusionPersistence'
-import { seedFusionResources } from '../src/services/fusion'
+import { createSqliteFusionPersistence } from '../src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
+import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

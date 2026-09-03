@@ -1,5 +1,5 @@
 import type { DbClient } from '@/db/client'
-import type { FusionEngineTaskOperations } from '@/modules/memory/public/fusion'
+import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import {
   createPostgresqlClarifyRepairParticipant,
   createPostgresqlReviewRepairParticipant,

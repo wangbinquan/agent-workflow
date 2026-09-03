@@ -5,7 +5,7 @@
 
 import type { Fusion, FusionSkipped, FusionStatus } from '@agent-workflow/shared'
 
-import type { FusionPersistenceRecord } from '../../memory/public/fusion'
+import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
 
 /** 坏 JSON / 非数组 / 非字符串项一律丢弃，绝不抛——这是列表页的取数路径。 */
 export function jsonArray(s: string | null): string[] {

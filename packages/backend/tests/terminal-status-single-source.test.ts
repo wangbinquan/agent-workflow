@@ -26,7 +26,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
     for (const rel of [
       'services/gc.ts',
       'services/stuckTaskDetector.ts',
-      'services/fusion.ts',
+      'modules/knowledge-evolution/application/fusionOrchestration.ts',
       'platform/persistence/sqlite/taskLifecycleRepair/options-R1.ts',
       'platform/persistence/sqlite/taskLifecycleRepair/options-R2.ts',
     ]) {

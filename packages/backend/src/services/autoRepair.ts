@@ -26,7 +26,7 @@ import {
 } from '@/services/recoveryBreaker'
 import { listAllOpenLifecycleAlerts, type OpenLifecycleAlert } from '@/services/taskAlerts'
 import { createLogger } from '@/util/log'
-import { DAEMON_CADENCE } from './daemonCadence'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import type {
   TaskLifecycleAutoRepairCommand,
   TaskLifecycleAutoRepairResult,

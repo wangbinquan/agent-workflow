@@ -25,7 +25,7 @@ const SRC = resolve(import.meta.dir, '..', 'src')
  * 业务判据（谁能改、算什么、默认值、失败怎么归类）**不在此列**——那种必须收成一份。
  */
 const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
-  'modules/memory/infrastructure/FusionPersistence.ts::uniqueViolation': '驱动错误形状',
+  'modules/knowledge-evolution/infrastructure/FusionRepository.ts::uniqueViolation': '驱动错误形状',
   'modules/code-capability/infrastructure/DeliveryChain.ts::toRow': '行命名与取值转换',
   'modules/development-automation/infrastructure/MissionStore.ts::toMissionRow': '行命名与取值转换',
   'modules/development-automation/infrastructure/PlaybookSagaStore.ts::approval': '仅换行排版',

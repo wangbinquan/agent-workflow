@@ -13,7 +13,7 @@ import type { PluginGenerationGcCommand } from '@/modules/resource-catalog/publi
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { garbageCollectPluginGenerations } from './pluginInstaller'
-import { HOUR_MS, MAINTENANCE_PHASE } from './daemonCadence'
+import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('plugin-generation-gc')

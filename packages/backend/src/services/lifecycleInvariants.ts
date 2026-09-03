@@ -46,7 +46,7 @@ import type {
   TaskRecoveryOperations,
 } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger, type Logger } from '@/util/log'
-import { DAEMON_CADENCE, MAINTENANCE_PHASE } from './daemonCadence'
+import { DAEMON_CADENCE, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from './maintenanceTicker'
 
 const log = createLogger('lifecycle.invariants')

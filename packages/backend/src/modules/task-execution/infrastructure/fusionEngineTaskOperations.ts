@@ -1,7 +1,7 @@
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
-} from '@/modules/memory/public/fusion'
+} from '@/modules/knowledge-evolution/public/participants'
 import type { DbClient } from '@/db/client'
 import { cancelTask, getTask, startTask, type StartTaskDeps } from '@/services/task'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'

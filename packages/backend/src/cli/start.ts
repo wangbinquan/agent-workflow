@@ -64,7 +64,7 @@ import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission
 import { IS_EMBEDDED } from '@/embed'
 import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { composeSqliteAppDeps, composeSqliteDaemonProviderCore, createComposedApp } from '@/server'
-import { reconcileRunningFusions } from '@/services/fusion'
+import { reconcileRunningFusions } from '@/modules/knowledge-evolution/public/operations'
 import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
   resumeQueuedIntentWorkingSets,
@@ -182,7 +182,7 @@ import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/compo
 import { composeSqliteCapabilityTemplateOperations } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { composeSqliteCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { composeSqliteDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composeSqliteFusionOperations } from '@/modules/memory/composition/fusion'
+import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import {
   composeSqliteDevelopmentEmployeeWorkspace,
   createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader,
@@ -1947,7 +1947,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // Fail CLOSED: an unexpected repair error aborts boot rather than serving a
   // database whose fusion identity is ambiguous.
   {
-    const { repairFusionProvenance } = await import('@/services/fusion')
+    const { repairFusionProvenance } =
+      await import('@/modules/knowledge-evolution/public/operations')
     const report = await repairFusionProvenance(fusionOperations.persistence)
     if (Object.values(report).some((count) => count > 0)) {
       log.info('fusion provenance repair complete', { ...report })
@@ -2126,7 +2127,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 'applying' whose version already committed, roll back the rest, and fail a
   // 'running'+currentTaskId=null (reject that never attached its task). Best-effort.
   try {
-    const { recoverFusionDecisions } = await import('@/services/fusion')
+    const { recoverFusionDecisions } =
+      await import('@/modules/knowledge-evolution/public/operations')
     const r = await recoverFusionDecisions(fusionOperations.persistence)
     if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
       log.info('fusion decision recovery on boot', { ...r })
@@ -2152,7 +2154,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // fusion launch never has to seed them on the hot path, and they show up in
   // the workflows list). Idempotent; createFusion also lazy-seeds defensively.
   try {
-    const { seedFusionResources } = await import('@/services/fusion')
+    const { seedFusionResources } = await import('@/modules/knowledge-evolution/public/operations')
     await seedFusionResources(fusionOperations.persistence)
   } catch (err) {
     log.warn('fusion resource seed on boot failed', {

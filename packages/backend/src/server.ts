@@ -162,7 +162,7 @@ import {
   composeSqliteMemoryInjectionQueries,
   composeSqliteMemoryOperations,
 } from '@/modules/memory/composition'
-import { composeSqliteFusionOperations } from '@/modules/memory/composition/fusion'
+import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createSqliteTaskRouteOperations } from '@/modules/task-execution/infrastructure/sqliteTaskRouteOperations'
 import type { MemoryOperations } from '@/modules/memory/public/operations'

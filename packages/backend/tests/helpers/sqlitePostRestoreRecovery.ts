@@ -1,11 +1,11 @@
-import { composeSqliteFusionPersistence } from '@/modules/memory/composition/fusion'
+import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { DbClient } from '@/db/client'
 import {
   restoreBackup as restoreSqliteBackup,
   type RestoreOptions,
   type SqlitePostRestoreRecovery,
 } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { repairFusionProvenance } from '@/services/fusion'
+import { repairFusionProvenance } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import {
   applyPendingRestoreIfAny as applyPendingSqliteRestore,
   type ApplyPendingRestoreOptions,

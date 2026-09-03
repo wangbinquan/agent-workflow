@@ -9,7 +9,7 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 
-import type { FusionBuiltinWorkflowSeed } from '../../memory/public/fusion'
+import type { FusionBuiltinWorkflowSeed } from '@/modules/knowledge-evolution/public/types'
 import { FUSION_WORKFLOW_DESCRIPTION, MERGER_PROMPT_TEMPLATE } from './fusionPrompt'
 
 /**

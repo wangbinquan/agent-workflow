@@ -41,7 +41,7 @@ import type {
 } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { createLogger } from '@/util/log'
 
-import { DAEMON_CADENCE } from './daemonCadence'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
 
 const log = createLogger('lifecycle.stuck')
 

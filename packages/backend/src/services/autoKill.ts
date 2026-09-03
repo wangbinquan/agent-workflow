@@ -24,7 +24,7 @@ import {
 } from '@/services/recoveryBreaker'
 import { killStaleRunProcessTree } from '@/util/process'
 import { createLogger } from '@/util/log'
-import { DAEMON_CADENCE } from './daemonCadence'
+import { DAEMON_CADENCE } from '@/services/daemonCadence'
 
 const log = createLogger('auto-kill')
 
