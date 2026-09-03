@@ -420,20 +420,14 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 494,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-353 T8/T9/T10/T11（`624a14647`…`02958a8aa`）：fusion 路由迁入 knowledge-evolution 的 inbound 层并收成 decode-call-map（新增 domain/fusionVisibility 与 application/fusionViews）；新增技能来源追溯`GET /api/skills/:id/provenance`（KE 的 domain/skillProvenance + application/skillProvenanceQuery + inbound/skillProvenanceRoutes，memory 新增只读投影 listFusedInto 与 domain/fusedProvenanceRows，shared 新增 skillProvenance 合同）；前端技能版本行展开区。owner / observed-import / exception / public-surface / transaction-callback 因此各涨一次，全部是新增能力与归位的账目，不是绕过。同批 facade 账本减 1（`services/skillVersion.ts` 已删）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6408,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-353 T8/T9/T10/T11（`624a14647`…`02958a8aa`）：fusion 路由迁入 knowledge-evolution 的 inbound 层并收成 decode-call-map（新增 domain/fusionVisibility 与 application/fusionViews）；新增技能来源追溯`GET /api/skills/:id/provenance`（KE 的 domain/skillProvenance + application/skillProvenanceQuery + inbound/skillProvenanceRoutes，memory 新增只读投影 listFusedInto 与 domain/fusedProvenanceRows，shared 新增 skillProvenance 合同）；前端技能版本行展开区。owner / observed-import / exception / public-surface / transaction-callback 因此各涨一次，全部是新增能力与归位的账目，不是绕过。同批 facade 账本减 1（`services/skillVersion.ts` 已删）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -454,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5312,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-353 T8/T9/T10/T11（`624a14647`…`02958a8aa`）：fusion 路由迁入 knowledge-evolution 的 inbound 层并收成 decode-call-map（新增 domain/fusionVisibility 与 application/fusionViews）；新增技能来源追溯`GET /api/skills/:id/provenance`（KE 的 domain/skillProvenance + application/skillProvenanceQuery + inbound/skillProvenanceRoutes，memory 新增只读投影 listFusedInto 与 domain/fusedProvenanceRows，shared 新增 skillProvenance 合同）；前端技能版本行展开区。owner / observed-import / exception / public-surface / transaction-callback 因此各涨一次，全部是新增能力与归位的账目，不是绕过。同批 facade 账本减 1（`services/skillVersion.ts` 已删）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -471,10 +462,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1008,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-353 T8/T9/T10/T11（`624a14647`…`02958a8aa`）：fusion 路由迁入 knowledge-evolution 的 inbound 层并收成 decode-call-map（新增 domain/fusionVisibility 与 application/fusionViews）；新增技能来源追溯`GET /api/skills/:id/provenance`（KE 的 domain/skillProvenance + application/skillProvenanceQuery + inbound/skillProvenanceRoutes，memory 新增只读投影 listFusedInto 与 domain/fusedProvenanceRows，shared 新增 skillProvenance 合同）；前端技能版本行展开区。owner / observed-import / exception / public-surface / transaction-callback 因此各涨一次，全部是新增能力与归位的账目，不是绕过。同批 facade 账本减 1（`services/skillVersion.ts` 已删）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -495,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25888,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-353 T8/T9/T10/T11（`624a14647`…`02958a8aa`）：fusion 路由迁入 knowledge-evolution 的 inbound 层并收成 decode-call-map（新增 domain/fusionVisibility 与 application/fusionViews）；新增技能来源追溯`GET /api/skills/:id/provenance`（KE 的 domain/skillProvenance + application/skillProvenanceQuery + inbound/skillProvenanceRoutes，memory 新增只读投影 listFusedInto 与 domain/fusedProvenanceRows，shared 新增 skillProvenance 合同）；前端技能版本行展开区。owner / observed-import / exception / public-surface / transaction-callback 因此各涨一次，全部是新增能力与归位的账目，不是绕过。同批 facade 账本减 1（`services/skillVersion.ts` 已删）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -515,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "082a88b1c9b028cb5f1e3099f77caae8fa046868",
-    "contentDigest": "sha256:f59bd76e1478b83abd2f0ca436845b83c82458d6d97e161da082ead5c655e1c5",
+    "currentSnapshotSha": "2f03a70efd45277af782297040861c45ec623fce",
+    "contentDigest": "sha256:5e0d7db600543c0fa8eb2d8d402af5a6746d58460db38519e14206ac4705f280",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
