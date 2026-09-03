@@ -1,6 +1,6 @@
 # RFC-353 实施计划 —— Knowledge Evolution bounded context 归位
 
-- 状态：Draft（待用户批准）
+- 状态：**Done**（2026-09-04）
 - current-source pin：`5ac6855e4`
 - 开工分母：W4-E3 exact edge **13**、facade **2**（`services/fusion.ts`、`services/skillVersion.ts`）
 
@@ -95,3 +95,27 @@ T5+T6 不拆开提交就是为了不留半截。
   「allowGrowth 无过期条目」，由 `4be2397eb` 收。RFC-352 已经被同族判据咬过一次
   （那次是「删账本条目后 baseline 没跟着减小」），两次根因相同：**账本类改动天然跨两笔，
   把「改动本身」当终点就会漏掉配套的那一笔**。T5–T12 一律按两笔一次 push 执行。
+
+
+## 8. 实际执行轨迹（2026-09-04 收口）
+
+| 任务 | 提交 | 与计划的出入 |
+| --- | --- | --- |
+| T1/T2 | `defec8a0c` | 无 |
+| T3（memory participant） | `42ef63350` `c5b48d918` | 计划里的 T3 是 RC 的 `SkillVersionParticipant`，实际先落了 memory 的；RC 那半推迟到 T6 一并做 |
+| T4 | `027df6cd3` `5e268f743` `4be2397eb` | 账本上涨笔与退许可笔**没有同一次 push**，run `33740247217` 因此红 —— 已写进本文件 §7 |
+| T5 | `250bd7560` `1e7f94be6` | 无 |
+| T13 | `500a17129` | 范围外纳入（用户裁决 D6/D7） |
+| T6 | `9911b3a05` `5402eaea6` `efbd3d242` | 技能版本提交 participant + 判据收口；capability brand 一次返工（运行时 symbol → 私有 `declare const`） |
+| T7 | `dd3d51345` `652f4d31c` | 迁入 KE 的是**成员关系协调**而非整个 restore（proposal §9「AC-6 的更正」）；并顺带把跨 context 的 provider 装配全部收到 bootstrap |
+| 账本 | `b6a53e050` `6eb8c676b` | 两笔同一次 push，这次做对了 |
+| T8 | `624a14647` | 无 |
+| T9 | `7fdada126` | 无 |
+| T10 | `51c900140` | 无 |
+| T11 | `02958a8aa` | `services/fusion.ts` 早在 T5 就删了，本笔只删 `services/skillVersion.ts` |
+| T12 | 本笔 | —— |
+
+**最贵的一次返工**：T6 起初把两个 owner 的 provider 工厂从 `public/participants.ts` 再导出，
+撞了 RFC-349 的 provider-cutover 账本（「只能缩不能涨」）。它与 RFC-317 R2 是一对夹子，
+叠起来只剩「跨 context 的 provider 装配在 bootstrap 完成」一个自洽解。教训已落
+`docs/dev-gotchas.md`，不留在本 RFC 里。

@@ -504,7 +504,7 @@ RFC-304 往 `ACL_RESOURCE_TYPES` 加两型（能力模板的部门层 / 小组�
 - **`bun test $(cat files.txt)` 在文件清单为空时不是「什么都不跑」，而是跑整个 backend 套件——且不带
   `--isolate`**（RFC-354 PR-1 实撞，2026-09-03）：`ls` 的 glob 有一个不匹配就整条命令退出、清单文件是空的，
   `bun test` 拿到零个参数等于「全部」，700 多个文件在**同一进程**里跑：HTTP 路由类用例成片红（`declared operation
-  has no mounted binding` 之类其实是并发 session 的在制品），跑了 20 分钟还在吃 CPU。定式：先 `wc -l` 看一眼清单
+has no mounted binding` 之类其实是并发 session 的在制品），跑了 20 分钟还在吃 CPU。定式：先 `wc -l` 看一眼清单
   再跑；聚焦跑就把文件名直接写进命令，别经过 `$(cat …)`。
 
 ## 本机 bun 低于 `package.json` 的 `engines.bun` 会伪造出「产品 bug」（RFC-349 实测，2026-09-02）
@@ -643,6 +643,10 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
   session**，另有 223 条是他们的新增文件；
 - 把别人引起的 baseline **上涨**写进 `ledger-baselines.json`（实测 842→870、859→928、
   17083→…）。账本只许降，涨要写 `allowGrowth` 并点名 RFC——替别人涨等于帮他们绕过高水位。
+- **任何新增顶层符号都算涨**（2026-09-04 实测）：`rfc294-module-symbol-owners` 数的是文件里的全部
+  顶层声明，**未 `export` 的本地 `interface` / `type` 也计**——给收红补一个 5 字段的本地 report 类型
+  就让账本 +1、被迫走两笔 allowGrowth。一次性的小类型优先内联到参数位，另一处用
+  `Parameters<typeof fn>[0]` 派生，不新开符号。
 
 **先把污染面收窄**（2026-09-02 源码对账）：真正会被工作树脏文件影响的只有
 `packages/{backend,shared,frontend}/src/**/*.{c,m}ts{,x}`（`census.ts` 的 `walkTsFiles` /
@@ -718,13 +722,13 @@ git status --porcelain -- packages/backend/src packages/shared/src packages/fron
      **代价**：那棵树从此共享真实仓库的 HEAD / index，只能在里面跑生成器与只读 git 命令；
      任何 `checkout` / `add` / `commit` / `reset` 都会作用在**真实仓库**上。
    - **导出的必须是「你要推的那个 commit 本身」**（`git archive <commit>`），不要「archive HEAD
-     + 逐个从工作树拷自己改过的文件」。2026-09-02 实撞（`d335ea0fa`）：拷贝发生在把
-     `cli/start.ts` 重放成干净版**之前**，于是账本采的是含并发 session 未提改动的磁盘版
-     （3456 行）、提交的却是重放版（3460 行）——账本里三处
-     `ambient:…start.ts#registerAfterCommitEventPump` 全部差 4 行（记 2540、需要 2544），
-     `sourceDigest` 也对不上，推上去当场 N1b 红。**采样源与提交内容是两个东西**，只有从提交
-     本身导出才恒等；推之前再自验一遍（导出目标 commit 整体重跑、与 committed 逐字节比）就
-     能在推之前拦住。
+     - 逐个从工作树拷自己改过的文件」。2026-09-02 实撞（`d335ea0fa`）：拷贝发生在把
+       `cli/start.ts` 重放成干净版**之前**，于是账本采的是含并发 session 未提改动的磁盘版
+       （3456 行）、提交的却是重放版（3460 行）——账本里三处
+       `ambient:…start.ts#registerAfterCommitEventPump` 全部差 4 行（记 2540、需要 2544），
+       `sourceDigest` 也对不上，推上去当场 N1b 红。**采样源与提交内容是两个东西**，只有从提交
+       本身导出才恒等；推之前再自验一遍（导出目标 commit 整体重跑、与 committed 逐字节比）就
+       能在推之前拦住。
    - 同一套姿势还能用来**判定账本到底同步了没有**：把 tip 导出来整体重跑一次，与 committed
      的 `architecture/*.json` + `status.md` 逐字节比。2026-09-02 就是这么确认「并发 session
      的重生成已经把我的改动一起收进去了、我不必再提一笔」的——他们的生成器读的是含我已提交
@@ -899,10 +903,10 @@ Bun 按路径确定性分配，每个文件仍恰好跑一次，覆盖面不变�
 
 同一天撞到的两条(都不是断言失败):
 
-| 用例 | runner 实测 | 本机整文件 |
-| --- | --- | --- |
-| `rfc322` 棘轮「src 下不得再出现以 hourly 周期直接调用的裸 setInterval」 | 5058.92ms | 850ms |
-| `rfc345` 「all live classic compatibility consumers have source-derived exact successor debt」 | 7013.75ms | 1.1–1.3s |
+| 用例                                                                                           | runner 实测 | 本机整文件 |
+| ---------------------------------------------------------------------------------------------- | ----------- | ---------- |
+| `rfc322` 棘轮「src 下不得再出现以 hourly 周期直接调用的裸 setInterval」                        | 5058.92ms   | 850ms      |
+| `rfc345` 「all live classic compatibility consumers have source-derived exact successor debt」 | 7013.75ms   | 1.1–1.3s   |
 
 加上 `docs/audit-backlog.md` 里更早的 RFC-227 Seatbelt(5015ms / 本机 380ms),这已经是**第三次**。
 
@@ -3608,3 +3612,53 @@ capability-forge 合同、`join()` 拼出来的哨兵路径）。改动触及**�
 `tests/architecture/`，于是同一个改动把主干推红了两次（`1ab271af2` 与 `247331ae5`）。
 顺带一条：`allowGrowth` 是**一次性**的——涨已经落进上一笔提交之后，相对当前 HEAD 就不再有增长，
 T17 的「allowGrowth 无过期条目」要求当期把它们删掉，否则下一笔又红。
+
+## `public/` 不许点名 provider 适配器——它与 R2 叠起来只剩「bootstrap 装配」一个解（2026-09-04 实撞）
+
+**症状**：给 memory / resource-catalog 落了跨 context 用的 tx-bound participant 之后，
+很自然地在各自 `public/participants.ts` 里 `export { markFusedSync } from '../infrastructure/sqlite…'`，
+让消费方（另一个 context 的 composition）从 public 取。结果 `tests/architecture/rfc349-provider-cutover.test.ts`
+的「provider-specific business dependencies are exact legacy debt and cannot grow」当场红。
+
+**为什么**：那条判据看两样东西——import 的 **specifier 里有没有 `sqlite` / `postgresql`**，以及
+**被 import 的名字匹不匹配 `/Sqlite|Postgresql/`**；`isBusinessOrTransport` 把模块的
+`application | domain | engine | public` 四层算在内（`composition` / `infrastructure` 不算，
+`cli/*` 与 `server.ts` 也不算）。所以 `public/` 里出现 `from '../infrastructure/sqliteXxx'` 必中。
+而那份账本的注释写死了**只能缩不能涨**：「New code must accept an owner-defined port from bootstrap
+instead of importing another SQLite/PostgreSQL factory.」
+
+**它和 RFC-317 R2 是一对夹子**：R2 要求模块之间只能经 exact `public/*` 交换东西（不许深入别人的
+`composition/` / `infrastructure/`），provider-cutover 又要求 `public/` 不许点名 provider。两条叠起来，
+**跨 context 的 provider 装配没有任何模块内的合法落点**，只剩：
+
+> 模块之间只交换 **provider 中性的端口类型**；具体挑哪个 provider 一律在 **bootstrap
+> （`cli/start.ts` / `server.ts` / `cli/postgresqlDaemonApplication.ts`）或 system-operation 根**上完成。
+
+**做法**：owner context 在自己的 `composition/` 下开一个装配出口（`composition.ts` 或
+`composition/xxx.ts`，那一层不在判据的负样本里），消费方的 compose 函数把 participant 作为**入参**收，
+根上把两者接起来。测试用同一份装配（抽个 `tests/helpers/*Participants.ts`），别在测试里 stub 一个
+形状相近的假货——那会让用例退化成「只验自己那张表」。
+
+**顺带一个同族守卫**：`public/` 里的类型名以 `Actor|Authority|Capability|Claim|Token|WorkerIdentity|Tx`
+结尾会触发 capability-forge 检查，brand 必须是**该 public 文件里的 `declare const … : unique symbol`**，
+不能是从 `domain/participantBrands.ts` 导出的运行时 symbol——后者谁都能 import 来伪造一个结构等价物。
+
+## `git archive` 导出树只隔离「按路径读的源码」，**不隔离 workspace 包**（2026-09-04 实撞）
+
+共享工作树上要把普查 / 门禁跑在「只含自己改动」的树上时，`git archive <commit> | tar -x` 到临时目录、
+再软链 `.git` 与 `node_modules` 是个好办法——**但只对按路径读文件的工具成立**（`architecture:write`
+这类普查是的）。
+
+**跑测试不成立**：`node_modules/@agent-workflow/shared` 是 workspace 软链，指回**真实工作树**的
+`packages/shared`。于是导出树里跑 backend 测试，吃到的仍然是别人此刻未提交的 shared 改动。
+2026-09-04 实撞：并发 session 的 schema v6 在制品让一条字节级绊线在**本地任何一棵树上**都红，
+在 CI 的干净 checkout 上却是绿的，白查了半小时。
+
+**结论**：导出树用来重采账本；判断「这条红是不是我的」优先去查 **CI 上该 sha 的结果**，
+本地只用来复现已经确认存在的红。
+
+## 改前端也会让架构账本变 stale（2026-09-03 实撞）
+
+`architecture:write` 的普查输入面是 `packages/{backend,shared,frontend,system-mocks}/src`。
+只改了一个前端组件 + 加一条前端测试，同样要重采，否则 `rfc294-canonical-manifests` 当场红。
+「架构账本只跟后端有关」是错觉——**任何落在那四个 `src` 下的改动都要重采**。

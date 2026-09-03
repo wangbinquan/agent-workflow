@@ -1,6 +1,6 @@
 # RFC-353 —— Knowledge Evolution bounded context 归位（RFC-294 W4-E3）
 
-- 状态：Draft（2026-09-03；待用户批准）
+- 状态：**Done**（2026-09-04 实现完成并推上主干；用户 2026-09-03 批准实现）
 - 关联：RFC-294 §3.2 N17 / §W4-E3；前置 RFC-352（W4-E2，Done）、RFC-345（W4-C，Done）、RFC-344（W4-A，Done）
 - owner 波次：W4-E3
 
@@ -178,3 +178,67 @@ T5 推上主干后，`e2e-webkit-nightly`（run `33752894225`）红在
 
 **验收补充**：**AC-14** ACL 面板撞 409 后草稿丢弃、面板显示服务端权威值，且弹窗不关、错误提示仍在；
 组件层锁死，不依赖渲染时序。
+
+
+## 9. 验收结论（2026-09-04）
+
+实现落在 `9911b3a05` … `02958a8aa`（T6/T7 在 `6eb8c676b` 一次推上，T8–T11 随后）。逐条对账，
+**两条与立项时的措辞不符，如实记在这里而不是悄悄放宽**：
+
+| AC | 结论 | 依据 |
+| --- | --- | --- |
+| AC-1 | 达成 | `services/fusion.ts`（T5 删）、`services/skillVersion.ts`（T11 删）都已不存在，生产 consumer = 0 |
+| AC-2 | 达成 | `rfc353-skill-restore-membership.test.ts` §装配面锁死：RC 侧四个文件里不许出现 `modules/memory` / `modules/knowledge-evolution` |
+| AC-3 | 达成 | `modules/memory/public/fusion.ts` 已删，端口住在 `modules/knowledge-evolution/public/` |
+| **AC-4** | **部分达成，措辞已更正** | **写入面归零**（两个 provider 的 fusion 适配器里对三张表的 `insert/update/delete` 计数为 0，`rfc353-skill-version-commit-participant.test.ts` 的源码锁守着）。**读取面没有归零**，也不应该归零——见下方「AC-4 的更正」 |
+| AC-5 | 达成 | `defec8a0c` 起判据收进 `memory/domain/fusionMembership`，`rfc353-memory-membership-participant.test.ts` 真库全矩阵对拍 |
+| **AC-6** | **达成，但 owner 的边界与立项设想不同** | operation id / input / output / `unfusedMemoryIds` **逐字未动**（descriptor 一行没改）。但迁进 KE 的是**成员关系协调**（退回哪些记忆），不是整个 restore——版本铸造与文件系统仍归 RC，见下方「AC-6 的更正」 |
+| AC-7 | 达成 | 路由迁至 `modules/knowledge-evolution/inbound/fusionRoutes.ts`，文件内无 DB / OCC / 审计 / 工作树操作；唯一一处 ACL 相关是把 actor 解成 viewer（见下） |
+| AC-8 | 达成 | 六份 oracle 除 import 路径与装配入参外一行未改，全绿 |
+| AC-9 | 达成 | daemon handle 与启动顺序未动，RFC-349 冻结守卫绿 |
+| AC-10 | 达成 | `rfc353-skill-provenance.test.ts`：不可见的记忆不出现且不留计数；已回滚退回的不再计入 |
+| AC-11 | 达成 | `rfc353-skill-provenance-expand.test.tsx`：复用 `OperationsExpandButton` + `.data-table__expand*` + `memory-row__scope`，空态文案说明「可能已被回滚或不可见」 |
+| AC-12 | 达成 | `PUBLIC_SURFACE_PILOT_DEBT` 回到 10 条（T6 一度加的 7 条随 provider 再导出撤下而消失），RFC-345 的 facade 账本与 exact 兼容边各减一 |
+| AC-13 | 见 §10 | —— |
+| AC-14 | 达成 | `rfc353-acl-conflict-draft.test.tsx`；webkit nightly 在 `500a17129` 成功 |
+
+### AC-4 的更正：「引用为 0」应为「**写入**为 0」
+
+立项时写的是「对这三张表的引用为 0」。实现中实测：**写入确实归零**，但**读取有 40 处且都有正当理由**——
+
+- `repairProvenance`（RFC-223 的启动自愈）必须读 `memories` 与 `skill_versions` 才能找出孤儿融合行；
+- `loadSkillAccess` / `loadSkillIdentity` / `assertClaimSkill` 必须读 `skills` 才能判断这次融合还能不能落。
+
+把这些读也搬走意味着给每一条读再造一个 participant，换来的是更多的跨 context 往返和更难懂的调用链，
+**不是更好的代码**。所以 AC-4 的判据更正为「写入为 0」，读取作为**转交债**记在 §7 的表里（owner：
+memory / resource-catalog；随各自下一波收）。源码锁也是按写入面写的。
+
+### AC-6 的更正：迁进 KE 的是「成员关系协调」，不是整个 restore
+
+立项时设想把整个 skill-restore coordinator 搬进 KE。实现时撞到 RFC-294 的目标边表：里面只有
+`knowledge-evolution → resource-catalog`，**没有反向边**，而 restore 的入口是 RC 的 operation
+descriptor。整体搬迁要么造一条 RC→KE 的反向边（与 KE→RC 一起成环，`implementationSccs` 会红），
+要么把 descriptor 也搬走（那会动 `skill-catalog.*` 的挂载方式，与 AC-6「逐字冻结」冲突）。
+
+因此按职责实际的归属线切：**「回滚时该退回哪些记忆」这条判据归 KE**
+（`domain/skillRestore` + `application/skillRestoreMembership`），**版本铸造与文件系统留在 RC**
+（那本来就是 RC 拥有的东西）。RC 只收到一个「给事务与回滚目标、还我被退回的 id」的窄端口，
+装配在 bootstrap。这比原设想更贴合两个 context 的实际所有权。
+
+### AC-7 的读法：路由里保留 `hasResourceAclBypass`
+
+`viewerOf(c)` 把请求上的 actor 解成 `{ userId, aclBypass }`。这是**对请求主体的解码**，不是对资源的
+授权判断——「这条融合谁看得见」的判据在 `domain/fusionVisibility`。把 `hasResourceAclBypass` 也推进
+application 只会让 application 去 import 一个 legacy service，更糟。这条按「decode」计入达成。
+
+## 10. 实施期间新增的两条通用教训
+
+两条都已落 `docs/dev-gotchas.md`（仓库是唯一事实源）：
+
+1. **`public/` 不许点名 provider 适配器**。T6 起初把 memory / RC 的 provider 工厂从
+   `public/participants.ts` 再导出，撞了 RFC-349 的 provider-cutover 账本（那份账本明写「只能缩不能涨，
+   新代码必须由 bootstrap 注入 owner 定义的端口」）。它与 RFC-317 R2（模块之间只能经 exact `public/*`）
+   叠起来只剩一个自洽解：**跨 context 的 provider 装配一律在 bootstrap / system-operation 根上完成**。
+2. **`git archive` 导出树只隔离「按路径读源码」的东西，不隔离 workspace 包**。
+   `node_modules/@agent-workflow/shared` 是回指工作树的软链，所以导出树跑普查没问题，
+   **跑测试仍会吃到别人未提交的 shared 改动**——本刀曾因此误判自己的字节绊线变红。
