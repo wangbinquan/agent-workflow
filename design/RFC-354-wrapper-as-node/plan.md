@@ -84,23 +84,23 @@ exit 谓词按帧求值）；PR-3 依赖 PR-2（clarify 通道端口已在端口
 
 ## 3. 验收清单（对应 proposal §5）
 
-- [ ] AC-1 s06 翻转 + 三层嵌套（T9）
-- [ ] AC-2 禁令 / 拒入边全仓零命中（T2 + 守卫）
-- [ ] AC-3 参数三来源 + 边界边路由 + `wrapper-input-port-missing`（T1, T2, T13）
-- [ ] AC-4 loop 返回值 = 边界边 + exit 谓词（T14, T15）
-- [ ] AC-5 闭包三条 + 既有 wrapper 用例零改动（T9）
-- [ ] AC-6 PortRef 字段退役 + `connectionSync` 双写删除（T11, T16）
-- [ ] AC-7 升级器 golden / 幂等 / 零 error / 执行逐字相同（T12）
-- [ ] AC-8 系统通道折表（T13）
-- [ ] AC-9 clarify 落行 + 既有用例零改动（T17）
-- [ ] AC-10 嵌套内 clarify（T8）
-- [ ] AC-11 resume / 重试（T9）
-- [ ] AC-12 回填 oracle（T4）
-- [ ] AC-13 双 provider（T3, T5, T14）
-- [ ] AC-14 前端（T10, T16, T18）
-- [ ] AC-15 fanout 校验（T2, T15）
-- [ ] AC-16 文档（T10, T16）
-- [ ] AC-17 三个 PR 各自 exact SHA CI 绿
+- [x] AC-1 s06 翻转 + 三层嵌套（T9） — `rfc354-nested-loop-frames`（外 2 × 内 2 = 4 次调起）+ 三层嵌套用例
+- [x] AC-2 禁令 / 拒入边全仓零命中（T2 + 守卫） — `wrapper-loop-nested` 退役、loop / git 入边即参数
+- [x] AC-3 参数三来源 + 边界边路由 + `wrapper-input-port-missing`（T1, T2, T13） — PR-1 + T13 端口表
+- [x] AC-4 loop 返回值 = 边界边 + exit 谓词（T14, T15） — `wrapper-output` 边 + `wrapper-loop-exit-port-missing`
+- [x] AC-5 闭包三条 + 既有 wrapper 用例零改动（T9） — `rfc354-nested-frames-closure`
+- [x] AC-6 PortRef 字段退役 + `connectionSync` 双写删除（T11, T16） — schema v6 + T16
+- [x] AC-7 升级器 golden / 幂等 / 零 error / 执行逐字相同（T12） — `rfc354-examples-v6-golden`（32 个示例）
+- [x] AC-8 系统通道折表（T13） — `DeclaredPort.channel`，`rfc147-system-channel-ports` 改「端口表是唯一来源」
+- [x] AC-9 clarify 落行 + 既有用例零改动（T17） — `rfc354-clarify-idle-skip` + 既有 clarify 用例零改动；实现门补 rfc040 gate 行加锁
+- [x] AC-10 嵌套内 clarify（T8） — clarify 同帧 + T20 park 行帧修复
+- [x] AC-11 resume / 重试（T9） — 重试级联按帧成员关系
+- [x] AC-12 回填 oracle（T4） — `cli/frameBackfill.ts` + `aw doctor --backfill-containers`
+- [x] AC-13 双 provider（T3, T5, T14） — SQLite / PostgreSQL 同源（review 读点、gate open、复用查找）
+- [x] AC-14 前端（T10, T16, T18） — 画布只写边 + 任务详情按帧
+- [x] AC-15 fanout 校验（T2, T15） — `wrapper-fanout-shard-source-*`
+- [x] AC-16 文档（T10, T16） — `docs/workflow-yaml.md` v6 + design §10 偏离
+- [x] AC-17 三个 PR 各自 exact SHA CI 绿 — PR-1 `87aab47cb`、PR-2 `e1e538b1b`（e2e 收红后 `fb608f89c` run 33800356235 全绿）、PR-3 `fb608f89c`；实现门收口笔随 tip run 判绿
 
 ## 4. 已知踩坑预案（摘自 `docs/dev-gotchas.md`，动手前再扫一遍）
 
