@@ -76,7 +76,7 @@
       "id": "rfc294-public-surface-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "PUBLIC_SURFACE_PILOT_DEBT",
-      "baseline": 10,
+      "baseline": 6,
       "why": "RFC-294 试点期允许的非 exact public 入口与类型偏离，目标架构下终值为 0。RFC-339 W2-D 已清偿 task-execution topology/config 与 DB-bound query constructor 中三条偏离；RFC-347 又清偿一条，剩余条目继续按后续 consumer cutover 删除。 RFC-353 T5：memory 的 5 条 fusion 债随端口迁进 knowledge-evolution 收成 4 条（落点在 application，因为 public 命令面目前是薄再导出，T8 收窄），`memory/public/fusion.ts: non-exact` 与 `catalog.ts#MemoryScopeAuthority` 两条销账，12 → 10。"
     },
     {
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f3e2901fafcff71afd446578ce74f0b6c593dedd",
-    "contentDigest": "sha256:95021f064c2cb462329c8c110bfeae21f9f9c99a3b8788b23db2f73947d8d43e",
+    "currentSnapshotSha": "3c775ab143050d3449949ece18c5f7e37aab6eee",
+    "contentDigest": "sha256:1fd6839d1daacf621779a7105c1b68096467d016d85e3b9353ff37aaa9180408",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
