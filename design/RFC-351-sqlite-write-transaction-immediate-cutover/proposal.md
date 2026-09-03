@@ -1,6 +1,6 @@
 # RFC-351 — SQLite 写事务一律预占 writer（裸 `db.transaction` 收敛到 `dbTxSync`）
 
-- 状态：Draft（2026-09-02；待用户批准）
+- 状态：**Done（2026-09-03）**（2026-09-02 用户批准实现；实现 `a3177b34e` → `06795e1d5` → `988d6b68e` → `d7595387e`，逐 AC 证据见 [plan.md §4](./plan.md)，hosted 取证见 plan.md §5）
 - current-source pin：`f4e3f3ca2`（`HEAD=origin/main`）
 - 前置：[RFC-093](../RFC-093-db-tx-sync/design.md)（`dbTxSync` 原语）、
   [RFC-338](../RFC-338-maintenance-worker-daily-window/proposal.md) AC-2（`BEGIN IMMEDIATE`）、

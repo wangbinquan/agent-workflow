@@ -149,6 +149,10 @@ describe('RFC 索引状态漂移守卫', () => {
     // RFC-345：2026-09-02 的进度对账给 plan §7.2 加了逐 AC 证据表（此前只有 proposal 的 AC 列表，
     // 本守卫按上面 RFC-329 的规则跳过）。表一落地就必须在这里显式登记，缺口保持为零。
     'RFC-345-resource-catalog-contract-cutover': 0,
+    // RFC-351：收口（2026-09-03）把 plan §4 的验收清单从 checkbox 列表改成逐 AC 证据表。
+    // 一改成表格就落进本守卫的被测面（`rows.size > 0`），必须显式登记——同 RFC-329 的规则，
+    // 缺口是 0 也不能漏登记。
+    'RFC-351-sqlite-write-transaction-immediate-cutover': 0,
   }
 
   test('AC 证据索引的缺口逐字相等（新增 AC 不补证据行 ⇒ 红；补齐了也要把账改小）', () => {

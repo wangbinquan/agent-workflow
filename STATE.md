@@ -56,16 +56,31 @@
 > 三处 ambient 锚点与 sourceDigest 全偏——正确姿势是 `git archive <要推的 commit>` 导出提交本身、软链真仓库 `.git` 后
 > 跑 `architecture:write --snapshot-sha HEAD`（已由 agent-workflow-f9 写进 `docs/dev-gotchas.md`）。
 >
-> 📝 **RFC 已落档、待批准（Draft，2026-09-02）：[RFC-351 SQLite 写事务一律预占 writer](design/RFC-351-sqlite-write-transaction-immediate-cutover/proposal.md)。**
+> ✅ **RFC 完工（Done，2026-09-03）：[RFC-351 SQLite 写事务一律预占 writer](design/RFC-351-sqlite-write-transaction-immediate-cutover/proposal.md)。**
 > 起于 2026-09-02 主干 CI run `33638907352` 的一条「玄学红」：`rfc319-digital-employee-p1` 的 `beforeAll` 两次
 > `POST …/tools/{id}/publish` 都 500，而绿的 `78dcc5999` 与红的 `f663be47c` 之间生产代码 diff 只有一段注释。
-> 挖到底是**真缺陷不是 flake**：全仓 37 处裸 `db.transaction(...)` 绕过 `dbTxSync`（26 处「先读后写」），
-> deferred 事务的读→写升级会以 `SQLITE_BUSY_SNAPSHOT` **0ms 失败、绕过 5s `busy_timeout`**（已用双连接脚本复现），
-> 裸 `SQLiteError` 在 HTTP 边界兜成 500。既有账本 `RAW_TRANSACTION_SITES`（RFC-317 T37）的安全理由只回答了
-> S-10 的 async 半提交，**没回答 RFC-338 AC-2 的 `BEGIN IMMEDIATE`**，于是这 37 处对后者是未覆盖的逃逸口。
-> 三件套已落档，**等待用户批准后才动生产代码**。另有一个**独立于本 RFC** 的可观测性缺口：e2e harness 把 daemon
-> 输出只留在内存 tail 里，CI 上任何 500 都拿不到服务端堆栈——这正是它长期被读成 flake 的原因。对应修复已由另一个
-> session 写在工作树里（回显 `unhandled error` 行），但该 session 已结束、改动**尚未提交**，归属确认中。
+> **是真缺陷不是 flake**：裸 deferred 事务先读后写，别的连接一提交，升级就以 `SQLITE_BUSY_SNAPSHOT`
+> **0ms 失败、绕过 5s `busy_timeout`**；裸 `SQLiteError` 不是 `DomainError`，在 HTTP 边界兜成 500。
+> 更深一层的问题是**账本读起来像已评估、实则只覆盖一半危害**：`RAW_TRANSACTION_SITES`（RFC-317 T37）的理由
+> 只回答了 S-10 的 async 半提交，**没回答 RFC-338 AC-2 的 `BEGIN IMMEDIATE`**，于是这 37 处对后者长期是逃逸口。
+>
+> 提交链：`a3177b34e`（8 个 store 文件 36 处 `db.transaction(` → `dbTxSync(`；事故锁；账本 37→1 且值升为
+> `{count, why}` + 双危害关键词守卫；架构账本重采）→ `06795e1d5`（出账那对一次性 `allowGrowth`）
+> → `988d6b68e`（嵌套 `dbTxSync` 原子性：内层失败必须把外层那次写一起带走）→ `d7595387e`（链接修复）。
+> **「回调体逐字未变」是机器判据**：该提交生产 diff 剔除 wrapper / import / 收尾 `})` 行后剩余改动 = 0。
+> 唯一保留的裸调用是 `writerCutoverPersistence.migrationSnapshot`（纯读，不该无谓占写锁）。
+> **红→绿在干净导出树上独立复现**：`git archive a3177b34e~1` 的源码跑事故锁 ⇒ `SQLiteError: database is locked`，
+> HEAD ⇒ 10 例全绿。
+>
+> **验收**：Main CI `33690423539`（`6752ec8c7`，35/35 attempt-1，含三平台 10 个 Playwright 分片——DE-07 就在其中，
+> 原始事故直接闭合）+ 8 条定时 workflow 全部 success，其中 6 条是在同一 SHA 上手动 dispatch 的
+> （本 RFC 改的正是 SQLite 写事务路径，拿改造前 SHA 的旧绿充数不诚实）。逐门 run id 见 `plan.md §5`；
+> `postgresql-evidence` 仍属 RFC-349 owned 例外，按用户 2026-09-02 裁决不阻塞。
+> 沉淀：`docs/dev-gotchas.md` 新增两条——`SQLITE_BUSY_SNAPSHOT` 不等 `busy_timeout` 的机制与复现姿势；
+> 以及**新立一类危害时必须回头重扫 rationale 早于它的既有台账**，「已登记」不等于「已就该危害登记」。
+>
+> 附带（属 RFC-349，非本 RFC）：e2e harness 的 daemon 诊断回显已由其 owner 在 `b0d5c5bbf` 落地并带测试——
+> 此前 `util/errors.ts` 的 `unhandled error` 只在 `E2E_VERBOSE` 下回显、CI 不设它，正是这条 500 长期被读成 flake 的原因。
 
 > 🚧 **RFC 实施中（Approved / In Progress，2026-08-31）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
 > 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：

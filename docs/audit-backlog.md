@@ -3818,3 +3818,24 @@ null-safe；`listCasesPage` 增 `membership` 过滤 + adapter 不再对 shared �
    用 `ne(owner, me)`，对 `owner_user_id IS NULL` 的协作任务不为真，于是「我是 collaborator 的
    系统任务」不会出现在「共享给我」。补法：`owner IS NULL OR owner <> ?`（与上一条共用一个
    null-safe helper 时一并修）。
+
+## REPO-39 的 `partial` 断言与分相位 worker 之间有竞态（2026-09-03 记，RFC-338/349 维护 worker 面）
+
+`e2e/rfc319-ops-events-and-repo-sweeps.spec.ts:1397` 的最后一条断言会间歇性红（实测：
+`e2e-webkit-nightly` run `33694279201` webkit shard 3/4 两次 attempt 都红，**同一 SHA
+`6752ec8c7` 上 chromium 通过**，run `33694276164`）。**是用例竞态，不是产品缺陷**：
+
+- `worktreeGc` 是 heavy 维护作业，`platform/background/maintenanceJobRunner.ts:107` 把它切成
+  `['worktree','iso','scratch','orphan','partial']` 五个相位，**每个相位是 worker 的一次独立执行**，
+  用 `continuation.resumeAfterMs: 25` 串起来（同文件 `:240-262`）。
+- 用例先 `expect.poll` 等 `orphan` 相位的产物（孤儿工作树）消失，poll 一返回就**零等待**断言
+  `partial` 相位的产物（`repos/…~partial~<ULID>`）也已消失。后者至少还要再过一轮 worker 调度，
+  于是快就过、慢就红。
+
+补法（一行）：把 `partial` 那条也改成 `expect.poll`，与上面 `orphan` 那条同形。
+
+**顺带**：该用例注释里写的「这一拍的相位是 daemon 启动后 4 分钟（`MAINTENANCE_PHASE.worktreeGc`）」
+已经过期——`startWorktreeGcTicker`（`platform/persistence/sqlite/systemWorkspaceGc.ts:1095`）
+**全仓无调用者**，是死代码；今天的活路径是上面那个 heavy worker。这条过期注释会把排查的人
+直接带偏（本次实撞：先按 4 分钟相位推理，与用例 32s 就跑完的事实对不上）。清理死 ticker 时
+一并把注释改掉。

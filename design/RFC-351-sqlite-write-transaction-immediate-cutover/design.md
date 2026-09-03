@@ -1,5 +1,7 @@
 # RFC-351 技术设计 — SQLite 写事务一律预占 writer
 
+状态：**Done（2026-09-03）**——本文件描述的设计已按原样落地，无偏离项。逐 AC 证据见 [plan.md §4](./plan.md)。
+
 ## 1. 落位（RFC-294 对齐）
 
 本 RFC 只动三个 bounded context 的 **infrastructure 层**：
@@ -9,6 +11,12 @@
 | `digital-employee`       | `infrastructure/sqliteRuntimeStore.ts` / `sqliteAuthoringStore.ts` / `writerCutoverPersistence.ts`                |     22 |
 | `development-automation` | `infrastructure/sqliteMissionStore.ts` / `sqliteUploadSessionStore.ts` / `employeePlatformWorkItemPersistence.ts` |     10 |
 | `event-center`           | `infrastructure/sqliteEventStore.ts` / `sqliteCustomEventSourceStore.ts`                                          |      5 |
+
+**落地实测（`a3177b34e`，逐文件）**：`sqliteRuntimeStore` 14 + `sqliteAuthoringStore` 5 +
+`writerCutoverPersistence` 2 = 21 / 22（差的 1 是 `migrationSnapshot`，纯读，按 AC-5 保留裸调用）；
+`sqliteMissionStore` 8 + `sqliteUploadSessionStore` 1 + `employeePlatformWorkItemPersistence` 1 = 10 / 10；
+`sqliteEventStore` 4 + `sqliteCustomEventSourceStore` 1 = 5 / 5。**合计 36 / 37**，与该提交里
+「删 36 行 `db.transaction(` / 加 36 行 `dbTxSync(`」逐一对应。
 
 **向目标架构的演进**：`dbTxSync` 是 `platform` 层已有的事务原语，本 RFC 把三个 context 的
 infrastructure 从「各自直调 drizzle」收敛到「统一经平台原语」，减少一处横切的平台合同逃逸。

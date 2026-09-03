@@ -738,6 +738,37 @@ session 未提交的两个 e2e 覆盖账本推上了主干，当场引发 T16 �
 先 `cp` 到 scratchpad，`git checkout <误提前的commit> -- <files>` 恢复并提交，再把备份原样
 写回工作树——这样对方的磁盘内容一个字节没变，只是重新显示为 M。
 
+## SQLite 的读→写升级失败**不等** `busy_timeout`（RFC-351 实测，2026-09-02）
+
+`PRAGMA busy_timeout = 5000` 只覆盖「拿不到锁就等」这一类。**deferred 事务先读后写**是另一
+条路径：读语句已经钉住了一个快照，此时别的连接提交了任何东西，写语句的升级会立刻返回
+`SQLITE_BUSY_SNAPSHOT`——**0ms，一次都不重试**。因为等下去也没用：那个快照已经过时了，只能
+整笔重来。bun:sqlite 把它抛成 `SQLiteError: database is locked`，字面上和「超时了」一模一样，
+极易误诊成「锁竞争，加大 timeout 就行」。
+
+所以本仓的写事务一律走 `dbTxSync`（`packages/backend/src/db/txSync.ts`），它用
+`{ behavior: 'immediate' }` 让 `BEGIN IMMEDIATE` **在取读快照之前**就预占 writer——拿不到就
+老老实实等 `busy_timeout`，永远不会走到升级失败那条路。裸 `db.transaction(fn)` 是 deferred，
+**哪怕回调体完全同步**也照样有这个洞。
+
+代价是这类失败在 HTTP 边界毫无线索：裸 `SQLiteError` 不是 `DomainError`，`util/errors.ts`
+兜成 500 `internal-error`，读起来就是一条「玄学 flake」。2026-09-02 主干 run `33638907352`
+的 `rfc319-digital-employee-p1` DE-07 两次发布 500 就是这样——绿的 `78dcc5999` 与红的
+`f663be47c` 之间生产代码 diff 只有一段注释，所以第一反应全是「重跑就好」。复现姿势：一个
+连接 `BEGIN IMMEDIATE` + 写 + 睡 100ms 再 COMMIT，另一个连接在这个窗口里跑「先 select 后
+insert」的事务，必现。
+
+## 站点账本的「安全理由」只回答了一半危害时，它比没有更危险（RFC-351 实测，2026-09-02）
+
+上面那 37 处裸 `db.transaction` **早就在账本里**（`RAW_TRANSACTION_SITES`，RFC-317 T37/CC-04），
+守卫也逐条对得上、天天绿。问题出在理由：那句话写的是「回调体是同步的 ⇒ 安全」——它只关闭了
+**S-10 的 async 半提交**那一类，完全没回答 RFC-338 AC-2 的 `BEGIN IMMEDIATE`。于是账本读起来
+像「这些站点已经评估过了」，实际上第二类危害一处都没覆盖，而且**越是有账本、越没人回去重看**。
+
+规律：**新立一类危害时，要回头重扫所有 rationale 早于它的既有台账**——「已登记」不等于「已就
+该危害登记」。把理由做成机器可验的多字段（本例把值从 `number` 升成 `{ count, why }`，守卫断言
+每条 `why` 同时命中两组关键词），比写一段自然语言注释可靠得多：漏答一类当场红。
+
 ## git / 多人协作（共享工作树）
 
 - **`git commit -- <路径>` 提交的是「工作树」内容，不是 index —— 你精心 `git add` 的那一版会被静默忽略**（2026-08-25 实撞，同一个坑连着把 main 弄红两次）。
