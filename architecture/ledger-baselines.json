@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6325,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-353 T1/T2（RFC-294 W4-E3）：融合成员关系的判据从两个 provider 各一份收成一份——新增 `memory/domain/fusionMembership.ts`（选中规则 + 返回顺序 + provenance stamp）与 `memory/infrastructure/sqliteMemoryMembershipParticipant.ts`（SQLite 侧此前根本没有这一半，是 resource-catalog 从 legacy facade 直接 import `unfuseMemoriesTx`）。因此 owner / observed-import / exception 各涨一次；换掉的是一处已经漂了的双 provider 判据（两边选中集合相同、**返回顺序不同**，而该数组经 `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire）。 RFC-353 T4：新建 `modules/knowledge-evolution/domain/`（状态机 / 行映射 / prompt 文本 / 内建工作流图，四份从 `services/fusion.ts` 逐字平移）并留一条已入账的 R1 过渡边，因此 owner / observed-import / exception 再涨一次；T5 把编排迁完后这批边会回落。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5256,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-353 T1/T2（RFC-294 W4-E3）：融合成员关系的判据从两个 provider 各一份收成一份——新增 `memory/domain/fusionMembership.ts`（选中规则 + 返回顺序 + provenance stamp）与 `memory/infrastructure/sqliteMemoryMembershipParticipant.ts`（SQLite 侧此前根本没有这一半，是 resource-catalog 从 legacy facade 直接 import `unfuseMemoriesTx`）。因此 owner / observed-import / exception 各涨一次；换掉的是一处已经漂了的双 provider 判据（两边选中集合相同、**返回顺序不同**，而该数组经 `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire）。 RFC-353 T4：新建 `modules/knowledge-evolution/domain/`（状态机 / 行映射 / prompt 文本 / 内建工作流图，四份从 `services/fusion.ts` 逐字平移）并留一条已入账的 R1 过渡边，因此 owner / observed-import / exception 再涨一次；T5 把编排迁完后这批边会回落。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -489,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25753,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-353 T1/T2（RFC-294 W4-E3）：融合成员关系的判据从两个 provider 各一份收成一份——新增 `memory/domain/fusionMembership.ts`（选中规则 + 返回顺序 + provenance stamp）与 `memory/infrastructure/sqliteMemoryMembershipParticipant.ts`（SQLite 侧此前根本没有这一半，是 resource-catalog 从 legacy facade 直接 import `unfuseMemoriesTx`）。因此 owner / observed-import / exception 各涨一次；换掉的是一处已经漂了的双 provider 判据（两边选中集合相同、**返回顺序不同**，而该数组经 `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire）。 RFC-353 T4：新建 `modules/knowledge-evolution/domain/`（状态机 / 行映射 / prompt 文本 / 内建工作流图，四份从 `services/fusion.ts` 逐字平移）并留一条已入账的 R1 过渡边，因此 owner / observed-import / exception 再涨一次；T5 把编排迁完后这批边会回落。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -509,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "defec8a0c67ab7810b51efde73ecaf26111d5d09",
-    "contentDigest": "sha256:c3bbcf5a3b4ab0b59043587574200e50bc580465fe7703208343e3a9f024e858",
+    "currentSnapshotSha": "546c70fd5cb702063ef3eb637b54b444d3252e5d",
+    "contentDigest": "sha256:c1c298c695d60d0b95a167c6c320ccd8da08a6b1bbb1b50452f14334709604b2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
