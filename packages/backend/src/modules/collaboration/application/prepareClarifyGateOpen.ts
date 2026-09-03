@@ -52,6 +52,12 @@ export interface PrepareClarifyGateOpenInput {
    */
   readonly containerRunId?: string | null
   readonly loopIter: number
+  /**
+   * RFC-354 — self rounds only: the asking run's round inside its frame, i.e.
+   * `node_runs.iteration` of the minted park row (cross rounds carry it as
+   * `loopIter`). Optional for legacy fixtures; defaults to 0.
+   */
+  readonly frameIteration?: number
   readonly iteration: number
   readonly questionsJson: string
   readonly questions: readonly ClarifyGateOpenQuestionDraft[]
@@ -98,6 +104,10 @@ function assertInput(input: PrepareClarifyGateOpenInput): void {
     (input.expectedGateRevision !== undefined &&
       (!Number.isSafeInteger(input.expectedGateRevision) || input.expectedGateRevision < 0)) ||
     (input.kind === 'self' && (input.targetConsumerNodeId !== null || input.loopIter !== 0)) ||
+    (input.frameIteration !== undefined &&
+      (input.kind !== 'self' ||
+        !Number.isSafeInteger(input.frameIteration) ||
+        input.frameIteration < 0)) ||
     (input.kind === 'cross' && input.askingShardKey !== null) ||
     new Set(input.questions.map((question) => question.id)).size !== input.questions.length ||
     input.questions.some((question) => question.id.length === 0 || question.title.length === 0)
@@ -222,7 +232,8 @@ export class ClarifyGateOpenPreparation {
       id: nodeRunId,
       taskId: input.taskId,
       nodeId: input.intermediaryNodeId,
-      runIteration: reused?.iteration ?? (input.kind === 'self' ? 0 : input.loopIter),
+      runIteration:
+        reused?.iteration ?? (input.kind === 'self' ? (input.frameIteration ?? 0) : input.loopIter),
       parentNodeRunId: reused === undefined ? input.parentNodeRunId : reused.parentNodeRunId,
       containerRunId:
         reused === undefined ? (input.containerRunId ?? null) : (reused.containerRunId ?? null),

@@ -198,6 +198,12 @@ export interface CreateSelfRoundArgs extends CreateRoundCommon {
   /** Caller-provided round index (matches the asking run's generation at ask time). */
   iteration: number
   /**
+   * RFC-354 — the asking run's round inside its frame (`node_runs.iteration`
+   * of the park row; pairs with `containerRunId`). Optional for legacy
+   * fixtures; defaults to 0.
+   */
+  frameIteration?: number
+  /**
    * Parent node_run id passthrough for agent-multi shard cases so the minted
    * clarify run groups under the fan-out parent in the task detail view.
    */
@@ -260,6 +266,7 @@ export async function createClarifyRound(
       args.intermediaryNodeId,
       args.askingShardKey,
       iteration,
+      { containerRunId: args.containerRunId ?? null, frameIteration: args.frameIteration ?? 0 },
     )
     if (
       existingRun !== undefined &&
@@ -322,6 +329,7 @@ export async function createClarifyRound(
       parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
       containerRunId: args.containerRunId ?? null,
       loopIter: args.kind === 'cross' ? args.loopIter : 0,
+      frameIteration: args.kind === 'self' ? (args.frameIteration ?? 0) : 0,
       iteration,
       questionsJson,
       truncationWarningsJson,
@@ -340,6 +348,7 @@ export async function createClarifyRound(
       parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
       containerRunId: args.containerRunId ?? null,
       loopIter: args.kind === 'cross' ? args.loopIter : 0,
+      ...(args.kind === 'self' ? { frameIteration: args.frameIteration ?? 0 } : {}),
       iteration,
       questionsJson,
       questions: questions.map((question) => ({ id: question.id, title: question.title })),
@@ -399,12 +408,18 @@ async function findSelfGateRunForShard(
   intermediaryNodeId: string,
   shardKey: string | null,
   iteration: number,
+  frame: { readonly containerRunId: string | null; readonly frameIteration: number },
 ): Promise<typeof nodeRuns.$inferSelect | undefined> {
   // RFC-074 PR-C: the gate run carries no round counter, so this round's
   // existing run is located via the clarify_rounds row that owns it — keyed
   // by (intermediaryNodeId, askingShardKey, iteration). A re-emit within the
   // same round finds the prior round row and reuses its run; a new round has
   // no row yet and falls through to a fresh mint.
+  //
+  // RFC-354: the key is frame-scoped too — the generation counter restarts in
+  // every loop round, so rounds of the same wrapper generation (same
+  // container, different `node_runs.iteration`) and rounds of different
+  // generations must never reuse each other's gate row.
   const roundRows = await db
     .select({ intermediaryNodeRunId: clarifyRounds.intermediaryNodeRunId })
     .from(clarifyRounds)
@@ -414,16 +429,23 @@ async function findSelfGateRunForShard(
         eq(clarifyRounds.taskId, taskId),
         eq(clarifyRounds.intermediaryNodeId, intermediaryNodeId),
         eq(clarifyRounds.iteration, iteration),
+        frameIs(frame.containerRunId),
         shardKey === null
           ? isNull(clarifyRounds.askingShardKey)
           : eq(clarifyRounds.askingShardKey, shardKey),
       ),
     )
     .orderBy(asc(clarifyRounds.createdAt))
-  const owningRunId = roundRows[0]?.intermediaryNodeRunId ?? undefined
-  if (owningRunId === undefined) return undefined
-  const runRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, owningRunId)).limit(1)
-  return runRows[0]
+  for (const roundRow of roundRows) {
+    const runRows = await db
+      .select()
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, roundRow.intermediaryNodeRunId))
+      .limit(1)
+    const run = runRows[0]
+    if (run !== undefined && run.iteration === frame.frameIteration) return run
+  }
+  return undefined
 }
 
 // ---------------------------------------------------------------------------

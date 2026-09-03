@@ -70,11 +70,12 @@ const t = (key: string, vars?: Record<string, string | number>): string =>
   vars && 'n' in vars ? `${key}=${vars.n}` : key
 
 describe('parseScopePath / formatFrameBreadcrumb', () => {
-  test('the top scope is empty', () => {
+  test('the top scope is empty — and so is a payload that omits the field (pre-frame daemon)', () => {
     expect(parseScopePath('')).toEqual([])
     expect(parseScopePath(null)).toEqual([])
     expect(parseScopePath(undefined)).toEqual([])
     expect(formatFrameBreadcrumb({ scopePath: '' })).toBe('')
+    expect(formatFrameBreadcrumb({ scopePath: undefined as unknown as string })).toBe('')
   })
 
   test('nested generations read root → here', () => {
@@ -203,14 +204,18 @@ describe('the task-detail surfaces render through the frame helpers (source anch
 
   test('the node-runs round column shows the breadcrumb for a framed row', () => {
     const src = read('src/routes/tasks.detail.tsx')
-    expect(src).toContain("r.scopePath !== '' ? (")
-    expect(src).toContain('formatFrameBreadcrumb(r)')
+    // Gate P3: the condition goes through the helper (tolerates a payload from
+    // a pre-frame daemon that omits `scopePath` entirely), never `!== ''`.
+    expect(src).toContain("formatFrameBreadcrumb(r) !== '' ? (")
+    expect(src).not.toContain("r.scopePath !== ''")
     expect(src).toContain('node-run-frame-${r.id}')
   })
 
   test('the drawer shows the frame stat and groups the run history per frame', () => {
     const src = read('src/components/NodeDetailDrawer.tsx')
     expect(src).toContain("t('nodeDrawer.statFrame')")
+    expect(src).toContain("formatFrameBreadcrumb(run) !== '' && (")
+    expect(src).not.toContain("run.scopePath !== ''")
     expect(src).toContain('data-testid="stats-frame"')
     expect(src).toContain('groupHistoryByFrame(history)')
     expect(src).toContain('data-testid="stats-history-frame"')

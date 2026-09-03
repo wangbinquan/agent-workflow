@@ -18,7 +18,6 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import { clickCanvasControl } from './canvas-controls'
 import { startDaemon, type DaemonHandle } from './harness'
 
-test.describe.configure({ mode: 'serial' })
 test.setTimeout(180_000)
 
 let daemon: DaemonHandle
@@ -149,38 +148,42 @@ async function centerOf(page: Page, nodeId: string): Promise<{ x: number; y: num
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
 }
 
-test('拖进 wrapper 的矩形 ⇒ 真的入组，并落进定义', async ({ page }) => {
-  const workflowId = await seedWorkflow(['seed'])
-  expect(await wrapperMembers(workflowId), '前置：mover 一开始不在组里').toEqual(['seed'])
+test.describe('拖拽成员关系（串行：两幕共用同一套相机 / 拖拽姿势）', () => {
+  test.describe.configure({ mode: 'serial' })
 
-  await openEditor(page, workflowId)
-  await dragNodeTo(page, 'mover', await centerOf(page, 'loop'))
+  test('拖进 wrapper 的矩形 ⇒ 真的入组，并落进定义', async ({ page }) => {
+    const workflowId = await seedWorkflow(['seed'])
+    expect(await wrapperMembers(workflowId), '前置：mover 一开始不在组里').toEqual(['seed'])
 
-  expect(
-    await wrapperMembers(workflowId),
-    '落在 wrapper 矩形里却没入组 ⇒ 画布上看着在里面、运行时它只跑一次而不是每轮重跑',
-  ).toEqual(['mover', 'seed'])
-})
+    await openEditor(page, workflowId)
+    await dragNodeTo(page, 'mover', await centerOf(page, 'loop'))
 
-test('拖出 wrapper ⇒ 真的出组（只增不减的实现会在这里露馅）', async ({ page }) => {
-  const workflowId = await seedWorkflow(['seed', 'mover'])
-  expect(await wrapperMembers(workflowId), '前置：mover 一开始在组里').toEqual(['mover', 'seed'])
-
-  await openEditor(page, workflowId)
-  const canvas = await page.locator('.workflow-canvas').boundingBox()
-  if (canvas === null) throw new Error('canvas has no geometry')
-  const loop = await page.locator('.react-flow__node[data-id="loop"]').boundingBox()
-  if (loop === null) throw new Error('loop has no geometry')
-  // 拖到 wrapper 矩形之外、但仍在画布视口内的位置。
-  await dragNodeTo(page, 'mover', {
-    x: Math.min(loop.x + loop.width + 120, canvas.x + canvas.width - 40),
-    y: Math.min(canvas.y + canvas.height - 60, loop.y + loop.height + 80),
+    expect(
+      await wrapperMembers(workflowId),
+      '落在 wrapper 矩形里却没入组 ⇒ 画布上看着在里面、运行时它只跑一次而不是每轮重跑',
+    ).toEqual(['mover', 'seed'])
   })
 
-  expect(
-    await wrapperMembers(workflowId),
-    '拖出去了却还在组里 ⇒ 节点一旦沾过 wrapper 就再也出不来，而画布上它明明在外面',
-  ).toEqual(['seed'])
+  test('拖出 wrapper ⇒ 真的出组（只增不减的实现会在这里露馅）', async ({ page }) => {
+    const workflowId = await seedWorkflow(['seed', 'mover'])
+    expect(await wrapperMembers(workflowId), '前置：mover 一开始在组里').toEqual(['mover', 'seed'])
+
+    await openEditor(page, workflowId)
+    const canvas = await page.locator('.workflow-canvas').boundingBox()
+    if (canvas === null) throw new Error('canvas has no geometry')
+    const loop = await page.locator('.react-flow__node[data-id="loop"]').boundingBox()
+    if (loop === null) throw new Error('loop has no geometry')
+    // 拖到 wrapper 矩形之外、但仍在画布视口内的位置。
+    await dragNodeTo(page, 'mover', {
+      x: Math.min(loop.x + loop.width + 120, canvas.x + canvas.width - 40),
+      y: Math.min(canvas.y + canvas.height - 60, loop.y + loop.height + 80),
+    })
+
+    expect(
+      await wrapperMembers(workflowId),
+      '拖出去了却还在组里 ⇒ 节点一旦沾过 wrapper 就再也出不来，而画布上它明明在外面',
+    ).toEqual(['seed'])
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -296,7 +299,8 @@ async function selectNode(page: Page, nodeId: string): Promise<void> {
   if ((await page.getByTestId('workflow-camera-overview').count()) > 0) {
     await clickCanvasControl(page, 'workflow-camera-overview')
   }
-  await page.waitForTimeout(400)
+  // No fixed wait for the camera animation: selection is delivered as an
+  // event below (no hit-test), and `toBeInViewport` polls until it holds.
   const header = page.locator(`.react-flow__node[data-id="${nodeId}"] .canvas-node__header`)
   await expect(header).toBeInViewport()
   // The node just wired keeps its floating toolbar ("Connect next step") open,
@@ -316,62 +320,69 @@ async function readSelectOptions(page: Page, trigger: Locator): Promise<string[]
   return labels
 }
 
-test('参数边：外部产出接到 loop 本身 ⇒ 普通入边，目标口名就是参数名，检查器参数列表列出它', async ({
-  page,
-}) => {
-  const workflowId = await seedFramedWorkflow()
-  await openEditor(page, workflowId)
-  await connectNew(page, 'outside', 'loop · wrapper-loop', 'brief', 'outside.answer → loop.brief')
-  expect(
-    (await readEdges(workflowId)).map(triple).sort(),
-    '接到 loop 上的边没有原样落进定义、或被误打成边界边 ⇒ 运行时不知道 brief 是这个循环的参数',
-  ).toEqual(['inner.answer→loop.looped[wrapper-output]', 'outside.answer→loop.brief'])
-  await selectNode(page, 'loop')
-  await expect(
-    inspector(page).getByTestId('wrapper-parameter-list'),
-    '参数列表没列出 brief ⇒ 作者看不出循环体能拿到什么',
-  ).toContainText('brief')
-})
-
-test('闭包边：外部产出直接接到循环体成员 ⇒ 穿墙的普通边，不是 loop 的参数', async ({ page }) => {
-  const workflowId = await seedFramedWorkflow()
-  await openEditor(page, workflowId)
-  await connectNew(
+// Three independent acts (each seeds its own workflow): a failure in one must
+// not skip the others, and a retry re-runs only the failing act.
+test.describe('RFC-354 T19 — 边的三种角色', () => {
+  test('参数边：外部产出接到 loop 本身 ⇒ 普通入边，目标口名就是参数名，检查器参数列表列出它', async ({
     page,
-    'outside',
-    'rfc319-wf16-agent (inner)',
-    'context',
-    'outside.answer → inner.context',
-  )
-  expect(
-    (await readEdges(workflowId)).map(triple).sort(),
-    '穿墙边被改写成别的形状（补了边界标记 / 挂到了 loop 上）⇒ 运行时按参数而不是闭包解析',
-  ).toEqual(['inner.answer→loop.looped[wrapper-output]', 'outside.answer→inner.context'])
-  await selectNode(page, 'loop')
-  await expect(
-    inspector(page).getByTestId('wrapper-parameter-list'),
-    '闭包边被当成参数列出 ⇒ 两种绑定在界面上分不开',
-  ).not.toContainText('context')
-})
+  }) => {
+    const workflowId = await seedFramedWorkflow()
+    await openEditor(page, workflowId)
+    await connectNew(page, 'outside', 'loop · wrapper-loop', 'brief', 'outside.answer → loop.brief')
+    expect(
+      (await readEdges(workflowId)).map(triple).sort(),
+      '接到 loop 上的边没有原样落进定义、或被误打成边界边 ⇒ 运行时不知道 brief 是这个循环的参数',
+    ).toEqual(['inner.answer→loop.looped[wrapper-output]', 'outside.answer→loop.brief'])
+    await selectNode(page, 'loop')
+    await expect(
+      inspector(page).getByTestId('wrapper-parameter-list'),
+      '参数列表没列出 brief ⇒ 作者看不出循环体能拿到什么',
+    ).toContainText('brief')
+  })
 
-test('返回值边：循环体成员接回自己的 loop ⇒ boundary=wrapper-output，成为返回值与退出条件候选', async ({
-  page,
-}) => {
-  const workflowId = await seedFramedWorkflow()
-  await openEditor(page, workflowId)
-  await connectNew(page, 'inner', 'loop · wrapper-loop', 'final', 'inner.answer → loop.final')
-  expect(
-    (await readEdges(workflowId)).map(triple).sort(),
-    '成员 → 自己的 loop 没有打上 wrapper-output ⇒ 它不是返回值，退出条件读不到它',
-  ).toEqual(['inner.answer→loop.final[wrapper-output]', 'inner.answer→loop.looped[wrapper-output]'])
-  await selectNode(page, 'loop')
-  await expect(inspector(page).getByTestId('loop-return-list')).toContainText('final')
-  const exitOptions = await readSelectOptions(
+  test('闭包边：外部产出直接接到循环体成员 ⇒ 穿墙的普通边，不是 loop 的参数', async ({ page }) => {
+    const workflowId = await seedFramedWorkflow()
+    await openEditor(page, workflowId)
+    await connectNew(
+      page,
+      'outside',
+      'rfc319-wf16-agent (inner)',
+      'context',
+      'outside.answer → inner.context',
+    )
+    expect(
+      (await readEdges(workflowId)).map(triple).sort(),
+      '穿墙边被改写成别的形状（补了边界标记 / 挂到了 loop 上）⇒ 运行时按参数而不是闭包解析',
+    ).toEqual(['inner.answer→loop.looped[wrapper-output]', 'outside.answer→inner.context'])
+    await selectNode(page, 'loop')
+    await expect(
+      inspector(page).getByTestId('wrapper-parameter-list'),
+      '闭包边被当成参数列出 ⇒ 两种绑定在界面上分不开',
+    ).not.toContainText('context')
+  })
+
+  test('返回值边：循环体成员接回自己的 loop ⇒ boundary=wrapper-output，成为返回值与退出条件候选', async ({
     page,
-    inspector(page).getByTestId('loop-exit-port-select'),
-  )
-  expect(
-    exitOptions.some((label) => label.includes('final')),
-    '新返回口没进退出条件候选 ⇒ 作者接了返回值却选不到它',
-  ).toBe(true)
+  }) => {
+    const workflowId = await seedFramedWorkflow()
+    await openEditor(page, workflowId)
+    await connectNew(page, 'inner', 'loop · wrapper-loop', 'final', 'inner.answer → loop.final')
+    expect(
+      (await readEdges(workflowId)).map(triple).sort(),
+      '成员 → 自己的 loop 没有打上 wrapper-output ⇒ 它不是返回值，退出条件读不到它',
+    ).toEqual([
+      'inner.answer→loop.final[wrapper-output]',
+      'inner.answer→loop.looped[wrapper-output]',
+    ])
+    await selectNode(page, 'loop')
+    await expect(inspector(page).getByTestId('loop-return-list')).toContainText('final')
+    const exitOptions = await readSelectOptions(
+      page,
+      inspector(page).getByTestId('loop-exit-port-select'),
+    )
+    expect(
+      exitOptions.some((label) => label.includes('final')),
+      '新返回口没进退出条件候选 ⇒ 作者接了返回值却选不到它',
+    ).toBe(true)
+  })
 })

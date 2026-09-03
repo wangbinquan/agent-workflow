@@ -387,6 +387,20 @@ describe('RFC-040 wrapper-loop bubbles awaiting_human (clarify inside loop)', ()
     // Final task status: done.
     const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
     expect(taskRow?.status).toBe('done')
+
+    // RFC-354 PR-3 (gate P1): the clarify gate's park row lives in the asking
+    // run's FRAME — the loop's generation row at round 0 — and the answer
+    // closes it as `done`. Minted at the top frame instead, the frame-scoped
+    // frontier saw an "empty" gate after the answer, visited it and settled it
+    // idle: a second, `skipped` row that turned the answered gate grey on the
+    // task canvas. Exactly one row, in the wrapper frame, done.
+    const gateRuns = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'c')))
+    expect(gateRuns.map((r) => r.status)).toEqual(['done'])
+    expect(gateRuns[0]?.containerRunId).toBe(wrapperRunIdBefore)
+    expect(gateRuns[0]?.iteration).toBe(0)
   })
 })
 
@@ -580,6 +594,15 @@ describe('RFC-040 wrapper-git bubbles awaiting_human (clarify inside git wrapper
       .where(eq(nodeRunOutputs.nodeRunId, gwRunIdBefore))
     const diffOuts = outs.filter((o) => o.portName === 'git_diff')
     expect(diffOuts.length).toBe(1)
+
+    // RFC-354 PR-3 (gate P1): the gate's park row is in the git wrapper's
+    // frame and is the gate's ONLY row — see the loop twin above.
+    const gateRuns = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'c')))
+    expect(gateRuns.map((r) => r.status)).toEqual(['done'])
+    expect(gateRuns[0]?.containerRunId).toBe(gwRunIdBefore)
   })
 })
 

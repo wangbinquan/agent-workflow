@@ -598,8 +598,10 @@ export async function executeWorkgroupHostMechanics(
               askingNodeId: req.nodeId,
               askingNodeRunId: req.nodeRunId,
               askingShardKey: currentRunRow?.shardKey ?? null,
-              // RFC-354: the park row lives in the asking run's frame.
+              // RFC-354: the park row lives in the asking run's frame — the
+              // generation row AND the round inside it.
               containerRunId: currentRunRow?.containerRunId ?? null,
+              frameIteration: currentRunRow?.iteration ?? 0,
               intermediaryNodeId: clarifyNodeId,
               iteration: askingGeneration,
               questions: result.clarify.questions,
@@ -4939,6 +4941,12 @@ export async function runAgentSingleNode(
       askingNodeId: node.id,
       askingNodeRunId: nodeRunId,
       askingShardKey: currentRunRow?.shardKey ?? null,
+      // RFC-354 (PR-3 gate P1): the park row lives in the asking run's frame —
+      // generation row + round. Minted at the top frame, a gate inside a loop /
+      // git wrapper was invisible to the frame-scoped frontier after the answer,
+      // which then visited the "empty" gate and settled it idle (`skipped`).
+      containerRunId: currentRunRow?.containerRunId ?? null,
+      frameIteration: currentRunRow?.iteration ?? 0,
       intermediaryNodeId: clarifyNodeId,
       iteration: askingGeneration,
       questions: lastResult.clarify.questions,

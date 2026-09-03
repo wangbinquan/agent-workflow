@@ -38,6 +38,10 @@ export function createSqliteCollaborationRuntimeMechanics(
               kind: 'self',
               askingShardKey: input.askingShardKey,
               iteration: input.iteration,
+              // RFC-354: the park row's round inside its frame.
+              ...(input.frameIteration === undefined
+                ? {}
+                : { frameIteration: input.frameIteration }),
               ...(input.parentNodeRunId === undefined
                 ? {}
                 : { parentNodeRunId: input.parentNodeRunId }),

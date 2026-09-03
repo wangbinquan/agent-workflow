@@ -66,6 +66,14 @@ export type CollaborationAgentClarifyOpenInput =
         askingShardKey: string | null
         iteration: number
         parentNodeRunId?: string | null
+        /**
+         * RFC-354 — the asking run's round INSIDE its frame (`node_runs.iteration`
+         * of the park row). Together with `containerRunId` it places the gate row
+         * in the same frame as the question, so the frame-scoped frontier finds
+         * it after the answer instead of visiting an "empty" gate and settling it
+         * idle. Optional only for legacy fixtures (0 = top-scope / first round).
+         */
+        frameIteration?: number
       }
     >
   | Readonly<

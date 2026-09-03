@@ -398,7 +398,7 @@ function StatsTab({
       {/* RFC-354 — the frame this run belongs to, as the root→here breadcrumb
           of wrapper generations (`outer#1 › inner#0`); absent at the top scope
           and on rows from pre-frame daemons. */}
-      {run.scopePath !== '' && (
+      {formatFrameBreadcrumb(run) !== '' && (
         <>
           <dt>{t('nodeDrawer.statFrame')}</dt>
           <dd>

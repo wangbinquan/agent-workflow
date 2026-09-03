@@ -1866,7 +1866,7 @@ function NodeRunsTable({
                   {/* RFC-354: inside a wrapper the frame breadcrumb names the
                       generation (`outer#1 › inner#0`); a flat workflow keeps the
                       bare round counter. */}
-                  {r.scopePath !== '' ? (
+                  {formatFrameBreadcrumb(r) !== '' ? (
                     <code data-testid={`node-run-frame-${r.id}`}>{formatFrameBreadcrumb(r)}</code>
                   ) : (
                     r.iteration

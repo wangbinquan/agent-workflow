@@ -861,17 +861,23 @@ async function findSelfGateRun(
         eq(clarifyRounds.taskId, input.taskId),
         eq(clarifyRounds.intermediaryNodeId, input.intermediaryNodeId),
         eq(clarifyRounds.iteration, input.iteration),
+        // RFC-354: frame-scoped — see the SQLite twin (`findSelfGateRunForShard`).
+        (input.containerRunId ?? null) === null
+          ? isNull(clarifyRounds.containerRunId)
+          : eq(clarifyRounds.containerRunId, input.containerRunId as string),
         input.askingShardKey === null
           ? isNull(clarifyRounds.askingShardKey)
           : eq(clarifyRounds.askingShardKey, input.askingShardKey),
       ),
     )
     .orderBy(asc(clarifyRounds.createdAt))
-    .limit(1)
-  const id = rounds[0]?.nodeRunId
-  if (id === undefined) return undefined
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)).limit(1)
-  return runs[0]
+  const frameIteration = input.frameIteration ?? 0
+  for (const round of rounds) {
+    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.id, round.nodeRunId)).limit(1)
+    const run = runs[0]
+    if (run !== undefined && run.iteration === frameIteration) return run
+  }
+  return undefined
 }
 
 async function openPostgresqlAgentClarify(
@@ -943,6 +949,7 @@ async function openPostgresqlAgentClarify(
     parentNodeRunId: input.kind === 'self' ? (input.parentNodeRunId ?? null) : null,
     containerRunId: input.containerRunId ?? null,
     loopIter: input.kind === 'cross' ? input.loopIter : 0,
+    frameIteration: input.kind === 'self' ? (input.frameIteration ?? 0) : 0,
     iteration,
     questionsJson,
     truncationWarningsJson: warningsJson,
@@ -959,6 +966,7 @@ async function openPostgresqlAgentClarify(
     parentNodeRunId: projection.parentNodeRunId,
     containerRunId: projection.containerRunId,
     loopIter: projection.loopIter,
+    ...(input.kind === 'self' ? { frameIteration: projection.frameIteration } : {}),
     iteration,
     questionsJson,
     questions: questions.map((question) => ({ id: question.id, title: question.title })),

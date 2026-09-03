@@ -284,6 +284,16 @@ wrapper = 内联 lambda（帧 = container run）；call-workflow = 调用定义�
   那一侧仍是 `'never'`。cross gate 早就是真依赖（2026-05-22 泄洪修复），本次只是把两种 gate 拉平。
 - **`skipped` 行不带 reason 列**：与 RFC-306 分支跳过同形（`branch-skip` cause 铸 pending → `mark-skipped`，`errorMessage` 为空），
   idle 原因只进日志；任务详情把它按「闸门未触发」展示，是否另标「无人发问」留给 T18 的展示层决定。
-- **「wired asker 跑了但没问」不是可达的 idle 路径**：RFC-100 强制反问让接了 clarify 通道的 agent 首轮必须发问，否则
-  `clarify-required-*` 失败；所以 idle 路径只有两条——asker 被分支关闭从未运行、或 gate 根本没接线。测试按这两条写
-  （`rfc354-clarify-idle-skip`）。
+- **「wired asker 跑了但没问」在首轮不可达**：RFC-100 强制反问让接了 clarify 通道的 agent 首轮必须发问，否则
+  `clarify-required-*` 失败。idle 路径有三条——asker 被分支关闭从未运行、gate 根本没接线、以及 asker 在反问已关闭的轮次
+  运行（节点级 `stop` 指令跨 loop 轮次持久，之后每轮 gate 都按 `skipped` 落行，行形状相同）。测试按前两条写
+  （`rfc354-clarify-idle-skip`），第三条由 RFC-183 stop 用例的既有形态覆盖。
+- **self 反问的 park 行必须铸在提问 run 的帧里**（实现门 P1，`scheduler-rfc040-wrapper-await` 两条 resume 用例加锁）：
+  PR-1 只在工作组宿主分支透传了 `containerRunId`，agent-single 主路径没传，且 `prepareClarifyGateOpen` 对 self 固定
+  `runIteration = 0`。gate 落行后这成了真缺陷——wrapper 体内的 park 行落在顶层帧 `(null, 0)`，答复后帧过滤的 frontier 看到
+  「无行」的 gate，N6 已失效，于是派发它、按 idle 铸第二行 `skipped`，任务画布把已答复的闸门显示为跳过。修法：
+  `openAgentClarify(self)` 传 `containerRunId` + 新字段 `frameIteration`（提问 run 的帧内轮次，即 park 行的
+  `node_runs.iteration`），`prepareClarifyGateOpen` 用它铸行，self 复用查找（SQLite `findSelfGateRunForShard` /
+  PostgreSQL `findSelfGateRun`）按 `(container_run_id, 帧内轮次)` 加锁——代际计数每轮从 0 重数，不按帧会让下一轮
+  复用上一轮的 gate 行。`clarify_rounds.loop_iter` 对 self 仍为 0（task_questions 投影依赖它），帧信息在
+  `container_run_id` + gate 行自身的 `iteration` 上。
