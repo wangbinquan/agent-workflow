@@ -27,6 +27,8 @@ import {
   composePostgresqlMemoryCatalogOperations,
   type PostgresqlMemoryTransaction,
 } from './infrastructure/postgresqlMemoryCatalogOperations'
+import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
+import type { DbTxSync } from '@/db/txSync'
 import { composeSqliteMemoryCatalogOperations } from './infrastructure/sqliteMemoryCatalogOperations'
 import {
   createPostgresqlMemoryDistillSessionCapture,
@@ -126,6 +128,11 @@ export function composeSqliteMemoryOperations(input: {
   readonly catalogBinding?: {
     readonly contexts: DirectCommandContextFactory
     readonly authorization: MemoryResourceScopeAuthorization
+    /**
+     * RFC-352 T4：repository / repository-group scope 的授权 participant 由 source-control 提供。
+     * 不传就用 source-control 的 SQLite 实现——bootstrap 之外的调用方（测试夹具）不必自己装。
+     */
+    readonly repositoryScopes?: RepositoryScopeAuthorizationInTx<DbTxSync>
   }
 }): MemoryOperations {
   return composeMemoryOperations({

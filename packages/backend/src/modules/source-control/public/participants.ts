@@ -79,3 +79,55 @@ export interface RepositoryCommitPublicationParticipant {
     commitSha?: string
   }): Promise<{ ok: true } | { ok: false; error: string }>
 }
+
+// ---------------------------------------------------------------------------
+// RFC-352（RFC-294 W4-E2）—— repository / repository-group scope 的授权 participant。
+//
+// 由来：memory 的 scope Move 需要判定「这条记忆能不能挂到某个仓库 / 仓库组名下」，
+// 而在此之前它是**直接 select `cachedRepos` / `repoGroups` 两张 source-control 的表**
+// 来做的（`modules/memory/infrastructure/{sqlite,postgresql}*` 各一份）。那是跨 context
+// 直读别人的表；RFC-294 `design.md:3441` 因此要求 source-control 提供这个 offered
+// participant，`plan.md §8` 把它列为 W4-E2 的前置件。
+//
+// **行为逐字等于迁移前**：repo / repo_group scope 的管理权今天就是「仅 `resource-acl:bypass`」
+// （RFC-248 / RFC-305）。这里不引入仓库属主委派——那是权限档位变更，须单独立项。
+//
+// 与 RFC-294 `design.md:3441` 的签名偏离（一条，故意）：文档写的是单方法
+// `assertManageable(authority, target)`。这里拆成 `exists` + `canManage` 两个纯问题，
+// 因为**错误的组装规则是 memory 的**，不是 source-control 的：memory 的 Move 对
+// 「当前 scope」与「目标 scope」用不同的失败语义（`current` 侧且持 bypass 时容忍目标行已消失，
+// 走清理路径），把 `side: 'current' | 'destination'` 这套词汇塞进 source-control 会让
+// SC 学会 memory 的 Move 语义。拆成两问后 SC 只回答自己知道的事实，memory 保留它自己的
+// NotFound / Forbidden 组装——两边的既有错误码与文案因此逐字不变。
+// ---------------------------------------------------------------------------
+
+/** 一个仓库 scope 或仓库组 scope 的目标。 */
+export interface RepositoryScopeTarget {
+  readonly kind: 'repo' | 'repo_group'
+  readonly id: string
+}
+
+/** 授权判定所需的最小主体投影——不接受完整 `Actor`，也不接受权限名字集合。 */
+export interface RepositoryScopeSubject {
+  readonly hasResourceAclBypass: boolean
+}
+
+export type RepositoryScopeMaybePromise<T> = T | Promise<T>
+
+/**
+ * source-control 提供给 memory 的 repository/group scope 授权面。
+ * `Transaction` 由各 provider 绑定，调用方必须在**同一个**事务里问这两件事。
+ */
+export interface RepositoryScopeAuthorizationInTx<Transaction> {
+  /** 目标仓库 / 仓库组的行是否还在。 */
+  exists(
+    transaction: Transaction,
+    target: RepositoryScopeTarget,
+  ): RepositoryScopeMaybePromise<boolean>
+  /** 该主体能否管理这个 scope。今天的判据：仅 `resource-acl:bypass`。 */
+  canManage(
+    transaction: Transaction,
+    subject: RepositoryScopeSubject,
+    target: RepositoryScopeTarget,
+  ): RepositoryScopeMaybePromise<boolean>
+}

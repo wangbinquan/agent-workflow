@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1891,
+    "backendFiles": 1893,
     "frontendFiles": 621,
     "legacyFiles": 632,
-    "moduleFiles": 1259,
-    "productionFiles": 2667,
+    "moduleFiles": 1261,
+    "productionFiles": 2669,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25683
+    "symbolsIncludingFileRoots": 25695
   },
   "entries": [
     {
@@ -75410,6 +75410,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
+      "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#MemoryScopeAuthorizations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "MemoryScopeAuthorizations",
+      "targetContext": "memory",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
       "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#MemoryScopeRef",
       "removeAfterWave": null,
       "status": "current-module",
@@ -106677,6 +106689,30 @@
     },
     {
       "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskSubmission.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskSubmission.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskSubmission.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskSubmission.ts#workgroupTaskSubmissionBody",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "workgroupTaskSubmissionBody",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
       "currentLayer": "public",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/public/commands.ts",
@@ -113228,6 +113264,66 @@
       "currentContext": "source-control",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#canManageRepositoryScope",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "canManageRepositoryScope",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createPostgresqlRepositoryScopeAuthorization",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createPostgresqlRepositoryScopeAuthorization",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createSqliteRepositoryScopeAuthorization",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSqliteRepositoryScopeAuthorization",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#PostgresqlTransaction",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "PostgresqlTransaction",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
       "id": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts#$file",
       "removeAfterWave": null,
@@ -114525,6 +114621,58 @@
       "signatureDigest": "sha256:358fa916ec6d18b166fe30d3de4cdafe48e1f77e395560667dd4efd310195839",
       "status": "current-module",
       "symbol": "RepositoryEndpointDiscoveryParticipant",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeAuthorizationInTx",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:6b3d5773a350bb5818174e66f2bfc2e9ce68179753f751605bfc6ebeba6fec51",
+      "status": "current-module",
+      "symbol": "RepositoryScopeAuthorizationInTx",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeMaybePromise",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:bc8dd2ad9346559ed0581514e0f0ae5a20658d58e89503b16cd2cb736a3da837",
+      "status": "current-module",
+      "symbol": "RepositoryScopeMaybePromise",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeSubject",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:568abee959de555b161d6469fea935e9ceb5ff3c54e208c64faf037f7be11f42",
+      "status": "current-module",
+      "symbol": "RepositoryScopeSubject",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeTarget",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:2b6ba89b8a7db64c6c76e3c61721e1cc5b0fb450e4529d9c4edd4c3fa8d25b9e",
+      "status": "current-module",
+      "symbol": "RepositoryScopeTarget",
       "targetContext": "source-control",
       "targetLayer": "public"
     },
@@ -308867,5 +309015,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b"
+  "sourceDigest": "sha256:4a60dd3c61aee997d1c691ae74b000983c1a42b65cbdbb2ee10802b1f7bfb3b4"
 }

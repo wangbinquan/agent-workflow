@@ -18,12 +18,15 @@ import {
 
 import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
 import type { ResourceAccess } from '@agent-workflow/shared'
+import { createPostgresqlRepositoryScopeAuthorization } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import type {
+  RepositoryScopeAuthorizationInTx,
+  RepositoryScopeTarget,
+} from '@/modules/source-control/public/participants'
 import {
-  cachedRepos,
   memories,
   memoryDistillJobs,
   memoryScopeMoveEvents,
-  repoGroups,
   userPermissionGrants,
   users,
 } from '@/db/schema'
@@ -230,6 +233,7 @@ async function accessOf(
 
 async function assertManageable(input: {
   readonly participant: MemoryResourceScopeAccessParticipant<PostgresqlTransaction>
+  readonly repositories: RepositoryScopeAuthorizationInTx<PostgresqlTransaction>
   readonly tx: PostgresqlTransaction
   readonly authority: MemoryScopeAuthority
   readonly scope: MemoryScopeRef
@@ -246,23 +250,28 @@ async function assertManageable(input: {
     throw new ValidationError('invalid-body', `${input.scope.scopeType} scope requires scopeId`)
   }
   if (input.scope.scopeType === 'repo' || input.scope.scopeType === 'repo_group') {
-    const table = input.scope.scopeType === 'repo' ? cachedRepos : repoGroups
-    const rows = await input.tx
-      .select({ id: table.id })
-      .from(table)
-      .where(eq(table.id, input.scope.scopeId))
-      .limit(1)
-      .all()
-    if (
-      rows[0] === undefined &&
-      !(input.side === 'current' && hasResourceAclBypass(input.authority.actor))
-    ) {
+    // RFC-352 T4：与 SQLite 侧同一条路——存在性与管理权由 source-control 的 offered
+    // participant 回答，memory 不再直读 `cachedRepos` / `repoGroups`。
+    const target: RepositoryScopeTarget = {
+      kind: input.scope.scopeType,
+      id: input.scope.scopeId,
+    }
+    const exists = await input.repositories.exists(input.tx, target)
+    if (!exists && !(input.side === 'current' && hasResourceAclBypass(input.authority.actor))) {
       throw new NotFoundError(
         'memory-scope-target-not-found',
         `${input.side} ${input.scope.scopeType} scope target not found`,
       )
     }
-    if (hasResourceAclBypass(input.authority.actor)) return
+    if (
+      await input.repositories.canManage(
+        input.tx,
+        { hasResourceAclBypass: hasResourceAclBypass(input.authority.actor) },
+        target,
+      )
+    ) {
+      return
+    }
     throw new ForbiddenError(
       'memory-scope-forbidden',
       `${input.side} ${input.scope.scopeType} memory scope requires resource-acl:bypass`,
@@ -293,6 +302,9 @@ export function composePostgresqlMemoryCatalogOperations(input: {
    * 取一条 scope 的授权事实。平台 scope 不查资源访问档（查了也用不上），
    * 与 SQLite 侧保持相同的查询次数。判定本身在 `domain/scopeAuthorization.ts`。
    */
+  // RFC-352 T4：source-control 的 repository/group scope 授权 participant，装配一次。
+  const repositoryScopes = createPostgresqlRepositoryScopeAuthorization()
+
   const readScopeAuthorizationFacts = async (
     authority: MemoryScopeAuthority,
     scope: MemoryScopeRef,
@@ -700,6 +712,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
         const authority = { authority: context.authority, actor }
         await assertManageable({
           participant: input.authorization,
+          repositories: repositoryScopes,
           tx,
           authority,
           scope: previousScope,
@@ -707,6 +720,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
         })
         await assertManageable({
           participant: input.authorization,
+          repositories: repositoryScopes,
           tx,
           authority,
           scope: nextScope,
@@ -727,6 +741,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
         const refreshedAuthority = { authority: context.authority, actor: refreshedActor }
         await assertManageable({
           participant: input.authorization,
+          repositories: repositoryScopes,
           tx,
           authority: refreshedAuthority,
           scope: previousScope,
@@ -734,6 +749,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
         })
         await assertManageable({
           participant: input.authorization,
+          repositories: repositoryScopes,
           tx,
           authority: refreshedAuthority,
           scope: nextScope,

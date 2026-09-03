@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1909,
+    "entries": 1911,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24847,6 +24847,52 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createPostgresqlRepositoryScopeAuthorization",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createPostgresqlRepositoryScopeAuthorization",
+      "symbol": "createPostgresqlRepositoryScopeAuthorization",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createSqliteRepositoryScopeAuthorization",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createSqliteRepositoryScopeAuthorization",
+      "symbol": "createSqliteRepositoryScopeAuthorization",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -45498,7 +45544,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b",
+  "sourceDigest": "sha256:4a60dd3c61aee997d1c691ae74b000983c1a42b65cbdbb2ee10802b1f7bfb3b4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

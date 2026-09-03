@@ -7330,23 +7330,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1573431c326749737014",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repoGroups",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "repoGroups",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -14147,6 +14130,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:27c3bed5e036bd1c0b2d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repoGroups",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "repoGroups",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
       "fromSymbol": "$file",
@@ -20146,23 +20146,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:38cbf54b815d7897934c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#cachedRepos",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "cachedRepos",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file",
@@ -22591,23 +22574,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookEndpoints",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "webhookEndpoints",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3fbec5cd05ede0283f24",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#cachedRepos",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "cachedRepos",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -33051,6 +33017,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5e8a833b5ea753e55751",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#cachedRepos",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "cachedRepos",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
       "fromSymbol": "$file",
@@ -43453,23 +43436,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7bc9ec164d37f07ed3a4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/jsonDocument.ts#parseJsonDocument",
-      "toPath": "packages/backend/src/util/jsonDocument.ts",
-      "toSymbol": "parseJsonDocument",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
@@ -46221,6 +46187,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMeteringReceipts",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeCaseMeteringReceipts",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/composition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8477e6e6727092c4dcd9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "DbTxSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -49949,6 +49932,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8f539d1c2151355e3c67",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createSqliteRepositoryScopeAuthorization",
+      "toPath": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "toSymbol": "createSqliteRepositoryScopeAuthorization",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryCommit.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/application/repositoryCommit.ts",
       "fromSymbol": "$file",
@@ -51049,23 +51049,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
       "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:932f4ce54476de1f3482",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repoGroups",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "repoGroups",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -69412,6 +69395,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c7e8bd5edc77977d5bad",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
+      "toSymbol": "PostgresqlDatabaseClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/repositoryPublicationTransport.ts#$file",
@@ -80702,6 +80702,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e7dcc53395b4efefa964",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTurnsOperations.ts",
       "fromSymbol": "$file",
@@ -82179,6 +82196,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ec130d258651a5532577",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAclReadRepository.ts#$file",
@@ -83112,6 +83146,23 @@
       "toPath": "packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts",
       "toSymbol": "TaskExecutionPersistence",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ef753d4552d965e1e42f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createPostgresqlRepositoryScopeAuthorization",
+      "toPath": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "toSymbol": "createPostgresqlRepositoryScopeAuthorization",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -89048,9 +89099,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5238,
+    "architectureExceptions": 5241,
     "implementationSccs": 0,
-    "observedEdges": 6293,
+    "observedEdges": 6303,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -97236,22 +97287,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
-      "id": "import:1573431c326749737014",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "repoGroups",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repoGroups"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -98817,6 +98852,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/composition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
+      "id": "import:1928db22c1ea2a2432db",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryScopeAuthorizationInTx",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeAuthorizationInTx"
     },
     {
       "edgeKind": "value",
@@ -104881,6 +104932,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "id": "import:27c3bed5e036bd1c0b2d",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "repoGroups",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repoGroups"
     },
     {
       "edgeKind": "value",
@@ -111651,22 +111718,6 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
-      "id": "import:38cbf54b815d7897934c",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "cachedRepos",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#cachedRepos"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
@@ -114373,22 +114424,6 @@
     {
       "edgeKind": "value",
       "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file",
-      "id": "import:3fbec5cd05ede0283f24",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "cachedRepos",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#cachedRepos"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "memory",
       "fromFile": "packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlFusionPersistence.ts#$file",
       "id": "import:3fbf2b71fd88ab487f03",
@@ -115873,6 +115908,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file",
+      "id": "import:43e51dd3222ecd92b371",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryScopeAuthorizationInTx",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeAuthorizationInTx"
     },
     {
       "edgeKind": "value",
@@ -126468,6 +126519,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "id": "import:5e8a833b5ea753e55751",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "cachedRepos",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#cachedRepos"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#$file",
@@ -136339,6 +136406,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
+      "id": "import:76cd9fb3f4a274bcd1ea",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryScopeTarget",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeTarget"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "memory",
       "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryInjectionReadStore.ts",
@@ -138257,22 +138340,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupTaskRoom.ts#$file",
-      "id": "import:7bc9ec164d37f07ed3a4",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/util/jsonDocument",
-      "syntax": "static-import",
-      "targetSymbol": "parseJsonDocument",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/jsonDocument.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/jsonDocument.ts#parseJsonDocument"
     },
     {
       "edgeKind": "type",
@@ -141203,6 +141270,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file",
+      "id": "import:83dccf34a3aff9c504e4",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryScopeAuthorizationInTx",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeAuthorizationInTx"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
@@ -141377,6 +141460,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeCaseMeteringReceipts"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/composition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
+      "id": "import:8477e6e6727092c4dcd9",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "DbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "value",
@@ -145636,6 +145735,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file",
+      "id": "import:8f539d1c2151355e3c67",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/source-control/infrastructure/repositoryScopeAuthorization",
+      "syntax": "static-import",
+      "targetSymbol": "createSqliteRepositoryScopeAuthorization",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createSqliteRepositoryScopeAuthorization"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/infrastructure/postgresqlTemplateUpstreamPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlTemplateUpstreamPersistence.ts#$file",
@@ -146913,22 +147028,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file",
-      "id": "import:932f4ce54476de1f3482",
-      "owner": "memory",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "repoGroups",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repoGroups"
     },
     {
       "edgeKind": "value",
@@ -162036,6 +162135,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file",
+      "id": "import:b950969040b7124bfc49",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryScopeTarget",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeTarget"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition/configOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/configOperations.ts#$file",
@@ -165123,6 +165238,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentAdapterDefinitions"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
+      "id": "import:c17655333c60c03f0d28",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "RepositoryScopeAuthorizationInTx",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeAuthorizationInTx"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/application/commands/submitMissionAnswers.ts",
@@ -167905,6 +168036,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#recoveryEvents"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "id": "import:c7e8bd5edc77977d5bad",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
+      "syntax": "static-import",
+      "targetSymbol": "PostgresqlDatabaseClient",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
       "edgeKind": "value",
@@ -174948,6 +175095,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "id": "import:d905bcd66b3f513d09e5",
+      "owner": "source-control",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts#$file",
@@ -180323,6 +180486,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#$file",
+      "id": "import:e7dcc53395b4efefa964",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "DbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/postgresqlReconcilerReaders.ts",
@@ -182083,6 +182262,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/systemResources.ts#assertNotBuiltin"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file",
+      "id": "import:ec130d258651a5532577",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "DbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAclReadRepository.ts",
@@ -183073,6 +183268,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts#TaskExecutionPersistence"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file",
+      "id": "import:ef753d4552d965e1e42f",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/source-control/infrastructure/repositoryScopeAuthorization",
+      "syntax": "static-import",
+      "targetSymbol": "createPostgresqlRepositoryScopeAuthorization",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryScopeAuthorization.ts#createPostgresqlRepositoryScopeAuthorization"
     },
     {
       "edgeKind": "value",
@@ -190284,7 +190495,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b",
+  "sourceDigest": "sha256:4a60dd3c61aee997d1c691ae74b000983c1a42b65cbdbb2ee10802b1f7bfb3b4",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

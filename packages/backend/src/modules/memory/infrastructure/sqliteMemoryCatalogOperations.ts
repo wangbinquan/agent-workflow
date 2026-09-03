@@ -1,3 +1,6 @@
+import { createSqliteRepositoryScopeAuthorization } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
+import type { DbTxSync } from '@/db/txSync'
 import type { DbClient } from '@/db/client'
 import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
 import type {
@@ -28,6 +31,12 @@ export function composeSqliteMemoryCatalogOperations(input: {
   readonly db: DbClient
   readonly contexts: DirectCommandContextFactory
   readonly authorization: MemoryResourceScopeAuthorization
+  /**
+   * RFC-352 T4：repository / repository-group scope 的授权由 source-control 提供。
+   * 缺省即 source-control 的 SQLite 实现——这是 SQLite 组合，装它自己的 provider 是唯一
+   * 正确答案，不是一个可调的行为开关。
+   */
+  readonly repositoryScopes?: RepositoryScopeAuthorizationInTx<DbTxSync>
 }): MemoryCatalogOperations {
   const authority = (value: Parameters<MemoryCatalogOperations['queries']['canView']>[0]) => ({
     ...value,
@@ -55,7 +64,17 @@ export function composeSqliteMemoryCatalogOperations(input: {
       promoteCandidate(input.db, id, command, administratorUserId),
     patch: (id, command, editorUserId) => patchMemory(input.db, id, command, editorUserId),
     move: async (context, id, command) =>
-      moveMemory(input.db, input.contexts, context, input.authorization, id, command),
+      moveMemory(
+        input.db,
+        input.contexts,
+        context,
+        {
+          resources: input.authorization,
+          repositories: input.repositoryScopes ?? createSqliteRepositoryScopeAuthorization(),
+        },
+        id,
+        command,
+      ),
     archive: (id) => archiveMemory(input.db, id),
     unarchive: (id) => unarchiveMemory(input.db, id),
     delete: (id) => deleteMemory(input.db, id),

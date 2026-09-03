@@ -59,6 +59,13 @@
       "why": "历史迁移文件的可接受哈希（内容曾被改动过的迁移）。新迁移绝不该进这张表"
     },
     {
+      "id": "rfc349-dual-provider-predicate-forks",
+      "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
+      "symbol": "ALLOWED_DIVERGENCE",
+      "baseline": 18,
+      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。"
+    },
+    {
       "id": "rfc294-cross-context-pilot-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CROSS_CONTEXT_PILOT_DEBT",
@@ -315,10 +322,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
       "baseline": 39,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。",
-      "allowGrowth": {
-        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。"
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -387,8 +391,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1909,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1911,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -422,10 +429,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6293,
+      "baseline": 6303,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
       }
     },
     {
@@ -446,10 +453,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5238,
+      "baseline": 5241,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
       }
     },
     {
@@ -463,10 +470,10 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 950,
+      "baseline": 954,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
       "allowGrowth": {
-        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
       }
     },
     {
@@ -487,15 +494,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25683,
+      "baseline": 25695,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b",
+    "sourceDigest": "sha256:4a60dd3c61aee997d1c691ae74b000983c1a42b65cbdbb2ee10802b1f7bfb3b4",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -508,8 +515,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "65179b8cf2ef997c3c6cb8fbe60ec16f6d1e8dd9",
-    "contentDigest": "sha256:df3af309a711b16b75cfbc6a697c5c089b951fe3f07bda0cb040fbd023d5237d",
+    "currentSnapshotSha": "389613ef027bdf96fcc158575b2b4b9e94da8034",
+    "contentDigest": "sha256:1b95f84753607f8ad91a856535436921758f85efa8c9b23578c4a3555cdbf52e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

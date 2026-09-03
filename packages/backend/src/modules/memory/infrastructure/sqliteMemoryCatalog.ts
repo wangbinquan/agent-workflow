@@ -43,11 +43,9 @@ import {
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import {
-  cachedRepos,
   memories,
   memoryDistillJobs,
   memoryScopeMoveEvents,
-  repoGroups,
   userPermissionGrants,
   users,
 } from '@/db/schema'
@@ -81,6 +79,10 @@ import {
   type MemoryScopeAuthorizationFacts,
   type MemoryScopeKind,
 } from '../domain/scopeAuthorization'
+import type {
+  RepositoryScopeAuthorizationInTx,
+  RepositoryScopeTarget,
+} from '@/modules/source-control/public/participants'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
@@ -651,6 +653,18 @@ export interface MemoryResourceScopeAuthority {
 }
 
 /**
+ * RFC-352 T4 —— scope Move 需要的两套授权 participant。
+ *
+ * 拆成两个是刻意的（RFC-294 `design.md:3429-3446`）：resource-catalog 只回答 agent / workflow，
+ * source-control 只回答 repository / repository-group，谁也拿不到另一类的判定权。
+ * 平台级的 `global` 档留在 memory 自己手里。
+ */
+export interface MemoryScopeAuthorizations {
+  readonly resources: MemoryResourceScopeAuthorization
+  readonly repositories: RepositoryScopeAuthorizationInTx<DbTxSync>
+}
+
+/**
  * RFC-342 / RFC-294 P0-A — the only scope mutation path.
  *
  * The serialized command contains only the memory target, expected memory
@@ -662,11 +676,12 @@ export function moveMemory(
   db: DbClient,
   contexts: DirectCommandContextFactory,
   context: CommandContext,
-  authorization: MemoryResourceScopeAuthorization,
+  authorizations: MemoryScopeAuthorizations,
   id: string,
   input: MemoryMoveRequest,
   hooks: MemoryMutationTestHooks = {},
 ): MoveMemoryResult {
+  const authorization = authorizations.resources
   const parsed = MemoryMoveRequestSchema.safeParse(input)
   if (!parsed.success) {
     throw new ValidationError('invalid-body', 'invalid move request', parsed.error.format())
@@ -711,8 +726,20 @@ export function moveMemory(
       actor,
       authorization,
     }
-    assertMemoryScopeManageableInTx(tx, scopeAuthority, previousScope, 'current')
-    assertMemoryScopeManageableInTx(tx, scopeAuthority, nextScope, 'destination')
+    assertMemoryScopeManageableInTx(
+      tx,
+      scopeAuthority,
+      authorizations.repositories,
+      previousScope,
+      'current',
+    )
+    assertMemoryScopeManageableInTx(
+      tx,
+      scopeAuthority,
+      authorizations.repositories,
+      nextScope,
+      'destination',
+    )
 
     const scopeTypeChanged = previousScope.scopeType !== nextScope.scopeType
     const scopeIdChanged = previousScope.scopeId !== nextScope.scopeId
@@ -751,8 +778,20 @@ export function moveMemory(
       actor: refreshedActor,
       authorization,
     }
-    assertMemoryScopeManageableInTx(tx, refreshedScopeAuthority, previousScope, 'current')
-    assertMemoryScopeManageableInTx(tx, refreshedScopeAuthority, nextScope, 'destination')
+    assertMemoryScopeManageableInTx(
+      tx,
+      refreshedScopeAuthority,
+      authorizations.repositories,
+      previousScope,
+      'current',
+    )
+    assertMemoryScopeManageableInTx(
+      tx,
+      refreshedScopeAuthority,
+      authorizations.repositories,
+      nextScope,
+      'destination',
+    )
 
     const nextVersion = row.version + 1
     const update = tx
@@ -866,6 +905,7 @@ function actorSourceOf(source: PrincipalSource): ActorSource {
 function assertMemoryScopeManageableInTx(
   tx: DbTxSync,
   authority: MemoryResourceScopeAuthority,
+  repositories: RepositoryScopeAuthorizationInTx<DbTxSync>,
   scope: MemoryScopeRef,
   side: 'current' | 'destination',
 ): void {
@@ -882,25 +922,21 @@ function assertMemoryScopeManageableInTx(
   }
 
   if (scope.scopeType === 'repo' || scope.scopeType === 'repo_group') {
-    const exists =
-      scope.scopeType === 'repo'
-        ? tx
-            .select({ id: cachedRepos.id })
-            .from(cachedRepos)
-            .where(eq(cachedRepos.id, scope.scopeId))
-            .get()
-        : tx
-            .select({ id: repoGroups.id })
-            .from(repoGroups)
-            .where(eq(repoGroups.id, scope.scopeId))
-            .get()
-    if (exists === undefined && !(side === 'current' && hasResourceAclBypass(actor))) {
+    // RFC-352 T4：仓库 / 仓库组的存在性与管理权改由 source-control 的 offered participant
+    // 回答。此前这里直接 select `cachedRepos` / `repoGroups`——那是跨 context 直读别人的表。
+    // 失败语义（`current` 侧持 bypass 时容忍目标已消失，走清理路径）仍归 memory 组装，
+    // 所以 source-control 不需要认识 Move 的 `side` 词汇。
+    const target: RepositoryScopeTarget = { kind: scope.scopeType, id: scope.scopeId }
+    const exists = repositories.exists(tx, target) as boolean
+    if (!exists && !(side === 'current' && hasResourceAclBypass(actor))) {
       throw new NotFoundError(
         'memory-scope-target-not-found',
         `${side} ${scope.scopeType} scope target not found`,
       )
     }
-    if (hasResourceAclBypass(actor)) return
+    if (repositories.canManage(tx, { hasResourceAclBypass: hasResourceAclBypass(actor) }, target)) {
+      return
+    }
     throw new ForbiddenError(
       'memory-scope-forbidden',
       `${side} ${scope.scopeType} memory scope requires resource-acl:bypass`,

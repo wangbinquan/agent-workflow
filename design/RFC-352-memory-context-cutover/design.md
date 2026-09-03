@@ -68,6 +68,15 @@ export interface RepositoryScopeAuthorizationInTx {
 - 错绑变异必红：把 `VersionedResourceRef<'agent'>` 传给它、或把 repo ref 传给 RC participant，编译期即失败
   （closed union，不共用一个 `ResourceRef`）。
 
+**与 RFC-294 `design.md:3441` 的签名偏离（一条，已落地，须知会）**：文档写的是单方法
+`assertManageable(authority, target)`；实现拆成 `exists(tx, target)` + `canManage(tx, subject, target)` 两问。
+理由是**错误的组装规则属于 memory，不属于 source-control**：memory 的 Move 对「当前 scope」与「目标 scope」
+用不同的失败语义——`current` 侧且持 bypass 时容忍目标行已消失（走清理路径），`destination` 侧一律 NotFound。
+把 `side: 'current' | 'destination'` 这套词汇塞进 source-control，等于让 SC 学会 memory 的 Move 语义。
+拆成两问后 SC 只回答自己知道的事实（行还在吗 / 这个主体能管吗），memory 保留它自己的 NotFound / Forbidden
+组装，两边既有的错误码与文案因此**逐字不变**。主体投影也收窄成 `{ hasResourceAclBypass: boolean }`，
+不接受完整 `Actor`、也不接受权限名字集合。
+
 ### 3.2 授权策略上移
 
 `application/memoryAuthorization.ts`：
@@ -82,6 +91,12 @@ interface MemoryAuthorizationDeps {
 
 - `canViewMemory` / `canManageMemory` 从 `infrastructure/sqliteMemoryCatalog.ts` 移到这里，
   **判据逐格不变**（含 RFC-248 AC-29 的 repo_group 同档、RFC-285 Q4 的 candidate 收窄）。
+- **一处例外，且是本 RFC 唯一的行为变更**：列表逐行盖的 `canManage`（UI 据此显示审批 / 编辑 / 归档按钮）
+  在合并前**两个 provider 已经漂了**——SQLite 侧的 `annotateMemoryManageRights` 停在 RFC-099 D12 的
+  「只有 owner」，PostgreSQL 侧的 `annotateManageRights` 跟上了 RFC-324 D9 的 `write | own`。同一个拿到
+  `write` 授权的人，SQLite 部署上看不到按钮、PostgreSQL 上看得到，**而两边的 API 门都放行**。合成一份判据
+  必须选一个值：用户 2026-09-03 裁定按 `write | own` 对齐（与 API 门一致、与 PostgreSQL 现行行为一致），
+  等于修掉 SQLite 部署上一个「界面欠了用户本来就有的能力」的缺口。矩阵有专门用例锁「列表标记 == API 门」。
 - `domain/scopeAuthorization.ts` 承载纯判定（给定「是否 bypass」「scopeType」「memory status」输出 view/manage），
   application 只负责取事实与调 participant。这样权限矩阵可以在 domain 上做**表驱动的 characterization 测试**。
 - `cli/start.ts:1917` 的 `memoryVisibility` 适配器改为直接引用 application 出口，不再自己包一层。
