@@ -13,7 +13,8 @@ import {
   assertPostgresqlTaskOwnerlessTx,
   assertPostgresqlTaskOwnerTx,
   type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
+  lockPostgresqlNodeRunAggregateRoot,
+  withPostgresqlNodeRunAggregateTransaction,
 } from './postgresqlTaskLifecycleTransaction'
 
 function whereQuery(input: NodeExecutionQuery) {
@@ -65,6 +66,11 @@ async function fencedTaskId(
   if (taskId === undefined) return null
   if (context === undefined) await assertPostgresqlTaskOwnerlessTx(tx, taskId)
   else await assertPostgresqlTaskOwnerTx(tx, context.token, now)
+  // 聚合根行锁。这几个写事务跑在 READ COMMITTED 上（见
+  // `withPostgresqlNodeRunAggregateTransaction` 的实测数据），同一个 node run 的并发写手
+  // 靠这把锁串起来。**必须在 owner fence 之后**：其余 owned 写手都是先 fence 再动
+  // `node_runs`，反序取锁会和它们死锁。
+  await lockPostgresqlNodeRunAggregateRoot(tx, nodeRunId)
   return taskId
 }
 
@@ -115,7 +121,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
   }
 
   async patch(input: Parameters<NodeExecutionPersistence['patch']>[0]): Promise<boolean> {
-    return await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    return await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -136,7 +142,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
     input: Parameters<NodeExecutionPersistence['upsertOutputs']>[0],
   ): Promise<void> {
     if (input.outputs.length === 0) return
-    await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -172,7 +178,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
   async replaceOutputs(
     input: Parameters<NodeExecutionPersistence['replaceOutputs']>[0],
   ): Promise<void> {
-    await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -211,7 +217,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
     input: Parameters<NodeExecutionPersistence['appendEvents']>[0],
   ): Promise<void> {
     if (input.events.length === 0) return
-    await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -239,7 +245,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
     input: Parameters<NodeExecutionPersistence['retagSessionEpochs']>[0],
   ): Promise<void> {
     if (input.supersededSessionIds.length === 0) return
-    await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    await withPostgresqlNodeRunAggregateTransaction(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,

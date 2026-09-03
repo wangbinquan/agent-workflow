@@ -15,11 +15,16 @@
 // 重试预算填不平：取证门同时要求 `httpErrors === 0` 与单请求 < 1000ms，加重试只会把尾延迟
 // 推高（托管 2 核上已量到 API max 1066.8ms）。
 import { describe, expect, test } from 'bun:test'
+import { getTableName, is, Table } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { withPostgresqlTaskAggregateTransaction } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import {
+  lockPostgresqlNodeRunAggregateRoot,
+  withPostgresqlNodeRunAggregateTransaction,
+  withPostgresqlTaskAggregateTransaction,
+} from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 
 const backendRoot = resolve(import.meta.dir, '..')
 
@@ -31,6 +36,11 @@ function literalText(query: unknown): string {
     if (typeof chunk === 'string') parts.push(chunk)
     else if (Array.isArray(chunk)) for (const item of chunk) walk(item)
     else if (chunk !== null && typeof chunk === 'object') {
+      // Tables and columns are objects, not strings: render their names so an
+      // assertion can tell `node_runs` from any other row lock.
+      const columnName = (chunk as { name?: unknown }).name
+      if (is(chunk, Table)) parts.push(getTableName(chunk))
+      else if (typeof columnName === 'string') parts.push(columnName)
       const value = (chunk as { value?: unknown }).value
       if (value !== undefined) walk(value)
     }
@@ -135,5 +145,80 @@ describe('RFC-349 single-aggregate task transaction', () => {
     )
     expect(doc).toContain('同一个聚合根')
     expect(doc).toContain('withPostgresqlSerializableTaskExecution')
+  })
+})
+
+// —————————————————————————————————————————————————————————————————————————————
+// 2026-09-03 第二例同类：node run 的写事务。
+//
+// 这几个是产品里最热的写——agent 每吐一行 stdout/stderr 就 `appendEvents` 一次，而它们
+// 全都先过 `assertPostgresqlTaskOwnerTx`（对 `task_execution_owners` 的条件 UPDATE）。
+// 那张表每个任务只有一行，**全新安装 / 小库割接后就是一张几行的小表**，小表上 predicate
+// lock 落到页这一级，于是每个任务的写都和其它任务的写互判读写依赖。对着真 PostgreSQL
+// （10 万任务的迁移目标库、只把 owners 缩到 4 行）实测：
+//
+//   8 并发满速     SERIALIZABLE  冲突率 81.2%，逃逸 234，156 ops/s，p95 106.4ms
+//                  聚合根行锁    冲突率  0.0%，逃逸   0，893 ops/s，p95  11.7ms
+//   4 并发 × 20 次/秒（真实速率）
+//                  SERIALIZABLE  冲突率 63.0%，逃逸   1，p95 50.7ms
+//                  聚合根行锁    冲突率  0.0%，逃逸   0，p95 24.9ms
+//
+// 生产规模（owners 10 万行）下 SERIALIZABLE 只有 0.25% 且零逃逸——所以这条回归锁的是
+// **小部署**这一形态，别因为「大库上看起来没事」把它改回去。
+describe('RFC-349 single-aggregate node run transaction', () => {
+  test('does not raise the isolation level', async () => {
+    const client = recordingClient()
+
+    await withPostgresqlNodeRunAggregateTransaction(client.db, async () => undefined)
+
+    for (const statement of client.statements) {
+      expect(
+        statement.toUpperCase(),
+        'SERIALIZABLE 回来了 ⇒ 小部署上的假冲突一起回来',
+      ).not.toContain('SERIALIZABLE')
+    }
+  })
+
+  test('the aggregate root lock is a FOR UPDATE on the node run row', async () => {
+    const client = recordingClient()
+
+    await withPostgresqlNodeRunAggregateTransaction(client.db, async (tx) => {
+      await lockPostgresqlNodeRunAggregateRoot(tx, 'node-run-1')
+    })
+
+    const locked = client.statements.join('\n').toLowerCase()
+    expect(locked).toContain('for update')
+    expect(locked, '锁错了表 ⇒ 同一个 node run 的并发写手不再互斥').toContain('node_runs')
+  })
+
+  test('every node-run writer uses it, and the fence takes the lock after the owner check', () => {
+    const source = readFileSync(
+      resolve(
+        backendRoot,
+        'src/modules/task-execution/infrastructure/postgresqlNodeExecutionPersistence.ts',
+      ),
+      'utf8',
+    )
+    expect(
+      source,
+      'node run 的写手回到 SERIALIZABLE ⇒ 小部署上 agent 输出会边写边丢',
+    ).not.toContain('withPostgresqlSerializableTaskExecution')
+    // patch / upsertOutputs / replaceOutputs / appendEvents / retagSessionEpochs
+    expect(source.split('withPostgresqlNodeRunAggregateTransaction(this.db').length - 1).toBe(5)
+
+    const fence = source.slice(
+      source.indexOf('async function fencedTaskId'),
+      source.indexOf('export class PostgresqlNodeExecutionPersistence'),
+    )
+    const owner = Math.max(
+      fence.indexOf('assertPostgresqlTaskOwnerlessTx'),
+      fence.indexOf('assertPostgresqlTaskOwnerTx'),
+    )
+    const lock = fence.indexOf('lockPostgresqlNodeRunAggregateRoot')
+    expect(owner, 'fence 不见了').toBeGreaterThan(-1)
+    expect(
+      lock,
+      '聚合根行锁跑到 owner fence 之前 ⇒ 和「先 fence 再动 node_runs」的其它写手锁序相反，会死锁',
+    ).toBeGreaterThan(owner)
   })
 })
