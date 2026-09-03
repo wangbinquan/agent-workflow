@@ -392,10 +392,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1916,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1（帧 + 闭包 + wrapper 参数，`9a1b608f5`）：task-execution 新增 domain（environmentChain / containerMembership / frameBackfill）、application（frameChain / frameBackfillJob）、composition（frameBackfill）与双 provider FrameBackfillStore 适配器、CLI `doctor --backfill-containers` 入口及两处 provider 启动接线；public/queries 新导出帧解析原语（resolveSourceFrame / containerMemberRuns 等）。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 因此各涨一次，全部是新增能力的账目，不是绕过。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -409,10 +406,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 478,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1（帧 + 闭包 + wrapper 参数，`9a1b608f5`）：task-execution 新增 domain（environmentChain / containerMembership / frameBackfill）、application（frameChain / frameBackfillJob）、composition（frameBackfill）与双 provider FrameBackfillStore 适配器、CLI `doctor --backfill-containers` 入口及两处 provider 启动接线；public/queries 新导出帧解析原语（resolveSourceFrame / containerMemberRuns 等）。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 因此各涨一次，全部是新增能力的账目，不是绕过。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -433,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6366,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1（帧 + 闭包 + wrapper 参数，`9a1b608f5`）：task-execution 新增 domain（environmentChain / containerMembership / frameBackfill）、application（frameChain / frameBackfillJob）、composition（frameBackfill）与双 provider FrameBackfillStore 适配器、CLI `doctor --backfill-containers` 入口及两处 provider 启动接线；public/queries 新导出帧解析原语（resolveSourceFrame / containerMemberRuns 等）。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 因此各涨一次，全部是新增能力的账目，不是绕过。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -457,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5286,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1（帧 + 闭包 + wrapper 参数，`9a1b608f5`）：task-execution 新增 domain（environmentChain / containerMembership / frameBackfill）、application（frameChain / frameBackfillJob）、composition（frameBackfill）与双 provider FrameBackfillStore 适配器、CLI `doctor --backfill-containers` 入口及两处 provider 启动接线；public/queries 新导出帧解析原语（resolveSourceFrame / containerMemberRuns 等）。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 因此各涨一次，全部是新增能力的账目，不是绕过。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -474,10 +462,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1008,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1（帧 + 闭包 + wrapper 参数，`9a1b608f5`）：task-execution 新增 domain（environmentChain / containerMembership / frameBackfill）、application（frameChain / frameBackfillJob）、composition（frameBackfill）与双 provider FrameBackfillStore 适配器、CLI `doctor --backfill-containers` 入口及两处 provider 启动接线；public/queries 新导出帧解析原语（resolveSourceFrame / containerMemberRuns 等）。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 因此各涨一次，全部是新增能力的账目，不是绕过。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -498,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25812,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1（帧 + 闭包 + wrapper 参数，`9a1b608f5`）：task-execution 新增 domain（environmentChain / containerMembership / frameBackfill）、application（frameChain / frameBackfillJob）、composition（frameBackfill）与双 provider FrameBackfillStore 适配器、CLI `doctor --backfill-containers` 入口及两处 provider 启动接线；public/queries 新导出帧解析原语（resolveSourceFrame / containerMemberRuns 等）。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 因此各涨一次，全部是新增能力的账目，不是绕过。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -518,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9a1b608f5d9e7422191c4595abb9745f1fefb3e3",
-    "contentDigest": "sha256:9bf9ebaaffff8162e93f06f86532f3f973690d9270c5cfc9d96e55ef1be39641",
+    "currentSnapshotSha": "624f1b3740eab217b1f31aa22abf61f03c31ddf7",
+    "contentDigest": "sha256:ed623f447046168cdca682be907878e8f6e3479c4f819326a79f3208e8fe87de",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
