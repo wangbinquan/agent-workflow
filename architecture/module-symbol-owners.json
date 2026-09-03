@@ -6,7 +6,7 @@
     "moduleFiles": 1301,
     "productionFiles": 2707,
     "sharedFiles": 156,
-    "symbolsIncludingFileRoots": 25888
+    "symbolsIncludingFileRoots": 25889
   },
   "entries": [
     {
@@ -131385,6 +131385,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "containerMemberRuns",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/containerMembership.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/containerMembership.ts#containerMemberRunsInRound",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "containerMemberRunsInRound",
       "targetContext": "task-execution",
       "targetLayer": "domain"
     },
@@ -311355,5 +311367,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce"
+  "sourceDigest": "sha256:fdd3eb46ebfa31534e03fd0485e3f7bf062f84cedbf5de581f96104f66ff295e"
 }

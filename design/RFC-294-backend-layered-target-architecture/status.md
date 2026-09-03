@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:fdd3eb46ebfa31534e03fd0485e3f7bf062f84cedbf5de581f96104f66ff295e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5312 |
+| `architectureExceptions` | 5313 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6408 |
+| `crossContextImports` | 6409 |
 | `facades` | 345 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25888 |
+| `moduleSymbolOwners` | 25889 |
 | `mutationEntrypoints` | 1920 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 1008 |
+| `publicSurfaces` | 1004 |
 | `transactionExternalEffects` | 479 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -202,7 +202,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3539 |
-| legacy-inbound | 1553 |
+| legacy-inbound | 1554 |
 | provider-mirror | 464 |
 | infrastructure-external | 400 |
 | offered-consumption | 149 |
@@ -217,7 +217,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3539 |
-| legacy-inbound | 1553 |
+| legacy-inbound | 1554 |
 | temporary-internal-debt | 115 |
 | off-dag-offered | 92 |
 | no-circular | 6 |
@@ -229,7 +229,7 @@
 | removeAfterWave | 数量 |
 | --- | --- |
 | W9 | 2744 |
-| W4-E1 | 843 |
+| W4-E1 | 844 |
 | W4-C | 442 |
 | W4-E0 | 220 |
 | W4 | 207 |
@@ -254,7 +254,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 246 |
-| task-execution | 210 |
+| task-execution | 206 |
 | collaboration | 125 |
 | identity-access | 65 |
 | system-operations | 63 |
@@ -271,13 +271,13 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 155 / 1008）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 1004）
 
 | context | 数量 |
 | --- | --- |
 | collaboration | 48 |
-| task-execution | 22 |
 | digital-employee | 18 |
+| task-execution | 16 |
 | system-operations | 12 |
 | code-capability | 11 |
 | event-center | 8 |

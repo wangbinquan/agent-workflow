@@ -426,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6408,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6409,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-354 PR-1 二次收红（`87aab47cb`）：复活证据改按停驻轮次取窗——task-execution domain 新增 `containerMemberRunsInRound`（owner +1），dispatchFrontier 改消费 public 的 `containerMemberRunsInRound` + `readWrapperRevivalIteration`（observed-import / exception 各 +1，同一条 legacy→public 边多一个符号）；同批撤掉 5 个零 consumer 的 public 帧原语（public-surfaces −4）。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5312,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5313,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-354 PR-1 二次收红（`87aab47cb`）：复活证据改按停驻轮次取窗——task-execution domain 新增 `containerMemberRunsInRound`（owner +1），dispatchFrontier 改消费 public 的 `containerMemberRunsInRound` + `readWrapperRevivalIteration`（observed-import / exception 各 +1，同一条 legacy→public 边多一个符号）；同批撤掉 5 个零 consumer 的 public 帧原语（public-surfaces −4）。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -461,7 +467,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1008,
+      "baseline": 1004,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -482,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25888,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25889,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-354 PR-1 二次收红（`87aab47cb`）：复活证据改按停驻轮次取窗——task-execution domain 新增 `containerMemberRunsInRound`（owner +1），dispatchFrontier 改消费 public 的 `containerMemberRunsInRound` + `readWrapperRevivalIteration`（observed-import / exception 各 +1，同一条 legacy→public 边多一个符号）；同批撤掉 5 个零 consumer 的 public 帧原语（public-surfaces −4）。退许可笔随后删除本条并重采。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce",
+    "sourceDigest": "sha256:fdd3eb46ebfa31534e03fd0485e3f7bf062f84cedbf5de581f96104f66ff295e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "2f03a70efd45277af782297040861c45ec623fce",
-    "contentDigest": "sha256:5e0d7db600543c0fa8eb2d8d402af5a6746d58460db38519e14206ac4705f280",
+    "currentSnapshotSha": "87aab47cbc5b8937c22d89134ccfceec9a5d0e4c",
+    "contentDigest": "sha256:a62e590b150fda0f2cb0b107f6f6538943d7453a2be6f43289ce2a6382477085",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
