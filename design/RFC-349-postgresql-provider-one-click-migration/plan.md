@@ -103,6 +103,14 @@ identity shutdown / 数据库关闭一步都没跑）、投影泵活过冻结窗
   覆盖不到的读 / 表达式面，每条都在 `bun:sqlite` 里可执行地钉住前提（SQLite 的 LIKE 不敏感、
   NULL 排序、`false` 即 0）。
 
+**留下的债（写进来是为了不被忘掉）**：AC-12 的 dual-provider oracle 覆盖的是 CAS / lease-fence /
+idempotency / outbox / ordering / apply-recovery，**不覆盖 node 执行的写路径**——缺陷 7（node run
+热写路径的 SSI 页级误报）能一路穿过去正是因为这个洞。它的正解不是把 oracle 扩到那条路径上
+（改成聚合根行锁之后两个 provider 的 SQL **本来就该不同**，比 SQL 会假红），而是给写矩阵加一组
+**真库并发**用例：同一个 node run 上并发 `replaceOutputs` / `appendEvents` 不得产出重复行或
+唯一键冲突。本轮已用一次性探针实测过（8 个写手压同一个 node run：0 冲突、0 错误、314 ops/s），
+但没有落成常驻门——需要在矩阵里先播种 task / node_run / owner 三张表，超出本轮范围。
+
 **唯一未关闭项**：`copying` 阶段的 688.5ms 事件循环停顿（门槛 500ms）。`verifying` 的那 2.5 秒
 已定位并修掉（`assertTargetCoverage` 的回执分组是 O(k²)，1 万个分片约 5000 万次同步拷贝）。
 已确认停顿**不是** CPU 饥饿——4 个并行 index build 打 850 万行表时旁观进程的最坏事件循环间隔

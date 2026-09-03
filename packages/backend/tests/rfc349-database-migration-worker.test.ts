@@ -42,6 +42,10 @@ describe('RFC-349 database migration Worker boundary', () => {
   test('the RPC protocol caps every cross-thread row batch', () => {
     const protocol = readBackend('src/platform/persistence/sqliteLogicalSourceProtocol.ts')
     expect(protocol).toContain('limit: z.number().int().min(1).max(10_000)')
-    expect(protocol).toContain('rows: z.array(CanonicalLogicalRowSchema).max(10_000)')
+    // 2026-09-03：行不再在传输层逐值校验（那一遍与 `createLogicalTableChunk` 的完全重复，
+    // `node_runs` 一块 14,750 个值、6.0ms，还整份复制出一个新对象图）。**本条守的是「条数
+    // 上限」**，它原样保留；逐值校验挪到哪里、坏行仍然被拒，由
+    // rfc349-worker-rows-single-validation.test.ts 钉住。
+    expect(protocol).toContain('rows: z.array(z.custom<CanonicalLogicalRow>()).max(10_000)')
   })
 })

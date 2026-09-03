@@ -4,7 +4,7 @@
 // locally so callers cannot smuggle an alternate table/column projection.
 
 import { z } from 'zod'
-import { CanonicalLogicalRowSchema, CanonicalLogicalValueSchema } from './logicalDatabaseArtifact'
+import { CanonicalLogicalValueSchema, type CanonicalLogicalRow } from './logicalDatabaseArtifact'
 
 export const SQLITE_LOGICAL_SOURCE_PROTOCOL_VERSION = 1 as const
 
@@ -83,7 +83,17 @@ export const SqliteLogicalSourceWorkerEventSchema = z.discriminatedUnion('type',
     .object({
       ...EventBase,
       type: z.literal('rows'),
-      rows: z.array(CanonicalLogicalRowSchema).max(10_000),
+      // 行**不在这里逐值校验**（只保留条数上限）：唯一的消费者是
+      // `createLogicalTableChunk`，它对整个 payload 跑 `LogicalTableChunkPayloadSchema`
+      // ——用的正是同一份 `CanonicalLogicalRowSchema`。在这里再验一遍是纯重复，而代价按
+      // 值计：`node_runs` 一块是 250 行 × 59 列 = 14,750 个判别联合，实测 **6.0ms/块**，
+      // 并且 Zod 会**整份复制**出一个新对象图（约 1.5 万个对象/块 × 5.28 万块）。迁移期间
+      // 的事件循环停顿在修掉两处每块重复工作之后只剩下 GC 尖峰，这份分配正是最大的一笔。
+      //
+      // 信封本身照旧严格：version / requestId / type 都验，协议漂移仍然当场判失败。行的
+      // 形状坏了会在 `createLogicalTableChunk` 以同样的 Zod 错误暴露——对调用方来说失败
+      // 面没有变，只是往后挪了一步（守卫见 rfc349-worker-rows-single-validation.test.ts）。
+      rows: z.array(z.custom<CanonicalLogicalRow>()).max(10_000),
     })
     .strict(),
   z.object({ ...EventBase, type: z.literal('closed') }).strict(),
