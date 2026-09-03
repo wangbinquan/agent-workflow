@@ -17,6 +17,12 @@
 //   其余一律算缺陷，尤其是 23502 not-null（identity 列渲染成 null 就长这样）、
 //   42703 未知列、42804 类型不匹配、42601 语法、42883 未知函数（SQLite 函数没打 shim）。
 //
+// 插入成功的表还要再**读一次回来**，逐列比对 JS 运行时类型：整数列在 PostgreSQL 投影里
+// 是 bigint，驱动按规范交回**字符串**，靠 Drizzle 的 `bigint({ mode: 'number' })` mapper 才
+// 变回 number——mapper 一旦漏掉，`createdAt` 之流会在 SQLite 上是 number、在 PostgreSQL 上
+// 是字符串（同一类偏差已经在聚合投影上真出过一次，见
+// rfc349-postgresql-numeric-projection.test.ts）。
+//
 // 每次插入都在事务里做完就回滚，数据库保持干净。
 
 import { describe, expect, test } from 'bun:test'
@@ -37,6 +43,18 @@ const OPERATION_ID = 'dbm_write_matrix_01'
 
 /** 合成值不满足业务约束 —— 与「这条 SQL 能不能在 PostgreSQL 上跑」无关。 */
 const EXPECTED_SQLSTATES = new Set(['23503', '23514', '22003', '22P02'])
+
+/** 读回来时每种逻辑 codec 该有的 JS 运行时类型（null 一律放行）。 */
+const RUNTIME_TYPE: Record<string, (value: unknown) => boolean> = {
+  boolean: (value) => typeof value === 'boolean',
+  'epoch-milliseconds': (value) => typeof value === 'number',
+  integer: (value) => typeof value === 'number',
+  real: (value) => typeof value === 'number',
+  'json-text': (value) => typeof value === 'string',
+  text: (value) => typeof value === 'string',
+  'text-identity': (value) => typeof value === 'string',
+  'opaque-bytes': (value) => value instanceof Uint8Array,
+}
 
 function sqlStates(error: unknown): readonly string[] {
   const codes: string[] = []
@@ -97,6 +115,29 @@ function minimalValues(facade: object): Record<string, unknown> {
     restore()
   }
   return values
+}
+
+/** Drizzle 属性名 -> contract 里那一列的 logical codec。 */
+function columnPropertyCodecs(facade: object): Map<string, string> {
+  const contract = buildLogicalSchemaContract()
+  const restore = selectDatabaseSchemaProvider('sqlite')
+  try {
+    const tableName = getTableName(facade as Parameters<typeof getTableName>[0])
+    const columns = contract.tables.find(
+      (candidate) => candidate.sourceTable === tableName,
+    )?.columns
+    const byPhysical = new Map((columns ?? []).map((column) => [column.name, column.logicalCodec]))
+    const out = new Map<string, string>()
+    for (const [property, candidate] of Object.entries(facade)) {
+      const name = (candidate as { name?: unknown }).name
+      if (typeof name !== 'string') continue
+      const codec = byPhysical.get(name)
+      if (codec !== undefined) out.set(property, codec)
+    }
+    return out
+  } finally {
+    restore()
+  }
 }
 
 function sqliteTableFacades(): Map<string, object> {
@@ -167,6 +208,24 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
                 .insert(facade as Parameters<typeof db.insert>[0])
                 .values(minimalValues(facade) as never)
                 .run()
+              const rows = (await tx
+                .select()
+                .from(facade as Parameters<typeof tx.select>[0] as never)
+                .limit(1)) as unknown as Record<string, unknown>[]
+              const row = rows[0]
+              if (row !== undefined) {
+                const byProperty = columnPropertyCodecs(facade)
+                for (const [property, codec] of byProperty) {
+                  const value = row[property]
+                  if (value === null || value === undefined) continue
+                  const check = RUNTIME_TYPE[codec]
+                  if (check === undefined || check(value)) continue
+                  defects.push(
+                    `${table.sourceTable}.${property}: ${codec} 读回来是 ${typeof value} ` +
+                      '⇒ codec mapper 漏了，两个 provider 的运行时类型会不一致',
+                  )
+                }
+              }
               // Roll the row back: the matrix proves the statement runs, not that
               // a synthetic row belongs in the database.
               throw new Error('__rollback__')

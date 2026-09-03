@@ -483,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25709,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349：拷贝循环不再写完再读回来，新增导出 persistLogicalTableChunk 与 PersistedLogicalTableChunk（写路径把写下去的那一份原样交回）。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -504,7 +501,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "40b76d0df5bbc0c0c846edc3e755b400f1aaccb4",
-    "contentDigest": "sha256:0891f1013e236edb885171ee9b0e46fb484ceaf4d5a847251e7d1fdc7e411884",
+    "contentDigest": "sha256:5c3c4449baea85ab0615aeed14ce5eef85974dcdf2a8fafc88e89827a7bee649",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
