@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-03）：[RFC-354 节点语义统一：参数 / 返回值 / 闭包 + 帧（全部 14 种节点，任意深度嵌套）](design/RFC-354-wrapper-as-node/proposal.md)。**
+> 三件套已落档，**批准前不动任何生产代码**。起点是用户问「校验不允许 loop 嵌 loop，能不能直接放开」——不能：
+> `wrapper-loop-nested` 遮的是真缺陷（`node_runs` 只有扁平 `iteration`，外层第 2 轮起内层静默 no-op，`scheduler-audit-s06` 锁着）。
+> 追问「包装器为什么不按节点抽象、和子工作流有什么区别」后对账：wrapper 只是「kind + 平铺兄弟 id」，没有输入端口，体内靠
+> **穿墙边** + 「iteration ≤ 窗口取最高」偷读外部值——「跨 scope 可见性」整类规则都来自这个墙洞；`call-workflow` 才是真的
+> 「节点 + 子图」。用户裁决用现成抽象：「输入边就是输入，输出边就是输出，穿墙边是闭包」——入边是参数（loop / git 不再拒入边，
+> 端口按边推导）、出边是返回值、外→体内直连边是闭包捕获（容器执行打开时按环境绑定，读点沿帧链查找、数值窗口退役）、
+> 每次执行体是一个帧 = `container_run_id`（= 既有 wrapper 代际行）、`scope_path` 派生、clarify 同挂帧、任意深度嵌套。
+> 用户再追问「所有节点是不是都是入参 / 输出 / 闭包的统一抽象」，逐 kind 对账「没有」（连接三种写法、review / output 双写、
+> loop 绑定是字段不是边、clarify 无行判完成），用户裁决**并进本 RFC 一次做完**：PortRef 字段全部退役由边表达、loop 返回值
+> 改 `wrapper-output` 边界边、系统通道折进端口表、clarify 落 `skipped` 行、schema v5→6 + 纯升级器（32 示例 golden）。
+> 唯一收缩项 C-7（v6 YAML 向下不兼容）待用户确认；D1 平铺存储已确认；三个 PR；设计门待用户决定。
+
 > 🚧 **进行中 RFC（Draft，待用户批准，2026-09-03）：[RFC-353 Knowledge Evolution bounded context 归位（RFC-294 W4-E3）](design/RFC-353-knowledge-evolution-context-cutover/proposal.md)。**
 > 三件套已落档，**批准前不动任何生产代码**。`modules/knowledge-evolution` 今天在源码里根本不存在，它该拥有的散在四处：
 > `services/fusion.ts`(1218) / `modules/memory/public/fusion.ts`(201) / memory infrastructure 的 fusion 双 provider(2062) /
