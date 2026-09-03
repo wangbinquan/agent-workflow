@@ -17,6 +17,7 @@ import {
   MemoryListFilterSchema,
   MemoryMoveRequestSchema,
   MemoryPatchRequestSchema,
+  MemoryListPageQuerySchema,
   MemoryScopeSchema,
   MemoryStatusSchema,
   MemoryTagModeSchema,
@@ -181,6 +182,30 @@ export function mountMemoryRoutes(
       // （含 body / 不含 body）同收。
       const dropCandidates = <T extends { status: string }>(rows: T[]): T[] =>
         hasResourceAclBypass(actor) ? rows : rows.filter((r) => r.status !== 'candidate')
+      // RFC-352 T8 —— 任一分页参数出现才切换封套；不传的调用逐字节保持旧的全量 `{items}`
+      // 形状（与 `GET /api/cached-repos` 同一约定）。既有 6 个前端消费者与
+      // `memory.list-memories.v1` MCP 工具因此一行都不用改，其中几个语义上本来就要全量。
+      const pageQuery = MemoryListPageQuerySchema.safeParse({
+        cursor: c.req.query('cursor'),
+        limit: c.req.query('limit'),
+      })
+      if (!pageQuery.success) {
+        throw new ValidationError('invalid-filter', 'invalid page parameters')
+      }
+      const wantsPage = pageQuery.data.cursor !== undefined || pageQuery.data.limit !== undefined
+      if (wantsPage) {
+        if (includeRaw === 'body') {
+          // 分页只服务摘要列表面；带正文的审批队列是全量队列，不分页（RFC-352 T8 裁决）。
+          throw new ValidationError('invalid-filter', 'include=body does not support pagination')
+        }
+        const page = await catalog.queries.listPage(
+          scopeAuthority,
+          parsed.data,
+          { cursor: pageQuery.data.cursor ?? null, limit: pageQuery.data.limit ?? 50 },
+          { includeCandidates: hasResourceAclBypass(actor) },
+        )
+        return c.json({ items: page.items, nextCursor: page.nextCursor })
+      }
       if (includeRaw === 'body') {
         const items = await catalog.queries.listWithBody(parsed.data)
         const visible = await catalog.queries.filterVisible(scopeAuthority, items)

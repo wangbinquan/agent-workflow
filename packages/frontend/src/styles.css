@@ -18664,6 +18664,16 @@ fieldset.settings-card {
 
 .memory-by-scope__list,
 .memory-scoped-list,
+/* RFC-352 T8 —— 列表底部的「加载更多」。与 .repo-operations__more /
+   .task-operations__more / .intent-recent__more 同形；四处已经重复，
+   下一次动分页 UI 时值得抽成公共件（CLAUDE.md §Frontend UI consistency）。 */
+.memory-all-list__more {
+  display: flex;
+  justify-content: center;
+  padding: 10px 22px;
+  border-top: 1px solid var(--border);
+}
+
 .memory-all-list {
   list-style: none;
   padding: 0;

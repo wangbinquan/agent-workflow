@@ -203,10 +203,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 38,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。",
-      "allowGrowth": {
-        "why": "RFC-349：新增 rfc349-postgresql-write-matrix.integration.test.ts —— 逐表对真 PostgreSQL 执行真 INSERT 的写矩阵，没有一次性外置库时条件跳过，与既有三条 RFC-349 真库集成用例同形。"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。"
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -429,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6310,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6311,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-352 T8（RFC-294 W4-E2）：`GET /api/memories` 新增可选分页（任一分页参数出现才切封套，无参调用逐字节不变）。新增 memory 的 domain 分页原语、application 分页编排与两个 provider 的 keyset 批取，因此 owner / observed-import / exception 各涨一次。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -450,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5248,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5249,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-352 T8（RFC-294 W4-E2）：`GET /api/memories` 新增可选分页（任一分页参数出现才切封套，无参调用逐字节不变）。新增 memory 的 domain 分页原语、application 分页编排与两个 provider 的 keyset 批取，因此 owner / observed-import / exception 各涨一次。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -485,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25709,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25729,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-352 T8（RFC-294 W4-E2）：`GET /api/memories` 新增可选分页（任一分页参数出现才切封套，无参调用逐字节不变）。新增 memory 的 domain 分页原语、application 分页编排与两个 provider 的 keyset 批取，因此 owner / observed-import / exception 各涨一次。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:739ad8dd680b159cbf4b1eacc3be2764490b4f4d0acbce0bacf5a9812dff9a92",
+    "sourceDigest": "sha256:f5b5c010aa724f36bf98ce934808b8fb696b6b4487b56ab01f37bbfdf1f24581",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -503,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "40b76d0df5bbc0c0c846edc3e755b400f1aaccb4",
-    "contentDigest": "sha256:a2e068082d868abcf23c7eee52c05ff29d0bd63482fb296c31fdc608de528ae7",
+    "currentSnapshotSha": "4f69feffaeb09740ec9aee817dbd78bbef5353cb",
+    "contentDigest": "sha256:2690a033a4008da8d0656eb7a19ee9e98789ed5fee9d33743bfd4f0dc1c2b74a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

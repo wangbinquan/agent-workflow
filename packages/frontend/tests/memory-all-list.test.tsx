@@ -83,10 +83,41 @@ afterEach(() => {
 })
 
 describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', () => {
+  // RFC-352 T8 —— 分页是本次**新增**的能力，正向覆盖必须有：
+  // 服务端给了 nextCursor 才出「加载更多」，点一次要带着游标再请求并把两页拼起来；
+  // nextCursor 为 null 时按钮不该出现（否则用户会一直点一个什么都不加载的按钮）。
+  test('分页：有 nextCursor 才出加载更多，点击后带游标续拉并拼接', async () => {
+    const urls: string[] = []
+    installFetch(({ url }) => {
+      urls.push(url)
+      const cursor = new URL(url).searchParams.get('cursor')
+      return new Response(
+        JSON.stringify(
+          cursor === null
+            ? { items: [mkMem({ id: 'mem_1' })], nextCursor: 'CURSOR_1' }
+            : { items: [mkMem({ id: 'mem_2' })], nextCursor: null },
+        ),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    })
+    wrap()
+    await screen.findByTestId('memory-all-mem_1-archive')
+    // 首页恒发 limit —— 不发就落回旧的全量形状，封套解析会炸。
+    expect(urls[0]).toContain('limit=50')
+    expect(urls[0]).not.toContain('cursor=')
+
+    fireEvent.click(await screen.findByTestId('memory-all-load-more'))
+    await screen.findByTestId('memory-all-mem_2-archive')
+    expect(urls.some((u) => u.includes('cursor=CURSOR_1'))).toBe(true)
+    // 两页都在，前一页没被替换掉。
+    expect(screen.getByTestId('memory-all-mem_1-archive')).toBeTruthy()
+    await waitFor(() => expect(screen.queryByTestId('memory-all-load-more')).toBeNull())
+  })
+
   test('Approved / Archived reuses the task-list view switch without page-tab semantics', async () => {
     installFetch(
       () =>
-        new Response(JSON.stringify({ items: [mkMem()] }), {
+        new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -113,7 +144,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
   test('default view is Approved → GET ?status=approved', async () => {
     const calls = installFetch(
       () =>
-        new Response(JSON.stringify({ items: [mkMem()] }), {
+        new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -136,11 +167,12 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
         return new Response(
           JSON.stringify({
             items: [mkMem({ id: 'mem_arc', status: 'archived' })],
+            nextCursor: null,
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
-      return new Response(JSON.stringify({ items: [mkMem()] }), {
+      return new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -156,7 +188,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
   test('Archive opens shared Dialog; Cancel closes it and DOES NOT POST', async () => {
     const calls = installFetch(
       () =>
-        new Response(JSON.stringify({ items: [mkMem()] }), {
+        new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         }),
@@ -184,7 +216,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
   test('Archive → Confirm POSTs /archive', async () => {
     const calls = installFetch(({ method }) => {
       if (method === 'GET') {
-        return new Response(JSON.stringify({ items: [mkMem()] }), {
+        return new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -216,7 +248,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     })
     installFetch(({ method }) => {
       if (method === 'GET') {
-        return new Response(JSON.stringify({ items: [mkMem()] }), {
+        return new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -256,7 +288,10 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     const calls = installFetch(({ method }) => {
       if (method === 'GET') {
         return new Response(
-          JSON.stringify({ items: [mkMem({ id: 'mem_a' }), mkMem({ id: 'mem_b' })] }),
+          JSON.stringify({
+            items: [mkMem({ id: 'mem_a' }), mkMem({ id: 'mem_b' })],
+            nextCursor: null,
+          }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
@@ -298,7 +333,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
     let attempts = 0
     const calls = installFetch(({ method }) => {
       if (method === 'GET') {
-        return new Response(JSON.stringify({ items: [mkMem()] }), {
+        return new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -335,7 +370,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
   test('Delete also routes through the shared Dialog, not window.confirm', async () => {
     const calls = installFetch(({ method }) => {
       if (method === 'GET') {
-        return new Response(JSON.stringify({ items: [mkMem()] }), {
+        return new Response(JSON.stringify({ items: [mkMem()], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -369,11 +404,14 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
         const u = new URL(url)
         if (u.searchParams.get('status') === 'archived') {
           return new Response(
-            JSON.stringify({ items: [mkMem({ id: 'mem_arc', status: 'archived' })] }),
+            JSON.stringify({
+              items: [mkMem({ id: 'mem_arc', status: 'archived' })],
+              nextCursor: null,
+            }),
             { status: 200, headers: { 'content-type': 'application/json' } },
           )
         }
-        return new Response(JSON.stringify({ items: [] }), {
+        return new Response(JSON.stringify({ items: [], nextCursor: null }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -412,6 +450,7 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
                     mkMem({ id: 'mem_b', status: 'archived' }),
                   ]
                 : [],
+            nextCursor: null,
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
@@ -459,14 +498,18 @@ describe('MemoryAllList — Approved/Archived filter + in-app confirm dialog', (
         return new Response(
           JSON.stringify({
             items: [mkMem({ id: 'mem_arc', status: 'archived', canManage: false })],
+            nextCursor: null,
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
         )
       }
-      return new Response(JSON.stringify({ items: [mkMem({ canManage: false })] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ items: [mkMem({ canManage: false })], nextCursor: null }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      )
     })
     wrap()
     const archiveBtn = (await screen.findByTestId('memory-all-mem_1-archive')) as HTMLButtonElement

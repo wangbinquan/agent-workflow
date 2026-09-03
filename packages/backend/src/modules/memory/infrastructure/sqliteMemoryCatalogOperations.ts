@@ -1,3 +1,4 @@
+import { listMemoryPage } from '../application/listPage'
 import { createRepositoryScopeAuthorizationInTx } from '@/modules/source-control/application/repositoryScopeAuthorization'
 import { sqliteRepositoryScopeExistenceReads } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
 import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
@@ -13,6 +14,7 @@ import type {
 } from '../public/catalog'
 import {
   annotateMemoryManageRights,
+  listMemoryPageBatch,
   archiveMemory,
   canManageMemory,
   canViewMemory,
@@ -58,6 +60,32 @@ export function composeSqliteMemoryCatalogOperations(input: {
       scopeAuthority: MemoryScopeAuthority,
       rows: readonly T[],
     ) => annotateMemoryManageRights(input.db, authority(scopeAuthority), rows),
+    // RFC-352 T8：批取由本 provider 提供，三层过滤与游标语义在 application 共用一份。
+    listPage: async (scopeAuthority, filter, page, options) => {
+      const result = await listMemoryPage(
+        {
+          fetchBatch: (after, size) => listMemoryPageBatch(input.db, filter, { after, size }),
+          filterVisible: (rows) =>
+            filterMemoriesByScopeVisibility(input.db, authority(scopeAuthority), rows),
+        },
+        filter,
+        page,
+        options,
+      )
+      const stamped = await annotateMemoryManageRights(
+        input.db,
+        authority(scopeAuthority),
+        result.items,
+      )
+      // `createdAt` 只为游标存在，不上 wire——`MemorySummary` 的形状不因分页而变。
+      return {
+        items: stamped.map((row) => {
+          const { createdAt: _createdAt, ...rest } = row
+          return rest
+        }),
+        nextCursor: result.nextCursor,
+      }
+    },
   }
   const commands: MemoryCatalogCommands = {
     createManual: (command) => createManualCandidate(input.db, command),

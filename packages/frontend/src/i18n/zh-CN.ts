@@ -6288,6 +6288,7 @@ export interface Resources {
   }
   // RFC-041 PR4: platform memory UI surface.
   memory: {
+    loadMore: string
     title: string
     empty: string
     sectionNavLabel: string
@@ -14657,6 +14658,7 @@ export const zhCN: Resources = {
     toolInput: '输入',
   },
   memory: {
+    loadMore: '加载更多记忆',
     title: '平台长期记忆',
     empty: '暂无沉淀',
     sectionNavLabel: '记忆分区',

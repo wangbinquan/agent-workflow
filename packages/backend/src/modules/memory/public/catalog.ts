@@ -53,6 +53,23 @@ export interface MemoryCatalogQueries {
     authority: MemoryScopeAuthority,
     rows: readonly T[],
   ): Promise<Array<T & { readonly canManage: boolean }>>
+  /**
+   * RFC-352 T8 —— 分页列表。**只有传了分页参数的调用者走这条路**；不传的仍走 `list`，
+   * wire 逐字节不变。
+   *
+   * 三层查询后过滤（标签 / scope 可见性 / 候选收窄）都在实现里按 keyset 迭代累积，
+   * 因此返回的一页**可能不满 `limit` 却仍带 `nextCursor`**——判到底只看 `nextCursor === null`。
+   * `includeCandidates` 由调用方按 `resource-acl:bypass` 传入（RFC-285 Q4）。
+   */
+  listPage(
+    authority: MemoryScopeAuthority,
+    filter: MemoryListFilter,
+    page: { readonly cursor: string | null; readonly limit: number },
+    options: { readonly includeCandidates: boolean },
+  ): Promise<{
+    readonly items: Array<MemorySummary & { readonly canManage: boolean }>
+    readonly nextCursor: string | null
+  }>
 }
 
 export interface MemoryCatalogCommands {

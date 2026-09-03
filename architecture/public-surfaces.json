@@ -3,9 +3,9 @@
     "consumers": 859,
     "exactEntrypointFiles": 62,
     "governedFieldSurfaces": 5,
-    "methods": 889,
+    "methods": 890,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18906,
+    "recursiveFields": 18932,
     "symbols": 954
   },
   "entries": [
@@ -66554,10 +66554,10 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 26,
+        "maxMethods": 27,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 185,
-        "maxUnionVariants": 77
+        "maxTransitiveLeafFields": 211,
+        "maxUnionVariants": 91
       },
       "consumerEdgeIds": [
         "import:3851ede7999917e9ee31",
@@ -67211,6 +67211,145 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:82867d7d706f853a6771"
+          ],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3851ede7999917e9ee31",
+            "import:82867d7d706f853a6771"
+          ],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:82867d7d706f853a6771"
+          ],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:authority.actor.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:filter",
+          "type": "z.infer<typeof MemoryListFilterSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:options.includeCandidates",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:page.cursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:page.cursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$parameter:page.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$return.items[]",
+          "type": "z.infer<typeof MemorySummarySchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:82867d7d706f853a6771"
+          ],
+          "fieldPath": "catalog.queries.$method:listPage.$return.items[].canManage",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "catalog.queries.$method:listPage.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "catalog.queries.$method:listWithBody.$parameter:filter",
           "type": "z.infer<typeof MemoryListFilterSchema>"
         },
@@ -67645,6 +67784,11 @@
           "consumerEdgeIds": [],
           "name": "listJobs",
           "signatureDigest": "sha256:9078dcb1b65c12d5eb866790a10d869989d92823e24b060159e4fadfe80e108e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "listPage",
+          "signatureDigest": "sha256:305acab18c105895f9e78bd10d2f2de1d4c43bd3113f302a26d6b7308aae03d3"
         },
         {
           "consumerEdgeIds": [],
@@ -152633,7 +152777,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:739ad8dd680b159cbf4b1eacc3be2764490b4f4d0acbce0bacf5a9812dff9a92",
+  "sourceDigest": "sha256:f5b5c010aa724f36bf98ce934808b8fb696b6b4487b56ab01f37bbfdf1f24581",
   "targetContexts": [
     "collaboration",
     "development-automation",

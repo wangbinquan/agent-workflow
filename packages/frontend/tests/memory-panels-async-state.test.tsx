@@ -103,7 +103,8 @@ const PANELS: PanelCase[] = [
   {
     name: 'all memories',
     node: () => <MemoryAllList />,
-    emptyResponse: { items: [] },
+    // RFC-352 T8：该面板传 `limit` ⇒ 服务端返回分页封套，空态也带 nextCursor。
+    emptyResponse: { items: [], nextCursor: null },
     assertEmpty: () => expect(screen.getByTestId('empty-state')).toBeTruthy(),
   },
   {

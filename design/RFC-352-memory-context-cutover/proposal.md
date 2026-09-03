@@ -84,7 +84,11 @@ consumer 面）、`modules/memory/composition.ts → services/memoryDistillSched
   RFC-285 Q4 的 candidate 只对资源管理员可读也原样保留。
 - **不做安全加固**。RFC-294 `plan.md §8` 给 E2 写的「不可见 count 无侧信道」是安全项，按用户 2026-08-26 的硬规则
   （存在性 oracle 一类一律不立项）**不承接**；本 RFC 只做它的功能半边——分页下推与列表分页正确性。
-- **不改 schema、不加 migration、不改 wire / WS 消息、不改前端**。
+- **不改 schema、不加 migration、不改 WS 消息**。**wire 与前端：只增不改**——用户 2026-09-03 选定在本 RFC 内
+  新增记忆列表分页（选项 B），原先「零 wire / 零前端」的承诺按此修订：`GET /api/memories` 新增两个**可选**
+  query 参数（`cursor` / `limit`），**任一出现才切换到 `{items, nextCursor}` 封套；不传的调用逐字节保持旧的
+  `{items}` 形状**（与 `GET /api/cached-repos` 同一约定）。6 个既有前端消费者与 `memory.list-memories.v1`
+  MCP 工具因此一行都不用改；只有 `MemoryAllList` 主动接入分页。
 - **不重开 RFC-342 已批准的 Move / PATCH 行为**，也不改蒸馏的模型 / prompt / 输出协议。
 - 不把 `services/runtime/opencode/distillSessionCapture.ts` 带走（归 W4-E4b）。
 - 不动 `services/fusion.ts` 自身（归 W4-E3），本 RFC 只保证它消费的 memory public 面稳定。
@@ -139,6 +143,7 @@ current-approved」的既有语义（`memoryInject.ts:16-20` 的设计不变量�
 | 蒸馏入队 / 去抖 / 重试 / 取消 / job 详情 / session 视图 | 不变                                                                                                                                                                                                                                                                        |
 | 蒸馏 worker 的可暂停语义（RFC-349 冻结）                | 不变                                                                                                                                                                                                                                                                        |
 | 列表逐行 `canManage`（UI 按钮可见性）                   | **SQLite 部署上放宽到与 API 门一致**：`write` 授权者开始看到审批 / 编辑 / 归档按钮。这不是新授权——API 门（`canManageMemory`）本来就放行、PostgreSQL 部署本来就显示；是两个 provider 判据漂移造成的 UI 欠权。合并判据时必须选一个值，用户 2026-09-03 裁定取 `write \| own`。 |
+| 记忆列表分页                                            | **新增可选能力**：`GET /api/memories` 支持 `cursor` / `limit`，`MemoryAllList` 出现「加载更多」。不传分页参数的调用与迁移前逐字节相同，既有 6 个前端消费者与 `memory.list-memories.v1` MCP 工具不受影响；审批队列刻意不分页（待办队列全量看得见更合适）。                   |
 
 ## 7. 验收标准
 
@@ -151,11 +156,14 @@ current-approved」的既有语义（`memoryInject.ts:16-20` 的设计不变量�
 - **AC-5** 权限矩阵 characterization 测试：六种 scope × 三种角色（普通用户 / 资源管理员 / ACL bypass）× 读/管
   的判定结果与迁移前**逐格相同**（迁移前先落这张表作为 oracle）。
 - **AC-6** `routes/memories.ts` / `routes/memoryDistillJobs.ts` 只 decode/call/map：路由文件内无 DB / ACL / OCC / 审计。
-- **AC-7** 列表分页下推到 provider，两个 provider 的分页结果逐页相同。
+- **AC-7** 列表分页：逐页拼接的结果与全量查询**逐条相同**（顺序一致、不重不漏）；分页项的字段集与全量项逐字
+  相同（游标用的 `createdAt` 不上 wire）；标签 / scope 可见性 / 候选收窄三层在分页路径上与全量一致；坏游标
+  显式报 400 而非静默从头；批数封顶时返回不满的一页 + 有效游标，判到底只看 `nextCursor === null`。
 - **AC-8** 蒸馏链路的既有行为 oracle 全绿：去抖合并、指数退避、`DISTILL_MAX_ATTEMPTS`、候选级容错
   （单条 zod 失败不炸整批）、`recoverRunning`、重试 / 取消。
 - **AC-9** `memory-distill` 仍注册为可暂停 handle，RFC-349 冻结守卫绿。
 - **AC-10** W4-E2 桶中 memory 自有的 exact ids 归零；转交的 18 条（fusion 9 / runtime 3 / off-dag 6）各带 owner 与
   removeWave 记账，全局债不增。
-- **AC-11** 零 schema / migration / wire / WS / 前端改动；`architecture:write` 重采后各 wave 分母不回升。
+- **AC-11** 零 schema / migration / WS 改动；wire 与前端**只增不改**：不带分页参数的 `GET /api/memories`
+  响应与迁移前逐字节相同，既有消费者零改动。`architecture:write` 重采后各 wave 分母不回升。
 - **AC-12** exact-SHA hosted CI 终态成功（并发 push 取消时按含本提交的后继 SHA 判）。

@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, ilike, inArray, or } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, ilike, inArray, lt, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -18,6 +18,8 @@ import {
 
 import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
 import type { ResourceAccess } from '@agent-workflow/shared'
+import { listMemoryPage, type MemoryPageRow } from '../application/listPage'
+import type { MemoryPageAnchor } from '../domain/listPagination'
 import { createRepositoryScopeAuthorizationInTx } from '@/modules/source-control/application/repositoryScopeAuthorization'
 import { postgresqlRepositoryScopeExistenceReads } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
 import type {
@@ -368,6 +370,52 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     )
   }
 
+  /**
+   * RFC-352 T8 —— keyset 批取（与 SQLite 侧同形）。**刻意不做任何过滤**：
+   * `accumulateMemoryPage` 用「返回行数少于 size」判源已耗尽，这里少返一行就会让列表
+   * 在中间截断。排序带 `id` 决胜位——`created_at` 是毫秒，批量蒸馏会撞。
+   */
+  const fetchPageBatch = async (
+    filter: MemoryListFilter,
+    after: MemoryPageAnchor | null,
+    size: number,
+  ): Promise<MemoryPageRow[]> => {
+    const conditions = []
+    if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))
+    if (filter.scopeType !== undefined) conditions.push(eq(memories.scopeType, filter.scopeType))
+    if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
+    if (filter.search !== undefined) {
+      const term = `%${filter.search}%`
+      conditions.push(or(ilike(memories.title, term), ilike(memories.bodyMd, term))!)
+    }
+    if (after !== null) {
+      conditions.push(
+        or(
+          lt(memories.createdAt, after.createdAt),
+          and(eq(memories.createdAt, after.createdAt), lt(memories.id, after.id)),
+        )!,
+      )
+    }
+    const where = conditions.length === 0 ? undefined : and(...conditions)
+    const base = input.db
+      .select({ ...SUMMARY_COLUMNS, createdAt: memories.createdAt })
+      .from(memories)
+    const rows = await (where === undefined
+      ? base.orderBy(desc(memories.createdAt), desc(memories.id)).limit(size).all()
+      : base.where(where).orderBy(desc(memories.createdAt), desc(memories.id)).limit(size).all())
+    const jobIds = rows.flatMap((row) =>
+      row.status === 'candidate' && row.distillJobId !== null ? [row.distillJobId] : [],
+    )
+    const languages = await loadJobLanguages(jobIds)
+    return rows.map((row) => ({
+      ...summaryOf(
+        row,
+        row.distillJobId === null ? null : (languages.get(row.distillJobId) ?? null),
+      ),
+      createdAt: row.createdAt,
+    }))
+  }
+
   const getById = async (id: string): Promise<MemoryWithChain | null> => {
     const rows = await input.db.select().from(memories).where(eq(memories.id, id)).limit(1).all()
     const first = rows[0]
@@ -395,6 +443,27 @@ export function composePostgresqlMemoryCatalogOperations(input: {
 
   const queries: MemoryCatalogQueries = {
     list: listRows,
+    // RFC-352 T8：批取由本 provider 提供，三层过滤与游标语义在 application 共用一份。
+    listPage: async (scopeAuthority, filter, page, options) => {
+      const result = await listMemoryPage(
+        {
+          fetchBatch: (after, size) => fetchPageBatch(filter, after, size),
+          filterVisible: (rows) => queries.filterVisible(scopeAuthority, rows),
+        },
+        filter,
+        page,
+        options,
+      )
+      const stamped = await queries.annotateManageRights(scopeAuthority, result.items)
+      // `createdAt` 只为游标存在，不上 wire。
+      return {
+        items: stamped.map((row) => {
+          const { createdAt: _createdAt, ...rest } = row
+          return rest
+        }),
+        nextCursor: result.nextCursor,
+      }
+    },
     async listWithBody(filter = {}) {
       const conditions = []
       if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))

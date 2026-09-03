@@ -370,6 +370,31 @@ export const MemoryListFilterSchema = z.object({
 })
 export type MemoryListFilter = z.infer<typeof MemoryListFilterSchema>
 
+// RFC-352 T8 —— `GET /api/memories` 的可选分页。**任一参数出现才切换封套**，
+// 无参调用保持旧的全量 `{ items }` 形状逐字节不变（与 `GET /api/cached-repos` 同一约定）。
+// 这样 6 个既有前端消费者与 `memory.list-memories.v1` MCP 工具一行都不用改，其中
+// 好几个语义上本来就要全量（待审徽标只数候选、融合对话框要全部 approved）。
+export const MemoryListPageQuerySchema = z.object({
+  /** 不透明游标，由服务端签发；客户端只回传，不解析。 */
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+})
+export type MemoryListPageQuery = z.infer<typeof MemoryListPageQuerySchema>
+
+/**
+ * 分页封套。`nextCursor` 为 null 表示到底。
+ *
+ * ⚠️ 一页**可能不满** `limit` 却仍带 `nextCursor`：可见性过滤发生在查询之后
+ * （agent / workflow scope 随资源可见性），为避免「几乎什么都看不见」的调用者触发无界扫描，
+ * 服务端给每次请求的扫描批数封顶；触顶时返回不满的一页 + 有效游标，客户端继续拉即可。
+ * 因此判「到底」的唯一依据是 `nextCursor === null`，**不能**用 `items.length < limit`。
+ */
+export const MemoryListPageSchema = z.object({
+  items: z.array(MemorySummarySchema),
+  nextCursor: z.string().nullable(),
+})
+export type MemoryListPage = z.infer<typeof MemoryListPageSchema>
+
 // RFC-327: `GET /api/memories/facets` 的查询面——在调用者可见的记忆集合上聚合标签。
 // status 缺省 approved（路由兜底，与注入链路只取 approved 一致）。
 export const MemoryFacetsQuerySchema = z.object({

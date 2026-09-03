@@ -18,7 +18,7 @@
 // a separate concern owned by this module: see canViewMemory / canManageMemory
 // (RFC-099 D12), which follow the scope resource's ACL.
 
-import { and, desc, eq, gt, inArray, like, or, getTableColumns } from 'drizzle-orm'
+import { and, desc, eq, gt, inArray, like, lt, or, getTableColumns } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -71,6 +71,7 @@ import type {
   ResourceMemoryScopeRef,
   ResourceScopeAccess,
 } from '@/modules/resource-catalog/public/types'
+import type { MemoryPageAnchor } from '../domain/listPagination'
 import {
   decideMemoryRowManageStamp,
   decideMemoryScopeManage,
@@ -250,6 +251,84 @@ export async function createManualCandidate(
 // fields) so the approval queue can render the candidate body inline for review
 // — the default `MemorySummary[]` shape stays the cheap path for grouped /
 // scope-browsing UIs that only need titles + chips.
+/**
+ * RFC-352 T8 —— 列表 WHERE 的唯一构造点（`listMemories` 与分页批取共用）。
+ * 标签不在这里：tags 是 JSON 列，SQL 判不可靠，仍在内存里判（见 `matchesTagFilter`）。
+ */
+function memoryListWhere(filter: MemoryListFilter) {
+  const conds = []
+  if (filter.status !== undefined) conds.push(eq(memories.status, filter.status))
+  if (filter.scopeType !== undefined) conds.push(eq(memories.scopeType, filter.scopeType))
+  if (filter.scopeId !== undefined) conds.push(eq(memories.scopeId, filter.scopeId))
+  if (filter.search !== undefined) {
+    const term = `%${filter.search}%`
+    conds.push(or(like(memories.title, term), like(memories.bodyMd, term))!)
+  }
+  return conds.length > 0 ? and(...conds) : undefined
+}
+
+/**
+ * RFC-352 T8 —— keyset 批取：按 `(created_at, id)` 降序取严格位于 `after` 之后的一批。
+ *
+ * **刻意不做任何过滤**（标签 / 可见性 / 候选收窄都交给调用方的 `keepVisible`）：
+ * `accumulateMemoryPage` 用「返回行数少于 size」判定源已耗尽，这里少返一行都会让列表
+ * 在中间截断。返回行带 `createdAt` 供游标使用，出口处由路由剥掉——`MemorySummary`
+ * 的 wire 形状不因分页而变。
+ *
+ * 排序加了 `id` 决胜位：`created_at` 是毫秒，批量蒸馏会在同一毫秒建多条，
+ * 只按 created_at 做游标必然漏行或重复。
+ */
+export async function listMemoryPageBatch(
+  db: DbClient,
+  filter: MemoryListFilter,
+  page: { after: MemoryPageAnchor | null; size: number },
+): Promise<Array<MemorySummary & MemoryPageAnchor>> {
+  const base = memoryListWhere(filter)
+  const keyset =
+    page.after === null
+      ? undefined
+      : or(
+          lt(memories.createdAt, page.after.createdAt),
+          and(eq(memories.createdAt, page.after.createdAt), lt(memories.id, page.after.id)),
+        )
+  const conds = [base, keyset].filter((c) => c !== undefined)
+  const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds)
+  const query = db
+    .select({ ...SUMMARY_COLUMNS, createdAt: memories.createdAt })
+    .from(memories)
+    .orderBy(desc(memories.createdAt), desc(memories.id))
+    .limit(page.size)
+  const narrow = (await (where === undefined ? query : query.where(where))) as Array<
+    Omit<MemoryRow, 'bodyMd'> & { createdAt: number }
+  >
+  const jobIds = new Set<string>()
+  for (const row of narrow) {
+    if (row.status === 'candidate' && row.distillJobId !== null) jobIds.add(row.distillJobId)
+  }
+  const langs = await loadJobOutputLangs(db, [...jobIds])
+  return narrow.map((row) => ({
+    id: row.id,
+    scopeType: row.scopeType,
+    scopeId: row.scopeId,
+    title: row.title,
+    status: row.status,
+    tags: parseTags(row.tags),
+    approvedAt: row.approvedAt,
+    version: row.version,
+    distillAction: row.distillAction,
+    fusedIntoSkill: row.fusedIntoSkill ?? null,
+    fusedIntoSkillId: row.fusedIntoSkillId ?? null,
+    fusedIntoSkillVersion: row.fusedIntoSkillVersion ?? null,
+    outputLang:
+      row.status === 'candidate'
+        ? row.distillJobId === null
+          ? null
+          : (langs.get(row.distillJobId) ?? null)
+        : null,
+    createdAt: row.createdAt,
+  })) as Array<MemorySummary & MemoryPageAnchor>
+}
+
 export async function listMemories(
   db: DbClient,
   filter: MemoryListFilter,
@@ -265,17 +344,7 @@ export async function listMemories(
   filter: MemoryListFilter = {},
   options: { includeBody?: boolean } = {},
 ): Promise<Memory[] | MemorySummary[]> {
-  const conds = []
-  if (filter.status !== undefined) conds.push(eq(memories.status, filter.status))
-  if (filter.scopeType !== undefined) conds.push(eq(memories.scopeType, filter.scopeType))
-  if (filter.scopeId !== undefined) conds.push(eq(memories.scopeId, filter.scopeId))
-  if (filter.search !== undefined) {
-    const term = `%${filter.search}%`
-    const titleLike = like(memories.title, term)
-    const bodyLike = like(memories.bodyMd, term)
-    conds.push(or(titleLike, bodyLike)!)
-  }
-  const where = conds.length > 0 ? and(...conds) : undefined
+  const where = memoryListWhere(filter)
   // RFC-311：**摘要路径不读正文**。`toSummary` 本来就把 `bodyMd` 丢掉，而此前 SQL 走的
   // 是 `select()` 全行——每一行都跟着把 markdown 正文读出来再在 JS 里扔掉。
   // /api/overview 的记忆计数正是这条路径：为了出一个数字，把整张表的正文搬了一遍

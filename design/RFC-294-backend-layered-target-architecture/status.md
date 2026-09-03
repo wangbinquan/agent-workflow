@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:739ad8dd680b159cbf4b1eacc3be2764490b4f4d0acbce0bacf5a9812dff9a92`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f5b5c010aa724f36bf98ce934808b8fb696b6b4487b56ab01f37bbfdf1f24581`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1894 |
+| backend production TS 文件 | 1896 |
 | `services/` 文件 | 347 |
-| `modules/**` 文件 / 非空 context | 1265 / 16 |
+| `modules/**` 文件 / 非空 context | 1267 / 16 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 5248 |
+| `architectureExceptions` | 5249 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6310 |
+| `crossContextImports` | 6311 |
 | `facades` | 347 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25709 |
+| `moduleSymbolOwners` | 25729 |
 | `mutationEntrypoints` | 1910 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 954 |
@@ -80,7 +80,7 @@
 | source-control / application | 10 |
 | collaboration / composition | 9 |
 | intent / domain | 9 |
-| memory / application | 8 |
+| memory / application | 9 |
 | development-automation / engine | 7 |
 | event-center / infrastructure | 7 |
 | memory / public | 7 |
@@ -96,13 +96,13 @@
 | event-center / public | 5 |
 | identity-access / composition | 5 |
 | integration / public | 5 |
+| memory / domain | 5 |
 | resource-catalog / domain | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
 | development-automation / public | 4 |
 | integration / domain | 4 |
 | intent / application | 4 |
-| memory / domain | 4 |
 | system-operations / composition | 4 |
 | system-operations / public | 4 |
 | digital-employee / domain | 3 |
@@ -198,7 +198,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3493 |
+| legacy-outbound | 3494 |
 | legacy-inbound | 1546 |
 | provider-mirror | 457 |
 | infrastructure-external | 395 |
@@ -213,7 +213,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3493 |
+| legacy-outbound | 3494 |
 | legacy-inbound | 1546 |
 | temporary-internal-debt | 111 |
 | off-dag-offered | 85 |
@@ -225,7 +225,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2711 |
+| W9 | 2712 |
 | W4-E1 | 841 |
 | W4-C | 436 |
 | W4-E0 | 214 |

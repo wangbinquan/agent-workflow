@@ -1,7 +1,7 @@
 # RFC-352 实施计划 — Memory bounded context 合同归位
 
 - 状态：**Approved / In Progress**（用户 2026-09-03 批准 D1～D6 与 AC-1～AC-12 并授权完整实现）
-- 进度：T1 ✅ / T2 ✅ / T3 ✅ / T4 ✅（`49b714d89` → `9954be7bd` → 本批）；T5～T10 未开
+- 进度：T1～T4 ✅ / T6 ✅ / T7 ✅ / T8 ✅（分页，用户 2026-09-03 选定选项 B 在本 RFC 内做）；T9 部分完成（facade 8 → 3，`services/memory.ts` 按归属转交）；T10 未开
 - current-source pin：`6752ec8c7`
 - 开工分母（账本重分桶 `48078eaa2` 之后）：W4-E2 exact edge **67**、facade **8**
 

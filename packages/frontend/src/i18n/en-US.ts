@@ -8541,6 +8541,7 @@ export const enUS: Resources = {
     toolInput: 'input',
   },
   memory: {
+    loadMore: 'Load more memories',
     title: 'Platform long-term memory',
     empty: 'No learned context yet',
     sectionNavLabel: 'Memory sections',

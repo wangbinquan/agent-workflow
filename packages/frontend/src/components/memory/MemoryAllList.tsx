@@ -12,9 +12,9 @@
 // Backend already exposes `?status=archived` listing + POST /unarchive.
 
 import { useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import type { MemorySummary } from '@agent-workflow/shared'
+import { MemoryListPageSchema, type MemoryListPage } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { Dialog } from '@/components/Dialog'
@@ -24,13 +24,13 @@ import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
 import { Segmented } from '@/components/Segmented'
 import { sortByRecency } from '@/lib/memory'
+import { usePagedList } from '@/hooks/usePagedList'
 import { FuseDialog } from '@/components/fusion/FuseDialog'
 import { MemoryEditDialog } from './MemoryEditDialog'
 import { MemoryRow } from './MemoryRow'
 
-interface ListResponse {
-  items: MemorySummary[]
-}
+/** RFC-352 T8：列表页大小。 */
+const MEMORY_PAGE_SIZE = 50
 
 export type MemoryAllView = 'approved' | 'archived'
 
@@ -76,9 +76,19 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
   // full Memory (the list endpoint returns MemorySummary only) and feed it
   // to <MemoryEditDialog>.
   const [editingId, setEditingId] = useState<string | null>(null)
-  const list = useQuery<ListResponse>({
+  // RFC-352 T8：改用统一的分页原语。`limit` 恒发——空 query 会落回旧全量形状
+  // （服务端「任一分页参数出现才切封套」，buildUrl 又会丢弃 undefined）。
+  const list = usePagedList<MemoryListPage>({
     queryKey: ['memories', 'all', view],
-    queryFn: ({ signal }) => api.get<ListResponse>('/api/memories', { status: view }, signal),
+    keepPreviousData: true,
+    fetchPage: async (cursor, signal) => {
+      const payload = await api.get<unknown>(
+        '/api/memories',
+        { status: view, limit: MEMORY_PAGE_SIZE, cursor: cursor ?? undefined },
+        signal,
+      )
+      return MemoryListPageSchema.parse(payload)
+    },
   })
 
   const invalidate = () => {
@@ -277,7 +287,7 @@ export function MemoryAllList({ view: controlledView, onViewChange }: MemoryAllL
 }
 
 interface BodyArgs {
-  list: ReturnType<typeof useQuery<ListResponse>>
+  list: ReturnType<typeof usePagedList<MemoryListPage>>
   view: MemoryAllView
   archivePendingId: string | null
   unarchivePendingIds: ReadonlySet<string>
@@ -322,7 +332,7 @@ function renderBody(args: BodyArgs) {
     }
     return <LoadingState />
   }
-  const rows = sortByRecency(list.data.items)
+  const rows = sortByRecency(list.data.pages.flatMap((page) => page.items))
 
   return (
     <>
@@ -406,6 +416,22 @@ function renderBody(args: BodyArgs) {
               />
             )
           })}
+          {list.hasNextPage === true && (
+            <li className="memory-all-list__more">
+              {/* 与 /repos、/tasks 同形：名字固定、不 disabled（RFC-311 的注记）。 */}
+              <button
+                type="button"
+                className="btn btn--sm"
+                data-testid="memory-all-load-more"
+                aria-busy={list.isFetchingNextPage || undefined}
+                onClick={() => {
+                  if (!list.isFetchingNextPage) void list.fetchNextPage()
+                }}
+              >
+                {t('memory.loadMore')}
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </>
