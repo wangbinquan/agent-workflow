@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6409,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1 二次收红（`87aab47cb`）：复活证据改按停驻轮次取窗——task-execution domain 新增 `containerMemberRunsInRound`（owner +1），dispatchFrontier 改消费 public 的 `containerMemberRunsInRound` + `readWrapperRevivalIteration`（observed-import / exception 各 +1，同一条 legacy→public 边多一个符号）；同批撤掉 5 个零 consumer 的 public 帧原语（public-surfaces −4）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5313,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1 二次收红（`87aab47cb`）：复活证据改按停驻轮次取窗——task-execution domain 新增 `containerMemberRunsInRound`（owner +1），dispatchFrontier 改消费 public 的 `containerMemberRunsInRound` + `readWrapperRevivalIteration`（observed-import / exception 各 +1，同一条 legacy→public 边多一个符号）；同批撤掉 5 个零 consumer 的 public 帧原语（public-surfaces −4）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -489,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25889,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-1 二次收红（`87aab47cb`）：复活证据改按停驻轮次取窗——task-execution domain 新增 `containerMemberRunsInRound`（owner +1），dispatchFrontier 改消费 public 的 `containerMemberRunsInRound` + `readWrapperRevivalIteration`（observed-import / exception 各 +1，同一条 legacy→public 边多一个符号）；同批撤掉 5 个零 consumer 的 public 帧原语（public-surfaces −4）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -510,7 +501,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "255daa3108f2495bfdbde1c7d0ae12185773f2fc",
-    "contentDigest": "sha256:2abf15274e4774cdb526ac99c8f5d00b2f5148048c31442c30145a27eaaf7307",
+    "contentDigest": "sha256:a62e590b150fda0f2cb0b107f6f6538943d7453a2be6f43289ce2a6382477085",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
