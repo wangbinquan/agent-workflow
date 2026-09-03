@@ -120,6 +120,8 @@ RFC-352 已经为这一类立下处置——收成一个 owner 出口——本�
 | D3 | skill-restore coordinator 迁不迁？         | **迁**；RC 保留 skill 版本机制并提供 `SkillVersionParticipantInTx`          |
 | D4 | 三个 provenance 查询面落不落？             | **只落 KE 的 `GetSkillProvenance`**                                        |
 | D5 | 溯源的用户可见形态？                       | **版本行展开列融入的记忆**（不新开页面）                                    |
+| D6 | ACL 面板撞 409 之后草稿留还是丢？（本刀实施期间由 webkit nightly 暴出，见 §8） | **丢弃草稿、刷回服务端权威值**；同步改 RFC-170 §8 与代码注释 |
+| D7 | D6 在哪儿做？                              | **直接做并计入本 RFC**（不另立 RFC）                                        |
 
 ## 7. 验收标准
 
@@ -150,3 +152,29 @@ RFC-352 已经为这一类立下处置——收成一个 owner 出口——本�
 - **AC-12** W4-E3 桶中 KE 自有的 exact ids 归零；转交出去的逐条带 owner 与 removeWave 记账，全局债不增；
   `architecture:write` 重采后各波分母不回升。
 - **AC-13** exact-SHA hosted CI 终态成功（并发 push 取消时按含本提交的后继 SHA 判）。
+
+## 8. 实施期间纳入的范围外修复（用户 2026-09-03 裁决 D6/D7）
+
+T5 推上主干后，`e2e-webkit-nightly`（run `33752894225`）红在
+`e2e/rfc319-iam-oidc-and-acl.spec.ts` 的 IAM-33。查明后**不是本 RFC 引入的回归，而是一处既有的
+渲染时序竞态**，且暴露出设计文档与既有断言互相矛盾：
+
+- RFC-170 `design.md §8`（G3-8）原写「**409 保留草稿并提示 reload**」，`AclPanel.tsx` 的
+  `onError` 也照它写——只 `invalidateQueries`，不动草稿与 OCC fence；
+- 而 IAM-33 判据二要求「面板收敛回权威快照」、判据三要求「在刷新后的快照上重做同一改动必须成功」
+  （后者需要 fence 被重新武装），**与那句设计意图正好相反**；
+- 两者今天同时成立靠的是一帧偶然：刷新期间若恰好有一帧 `query.fetchStatus === 'fetching'`，
+  `liveCanManage` 转 false，组件走 `!liveCanManage` 分支清掉 `dirty` 并置空 fence。
+  那一帧被 React 批掉就两边落空，面板停在陈旧草稿上（显示 `public`，服务端是 `private`）。
+
+**用户裁决**：以服务端为准、草稿丢弃（D6），直接做并计入本 RFC（D7）。落地：
+
+- `AclPanel.tsx` 的 `onError` 显式 `draftBaselineRef.current = null` + `setDirty(false)`，
+  不再依赖渲染时序；**刻意不推进 `manageSessionRef`**——推进它会让 `mutationBelongsToSession`
+  转 false，把错误提示一起吞掉，用户就不知道保存失败了；
+- RFC-170 `design.md §8` 落勘误段，写清原意图、矛盾、以及为什么改；
+- 回归锁 `packages/frontend/tests/rfc353-acl-conflict-draft.test.tsx`（先红后绿：撤掉修复后
+  「刷回权威值」当场红）。
+
+**验收补充**：**AC-14** ACL 面板撞 409 后草稿丢弃、面板显示服务端权威值，且弹窗不关、错误提示仍在；
+组件层锁死，不依赖渲染时序。

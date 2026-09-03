@@ -19,6 +19,7 @@
 | **T9**   | 【新功能】`GetSkillProvenance`：memory 加只读投影 `listFusedInto`，KE 加 domain 投影 + application query + `GET /api/skills/:id/provenance`                     | T5        | `modules/memory/public/queries.ts`、`routes/skills.ts`             |
 | **T10**  | 【新功能】前端：`SkillVersionHistory` 的 fusion 行展开区（复用公共原语）+ i18n + 单测                                                                          | T9        | `packages/frontend/src/components/skill/SkillVersionHistory.tsx`   |
 | **T11**  | 删 `services/fusion.ts` 与 `services/skillVersion.ts`（consumer 归零后）；`services/intent/journalArtifacts.ts` 的 type import 改指 RC                          | T5–T9     | 两个 facade + intent 一行                                          |
+| **T13**  | 【范围外纳入，用户裁决 D6/D7】ACL 面板 409 冲突后丢弃草稿、刷回权威值；同步 RFC-170 §8 勘误与代码注释；组件层回归锁 | —         | `packages/frontend/src/components/AclPanel.tsx`、RFC-170 `design.md` |
 | **T12**  | `architecture:write` 重采 + 收口（`STATE.md` / `design/plan.md` / RFC-294 §3.2 N17 与 §W4-E 勾选 + exact-SHA CI 取证）                                          | T11       | `architecture/*`（与并发 session 排队）                            |
 
 ## 2. PR 拆分建议

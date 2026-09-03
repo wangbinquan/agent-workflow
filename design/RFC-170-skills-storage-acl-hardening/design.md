@@ -181,7 +181,24 @@ source 禁用/删除/手动 rescan/懒加载与启动 reconcile 都会删/改 sk
 - **被引用用户 active 校验进 CAS 同事务（G5-P5）**：现 `resourceAcl.ts:261` 在事务**前** `await` 查 nextOwner/grantee 是否 active，之后才进同步事务——用户可在两查之间被 disable 仍成为 owner/grantee。修复：把 owner/grantee 的存在+active 校验用 `.get`/`.all` 挪进 CAS `dbTxSync` 内（`txSync.ts:19` 禁 `await`，故只能同步 driver 查），与 revision CAS、grants full-replace 原子完成；校验失败→整事务 rollback + 422。
 
 - **external skill 禁 owner transfer（G3-2）**：source-backed / hand-imported external 的注入 body 来自可变 externalPath，通用 owner transfer 后原 registrar 仍控内容 →「owner 才可改资源」在 external 成假承诺。故 **skill 类型资源的 ACL PUT 对 external（`authority_kind != 'managed'`）拒绝 owner transfer**（原 registrar/importer 永为内容控制者；grant/visibility 仍可改）；managed skill 与其余五类资源 transfer 不受限。
-- **前端 ACL 管线全链（G3-8，plan T13 必含，否则六类 ACL PUT 全 400）**：shared `ResourceAcl` 加 `aclRevision`；PUT body 加 `expectedResourceId`+`expectedAclRevision`；`AclPanel` 从 GET 持有 revision、PUT 成功后原子推进、409 保留草稿并提示 reload；补 transfer 与普通 grant/visibility 两条前端测试。**六类资源同步**（agents/skills/mcps/plugins/workflows/workgroups 的 AclPanel 复用同一组件、一次改全受益）。
+- **前端 ACL 管线全链（G3-8，plan T13 必含，否则六类 ACL PUT 全 400）**：shared `ResourceAcl` 加 `aclRevision`；PUT body 加 `expectedResourceId`+`expectedAclRevision`；`AclPanel` 从 GET 持有 revision、PUT 成功后原子推进、**409 丢弃草稿并刷回服务端权威值**（见下方 RFC-353 勘误）；补 transfer 与普通 grant/visibility 两条前端测试。**六类资源同步**（agents/skills/mcps/plugins/workflows/workgroups 的 AclPanel 复用同一组件、一次改全受益）。
+
+> **勘误（RFC-353，2026-09-03，用户裁决）**：本节原写「**409 保留草稿并提示 reload**」，代码也照它写
+> （`AclPanel.tsx` 的 `onError` 只 `invalidateQueries`，不动草稿与 fence）。实施 RFC-353 时查明两件事：
+>
+> 1. **那条意图与既有 e2e 断言相反**。`e2e/rfc319-iam-oidc-and-acl.spec.ts` 的 IAM-33 判据二要求
+>    「面板收敛回权威快照，而不是继续显示那份陈旧草稿」，判据三还要求「在刷新后的快照上重做同一个改动必须成功」
+>    ——后者需要 OCC fence 被**重新武装**，与本节原文「fence 冻结、重试继续冲突」正好相反。
+> 2. **两者今天同时成立纯属偶然**：刷新期间若恰好有一帧观察到 `query.fetchStatus === 'fetching'`，
+>    `liveCanManage` 转 false，组件走进 `!liveCanManage` 分支清掉 `dirty` 并把 fence 置空，下一帧再用新数据
+>    重新武装。那一帧被 React 批掉（或 refetch 太快）就两边都落空——面板停在陈旧草稿上，
+>    用户对着一个与服务端不符的界面继续操作。webkit nightly run `33752894225` 的 IAM-33 正是这么红的
+>    （chromium 上一直绿，只是时序不同）。
+>
+> **用户 2026-09-03 裁定：以服务端为准，草稿丢弃。** `onError` 现在显式
+> `draftBaselineRef.current = null` + `setDirty(false)`，不再依赖渲染时序；`manageSessionRef` 刻意不推进
+> ——推进它会让 `mutationBelongsToSession` 转 false，把 `describeApiError` 的错误提示一起吞掉，
+> 用户就不知道保存失败了。回归锁：`packages/frontend/tests/rfc353-acl-conflict-draft.test.tsx`。
 
 ## 9. 技能创建 reservation（V9）
 

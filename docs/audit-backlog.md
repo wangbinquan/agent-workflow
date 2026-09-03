@@ -3871,6 +3871,39 @@ null-safe；`listCasesPage` 增 `membership` 过滤 + adapter 不再对 shared �
    系统任务」不会出现在「共享给我」。补法：`owner IS NULL OR owner <> ?`（与上一条共用一个
    null-safe helper 时一并修）。
 
+## rfc310 职位模版草稿卡在 Windows e2e 上没刷出来（2026-09-03 记，RFC-353 T3 期间撞到）
+
+**现象**：`Playwright e2e (windows-latest shard 3/4)`，run `33756781371`（`c5b48d918`）红在
+`e2e/rfc310-zero-config-onboarding.spec.ts:110`，含 retry #1 两次同样：
+
+```
+Locator: locator('.employee-summary-card').filter({ hasText: 'First development role' })
+Expected substring: "Draft"
+Error: element(s) not found          ← 卡片压根没出现，不是文案不对
+```
+
+**归属：不是该轮改动引入的**，三条证据一起给（单独任何一条都不够）：
+
+1. **后端写路径没坏**：同一用例 `:95` 的 `expect(createdDraft.status()).toBe(201)` 是**过了**的，
+   POST 的 payload 也断言过。草稿在服务端已经建出来，红的是随后点完「Cancel editing」、
+   编辑器关掉之后列表 15 秒内没渲染出那张 summary card——是**前端列表刷新时序**。
+2. **改动面零命中**：`1e7f94be6 → c5b48d918` 的代码增量只有两笔（另一笔 `11aa1f246` 在
+   `packages/*/src` 与 `e2e/` 下 0 文件），改的是 memory participant / `legacy/skillVersion.ts` /
+   两个 `skillRepository.ts`；这 8 个非测试文件里 `employee|jobTemplate|job_template`
+   命中数为 **0**，而本用例走的是 digital-employee 的 job template 列表，表和路径都不搭界。
+3. **同 shard 其余 120 例通过**；近 12 个 main run 里该 job 均为 success，这是首红。
+
+**重跑 attempt 2 通过**——按仓规这**不作为通过依据**，只与上面三条一起构成「既有 flake」的归因。
+
+**与 `docs/dev-gotchas.md` 里 `<Select>` 焦点抢跑那条是同支 spec、不同机制**（那条是 `setTimeout(0)`
+交焦点前 Enter 抢跑、落在 trigger 上；这条是列表没刷出来），**不要硬归进同一个家族**——
+硬归会让下一个人按错误的方向去等焦点。
+
+**待办**：`rfc310-zero-config-onboarding.spec.ts:110` 那处 `expect(durableDraft).toContainText('Draft')`
+之前缺一个「列表已刷新」的事件锚点。取消编辑走的是本地状态回退，没有网络往返可等，
+所以要么等 `.employee-summary-card` 的数量变化，要么让编辑器关闭后显式 `waitFor` 列表查询 idle。
+未修之前 Windows 腿会间歇性再红。
+
 ## REPO-39 的 `partial` 断言与分相位 worker 之间有竞态（2026-09-03 记，RFC-338/349 维护 worker 面）
 
 `e2e/rfc319-ops-events-and-repo-sweeps.spec.ts:1397` 的最后一条断言会间歇性红（实测：

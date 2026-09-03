@@ -262,12 +262,32 @@ export function AclPanel({
       ) {
         return
       }
-      // RFC-170 §8: a failed save (esp. a 409 revision conflict) means the panel's
-      // held revision is stale — refetch the authoritative owner/grants/revision.
-      // The draft fence deliberately stays frozen: retrying the same stale draft
-      // must keep conflicting until the user closes/reopens and reviews a fresh
-      // snapshot. The error text shows via describeApiError.
+      // A failed save (esp. a 409 revision conflict) means the panel's held
+      // revision is stale — refetch the authoritative owner/grants/revision AND
+      // drop the draft so the panel converges on what the server actually has.
+      //
+      // RFC-353（2026-09-03，用户裁决）改了这里的语义。RFC-170 §8 原本写的是
+      // 「409 保留草稿并提示 reload」，代码也照它写；但那样面板会**停在**用户那份
+      // 陈旧草稿上（比如显示 public，而服务端已经是 private），用户对着一个与服务端
+      // 不符的界面继续操作。用户当日裁定：冲突之后以服务端为准，草稿丢弃。
+      //
+      // ⚠️ 别把 `setDirty(false)` 去掉：在它之前，面板能刷回权威值**纯属偶然**——
+      // 靠刷新期间恰好有一帧观察到 `query.fetchStatus === 'fetching'`，使 `liveCanManage`
+      // 转 false 而走进下面那个 effect 的 `!liveCanManage` 分支。那一帧被 React 批掉
+      // （或 refetch 太快）就不会发生，面板继续显示陈旧草稿。e2e IAM-33 正是这么红的
+      // （webkit nightly run 33752894225）。现在这条路径是显式的，不再依赖渲染时序。
+      //
+      // fence 一并置空：`draftBaselineRef` 留着旧 revision 会让用户在新快照上重做同一个
+      // 改动仍然 409（IAM-33 判据三要防的「冲突把面板永久锁死」）。置空后下面的 effect
+      // 会用刷新回来的数据重新武装它。
+      //
+      // 不动 `manageSessionRef`：那是权限会话边界，推进它会让 `mutationBelongsToSession`
+      // 转 false，把 `describeApiError` 那条错误提示一起吞掉——用户就不知道保存失败了。
       void qc.invalidateQueries({ queryKey: ['acl', aclUrl, request.authRevision] })
+      draftBaselineRef.current = null
+      setDirty(false)
+      setTransferOpen(false)
+      setTransferTo([])
     },
   })
   resetSaveRef.current = save.reset
