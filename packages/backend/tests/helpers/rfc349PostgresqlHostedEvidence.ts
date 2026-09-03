@@ -321,7 +321,9 @@ export const RFC349_T10_FULL_REGRESSION_TOPOLOGY = Object.freeze([
   {
     lane: 'backend',
     evidenceRole: 'provider-neutral-full-regression',
-    command: 'bun test --isolate --randomize --seed=349001',
+    // Sharded 4-way like Main CI: the un-sharded lane could not survive one VM.
+    command: 'bun test --isolate --randomize --seed=349001 --shard=${{ matrix.shard }}/4',
+    shards: 4,
   },
   {
     lane: 'frontend',

@@ -252,8 +252,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - lane: backend
-            shard: 0
+          # The backend suite is sharded 4-way for the same reason Main CI shards
+          # it: one VM cannot carry the whole suite. Run un-sharded, this lane was
+          # killed twice by `The runner has received a shutdown signal` at ~20m /
+          # ~23m with ZERO failing assertions and at two different files, while the
+          # identical file set and env (RUN_GIT_NETWORK/RUN_CHAOS) passed green in
+          # Main CI's four ~7m ubuntu shards at the same SHA. Bun assigns files to
+          # shards deterministically by path, so every file still runs exactly once
+          # and coverage of this lane is unchanged.
+          - lane: backend-1
+            shard: 1
+          - lane: backend-2
+            shard: 2
+          - lane: backend-3
+            shard: 3
+          - lane: backend-4
+            shard: 4
           - lane: frontend
             shard: 0
           - lane: e2e-1
@@ -288,12 +302,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run full backend regression (provider-neutral baseline)
-        if: matrix.lane == 'backend'
+        if: startsWith(matrix.lane, 'backend-')
         env:
           RUN_GIT_NETWORK: '1'
           RUN_CHAOS: '1'
         shell: bash
-        run: bun test --isolate --randomize --seed=349001
+        run: bun test --isolate --randomize --seed=349001 --shard=${{ matrix.shard }}/4
 
       - name: Run full frontend regression (UI-only oracle)
         if: matrix.lane == 'frontend'

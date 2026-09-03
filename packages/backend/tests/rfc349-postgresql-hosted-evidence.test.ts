@@ -130,6 +130,51 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(regressionJob).not.toContain('RFC349_TARGET_FAULTS_DATABASE_URL')
   })
 
+  // Why this test exists: the backend regression lane originally ran the WHOLE
+  // backend suite un-sharded in a single VM. The first time it ever executed
+  // (run 33722869768 @ b3883154e — every earlier run had it skipped by `needs:`)
+  // the runner was killed twice, at ~20m and ~23m, with `The runner has received
+  // a shutdown signal`, ZERO failing assertions, and two different cut points —
+  // while the identical file set and env passed green in Main CI's four ~7m
+  // ubuntu shards at that same SHA. One VM cannot carry four shards' worth of
+  // this suite. Keep the lane sharded exactly like Main CI: if a refactor ever
+  // collapses it back to one lane, this goes red instead of costing another
+  // 23-minute unattributable runner death.
+  test('runs the backend regression lane sharded exactly like Main CI', () => {
+    const workflow = readFileSync(WORKFLOW_PATH, 'utf8')
+    const regressionJob = / {2}functional-regression:[\s\S]*$/u.exec(workflow)?.[0]
+    expect(regressionJob).toBeDefined()
+
+    const backendLane = RFC349_T10_FULL_REGRESSION_TOPOLOGY.find(
+      (lane) => lane.evidenceRole === 'provider-neutral-full-regression',
+    )
+    expect(backendLane?.shards).toBe(4)
+    expect(backendLane?.command).toContain('--shard=${{ matrix.shard }}/4')
+
+    // Every declared backend lane maps to a distinct shard, covering 1..4 with
+    // no gap: a missing shard would silently drop a quarter of the suite while
+    // the job still reported green.
+    const declared = [
+      ...(regressionJob ?? '').matchAll(/- lane: (backend-\d+)\n {12}shard: (\d+)/gu),
+    ]
+    expect(declared.map((match) => match[1])).toEqual([
+      'backend-1',
+      'backend-2',
+      'backend-3',
+      'backend-4',
+    ])
+    expect(declared.map((match) => Number(match[2]))).toEqual([1, 2, 3, 4])
+
+    // The step guard must admit all four lanes, not just the historical `backend`.
+    expect(regressionJob).toContain("if: startsWith(matrix.lane, 'backend-')")
+    expect(regressionJob).not.toContain("if: matrix.lane == 'backend'")
+
+    // Main CI's own backend lane stays the reference topology this mirrors.
+    const mainCi = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+    expect(mainCi).toContain('shard: [1, 2, 3, 4]')
+    expect(mainCi).toContain('--shard=${{ matrix.shard }}/4')
+  })
+
   test('locks before/after crash coverage for every migration phase and the first target chunk', () => {
     expect(RFC349_DATABASE_MIGRATION_PHASES).toEqual([
       'planned',
