@@ -426,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6338,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6341,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-349 provider 分流收口：给 `platform/persistence/databaseProviders.ts` 加编译期穷尽收口原语 `unhandledDatabaseProvider(value: never)`，并在 main / cli.start / cli.doctor / cli.migrate / databaseProviderRuntime 五处把 provider 分叉的残余分支接上它；traits 表新增 `migrationRole` 后，logicalDatabaseExport / generationStore / portableDatabaseRestore / databaseMigrationDaemonAdmission / databaseMigrationCoordinator / cli.dbCompact 六个文件改为读 traits，各新增一条到 `platform/persistence/providerTraits` 的 observed import。换来的是：加一个 provider 时第一波编译红从 4 个错误 / 1 个源文件变成 13 个错误 / 6 个源文件，且不填齐 traits 就编不过。涨的是「多了几条指向唯一决策表的边」，换掉的是「十几处各自拍脑袋的 provider 字面量分叉」。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5268,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5271,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-349 provider 分流收口：给 `platform/persistence/databaseProviders.ts` 加编译期穷尽收口原语 `unhandledDatabaseProvider(value: never)`，并在 main / cli.start / cli.doctor / cli.migrate / databaseProviderRuntime 五处把 provider 分叉的残余分支接上它；traits 表新增 `migrationRole` 后，logicalDatabaseExport / generationStore / portableDatabaseRestore / databaseMigrationDaemonAdmission / databaseMigrationCoordinator / cli.dbCompact 六个文件改为读 traits，各新增一条到 `platform/persistence/providerTraits` 的 observed import。换来的是：加一个 provider 时第一波编译红从 4 个错误 / 1 个源文件变成 13 个错误 / 6 个源文件，且不填齐 traits 就编不过。涨的是「多了几条指向唯一决策表的边」，换掉的是「十几处各自拍脑袋的 provider 字面量分叉」。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25768,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25769,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 provider 分流收口：给 `platform/persistence/databaseProviders.ts` 加编译期穷尽收口原语 `unhandledDatabaseProvider(value: never)`，并在 main / cli.start / cli.doctor / cli.migrate / databaseProviderRuntime 五处把 provider 分叉的残余分支接上它；traits 表新增 `migrationRole` 后，logicalDatabaseExport / generationStore / portableDatabaseRestore / databaseMigrationDaemonAdmission / databaseMigrationCoordinator / cli.dbCompact 六个文件改为读 traits，各新增一条到 `platform/persistence/providerTraits` 的 observed import。换来的是：加一个 provider 时第一波编译红从 4 个错误 / 1 个源文件变成 13 个错误 / 6 个源文件，且不填齐 traits 就编不过。涨的是「多了几条指向唯一决策表的边」，换掉的是「十几处各自拍脑袋的 provider 字面量分叉」。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:cf6b37dd6e22fe954dd6735f52e9f42df990651d870d0a11163f30d043ba9b7a",
+    "sourceDigest": "sha256:b69292c7068ac9c3e8498f2a6123eff1aba0a245e4ae86431e7f921a5d93aa5a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "99cc938ebd3fa9cdb54ddea4dfb02a6107dc9e49",
-    "contentDigest": "sha256:6561279f86d1e8a5e0d95c6aeb21447af182d47f23cafcf256065fdbbe4a44b7",
+    "currentSnapshotSha": "9cb42ca501bdb2f145541053b1ea7bb50863e75a",
+    "contentDigest": "sha256:dc1189bad6fca34074a837fc8669bdfe62a669d0416a42482262917933d207b3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

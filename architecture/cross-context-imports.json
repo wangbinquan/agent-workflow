@@ -44898,6 +44898,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7f9fec3f5b2156326f4f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toSymbol": "databaseProviderTraits",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#$file",
@@ -52052,6 +52069,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/postgresqlSerializationRetry.ts#retryPostgresqlSerialization",
       "toPath": "packages/backend/src/db/postgresqlSerializationRetry.ts",
       "toSymbol": "retryPostgresqlSerialization",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:951cc436520201cebbae",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toSymbol": "databaseProviderTraits",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -66383,6 +66417,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file",
       "toPath": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toSymbol": "taskExecutionRequestHash",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bf6130a455ce7368b43f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toSymbol": "databaseProviderTraits",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -89558,9 +89609,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5268,
+    "architectureExceptions": 5271,
     "implementationSccs": 0,
-    "observedEdges": 6338,
+    "observedEdges": 6341,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -140497,6 +140548,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts#$file",
+      "id": "import:7f9fec3f5b2156326f4f",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/providerTraits",
+      "syntax": "static-import",
+      "targetSymbol": "databaseProviderTraits",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
@@ -148703,6 +148770,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#docVersions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#$file",
+      "id": "import:951cc436520201cebbae",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/providerTraits",
+      "syntax": "static-import",
+      "targetSymbol": "databaseProviderTraits",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
     },
     {
       "edgeKind": "value",
@@ -165215,6 +165298,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/taskExecutionParticipants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts#$file",
+      "id": "import:bf6130a455ce7368b43f",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/providerTraits",
+      "syntax": "static-import",
+      "targetSymbol": "databaseProviderTraits",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
     },
     {
       "edgeKind": "value",
@@ -191514,7 +191613,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cf6b37dd6e22fe954dd6735f52e9f42df990651d870d0a11163f30d043ba9b7a",
+  "sourceDigest": "sha256:b69292c7068ac9c3e8498f2a6123eff1aba0a245e4ae86431e7f921a5d93aa5a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

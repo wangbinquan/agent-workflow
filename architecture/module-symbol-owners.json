@@ -6,7 +6,7 @@
     "moduleFiles": 1281,
     "productionFiles": 2687,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25768
+    "symbolsIncludingFileRoots": 25769
   },
   "entries": [
     {
@@ -151299,6 +151299,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DatabaseProvider",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviders.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviders.ts#unhandledDatabaseProvider",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "unhandledDatabaseProvider",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -309910,5 +309922,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cf6b37dd6e22fe954dd6735f52e9f42df990651d870d0a11163f30d043ba9b7a"
+  "sourceDigest": "sha256:b69292c7068ac9c3e8498f2a6123eff1aba0a245e4ae86431e7f921a5d93aa5a"
 }
