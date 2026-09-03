@@ -118,6 +118,10 @@ jobs:
       - name: Run crash/resume, large migration, and dual-provider soak
         env:
           RFC349_TARGET_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.target_sha || github.sha }}
+          # 归因用：默认 1s 的门槛看不见一次大迁移里的亚秒级停顿，而报告只给一个跨窗口的
+          # max。取证跑批本来就是诊断场景，把门槛压到 300ms 让 daemon 当场记下时刻与堆走向
+          # （harness 会把这类行回显进 job log）。正常相位一条都不会有。
+          AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS: '300'
           EVIDENCE_SCALE: ${{ github.event_name == 'schedule' && 'full' || inputs.scale }}
           EVIDENCE_CLIENTS: ${{ github.event_name == 'schedule' && '100' || inputs.clients }}
           EVIDENCE_DURATION: ${{ github.event_name == 'schedule' && '180' || inputs.duration_seconds }}
