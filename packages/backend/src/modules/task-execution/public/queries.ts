@@ -6,14 +6,12 @@ export { parseLoopExitCondition } from '@agent-workflow/shared'
 
 // RFC-354 — frame primitives offered to the legacy `services/` pickers and
 // predicates (dispatchFrontier / freshness / runLiveness) until they move in.
-export { containerMemberRuns, frameChainOf } from '../domain/containerMembership'
+// Only the symbols a legacy consumer actually reads are public; the rest of
+// the environment-chain vocabulary stays inside the context.
+export { containerMemberRuns, containerMemberRunsInRound } from '../domain/containerMembership'
 export { loadFrameChain, type FrameChain } from '../application/frameChain'
 export {
-  childScopePath,
-  parentFrameOf,
   resolveSourceFrame,
-  resolveSourceFrameInScope,
-  TOP_FRAME,
   type ContainerRunRow,
   type FrameCoordinate,
   type SourceFrameResolution,
@@ -29,8 +27,9 @@ export interface TaskOverviewQuery {
 }
 
 /**
- * Public read of the loop iteration used by parked-wrapper revival. Malformed
- * or absent progress retains the runtime's historical iteration-zero fallback.
+ * The loop round a parked wrapper-loop generation was driving when it parked:
+ * the frame its revival evidence must sit in. Malformed or absent progress
+ * retains the runtime's historical round-zero fallback.
  */
 export function readWrapperRevivalIteration(progressJson: string | null | undefined): number {
   return decodeWrapperProgress(progressJson, () => {})?.iteration ?? 0

@@ -151,7 +151,13 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // top-level predicate (a placeholder must never inherit a fan-out child's
     // parentNodeRunId — that made it invisible to the frontier and the
     // cascade silently dead; design §3.2).
-    expect(cascade.includes('pickFreshestRun(existing, { topLevelOnly: true })')).toBe(true)
+    // RFC-354: the candidate set is narrowed to the retried run's FRAME first
+    // (a fan-out child lives in the fan-out generation's frame, never in the
+    // retried run's), then the shared picker applies the top-level predicate.
+    expect(cascade.includes('pickFreshestRun(sameFrame.length > 0 ? sameFrame : existing, {')).toBe(
+      true,
+    )
+    expect(cascade.includes('topLevelOnly: true,')).toBe(true)
     // nextRetry stays the CONSERVATIVE all-rows max+1 (NOT prev.retryIndex+1):
     // legacy pathological rows minted by the old pickers can carry inflated
     // retryIndex on child/inherited rows; the all-rows max avoids a UNIQUE

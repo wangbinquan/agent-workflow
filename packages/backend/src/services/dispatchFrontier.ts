@@ -46,7 +46,10 @@ import {
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
-import { containerMemberRuns } from '@/modules/task-execution/public/queries'
+import {
+  containerMemberRunsInRound,
+  readWrapperRevivalIteration,
+} from '@/modules/task-execution/public/queries'
 
 // RFC-311：收窄到 freshness 的调度列合同（本文件消费 id/nodeId/status/iteration/
 // supersededByReview/wrapperProgressJson，全部 ⊂ 合同），使 tick 投影行可直达。
@@ -246,15 +249,20 @@ export function wrapperRevivalEvidence(
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
 ): WrapperRevivalEvidence | null {
-  // RFC-354 — the scan window is the wrapper generation's MEMBERSHIP (every row
-  // whose frame chain passes through this generation row, at any depth), not
-  // a single iteration number. Evidence born inside a nested loop lives in
-  // that loop's own frame and is found here all the same — the depth-1 blind
-  // spot (RFC-098 §B3 revision #8) is gone. Wrapper progress / iteration is no
-  // longer consulted: frames carry the round themselves.
-  const members = containerMemberRuns(wrapperRow.id, rows)
-  const inner = wrapperInnerDescendants(wrapperRow.nodeId, definition)
+  // RFC-354 — the scan window is the wrapper generation's MEMBERSHIP in the
+  // round it is parked on (every row whose frame chain reaches this generation
+  // row through a direct member of that round, at any depth). Evidence born
+  // inside a nested loop lives in that loop's own frame and is found here all
+  // the same — the depth-1 blind spot (RFC-098 §B3 revision #8) is gone. The
+  // round is the loop counter the progress recorded when it parked; git /
+  // fan-out bodies run at the wrapper row's own iteration.
   const kindById = new Map(definition.nodes.map((n) => [n.id, n.kind]))
+  const round =
+    kindById.get(wrapperRow.nodeId) === 'wrapper-loop'
+      ? readWrapperRevivalIteration(wrapperRow.wrapperProgressJson)
+      : wrapperRow.iteration
+  const members = containerMemberRunsInRound(wrapperRow.id, round, rows)
+  const inner = wrapperInnerDescendants(wrapperRow.nodeId, definition)
   // A done review row is evidence only while it is the FRESH settled row of
   // its node inside its own frame; the map is built lazily per frame.
   const freshestByFrame = new Map<string, Map<string, NodeRunRow>>()

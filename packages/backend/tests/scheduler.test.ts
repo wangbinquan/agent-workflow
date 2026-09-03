@@ -1112,7 +1112,9 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
   test('nested wrapper-git inside wrapper-loop runs per iteration', async () => {
     // git-in-loop: inner wrapper-git is the only inner of the loop. Each
     // iteration runs the wrapper-git which runs its inner agent. We verify
-    // both wrappers complete and the loop exits via the agent's output.
+    // both wrappers complete and the loop exits on the git wrapper's outlet
+    // (RFC-354: the agent's own port is hidden behind the git boundary — the
+    // loop reads its direct member `wg.git_diff`, empty for a read-only agent).
     const repoDir = h.worktreePath
     await runGit(repoDir, ['init', '-q', '-b', 'main'])
     await runGit(repoDir, ['config', 'user.email', 'test@example.com'])
@@ -1133,7 +1135,7 @@ describe('runTask: loop wrapper (M4 P-4-01 / P-4-03)', () => {
           kind: 'wrapper-loop',
           nodeIds: ['wg'],
           maxIterations: 2,
-          exitCondition: { kind: 'port-empty', nodeId: 'audit', portName: 'findings' },
+          exitCondition: { kind: 'port-empty', nodeId: 'wg', portName: 'git_diff' },
           outputBindings: [],
         },
       ] as unknown as WorkflowDefinition['nodes'],

@@ -235,7 +235,7 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
 // whose frame chain passes through the wrapper row, at any round and any
 // nesting depth. The old "iteration window read off the progress payload"
 // (HIGH-1) is gone with the depth-1 blind spot it carried.
-describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation membership)', () => {
+describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation membership, parked round)', () => {
   const loopDef = def([
     { id: 'lw', kind: 'wrapper-loop', nodeIds: ['a', 'c'] },
     { id: 'a', kind: 'agent-single' },
@@ -249,7 +249,11 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
       wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
     })
 
-  test('loop: an inner pending in this generation counts, whatever round it is on', () => {
+  test('loop: an inner pending counts only in the round the loop parked on (progress.iteration)', () => {
+    // Rounds 0 / 1 are settled history of this generation: on revival the
+    // loop re-drives round 2 only, so evidence there would park it forever
+    // (audit S-3 runaway). The S-3 lock lives in
+    // scheduler-audit-s03-wrapper-approve-stuck.test.ts (窗口取值规则).
     const wrapperRow = parkedLoop()
     for (const iteration of [0, 1, 2]) {
       const rows = [
@@ -262,7 +266,7 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
           containerRunId: wrapperRow.id,
         }),
       ]
-      expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(true)
+      expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(iteration === 2)
     }
   })
 
@@ -284,27 +288,28 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
     expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
   })
 
-  test('loop: wrapper progress is not consulted — a member counts even with absent progress', () => {
+  test('loop: absent / malformed progress means round 0', () => {
     const wrapperRow = run({
       nodeId: 'lw',
       iteration: 0,
       status: 'awaiting_human',
       wrapperProgressJson: null,
     })
-    const rows = [
+    const pendingAt = (iteration: number) => [
       wrapperRow,
       run({
         id: '01P',
         nodeId: 'a',
         status: 'pending',
-        iteration: 2,
+        iteration,
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(true)
+    expect(wrapperHasFreshInnerWork(wrapperRow, pendingAt(0), loopDef)).toBe(true)
+    expect(wrapperHasFreshInnerWork(wrapperRow, pendingAt(2), loopDef)).toBe(false)
   })
 
-  test('git: an inner pending in this generation → true; in another generation → false', () => {
+  test("git: the body runs at the wrapper row's own iteration — a pending there → true; another round or generation → false", () => {
     const gitDef = def([
       { id: 'gw', kind: 'wrapper-git', nodeIds: ['a'] },
       { id: 'a', kind: 'agent-single' },
@@ -316,11 +321,22 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
         id: '01P',
         nodeId: 'a',
         status: 'pending',
-        iteration: 0,
+        iteration: 3,
         containerRunId: wrapperRow.id,
       }),
     ]
     expect(wrapperHasFreshInnerWork(wrapperRow, rows, gitDef)).toBe(true)
+    const wrongRound = [
+      wrapperRow,
+      run({
+        id: '01P',
+        nodeId: 'a',
+        status: 'pending',
+        iteration: 0,
+        containerRunId: wrapperRow.id,
+      }),
+    ]
+    expect(wrapperHasFreshInnerWork(wrapperRow, wrongRound, gitDef)).toBe(false)
     const wrong = [
       wrapperRow,
       run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 3, containerRunId: 'OTHER_GEN' }),
@@ -336,13 +352,23 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
       { id: 'inner', kind: 'wrapper-loop', nodeIds: ['a'] },
       { id: 'a', kind: 'agent-single' },
     ])
-    const outerRow = run({ id: '01OUT', nodeId: 'outer', iteration: 0, status: 'awaiting_human' })
+    // outer parked on round 1 (progress); the inner generation opened in that
+    // round carries its whole subtree along — the deep row's own round (3)
+    // is the INNER loop's business.
+    const outerRow = run({
+      id: '01OUT',
+      nodeId: 'outer',
+      iteration: 0,
+      status: 'awaiting_human',
+      wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 1, phase: 'awaiting' }),
+    })
     const innerGen = run({
       id: '01IN',
       nodeId: 'inner',
       iteration: 1,
       status: 'awaiting_human',
       containerRunId: '01OUT',
+      wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 3, phase: 'awaiting' }),
     })
     const deepPending = run({
       id: '01P',
@@ -357,6 +383,11 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
     expect(wrapperHasFreshInnerWork(innerGen, [outerRow, innerGen, deepPending], nestedDef)).toBe(
       true,
     )
+    // An inner generation opened in an EARLIER outer round is settled history.
+    const staleInnerGen = { ...innerGen, iteration: 0 }
+    expect(
+      wrapperHasFreshInnerWork(outerRow, [outerRow, staleInnerGen, deepPending], nestedDef),
+    ).toBe(false)
   })
 })
 

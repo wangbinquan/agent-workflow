@@ -180,12 +180,26 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
       finishedAt: Date.now() - 800,
     })
 
+    // RFC-354: 'down' rounds 0 / 1 are rounds of ONE loop generation (a
+    // top-level row only ever has round 0) — the generation row must exist for
+    // the frame column's foreign key.
+    await h.db.insert(nodeRuns).values({
+      id: 'loop-gen-1',
+      taskId,
+      nodeId: 'loop',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 760,
+      finishedAt: Date.now() - 420,
+    })
     // 'down' row set — three generations, ids strictly increasing (monotonic):
-    // (1) stale top-level failed row.
+    // (1) stale failed row of round 0.
     await h.db.insert(nodeRuns).values({
       id: ulid(),
       taskId,
       nodeId: 'down',
+      containerRunId: 'loop-gen-1',
       status: 'failed',
       retryIndex: 1,
       iteration: 0,
@@ -202,6 +216,7 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
       id: downTopId,
       taskId,
       nodeId: 'down',
+      containerRunId: 'loop-gen-1',
       status: 'done',
       retryIndex: 2,
       iteration: 1,
@@ -213,13 +228,26 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // (3) fan-out shard CHILD row: newest id AND highest retryIndex — the old
     // `desc(retryIndex)` pick chose THIS row (red shape: placeholder inherited
     // parentNodeRunId='fanout-parent-run-1', iteration=0, reviewIteration=7,
-    // shardKey='src/a.ts', preSnapshot='stash-child').
+    // shardKey='src/a.ts', preSnapshot='stash-child'). RFC-354: the child hangs
+    // off the fan-out GENERATION row's frame, which therefore has to exist.
+    await h.db.insert(nodeRuns).values({
+      id: 'fanout-parent-run-1',
+      taskId,
+      nodeId: 'fan',
+      status: 'done',
+      retryIndex: 0,
+      iteration: 0,
+      startedAt: Date.now() - 560,
+      finishedAt: Date.now() - 440,
+    })
     const downChildId = ulid()
     await h.db.insert(nodeRuns).values({
       id: downChildId,
       taskId,
       nodeId: 'down',
       parentNodeRunId: 'fanout-parent-run-1',
+      // RFC-354: a fan-out child hangs off the fan-out generation row's frame.
+      containerRunId: 'fanout-parent-run-1',
       status: 'done',
       retryIndex: 5,
       iteration: 0,
