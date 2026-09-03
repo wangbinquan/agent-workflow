@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 861,
+    "consumers": 859,
     "exactEntrypointFiles": 62,
     "governedFieldSurfaces": 5,
     "methods": 889,
@@ -67831,8 +67831,6 @@
       },
       "consumerEdgeIds": [
         "import:05faa3898918869c5c48",
-        "import:6a11499bacb0a940b32f",
-        "import:7ec9303db9fd99ecb543",
         "import:d4931979de5b32069560"
       ],
       "context": "memory",
@@ -67884,14 +67882,14 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:7ec9303db9fd99ecb543"
+            "import:05faa3898918869c5c48"
           ],
           "name": "getJobDetail",
           "signatureDigest": "sha256:e88e0c57657330a5974b3c3cf9999fe2ae162649847f38cf8b116af01c9d180b"
         },
         {
           "consumerEdgeIds": [
-            "import:6a11499bacb0a940b32f"
+            "import:05faa3898918869c5c48"
           ],
           "name": "getJobSessionView",
           "signatureDigest": "sha256:61f512e4ad486fa6cc87b259851dd264d05b663d74e5c12e6fc18b137ebb60d3"
@@ -67911,18 +67909,6 @@
           "edgeId": "import:05faa3898918869c5c48",
           "file": "packages/backend/src/routes/memoryDistillJobs.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/memoryDistillJobs.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:6a11499bacb0a940b32f",
-          "file": "packages/backend/src/services/memoryDistillSessionView.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:7ec9303db9fd99ecb543",
-          "file": "packages/backend/src/services/memoryDistillJobDetail.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file"
         },
         {
           "context": "legacy",
@@ -152647,7 +152633,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9",
+  "sourceDigest": "sha256:2b435edc838aff66d96bdc67d3a3e5c84425c3fa9dae6f0c1b5cc38887cccc2a",
   "targetContexts": [
     "collaboration",
     "development-automation",

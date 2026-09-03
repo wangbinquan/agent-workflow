@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 350,
+    "serviceFiles": 347,
     "thinFacades": 77
   },
   "entries": [
@@ -3258,87 +3258,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:5cd49ca52de157d5e204",
-        "import:7ec9303db9fd99ecb543",
-        "import:9f3c2a29ad232be0674a"
-      ],
-      "exportedSymbols": [
-        "getDistillJobDetail"
-      ],
-      "file": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "id": "facade:packages/backend/src/services/memoryDistillJobDetail.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "legacy-implementation",
-      "targetContext": "memory",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:1867356335a6c2917b2c",
-        "import:511b752f05dddd1cb527",
-        "import:523b1162838016d6aff9",
-        "import:5a5035bc65eb5cb386d3",
-        "import:6579598d4bfe89cb1fca",
-        "import:6c388428bf8a513e31ec",
-        "import:7b0a4ea5261b2be16550",
-        "import:93d7642c562c18e45f46",
-        "import:c1156642e2753e5eed12",
-        "import:d1f3a1466ff10bc42ff0",
-        "import:ddf338f61596143c1fc2",
-        "import:de4968a2f73254c337d9",
-        "import:ffd9697ed8e91a56f8d0"
-      ],
-      "exportedSymbols": [
-        "DISTILL_BACKOFF_BASE_MS",
-        "DISTILL_BATCH_LIMIT",
-        "DISTILL_DEBOUNCE_MS",
-        "DISTILL_MAX_ATTEMPTS",
-        "DistillLoopHandle",
-        "DistillTickOptions",
-        "EnqueueDistillJobInput",
-        "EnqueueResult",
-        "StartLoopOptions",
-        "buildDebounceKey",
-        "cancelPendingJob",
-        "computeEligibleScopes",
-        "distillTick",
-        "enqueueDistillJob",
-        "extractAgentIdsFromSnapshot",
-        "extractAgentIdsFromWorkgroupConfig",
-        "listDistillJobs",
-        "recoverRunning",
-        "resetMemoryDistillLangProviderForTest",
-        "retryFailedJob",
-        "setMemoryDistillLangProvider",
-        "startMemoryDistillLoop"
-      ],
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "id": "facade:packages/backend/src/services/memoryDistillScheduler.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "legacy-implementation",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:179632beaec5dda9c507",
-        "import:6a11499bacb0a940b32f"
-      ],
-      "exportedSymbols": [
-        "getDistillJobSessionView"
-      ],
-      "file": "packages/backend/src/services/memoryDistillSessionView.ts",
-      "id": "facade:packages/backend/src/services/memoryDistillSessionView.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "legacy-implementation",
-      "targetContext": "memory",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:5af6bb3cffb8b9251a95",
         "import:61fafb4bd60c3fc76fe6",
         "import:70c54af64c132bdaca01",
@@ -4026,6 +3945,7 @@
       "boundaryEdgeIds": [
         "import:2109fd6c1d2bd2caa6f7",
         "import:3ddbe3e2c3025ef8f5f6",
+        "import:4b4421b45d99d5bec864",
         "import:7efd824461f9f7ad36ec",
         "import:c400eab6bf8fdaa82a62"
       ],
@@ -7540,5 +7460,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9"
+  "sourceDigest": "sha256:2b435edc838aff66d96bdc67d3a3e5c84425c3fa9dae6f0c1b5cc38887cccc2a"
 }

@@ -17,6 +17,9 @@ import {
   retryFailedJob,
   startMemoryDistillLoop,
 } from './application/distill/schedule'
+
+// RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
+export { setMemoryDistillLangProvider } from './application/distill/schedule'
 import { PostgresqlMemoryDistillReadStore } from './infrastructure/postgresqlMemoryDistillReadStore'
 import { SqliteMemoryDistillReadStore } from './infrastructure/sqliteMemoryDistillReadStore'
 import { PostgresqlMemoryDistillWorkStore } from './infrastructure/postgresqlMemoryDistillWorkStore'

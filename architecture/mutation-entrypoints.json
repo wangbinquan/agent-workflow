@@ -15773,6 +15773,148 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#cancelPendingJob",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#cancelPendingJob",
+      "symbol": "cancelPendingJob",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#publish",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#publish",
+      "symbol": "publish",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#retryFailedJob",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#retryFailedJob",
+      "symbol": "retryFailedJob",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#setMemoryDistillLangProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#setMemoryDistillLangProvider",
+      "symbol": "setMemoryDistillLangProvider",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#StartLoopOptions",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#StartLoopOptions",
+      "symbol": "StartLoopOptions",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#startMemoryDistillLoop",
+      "missingControls": [
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#startMemoryDistillLoop",
+      "symbol": "startMemoryDistillLoop",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -39573,148 +39715,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/memoryDistillScheduler.ts#cancelPendingJob",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#cancelPendingJob",
-      "symbol": "cancelPendingJob",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/memoryDistillScheduler.ts#publish",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#publish",
-      "symbol": "publish",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/memoryDistillScheduler.ts#retryFailedJob",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#retryFailedJob",
-      "symbol": "retryFailedJob",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/memoryDistillScheduler.ts#setMemoryDistillLangProvider",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#setMemoryDistillLangProvider",
-      "symbol": "setMemoryDistillLangProvider",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/memoryDistillScheduler.ts#StartLoopOptions",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#StartLoopOptions",
-      "symbol": "StartLoopOptions",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": true,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/memoryDistillScheduler.ts#startMemoryDistillLoop",
-      "missingControls": [
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#startMemoryDistillLoop",
-      "symbol": "startMemoryDistillLoop",
-      "targetContext": "memory",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/services/nodeIsolation.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/nodeIsolation.ts#createNodeIso",
@@ -45521,7 +45521,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9",
+  "sourceDigest": "sha256:2b435edc838aff66d96bdc67d3a3e5c84425c3fa9dae6f0c1b5cc38887cccc2a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

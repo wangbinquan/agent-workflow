@@ -129,7 +129,7 @@ import {
   transitionMcpRuntimeTestsInTx,
 } from '@/services/mcpRuntimeTestTransitions'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
-import { setMemoryDistillLangProvider } from '@/modules/memory/application/distill/schedule'
+import { setMemoryDistillLangProvider } from '@/modules/memory/composition'
 import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import {
   PRESENCE_CHANNEL,

@@ -2907,9 +2907,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memoryDistillJobs.ts",
-      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:111",
+      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:109",
       "kind": "register-call",
-      "line": 111,
+      "line": 109,
       "ownerEntryId": "owner:packages/backend/src/routes/memoryDistillJobs.ts#mountMemoryDistillJobRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryDistillJobRoutes",
@@ -2918,9 +2918,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memoryDistillJobs.ts",
-      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:26",
+      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:24",
       "kind": "register-call",
-      "line": 26,
+      "line": 24,
       "ownerEntryId": "owner:packages/backend/src/routes/memoryDistillJobs.ts#mountMemoryDistillJobRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryDistillJobRoutes",
@@ -2929,9 +2929,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memoryDistillJobs.ts",
-      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:50",
+      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:48",
       "kind": "register-call",
-      "line": 50,
+      "line": 48,
       "ownerEntryId": "owner:packages/backend/src/routes/memoryDistillJobs.ts#mountMemoryDistillJobRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryDistillJobRoutes",
@@ -2940,9 +2940,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memoryDistillJobs.ts",
-      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:73",
+      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:71",
       "kind": "register-call",
-      "line": 73,
+      "line": 71,
       "ownerEntryId": "owner:packages/backend/src/routes/memoryDistillJobs.ts#mountMemoryDistillJobRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryDistillJobRoutes",
@@ -2951,9 +2951,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/memoryDistillJobs.ts",
-      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:96",
+      "id": "ambient:packages/backend/src/routes/memoryDistillJobs.ts#registerRoute:94",
       "kind": "register-call",
-      "line": 96,
+      "line": 94,
       "ownerEntryId": "owner:packages/backend/src/routes/memoryDistillJobs.ts#mountMemoryDistillJobRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMemoryDistillJobRoutes",
@@ -7120,6 +7120,50 @@
       "phase": "unknown",
       "symbol": "decodeRecoveryArtifacts",
       "targetContext": "intent"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/memory/application/distill/schedule.ts#$setInterval:408",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setInterval:408",
+      "targetContext": "memory"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/memory/application/distill/schedule.ts#recoverRunning",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#recoverRunning",
+      "phase": "unknown",
+      "symbol": "recoverRunning",
+      "targetContext": "memory"
     },
     {
       "dependencies": [],
@@ -12375,50 +12419,6 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/memoryDistillScheduler.ts#$setInterval:403",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:403",
-      "targetContext": "memory"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/memoryDistillScheduler.ts#recoverRunning",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#recoverRunning",
-      "phase": "unknown",
-      "symbol": "recoverRunning",
-      "targetContext": "memory"
-    },
-    {
       "dependencies": [],
       "file": "packages/backend/src/services/orphanReconcile.ts",
       "finalCriterion": "W9-B registry",
@@ -13553,5 +13553,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9"
+  "sourceDigest": "sha256:2b435edc838aff66d96bdc67d3a3e5c84425c3fa9dae6f0c1b5cc38887cccc2a"
 }

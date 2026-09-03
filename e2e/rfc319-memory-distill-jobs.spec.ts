@@ -35,12 +35,12 @@
 //       整行 onClick → /memory/distill-jobs/$jobId
 //   packages/frontend/src/components/memory/MemoryDistillJobsTable.tsx:131-158
 //       Retry 只挂 failed、Cancel 只挂 pending，两者都 stopPropagation
-//   packages/backend/src/services/memoryDistillScheduler.ts:501-523
+//   packages/backend/src/modules/memory/application/distill/schedule.ts:501-523
 //       retryFailedJob：仅 failed 可重试；attempts→0、lastError→NULL、
 //       nextRunAt→now（下一 tick 必被 worker 选中）、发 distill.queued
-//   packages/backend/src/services/memoryDistillScheduler.ts:526-540
+//   packages/backend/src/modules/memory/application/distill/schedule.ts:526-540
 //       cancelPendingJob：仅 pending 可取消 → canceled + finishedAt
-//   packages/backend/src/services/memoryDistillScheduler.ts:421-431,473-490
+//   packages/backend/src/modules/memory/application/distill/schedule.ts:421-431,473-490
 //       startMemoryDistillLoop 开机即 recoverRunning；running→pending，
 //       **attempts 原样不动**、startedAt 清空、nextRunAt 不动
 //   packages/backend/src/services/memoryDistiller.ts:1092-1107

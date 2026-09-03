@@ -6922,6 +6922,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1429b199357400917339",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#MEMORY_DISTILL_JOB_CHANNEL",
+      "toPath": "packages/backend/src/ws/broadcaster.ts",
+      "toSymbol": "MEMORY_DISTILL_JOB_CHANNEL",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
       "fromSymbol": "$file",
@@ -8059,23 +8076,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillSessionView.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:179632beaec5dda9c507",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distillQueries.ts#DISTILLER_PRIMARY_AGENT_NAME",
-      "toPath": "packages/backend/src/modules/memory/application/distillQueries.ts",
-      "toSymbol": "DISTILLER_PRIMARY_AGENT_NAME",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/agents.ts#$file",
@@ -8481,23 +8481,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
       "toPath": "packages/backend/src/services/lifecycle.ts",
       "toSymbol": "setNodeRunStatusTx",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1867356335a6c2917b2c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#distillTick",
-      "toPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toSymbol": "distillTick",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -14397,6 +14380,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "clarifyRounds",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:28534a459d73bbb87f43",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "createLogger",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -26693,6 +26693,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4b4421b45d99d5bec864",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W4-E4b",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/ref/runtimeRef.ts#agentRefOfNode",
+      "toPath": "packages/backend/src/services/ref/runtimeRef.ts",
+      "toSymbol": "agentRefOfNode",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEventWsProjector.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEventWsProjector.ts",
       "fromSymbol": "$file",
@@ -28563,23 +28580,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:511b752f05dddd1cb527",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#runDistill",
-      "toPath": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "toSymbol": "runDistill",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts",
       "fromSymbol": "$file",
@@ -29000,23 +29000,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookDeliveries",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "webhookDeliveries",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:523b1162838016d6aff9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#enqueueDistillJob",
-      "toPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toSymbol": "enqueueDistillJob",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -31723,23 +31706,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5a5035bc65eb5cb386d3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#startMemoryDistillLoop",
-      "toPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toSymbol": "startMemoryDistillLoop",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
@@ -32605,23 +32571,6 @@
       "toPath": "packages/backend/src/services/isolatedAgentRun.ts",
       "toSymbol": "mergeBackAndSettle",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5cd49ca52de157d5e204",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distillQueries.ts#summarizeClarifyQuestions",
-      "toPath": "packages/backend/src/modules/memory/application/distillQueries.ts",
-      "toSymbol": "summarizeClarifyQuestions",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -35667,23 +35616,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6579598d4bfe89cb1fca",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillWorkStore",
-      "toPath": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-      "toSymbol": "MemoryDistillWorkStore",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts#$file",
@@ -37199,23 +37131,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillSessionView.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6a11499bacb0a940b32f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/queries.ts#MemoryDistillQueries",
-      "toPath": "packages/backend/src/modules/memory/public/queries.ts",
-      "toSymbol": "MemoryDistillQueries",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryTransportCredentialRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryTransportCredentialRepository.ts",
       "fromSymbol": "$file",
@@ -38062,23 +37977,6 @@
       "toPath": "packages/backend/src/modules/task-execution/composition/taskArchiveMaintenance.ts",
       "toSymbol": "createSqliteTaskArchiveMaintenanceCommand",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6c388428bf8a513e31ec",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#retryFailedJob",
-      "toPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toSymbol": "retryFailedJob",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -43319,23 +43217,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7b0a4ea5261b2be16550",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#rowToDistillJob",
-      "toPath": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "toSymbol": "rowToDistillJob",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/databaseMigration.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/domain/databaseMigration.ts",
       "fromSymbol": "$file",
@@ -44402,23 +44283,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toSymbol": "nodeRunOutputs",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7ec9303db9fd99ecb543",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/queries.ts#MemoryDistillQueries",
-      "toPath": "packages/backend/src/modules/memory/public/queries.ts",
-      "toSymbol": "MemoryDistillQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -51411,23 +51275,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:93d7642c562c18e45f46",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillReviewedArtifactReader",
-      "toPath": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-      "toSymbol": "MemoryDistillReviewedArtifactReader",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts",
       "fromSymbol": "$file",
@@ -55606,23 +55453,6 @@
       "toPath": "packages/backend/src/util/process.ts",
       "toSymbol": "reapDetachedGroup",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9f3c2a29ad232be0674a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distillQueries.ts#parseDedupSnapshot",
-      "toPath": "packages/backend/src/modules/memory/application/distillQueries.ts",
-      "toSymbol": "parseDedupSnapshot",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -66879,23 +66709,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c1156642e2753e5eed12",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillRuntimeResolver",
-      "toPath": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-      "toSymbol": "MemoryDistillRuntimeResolver",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts#$file",
@@ -72950,23 +72763,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d1f3a1466ff10bc42ff0",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#DistillerSpawnFn",
-      "toPath": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "toSymbol": "DistillerSpawnFn",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyDirectiveStore.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyDirectiveStore.ts",
       "fromSymbol": "$file",
@@ -77574,23 +77370,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "fromPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ddf338f61596143c1fc2",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillReadStore.ts#MemoryDistillJobRecord",
-      "toPath": "packages/backend/src/modules/memory/application/ports/distillReadStore.ts",
-      "toSymbol": "MemoryDistillJobRecord",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
       "fromSymbol": "$file",
@@ -77744,23 +77523,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:de4968a2f73254c337d9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#recoverRunning",
-      "toPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toSymbol": "recoverRunning",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "fromPath": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "fromSymbol": "$file",
@@ -77824,6 +77586,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#automationPolicies",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "automationPolicies",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:de9e00fd1b484bec6f42",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#memoryDistillJobBroadcaster",
+      "toPath": "packages/backend/src/ws/broadcaster.ts",
+      "toSymbol": "memoryDistillJobBroadcaster",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -80765,6 +80544,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#composePostgresqlDevelopmentMissionOperations",
       "toPath": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
       "toSymbol": "composePostgresqlDevelopmentMissionOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e75b5267cf587ef78d41",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E2",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/memory/composition.ts",
+      "toSymbol": "setMemoryDistillLangProvider",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -89183,23 +88979,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/memory/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ffd9697ed8e91a56f8d0",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#cancelPendingJob",
-      "toPath": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toSymbol": "cancelPendingJob",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts#$file",
@@ -89269,9 +89048,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5251,
+    "architectureExceptions": 5238,
     "implementationSccs": 0,
-    "observedEdges": 6313,
+    "observedEdges": 6300,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -97025,6 +96804,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "id": "import:1429b199357400917339",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "role": "legacy-outbound",
+      "specifier": "@/ws/broadcaster",
+      "syntax": "static-import",
+      "targetSymbol": "MEMORY_DISTILL_JOB_CHANNEL",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/ws/broadcaster.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#MEMORY_DISTILL_JOB_CHANNEL"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file",
@@ -98256,22 +98051,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillSessionView.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file",
-      "id": "import:179632beaec5dda9c507",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/distillQueries",
-      "syntax": "export",
-      "targetSymbol": "DISTILLER_PRIMARY_AGENT_NAME",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/distillQueries.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distillQueries.ts#DISTILLER_PRIMARY_AGENT_NAME"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/agents.ts",
@@ -98734,22 +98513,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/lifecycle.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "id": "import:1867356335a6c2917b2c",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memoryDistillScheduler",
-      "syntax": "static-import",
-      "targetSymbol": "distillTick",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#distillTick"
     },
     {
       "edgeKind": "type",
@@ -105422,6 +105185,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "id": "import:28534a459d73bbb87f43",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "createLogger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
     },
     {
       "edgeKind": "value",
@@ -119344,6 +119123,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "id": "import:4b4421b45d99d5bec864",
+      "owner": "memory",
+      "removeAfterWave": "W4-E4b",
+      "role": "legacy-outbound",
+      "specifier": "@/services/ref/runtimeRef",
+      "syntax": "static-import",
+      "targetSymbol": "agentRefOfNode",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/ref/runtimeRef.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/ref/runtimeRef.ts#agentRefOfNode"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/taskWorkspaceCommit.ts",
@@ -121633,22 +121428,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:511b752f05dddd1cb527",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/distill/memoryDistiller",
-      "syntax": "static-import",
-      "targetSymbol": "runDistill",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#runDistill"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts#$file",
@@ -122094,22 +121873,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookDeliveries"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "id": "import:523b1162838016d6aff9",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memoryDistillScheduler",
-      "syntax": "static-import",
-      "targetSymbol": "enqueueDistillJob",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#enqueueDistillJob"
     },
     {
       "edgeKind": "type",
@@ -125121,22 +124884,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "id": "import:5a5035bc65eb5cb386d3",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memoryDistillScheduler",
-      "syntax": "static-import",
-      "targetSymbol": "startMemoryDistillLoop",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#startMemoryDistillLoop"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/infrastructure/postgresqlRepoEndpointRead.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlRepoEndpointRead.ts#$file",
@@ -126158,22 +125905,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/isolatedAgentRun.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#mergeBackAndSettle"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "id": "import:5cd49ca52de157d5e204",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/distillQueries",
-      "syntax": "export",
-      "targetSymbol": "summarizeClarifyQuestions",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/distillQueries.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distillQueries.ts#summarizeClarifyQuestions"
     },
     {
       "edgeKind": "value",
@@ -129760,22 +129491,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#repairRuntimeSessionLeasesAfterOrphanReap"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:6579598d4bfe89cb1fca",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/ports/distillWorkStore",
-      "syntax": "static-import",
-      "targetSymbol": "MemoryDistillWorkStore",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillWorkStore"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts",
@@ -131553,22 +131268,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillSessionView.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file",
-      "id": "import:6a11499bacb0a940b32f",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/public/queries",
-      "syntax": "static-import",
-      "targetSymbol": "MemoryDistillQueries",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/public/queries.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/queries.ts#MemoryDistillQueries"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryTransportCredentialRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/postgresqlRepositoryTransportCredentialRepository.ts#$file",
@@ -132478,22 +132177,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "id": "import:6c388428bf8a513e31ec",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memoryDistillScheduler",
-      "syntax": "static-import",
-      "targetSymbol": "retryFailedJob",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#retryFailedJob"
     },
     {
       "edgeKind": "value",
@@ -138353,22 +138036,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:7b0a4ea5261b2be16550",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/distill/memoryDistiller",
-      "syntax": "static-import",
-      "targetSymbol": "rowToDistillJob",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#rowToDistillJob"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/domain/databaseMigration.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/databaseMigration.ts#$file",
@@ -139566,22 +139233,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "id": "import:7ec9303db9fd99ecb543",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/public/queries",
-      "syntax": "static-import",
-      "targetSymbol": "MemoryDistillQueries",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/public/queries.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/queries.ts#MemoryDistillQueries"
     },
     {
       "edgeKind": "value",
@@ -147617,22 +147268,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:93d7642c562c18e45f46",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/ports/distillWorkStore",
-      "syntax": "static-import",
-      "targetSymbol": "MemoryDistillReviewedArtifactReader",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillReviewedArtifactReader"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts#$file",
@@ -152350,22 +151985,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeExecutionPolicyRevisions"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillJobDetail.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillJobDetail.ts#$file",
-      "id": "import:9f3c2a29ad232be0674a",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/distillQueries",
-      "syntax": "export",
-      "targetSymbol": "parseDedupSnapshot",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/distillQueries.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distillQueries.ts#parseDedupSnapshot"
     },
     {
       "edgeKind": "value",
@@ -165392,22 +165011,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:c1156642e2753e5eed12",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/ports/distillWorkStore",
-      "syntax": "static-import",
-      "targetSymbol": "MemoryDistillRuntimeResolver",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillRuntimeResolver"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts",
@@ -172145,22 +171748,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:d1f3a1466ff10bc42ff0",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/distill/memoryDistiller",
-      "syntax": "static-import",
-      "targetSymbol": "DistillerSpawnFn",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#DistillerSpawnFn"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyDirectiveStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteClarifyDirectiveStore.ts#$file",
@@ -177201,22 +176788,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
-      "id": "import:ddf338f61596143c1fc2",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/memory/application/ports/distillReadStore",
-      "syntax": "static-import",
-      "targetSymbol": "MemoryDistillJobRecord",
-      "toContext": "memory",
-      "toFile": "packages/backend/src/modules/memory/application/ports/distillReadStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillReadStore.ts#MemoryDistillJobRecord"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#$file",
@@ -177377,22 +176948,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "id": "import:de4968a2f73254c337d9",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memoryDistillScheduler",
-      "syntax": "static-import",
-      "targetSymbol": "recoverRunning",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#recoverRunning"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
@@ -177470,6 +177025,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#automationPolicies"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
+      "id": "import:de9e00fd1b484bec6f42",
+      "owner": "memory",
+      "removeAfterWave": "W4-E2",
+      "role": "legacy-outbound",
+      "specifier": "@/ws/broadcaster",
+      "syntax": "static-import",
+      "targetSymbol": "memoryDistillJobBroadcaster",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/ws/broadcaster.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#memoryDistillJobBroadcaster"
     },
     {
       "edgeKind": "value",
@@ -180718,6 +180289,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#composePostgresqlDevelopmentMissionOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:e75b5267cf587ef78d41",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E2",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/memory/composition",
+      "syntax": "static-import",
+      "targetSymbol": "setMemoryDistillLangProvider",
+      "toContext": "memory",
+      "toFile": "packages/backend/src/modules/memory/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -190192,22 +189779,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#StartExecutionDeps"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "memory",
-      "fromFile": "packages/backend/src/modules/memory/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/composition.ts#$file",
-      "id": "import:ffd9697ed8e91a56f8d0",
-      "owner": "memory",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memoryDistillScheduler",
-      "syntax": "static-import",
-      "targetSymbol": "cancelPendingJob",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memoryDistillScheduler.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#cancelPendingJob"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts",
@@ -190825,7 +190396,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9",
+  "sourceDigest": "sha256:2b435edc838aff66d96bdc67d3a3e5c84425c3fa9dae6f0c1b5cc38887cccc2a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

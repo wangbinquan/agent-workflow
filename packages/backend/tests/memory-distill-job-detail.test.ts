@@ -15,16 +15,15 @@ import {
   workflows,
 } from '../src/db/schema'
 import {
-  getDistillJobDetail as getDistillJobDetailService,
   parseDedupSnapshot,
   summarizeClarifyQuestions,
-} from '../src/services/memoryDistillJobDetail'
+} from '../src/modules/memory/application/distillQueries'
 import { composeSqliteMemoryDistillQueries } from '../src/modules/memory/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function getDistillJobDetail(db: DbClient, jobId: string) {
-  return getDistillJobDetailService(composeSqliteMemoryDistillQueries(db), jobId)
+  return composeSqliteMemoryDistillQueries(db).getJobDetail(jobId)
 }
 
 function seedTaskWithReviewRun(db: DbClient): { taskId: string; nodeRunId: string } {

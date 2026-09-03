@@ -54,7 +54,7 @@
 //   packages/frontend/src/components/node-session/InjectedMemoriesCard.tsx:44-121  卡片三态与分档
 //   packages/backend/src/services/clarify/autoDispatch.ts:342-350 反问整轮封存后 enqueue（仅 self 轮）
 //   packages/backend/src/services/review.ts:3026-3032            评审决定提交后 enqueue
-//   packages/backend/src/services/memoryDistillScheduler.ts:90-125 enqueueDistillJob 与 debounceKey
+//   packages/backend/src/modules/memory/application/distill/schedule.ts:90-125 enqueueDistillJob 与 debounceKey
 //   packages/frontend/src/components/tasks/TaskFeedbackList.tsx:75-79,175-183  失败横幅与「成功才清草稿」
 //   packages/backend/src/services/workgroup/taskActions.ts:186-188 终态任务发消息 409 workgroup-task-terminal
 //   packages/frontend/src/lib/workgroup-room.ts:461-463          canPostRoomMessage 的终态判据

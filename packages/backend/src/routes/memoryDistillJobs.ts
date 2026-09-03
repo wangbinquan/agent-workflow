@@ -11,8 +11,6 @@ import { DistillJobStatusSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
-import { getDistillJobDetail } from '@/services/memoryDistillJobDetail'
-import { getDistillJobSessionView } from '@/services/memoryDistillSessionView'
 import { ConflictError, ValidationError } from '@/util/errors'
 import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
 
@@ -103,7 +101,7 @@ export function mountMemoryDistillJobRoutes(
       summary: 'Get one distill job',
     },
     async (c) => {
-      const detail = await getDistillJobDetail(deps.memoryDistillQueries, c.req.param('id'))
+      const detail = await deps.memoryDistillQueries.getJobDetail(c.req.param('id'))
       return c.json(detail)
     },
   )
@@ -118,7 +116,7 @@ export function mountMemoryDistillJobRoutes(
       summary: 'Distill job session view',
     },
     async (c) => {
-      const view = await getDistillJobSessionView(deps.memoryDistillQueries, c.req.param('id'))
+      const view = await deps.memoryDistillQueries.getJobSessionView(c.req.param('id'))
       return c.json(view)
     },
   )
