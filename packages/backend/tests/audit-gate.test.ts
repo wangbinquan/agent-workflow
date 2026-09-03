@@ -18,12 +18,14 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import {
+  AUDIT_ATTEMPT_TIMEOUT_MS,
   BLOCKING_SEVERITIES,
   decodeAuditReport,
   evaluateAudit,
   formatVerdict,
   ghsaOf,
   IGNORED_ADVISORIES,
+  runBunAudit,
   type AuditReport,
   type IgnoreEntry,
 } from '../../../scripts/audit-gate'
@@ -193,5 +195,34 @@ describe('audit-gate — CI 接线', () => {
   test('门禁没有被整体降级（策略禁止 continue-on-error）', () => {
     const step = ci.slice(ci.indexOf('dependency audit gate'), ci.indexOf('actionlint'))
     expect(step).not.toContain('continue-on-error')
+  })
+})
+
+// 2026-09-04 实撞：registry 停摆时 `bun audit` 挂着不退出，第 3 次尝试吃满 job 的
+// 15 分钟预算，Static scans 被 timeout 取消、主干红。单次尝试必须有上限，超时算
+// 「没拿到报告」进入重试 / 放行分支，而不是把整个 job 拖死。
+describe('audit-gate — 单次 bun audit 有上限', () => {
+  test('挂住的子进程在 timeoutMs 后被终止，返回 timedOut=true', async () => {
+    const started = performance.now()
+    const run = await runBunAudit({
+      argv: ['bun', '-e', 'await Bun.sleep(30_000)'],
+      timeoutMs: 300,
+    })
+    expect(run.timedOut).toBe(true)
+    expect(performance.now() - started).toBeLessThan(10_000)
+  })
+
+  test('正常退出的子进程原样带回 stdout，timedOut=false', async () => {
+    const run = await runBunAudit({
+      argv: ['bun', '-e', 'process.stdout.write(JSON.stringify({}))'],
+      timeoutMs: 10_000,
+    })
+    expect(run.timedOut).toBe(false)
+    expect(new TextDecoder().decode(run.stdout)).toBe('{}')
+    expect(decodeAuditReport(run.stdout)).toEqual({})
+  })
+
+  test('默认上限远小于 Static scans job 的 15 分钟预算（三次尝试 + 退避仍装得下）', () => {
+    expect(AUDIT_ATTEMPT_TIMEOUT_MS * 3 + 2_000 + 4_000).toBeLessThan(15 * 60_000)
   })
 })

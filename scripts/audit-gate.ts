@@ -219,32 +219,65 @@ export function formatVerdict(verdict: AuditVerdict): string[] {
 const MAX_ATTEMPTS = 3
 
 /**
+ * 单次 `bun audit` 的上限。registry 停摆时 bun 会一直挂在请求上不退出（2026-09-04
+ * 实撞：第 3 次尝试挂满 15 分钟，整个 Static scans job 被 timeout 取消）；三次尝试加
+ * 退避合计仍远在 job 的 15 分钟预算之内，超时按「没拿到报告」计入重试。
+ */
+export const AUDIT_ATTEMPT_TIMEOUT_MS = 90_000
+
+export interface BunAuditRun {
+  stdout: Uint8Array
+  stderr: string
+  /** 子进程在 `timeoutMs` 内没有退出，已被终止；stdout / stderr 是截止时已收到的部分。 */
+  timedOut: boolean
+}
+
+/**
  * 跑 `bun audit --json` 并取回原始 stdout。
  *
  * 注意：bun 1.3.13 在 registry 返回 gzip 时**自己解不开**，会把压缩响应体原样
  * 倒进 stdout、往 stderr 写 `audit request failed to parse json. Is the registry
  * down?` 并 exit 1。所以这里**刻意不看子进程退出码**——它反映的是 bun 的解析
  * 结果，不是漏洞判定。真正的判定由本脚本自己解压后完成。
+ *
+ * `argv` / `timeoutMs` 只为测试注入（用一条会挂住的命令验证超时确实会终止子进程）。
  */
-async function runBunAudit(): Promise<{ stdout: Uint8Array; stderr: string }> {
-  const proc = Bun.spawn(['bun', 'audit', '--json'], { stdout: 'pipe', stderr: 'pipe' })
-  const [out, err] = await Promise.all([
-    new Response(proc.stdout).arrayBuffer(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  return { stdout: new Uint8Array(out), stderr: err.trim() }
+export async function runBunAudit(
+  options: { argv?: readonly string[]; timeoutMs?: number } = {},
+): Promise<BunAuditRun> {
+  const argv = [...(options.argv ?? ['bun', 'audit', '--json'])]
+  const timeoutMs = options.timeoutMs ?? AUDIT_ATTEMPT_TIMEOUT_MS
+  const proc = Bun.spawn(argv, { stdout: 'pipe', stderr: 'pipe' })
+  let timedOut = false
+  const timer = setTimeout(() => {
+    timedOut = true
+    proc.kill()
+  }, timeoutMs)
+  try {
+    const [out, err] = await Promise.all([
+      new Response(proc.stdout).arrayBuffer(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    return { stdout: new Uint8Array(out), stderr: err.trim(), timedOut }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 async function main(): Promise<void> {
   let report: AuditReport | null = null
   let lastStderr = ''
   for (let attempt = 1; attempt <= MAX_ATTEMPTS && report === null; attempt++) {
-    const { stdout, stderr } = await runBunAudit()
+    const { stdout, stderr, timedOut } = await runBunAudit()
     lastStderr = stderr
-    report = decodeAuditReport(stdout)
+    report = timedOut ? null : decodeAuditReport(stdout)
     if (report === null && attempt < MAX_ATTEMPTS) {
-      console.warn(`audit-gate: 第 ${attempt} 次未取到可解析的报告，重试…`)
+      console.warn(
+        timedOut
+          ? `audit-gate: 第 ${attempt} 次在 ${AUDIT_ATTEMPT_TIMEOUT_MS}ms 内没有拿到报告（已终止 bun audit），重试…`
+          : `audit-gate: 第 ${attempt} 次未取到可解析的报告，重试…`,
+      )
       await Bun.sleep(2000 * attempt)
     }
   }
