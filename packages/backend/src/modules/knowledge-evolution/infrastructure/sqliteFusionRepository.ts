@@ -18,6 +18,10 @@ import {
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import type {
+  SkillVersionCommitHooks,
+  SkillVersionCommitRequest,
+} from '@/modules/resource-catalog/public/participants'
+import type {
   FusionBuiltinWorkflowSeed,
   FusionDecisionRecoveryReceipt,
   FusionPersistencePatch,
@@ -238,11 +242,58 @@ function recoverPublishedPlan(
   }
 }
 
+/**
+ * RFC-353 T6 —— 融合提交时「把这批记忆标记为已融合」那一半，由 memory 注入。
+ *
+ * 为什么在这里声明一个窄端口而不是直接吃 memory 的 `MemoryMembershipParticipantInTx`：
+ * 那个合同的方法返回 Promise（provider 中性），而 SQLite 侧的 `apply` 跑在 `dbTxSync` 的
+ * **同步**回调里，拿不到 await。与 T3 给技能回滚落的 `SkillRestoreMemoryMembership` 同形：
+ * 消费处声明自己能用的形状，memory 提供实现，composition 注入。
+ *
+ * 判据（谁会被标记、返回什么顺序、写哪几列）**全在 memory 那边**——这里只负责把事务交过去。
+ */
+export interface FusionMemoryMembershipSync {
+  markFused(
+    tx: DbTxSync,
+    command: {
+      readonly memoryIds: readonly string[]
+      readonly skillId: string
+      readonly skillName: string
+      readonly skillVersion: number
+      readonly fusionId: string
+      readonly actorUserId: string
+      readonly now: number
+    },
+  ): string[]
+  /** RFC-223 provenance 修复：把某条记忆的 `fusedIntoSkillId` 改判为解析出的技能（或隔离哨兵）。 */
+  reassignFusedSkill(
+    db: DbClient,
+    input: { readonly memoryId: string; readonly skillId: string },
+  ): void
+}
+
+/**
+ * RFC-353 T6 —— 融合提交时「推进技能版本」那一半，由 resource-catalog 注入。
+ *
+ * `skills` / `skill_versions` 归 resource-catalog 单写。此前本文件是跨 context 直写它们，
+ * 复合前置条件还只比了 `contentVersion` / `metaRevision` 两项（RC 自己的写入路径比六项）。
+ * 同步端口的理由与上面的 `FusionMemoryMembershipSync` 一致：`apply` 跑在 `dbTxSync` 的同步回调里。
+ */
+export interface FusionSkillVersionCommitSync {
+  commit(
+    tx: DbTxSync,
+    request: SkillVersionCommitRequest,
+    hooks?: SkillVersionCommitHooks<void>,
+  ): number
+}
+
 export function createSqliteFusionPersistence(input: {
   readonly db: DbClient
   readonly appHome: string
+  readonly memoryMembership: FusionMemoryMembershipSync
+  readonly skillVersionCommit: FusionSkillVersionCommitSync
 }): FusionPersistence {
-  const { db, appHome } = input
+  const { db, appHome, memoryMembership, skillVersionCommit } = input
 
   async function seedResources(seed: FusionResourceSeed): Promise<void> {
     const now = Date.now()
@@ -486,53 +537,42 @@ export function createSqliteFusionPersistence(input: {
           throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
         }
         assertClaimSkill(tx, currentFusion, command.actor)
-        const currentSkill = tx.select().from(skills).where(eq(skills.id, fusion.skillId)).get()
-        if (
-          currentSkill === undefined ||
-          currentSkill.contentVersion !== token.contentVersion ||
-          currentSkill.metaRevision !== token.metaRevision
-        ) {
-          throw staleConflictError('skill', 'fusion target skill changed; reload and retry')
-        }
-        tx.update(skills)
-          .set({
-            contentVersion: versionIndex,
-            versionState: 'snapshot-authoritative',
-            updatedAt: command.now,
-          })
-          .where(eq(skills.id, fusion.skillId))
-          .run()
-        tx.insert(skillVersions)
-          .values({
-            id: ulid(),
+        // RFC-353 T6：`skills` / `skill_versions` 归 resource-catalog 单写，这里只把事务交过去。
+        // `before` 空着——上面两道（还在 applying 吗 / 还有权吗）已经跑完，正是它们决定的
+        // 错误优先级：先答无权，再答技能被推进。
+        skillVersionCommit.commit(
+          tx,
+          {
             skillId: fusion.skillId,
             versionIndex,
-            filesPath: `skills/${fusion.skillId}/versions/v${versionIndex}/files`,
+            contentHash: plan!.contentHash,
             source: 'fusion',
             summary: command.summary,
             fusionId: command.fusionId,
             restoredFromVersion: null,
             authorUserId: command.actor.user.id,
-            contentHash: plan!.contentHash,
-            createdAt: command.now,
-          })
-          .run()
-        for (const memoryId of command.incorporatedMemoryIds) {
-          const memory = tx.select().from(memories).where(eq(memories.id, memoryId)).get()
-          if (memory === undefined || memory.status !== 'approved') continue
-          tx.update(memories)
-            .set({
-              status: 'fused',
-              fusedIntoSkillId: fusion.skillId,
-              fusedIntoSkill: fusion.skillName,
-              fusedIntoSkillVersion: versionIndex,
-              fusedAt: command.now,
-              fusedByUserId: command.actor.user.id,
-              fusedFusionId: command.fusionId,
-            })
-            .where(eq(memories.id, memoryId))
-            .run()
-        }
+            now: command.now,
+            expectedSkillId: token.skillId,
+            expectedVersion: token.contentVersion,
+            expectedMetaRevision: token.metaRevision,
+            staleMessage: 'fusion target skill changed; reload and retry',
+          },
+          {
+            // RFC-353 T6：记忆的成员关系由 memory 单写，与技能版本写入**同一事务**——
+            // 不变式是 fused ⟺ 该知识在技能的当前版本里，中间态被读到就是一条幽灵行。
+            after: () => {
+              memoryMembership.markFused(tx, {
+                memoryIds: command.incorporatedMemoryIds,
+                skillId: fusion.skillId,
+                skillName: fusion.skillName,
+                skillVersion: versionIndex,
+                fusionId: command.fusionId,
+                actorUserId: command.actor.user.id,
+                now: command.now,
+              })
+            },
+          },
+        )
         advanceOperation(tx, operationId, 'db-committed')
       })
       databaseCommitted = true
@@ -658,10 +698,7 @@ export function createSqliteFusionPersistence(input: {
           ? fusionSkillId
           : QUARANTINED_FUSION_SKILL_ID
       if (memory.skillId !== resolved) {
-        db.update(memories)
-          .set({ fusedIntoSkillId: resolved })
-          .where(eq(memories.id, memory.id))
-          .run()
+        memoryMembership.reassignFusedSkill(db, { memoryId: memory.id, skillId: resolved })
         if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedMemories++
         else repairedMemories++
       }

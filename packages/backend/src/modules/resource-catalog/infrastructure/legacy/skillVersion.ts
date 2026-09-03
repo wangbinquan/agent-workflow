@@ -110,6 +110,8 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { sha256Hex } from '@/util/hash'
 
+import { assertSkillVersionCompositeFenceSync } from '../sqliteSkillVersionCommitParticipant'
+
 /** A file in a version snapshot: utf-8 text, or a binary file keyed by hash. */
 export type TreeEntry = { kind: 'text'; content: string } | { kind: 'binary'; hash: string }
 
@@ -438,48 +440,10 @@ function assertCompositePrecondition(
   skillId: string,
   commit: SkillVersionCommitOpts,
 ): void {
-  if (
-    commit.expectedSkillId === undefined &&
-    commit.expectedMetaRevision === undefined &&
-    commit.expectedVersion === undefined &&
-    commit.expectedOwnerUserId === undefined &&
-    commit.expectedAclRevision === undefined &&
-    commit.expectedVisibility === undefined
-  ) {
-    return
-  }
-  const live = tx
-    .select({
-      id: skills.id,
-      contentVersion: skills.contentVersion,
-      metaRevision: skills.metaRevision,
-      ownerUserId: skills.ownerUserId,
-      aclRevision: skills.aclRevision,
-      visibility: skills.visibility,
-    })
-    .from(skills)
-    .where(eq(skills.id, skillId))
-    .get()
-  if (
-    !live ||
-    (commit.expectedSkillId !== undefined && live.id !== commit.expectedSkillId) ||
-    (commit.expectedMetaRevision !== undefined &&
-      live.metaRevision !== commit.expectedMetaRevision) ||
-    (commit.expectedVersion !== undefined && live.contentVersion !== commit.expectedVersion) ||
-    // RFC-170 (4th-review [high]): owner-drift — the actor was authorized (route
-    // requireResourceOwner) against the owner at request time; if it transferred
-    // during the operation's await window that authorization is stale → reject, so
-    // a demoted ex-owner cannot commit a post-revocation version. Conservative for
-    // ACL-bypass actors (an owner change during their write also 409s → reload), which is safe.
-    (commit.expectedOwnerUserId !== undefined && live.ownerUserId !== commit.expectedOwnerUserId) ||
-    (commit.expectedAclRevision !== undefined && live.aclRevision !== commit.expectedAclRevision) ||
-    (commit.expectedVisibility !== undefined && live.visibility !== commit.expectedVisibility)
-  ) {
-    throw staleConflictError(
-      'skill',
-      `skill '${skillId}' changed since this operation started; reload and retry`,
-    )
-  }
+  // RFC-353 T6：判据本身搬进了 `domain/skillVersionCommit`，读 live 行搬进了
+  // `sqliteSkillVersionCommitParticipant`——本文件、融合 apply 的两个 provider 从此比同一套六项。
+  // 在此之前融合那两份只比 `contentVersion` / `metaRevision`，少四项。
+  assertSkillVersionCompositeFenceSync(tx as DbTxSync, skillId, commit)
 }
 
 /**

@@ -12,13 +12,19 @@
 // （SQLite 按插入顺序、PostgreSQL 排过序），而这个数组经
 // `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire。
 
-import { and, eq, gt } from 'drizzle-orm'
+import { and, eq, gt, inArray } from 'drizzle-orm'
 
 import { memories } from '@/db/schema'
+import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 
 import type { MemoryMembershipWrites } from '../application/memoryMembership'
-import { fusedProvenanceStamp, memoriesToUnfuseAbove } from '../domain/fusionMembership'
+import type { MemoryMembershipFuseCommand } from '../public/participants'
+import {
+  fusedProvenanceStamp,
+  memoriesToMarkFused,
+  memoriesToUnfuseAbove,
+} from '../domain/fusionMembership'
 
 /**
  * SQL 里保留 WHERE 是有意的——那是索引用得上的形状。
@@ -41,7 +47,37 @@ export function sqliteMemoryMembershipWrites(tx: DbTxSync): MemoryMembershipWrit
     }): Promise<readonly string[]> {
       return unfuseAboveVersionSync(tx, input)
     },
+    async markFused(command: MemoryMembershipFuseCommand): Promise<readonly string[]> {
+      return markFusedSync(tx, command)
+    },
   })
+}
+
+/** 同步核心，理由同 `unfuseAboveVersionSync`：SQLite 侧的调用方跑在 `dbTxSync` 的同步回调里。 */
+export function markFusedSync(tx: DbTxSync, command: MemoryMembershipFuseCommand): string[] {
+  const candidates = tx
+    .select({
+      id: memories.id,
+      status: memories.status,
+      fusedIntoSkillId: memories.fusedIntoSkillId,
+      fusedIntoSkillVersion: memories.fusedIntoSkillVersion,
+    })
+    .from(memories)
+    .where(inArray(memories.id, [...command.memoryIds]))
+    .all()
+  const ids = memoriesToMarkFused(candidates, command.memoryIds)
+  const stamp = fusedProvenanceStamp({
+    skillId: command.skillId,
+    skillName: command.skillName,
+    skillVersion: command.skillVersion,
+    fusionId: command.fusionId,
+    actorUserId: command.actorUserId,
+    now: command.now,
+  })
+  for (const id of ids) {
+    tx.update(memories).set(stamp).where(eq(memories.id, id)).run()
+  }
+  return ids
 }
 
 /**
@@ -76,4 +112,22 @@ export function unfuseAboveVersionSync(
     tx.update(memories).set(stamp).where(eq(memories.id, id)).run()
   }
   return ids
+}
+
+/**
+ * RFC-353 T6 —— RFC-223 provenance 修复用的**非事务**写入面。
+ *
+ * 与上面两个不同：`repairProvenance` 是 daemon 启动期逐条修复，没有外层事务
+ * （每条独立、可中断、下次启动继续），所以这里收 `DbClient` 而不是 `DbTxSync`。
+ * 收进 memory 的理由不变——`memories.fused_into_skill_id` 是 memory 的列，
+ * 只是「谁能写」这件事，不该由 knowledge-evolution 自己伸手。
+ */
+export function reassignFusedSkillSync(
+  db: DbClient,
+  input: { readonly memoryId: string; readonly skillId: string },
+): void {
+  db.update(memories)
+    .set({ fusedIntoSkillId: input.skillId })
+    .where(eq(memories.id, input.memoryId))
+    .run()
 }

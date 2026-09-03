@@ -30,9 +30,13 @@ import { memories } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
 import {
   fusedProvenanceStamp,
+  memoriesToMarkFused,
   memoriesToUnfuseAbove,
 } from '../src/modules/memory/domain/fusionMembership'
-import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
+import {
+  markFusedSync,
+  unfuseAboveVersionSync,
+} from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SQLITE_ADAPTER = resolve(
@@ -256,6 +260,107 @@ describe('RFC-353 T1 — 顺序只有一个来源', () => {
         usesStamp: body.includes('fusedProvenanceStamp'),
         ownSort: /\.sort\(\)/.test(body),
       }).toEqual({ name, importsDomain: true, usesStamp: true, ownSort: false })
+    }
+  })
+})
+
+describe('RFC-353 T6 — 融合提交侧的成员关系判据', () => {
+  test('只有 approved 的候选会被标记，其余静静跳过（那是真实分支）', () => {
+    // 候选是在融合**发起时**选定的；审批之间记忆可能被归档、被别的融合吃掉、被人工改状态。
+    // 所以「跳过非 approved」不是防御性代码，是每天都会走到的分支。
+    const candidates = [
+      { id: 'm_a', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+      { id: 'm_b', status: 'fused', fusedIntoSkillId: 'other', fusedIntoSkillVersion: 2 },
+      { id: 'm_c', status: 'archived', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+      { id: 'm_d', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+    ]
+    expect(memoriesToMarkFused(candidates, ['m_a', 'm_b', 'm_c', 'm_d'])).toEqual(['m_a', 'm_d'])
+  })
+
+  test('没被这次融合选中的记忆不会被顺手标记', () => {
+    const candidates = [
+      { id: 'm_a', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+      { id: 'm_z', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+    ]
+    expect(memoriesToMarkFused(candidates, ['m_a'])).toEqual(['m_a'])
+  })
+
+  test('返回顺序与解融合同源，都是字典序', () => {
+    const candidates = [
+      { id: 'm_z', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+      { id: 'm_a', status: 'approved', fusedIntoSkillId: null, fusedIntoSkillVersion: null },
+    ]
+    expect(memoriesToMarkFused(candidates, ['m_z', 'm_a'])).toEqual(['m_a', 'm_z'])
+  })
+
+  test('真库：标记之后 provenance 七列按同一份 stamp 写满', () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    seed(db, [
+      { id: 'm_1', status: 'approved', skillId: null, version: null },
+      { id: 'm_2', status: 'archived', skillId: null, version: null },
+    ])
+    const marked = dbTxSync(db, (tx) =>
+      markFusedSync(tx, {
+        memoryIds: ['m_1', 'm_2'],
+        skillId: 'skl_9',
+        skillName: 'my-skill',
+        skillVersion: 4,
+        fusionId: 'fus_1',
+        actorUserId: 'u_1',
+        now: 1_700_000_000_777,
+      }),
+    )
+    expect(marked).toEqual(['m_1'])
+    const rows = db.select().from(memories).all()
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    const stamp = fusedProvenanceStamp({
+      skillId: 'skl_9',
+      skillName: 'my-skill',
+      skillVersion: 4,
+      fusionId: 'fus_1',
+      actorUserId: 'u_1',
+      now: 1_700_000_000_777,
+    })
+    const m1 = byId.get('m_1')!
+    expect({
+      status: m1.status,
+      fusedIntoSkillId: m1.fusedIntoSkillId,
+      fusedIntoSkill: m1.fusedIntoSkill,
+      fusedIntoSkillVersion: m1.fusedIntoSkillVersion,
+      fusedAt: m1.fusedAt,
+    }).toEqual({
+      status: stamp.status,
+      fusedIntoSkillId: stamp.fusedIntoSkillId,
+      fusedIntoSkill: stamp.fusedIntoSkill,
+      fusedIntoSkillVersion: stamp.fusedIntoSkillVersion,
+      fusedAt: stamp.fusedAt,
+    })
+    // 非 approved 的那条一个字段都没被碰。
+    expect(byId.get('m_2')!.status).toBe('archived')
+    expect(byId.get('m_2')!.fusedIntoSkillId).toBeNull()
+  })
+})
+
+describe('RFC-353 T6 — fusion 适配器不再直写 memories', () => {
+  test('两个 fusion 适配器里对 memories 的写入为 0', () => {
+    // AC-4 的机器判据（写侧）。读仍然有——`repairProvenance` 要读 `skill_versions` 才能
+    // 发现孤儿 fusion 行、`loadSkillAccess` 要读 `skills` 做授权——那部分按 owner 转交登记，
+    // 不在本刀。写侧必须归零：跨聚合**写**才是 design §638 给 KE 的禁止清单第一条。
+    for (const name of ['sqliteFusionRepository.ts', 'postgresqlFusionRepository.ts']) {
+      const source = readFileSync(
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'knowledge-evolution',
+          'infrastructure',
+          name,
+        ),
+        'utf8',
+      )
+      const writes = source.match(/(?:update|insert|delete)\(memories\)/g) ?? []
+      expect({ name, writes }).toEqual({ name, writes: [] })
     }
   })
 })

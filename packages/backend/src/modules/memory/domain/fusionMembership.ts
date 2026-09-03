@@ -109,3 +109,20 @@ export function fusedProvenanceStamp(provenance: FusedProvenance | null): FusedP
     fusedFusionId: provenance.fusionId,
   }
 }
+
+/**
+ * 融合提交时，这批候选里**真正会被标记为已融合**的记忆 id，字典序。
+ *
+ * 只有 `approved` 的会被标记：两个 provider 今天都逐条读回来判 `status !== 'approved'` 就跳过。
+ * 这条「跳过」不是防御性代码，是真实分支——候选是在融合发起时选定的，审批之间那段时间里
+ * 记忆可能被归档、被别的融合吃掉、或被人工改状态。判据收成一份，免得两个 provider 各判各的。
+ */
+export function memoriesToMarkFused(
+  candidates: readonly FusionMembershipRow[],
+  requestedIds: readonly string[],
+): string[] {
+  const requested = new Set(requestedIds)
+  return orderMembershipIds(
+    candidates.filter((row) => requested.has(row.id) && row.status === 'approved').map((r) => r.id),
+  )
+}

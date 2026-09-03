@@ -17,6 +17,7 @@
 // 其中一条还穿过一个 legacy facade。
 
 import type {
+  MemoryMembershipFuseCommand,
   MemoryMembershipParticipantInTx,
   MemoryMembershipUnfuseSelector,
 } from '../public/participants'
@@ -30,6 +31,7 @@ import type {
  */
 export interface MemoryMembershipWrites {
   unfuseAboveVersion(selector: MemoryMembershipUnfuseSelector): Promise<readonly string[]>
+  markFused(command: MemoryMembershipFuseCommand): Promise<readonly string[]>
 }
 
 /**
@@ -48,6 +50,9 @@ export function createMemoryMembershipParticipantInTx(
   const participant = Object.freeze({
     unfuseAboveVersion(selector: MemoryMembershipUnfuseSelector) {
       return writes.unfuseAboveVersion(selector)
+    },
+    markFused(command: MemoryMembershipFuseCommand) {
+      return writes.markFused(command)
     },
   }) as unknown as MemoryMembershipParticipantInTx
   trustedMemoryMembershipParticipants.add(participant)

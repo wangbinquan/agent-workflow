@@ -17,3 +17,8 @@ export const skillCatalogBootParticipantBrand: unique symbol = Symbol(
 export const agentLaunchResourceIntegrityParticipantBrand: unique symbol = Symbol(
   'agent-launch-resource-integrity-participant',
 )
+
+/** Runtime-only nominal key for the tx-bound skill version commit capability. */
+export const skillVersionCommitParticipantInTxBrand: unique symbol = Symbol(
+  'skill-version-commit-participant-in-tx',
+)

@@ -1574,6 +1574,19 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
 // forbidden type import`（该符号此前经 `memory/public/fusion.ts` 进入 memory 公共面，fusion
 // 端口迁走后不再在那条面上）。
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
+  // RFC-353 T6：memory 的成员关系铸造入口经 `public/participants` 出（唯一 owner 工厂 +
+  // 两个 provider 的实现），消费方 knowledge-evolution 从那里取，而不是深入
+  // `memory/composition.ts` / `infrastructure/*`——后者是跨 context 内部 import（RFC-317 R2 禁止）。
+  // 这里出现 provider 形状是因为「记忆成员关系必须与技能版本写入同一事务」，事务只能由调用方
+  // 开好交进来。与 RFC-352 给 source-control 的 `sqliteRepositoryScopeExistenceReads` 同类，
+  // 同随 W4-E3 收口时一并处置（把事务形状收进 provider-neutral 的 tx scope 抽象）。
+  'modules/memory/infrastructure/postgresqlSkillMemoryFusionParticipant.ts#composePostgresqlFusedSkillReassignment: forbidden type import @/platform/persistence/postgresqlDatabaseClient#PostgresqlDatabaseClient',
+  'modules/memory/infrastructure/postgresqlSkillMemoryFusionParticipant.ts#composePostgresqlSkillMemoryFusionParticipantFactory: forbidden type import @/platform/persistence/postgresqlDatabaseClient#PostgresqlDatabaseClient',
+  'modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#markFusedSync: forbidden type import @/db/txSync#DbTxSync',
+  'modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#reassignFusedSkillSync: forbidden type DbClient',
+  'modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#reassignFusedSkillSync: forbidden type import @/db/client#DbClient',
+  'modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#sqliteMemoryMembershipWrites: forbidden type import @/db/txSync#DbTxSync',
+  'modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#unfuseAboveVersionSync: forbidden type import @/db/txSync#DbTxSync',
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
   'modules/knowledge-evolution/application/fusionOrchestration.ts#approveFusion: forbidden type Partial',
   'modules/knowledge-evolution/application/fusionOrchestration.ts#approveFusion: forbidden type import @/auth/actor#Actor',

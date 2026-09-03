@@ -1,4 +1,8 @@
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type {
+  ResourceVisibility,
+  SkillVersionSource,
+  WorkflowDefinition,
+} from '@agent-workflow/shared'
 import type {
   DirectAuthenticatedAuthority,
   RequestAuthority,
@@ -8,6 +12,7 @@ import type {
   agentLaunchResourceIntegrityParticipantBrand,
   intentContextResourceAuthorizationSessionBrand,
   skillCatalogBootParticipantBrand,
+  skillVersionCommitParticipantInTxBrand,
 } from '../domain/participantBrands'
 import type {
   AgentPackageMutation,
@@ -365,3 +370,67 @@ export interface ResourcePackageApplyScenarioProvider {
   readonly scenario: ResourcePackageApplyScenarioPlan
   readonly participants: ResourcePackageMutationParticipants
 }
+
+// ---------------------------------------------------------------------------
+// RFC-353 T6（RFC-294 W4-E3）—— resource-catalog offered 的**技能版本提交**面。
+//
+// `skills` / `skill_versions` 两张表归 resource-catalog 单写。此前 knowledge-evolution 的
+// 融合 `apply()` 是跨 context 直写它们（两个 provider 各抄一份，复合前置条件还比对方少四项）。
+// 现在改由这个 tx-bound participant 代写：调用方开好事务交进来，版本行与调用方自己的
+// 状态推进、与 memory 的成员关系标记落在同一个事务里。
+//
+// 唯一 owner 工厂是 `application/skillVersionCommit.ts` 的
+// `createSkillVersionCommitParticipantInTx`。
+// ---------------------------------------------------------------------------
+
+/** 调用方在授权那一刻看到的技能形状；漂了就以 409 退回让它重新加载。 */
+export interface SkillVersionCommitFence {
+  readonly expectedSkillId?: string
+  readonly expectedVersion?: number
+  readonly expectedMetaRevision?: number
+  readonly expectedOwnerUserId?: string | null
+  readonly expectedAclRevision?: number
+  readonly expectedVisibility?: ResourceVisibility
+  /**
+   * 栅栏拦下时给用户看的话。默认是 RC 通用的那句；融合 approve 传自己的
+   * （「fusion target skill changed」），这样判据收成一份而**用户可见的文案逐字不变**。
+   */
+  readonly staleMessage?: string
+}
+
+export interface SkillVersionCommitRequest extends SkillVersionCommitFence {
+  readonly skillId: string
+  readonly versionIndex: number
+  readonly contentHash: string
+  readonly source: SkillVersionSource
+  readonly summary: string | null
+  readonly fusionId: string | null
+  readonly restoredFromVersion: number | null
+  readonly authorUserId: string | null
+  readonly now: number
+}
+
+/**
+ * 调用方折进同一事务的两段自有写入 / 检查。
+ *
+ * `before` 在版本行落下**之前**跑，这决定错误优先级：融合 approve 的既有语义是先答
+ * 「不在 applying / 无权」，再答「技能已被别人推进」。放到写入之后会让 409 抢在前面，
+ * 那是用户可见的行为漂移。`after` 拿得到刚写下的版本号（融合在这里把记忆标记为已融合）。
+ */
+export interface SkillVersionCommitHooks<R> {
+  readonly before?: () => R
+  readonly after?: (versionIndex: number) => R
+}
+
+export interface SkillVersionCommitParticipantInTx {
+  readonly [skillVersionCommitParticipantInTxBrand]: 'skill-version-commit'
+  /** 返回刚写下的版本号（等于 `request.versionIndex`）。 */
+  commit(
+    request: SkillVersionCommitRequest,
+    hooks?: SkillVersionCommitHooks<Promise<void> | void>,
+  ): Promise<number>
+}
+
+export { createSkillVersionCommitParticipantInTx } from '../application/skillVersionCommit'
+export { sqliteSkillVersionCommitSync } from '../infrastructure/sqliteSkillVersionCommitParticipant'
+export { composePostgresqlSkillVersionCommitParticipantFactory } from '../infrastructure/postgresqlSkillVersionCommitParticipant'

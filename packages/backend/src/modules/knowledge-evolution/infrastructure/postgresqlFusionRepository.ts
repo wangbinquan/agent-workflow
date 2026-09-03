@@ -2,6 +2,8 @@ import { and, desc, eq, isNull } from 'drizzle-orm'
 import { cpSync, existsSync, rmSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { ulid } from 'ulid'
+import type { MemoryMembershipParticipantInTx } from '@/modules/memory/public/participants'
+import type { SkillVersionCommitParticipantInTx } from '@/modules/resource-catalog/public/participants'
 import type { FusionStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import {
@@ -259,11 +261,36 @@ function recoverPublishedPlan(
   }
 }
 
+/**
+ * RFC-353 T6 —— 融合提交时「把这批记忆标记为已融合」那一半，由 memory 注入。
+ * PostgreSQL 侧的 `apply` 本来就是 async，所以这里直接吃 memory offered 的 tx-bound
+ * participant（带 brand、唯一 owner 工厂铸造），不需要 SQLite 那侧的同步变体。
+ */
+export interface PostgresqlFusionMemoryMembership {
+  inTransaction(transaction: PostgresqlTransaction): MemoryMembershipParticipantInTx
+}
+
+/**
+ * RFC-353 T6 —— 融合提交时「推进技能版本」那一半，由 resource-catalog 注入。
+ * `skills` / `skill_versions` 归它单写；PostgreSQL 侧同样直接吃 offered 的 tx-bound participant。
+ */
+export interface PostgresqlFusionSkillVersionCommit {
+  inTransaction(transaction: PostgresqlTransaction): SkillVersionCommitParticipantInTx
+}
+
+/** RFC-223 provenance 修复：非事务，逐条改判某条记忆的 `fusedIntoSkillId`。 */
+export interface PostgresqlFusedSkillReassignment {
+  reassign(input: { readonly memoryId: string; readonly skillId: string }): Promise<void>
+}
+
 export function createPostgresqlFusionPersistence(input: {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
+  readonly memoryMembership: PostgresqlFusionMemoryMembership
+  readonly fusedSkillReassignment: PostgresqlFusedSkillReassignment
+  readonly skillVersionCommit: PostgresqlFusionSkillVersionCommit
 }): FusionPersistence {
-  const { db, appHome } = input
+  const { db, appHome, memoryMembership, fusedSkillReassignment, skillVersionCommit } = input
 
   async function seedResources(seed: FusionResourceSeed): Promise<void> {
     const now = Date.now()
@@ -517,60 +544,41 @@ export function createPostgresqlFusionPersistence(input: {
           throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
         }
         await assertClaimSkill(tx, currentFusion, command.actor)
-        const currentSkill = await tx
-          .select()
-          .from(skills)
-          .where(eq(skills.id, fusion.skillId))
-          .get()
-        if (
-          currentSkill === undefined ||
-          currentSkill.contentVersion !== token.contentVersion ||
-          currentSkill.metaRevision !== token.metaRevision
-        ) {
-          throw staleConflictError('skill', 'fusion target skill changed; reload and retry')
-        }
-        await tx
-          .update(skills)
-          .set({
-            contentVersion: versionIndex,
-            versionState: 'snapshot-authoritative',
-            updatedAt: command.now,
-          })
-          .where(eq(skills.id, fusion.skillId))
-          .run()
-        await tx
-          .insert(skillVersions)
-          .values({
-            id: ulid(),
+        // RFC-353 T6：`skills` / `skill_versions` 归 resource-catalog 单写，这里只把事务交过去。
+        // `before` 空着——上面两道（还在 applying 吗 / 还有权吗）已经跑完，正是它们决定的
+        // 错误优先级：先答无权，再答技能被推进。
+        await skillVersionCommit.inTransaction(tx).commit(
+          {
             skillId: fusion.skillId,
             versionIndex,
-            filesPath: `skills/${fusion.skillId}/versions/v${versionIndex}/files`,
+            contentHash: plan!.contentHash,
             source: 'fusion',
             summary: command.summary,
             fusionId: command.fusionId,
             restoredFromVersion: null,
             authorUserId: command.actor.user.id,
-            contentHash: plan!.contentHash,
-            createdAt: command.now,
-          })
-          .run()
-        for (const memoryId of command.incorporatedMemoryIds) {
-          const memory = await tx.select().from(memories).where(eq(memories.id, memoryId)).get()
-          if (memory === undefined || memory.status !== 'approved') continue
-          await tx
-            .update(memories)
-            .set({
-              status: 'fused',
-              fusedIntoSkillId: fusion.skillId,
-              fusedIntoSkill: fusion.skillName,
-              fusedIntoSkillVersion: versionIndex,
-              fusedAt: command.now,
-              fusedByUserId: command.actor.user.id,
-              fusedFusionId: command.fusionId,
-            })
-            .where(eq(memories.id, memoryId))
-            .run()
-        }
+            now: command.now,
+            expectedSkillId: token.skillId,
+            expectedVersion: token.contentVersion,
+            expectedMetaRevision: token.metaRevision,
+            staleMessage: 'fusion target skill changed; reload and retry',
+          },
+          {
+            // RFC-353 T6：记忆的成员关系由 memory 单写，与技能版本写入**同一事务**——
+            // 不变式是 fused ⟺ 该知识在技能的当前版本里，中间态被读到就是一条幽灵行。
+            after: async () => {
+              await memoryMembership.inTransaction(tx).markFused({
+                memoryIds: command.incorporatedMemoryIds,
+                skillId: fusion.skillId,
+                skillName: fusion.skillName,
+                skillVersion: versionIndex,
+                fusionId: command.fusionId,
+                actorUserId: command.actor.user.id,
+                now: command.now,
+              })
+            },
+          },
+        )
         await advanceOperation(tx, operationId, 'db-committed')
       })
       databaseCommitted = true
@@ -695,11 +703,7 @@ export function createPostgresqlFusionPersistence(input: {
           ? fusionSkillId
           : QUARANTINED_FUSION_SKILL_ID
       if (memory.skillId !== resolved) {
-        await db
-          .update(memories)
-          .set({ fusedIntoSkillId: resolved })
-          .where(eq(memories.id, memory.id))
-          .run()
+        await fusedSkillReassignment.reassign({ memoryId: memory.id, skillId: resolved })
         if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedMemories++
         else repairedMemories++
       }
