@@ -72,6 +72,8 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/rfc349-database-migration-coordinator.integration.test.ts#skip': 1,
   'packages/backend/tests/rfc349-postgresql-logical-migration.integration.test.ts#skip': 1,
   'packages/backend/tests/rfc349-postgresql-target-faults.integration.test.ts#skip': 1,
+  // 写矩阵要一台一次性外置 PostgreSQL（postgresql-evidence 提供），普通跑批跳过。
+  'packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts#skip': 1,
   'e2e/clarify.spec.ts#skip': 1,
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   // RFC-319 REPO-42（2026-08-26）：这里曾是 2 —— 一条是 gitea 夹具未配置时的条件跳过
