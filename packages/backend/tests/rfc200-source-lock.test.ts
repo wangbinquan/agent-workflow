@@ -133,7 +133,9 @@ describe('RFC-200 source wiring locks', () => {
     const scheduler = read('packages/backend/src/services/scheduler.ts')
     expect(scheduler).toContain('promptTemplate: buildPrompt(envelopeNonce)')
 
-    const distiller = read('packages/backend/src/services/memoryDistiller.ts')
+    const distiller = read(
+      'packages/backend/src/modules/memory/application/distill/memoryDistiller.ts',
+    )
     expect(distiller).toContain("fenceUntrusted('memory-distill-source-context'")
     expect(distiller).toContain('extractLastEnvelope(text, envelopeNonce)')
     expect(distiller).toContain('options.envelopeNonce ?? generateEnvelopeNonce()')

@@ -114,11 +114,17 @@ export interface RepositoryScopeSubject {
 
 export type RepositoryScopeMaybePromise<T> = T | Promise<T>
 
+declare const repositoryScopeAuthorizationInTxBrand: unique symbol
+
 /**
  * source-control 提供给 memory 的 repository/group scope 授权面。
  * `Transaction` 由各 provider 绑定，调用方必须在**同一个**事务里问这两件事。
+ *
+ * 带私有 brand 且只有唯一 owner 工厂（`createRepositoryScopeAuthorizationInTx`）——
+ * 结构等价的对象铸不出这个类型，也无法被序列化后重建（RFC-294 capability-forge 守卫）。
  */
 export interface RepositoryScopeAuthorizationInTx<Transaction> {
+  readonly [repositoryScopeAuthorizationInTxBrand]: 'repository-scope-authorization'
   /** 目标仓库 / 仓库组的行是否还在。 */
   exists(
     transaction: Transaction,

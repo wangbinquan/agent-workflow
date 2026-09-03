@@ -21,7 +21,7 @@ import {
   runDistill,
   type DistillerSpawnFn,
   type DistillerSpawnInput,
-} from '../src/services/memoryDistiller'
+} from '../src/modules/memory/application/distill/memoryDistiller'
 import { createInMemoryDb } from '../src/db/client'
 import { resolve } from 'node:path'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'

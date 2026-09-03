@@ -342,7 +342,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   })
 
   it('memoryDistiller 无 protocol 判别（spawn 与 transcript capture 均走 driver capability）', () => {
-    const src = SRC('services/memoryDistiller.ts')
+    const src = SRC('modules/memory/application/distill/memoryDistiller.ts')
     expect(src).not.toContain('captureDistillSession')
     const memoryCapture = SRC('modules/memory/infrastructure/memoryDistillSessionCapture.ts')
     expect(memoryCapture).toContain('getRuntimeDriver(input.protocol).captureDistillSession?.(')

@@ -391,11 +391,8 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1911,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
-      }
+      "baseline": 1910,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -429,10 +426,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6303,
+      "baseline": 6313,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
+        "why": "RFC-352 T6（RFC-294 W4-E2）：蒸馏 1274 行从 `services/memoryDistiller.ts` 整体迁进 `modules/memory/application/distill/`，提示词常量下沉 `domain/distillPrompt.ts`。一份 legacy 文件变成两份模块文件，且迁位让它对 legacy 的 7 条依赖第一次成为可记账的 module→legacy 边（迁位前是 legacy→legacy，跨域图里看不见），因此 owner / observed-import / exception 各涨一次。涨的是账本的分辨率，不是新债。"
       }
     },
     {
@@ -453,17 +450,17 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5241,
+      "baseline": 5251,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
+        "why": "RFC-352 T6（RFC-294 W4-E2）：蒸馏 1274 行从 `services/memoryDistiller.ts` 整体迁进 `modules/memory/application/distill/`，提示词常量下沉 `domain/distillPrompt.ts`。一份 legacy 文件变成两份模块文件，且迁位让它对 legacy 的 7 条依赖第一次成为可记账的 module→legacy 边（迁位前是 legacy→legacy，跨域图里看不见），因此 owner / observed-import / exception 各涨一次。涨的是账本的分辨率，不是新债。"
       }
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 351,
+      "baseline": 350,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -471,10 +468,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 954,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -494,15 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25695,
+      "baseline": 25704,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-352 T4（RFC-294 W4-E2）：memory 的 scope Move 不再直读 source-control 的 `cachedRepos` / `repoGroups`，改经 source-control 新落的 offered `RepositoryScopeAuthorizationInTx`（`exists` + `canManage` 两问，判据仍是「仅 resource-acl:bypass」逐字未变）。两个 provider 各一个实现，因此 owner / public-surface / mutation entrypoint 各多一处。"
+        "why": "RFC-352 T6（RFC-294 W4-E2）：蒸馏 1274 行从 `services/memoryDistiller.ts` 整体迁进 `modules/memory/application/distill/`，提示词常量下沉 `domain/distillPrompt.ts`。一份 legacy 文件变成两份模块文件，且迁位让它对 legacy 的 7 条依赖第一次成为可记账的 module→legacy 边（迁位前是 legacy→legacy，跨域图里看不见），因此 owner / observed-import / exception 各涨一次。涨的是账本的分辨率，不是新债。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4a60dd3c61aee997d1c691ae74b000983c1a42b65cbdbb2ee10802b1f7bfb3b4",
+    "sourceDigest": "sha256:08bc94eed6634d0f7f5ea8234dffac19e13f6f850dff7dd85922ea6eab3c28fb",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -515,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "389613ef027bdf96fcc158575b2b4b9e94da8034",
-    "contentDigest": "sha256:1b95f84753607f8ad91a856535436921758f85efa8c9b23578c4a3555cdbf52e",
+    "currentSnapshotSha": "e48508ee4c5506f39d907a340a0d15f787726caa",
+    "contentDigest": "sha256:f78011a5c616583bb78f709660ff173208aacd9d0a92ddbd36e73f616a94630c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

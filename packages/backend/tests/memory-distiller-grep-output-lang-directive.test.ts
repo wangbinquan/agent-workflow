@@ -21,12 +21,37 @@ import { resolve } from 'node:path'
 import {
   DISTILLER_OUTPUT_LANG_DIRECTIVE,
   DISTILLER_SYSTEM_PROMPT,
-} from '../src/services/memoryDistiller'
+} from '../src/modules/memory/application/distill/memoryDistiller'
 
-const SRC_PATH = resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts')
+const SRC_PATH = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'memory',
+  'domain',
+  'distillPrompt.ts',
+)
+
+// RFC-352：常量下沉 domain、组装仍在 application，因此两条守卫各读各的 owner 文件。
+// 下一步把 buildDistillerUserPrompt 也移进 domain 时，把这里改成同一个路径即可。
+const PROMPT_BUILDER_PATH = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'memory',
+  'application',
+  'distill',
+  'memoryDistiller.ts',
+)
 
 async function readSrc(): Promise<string> {
   return await Bun.file(SRC_PATH).text()
+}
+
+async function readPromptBuilderSrc(): Promise<string> {
+  return await Bun.file(PROMPT_BUILDER_PATH).text()
 }
 
 /**
@@ -37,14 +62,14 @@ async function readSrc(): Promise<string> {
 const BASELINE_SHA256 = 'd3e640d98cdbd1b2d09c7b813547879242f9bea944a7761a855dcf68eb054474'
 
 describe('RFC-050 grep guards — output-language directive', () => {
-  test('G1: both directive strings appear verbatim in memoryDistiller.ts', async () => {
+  test('G1: both directive strings appear verbatim in domain/distillPrompt.ts', async () => {
     const src = await readSrc()
     expect(src).toContain(DISTILLER_OUTPUT_LANG_DIRECTIVE['en-US'])
     expect(src).toContain(DISTILLER_OUTPUT_LANG_DIRECTIVE['zh-CN'])
   })
 
   test('G2: buildDistillerUserPrompt appends DISTILLER_OUTPUT_LANG_DIRECTIVE', async () => {
-    const src = await readSrc()
+    const src = await readPromptBuilderSrc()
     // The function must reference the directive map by name AND push it
     // into the prompt lines. We look for both signals so a rename of the
     // local `outputLang` variable doesn't accidentally pass.

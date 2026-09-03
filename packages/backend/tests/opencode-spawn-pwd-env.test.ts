@@ -84,7 +84,7 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
 
   test('memoryDistiller.ts passes its isolated worktreeDir into buildSpawn', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src/services/memoryDistiller.ts'),
+      resolve(import.meta.dir, '..', 'src/modules/memory/application/distill/memoryDistiller.ts'),
       'utf-8',
     )
     expect(src).toContain('buildSpawn(')

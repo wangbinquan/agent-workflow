@@ -37,7 +37,7 @@ import {
   startMemoryDistillLoop,
 } from '../src/services/memoryDistillScheduler'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { DistillerSpawnFn } from '../src/services/memoryDistiller'
+import type { DistillerSpawnFn } from '../src/modules/memory/application/distill/memoryDistiller'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -20,7 +20,11 @@ import type {
   SourceContextBudget,
 } from '@agent-workflow/shared'
 import { QUARANTINED_SNAPSHOT_AGENT_ID, WorkgroupRuntimeConfigSchema } from '@agent-workflow/shared'
-import { runDistill, type DistillerSpawnFn, rowToDistillJob } from '@/services/memoryDistiller'
+import {
+  runDistill,
+  type DistillerSpawnFn,
+  rowToDistillJob,
+} from '@/modules/memory/application/distill/memoryDistiller'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
 import { createLogger } from '@/util/log'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'

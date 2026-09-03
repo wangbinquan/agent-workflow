@@ -28,7 +28,7 @@ import {
   buildDistillerUserPrompt,
   loadSourceEvents,
   rowToDistillJob,
-} from '../src/services/memoryDistiller'
+} from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 

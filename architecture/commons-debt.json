@@ -4,7 +4,7 @@
   "baseline": {
     "recordedAt": "2026-08-23",
     "inboundEdges": 323,
-    "outboundEdges": 11,
+    "outboundEdges": 18,
     "registeredFindings": 79,
     "recordedAtShaNote": "采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
   },
@@ -186,27 +186,6 @@
       "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator",
       "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow.validator",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:3f508d0cb47540693543"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#validateWorkflowDef"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow.validator",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -220,6 +199,27 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#ValidatorContext"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow.validator",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:3f508d0cb47540693543"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts#validateWorkflowDef"
       ],
       "canonicalFacadeIds": []
     },
@@ -440,27 +440,6 @@
       "from": "packages/backend/src/modules/integration/application/mrEnsure.ts",
       "to": "@/services/codeHost/call",
       "specifier": "@/services/codeHost/call",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "integration",
-      "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-02",
-      "canonicalImportEdgeIds": [
-        "import:3d9af2993c79ab5def7e"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/codeHost/call.ts#executeCodeHostCall"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/integration/application/mrEnsure.ts",
-      "to": "@/services/codeHost/call",
-      "specifier": "@/services/codeHost/call",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "integration",
@@ -474,6 +453,27 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/codeHost/call.ts#CodeHostCallDeps"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/integration/application/mrEnsure.ts",
+      "to": "@/services/codeHost/call",
+      "specifier": "@/services/codeHost/call",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "application 层反向依赖 legacy 横向模块 @/services/codeHost/call；该能力尚无 port/public 合同可替代。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:3d9af2993c79ab5def7e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/codeHost/call.ts#executeCodeHostCall"
       ],
       "canonicalFacadeIds": []
     },
@@ -524,6 +524,29 @@
       "from": "packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts",
       "to": "@/services/intent/manifest",
       "specifier": "@/services/intent/manifest",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "RFC-349 provider cutover 后该 bounded context 仍反向消费 legacy service 类型或实现；这是逐边可见的兼容债，后续须将合同归入 owner application/public port。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9974bddcde99eeac4078",
+        "import:d660ee6d907938c70558"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/intent/manifest.ts#IntentContextManifest",
+        "owner:packages/backend/src/services/intent/manifest.ts#IntentHandleWatermark"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts",
+      "to": "@/services/intent/manifest",
+      "specifier": "@/services/intent/manifest",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "intent",
@@ -550,29 +573,6 @@
     },
     {
       "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts",
-      "to": "@/services/intent/manifest",
-      "specifier": "@/services/intent/manifest",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-349 provider cutover 后该 bounded context 仍反向消费 legacy service 类型或实现；这是逐边可见的兼容债，后续须将合同归入 owner application/public port。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9974bddcde99eeac4078",
-        "import:d660ee6d907938c70558"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/intent/manifest.ts#IntentContextManifest",
-        "owner:packages/backend/src/services/intent/manifest.ts#IntentHandleWatermark"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R2-outbound-module-to-legacy",
       "from": "packages/backend/src/modules/intent/application/ports/intentPersistence.ts",
       "to": "@/services/intent/manifest",
       "specifier": "@/services/intent/manifest",
@@ -589,6 +589,155 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentPersistence.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/intent/manifest.ts#IntentContextManifest"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/envelope",
+      "specifier": "@/services/envelope",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 解析 `<workflow-output>` 信封是执行协议的一部分，归 task-execution 的执行合同。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:32c80f7bbec8ec08d008"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/envelope.ts#extractLastEnvelope"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/execution/agentProcess",
+      "specifier": "@/services/execution/agentProcess",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "runtime-management",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 真正 spawn agent 进程的入口。同样收进 `DistillerProcessPort` 的 infrastructure 实现。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E4b（runtime-management vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2bfaaf344338a8f3fab0"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/execution/agentProcess.ts#runAgentProcess"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/nodeRunMint",
+      "specifier": "@/services/nodeRunMint",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 每次蒸馏要一个 envelope nonce；铸号归 task-execution。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:59e4b5241b08b45205d9"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/nodeRunMint.ts#generateEnvelopeNonce"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/nodeRunPrompt",
+      "specifier": "@/services/nodeRunPrompt",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 读 node_run 的提示词作为蒸馏源材料；读点归 task-execution。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5b30eee8a2e36ca0b4a4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/nodeRunPrompt.ts#readNodeRunPrompt"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/runtime",
+      "specifier": "@/services/runtime",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "runtime-management",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 蒸馏要按管理员选定的 runtime 起子进程。目标形态是 memory 只认自己的 `DistillerProcessPort`，由 infrastructure 适配 runtime-management 的驱动合同。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E4b（runtime-management vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:6d5a94d223636922c768"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtime/index.ts#getRuntimeDriver"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/runtime/types",
+      "specifier": "@/services/runtime/types",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "runtime-management",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 同上，`RuntimeKind` 随驱动合同一起走。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E4b（runtime-management vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a99307c8c8debf377c51"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtime/types.ts#RuntimeKind"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/ws/broadcaster",
+      "specifier": "@/ws/broadcaster",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "platform",
+      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 候选落库后广播 WS。目标形态是 commit 后由平台事件面投递，不由 application 直连 broadcaster。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W9（platform 事件 / 广播合同）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2867159f3241f795be53",
+        "import:69e67e46f2918763e1a0"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/ws/broadcaster.ts#MEMORY_CHANNEL",
+        "owner:packages/backend/src/ws/broadcaster.ts#memoryBroadcaster"
       ],
       "canonicalFacadeIds": []
     },
@@ -807,6 +956,27 @@
       "from": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
       "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b09b351ddbed74bc0510"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#ResourcePackageMutationArtifact"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
+      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -822,27 +992,6 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#compensateLegacyResourcePackageArtifact",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#rollForwardLegacyResourcePackageArtifacts"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
-      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b09b351ddbed74bc0510"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#ResourcePackageMutationArtifact"
       ],
       "canonicalFacadeIds": []
     },
@@ -1878,6 +2027,29 @@
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
       "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:750a212d3292d449e8b4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#LegacyResourcePackageMutationDependencies"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
+      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -1899,8 +2071,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
-      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/agent",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -1909,11 +2081,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:750a212d3292d449e8b4"
+        "import:587d6d4843ecce787d4e",
+        "import:e87c7f707620aaf9d440"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyResourcePackageMutationParticipants.ts#LegacyResourcePackageMutationDependencies"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentUpdate"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -1945,31 +2119,6 @@
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#getAgentById",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#prepareAgentCreate",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#prepareAgentUpdate"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/agent",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:587d6d4843ecce787d4e",
-        "import:e87c7f707620aaf9d440"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentUpdate"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -2080,6 +2229,29 @@
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion",
       "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillVersion",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fd1c761f10dbaf398cd6"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#StagedSkillVersion"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillVersion",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -2107,8 +2279,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillVersion",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -2117,11 +2289,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:fd1c761f10dbaf398cd6"
+        "import:a339005879b1b7e9b8c8"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#StagedSkillVersion"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#PreparedWorkflowSave"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -2161,8 +2333,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workgroups",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -2171,11 +2343,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:a339005879b1b7e9b8c8"
+        "import:33eff8cfec108d848164",
+        "import:b0598c6830353e8f98ea"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#PreparedWorkflowSave"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupSave"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -2215,8 +2389,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workgroups",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence",
+      "specifier": "@/modules/resource-catalog/infrastructure/mcpPersistence",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -2225,13 +2399,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:33eff8cfec108d848164",
-        "import:b0598c6830353e8f98ea"
+        "import:271a0261d084cd666c0e",
+        "import:447f34e4dc86f3ddcdf8"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupSave"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpUpdate"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -2269,8 +2443,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence",
-      "specifier": "@/modules/resource-catalog/infrastructure/mcpPersistence",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence",
+      "specifier": "@/modules/resource-catalog/infrastructure/pluginPersistence",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -2279,13 +2453,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:271a0261d084cd666c0e",
-        "import:447f34e4dc86f3ddcdf8"
+        "import:8c19b80f9dfad59536c3",
+        "import:9ecf9b25dd7db9cea3e2"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpUpdate"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#LegacyPreparedPluginCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#PluginPersistenceRow"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -2311,31 +2485,6 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#commitLegacyPluginCreateInTx",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#commitLegacyPluginPublishInTx"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence",
-      "specifier": "@/modules/resource-catalog/infrastructure/pluginPersistence",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:8c19b80f9dfad59536c3",
-        "import:9ecf9b25dd7db9cea3e2"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#LegacyPreparedPluginCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#PluginPersistenceRow"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts"
@@ -2937,6 +3086,29 @@
       "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
       "to": "packages/backend/src/modules/integration/application/mrEnsure",
       "specifier": "@/modules/integration/application/mrEnsure",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b59f570468000dc6f3a5"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#MrEnsureConnectionDeps"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
+      "to": "packages/backend/src/modules/integration/application/mrEnsure",
+      "specifier": "@/modules/integration/application/mrEnsure",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "integration",
@@ -2952,29 +3124,6 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#ensureMergeRequest",
         "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#observeMergeRequest"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
-      "to": "packages/backend/src/modules/integration/application/mrEnsure",
-      "specifier": "@/modules/integration/application/mrEnsure",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "integration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b59f570468000dc6f3a5"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/integration/application/mrEnsure.ts#MrEnsureConnectionDeps"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/developmentDeliveryDeps.ts"
@@ -4000,31 +4149,6 @@
       "from": "packages/backend/src/services/intent/applyChangeset.ts",
       "to": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations",
       "specifier": "@/modules/intent/infrastructure/sqliteIntentApplyOperations",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:21dd95ed4d23cfbc947e",
-        "import:2fbcec52e324339766bb"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/applyChangeset.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyIntentChangeset",
-        "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/applyChangeset.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/applyChangeset.ts",
-      "to": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations",
-      "specifier": "@/modules/intent/infrastructure/sqliteIntentApplyOperations",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "intent",
@@ -4067,6 +4191,31 @@
         "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#IntentApplyReceipt",
         "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#IntentApplyResourceBinding",
         "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#IntentApplyResourceSession"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/applyChangeset.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/applyChangeset.ts",
+      "to": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations",
+      "specifier": "@/modules/intent/infrastructure/sqliteIntentApplyOperations",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:21dd95ed4d23cfbc947e",
+        "import:2fbcec52e324339766bb"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/applyChangeset.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyIntentChangeset",
+        "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#convergeIntentApplyJournal"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/applyChangeset.ts"
@@ -4125,6 +4274,29 @@
       "from": "packages/backend/src/services/intent/intentDoc.ts",
       "to": "packages/backend/src/modules/intent/domain/teaching/render",
       "specifier": "@/modules/intent/domain/teaching/render",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:9cb0d0f84564cfa30b04"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#IntentDocPrivileges"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/intentDoc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/intentDoc.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/render",
+      "specifier": "@/modules/intent/domain/teaching/render",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "intent",
@@ -4165,25 +4337,25 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/intentDoc.ts",
-      "to": "packages/backend/src/modules/intent/domain/teaching/render",
-      "specifier": "@/modules/intent/domain/teaching/render",
+      "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants",
+      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants",
       "edgeKind": "type",
       "syntax": "static-import",
-      "owner": "intent",
-      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
-      "introducedByRFC": "RFC-348",
-      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:9cb0d0f84564cfa30b04"
+        "import:209e9a1d882b9ead6153"
       ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/domain/teaching/render.ts#IntentDocPrivileges"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyResourceDependencies"
       ],
       "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/intentDoc.ts"
+        "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
       ]
     },
     {
@@ -4214,8 +4386,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants",
-      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/agent",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -4224,11 +4396,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:209e9a1d882b9ead6153"
+        "import:b04ceaa8c18cb15af7b3",
+        "import:ed85284ab390e167c537"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants.ts#LegacyIntentApplyResourceDependencies"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentUpdate"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
@@ -4260,31 +4434,6 @@
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#getAgentById",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#prepareAgentCreate",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#prepareAgentUpdate"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/agent",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b04ceaa8c18cb15af7b3",
-        "import:ed85284ab390e167c537"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#PreparedAgentUpdate"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
@@ -4395,6 +4544,29 @@
       "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion",
       "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillVersion",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:a225f95d285f90840b59"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#StagedSkillVersion"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillVersion",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -4422,8 +4594,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillVersion",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -4432,11 +4604,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:a225f95d285f90840b59"
+        "import:79444e84acb13a2d09f3"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#StagedSkillVersion"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#PreparedWorkflowSave"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
@@ -4476,8 +4648,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workflow",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups",
+      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workgroups",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -4486,11 +4658,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:79444e84acb13a2d09f3"
+        "import:c6b9b583540530fbeedf",
+        "import:d3679917cd211e465726"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.ts#PreparedWorkflowSave"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupSave"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
@@ -4530,8 +4704,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/workgroups",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence",
+      "specifier": "@/modules/resource-catalog/infrastructure/mcpPersistence",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -4540,13 +4714,13 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:c6b9b583540530fbeedf",
-        "import:d3679917cd211e465726"
+        "import:8e9b7a82559b7c4f0249",
+        "import:945968a872b197695af3"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#PreparedWorkgroupSave"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpUpdate"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
@@ -4584,8 +4758,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence",
-      "specifier": "@/modules/resource-catalog/infrastructure/mcpPersistence",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence",
+      "specifier": "@/modules/resource-catalog/infrastructure/pluginPersistence",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "resource-catalog",
@@ -4594,13 +4768,15 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:8e9b7a82559b7c4f0249",
-        "import:945968a872b197695af3"
+        "import:262e0156574839775e59",
+        "import:671c231f2e24f873318b",
+        "import:6d6e2816334456b013e1"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpPersistence.ts#LegacyPreparedMcpUpdate"
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#LegacyPluginPublishSet",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#LegacyPreparedPluginCreate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#PluginPersistenceRow"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
@@ -4639,56 +4815,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence",
-      "specifier": "@/modules/resource-catalog/infrastructure/pluginPersistence",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:262e0156574839775e59",
-        "import:671c231f2e24f873318b",
-        "import:6d6e2816334456b013e1"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#LegacyPluginPublishSet",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#LegacyPreparedPluginCreate",
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#PluginPersistenceRow"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/platformInventory.ts",
-      "to": "packages/backend/src/modules/intent/domain/teaching/platformMap",
-      "specifier": "@/modules/intent/domain/teaching/platformMap",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
-      "introducedByRFC": "RFC-348",
-      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:f8abbc01fc797e555789"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/platformInventory.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/platformInventory.ts",
       "to": "packages/backend/src/modules/intent/domain/teaching/platformMap",
       "specifier": "@/modules/intent/domain/teaching/platformMap",
@@ -4712,25 +4838,25 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/postgresqlApplyChangeset.ts",
-      "to": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations",
-      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyOperations",
+      "from": "packages/backend/src/services/intent/platformInventory.ts",
+      "to": "packages/backend/src/modules/intent/domain/teaching/platformMap",
+      "specifier": "@/modules/intent/domain/teaching/platformMap",
       "edgeKind": "value",
-      "syntax": "export",
+      "syntax": "static-import",
       "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "why": "intent context 仍无 public/{queries,types} 面（MODULES_WITHOUT_PUBLIC 登记在案），RFC-348 的教学注册表 / 渲染器落在 modules/intent/domain/teaching，装配层（services/intent）只能直读领域内部；随 intent 立 public 面时改走 exact 合同。",
+      "introducedByRFC": "RFC-348",
+      "removeAfterWave": "RFC-294 W6（唯一 AtomicApplyEngine 时一并给 intent 立 public 面）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:599e7387f7b548f4bbb6"
+        "import:f8abbc01fc797e555789"
       ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/postgresqlApplyChangeset.ts#$file",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations"
+        "owner:packages/backend/src/modules/intent/domain/teaching/platformMap.ts#platformOnlyResourceTypes"
       ],
       "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/postgresqlApplyChangeset.ts"
+        "facade:packages/backend/src/services/intent/platformInventory.ts"
       ]
     },
     {
@@ -4759,6 +4885,29 @@
         "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#PostgresqlIntentApplyOperations",
         "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#PostgresqlIntentApplyRequest",
         "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#PostgresqlIntentApplyResourceBinding"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/postgresqlApplyChangeset.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/postgresqlApplyChangeset.ts",
+      "to": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations",
+      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyOperations",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "intent",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:599e7387f7b548f4bbb6"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/postgresqlApplyChangeset.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#createPostgresqlIntentApplyOperations"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/postgresqlApplyChangeset.ts"
@@ -4817,29 +4966,6 @@
       "from": "packages/backend/src/services/intent/workingSet.ts",
       "to": "packages/backend/src/modules/intent/application/intentWorkingSetDelta",
       "specifier": "@/modules/intent/application/intentWorkingSetDelta",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:c082677955d84e194c8b"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/workingSet.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts#applyIntentWorkingSetDelta"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/intent/workingSet.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/intent/workingSet.ts",
-      "to": "packages/backend/src/modules/intent/application/intentWorkingSetDelta",
-      "specifier": "@/modules/intent/application/intentWorkingSetDelta",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "intent",
@@ -4853,6 +4979,29 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/workingSet.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts#AppliedIntentWorkingSetDelta"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/workingSet.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/intent/workingSet.ts",
+      "to": "packages/backend/src/modules/intent/application/intentWorkingSetDelta",
+      "specifier": "@/modules/intent/application/intentWorkingSetDelta",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c082677955d84e194c8b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/workingSet.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts#applyIntentWorkingSetDelta"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/workingSet.ts"
@@ -5055,6 +5204,54 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/memoryDistillScheduler.ts",
+      "to": "packages/backend/src/modules/memory/application/distill/memoryDistiller",
+      "specifier": "@/modules/memory/application/distill/memoryDistiller",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "memory",
+      "why": "同上（type-only 那条）。RFC-352 T7 落地后消失。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E2（RFC-352 T7：调度迁入 memory application）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d1f3a1466ff10bc42ff0"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#DistillerSpawnFn"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/memoryDistillScheduler.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/memoryDistillScheduler.ts",
+      "to": "packages/backend/src/modules/memory/application/distill/memoryDistiller",
+      "specifier": "@/modules/memory/application/distill/memoryDistiller",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "memory",
+      "why": "RFC-352 T6 先迁蒸馏、T7 再迁调度器；两者都属 memory，这是同一 context 内部的过渡边。T7 落地后消失。",
+      "introducedByRFC": "RFC-352",
+      "removeAfterWave": "RFC-294 W4-E2（RFC-352 T7：调度迁入 memory application）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:511b752f05dddd1cb527",
+        "import:7b0a4ea5261b2be16550"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/memoryDistillScheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#rowToDistillJob",
+        "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#runDistill"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/memoryDistillScheduler.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/memoryDistillScheduler.ts",
       "to": "packages/backend/src/modules/memory/application/ports/distillReadStore",
       "specifier": "@/modules/memory/application/ports/distillReadStore",
       "edgeKind": "type",
@@ -5127,58 +5324,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/memoryDistiller.ts",
-      "to": "packages/backend/src/modules/memory/application/ports/distillWorkStore",
-      "specifier": "@/modules/memory/application/ports/distillWorkStore",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "memory",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:52753b3eea6e966edf79",
-        "import:6b02740364016507d547",
-        "import:d34368e078e7e4b24407"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/memoryDistiller.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillClarifyWorkRecord",
-        "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillReviewedArtifactReader",
-        "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#MemoryDistillWorkStore"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/memoryDistiller.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/memoryDistiller.ts",
-      "to": "packages/backend/src/modules/memory/domain/sourceContext",
-      "specifier": "@/modules/memory/domain/sourceContext",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "memory",
-      "why": "RFC-352 T2 先把两个纯函数（会话树渲染 / 头尾裁剪）迁进 memory domain，而它们唯一的调用方 memoryDistiller.ts 还留在 legacy 层——它自己也属 memory，T6 把蒸馏迁进 modules/memory/application 后这条边随之消失。这是同一 context 内部的过渡边，不是新增跨域耦合。",
-      "introducedByRFC": "RFC-352",
-      "removeAfterWave": "RFC-294 W4-E2（RFC-352 T6：蒸馏迁入 memory application）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5fb04846559fecacec88",
-        "import:8bbdf0ecedfee2d0635a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/memoryDistiller.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/memory/domain/sourceContext.ts#clipHeadTail",
-        "owner:packages/backend/src/modules/memory/domain/sourceContext.ts#renderSessionTreeToDistillerMd"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/memoryDistiller.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/nodeRollback.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRollbackQueries",
       "specifier": "@/modules/task-execution/application/ports/taskRollbackQueries",
@@ -5205,6 +5350,29 @@
       "from": "packages/backend/src/services/nodeRollback.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRollback",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5a363d172c4c62473920"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#LegacySqliteRollbackDatabase"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/nodeRollback.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/nodeRollback.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRollback",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -5220,29 +5388,6 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#createLegacySqliteRollbackEffectObserver",
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#loadLegacySqliteRollbackTarget"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/nodeRollback.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/nodeRollback.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRollback",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5a363d172c4c62473920"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#LegacySqliteRollbackDatabase"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/nodeRollback.ts"
@@ -5351,29 +5496,6 @@
       "from": "packages/backend/src/services/nodeRunMint.ts",
       "to": "packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow",
       "specifier": "@/modules/task-execution/application/resolveSchedulerRunRow",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:9e22458e484593ea92db"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts#resolveSchedulerRunRow"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/nodeRunMint.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/nodeRunMint.ts",
-      "to": "packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow",
-      "specifier": "@/modules/task-execution/application/resolveSchedulerRunRow",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -5395,8 +5517,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/nodeRunMint.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRunOperations",
+      "to": "packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow",
+      "specifier": "@/modules/task-execution/application/resolveSchedulerRunRow",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -5405,13 +5527,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:0043c7b1d86621e252ef",
-        "import:347be0261a5ef45eba81"
+        "import:9e22458e484593ea92db"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#mintLegacySqliteNodeRunInTx"
+        "owner:packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts#resolveSchedulerRunRow"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/nodeRunMint.ts"
@@ -5437,6 +5557,31 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunDatabase",
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#LegacySqliteNodeRunTransaction"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/nodeRunMint.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/nodeRunMint.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteNodeRunOperations",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0043c7b1d86621e252ef",
+        "import:347be0261a5ef45eba81"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#mintLegacySqliteNodeRunInTx"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/nodeRunMint.ts"
@@ -5799,6 +5944,29 @@
       "from": "packages/backend/src/services/resourceAcl.ts",
       "to": "packages/backend/src/modules/resource-catalog/domain/resourceAccess",
       "specifier": "@/modules/resource-catalog/domain/resourceAccess",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d3068c88753231fb992a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#AclRow"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/resourceAcl.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/resourceAcl.ts",
+      "to": "packages/backend/src/modules/resource-catalog/domain/resourceAccess",
+      "specifier": "@/modules/resource-catalog/domain/resourceAccess",
       "edgeKind": "value",
       "syntax": "export",
       "owner": "resource-catalog",
@@ -5830,29 +5998,6 @@
         "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#isVisibleRow",
         "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#isVisibleToAudienceSnapshot",
         "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#resourceAclAudienceAuthority"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/resourceAcl.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/resourceAcl.ts",
-      "to": "packages/backend/src/modules/resource-catalog/domain/resourceAccess",
-      "specifier": "@/modules/resource-catalog/domain/resourceAccess",
-      "edgeKind": "type",
-      "syntax": "export",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:d3068c88753231fb992a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/domain/resourceAccess.ts#AclRow"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -5906,6 +6051,29 @@
       "from": "packages/backend/src/services/resourceAcl.ts",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository",
       "specifier": "@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "resource-catalog",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2d09b8b47cc2de192282"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#AclColumnRef"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/resourceAcl.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/resourceAcl.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository",
+      "specifier": "@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository",
       "edgeKind": "value",
       "syntax": "export",
       "owner": "resource-catalog",
@@ -5933,29 +6101,6 @@
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#listWritableGrantedResourceIds",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#loadGrantLevel",
         "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#visibleRowsCondition"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/resourceAcl.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/resourceAcl.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository",
-      "specifier": "@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository",
-      "edgeKind": "type",
-      "syntax": "export",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2d09b8b47cc2de192282"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#AclColumnRef"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/resourceAcl.ts"
@@ -6244,29 +6389,6 @@
       "from": "packages/backend/src/services/runtimeSessionLease.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations",
       "specifier": "@/modules/task-execution/application/ports/runtimeSessionLeaseOperations",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:4e5cf034a0fcabdd998f"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseError"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runtimeSessionLease.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runtimeSessionLease.ts",
-      "to": "packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations",
-      "specifier": "@/modules/task-execution/application/ports/runtimeSessionLeaseOperations",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -6288,6 +6410,29 @@
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseOperations",
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseProtocol",
         "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseToken"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runtimeSessionLease.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runtimeSessionLease.ts",
+      "to": "packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations",
+      "specifier": "@/modules/task-execution/application/ports/runtimeSessionLeaseOperations",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:4e5cf034a0fcabdd998f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSessionLeaseOperations.ts#RuntimeSessionLeaseError"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/runtimeSessionLease.ts"
@@ -6611,6 +6756,29 @@
       "from": "packages/backend/src/services/task.ts",
       "to": "packages/backend/src/modules/source-control/composition",
       "specifier": "@/modules/source-control/composition",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "source-control",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:5b61552fce6c72aa3783"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/source-control/composition.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/source-control/composition",
+      "specifier": "@/modules/source-control/composition",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "source-control",
@@ -6626,29 +6794,6 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/source-control/composition.ts#$file",
         "owner:packages/backend/src/modules/source-control/composition.ts#bindWorkspaceExcludeParticipant"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/source-control/composition",
-      "specifier": "@/modules/source-control/composition",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "source-control",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:5b61552fce6c72aa3783"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/source-control/composition.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -6774,6 +6919,29 @@
       "from": "packages/backend/src/services/task.ts",
       "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
       "specifier": "@/modules/task-execution/domain/sourceTermination",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fe30b04e89398c214603"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/domain/sourceTermination.ts#TaskStopCause"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
+      "specifier": "@/modules/task-execution/domain/sourceTermination",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -6795,8 +6963,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/domain/sourceTermination",
-      "specifier": "@/modules/task-execution/domain/sourceTermination",
+      "to": "packages/backend/src/modules/task-execution/domain/taskLaunchOrigin",
+      "specifier": "@/modules/task-execution/domain/taskLaunchOrigin",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -6805,11 +6973,11 @@
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:fe30b04e89398c214603"
+        "import:b20c5073febb0f2fcfbe"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/domain/sourceTermination.ts#TaskStopCause"
+        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#TaskLaunchProvenance"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -6843,21 +7011,23 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/domain/taskLaunchOrigin",
-      "specifier": "@/modules/task-execution/domain/taskLaunchOrigin",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "task-execution",
-      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:b20c5073febb0f2fcfbe"
+        "import:11f9a6b4d8215cb0324a",
+        "import:716be69ae2cd0c0f70ea",
+        "import:a91bbed82d5c693d154c"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/domain/taskLaunchOrigin.ts#TaskLaunchProvenance"
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -6904,31 +7074,6 @@
         "import:d40458411935c8508bf4",
         "import:f85e59d321501b8d5c82",
         "import:f96695582381ac496ce2"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:11f9a6b4d8215cb0324a",
-        "import:716be69ae2cd0c0f70ea",
-        "import:a91bbed82d5c693d154c"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -7012,6 +7157,29 @@
       "from": "packages/backend/src/services/taskArchive.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:82027543323ddac924a7"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskArchive.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskArchive.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskArchive.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -7071,29 +7239,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskArchive.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:82027543323ddac924a7"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskArchive.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskArchive.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/taskAuthorization.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskAuthorization",
       "specifier": "@/modules/task-execution/application/ports/taskAuthorization",
@@ -7110,6 +7255,31 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskAuthorization.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskAuthorization.ts#TaskAuthorizationQueries"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskAuthorization.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskAuthorization.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskAuthorization",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b14d7d8daef447bf3f23",
+        "import:ea0130f248cb90eb7506"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskAuthorization.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#LegacySqliteTaskAuthorizationRef",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#LegacyTaskOwnershipScope"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/taskAuthorization.ts"
@@ -7139,31 +7309,6 @@
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#legacySqliteTaskAuthorizationCondition",
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#legacySqliteTaskOwnershipScopeCondition",
         "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#legacySqliteVisibleTaskIdsOf"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskAuthorization.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskAuthorization.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTaskAuthorization",
-      "edgeKind": "type",
-      "syntax": "export",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b14d7d8daef447bf3f23",
-        "import:ea0130f248cb90eb7506"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskAuthorization.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#LegacySqliteTaskAuthorizationRef",
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts#LegacyTaskOwnershipScope"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/taskAuthorization.ts"
@@ -7230,6 +7375,29 @@
       "from": "packages/backend/src/services/taskDelete.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:7a227aa3d1e4db08c1fa"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskDelete.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskDelete.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
+      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -7246,29 +7414,6 @@
         "import:9d6e175357b93312fe02",
         "import:db4cd236b2f67cab4105",
         "import:e3b3ed144860eaf28518"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/taskDelete.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/taskDelete.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:7a227aa3d1e4db08c1fa"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -7306,7 +7451,7 @@
       "from": "packages/backend/src/services/taskOperations.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "edgeKind": "value",
+      "edgeKind": "type",
       "syntax": "static-import",
       "owner": "task-execution",
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
@@ -7314,11 +7459,8 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:397db2877678de831850",
-        "import:adde05b3f00ebb629846",
-        "import:b73b42a7c738416e29f5",
-        "import:ba7cc88d1d1aaed9f185",
-        "import:d17be8aa2e64bbfb6379"
+        "import:6a1ffe3c94c9e562787d",
+        "import:77796ac74c0aba0e4876"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskOperations.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -7333,7 +7475,7 @@
       "from": "packages/backend/src/services/taskOperations.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
       "specifier": "@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms",
-      "edgeKind": "type",
+      "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
@@ -7341,8 +7483,11 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:6a1ffe3c94c9e562787d",
-        "import:77796ac74c0aba0e4876"
+        "import:397db2877678de831850",
+        "import:adde05b3f00ebb629846",
+        "import:b73b42a7c738416e29f5",
+        "import:ba7cc88d1d1aaed9f185",
+        "import:d17be8aa2e64bbfb6379"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskOperations.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -7678,29 +7823,6 @@
       "from": "packages/backend/src/services/webhook/webhookDispatch.ts",
       "to": "packages/backend/src/modules/integration/domain/mrTerminalControl",
       "specifier": "@/modules/integration/domain/mrTerminalControl",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "integration",
-      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
-      "introducedByRFC": "pre-RFC-317（存量）",
-      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:139778ff64f70937014b"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#decideProtectedLaunch"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/webhook/webhookDispatch.ts",
-      "to": "packages/backend/src/modules/integration/domain/mrTerminalControl",
-      "specifier": "@/modules/integration/domain/mrTerminalControl",
       "edgeKind": "type",
       "syntax": "static-import",
       "owner": "integration",
@@ -7714,6 +7836,29 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#MrStreamState"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/webhook/webhookDispatch.ts",
+      "to": "packages/backend/src/modules/integration/domain/mrTerminalControl",
+      "specifier": "@/modules/integration/domain/mrTerminalControl",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "integration",
+      "why": "该 context 尚未在 public/{queries,types} 暴露对应的值对象 / 判据合同，调用方直接读了领域内部。",
+      "introducedByRFC": "pre-RFC-317（存量）",
+      "removeAfterWave": "RFC-294 W4-E（该 context 的 vertical slice）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:139778ff64f70937014b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/integration/domain/mrTerminalControl.ts#decideProtectedLaunch"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/webhook/webhookDispatch.ts"
@@ -9251,15 +9396,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4a60dd3c61aee997d1c691ae74b000983c1a42b65cbdbb2ee10802b1f7bfb3b4",
+    "sourceDigest": "sha256:08bc94eed6634d0f7f5ea8234dffac19e13f6f850dff7dd85922ea6eab3c28fb",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "389613ef027bdf96fcc158575b2b4b9e94da8034",
-    "contentDigest": "sha256:b3b4100062c4f0ea229dabf9f115f8d559078efcae760025b8b58bd7f5980bad",
+    "currentSnapshotSha": "e48508ee4c5506f39d907a340a0d15f787726caa",
+    "contentDigest": "sha256:effdb37c248043d1d4520aa7d92c6e61d82427ed7071c2747ff825d4d11e43e4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -617,18 +617,25 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(fusionRoute).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient/)
 
     const resolveContext = memory.indexOf('contexts.resolveCommandContext(context)')
-    const firstScopeGate = memory.indexOf(
-      "assertMemoryScopeManageableInTx(tx, scopeAuthority, previousScope, 'current')",
-      resolveContext,
-    )
+    // RFC-352 T4 之后调用多了一个 participant 参数、被 prettier 拆成多行，
+    // 因此改用「函数名 + 该次调用绑定的 authority 变量」这对锚点来定位。
+    // 本断言锁的语义没变：**第二道 scope gate 必须排在 actor 刷新之后**——
+    // 刷新前后各验一次，才挡得住「读完权限到写入之间权限被改」的窗口。
+    const gateWith = (authorityVar: string, from: number): number => {
+      let cursor = memory.indexOf('assertMemoryScopeManageableInTx(', from)
+      while (cursor >= 0) {
+        const call = memory.slice(cursor, cursor + 220)
+        if (call.includes(authorityVar) && call.includes("'current'")) return cursor
+        cursor = memory.indexOf('assertMemoryScopeManageableInTx(', cursor + 1)
+      }
+      return -1
+    }
+    const firstScopeGate = gateWith('scopeAuthority', resolveContext)
     const refreshActor = memory.indexOf(
       'const refreshedActor = currentMoveActorInTx(tx, authority)',
       firstScopeGate + 1,
     )
-    const secondScopeGate = memory.indexOf(
-      "assertMemoryScopeManageableInTx(tx, refreshedScopeAuthority, previousScope, 'current')",
-      refreshActor,
-    )
+    const secondScopeGate = gateWith('refreshedScopeAuthority', refreshActor)
     expect(resolveContext).toBeGreaterThanOrEqual(0)
     expect(firstScopeGate).toBeGreaterThan(resolveContext)
     expect(refreshActor).toBeGreaterThan(firstScopeGate)

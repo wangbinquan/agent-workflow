@@ -32,8 +32,8 @@ import {
   runDistill,
   validateAndPersistCandidate,
   type DistillerSpawnFn,
-} from '../src/services/memoryDistiller'
-import { rowToDistillJob } from '../src/services/memoryDistiller'
+} from '../src/modules/memory/application/distill/memoryDistiller'
+import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { promoteCandidate } from '../src/services/memory'
 import { injectMemoryForRun } from '../src/modules/memory/application/injection/injectMemory'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -871,7 +871,16 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
 
   test('grep guards: source file pins RFC-117 runtime-driver seam + invariants', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'memory',
+        'application',
+        'distill',
+        'memoryDistiller.ts',
+      ),
       'utf8',
     )
     // RFC-117: opencode argv/env (OPENCODE_CONFIG_CONTENT) assembly moved into
@@ -881,7 +890,14 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
     expect(src).toContain('parseEvent')
     // RFC-280 T4（落差⑤）：throwaway cwd 由 appHome scratch 分配（原 mkdtemp/tmpdir）。
     expect(src).toContain("join(Paths.root, 'scratch'")
-    expect(src).toContain('aw-memory-distiller')
+    // RFC-352：agent 名字的字面量随 DISTILLER_AGENT_NAME 下沉到 memory domain，
+    // 断言跟着字面量走——它仍然必须逐字存在，只是不再在编排文件里。
+    expect(
+      readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'modules', 'memory', 'domain', 'distillPrompt.ts'),
+        'utf8',
+      ),
+    ).toContain('aw-memory-distiller')
     // the hand-rolled opencode event walker is gone (folded into driver.parseEvent)
     expect(src).not.toContain('function extractEventText')
     expect(DISTILLER_SYSTEM_PROMPT.length).toBeGreaterThan(200)
@@ -957,7 +973,16 @@ describe('runDistill orchestration (mocked spawnFn)', () => {
 describe('RFC-044 grep guard (source-context block literals)', () => {
   test('memoryDistiller source emits both Source agent transcript: and Reviewed document body: literals', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'memoryDistiller.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'memory',
+        'application',
+        'distill',
+        'memoryDistiller.ts',
+      ),
       'utf8',
     )
     expect(src).toContain("'Source agent transcript:'")

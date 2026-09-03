@@ -1,4 +1,5 @@
-import { createSqliteRepositoryScopeAuthorization } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import { createRepositoryScopeAuthorizationInTx } from '@/modules/source-control/application/repositoryScopeAuthorization'
+import { sqliteRepositoryScopeExistenceReads } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
 import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
 import type { DbTxSync } from '@/db/txSync'
 import type { DbClient } from '@/db/client'
@@ -70,7 +71,9 @@ export function composeSqliteMemoryCatalogOperations(input: {
         context,
         {
           resources: input.authorization,
-          repositories: input.repositoryScopes ?? createSqliteRepositoryScopeAuthorization(),
+          repositories:
+            input.repositoryScopes ??
+            createRepositoryScopeAuthorizationInTx(sqliteRepositoryScopeExistenceReads),
         },
         id,
         command,

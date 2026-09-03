@@ -19,8 +19,8 @@ import {
   extractFirstSessionIdFromStdout,
   runDistill,
   type DistillerSpawnFn,
-} from '../src/services/memoryDistiller'
-import { rowToDistillJob } from '../src/services/memoryDistiller'
+} from '../src/modules/memory/application/distill/memoryDistiller'
+import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 

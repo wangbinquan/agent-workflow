@@ -3,7 +3,8 @@
 // These tests lock the command boundary, old+new scope authorization, durable
 // event atomicity, mutation races, and the eventual prompt-injection audience.
 
-import { createSqliteRepositoryScopeAuthorization } from '../src/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import { createRepositoryScopeAuthorizationInTx } from '../src/modules/source-control/application/repositoryScopeAuthorization'
+import { sqliteRepositoryScopeExistenceReads } from '../src/modules/source-control/infrastructure/repositoryScopeAuthorization'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -55,7 +56,7 @@ function moveMemory(
       resources: TEST_RESOURCE_SCOPE_AUTHORIZATION,
       // RFC-352 T4：repo / repo_group 的存在性与管理权改经 source-control 的 offered
       // participant，判据（仅 resource-acl:bypass 可管）与迁移前逐字相同。
-      repositories: createSqliteRepositoryScopeAuthorization(),
+      repositories: createRepositoryScopeAuthorizationInTx(sqliteRepositoryScopeExistenceReads),
     },
     id,
     input,

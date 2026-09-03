@@ -528,6 +528,29 @@ exact generated projections」在 CI 上红，而本地（探针还在时）是�
 同一段还有一条：**census 的生成物不要进 `prettier --write` 批处理**。它们必须与生成器逐字
 相等，被 prettier 重排一次就红（实撞的是 `design/RFC-294-…/status.md`，A2 投影守卫）。
 
+## `git checkout -- architecture/` 会静默吃掉别人手写的账本条目（2026-09-03 实撞）
+
+`architecture/ledger-baselines.json` 里**手写条目与生成产物混在同一份 JSON**：`rfc294-*` 那批由
+`architecture:write` 投影出来，但新账本入网的条目（`id` / `file` / `symbol` / `baseline` / `why`）
+是人手加的，生成器不会替你重建。于是「我只是想把自己上一轮的产物回退掉」这个动作——
+
+```
+git checkout -- architecture/          # ← 连同别人刚手写的条目一起没了
+```
+
+——会把并发 session 刚加进去的条目一并抹掉，而且**当场看不出来**：`architecture:write` 照常成功，
+只有 RFC-317 T72（「tests / scripts 下的账本形状常量，要么入基线、要么在具名豁免表里」）在下一次
+跑全量守卫时才报出来，报的还是**对方那个文件**的名字，很容易被误判成对方的问题。
+
+做法：
+
+1. **共享账本目录不要整目录 `git checkout --`**。要丢弃自己的产物，直接重跑 `bun run architecture:write`
+   覆盖即可——生成部分本来就是可复算的，手写部分会被保留。
+2. 真要回退，先 `git diff -- architecture/ledger-baselines.json` 看一眼有没有不是自己加的 `id`。
+3. 新账本条目的**位置有语义**：`projectGovernanceArtifacts` 是「先按原序输出非 N1 条目、再把全部
+   `rfc294-*` 追加到末尾」，所以新条目必须插在第一个 `rfc294-*` **之前**；append 到文件末尾会让
+   N1b 的「RFC-317 subset ledgers project into canonical truth」红，而报错信息不会告诉你是顺序问题。
+
 ## 对 CI 不检查的共享 md 跑 `prettier --write`，会把别人的行全变成 diff（2026-09-03 实撞）
 
 CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:check:repo-ui` 那张**点名清单**

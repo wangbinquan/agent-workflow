@@ -18,7 +18,8 @@ import {
 
 import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
 import type { ResourceAccess } from '@agent-workflow/shared'
-import { createPostgresqlRepositoryScopeAuthorization } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import { createRepositoryScopeAuthorizationInTx } from '@/modules/source-control/application/repositoryScopeAuthorization'
+import { postgresqlRepositoryScopeExistenceReads } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
 import type {
   RepositoryScopeAuthorizationInTx,
   RepositoryScopeTarget,
@@ -303,7 +304,9 @@ export function composePostgresqlMemoryCatalogOperations(input: {
    * 与 SQLite 侧保持相同的查询次数。判定本身在 `domain/scopeAuthorization.ts`。
    */
   // RFC-352 T4：source-control 的 repository/group scope 授权 participant，装配一次。
-  const repositoryScopes = createPostgresqlRepositoryScopeAuthorization()
+  const repositoryScopes = createRepositoryScopeAuthorizationInTx(
+    postgresqlRepositoryScopeExistenceReads,
+  )
 
   const readScopeAuthorizationFacts = async (
     authority: MemoryScopeAuthority,
