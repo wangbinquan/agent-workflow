@@ -64,6 +64,8 @@ export {
   type DatabaseMigrationDaemonAdmission,
   type DatabaseMigrationDaemonAdmissionLiveState,
 } from './infrastructure/databaseMigrationDaemonAdmission'
+import { composeSqliteFusionMemoryMembership } from '@/modules/memory/composition'
+import { composeSqliteFusionSkillVersionCommit } from '@/modules/resource-catalog/composition/skillVersionCommit'
 
 export interface SystemOperationsModule {
   readonly application: SystemOperationsApplication
@@ -86,7 +88,15 @@ export interface PostgresqlSystemOperationsModule extends SystemOperationsModule
 export function composeSqlitePostRestoreRecovery(): SqlitePostRestoreRecovery {
   return Object.freeze({
     async recover({ db, appHome }: { readonly db: DbClient; readonly appHome: string }) {
-      await repairFusionProvenance(composeSqliteFusionPersistence({ db, appHome }))
+      await repairFusionProvenance(
+        composeSqliteFusionPersistence({
+          db,
+          appHome,
+          // RFC-353 T6/T7：provider 装配在 system-operation 根上完成（同 bootstrap）。
+          memoryMembership: composeSqliteFusionMemoryMembership(),
+          skillVersionCommit: composeSqliteFusionSkillVersionCommit(),
+        }),
+      )
     },
   })
 }

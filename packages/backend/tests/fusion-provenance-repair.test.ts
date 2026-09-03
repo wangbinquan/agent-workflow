@@ -7,6 +7,7 @@ import { repairFusionProvenance } from '../src/modules/knowledge-evolution/appli
 import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -65,6 +66,7 @@ describe('RFC-223 fusion provenance boot repair', () => {
   test('uses only trustworthy token/ledger oracles, quarantines conflicts, and is idempotent', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const persistence = composeSqliteFusionPersistence({
+      ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
       appHome: resolve(import.meta.dir, '.rfc223-unused-app-home'),
     })

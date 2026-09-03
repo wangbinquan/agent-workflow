@@ -10,11 +10,14 @@ import {
   applyPendingRestoreIfAny as applyPendingSqliteRestore,
   type ApplyPendingRestoreOptions,
 } from '@/services/pendingRestore'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './fusionParticipants'
 
 /** Test bootstrap for the same required post-open recovery used in production. */
 export const SQLITE_POST_RESTORE_RECOVERY: SqlitePostRestoreRecovery = Object.freeze({
   async recover({ db, appHome }: { readonly db: DbClient; readonly appHome: string }) {
-    await repairFusionProvenance(composeSqliteFusionPersistence({ db, appHome }))
+    await repairFusionProvenance(
+      composeSqliteFusionPersistence({ db, appHome, ...TEST_SQLITE_FUSION_PARTICIPANTS }),
+    )
   },
 })
 

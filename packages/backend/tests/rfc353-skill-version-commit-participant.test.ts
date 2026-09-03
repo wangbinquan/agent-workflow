@@ -146,9 +146,9 @@ describe('RFC-353 AC-4 写入面：融合适配器不再直写 resource-catalog 
     'knowledge-evolution',
     'infrastructure',
   )
-  const adapters = ['sqliteFusionRepository.ts', 'postgresqlFusionRepository.ts'] as const
+  const adapters: string[] = ['sqliteFusionRepository.ts', 'postgresqlFusionRepository.ts']
 
-  test.each(adapters)('%s 里没有对 skills / skillVersions / memories 的写', (file) => {
+  test.each(adapters)('%s 里没有对 skills / skillVersions / memories 的写', (file: string) => {
     const source = readFileSync(join(root, file), 'utf-8')
     const writes = source.match(
       /\.(?:update|insert|delete)\(\s*(?:skills|skillVersions|memories)\s*\)/g,
@@ -156,11 +156,14 @@ describe('RFC-353 AC-4 写入面：融合适配器不再直写 resource-catalog 
     expect(writes).toBeNull()
   })
 
-  test.each(adapters)('%s 经 participant 提交版本，并逐字保留融合自己的栅栏文案', (file) => {
-    const source = readFileSync(join(root, file), 'utf-8')
-    expect(source).toContain('skillVersionCommit')
-    expect(source).toContain("staleMessage: 'fusion target skill changed; reload and retry'")
-  })
+  test.each(adapters)(
+    '%s 经 participant 提交版本，并逐字保留融合自己的栅栏文案',
+    (file: string) => {
+      const source = readFileSync(join(root, file), 'utf-8')
+      expect(source).toContain('skillVersionCommit')
+      expect(source).toContain("staleMessage: 'fusion target skill changed; reload and retry'")
+    },
+  )
 
   test('legacy 的复合前置条件已改为委托，判据不再有第二份拷贝', () => {
     const legacy = readFileSync(

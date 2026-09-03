@@ -258,6 +258,7 @@ import { createPostgresqlDevelopmentDeliveryProvider } from '@/modules/developme
 import { composePostgresqlPipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
+import { composePostgresqlSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import {
   mcpOperationCoordinator,
   pluginOperationCoordinator,
@@ -997,6 +998,9 @@ export async function composePostgresqlDaemonApplication(
     taskNodeLifecycle: nodeRunLifecycle,
   })
   const fusionOperations = composePostgresqlFusionOperations({
+    // RFC-353 T6/T7：同 SQLite 侧——provider 装配只在 bootstrap 根上完成。
+    memoryMembership: composePostgresqlSkillMemoryFusionParticipantFactory(),
+    skillVersionCommit: composePostgresqlSkillVersionCommitParticipantFactory(),
     db: input.db,
     appHome: input.appHome,
     memories: memoryCatalog,

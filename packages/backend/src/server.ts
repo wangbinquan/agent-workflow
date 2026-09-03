@@ -399,7 +399,6 @@ import {
   type WebhookIngressPersistence,
 } from '@/modules/integration/composition/webhookIngress'
 import { createSyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
-import { unfuseAboveVersionSync } from '@/modules/memory/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
@@ -436,6 +435,11 @@ import { composeAgentActionExecution } from '@/modules/task-execution/compositio
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'
+import {
+  composeSqliteFusionMemoryMembership,
+  unfuseAboveVersionSync,
+} from '@/modules/memory/composition'
+import { composeSqliteFusionSkillVersionCommit } from '@/modules/resource-catalog/composition/skillVersionCommit'
 
 /**
  * Narrow in-process dependency seams for route tests that exercise diagnostics
@@ -2679,6 +2683,10 @@ function composeSqliteApiRouteMounts(
       (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
   } satisfies WorktreeFilesRouteDeps)
   const fusionOperations = composeSqliteFusionOperations({
+    // RFC-353 T6/T7：跨 context 的 provider 装配一律在 bootstrap 完成（RFC-317 R2 只许经
+    // exact public 交换合同，RFC-349 又不许 public 面点名 provider 适配器）。
+    memoryMembership: composeSqliteFusionMemoryMembership(),
+    skillVersionCommit: composeSqliteFusionSkillVersionCommit(),
     db: deps.db,
     appHome,
     memories: memoryCatalog,

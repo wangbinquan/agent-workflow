@@ -45,6 +45,7 @@ import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { ForbiddenError } from '../src/util/errors'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const TOKEN = 'a'.repeat(64) // 64-char hex → the __system__ ADMIN daemon actor
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -65,6 +66,7 @@ function buildApp(): { db: DbClient; app: Hono } {
 function seedFusionResourcesForDb(db: DbClient): Promise<void> {
   return seedFusionResources(
     composeSqliteFusionPersistence({
+      ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
       appHome: '/tmp',
     }),

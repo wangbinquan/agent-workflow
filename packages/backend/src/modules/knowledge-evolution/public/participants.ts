@@ -147,4 +147,3 @@ export {
   createAsyncSkillRestoreMembership,
   createSyncSkillRestoreMembership,
 } from '../application/skillRestoreMembership'
-export { memoriesToUnfuseOnRestore } from '../domain/skillRestore'

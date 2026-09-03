@@ -431,6 +431,3 @@ export interface SkillVersionCommitParticipantInTx {
   ): Promise<number>
 }
 
-export { createSkillVersionCommitParticipantInTx } from '../application/skillVersionCommit'
-export { sqliteSkillVersionCommitSync } from '../infrastructure/sqliteSkillVersionCommitParticipant'
-export { composePostgresqlSkillVersionCommitParticipantFactory } from '../infrastructure/postgresqlSkillVersionCommitParticipant'

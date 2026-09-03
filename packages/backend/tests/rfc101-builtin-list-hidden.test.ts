@@ -44,6 +44,7 @@ import { listWorkflows } from '../src/services/workflow'
 import { createApp } from '../src/server'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { Agent, Workflow } from '@agent-workflow/shared'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const TOKEN = 'a'.repeat(64) // 64-char hex → resolves to the __system__ admin actor
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -69,7 +70,7 @@ async function api(app: Hono, path: string, init?: RequestInit): Promise<Respons
 }
 
 function fusionPersistence(db: DbClient) {
-  return composeSqliteFusionPersistence({ db, appHome: '/tmp' })
+  return composeSqliteFusionPersistence({ db, appHome: '/tmp', ...TEST_SQLITE_FUSION_PARTICIPANTS })
 }
 
 // Mirrors the proven-valid create payload from agents.test.ts (returns 201).

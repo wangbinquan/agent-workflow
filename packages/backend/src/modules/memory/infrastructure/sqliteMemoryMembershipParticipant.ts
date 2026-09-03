@@ -18,46 +18,12 @@ import { memories } from '@/db/schema'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 
-import type { MemoryMembershipWrites } from '../application/memoryMembership'
 import type { MemoryMembershipFuseCommand } from '../public/participants'
 import {
   fusedProvenanceStamp,
   memoriesToMarkFused,
   memoriesToUnfuseAbove,
 } from '../domain/fusionMembership'
-
-/**
- * SQL 里保留 WHERE 是有意的——那是索引用得上的形状。
- * 但**选中结果与顺序的裁定权归 domain 的纯函数**：SQL 取候选，纯函数定集合与顺序，
- * 两者的等价性由 `rfc353-memory-membership-participant.test.ts` 的真库全矩阵锁死。
- */
-/**
- * SQLite 侧的成员关系写入面。
- *
- * 这里**故意不返回 T7 才落的 branded participant**：capability 类型只能有唯一 owner 工厂
- * （RFC-294 capability-forge 守卫），provider 文件再造一个就成了第二个工厂。
- * 与 RFC-352 给 source-control 落 `RepositoryScopeExistenceReads` 是同一形状——
- * provider 只出「怎么读怎么写」，capability 由 application 的唯一工厂铸。
- */
-export function sqliteMemoryMembershipWrites(tx: DbTxSync): MemoryMembershipWrites {
-  return Object.freeze({
-    async unfuseAboveVersion(input: {
-      readonly skillId: string
-      readonly aboveVersion: number
-    }): Promise<readonly string[]> {
-      return unfuseAboveVersionSync(tx, input)
-    },
-    async markFused(command: MemoryMembershipFuseCommand): Promise<readonly string[]> {
-      return markFusedSync(tx, command)
-    },
-    async reassignFusedSkill(input: {
-      readonly memoryId: string
-      readonly skillId: string
-    }): Promise<void> {
-      reassignFusedSkillSync(tx, input)
-    },
-  })
-}
 
 /** 同步核心，理由同 `unfuseAboveVersionSync`：SQLite 侧的调用方跑在 `dbTxSync` 的同步回调里。 */
 export function markFusedSync(tx: DbTxSync, command: MemoryMembershipFuseCommand): string[] {

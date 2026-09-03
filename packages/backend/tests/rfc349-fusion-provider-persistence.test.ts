@@ -20,6 +20,10 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import {
+  TEST_POSTGRESQL_FUSION_PARTICIPANTS,
+  TEST_SQLITE_FUSION_PARTICIPANTS,
+} from './helpers/fusionParticipants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -179,7 +183,11 @@ describe('RFC-349 fusion provider persistence', () => {
     writeFileSync(join(versionOne, 'SKILL.md'), 'old\n')
     writeFileSync(join(proposal, 'SKILL.md'), 'new\n')
 
-    const persistence = composeSqliteFusionPersistence({ db, appHome })
+    const persistence = composeSqliteFusionPersistence({
+      db,
+      appHome,
+      ...TEST_SQLITE_FUSION_PARTICIPANTS,
+    })
     const access = await persistence.loadSkillAccess(actor, 'skill-1')
     expect(access).not.toBeNull()
     await persistence.create(fusionRecord(access!.preconditionToken))
@@ -214,6 +222,7 @@ describe('RFC-349 fusion provider persistence', () => {
   test('PostgreSQL adapter issues schema-qualified Promise reads', async () => {
     const fixture = postgresqlFixture([[['fusion-1'], ['fusion-2']]])
     const persistence = composePostgresqlFusionPersistence({
+      ...TEST_POSTGRESQL_FUSION_PARTICIPANTS,
       db: fixture.db,
       appHome: tempRoot(),
     })

@@ -58,25 +58,3 @@ export interface MemoryMembershipParticipantInTx {
    */
   reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }): Promise<void>
 }
-
-// ---------------------------------------------------------------------------
-// RFC-353 T6 —— 成员关系的**铸造入口**也从 public 出。
-//
-// 形态照 RFC-352 给 source-control 的 `RepositoryScopeAuthorizationInTx`：唯一 owner 工厂与
-// 两个 provider 的实现一起经 `public/participants` 出口，消费方（knowledge-evolution）
-// 从这里取，而不是深入 memory 的 `composition.ts` / `infrastructure/*`——后者是跨 context
-// 内部 import，RFC-317 R2 明令禁止。
-//
-// 为什么这里出现 provider 形状（`DbTxSync` / PostgreSQL 事务）：融合提交与技能回滚都要求
-// 「记忆成员关系与技能版本写入同一事务」，事务只能由调用方开、交进来。这与 SC 那条
-// `sqliteRepositoryScopeExistenceReads` 是同一类已登记的存量债，不是新形态。
-// ---------------------------------------------------------------------------
-
-export {
-  markFusedSync,
-  reassignFusedSkillSync,
-  sqliteMemoryMembershipWrites,
-  unfuseAboveVersionSync,
-} from '../infrastructure/sqliteMemoryMembershipParticipant'
-export { composePostgresqlSkillMemoryFusionParticipantFactory } from '../infrastructure/postgresqlSkillMemoryFusionParticipant'
-export { createMemoryMembershipParticipantInTx } from '../application/memoryMembership'

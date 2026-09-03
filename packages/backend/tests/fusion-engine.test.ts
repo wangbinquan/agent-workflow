@@ -72,6 +72,7 @@ import {
   resourceScopeAuthority,
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
 } from './helpers/resourceScopeAuthority'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
@@ -203,6 +204,7 @@ async function build(): Promise<H> {
   const deps: TestFusionDeps = {
     db,
     operations: composeSqliteFusionOperations({
+      ...TEST_SQLITE_FUSION_PARTICIPANTS,
       db,
       appHome,
       memories: memoryCatalog,

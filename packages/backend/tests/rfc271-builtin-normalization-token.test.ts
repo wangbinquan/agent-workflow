@@ -30,6 +30,7 @@ import { agents, users, workflows } from '../src/db/schema'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedFusionResources } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { expectTokenOf } from '../src/services/resourcePackage/preview'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -54,7 +55,9 @@ async function freshDb(): Promise<DbClient> {
 }
 
 function seed(db: DbClient): Promise<void> {
-  return seedFusionResources(composeSqliteFusionPersistence({ db, appHome: '/tmp' }))
+  return seedFusionResources(
+    composeSqliteFusionPersistence({ db, appHome: '/tmp', ...TEST_SQLITE_FUSION_PARTICIPANTS }),
+  )
 }
 
 describe('AC-12 · built-in 归一改变导出语义 ⇒ 必须推进 token', () => {

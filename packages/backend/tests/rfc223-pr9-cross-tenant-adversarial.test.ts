@@ -64,6 +64,7 @@ import { composeIdentityAccess } from '../src/modules/identity-access/compositio
 import { composeSqliteMemoryCatalogOperations } from '../src/modules/memory/composition'
 import { composeSqliteFusionOperations } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createSqliteFusionEngineTaskOperations } from '../src/modules/task-execution/infrastructure/fusionEngineTaskOperations'
+import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -353,6 +354,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       db,
       appHome,
       operations: composeSqliteFusionOperations({
+        ...TEST_SQLITE_FUSION_PARTICIPANTS,
         db,
         appHome,
         memories: composeSqliteMemoryCatalogOperations({
