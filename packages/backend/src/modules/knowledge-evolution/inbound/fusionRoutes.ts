@@ -20,19 +20,22 @@ import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import { directTaskInitiatorFromActorSource } from '@/modules/task-execution/inbound/directTaskInitiator'
 import { registerRoute } from '@/routes/registry'
+// RFC-353 T12：inbound 是本 context 自己的投递适配器，直接取 `application/`。
+// **不经自己的 `public/`**——那一层是给别的 context 用的，只被自家 inbound 消费的
+// 符号按 RFC-294 design §3.3「无 consumer 不公开」就不该出现在 public 面上。
 import {
   approveFusion,
   cancelFusion,
   createFusion,
   rejectFusion,
   type FusionDeps,
-} from '@/modules/knowledge-evolution/public/commands'
+} from '../application/fusionOrchestration'
 import {
   countVisibleAwaitingApprovalFusions,
   getVisibleFusion,
   listVisibleFusionSummaries,
   type FusionViewer,
-} from '@/modules/knowledge-evolution/public/queries'
+} from '../application/fusionViews'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 import { NotFoundError, ValidationError } from '@/util/errors'

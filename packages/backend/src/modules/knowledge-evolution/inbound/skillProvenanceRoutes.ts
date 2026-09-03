@@ -12,10 +12,8 @@
 import type { Hono } from 'hono'
 
 import { actorOf, type Actor } from '@/auth/actor'
-import {
-  bindSkillProvenanceDeps,
-  getSkillProvenance,
-} from '@/modules/knowledge-evolution/public/queries'
+// RFC-353 T12：理由同 `fusionRoutes.ts`——自家 inbound 直接取 `application/`。
+import { bindSkillProvenanceDeps, getSkillProvenance } from '../application/skillProvenanceQuery'
 import type { FusedIntoSkillMemory, MemoryScopeAuthority } from '@/modules/memory/public/catalog'
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { SkillQueries, SkillVersionQueries } from '@/modules/resource-catalog/public/queries'
