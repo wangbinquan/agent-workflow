@@ -242,3 +242,38 @@ application 只会让 application 去 import 一个 legacy service，更糟。�
 2. **`git archive` 导出树只隔离「按路径读源码」的东西，不隔离 workspace 包**。
    `node_modules/@agent-workflow/shared` 是回指工作树的软链，所以导出树跑普查没问题，
    **跑测试仍会吃到别人未提交的 shared 改动**——本刀曾因此误判自己的字节绊线变红。
+
+## 11. 实施期间我造成的两次主干红（取证与归因）
+
+两次都不是设计问题，是**提交纪律**没执行到位。记在这里而不是只记进 `docs/dev-gotchas.md`，
+因为账要落在造成它的 RFC 上。
+
+### 11.1 `7fdada126` 夹带了他人未提交的一行删除（严重）
+
+**现象**：`71935702e` 的 CI（run `33787067101`）24/35 job 红，含 typecheck 与全部 backend 分片。
+
+**取证**：`git show 7fdada126 -- packages/shared/src/index.ts` 是 **+1 −1**——
+`+export * from './schemas/skillProvenance'`（我的 T9）与
+`-export * from './systemChannelPorts'`（并发 session RFC-354 PR-2 在工作树里**未提交**的删除）。
+`systemChannelPorts.ts` 在 HEAD 里仍在，于是 backend 里所有
+`channelEdgeDataflowSkip` / `isSystemChannelEdge` / `touchesSystemChannelPort` 的 import 全断。
+
+**根因**：我按 CLAUDE.md 的要求用了精确 pathspec（`git add <file>` + `git commit -- <file>`），
+但**只跑了 `git diff --cached --name-only`**——它回答「哪些文件」，不回答「文件里有谁的东西」。
+`git add <file>` 的粒度是**文件不是 hunk**：只要要提的文件别人也改过，整文件的暂存就会把别人的
+hunk 一起带走。
+
+**处置**：agent-workflow-22 在 `87aab47cb` 里原位补回该行（连同他们 PR-1 的收红），
+`7c79ca6e0` 收尾。我没有另推 revert——他们正在做账本的两笔（上涨 + 退许可），
+我插任何一笔都会让顶端的 `allowGrowth` 变成过期条目而红。
+
+**事后自查**：把本 RFC 全部 13 笔逐笔扫了一遍「纯删除且与本笔主题无关的行」，
+**夹带只此一处**，其余纯删除行都是自己的路由重写 / participant 重构 / 门面删除。
+
+### 11.2 T8 改路径字面量后漏跑 prettier（轻微）
+
+`624a14647` 用脚本替换了九个既有守卫里的 `routes/fusions.ts` 路径字面量，替换后只对**新增**的文件跑了
+`prettier --write`，两个被改的既有测试（`rfc108-launch-budget-timeout-floor.test.ts`、
+`rfc345-resource-catalog-contracts.test.ts`）超了行宽却没格式化，`format:check` 因此红。
+本 RFC 收尾一笔补格式化。教训与 11.1 同源：**改动面比验证面宽**——脚本批量改了 N 个文件，
+只对其中一部分跑了检查。

@@ -575,7 +575,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const memoryRoute = readFileSync(resolve(sourceRoot, 'routes/memories.ts'), 'utf8')
     const overviewRoute = readFileSync(resolve(sourceRoot, 'routes/overview.ts'), 'utf8')
-    const fusionRoute = readFileSync(resolve(sourceRoot, 'modules/knowledge-evolution/inbound/fusionRoutes.ts'), 'utf8')
+    const fusionRoute = readFileSync(
+      resolve(sourceRoot, 'modules/knowledge-evolution/inbound/fusionRoutes.ts'),
+      'utf8',
+    )
     const wsRegistry = readFileSync(resolve(sourceRoot, 'ws/registry.ts'), 'utf8')
     const realtimeAccess = readFileSync(
       resolve(sourceRoot, 'modules/runtime-management/application/realtimeChannelAccess.ts'),
