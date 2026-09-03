@@ -5445,9 +5445,9 @@
     "disabled": 11,
     "entries": 367,
     "executionLocal": 52,
-    "longRunning": 83,
+    "longRunning": 82,
     "managed": 11,
-    "periodic": 221
+    "periodic": 222
   },
   "entries": [
     {
@@ -11078,7 +11078,7 @@
       "file": "packages/backend/src/platform/persistence/sqliteLogicalSourceProtocol.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/persistence/sqliteLogicalSourceProtocol.ts#SqliteLogicalSourceWorkerEventSchema",
-      "kind": "long-running",
+      "kind": "periodic",
       "lifecycle": {
         "health": false,
         "readiness": true,
@@ -13553,5 +13553,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:497a5e268132f7d57fe698c5dac413e1fc223cfcfed323b51cd24f6747dde0e1"
+  "sourceDigest": "sha256:43b63ef184b9591817aeec615d4f44b341efe6fa717259fac419cb6127031ba8"
 }
