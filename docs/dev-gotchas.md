@@ -3514,3 +3514,37 @@ refresh/pin，是 review §A3 改协议的直接理由。
 （RFC-330 落档时 `db/schema.ts` / `services/task.ts` 就被 RFC-328 的在制品挪了几十行，
 设计门当场判「锚点对不上」）。写进 `design/**/*.md` 的锚点一律 `git show <sha>:<path> | nl -ba |
 sed -n 'a,bp'` 取，并在文档头写明基线 sha；复核也用同一条命令。
+
+## 删掉一条 legacy import，会有**别处的账本**当场变 stale 而红（2026-09-03 主干实撞）
+
+本仓有一批「**live consumer 精确账本**」型守卫：测试里手写一张 `A.ts → B.ts` 的边表，再从源码实测
+一张同形的表，断言**两张表逐条相等**——多一条是「没登记」，少一条是「stale」。典型的是
+`tests/rfc345-resource-acl-facade-retirement.test.ts` 的 `EXACT_COMPATIBILITY_DEBT`（`services/resourceAcl.ts`
+的全部存活消费者），同类还有 `OFF_DAG_OFFERED_EDGE_DEBT`、`RAW_TRANSACTION_SITES` 等。
+
+它们的判据是**双向**的，所以「把一条 legacy import 改成走 public 出口」这种**纯改善**照样把主干推红：
+你删掉了消费者，账本里那条边就没有实测对应物了。RFC-352 T9 实撞——`1ab271af2` 只是把
+`sqliteMemoryCatalog.ts` 的 `hasResourceAclBypass` 从 `@/services/resourceAcl` 改到
+`resource-catalog/public/types`，CI run `33718571164` 的 Backend shard 4/4 就红在
+`all live classic compatibility consumers have source-derived exact successor debt`。
+
+**动手前的一步**（成本几秒，能省一轮红→修→再推）：
+
+```
+rg -n "<你要删掉的那个 import 的源文件名>" packages/backend/tests | grep -v '\.test\.ts:.*import '
+```
+
+即：拿**被 import 的那个文件路径**（不是你改的文件）去 `tests/` 里搜，凡是把它写成**字符串字面量**
+的地方，多半就是一张账本。命中了就顺手把对应条目一起删/改，跟改动放同一笔提交。
+
+**更一般的那条**：本仓的守卫**不都住在 `tests/architecture/`**。只跑 `tests/architecture/` 加几个点名
+守卫，验证面比改动面窄——同一天里这个模式咬了三次（`commons-manifest.json` 手工锚点、
+capability-forge 合同、`join()` 拼出来的哨兵路径）。改动触及**跨文件的合同 / 账本 / 公共出口**时，
+按「被改动路径的字符串出现在哪些测试里」来定要跑哪些测试，而不是按目录。
+
+**同一天的第二遍**：把那两条边从账本里删掉之后，`ledger-baselines.json` 里对应条目的 `baseline`
+也要一起减小——RFC-317 T16 的判据是「条目数与基线**逐字相等**」，**减**了不改基线同样是红
+（差额会变成下一个人的免费槽位）。我跑了被删边的那个测试文件确认它自己绿了，却没回头再跑一遍
+`tests/architecture/`，于是同一个改动把主干推红了两次（`1ab271af2` 与 `247331ae5`）。
+顺带一条：`allowGrowth` 是**一次性**的——涨已经落进上一笔提交之后，相对当前 HEAD 就不再有增长，
+T17 的「allowGrowth 无过期条目」要求当期把它们删掉，否则下一笔又红。
