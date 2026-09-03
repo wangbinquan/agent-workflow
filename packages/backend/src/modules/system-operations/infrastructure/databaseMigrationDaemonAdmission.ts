@@ -3,9 +3,10 @@
 // bootstrap supplies provider-composition and background-writer callbacks,
 // while this state machine owns the no-new-work + bounded-drain invariant.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
 
-export type DatabaseAdmissionProvider = 'sqlite' | 'postgresql'
+export type DatabaseAdmissionProvider = DatabaseProvider
 export type DatabaseAdmissionPhase =
   | 'open'
   | 'draining'

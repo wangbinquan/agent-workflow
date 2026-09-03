@@ -1,5 +1,6 @@
 // `agent-workflow start` — daemon foreground entry.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
@@ -372,7 +373,7 @@ function createDaemonProviderHttpAdmission(): DaemonProviderHttpAdmission {
 }
 
 interface DaemonProviderRuntimeComposition {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly generationId: string
   readonly app: Pick<ReturnType<typeof createComposedApp>, 'fetch'>
   readonly webSocket: ReturnType<typeof buildWebSocketAdapter>

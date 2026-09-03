@@ -13,6 +13,7 @@
 
 // System Operations SQLite migration-axis inspection plus backup envelope I/O.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { Database } from 'bun:sqlite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -45,7 +46,7 @@ export interface BackupManifestV1 extends BackupManifestBase {
 
 export interface LogicalBackupDatabaseManifest {
   readonly format: 'agent-workflow-logical-database-v1'
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly sourceGenerationId: string
   readonly schemaDigest: string
   readonly logicalPath: 'database/logical'

@@ -1,6 +1,7 @@
 // `agent-workflow doctor` — run all health checks without starting daemon.
 // Mirrors design.md §11.3.
 
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -127,7 +128,11 @@ export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
       },
     ]
   }
-  if (config.database.provider === 'sqlite' && !existsSync(Paths.db)) {
+  // Ask the trait, not the provider name: "is there a local file the daemon
+  // owns?" A new external-server provider then answers correctly by declaration
+  // instead of relying on `!== 'sqlite'` happening to mean the right thing.
+  const storage = databaseProviderTraits(config.database.provider).storage
+  if (storage === 'embedded-file' && !existsSync(Paths.db)) {
     return [
       {
         name: 'database provider',

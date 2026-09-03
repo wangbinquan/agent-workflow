@@ -1,3 +1,4 @@
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 import {
@@ -95,7 +96,7 @@ export interface CreatePasswordLoginSessionInput {
 }
 
 export interface AuthRuntime {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly allowLegacyDaemonTestAccess: boolean
   getLoginPolicy(): Promise<AuthLoginPolicy>
   getLoginMethodDiscovery(oidcRuntimeAvailable: boolean): Promise<AuthMethodDiscovery>
@@ -232,7 +233,7 @@ function resolvedPat(input: ActiveAuthPat): ResolvedPat {
 }
 
 export function createAuthRuntime(input: {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly persistence: AuthPersistence
   readonly options?: AuthRuntimeOptions
 }): AuthRuntime {

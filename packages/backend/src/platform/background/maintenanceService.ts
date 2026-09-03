@@ -23,7 +23,7 @@ import {
   startMaintenanceWorkerSupervisor,
   type MaintenanceWorkerSupervisor,
 } from './maintenanceWorkerSupervisor'
-import { postgresqlSerializationFailureCode } from '@/db/postgresqlSerializationRetry'
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 
 const log = createLogger('maintenance-service')
 const CHECKPOINT_SUPERVISOR_MS = 60_000
@@ -299,10 +299,6 @@ function fixedSlot(job: MaintenanceJobKey, intervalMs: number, now: number): Cle
   }
 }
 
-function postgresqlRetryableCode(error: unknown): string | undefined {
-  return postgresqlSerializationFailureCode(error)
-}
-
 export function startMaintenanceService(options: MaintenanceServiceOptions): MaintenanceService {
   let currentConfig = options.loadConfig()
   let stopped = false
@@ -346,6 +342,11 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   let admissionDb: ReturnType<typeof openDb> | null = null
   let store: MaintenanceRunStore
   let payloadSources: MaintenancePayloadSources
+  // NOTE: this stays a provider-literal check on purpose — `MaintenanceServiceOptions`
+  // is a union discriminated by that literal, so the check also narrows
+  // `store` / `database` / `generationId` into existence. A third provider cannot
+  // reach here without adding its own variant, which makes the caller fail to
+  // compile; that is a stronger fence than a traits lookup, not a weaker one.
   if (options.provider === 'postgresql') {
     store = options.store
     payloadSources = options.payloadSources
@@ -516,8 +517,11 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     store,
     payloadFor,
     wake: supervisor.wake,
-    classifyRetryable:
-      options.provider === 'postgresql' ? postgresqlRetryableCode : retryableSqliteWriteErrorCode,
+    // Per-provider retryable classification lives in the traits table: a new
+    // provider must declare its own codes instead of inheriting SQLite's.
+    // An absent provider is the product's documented zero-config default, which
+    // is spelled out here rather than left to a branch fallthrough.
+    classifyRetryable: databaseProviderTraits(options.provider ?? 'sqlite').classifyRetryable,
     onAdmitted: refreshProjection,
     onDeferred: ({ job, attempt, delayMs, contentionCode }) => {
       log.warn('maintenance admission deferred', { job, attempt, delayMs, contentionCode })

@@ -4,6 +4,7 @@
 // target. Replay makes a second digest-checked pass to close the file TOCTOU
 // window and relies on the provider target's per-chunk idempotency receipts.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -35,7 +36,7 @@ import {
 } from './schemaContract'
 
 export interface LogicalDatabaseRestoreTarget {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly operationId: string
   prepare(now: number): Promise<void>
   copyChunk(table: LogicalTableContract, chunk: LogicalTableChunk, now: number): Promise<void>
@@ -79,9 +80,9 @@ export interface LogicalDatabaseRestoreReceipt {
   readonly version: 1
   readonly operationId: string
   readonly sourceOperationId: string
-  readonly sourceProvider: 'sqlite' | 'postgresql'
+  readonly sourceProvider: DatabaseProvider
   readonly sourceGenerationId: string
-  readonly targetProvider: 'sqlite' | 'postgresql'
+  readonly targetProvider: DatabaseProvider
   readonly schemaDigest: string
   readonly logicalManifestDigest: string
   readonly legacyArchiveFileDigest: string

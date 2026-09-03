@@ -229,7 +229,12 @@ const RFC349_DEFER_TABLES = new Set<string>([
 
 const RFC349_ARCHIVE_TABLE_SET = new Set<string>(RFC349_ARCHIVE_THEN_OMIT_TABLES)
 
-export type DatabaseProvider = 'sqlite' | 'postgresql'
+// The canonical list lives in `databaseProviders.ts` (a leaf, to keep the traits
+// table out of an import cycle); re-exported here because this module has long
+// been the place consumers reach for it.
+export { DATABASE_PROVIDERS, type DatabaseProvider } from './databaseProviders'
+import { type DatabaseProvider } from './databaseProviders'
+import { databaseProviderTraits } from './providerTraits'
 export type TableDisposition = 'KEEP' | 'ARCHIVE_THEN_OMIT' | 'DEFER'
 export type OwnerContext =
   | 'collaboration'
@@ -498,8 +503,9 @@ function defaultKind(column: AnySQLiteColumn): LogicalColumnContract['defaultKin
 function literalSql(value: unknown, provider: DatabaseProvider): string {
   if (value === null) return 'NULL'
   if (typeof value === 'boolean') {
-    if (provider === 'postgresql') return value ? 'TRUE' : 'FALSE'
-    return value ? '1' : '0'
+    // Per-provider rendering lives in the traits table so a new provider cannot
+    // silently inherit SQLite's 1/0 (which PostgreSQL rejects on a boolean).
+    return databaseProviderTraits(provider).booleanLiteral(value)
   }
   if (typeof value === 'number' || typeof value === 'bigint') return String(value)
   if (typeof value === 'string') return `'${value.replaceAll("'", "''")}'`

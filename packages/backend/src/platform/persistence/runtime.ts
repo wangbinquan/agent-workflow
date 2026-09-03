@@ -1,8 +1,9 @@
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 // RFC-349 — narrow provider-neutral runtime mechanism. Business application
 // ports never receive a raw client or transaction from this surface.
 
 export interface DatabaseHealth {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly generationId: string
   readonly ok: boolean
   readonly latencyMs: number
@@ -12,7 +13,7 @@ export interface DatabaseHealth {
 }
 
 export interface DatabaseRuntime {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly generationId: string
   health(): Promise<DatabaseHealth>
   close(): Promise<void>

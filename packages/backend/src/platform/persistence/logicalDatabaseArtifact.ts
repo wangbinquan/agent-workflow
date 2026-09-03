@@ -4,6 +4,7 @@
 // JSON's number coercion. That keeps signed 64-bit integers, booleans, NULL,
 // blobs and arbitrary JSON text byte-equivalent across SQLite and PostgreSQL.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import {
   closeSync,
   existsSync,
@@ -534,7 +535,7 @@ export function readLogicalTableChunk(path: string): LogicalTableChunk {
 
 export function createLogicalArtifactManifest(input: {
   readonly operationId: string
-  readonly sourceProvider: 'sqlite' | 'postgresql'
+  readonly sourceProvider: DatabaseProvider
   readonly sourceGenerationId: string
   readonly contract: LogicalSchemaContract
   readonly createdAt: number

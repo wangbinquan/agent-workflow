@@ -3,6 +3,7 @@
 // already-verified chunks are re-bound from the preserved legacy artifact while
 // all active tables are read from one provider snapshot.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -31,7 +32,7 @@ import {
 } from './schemaContract'
 
 export interface LogicalDatabaseExportSource {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   assertUnchanged(): Promise<void>
   readChunk(
     table: LogicalTableContract,
@@ -157,7 +158,7 @@ export function readLogicalDatabaseBackupEnvelope(input: {
 }
 
 function expectedRoster(input: {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly contract: LogicalSchemaContract
 }): string[] {
   return input.contract.tables
@@ -226,7 +227,7 @@ function createTableEntryAccumulator(input: {
 
 export async function exportLogicalDatabaseArtifact(input: {
   readonly operationId: string
-  readonly sourceProvider: 'sqlite' | 'postgresql'
+  readonly sourceProvider: DatabaseProvider
   readonly sourceGenerationId: string
   readonly source: LogicalDatabaseExportSource
   readonly expectedTableRows: Readonly<Record<string, number>>

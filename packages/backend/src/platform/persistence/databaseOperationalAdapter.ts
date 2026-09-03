@@ -2,6 +2,7 @@
 // mechanisms. Business retention remains owner application work; this adapter
 // prevents SQLite PRAGMA/VACUUM machinery from ever reaching PostgreSQL.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { Database } from 'bun:sqlite'
 import {
   openPostgresqlLogicalSource,
@@ -17,7 +18,7 @@ export interface DatabaseOperationalCheck {
 }
 
 export interface DatabaseDoctorReport {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly generationId: string
   readonly ok: boolean
   readonly checks: readonly DatabaseOperationalCheck[]
@@ -25,13 +26,13 @@ export interface DatabaseDoctorReport {
 }
 
 export interface DatabaseStorageMaintenanceReceipt {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly mechanism: 'sqlite-wal-checkpoint' | 'postgresql-autovacuum-observation'
   readonly counters: Readonly<Record<string, number>>
 }
 
 export interface DatabaseOperationalAdapter {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   doctor(): Promise<DatabaseDoctorReport>
   runStorageMaintenance(): Promise<DatabaseStorageMaintenanceReceipt>
 }

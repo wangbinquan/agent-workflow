@@ -1,3 +1,4 @@
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 // RFC-349 — bootstrap-only lifecycle for a live provider composition.
 //
 // A session is created in a frozen state: HTTP/WS/background writers are not
@@ -5,7 +6,7 @@
 // client and no business adapter. It only makes provider replacement atomic at
 // the daemon-composition boundary used by database-migration admission.
 
-export type DaemonProviderKind = 'sqlite' | 'postgresql'
+export type DaemonProviderKind = DatabaseProvider
 
 export interface DaemonProviderSessionLifecycleInput {
   readonly operationId: string

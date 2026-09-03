@@ -2,6 +2,7 @@
 // their dependencies via the `AppDeps` interface so tests can inject mocks
 // without monkey-patching the module.
 
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { Hono } from 'hono'
 import type {
@@ -514,7 +515,7 @@ export interface ComposePostgresqlDaemonProviderCoreInput extends DaemonProvider
 export interface DaemonProviderCore<
   TSystemOperations extends SystemOperationsModule = SystemOperationsModule,
 > {
-  readonly provider: 'sqlite' | 'postgresql'
+  readonly provider: DatabaseProvider
   readonly authRuntime: AuthRuntime
   readonly tokenCallAudit: TokenCallAuditParticipant
   /** The one window both the auth runtime and the token-call audit consult. */

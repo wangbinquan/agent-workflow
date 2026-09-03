@@ -1,3 +1,4 @@
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type {
   AuthLoginPolicy,
   AuthMethodDiscovery,
@@ -174,7 +175,7 @@ export interface AuthRuntimeOptions {
   readonly sourceWriteWindow?: DatabaseSourceWriteWindow
 }
 
-export type AuthProvider = 'sqlite' | 'postgresql'
+export type AuthProvider = DatabaseProvider
 
 export interface AuthPersistenceBinding {
   readonly provider: AuthProvider
