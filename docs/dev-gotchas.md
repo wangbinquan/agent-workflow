@@ -679,6 +679,11 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
   `allowGrowth` 键**原样保留**，在上涨笔的导出树里直接重采得到的产物仍带着许可，提交上去就是一条
   「本 commit 未涨、allowGrowth 应删除」的红。正确顺序：导出树里先删掉三处 `allowGrowth`、
   `prettier --write`，再 `architecture:write --snapshot-sha <上涨笔 sha>`，拷回提交。
+- **「只有 provenance 行变了」也必须提交重采产物**（2026-09-04 实撞，RFC-354 意图教学两句改动）：判断
+  「要不要提交重采」时若把 `sourceDigest` / `currentSnapshotSha` / `contentDigest` 从 diff 里排除掉再看
+  「有没有变化」，会把**任何** src 改动误判成「无需重采」——`sourceDigest` 本身就是 N1b「精确生成投影」
+  比对的内容，CI 在干净 checkout 上重采一定和你提交的不同。判据只有一条：`bun run architecture:write
+  --snapshot-sha <tip>` 之后 `git status architecture/` 非空就提交，别自己挑行。
 - **任何新增顶层符号都算涨**（2026-09-04 实测）：`rfc294-module-symbol-owners` 数的是文件里的全部
   顶层声明，**未 `export` 的本地 `interface` / `type` 也计**——给收红补一个 5 字段的本地 report 类型
   就让账本 +1、被迫走两笔 allowGrowth。一次性的小类型优先内联到参数位，另一处用
