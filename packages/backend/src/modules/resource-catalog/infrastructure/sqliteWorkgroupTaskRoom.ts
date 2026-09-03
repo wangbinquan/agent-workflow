@@ -1,9 +1,9 @@
 import type { DbClient } from '@/db/client'
-import { parseJsonDocument } from '@/util/jsonDocument'
 import type { WorkgroupTaskRoomDriver } from '../application/workgroups/workgroupTaskRoom'
 import type { WorkgroupTaskRoomCommands } from '../public/commands'
 import type { WorkgroupTaskRoomQueries } from '../public/queries'
 import type { WorkgroupTaskJsonDocument } from '../public/types'
+import { workgroupTaskSubmissionBody } from './workgroupTaskSubmission'
 import { buildConfigActions } from './legacy/workgroup/configActions'
 import { buildDwActions } from './legacy/workgroup/dwActions'
 import { buildRoomReads } from './legacy/workgroup/room'
@@ -19,9 +19,8 @@ export interface SqliteWorkgroupTaskRoomDependencies {
   readonly taskRecoveryOperations: WorkgroupTaskActionDeps['taskRecoveryOperations']
 }
 
-function inputBody(body: string): unknown {
-  return parseJsonDocument(body)
-}
+/** 与 PostgreSQL adapter 共用同一份判据，见 `workgroupTaskSubmission.ts`。 */
+const inputBody = workgroupTaskSubmissionBody
 
 function document(value: unknown): WorkgroupTaskJsonDocument {
   return Object.freeze({ kind: 'json-document' as const, body: JSON.stringify(value) })
@@ -40,22 +39,22 @@ export function createSqliteWorkgroupTaskRoomDriver(
   }
   const commands = Object.freeze<WorkgroupTaskRoomCommands>({
     postMessage: (authority, input) =>
-      actions.postRoomMessage(authority, input.taskId, inputBody(input.submission.body)),
+      actions.postRoomMessage(authority, input.taskId, inputBody(input.submission)),
     deliverAssignment: (authority, input) =>
       actions.deliverAssignment(
         authority,
         input.taskId,
         input.assignmentId,
-        inputBody(input.submission.body),
+        inputBody(input.submission),
       ),
     confirmGate: (authority, input) =>
-      actions.confirmGate(authority, input.taskId, inputBody(input.submission.body)),
+      actions.confirmGate(authority, input.taskId, inputBody(input.submission)),
     confirmDynamicWorkflow: (authority, input) =>
-      actions.dwConfirm(authority, input.taskId, inputBody(input.submission.body)),
+      actions.dwConfirm(authority, input.taskId, inputBody(input.submission)),
     saveDynamicWorkflow: (authority, input) =>
-      actions.dwSaveAsWorkflow(authority, input.taskId, inputBody(input.submission.body)),
+      actions.dwSaveAsWorkflow(authority, input.taskId, inputBody(input.submission)),
     updateConfig: (authority, input) =>
-      actions.updateTaskConfig(authority, input.taskId, inputBody(input.submission.body)),
+      actions.updateTaskConfig(authority, input.taskId, inputBody(input.submission)),
     cancelAssignment: (authority, input) =>
       actions.cancelAssignment(authority, input.taskId, input.assignmentId),
   })

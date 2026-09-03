@@ -28,11 +28,12 @@ import {
   isVisibleRow,
 } from '../domain/resourceAccess'
 import type { WorkgroupOperationContext } from '../public/participants'
-import type { WorkgroupTaskJsonDocument, WorkgroupTaskJsonSubmission } from '../public/types'
+import type { WorkgroupTaskJsonDocument } from '../public/types'
 import {
   runPostgresqlResourceCatalogTransaction,
   type PostgresqlResourceCatalogTransaction,
 } from './postgresql/repositorySupport'
+import { workgroupTaskSubmissionBody } from './workgroupTaskSubmission'
 
 type AssignmentRow = typeof workgroupAssignments.$inferSelect
 export type AssignmentStatus = AssignmentRow['status']
@@ -155,13 +156,8 @@ interface LoadedState {
   readonly dw: DwState | null
 }
 
-export function inputBody(submission: WorkgroupTaskJsonSubmission): unknown {
-  try {
-    return JSON.parse(submission.body)
-  } catch {
-    return {}
-  }
-}
+/** 与 SQLite adapter 共用同一份判据，见 `workgroupTaskSubmission.ts`。 */
+export const inputBody = workgroupTaskSubmissionBody
 
 export function document(value: unknown): WorkgroupTaskJsonDocument {
   return Object.freeze({ kind: 'json-document' as const, body: JSON.stringify(value) })
