@@ -189,6 +189,7 @@ import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
 import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
 import { mountFusionRoutes } from '@/modules/knowledge-evolution/inbound/fusionRoutes'
+import { mountSkillProvenanceRoutes } from '@/modules/knowledge-evolution/inbound/skillProvenanceRoutes'
 import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
@@ -960,6 +961,7 @@ export interface AppApiRouteMounts {
   readonly mcps: AppRouteMount
   readonly plugins: AppRouteMount
   readonly skills: AppRouteMount
+  readonly skillProvenance: AppRouteMount
   readonly repos: AppRouteMount
   readonly cachedRepos: AppRouteMount
   readonly repoGroups: AppRouteMount
@@ -1153,6 +1155,8 @@ export interface ProviderCollaborationRouteComposition {
 
 export interface ProviderMemoryRouteComposition {
   readonly fusion: Parameters<typeof mountFusionRoutes>[1]
+  /** RFC-353 T9：技能来源追溯。归 knowledge-evolution，取数横跨 resource-catalog 与 memory。 */
+  readonly skillProvenance: Parameters<typeof mountSkillProvenanceRoutes>[1]
   readonly memories: Readonly<{
     readonly catalog: Parameters<typeof mountMemoryRoutes>[1]
     readonly identityAccess: Parameters<typeof mountMemoryRoutes>[2]
@@ -1273,6 +1277,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
     mcps: (app: Hono) => mountMcpRoutes(app, input.resourceCatalog.mcps),
     plugins: (app: Hono) => mountPluginRoutes(app, input.resourceCatalog.plugins),
     skills: (app: Hono) => mountSkillRoutes(app, input.resourceCatalog.skills),
+    skillProvenance: (app: Hono) => mountSkillProvenanceRoutes(app, input.memory.skillProvenance),
     repos: (app: Hono) => mountRepoRoutes(app, input.resourceCatalog.repositories.store),
     cachedRepos: (app: Hono) =>
       mountCachedRepoRoutes(
@@ -2902,6 +2907,21 @@ function composeSqliteApiRouteMounts(
         operations: fusionOperations,
         configPath: deps.configPath,
         directAuthority: identityAccess.directAuthority,
+      }),
+    // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
+    // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。
+    skillProvenance: (app) =>
+      mountSkillProvenanceRoutes(app, {
+        skills: skillCatalog.queries,
+        versions: skillCatalog.versionQueries,
+        authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+        memoryAuthorityFor: (actor) => ({
+          actor,
+          authority: directRequestAuthority(identityAccess.directAuthority, actor),
+        }),
+        listFusedInto: (skillId) => memoryCatalog.queries.listFusedInto(skillId),
+        filterVisibleMemories: (authority, rows) =>
+          memoryCatalog.queries.filterVisible(authority, rows),
       }),
     intentSessions: (app) => mountIntentSessionRoutes(app, intentSessionRoutes),
     memories: (app) =>

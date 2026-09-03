@@ -6,6 +6,7 @@ import {
 import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
 import type { DbTxSync } from '@/db/txSync'
 import type { DbClient } from '@/db/client'
+import { listFusedIntoSkillSync } from './sqliteMemoryMembershipParticipant'
 import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
 import type {
   MemoryCatalogCommands,
@@ -50,6 +51,8 @@ export function composeSqliteMemoryCatalogOperations(input: {
   const queries: MemoryCatalogQueries = {
     list: (filter = {}) => listMemories(input.db, filter),
     listWithBody: (filter = {}) => listMemories(input.db, filter, { includeBody: true }),
+    // RFC-353 T9：只读投影，选中与定序在 memory domain（`fusedIntoSkill`）。
+    listFusedInto: async (skillId) => listFusedIntoSkillSync(input.db, skillId),
     getById: (id) => getMemoryById(input.db, id),
     canView: (scopeAuthority, scope) => canViewMemory(input.db, authority(scopeAuthority), scope),
     canManage: (scopeAuthority, scope) =>

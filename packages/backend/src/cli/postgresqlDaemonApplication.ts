@@ -278,6 +278,7 @@ import {
   type SelectedDaemonProviderCore,
 } from '@/server'
 import { buildWebSocketAdapter } from '@/ws/server'
+import type { FusedIntoSkillMemory, MemoryScopeAuthority } from '@/modules/memory/public/catalog'
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
@@ -1750,6 +1751,23 @@ export async function composePostgresqlDaemonApplication(
       operations: fusionOperations,
       configPath: input.configPath,
       directAuthority: identityAccess.directAuthority,
+    }),
+    // RFC-353 T9：技能来源追溯——版本流水来自 resource-catalog，融合记录来自 memory，
+    // 拼装归 knowledge-evolution，所以路由挂在 KE 的 inbound 上。
+    skillProvenance: Object.freeze({
+      skills: classicCatalogs.skill.queries,
+      versions: classicCatalogs.skill.versionQueries,
+      authorityFor: (actor: Actor) =>
+        directOperationAuthority(identityAccess.directAuthority, actor),
+      memoryAuthorityFor: (actor: Actor) => ({
+        actor,
+        authority: directRequestAuthority(identityAccess.directAuthority, actor),
+      }),
+      listFusedInto: (skillId: string) => memoryCatalog.queries.listFusedInto(skillId),
+      filterVisibleMemories: (
+        authority: MemoryScopeAuthority,
+        rows: readonly FusedIntoSkillMemory[],
+      ) => memoryCatalog.queries.filterVisible(authority, rows),
     }),
     memories: Object.freeze({
       catalog: memoryCatalog,

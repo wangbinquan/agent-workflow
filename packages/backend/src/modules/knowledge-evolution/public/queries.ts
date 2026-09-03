@@ -16,3 +16,10 @@ export {
   listVisibleFusionSummaries,
   type FusionViewer,
 } from '../application/fusionViews'
+
+// RFC-353 T9：`GetSkillProvenance` —— 「这个技能的第 N 版是怎么来的、吃进了哪些知识」。
+export {
+  bindSkillProvenanceDeps,
+  getSkillProvenance,
+  type SkillProvenanceDeps,
+} from '../application/skillProvenanceQuery'

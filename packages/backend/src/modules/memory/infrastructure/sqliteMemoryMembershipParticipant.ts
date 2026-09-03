@@ -19,6 +19,8 @@ import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 
 import type { MemoryMembershipFuseCommand } from '../public/participants'
+import type { FusedIntoSkillMemory } from '../public/catalog'
+import { fusedIntoSkill } from '../domain/fusedProvenanceRows'
 import {
   fusedProvenanceStamp,
   memoriesToMarkFused,
@@ -104,4 +106,34 @@ export function reassignFusedSkillSync(
     .set({ fusedIntoSkillId: input.skillId })
     .where(eq(memories.id, input.memoryId))
     .run()
+}
+
+/**
+ * RFC-353 T9 —— 只读投影：这个技能吃进过哪些记忆。
+ *
+ * SQL 里保留 `WHERE`（索引 `idx_memories_fused_skill_id` 用得上），但**选中与定序的
+ * 裁定权归 domain 的纯函数** `fusedIntoSkill`——理由同本文件的写入面：无 ORDER BY 的读
+ * 在两个 provider 上会漂（`docs/audit-backlog.md` 已记过一次）。
+ */
+export function listFusedIntoSkillSync(db: DbClient, skillId: string): FusedIntoSkillMemory[] {
+  const rows = db
+    .select({
+      id: memories.id,
+      title: memories.title,
+      scopeType: memories.scopeType,
+      scopeId: memories.scopeId,
+      status: memories.status,
+      fusedIntoSkillId: memories.fusedIntoSkillId,
+      fusedIntoSkillVersion: memories.fusedIntoSkillVersion,
+    })
+    .from(memories)
+    .where(eq(memories.fusedIntoSkillId, skillId))
+    .all()
+  return fusedIntoSkill(rows, skillId).map((row) => ({
+    id: row.id,
+    title: row.title,
+    scopeType: row.scopeType,
+    scopeId: row.scopeId,
+    fusedIntoSkillVersion: row.fusedIntoSkillVersion!,
+  }))
 }

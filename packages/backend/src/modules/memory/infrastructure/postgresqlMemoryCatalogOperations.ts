@@ -51,6 +51,7 @@ import {
 } from '../domain/scopeAuthorization'
 import type { ResourceMemoryScopeRef } from '@/modules/resource-catalog/public/types'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { listFusedIntoSkillAsync } from './postgresqlSkillMemoryFusionParticipant'
 import {
   ConflictError,
   ForbiddenError,
@@ -466,6 +467,8 @@ export function composePostgresqlMemoryCatalogOperations(input: {
         nextCursor: result.nextCursor,
       }
     },
+    // RFC-353 T9：只读投影，选中与定序在 memory domain（`fusedIntoSkill`），与 SQLite 同源。
+    listFusedInto: (skillId: string) => listFusedIntoSkillAsync(input.db, skillId),
     async listWithBody(filter = {}) {
       const conditions = []
       if (filter.status !== undefined) conditions.push(eq(memories.status, filter.status))

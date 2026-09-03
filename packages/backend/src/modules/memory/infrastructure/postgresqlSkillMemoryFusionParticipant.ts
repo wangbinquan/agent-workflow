@@ -14,6 +14,8 @@ import {
   memoriesToMarkFused,
   orderMembershipIds,
 } from '../domain/fusionMembership'
+import { fusedIntoSkill } from '../domain/fusedProvenanceRows'
+import type { FusedIntoSkillMemory } from '../public/catalog'
 
 type PostgresqlMemoryTransaction = Parameters<
   Parameters<PostgresqlDatabaseClient['transaction']>[0]
@@ -95,4 +97,34 @@ export function composePostgresqlSkillMemoryFusionParticipantFactory(): Postgres
       })
     },
   })
+}
+
+/**
+ * RFC-353 T9 —— 只读投影（PostgreSQL 侧）：这个技能吃进过哪些记忆。
+ * 选中与定序共用 memory domain 的 `fusedIntoSkill`，与 SQLite 侧同源。
+ */
+export async function listFusedIntoSkillAsync(
+  db: PostgresqlDatabaseClient,
+  skillId: string,
+): Promise<FusedIntoSkillMemory[]> {
+  const rows = await db
+    .select({
+      id: memories.id,
+      title: memories.title,
+      scopeType: memories.scopeType,
+      scopeId: memories.scopeId,
+      status: memories.status,
+      fusedIntoSkillId: memories.fusedIntoSkillId,
+      fusedIntoSkillVersion: memories.fusedIntoSkillVersion,
+    })
+    .from(memories)
+    .where(eq(memories.fusedIntoSkillId, skillId))
+    .all()
+  return fusedIntoSkill(rows, skillId).map((row) => ({
+    id: row.id,
+    title: row.title,
+    scopeType: row.scopeType,
+    scopeId: row.scopeId,
+    fusedIntoSkillVersion: row.fusedIntoSkillVersion!,
+  }))
 }

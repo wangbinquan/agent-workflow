@@ -38,6 +38,7 @@ export * from './memoryTags' // RFC-327
 export * from './schemas/plugin'
 export * from './schemas/repoBatchImport'
 export * from './schemas/skill'
+export * from './schemas/skillProvenance'
 export * from './schemas/skillVersion'
 export * from './schemas/overview' // RFC-190
 export * from './schemas/task'
@@ -127,7 +128,6 @@ export * from './codeHost/path'
 export * from './codeHost/template'
 export * from './codeHost/templateProjection' // RFC-295
 export * from './workflowCalls'
-export * from './systemChannelPorts'
 export * from './scheduleTime' // RFC-159
 export * from './worktree-files'
 // RFC-079 — review multi-document mode pure helpers.

@@ -39,8 +39,26 @@ export interface MemoryScopeAuthority {
   readonly actor: Actor
 }
 
+/**
+ * RFC-353 T9 —— 技能来源追溯要的最小行：id / 标题 / scope / 融入的版本号。
+ * 刻意不含正文——来源面板只展示「哪几条知识进了第几版」，不是记忆列表。
+ */
+export interface FusedIntoSkillMemory extends MemoryScopeRef {
+  readonly id: string
+  readonly title: string
+  readonly fusedIntoSkillVersion: number
+}
+
 export interface MemoryCatalogQueries {
   list(filter?: MemoryListFilter): Promise<MemorySummary[]>
+  /**
+   * RFC-353 T9 —— 只读投影：这个技能吃进过哪些记忆（按 id 字典序）。
+   *
+   * 只返回**此刻仍算数**的行（`status='fused'` 且 provenance 指向该技能）——被回滚
+   * 退回的记忆不再计入，所以来源面板反映的是当前真相而不是历史流水。
+   * 可见性由调用方用 `filterVisible` 过滤，这里不做权限判断。
+   */
+  listFusedInto(skillId: string): Promise<FusedIntoSkillMemory[]>
   listWithBody(filter?: MemoryListFilter): Promise<Memory[]>
   getById(id: string): Promise<MemoryWithChain | null>
   canView(authority: MemoryScopeAuthority, scope: MemoryScopeRef): Promise<boolean>
