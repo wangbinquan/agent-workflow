@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1909,
+    "backendFiles": 1911,
     "frontendFiles": 621,
-    "legacyFiles": 628,
+    "legacyFiles": 630,
     "moduleFiles": 1281,
-    "productionFiles": 2685,
+    "productionFiles": 2687,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25762
+    "symbolsIncludingFileRoots": 25768
   },
   "entries": [
     {
@@ -147201,18 +147201,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
-      "exported": false,
-      "file": "packages/backend/src/platform/background/maintenanceService.ts",
-      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#postgresqlRetryableCode",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "postgresqlRetryableCode",
-      "targetContext": "platform",
-      "targetLayer": "background"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/background/maintenanceService.ts",
       "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService",
@@ -151275,6 +151263,42 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ResolvedDatabaseProviderRuntime",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseProviders.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviders.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviders.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviders.ts#DATABASE_PROVIDERS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DATABASE_PROVIDERS",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviders.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviders.ts#DatabaseProvider",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DatabaseProvider",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -155542,6 +155566,66 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "id": "owner:packages/backend/src/platform/persistence/providerTraits.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "id": "owner:packages/backend/src/platform/persistence/providerTraits.ts#DATABASE_PROVIDER_TRAITS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DATABASE_PROVIDER_TRAITS",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "id": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "databaseProviderTraits",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "id": "owner:packages/backend/src/platform/persistence/providerTraits.ts#DatabaseProviderTraits",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DatabaseProviderTraits",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "id": "owner:packages/backend/src/platform/persistence/providerTraits.ts#DatabaseStorageShape",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DatabaseStorageShape",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/runtime.ts",
       "id": "owner:packages/backend/src/platform/persistence/runtime.ts#$file",
       "removeAfterWave": "W9",
@@ -155691,18 +155775,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "consumerLedgerFor",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/schemaContract.ts",
-      "id": "owner:packages/backend/src/platform/persistence/schemaContract.ts#DatabaseProvider",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "DatabaseProvider",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -309838,5 +309910,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585"
+  "sourceDigest": "sha256:cf6b37dd6e22fe954dd6735f52e9f42df990651d870d0a11163f30d043ba9b7a"
 }

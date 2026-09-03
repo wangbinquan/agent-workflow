@@ -60249,6 +60249,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:acac6d14843ab4c457e4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviders.ts#DatabaseProvider",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviders.ts",
+      "toSymbol": "DatabaseProvider",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/protectedSnapshot.ts#$file",
@@ -89541,9 +89558,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5267,
+    "architectureExceptions": 5268,
     "implementationSccs": 0,
-    "observedEdges": 6337,
+    "observedEdges": 6338,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -157952,6 +157969,22 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts#$file",
+      "id": "import:acac6d14843ab4c457e4",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviders",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseProvider",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviders.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviders.ts#DatabaseProvider"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/developmentToolConnectionStore.ts",
@@ -191481,7 +191514,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585",
+  "sourceDigest": "sha256:cf6b37dd6e22fe954dd6735f52e9f42df990651d870d0a11163f30d043ba9b7a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

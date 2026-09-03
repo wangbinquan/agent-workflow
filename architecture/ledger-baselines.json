@@ -426,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6337,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6338,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-349 provider 适配完备性：新增 platform/persistence/databaseProviders.ts（provider 元组的唯一派生源，叶子模块以免与 traits 表成环）与 providerTraits.ts（`satisfies Record<DatabaseProvider, …>` 的穷尽决策表）。此前加一个 provider 只产生 4 个编译错误、全在 schema 投影里，216 个适配器与 31 处 provider 分流一个都不拦；其中两处会让新 provider 静默继承 SQLite 行为（布尔 DDL 默认值渲染成 '1'/'0'、可重试写判据用 SQLite 错误码），正是本 RFC 这轮在真 PostgreSQL 上修过的缺陷类。因此 owner / observed-import / exception 各涨一次——换来的是「加 provider 不填齐 traits 就编译红」。同批把 20 处手抄的内联 union 改为 import 唯一定义。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5267,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5268,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-349 provider 适配完备性：新增 platform/persistence/databaseProviders.ts（provider 元组的唯一派生源，叶子模块以免与 traits 表成环）与 providerTraits.ts（`satisfies Record<DatabaseProvider, …>` 的穷尽决策表）。此前加一个 provider 只产生 4 个编译错误、全在 schema 投影里，216 个适配器与 31 处 provider 分流一个都不拦；其中两处会让新 provider 静默继承 SQLite 行为（布尔 DDL 默认值渲染成 '1'/'0'、可重试写判据用 SQLite 错误码），正是本 RFC 这轮在真 PostgreSQL 上修过的缺陷类。因此 owner / observed-import / exception 各涨一次——换来的是「加 provider 不填齐 traits 就编译红」。同批把 20 处手抄的内联 union 改为 import 唯一定义。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25762,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25768,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 provider 适配完备性：新增 platform/persistence/databaseProviders.ts（provider 元组的唯一派生源，叶子模块以免与 traits 表成环）与 providerTraits.ts（`satisfies Record<DatabaseProvider, …>` 的穷尽决策表）。此前加一个 provider 只产生 4 个编译错误、全在 schema 投影里，216 个适配器与 31 处 provider 分流一个都不拦；其中两处会让新 provider 静默继承 SQLite 行为（布尔 DDL 默认值渲染成 '1'/'0'、可重试写判据用 SQLite 错误码），正是本 RFC 这轮在真 PostgreSQL 上修过的缺陷类。因此 owner / observed-import / exception 各涨一次——换来的是「加 provider 不填齐 traits 就编译红」。同批把 20 处手抄的内联 union 改为 import 唯一定义。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585",
+    "sourceDigest": "sha256:cf6b37dd6e22fe954dd6735f52e9f42df990651d870d0a11163f30d043ba9b7a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "42ef63350941476b748b03505f1ae855a106f319",
-    "contentDigest": "sha256:6c9cf1aba29ad4d7a91901ce10892aea470c45854bd3fa2b18185aa30f72a80b",
+    "currentSnapshotSha": "53b0fd24a691aa711463143685b8df31c53bbb97",
+    "contentDigest": "sha256:376ec7264d633ac623e69437c9186732dc93de9f19935b2757efd89f4145de03",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
