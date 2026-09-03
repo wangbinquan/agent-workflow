@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25873,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25880,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-354 PR-3 T18（`e9b941558`）：前端 node-history 新增帧原语 `sameFrame` / `frameKeyOf` / `parseScopePath` / `formatFrameBreadcrumb` / `groupHistoryByFrame` 与 `ScopeSegment` / `FrameGroup` 两个类型（owner +7）。退许可笔随后删除本条并重采。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0a900c0f2ee74da28fa25433b7c023c3b34ba01a430f12a7462942601f1e540c",
+    "sourceDigest": "sha256:e7defb2141a428a28e256bcac4e55730cfa0edbc43891c79e09676a3070c49bf",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "458801486a06d90b1e43fd457258815dc2bf3f19",
-    "contentDigest": "sha256:149c857d708b703cd559d0452b04c77461b90067090257b4551ccdd9982d0ad1",
+    "currentSnapshotSha": "e9b94155893ecab40c47ff78bb47fd3ebba5e744",
+    "contentDigest": "sha256:3cbbaa8750620af5caf281f88385c1707febeeb8e41203ce899ba5b378800b3f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
