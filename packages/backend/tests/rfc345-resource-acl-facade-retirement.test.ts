@@ -96,6 +96,10 @@ const REMOVE_OWNERS = {
     'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts',
     'PortableImportReferenceApplication',
   ),
+  // RFC-352（2026-09-03）已把 memory 名下的两条边销账：`sqliteMemoryCatalog.ts` 与
+  // `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types`，
+  // 于是它们从下面的 exact 账本里删除（账本与实测必须逐条相等，留着就是 stale）。
+  // owner 定义保留：它记录的是「W4-E2 该往哪个 public 合同收」这条裁决，还有后续边会用到。
   memory: owner(
     'RFC-294 W4-E2',
     'packages/backend/src/modules/resource-catalog/public/participants.ts',
@@ -403,13 +407,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
-    'modules/memory/infrastructure/sqliteMemoryCatalog.ts',
-    ['hasResourceAclBypass'],
-    'memory scope ACL bypass',
-    REMOVE_OWNERS.memory,
-  ),
-  edge(
-    'services/resourceAcl.ts',
     'modules/task-execution/composition/agentActionExecution.ts',
     ['initialBuiltinResourceAcl'],
     'built-in Agent execution ACL seed',
@@ -442,13 +439,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['hasResourceAclBypass'],
     'knowledge-evolution ACL bypass',
     REMOVE_OWNERS.knowledgeEvolution,
-  ),
-  edge(
-    'services/resourceAcl.ts',
-    'routes/memories.ts',
-    ['hasResourceAclBypass'],
-    'memory route ACL bypass',
-    REMOVE_OWNERS.memory,
   ),
   edge(
     'services/resourceAcl.ts',

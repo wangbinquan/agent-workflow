@@ -10,6 +10,7 @@ import { matchesTagFilter } from '@agent-workflow/shared'
 
 import { ValidationError } from '@/util/errors'
 
+import { narrowCandidateRows } from '../domain/candidateVisibility'
 import {
   accumulateMemoryPage,
   decodeMemoryPageCursor,
@@ -50,9 +51,8 @@ export async function listMemoryPage(
       // ① 标签：tags 是 JSON 列，SQL 判不可靠，与全量路径同一实现。
       const byTag = rows.filter((row) => matchesTagFilter(row.tags, filter))
       // ② 候选收窄（RFC-285 Q4）：未经人审的蒸馏产物只对持 `resource-acl:bypass` 的操作者可见。
-      const byStatus = options.includeCandidates
-        ? byTag
-        : byTag.filter((row) => row.status !== 'candidate')
+      // 判据只此一份（`domain/candidateVisibility`），与全量路径、facets、详情 404 共用。
+      const byStatus = narrowCandidateRows(byTag, options)
       if (byStatus.length === 0) return []
       // ③ scope 可见性：agent / workflow 随其资源可见性。
       return await deps.filterVisible(byStatus)

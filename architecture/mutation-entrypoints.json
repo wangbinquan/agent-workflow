@@ -36773,7 +36773,7 @@
       },
       "file": "packages/backend/src/routes/memories.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/memories.ts#$http:delete:494",
+      "id": "mutation:packages/backend/src/routes/memories.ts#$http:delete:502",
       "missingControls": [
         "audit",
         "authority",
@@ -36783,8 +36783,8 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file",
-      "symbol": "$http:delete:494",
-      "targetContext": "task-execution",
+      "symbol": "$http:delete:502",
+      "targetContext": "memory",
       "targetLayer": "inbound"
     },
     {
@@ -36798,7 +36798,7 @@
       },
       "file": "packages/backend/src/routes/memories.ts",
       "finalCriterion": "W4 transport-to-application cutover",
-      "id": "mutation:packages/backend/src/routes/memories.ts#$http:patch:378",
+      "id": "mutation:packages/backend/src/routes/memories.ts#$http:patch:386",
       "missingControls": [
         "audit",
         "authority",
@@ -36808,8 +36808,8 @@
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file",
-      "symbol": "$http:patch:378",
-      "targetContext": "task-execution",
+      "symbol": "$http:patch:386",
+      "targetContext": "memory",
       "targetLayer": "inbound"
     },
     {
@@ -45521,7 +45521,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f1c51b3cf8e7622e9d8b7f7037ba9a990ffd05239296c652adffdad86cfb5b45",
+  "sourceDigest": "sha256:497a5e268132f7d57fe698c5dac413e1fc223cfcfed323b51cd24f6747dde0e1",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

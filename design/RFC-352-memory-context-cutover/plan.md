@@ -59,7 +59,7 @@ W4-E2 桶：开工时 96 条 → T8 后 54 条 → T9 后 **35 条**。facade：
 | 项                                                                              |                     条数 | 转交给             | 理由                                                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------- | -----------------------: | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `services/fusion.ts` → `memory/public/fusion`                                   |                        9 | **W4-E3**          | fusion 属 knowledge-evolution；剩下的活是把**消费者**搬进它自己的 context                                                                                                                                                    |
-| `routes/memories.ts` / `routes/fusions.ts` → memory public                      |                        5 | 各自 consumer 的波 | 同上                                                                                                                                                                                                                         |
+| `routes/fusions.ts` → memory public | 2 | **W4-E3** | fusion 路由属 knowledge-evolution。原表把 `routes/memories.ts` 与它并列「各自 consumer 的波」，T10 查明前者根本不该在别人的桶里——见 §4.3 |
 | memory → `ws/broadcaster`                                                       |                        8 | **W9**             | 目标形态是 commit 后由平台事件面投递，不由 application 直连 broadcaster                                                                                                                                                      |
 | `memoryDistillSessionCapture` → `services/runtime/*`                            |                        3 | **W4-E4b**         | runtime 驱动合同归 runtime-management                                                                                                                                                                                        |
 | TE / collaboration → memory public（off-dag）                                   |                        9 | **W4-E1 / W4**     | 合法消费但不在设计 §3.1 DAG 上；已在 `OFF_DAG_OFFERED_EDGE_DEBT` 逐条登记，反向补 DAG 会造成双向 context 边                                                                                                                  |
@@ -81,6 +81,41 @@ W4-E2 桶：开工时 96 条 → T8 后 54 条 → T9 后 **35 条**。facade：
 就这条规则而言两者没有分别——消费者拿到的都是模块对外承诺的东西。用 EXACT 判会把
 `services/fusion.ts` 这类消费者错记到被调模块头上（实测 9 条 fusion→memory 的边挂在 W4-E2，
 而修法全在 knowledge-evolution 的文件里）。已改为「路径在 `public/` 下即算已发布面」。
+
+## 4.2 T10 收口取证（2026-09-03）——逐 AC
+
+| AC        | 判定                        | 证据                                                                                                                                                                                                                            |
+| --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AC-1**  | **按转交口径达成**（8 → 2） | 6 个 memory 自有 facade 已删；余 2 个的修法在别人的文件里（`services/memory.ts` 的两个生产 consumer 在 `platform/persistence/sqlite/systemOverviewReadModel.ts` 与 RC legacy；`distillSessionCapture.ts` 在 runtime 目录），逐条见 §4.1 |
+| **AC-2**  | 达成                        | `grep -rn "@/services/memory\|@/services/distillerSourceContext" src/modules/memory/` 零命中                                                                                                                                     |
+| **AC-3**  | 达成                        | 判据在 `domain/scopeAuthorization.ts`；`src/modules/memory/infrastructure/` 不再导出 `canViewMemory`/`canManageMemory`，也不再 import `@/services/resourceAcl`                                                                    |
+| **AC-4**  | 达成                        | `modules/source-control/public/participants.ts` 导出 `RepositoryScopeAuthorizationInTx` + 唯一 owner 工厂；能力铸造合同由 `rfc294-architecture-preflight` 的 capability-forge 守卫锁定（brand / freeze / WeakSet / 单工厂）        |
+| **AC-5**  | 达成                        | `rfc285-b7-memory-matrix.test.ts`（六 scope × 三角色 × 读/管）全绿。**唯一有意的一格变化**：SQLite 侧 `canManage` 由 `own` 放宽到 `write\|own`，与 PostgreSQL 侧对齐——那是双 provider 漂移出的真 bug，用户当日裁决取 `write\|own`  |
+| **AC-6**  | 达成（T10 补完）            | 收口自查发现路由里还留着 RFC-285 Q4 收窄的**四份手抄件** + `@/services/resourceAcl` 的 ACL 谓词；已收成 `domain/candidateVisibility.ts` 一份判据经 `memory/public/types` 消费，ACL 谓词改经 `resource-catalog/public/types`。锁：`rfc352-memory-candidate-visibility.test.ts`（含源码层「路由里不得再出现手写 `status !== 'candidate'`」） |
+| **AC-7**  | 达成                        | `rfc352-memory-list-pagination.test.ts`（8 例纯原语：游标往返 / 同毫秒决胜 / 稀疏跨批 / 触顶不满页 + 有效游标 / 触顶后能翻到底 / 空源 / 末页 null）+ `rfc352-memory-list-page-query.test.ts`（6 例 provider 集成：逐页拼接 === 全量、字段集逐字相同、标签 / 候选 / scope 三层一致、坏游标 400） |
+| **AC-8**  | 达成                        | `memory-distiller*.test.ts` / `memory-distill-scheduler*.test.ts` / `memory-distill-job-detail*.test.ts` 全绿（去抖合并 / 退避 / MAX_ATTEMPTS / 候选级容错 / recoverRunning / 重试取消）                                          |
+| **AC-9**  | 达成                        | `memory-distill` 仍在 `cli/start.ts` / `cli/postgresqlDaemonApplication.ts` 注册为可暂停 handle；`rfc349-postgresql-preflight` 冻结守卫绿                                                                                        |
+| **AC-10** | **按转交口径达成**          | 见 §4.1 / §4.3：W4-E2 现 43 条 = bootstrap→composition 全仓形态 11 + `ws/broadcaster` 8 + runtime 3 + off-dag offered 9 + 两个路由文件 10 + RC legacy consumer 1 + facade 自身 1；memory **自有且修法在自己文件里**的已归零     |
+| **AC-11** | 达成                        | 零 schema / migration / WS 改动；`GET /api/memories` 不带分页参数时逐字节保持 `{items}`（`routes-memories.test.ts` 既有断言未改）；前端只增 load-more。各波分母见 §4.3，无回升                                                  |
+| **AC-12** | 见 §4.4                     | exact-SHA hosted CI 取证                                                                                                                                                                                                        |
+
+## 4.3 T10 查出的桶归属错误（`routes/memories.ts`）
+
+收口重采时发现 `routes/memories.ts` 的 `targetContext` 是 **`task-execution`**（W4-E1），而它的兄弟
+`routes/memoryDistillJobs.ts` 是 `memory`（W4-E2）。原因是 `rfc294Canonical.ts` 的关键词级联第 449 行写的是
+**单数** `/memory|distill/`：`memoryDistillJobs` 含 `distill` 命中，`memories`（复数）不含 `memory`，
+一路落到兜底的 `task-execution`。全仓 121 个 route 文件里有 24 个落在这个兜底里。
+
+这不是学术问题：R4 把 legacy → 模块 public 面的边按**消费者**记账之后，这个路由消费 memory / identity-access /
+resource-catalog public 的 **8 条**边全记进了 W4-E1——而「把这个 memory 路由搬进模块 inbound」恰恰是 W4-E2
+自己的活（AC-6 就是冲它去的）。不纠正的话，本 RFC 的退出数字是**靠一个分类 bug 变好看的**。
+
+修法按本文件既有的 `*_INBOUND_FILES` 形态逐文件登记（新增 `MEMORY_INBOUND_FILES`），**不**把判据放宽成
+`/memor/` 或加 `memories`：`services/fusion.ts#unfuseMemoriesTx` 一类符号同样含 `memories`，而 fusion 已由本 RFC
+明确转交 knowledge-evolution（W4-E3），放宽会把它们反向吸回 memory。
+
+纠正后：**W4-E2 35 → 43、W4-E1 846 → 838**，全局总数不变。其余 23 个兜底 route 文件的归属是同类问题，
+但属全局记账裁决，随下一批账本工作处理（已登记进 RFC-294 `plan.md §14`）。
 
 ## 5. 并发协调
 

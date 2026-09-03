@@ -367,6 +367,19 @@ const SYSTEM_OPERATIONS_INBOUND_FILES = new Set([
   'packages/backend/src/routes/restore.ts',
 ])
 
+// RFC-352 T10 —— 关键词级联的复数漏网。
+// 第 449 行那条 `/memory|distill/` 判据匹配的是**单数** `memory`，而 `routes/memories.ts`
+// 写的是复数，于是这个纯粹的 memory 路由一路落到兜底的 `task-execution`（W4-E1），
+// 它的兄弟 `routes/memoryDistillJobs.ts` 却因为含 `distill` 正确落在 memory（W4-E2）。
+// 后果不是学术问题：R4 把 legacy→模块 public 面的边按**消费者**记账后，这个路由消费
+// memory / identity-access / resource-catalog public 的 8 条边全记进了 W4-E1——
+// 而把这个路由搬进 `modules/memory` inbound 恰恰是 W4-E2 自己的活（AC-6）。
+//
+// 不把判据放宽成 `/memor/` 或加上 `memories`：`services/fusion.ts#unfuseMemoriesTx` 一类
+// 符号同样含 `memories`，而 fusion 已由 RFC-352 明确转交 knowledge-evolution（W4-E3），
+// 放宽会把它们反向吸回 memory。所以按本文件既有的 `*_INBOUND_FILES` 形态逐文件登记。
+const MEMORY_INBOUND_FILES = new Set(['packages/backend/src/routes/memories.ts'])
+
 const PLATFORM_ADMIN_MECHANISM_FILES = new Set([
   'packages/backend/src/routes/maintenance.ts',
   'packages/backend/src/routes/maintenanceDisk.ts',
@@ -442,6 +455,7 @@ export function targetContextFor(path: string, symbol = ''): TargetOwner {
     return 'platform'
   }
   if (SYSTEM_OPERATIONS_INBOUND_FILES.has(path)) return 'system-operations'
+  if (MEMORY_INBOUND_FILES.has(path)) return 'memory'
   if (PLATFORM_ADMIN_MECHANISM_FILES.has(path)) return 'platform'
   if (BOOTSTRAP_ADMIN_AGGREGATE_FILES.has(path)) return 'bootstrap'
   const value = `${path}#${symbol}`.toLowerCase()

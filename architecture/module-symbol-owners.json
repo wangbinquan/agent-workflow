@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1896,
+    "backendFiles": 1897,
     "frontendFiles": 621,
     "legacyFiles": 629,
-    "moduleFiles": 1267,
-    "productionFiles": 2672,
+    "moduleFiles": 1268,
+    "productionFiles": 2673,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25729
+    "symbolsIncludingFileRoots": 25734
   },
   "entries": [
     {
@@ -74420,6 +74420,66 @@
       "symbol": "FusionCompositionDependencies",
       "targetContext": "memory",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/memory/domain/candidateVisibility.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/candidateVisibility.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/candidateVisibility.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/candidateVisibility.ts#CandidateNarrowable",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CandidateNarrowable",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/candidateVisibility.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/candidateVisibility.ts#CandidateVisibilityOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CandidateVisibilityOptions",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/candidateVisibility.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/candidateVisibility.ts#isMemoryHiddenCandidate",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isMemoryHiddenCandidate",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/candidateVisibility.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/candidateVisibility.ts#narrowCandidateRows",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "narrowCandidateRows",
+      "targetContext": "memory",
+      "targetLayer": "domain"
     },
     {
       "currentContext": "memory",
@@ -162473,10 +162533,10 @@
       "exported": false,
       "file": "packages/backend/src/routes/memories.ts",
       "id": "owner:packages/backend/src/routes/memories.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E2",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "task-execution",
+      "targetContext": "memory",
       "targetLayer": "inbound"
     },
     {
@@ -162497,10 +162557,10 @@
       "exported": false,
       "file": "packages/backend/src/routes/memories.ts",
       "id": "owner:packages/backend/src/routes/memories.ts#MemoryRouteIdentityAccess",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W4-E2",
       "status": "legacy-target",
       "symbol": "MemoryRouteIdentityAccess",
-      "targetContext": "identity-access",
+      "targetContext": "memory",
       "targetLayer": "inbound"
     },
     {
@@ -162509,10 +162569,10 @@
       "exported": false,
       "file": "packages/backend/src/routes/memories.ts",
       "id": "owner:packages/backend/src/routes/memories.ts#memoryScopeAuthority",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W4-E2",
       "status": "legacy-target",
       "symbol": "memoryScopeAuthority",
-      "targetContext": "identity-access",
+      "targetContext": "memory",
       "targetLayer": "inbound"
     },
     {
@@ -309423,5 +309483,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f1c51b3cf8e7622e9d8b7f7037ba9a990ffd05239296c652adffdad86cfb5b45"
+  "sourceDigest": "sha256:497a5e268132f7d57fe698c5dac413e1fc223cfcfed323b51cd24f6747dde0e1"
 }

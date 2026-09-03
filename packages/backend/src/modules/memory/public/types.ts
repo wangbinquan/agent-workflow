@@ -21,6 +21,15 @@
 // 只导出**真的有生产 consumer** 的那几个（RFC-294 design §3.3「无 consumer 不公开」，
 // `rfc294-review-public-consumer-ledger` 逐条钉死）。预算常量、逐档裁剪、token 估算与另外
 // 两个 format 变体都只在 memory 自己内部用，留在 domain 里。
+// RFC-352 AC-6：RFC-285 B7（Q4）候选收窄的唯一判据。路由层是它的生产 consumer——
+// 边界只 decode 一次「这个调用者能不能看未审候选」，收窄本身不再在路由里手写。
+export {
+  isMemoryHiddenCandidate,
+  narrowCandidateRows,
+  type CandidateNarrowable,
+  type CandidateVisibilityOptions,
+} from '../domain/candidateVisibility'
+
 export {
   formatMemoryBlockFromSnapshot,
   memoryFencingForNonce,

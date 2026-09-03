@@ -2,15 +2,41 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-03）：[RFC-352 Memory bounded context 合同归位（RFC-294 W4-E2）](design/RFC-352-memory-context-cutover/proposal.md)。**
-> 三件套已落档，**批准前不动任何生产代码**。范围：把 `services/` 里的注入（570 行）/ 蒸馏（1274）/ 调度（480）/
-> 源上下文（153）四块实现按分层迁进 `modules/memory`，删 8 个兼容 facade；把 `canViewMemory` / `canManageMemory`
-> 从 `modules/memory/infrastructure/sqliteMemoryCatalog.ts:1098,1117` 提到 application 层（今天授权策略住在 SQLite
-> adapter 里）；按 RFC-294 `design.md:3441` 落 source-control offered `RepositoryScopeAuthorizationInTx` 薄 participant
-> ——**行为逐字等于今天**（repo / repo_group / global 仍是全员可读、仅资源管理员可管，RFC-248 AC-29 / RFC-305），
-> 不借迁移改权限档位；列表分页下推、路由收成 decode/call/map。零 schema / migration / wire / WS / 前端改动。
-> plan §8 给 E2 写的「不可见 count 无侧信道」是安全项，按用户 2026-08-26 硬规则**不承接**，只做功能半边。
-> 用户 2026-09-03 已定两处范围：一刀切完（不拆蒸馏）、SC participant 本轮就落。
+> ✅ **RFC 完工（Done，2026-09-03）：[RFC-352 Memory bounded context 合同归位（RFC-294 W4-E2）](design/RFC-352-memory-context-cutover/proposal.md)。**
+> 把 `services/` 里的注入（570 行）/ 蒸馏（1274）/ 调度（480）/ 源上下文（153）四块实现按分层迁进 `modules/memory`；
+> 把 `canViewMemory` / `canManageMemory` 从 SQLite adapter 提到 `domain/scopeAuthorization.ts` 的单一判据；按 RFC-294
+> `design.md:3441` 落 source-control offered `RepositoryScopeAuthorizationInTx` 薄 participant；列表下推 keyset 分页。
+> **提交链**：`49b714d89`（T1/T2 注入 + 源上下文）→ `9954be7bd`（收红 + T3 单一授权判据）→ `e48508ee4`（T4 不再直读
+> source-control 仓库表）→ `0dc1662ec`（T6 蒸馏 + T4 participant 能力铸造合同）→ `2bb6dfcc0`（T7 调度，并清掉主干上
+> 重复的调度器）→ `e211f1499`（收 T6 的拼接路径哨兵）→ `eb8b331db`（T8 分页）→ `1ab271af2`（T9 内部 import 归 public
+>
+> - R4 判据修正 + 账本重采）。
+>
+> **两处与「行为逐字不变」的偏离，都是本刀查出的真 bug / 用户当场拍板**：
+>
+> - **canManage 双 provider 漂移（用户裁决「取 `write|own`」）**：SQLite 侧要求 `own`、PostgreSQL 侧接受 `write|own`，
+>   于是**同一个持 write grant 的用户，在 SQLite 部署上看不到审批 / 编辑 / 归档按钮，API 却允许他做**。收成一份判据后
+>   按 `write|own` 取，SQLite 侧的按钮回来了——这是修 bug，不是放权。
+> - **列表分页（用户选定选项 B：在本 RFC 内做，不转交）**：`GET /api/memories` 新增可选分页，**任一分页参数出现才切
+>   `{items,nextCursor}` 封套**，无参调用逐字节不变（沿用 `GET /api/cached-repos` 的既有约定）。可见性过滤发生在查询
+>   **之后**（agent / workflow scope 随资源可见性、tags 是 JSON 列），所以不能 SQL `LIMIT`：落 keyset 累积原语
+>   `domain/listPagination.ts`，每批取数→过滤→凑够一页，批数封顶 10 防无界扫描；触顶返回不满的一页 + 有效游标。
+>   前端 `MemoryAllList` 走 RFC-311 `usePagedList`，页大小 50，审批队列不分页。
+>
+> **收尾状态**：8 个 facade 退役 6 个，剩 2 个按 owner 转交（`services/memory.ts` 的薄再导出、
+> `services/runtime/opencode/distillSessionCapture.ts` 属 runtime 域）；W4-E2 exact 边 `67 → 43`。
+> 中途两次记账修正**都不是往自己脸上贴金**：T9 把 R4 判据修准（`54 → 35`，9 条 `services/fusion.ts→memory` 归
+> W4-E3）；T10 收口自查又发现 `routes/memories.ts` 因为关键词级联写的是**单数** `memory`、复数 `memories` 不匹配，
+> 一路落进兜底的 `task-execution`（W4-E1），于是这个纯 memory 路由消费 public 面的 8 条边全记在了别人头上——
+> 纠回 W4-E2（`35 → 43`、W4-E1 `846 → 838`），**把自己的债认回来**。全仓 121 个 route 文件里有 24 个落在同一个
+> 兜底里，其余 23 个属全局记账裁决，已登记进 RFC-294 `plan.md §14` 随下一批账本工作处理。
+> `plan.md §8` 给 E2 写的「不可见 count 无侧信道」是安全项，按用户 2026-08-26 硬规则**不承接**。
+> **T10 收口自查还补完了 AC-6**：`routes/memories.ts` 里 RFC-285 Q4 的候选收窄被**手抄了四遍**（列表 /
+> `include=body` 审批队列 / facets / 详情 404），分页路径是第五份，且 facets 那份形状还不一样——与本 RFC 开局
+> 撞到的 canManage 漂移同类。已收成 `domain/candidateVisibility.ts` 一份判据经 `memory/public/types` 消费，
+> 路由的 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types`；源码层锁「路由里不得再出现手写的
+> `status !== 'candidate'`」。
+> 逐 AC 证据、T9 的退役 / 转交账与 T10 的桶归属纠正见 `design/RFC-352-memory-context-cutover/plan.md §4.1–§4.3`。
 
 > ✅ **RFC-294 账本重分桶与分母重设完成（2026-09-02，零生产改动、零 wave credit）。**
 > 起于 `plan.md §14` 那条挂了两天的「必须在下一个 wave 立项时裁决的输入」：RFC-349 双 provider 把 canonical 分母抬了
@@ -33,10 +59,10 @@
 > 的红分别在 `Static scans`(fast-uri 公告) 与 `Playwright e2e windows shard 2/4`，都不在本批归属面。
 > 自验：`git archive 48078eaa2` 导出提交本身重跑 census，八份 canonical manifest 与 committed 逐字节相同。
 >
-> **下一刀**：W4-E2 memory（用户 2026-09-02 选定）。它今天的实剩是 67 条 exact edge + 8 个 legacy facade
-> （`services/memory*` 家族 2577 行）+ 3 个路由 824 行；`modules/memory` 骨架与双 provider store 已在，
-> 最难的正确性部分由 RFC-342/P0-A 交付。前置件：SC offered `RepositoryScopeAuthorizationInTx` 薄 participant
-> 今天只存在于 `design.md:3429/3441`，源码里还没有。
+> **下一刀**：W4-E2 memory（用户 2026-09-02 选定）——**已由 RFC-352 于 2026-09-03 完工**，见本文件顶部的 Done 条目。
+> 立项时的实剩「67 条 exact edge + 8 个 legacy facade（`services/memory*` 家族 2577 行）+ 3 个路由 824 行」现为
+> 35 条边 + 2 个转交出去的 facade；前置件 SC offered `RepositoryScopeAuthorizationInTx` 薄 participant 已随 T4 落地
+> （`modules/source-control/application/repositoryScopeAuthorization.ts`，经 `public/participants.ts` 出口）。
 
 > ✅ **RFC 完工（Done，2026-09-02）：[RFC-350 任务不活跃超时收割（僵尸任务）与 interrupted 树归档补齐](design/RFC-350-task-idle-timeout-reaper/proposal.md)。**
 > 起于用户「配置里有终态任务自动归档，也要有任务超时自动归档——任务最后一次没有动作之后多久就当僵尸自动归档」。
@@ -324,13 +350,24 @@ called before any query`。十九处判据统一补上 `errno`；守卫
 > （按 SQLSTATE 判缺陷，挂在 `postgresql-evidence` 上），加四条静态守卫
 > （search-case / null-ordering / numeric-projection / boolean-expression parity），全部验证过对回退敏感。
 >
-> **仍未关闭**：托管 `postgresql-evidence` 在 `e211f1499` 上只剩**一条**未过——`copying` 阶段
-> event-loop max **688.5ms ≥ 500ms**（crash/resume 26/26、三平台 compiled、三个相位各 0 错误、
-> 迁移 0 错误都已绿；上一轮还是 3628.9ms + SERIALIZABLE 逃逸）。本机 10 核同一份代码是 221.4ms、
-> 托管 2 核 688.5ms，约 3 倍——与 CPU 规模一致，也可能是一次大 GC。已给 daemon 采样器加可调门槛
-> （`AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`）与堆用量/增量记录做归因，harness 会把这类行回显进
-> job log。归因结论落定前**不动** `EVENT_LOOP_GAP_MS = 500`。含全部修复的 exact SHA
-> `40b76d0df` 已重新 dispatch。**AC-14 / AC-15 未满足前 RFC-349 不得标 Done。**
+> **2026-09-03（第三轮：把托管唯一未过的那条门槛归因并修掉）**：托管 `postgresql-evidence` 在
+> `e211f1499` 上只剩**一条**未过——`copying` 阶段 event-loop max **688.5ms ≥ 500ms**
+> （crash/resume 26/26、三平台 compiled、三个相位各 0 错误、迁移 0 错误都已绿；上一轮还是
+> 3628.9ms + SERIALIZABLE 逃逸）。
+>
+> 给 daemon 采样器加了**可调门槛**（`AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`，默认仍 1s）与
+> **堆用量/增量**记录，harness 也放行这类行进 job log。调到 120ms 后本机全量迁移测到
+> 180 次 ≥120ms、p50 134ms / p95 175ms / 最坏 251ms，**堆增量为正**——是分配密集的阻塞计算，
+> 不是 GC，也不是 fsync（同机同时段 fsync p95 0.1ms）。根因是拷贝循环每块**两遍重复工作**：
+> 写完立刻读回来再解析校验一遍（文件刚 fsync 完、读的是页缓存），以及刚构造出来的块在写路径
+> 又被完整校验一遍（payload 刚过 Zod、digest 刚按同一份 canonical JSON 算过）。同一进程 A/B：
+> `tasks` 55.2→12.5ms（−77%）、`node_runs` 40.1→9.7ms（−76%）。
+>
+> 「构造即已校验」的标记住在**模块私有的 WeakSet**里，只有构造函数往里加；磁盘/网络/调用方
+> 给的对象照旧完整校验，构造出来的块另加 `Object.freeze`。`EVENT_LOOP_GAP_MS = 500` 一个字没动。
+>
+> **仍未关闭**：含全部修复的 exact SHA 上的托管 `postgresql-evidence` 尚未跑绿。
+> **AC-14 / AC-15 未满足前 RFC-349 不得标 Done。**
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 865,
+    "consumers": 868,
     "exactEntrypointFiles": 62,
     "governedFieldSurfaces": 5,
-    "methods": 895,
+    "methods": 897,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18960,
-    "symbols": 959
+    "recursiveFields": 18968,
+    "symbols": 963
   },
   "entries": [
     {
@@ -68366,6 +68366,83 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "status",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:CandidateNarrowable",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:memory:types:isMemoryHiddenCandidate"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ddced8d0d3f6c8cc4a5127920fb524710b7d52c25d6c1e1b1bd515ab8944e177",
+      "status": "target-context-current-surface",
+      "symbol": "CandidateNarrowable",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "includeCandidates",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:CandidateVisibilityOptions",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:memory:types:isMemoryHiddenCandidate",
+        "public:memory:types:narrowCandidateRows"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:1361e59b01dcc4bcc906ebee8e3847afbd365dcf5f1a8abf31e4c0befda69fa7",
+      "status": "target-context-current-surface",
+      "symbol": "CandidateVisibilityOptions",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [
         "import:ddb1a9cb8d5a6063f9cf"
       ],
@@ -68441,6 +68518,71 @@
       "signatureDigest": "sha256:4c355e7fcc128fd629053a6305a768b27c48b056ce8bc6aadf4dd8697f3513e9",
       "status": "target-context-current-surface",
       "symbol": "formatMemoryBlockFromSnapshot",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:177de18d3b7622533483"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:177de18d3b7622533483"
+          ],
+          "fieldPath": "$call.$parameter:options.includeCandidates",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:177de18d3b7622533483"
+          ],
+          "fieldPath": "$call.$parameter:row.status",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:isMemoryHiddenCandidate",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:b71c74a30a64e03cebdfe959b0eb40f10000c68737e4c38e6a6cb30d1cfa2ddc"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:177de18d3b7622533483",
+          "file": "packages/backend/src/routes/memories.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:82d4a6a82c9389552d40663c8fa00a155b35ce74e83e30913a478408ac531e81",
+      "status": "target-context-current-surface",
+      "symbol": "isMemoryHiddenCandidate",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -68572,6 +68714,69 @@
       "signatureDigest": "sha256:3dd1f94406d18a8b50d9ced72e1da82d8b69f2dfea313aba8988eb6bc7a99634",
       "status": "target-context-current-surface",
       "symbol": "memoryFencingForNonce",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:c8efb41994b9273b7a49"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:c8efb41994b9273b7a49"
+          ],
+          "fieldPath": "$call.$parameter:options.includeCandidates",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:rows",
+          "type": "readonly T[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return[]",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:narrowCandidateRows",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:9f8ccd492c1666c86df2d68b18dca4fe7b87928256a07f5a82995deb9972ca59"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c8efb41994b9273b7a49",
+          "file": "packages/backend/src/routes/memories.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:deb9f7b3f9c2a03085fddbfbd0f61e1f1ba8b540eb57e83e4f07ca0dca34da97",
+      "status": "target-context-current-surface",
+      "symbol": "narrowCandidateRows",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -105256,6 +105461,7 @@
       },
       "consumerEdgeIds": [
         "import:154ce719aa99e6033abd",
+        "import:7b27e5d280ef1a61330d",
         "import:c83208e594e80466e61f"
       ],
       "context": "resource-catalog",
@@ -105271,6 +105477,7 @@
         {
           "consumerEdgeIds": [
             "import:154ce719aa99e6033abd",
+            "import:7b27e5d280ef1a61330d",
             "import:c83208e594e80466e61f"
           ],
           "fieldPath": "$call.$parameter:actor.user.id",
@@ -105299,6 +105506,12 @@
           "edgeId": "import:154ce719aa99e6033abd",
           "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:7b27e5d280ef1a61330d",
+          "file": "packages/backend/src/routes/memories.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
         },
         {
           "context": "memory",
@@ -153176,7 +153389,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f1c51b3cf8e7622e9d8b7f7037ba9a990ffd05239296c652adffdad86cfb5b45",
+  "sourceDigest": "sha256:497a5e268132f7d57fe698c5dac413e1fc223cfcfed323b51cd24f6747dde0e1",
   "targetContexts": [
     "collaboration",
     "development-automation",

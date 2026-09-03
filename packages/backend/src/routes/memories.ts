@@ -27,7 +27,8 @@ import {
 import type { Memory, MemorySummary } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
+import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
+import { isMemoryHiddenCandidate, narrowCandidateRows } from '@/modules/memory/public/types'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { actorOf } from '@/auth/actor'
@@ -180,8 +181,9 @@ export function mountMemoryRoutes(
       // body）——读面收紧为仅持有 `resource-acl:bypass` 的操作者，与 distill 详情门
       // （E8）同一威胁模型。人审发布（approved）后才进入全员读面。两读法
       // （含 body / 不含 body）同收。
-      const dropCandidates = <T extends { status: string }>(rows: T[]): T[] =>
-        hasResourceAclBypass(actor) ? rows : rows.filter((r) => r.status !== 'candidate')
+      // RFC-352 AC-6：边界只 decode 出「这个调用者能不能看候选」，收窄本身走 memory
+      // 的单一判据（`narrowCandidateRows`），与分页 / facets / 详情 404 共用一份。
+      const candidateVisibility = { includeCandidates: hasResourceAclBypass(actor) }
       // RFC-352 T8 —— 任一分页参数出现才切换封套；不传的调用逐字节保持旧的全量 `{items}`
       // 形状（与 `GET /api/cached-repos` 同一约定）。既有 6 个前端消费者与
       // `memory.list-memories.v1` MCP 工具因此一行都不用改，其中几个语义上本来就要全量。
@@ -202,7 +204,7 @@ export function mountMemoryRoutes(
           scopeAuthority,
           parsed.data,
           { cursor: pageQuery.data.cursor ?? null, limit: pageQuery.data.limit ?? 50 },
-          { includeCandidates: hasResourceAclBypass(actor) },
+          candidateVisibility,
         )
         return c.json({ items: page.items, nextCursor: page.nextCursor })
       }
@@ -212,14 +214,17 @@ export function mountMemoryRoutes(
         return c.json({
           items: await catalog.queries.annotateManageRights(
             scopeAuthority,
-            dropCandidates(visible),
+            narrowCandidateRows(visible, candidateVisibility),
           ),
         })
       }
       const items = await catalog.queries.list(parsed.data)
       const visible = await catalog.queries.filterVisible(scopeAuthority, items)
       return c.json({
-        items: await catalog.queries.annotateManageRights(scopeAuthority, dropCandidates(visible)),
+        items: await catalog.queries.annotateManageRights(
+          scopeAuthority,
+          narrowCandidateRows(visible, candidateVisibility),
+        ),
       })
     },
   )
@@ -272,10 +277,9 @@ export function mountMemoryRoutes(
       const scopeAuthority = memoryScopeAuthority(c, identityAccess)
       const rows = await catalog.queries.list({ ...parsed.data, status })
       const visible = await catalog.queries.filterVisible(scopeAuthority, rows)
-      const items =
-        status === 'candidate' && !hasResourceAclBypass(actor)
-          ? visible.filter((r) => r.status !== 'candidate')
-          : visible
+      const items = narrowCandidateRows(visible, {
+        includeCandidates: hasResourceAclBypass(actor),
+      })
       return c.json({
         status,
         scopeType: parsed.data.scopeType ?? null,
@@ -307,7 +311,11 @@ export function mountMemoryRoutes(
       })
       if (!visible) throw new NotFoundError('memory-not-found', `memory ${id} not found`)
       // RFC-285 B7（Q4）：candidate 行对无 ACL bypass 权限者与不存在同形 404。
-      if (found.memory.status === 'candidate' && !hasResourceAclBypass(actorOf(c))) {
+      if (
+        isMemoryHiddenCandidate(found.memory, {
+          includeCandidates: hasResourceAclBypass(actorOf(c)),
+        })
+      ) {
         throw new NotFoundError('memory-not-found', `memory ${id} not found`)
       }
       const canManage = await catalog.queries.canManage(scopeAuthority, {

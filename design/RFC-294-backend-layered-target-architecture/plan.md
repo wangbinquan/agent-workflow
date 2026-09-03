@@ -363,7 +363,7 @@ flowchart LR
   W2D --> W3["RFC-341 / W3 Done<br/>67a97480 / CI 33268925250"]
   P0C --> W3
   W3 --> W4["W4 context cutover"] --> W5["W5 SCC/source-control"]
-  P0A["RFC-342 / P0-A Done<br/>67a97480"] --> W4E2["W4-E2 memory"] --> W4
+  P0A["RFC-342 / P0-A Done<br/>67a97480"] --> W4E2["RFC-352 / W4-E2 Done<br/>1ab271af2"] --> W4
   W4 --> W6["W6 AtomicApply"]
   P0B["RFC-343 / P0-B Done<br/>67a97480"] --> W6
   W5 --> W7
@@ -411,12 +411,14 @@ P0-B 后可与 W5/W7 的设计准备并行，但 schema/start owner 必须排队
 | N13  | RFC-347 / W4-E0（Done）             | trusted direct/delegated request authority factory、presence/WS 收编、central `Actor` constructor 与 DB-keyed module cache 退役；remaining legacy projection按 E1/E2/E3/E8/E9/E10 精确入账                          | final `7ede76a8`；Main `33317698270` 与同 SHA 8 schedules terminal success；不等于其余 W4-E slices Done                    |
 | N14  | RFC-345 / W4-C（Done）              | 四 roster、`ResourceCatalogQuery`、四 named participant、六 aggregate cohort、package 七 participant 与 operation binding 已落；T9 退役 11 条 exact debt edge 并删掉第 11 个 facade，其余 11 条按 consumer 归属转交 | 功能链 `50e2b3e47` → `f4c1e4ceb`；Main CI `33633631833`（`78dcc5999`，35/35）与 8 条定时 workflow terminal success         |
 | N15  | 账本重分桶与分母重设（Done）        | 生成器落 R1～R4 记账规则、8 条 `KNOWN_VIOLATIONS` 钉 `removeWave: W5`、七份 canonical manifest 与 `status.md` 全量重采                                                                                              | 零生产改动、零 wave credit；关闭 review §6 的 B3/C3/B4；exception `6071→5220`、W4-E1 `2528→837`                            |
+| N16  | RFC-352 / W4-E2（Done）             | 注入 / 蒸馏 / 调度 / 源上下文四块实现迁进 `modules/memory`，`canView`/`canManage` 收成 `domain/scopeAuthorization.ts` 单一判据，SC offered `RepositoryScopeAuthorizationInTx` 薄 participant 落地，列表 keyset 分页下推；facade 8 → 2（余 2 条按 owner 转交），W4-E2 exact 边 `67 → 43` | 链 `49b714d89` → `9954be7bd` → `e48508ee4` → `0dc1662ec` → `2bb6dfcc0` → `e211f1499` → `eb8b331db` → `1ab271af2`；T9 把 R4 判据由 EXACT 入口改为 `isPublishedSurface`（W4-E2 `54→35`、W4-E3 `2→13`）；T10 又把 `routes/memories.ts` 从兜底的 W4-E1 纠回 W4-E2（`35→43`、W4-E1 `846→838`，见 §14）        |
 | OPT  | W7 后新号 fanout capability RFC     | SelectedRunMap、exact consumed edge、consumed-aware reuse 与能力扩张矩阵                                                                                                                                            | 仅 W7 exit 后；未批准则保持挡板、跳过 W8                                                                                   |
 
 P0-A、P0-B、W3、W4-A、W4-E0 与 W4-E7 已关闭各自 successor；它们不再被错误地用作其它 wave 已经落地的证明，也不倒签后续
 slice。RFC-345 / W4-C 已于 2026-09-02 Done（T9 的「RC 侧退役 / consumer 侧转交」口径由用户当日裁定，逐条见其
-`plan.md §7.5`；hosted 取证见 §7.6）。当前无 active production migration；W4-E2 可消费 P0-A，W6 可消费 P0-B，但各自仍须通过本 wave 的功能、
-transaction、compatibility 与 exact-SHA hosted gate。
+`plan.md §7.5`；hosted 取证见 §7.6）。**RFC-352 / W4-E2 已于 2026-09-03 Done**（消费了 P0-A 的事务正确性；同样按
+W4-C 立下的转交口径处理剩余 facade 与不属于 memory 的 exact id，逐条见其 `plan.md §4.1`）。当前无 active production
+migration；W6 可消费 P0-B，但仍须通过本 wave 的功能、transaction、compatibility 与 exact-SHA hosted gate。
 
 ## 4. W0-R：重建架构基线、owner 账本与机器栅栏
 
@@ -1240,6 +1242,17 @@ import=0；终局指标全绿。
 >   消费者拿到的都是模块对外承诺的东西。判据改用 `isPublishedSurface`（`public/<file>` 一层即算），
 >   W4-E2 由此 `54→35`（9 条 `services/fusion.ts→memory` 归 W4-E3 等），W4-E3 `2→13`、W4-E1 `841→843`、W4-B `187→186`、
 >   W9 `2712→2713`。分母重设的结论不变，只是把「按消费者记」记得更准。
+> - **2026-09-03（RFC-352 T10）关键词级联的复数漏网**：R4 按消费者记账之后，「消费者被分到哪个 context」直接
+>   决定债落在谁头上，级联里的分类错误因此被放大。实撞：`targetContextFor` 的 memory 判据写的是**单数**
+>   `/memory|distill/`，`routes/memories.ts`（复数）不匹配，一路落到兜底的 `task-execution`，于是这个纯 memory
+>   路由消费 public 面的 8 条边全记进了 W4-E1，而搬迁它是 W4-E2 的活。已按本文件既有的 `*_INBOUND_FILES` 形态
+>   逐文件登记（`MEMORY_INBOUND_FILES`）：**W4-E2 `35→43`、W4-E1 `846→838`**，全局总数不变。
+>   不放宽成 `/memor/` 或加 `memories`——`services/fusion.ts#unfuseMemoriesTx` 一类符号同样含 `memories`，
+>   而 fusion 已明确转交 knowledge-evolution，放宽会把它们反向吸回 memory。
+>   **未决**：全仓 121 个 route 文件里有 **24 个**落在同一个兜底 `task-execution` 里（`docs.ts` / `health.ts` /
+>   `plantuml.ts` / `publicOrigin.ts` / `resourceAcl.ts` / `resourcePackages.ts` / `config.ts` /
+>   `databaseMigrations.ts` 等显然不属 TE 的都在内）。逐个纠正是全局记账裁决，**下一批账本工作时一并处理**——
+>   在此之前，任何以 W4-E1 exact ids 为分母的退出门都要知道它里面混着别人的路由。
 >
 > 同批把 `scripts/depcheck.ts` 里 8 条 `KNOWN_VIOLATIONS` 逐条钉上 `removeWave: 'W5'`（review §B4；此前 `removeWhen` 写
 > 「属独立切片（未编号）」的条目被兜进 `RFC-owner-cutover`，在任何 wave 的退出门里都不出现）。结果：exception
