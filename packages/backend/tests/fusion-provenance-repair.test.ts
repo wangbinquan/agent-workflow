@@ -5,7 +5,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { fusions, memories, skills, skillVersions } from '../src/db/schema'
 import { repairFusionProvenance } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
-import { createSqliteFusionPersistence } from '../src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
+import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -64,7 +64,7 @@ function addFusion(
 describe('RFC-223 fusion provenance boot repair', () => {
   test('uses only trustworthy token/ledger oracles, quarantines conflicts, and is idempotent', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const persistence = createSqliteFusionPersistence({
+    const persistence = composeSqliteFusionPersistence({
       db,
       appHome: resolve(import.meta.dir, '.rfc223-unused-app-home'),
     })

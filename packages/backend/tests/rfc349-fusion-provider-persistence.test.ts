@@ -10,8 +10,8 @@ import { buildActor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
 import { memories, skillOperations, skills, skillVersions } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { createPostgresqlFusionPersistence } from '@/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository'
-import { createSqliteFusionPersistence } from '@/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
+import { composePostgresqlFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
+import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -179,7 +179,7 @@ describe('RFC-349 fusion provider persistence', () => {
     writeFileSync(join(versionOne, 'SKILL.md'), 'old\n')
     writeFileSync(join(proposal, 'SKILL.md'), 'new\n')
 
-    const persistence = createSqliteFusionPersistence({ db, appHome })
+    const persistence = composeSqliteFusionPersistence({ db, appHome })
     const access = await persistence.loadSkillAccess(actor, 'skill-1')
     expect(access).not.toBeNull()
     await persistence.create(fusionRecord(access!.preconditionToken))
@@ -213,7 +213,7 @@ describe('RFC-349 fusion provider persistence', () => {
 
   test('PostgreSQL adapter issues schema-qualified Promise reads', async () => {
     const fixture = postgresqlFixture([[['fusion-1'], ['fusion-2']]])
-    const persistence = createPostgresqlFusionPersistence({
+    const persistence = composePostgresqlFusionPersistence({
       db: fixture.db,
       appHome: tempRoot(),
     })

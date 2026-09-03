@@ -21,7 +21,7 @@ import {
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { createInMemoryDb } from '@/db/client'
 import { workflows } from '@/db/schema'
-import { createSqliteFusionPersistence } from '@/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
+import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import { buildAgentHostSnapshot } from '@/services/agentLaunch'
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
@@ -182,7 +182,7 @@ describe('built-in workflow automatic layout', () => {
 
   test('the persisted built-in seeder lays out new rows and repairs legacy geometry once', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const fusion = createSqliteFusionPersistence({ db, appHome: '/tmp' })
+    const fusion = composeSqliteFusionPersistence({ db, appHome: '/tmp' })
     await seedFusionResources(fusion)
     const first = db.select().from(workflows).where(eq(workflows.builtin, true)).get()!
     const firstDefinition = WorkflowDefinitionSchema.parse(JSON.parse(first.definition))

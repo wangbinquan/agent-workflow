@@ -31,7 +31,7 @@ import type { Hono } from 'hono'
 import { resolve } from 'node:path'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createSqliteFusionPersistence } from '../src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository'
+import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/services/agent'
 import {
@@ -69,7 +69,7 @@ async function api(app: Hono, path: string, init?: RequestInit): Promise<Respons
 }
 
 function fusionPersistence(db: DbClient) {
-  return createSqliteFusionPersistence({ db, appHome: '/tmp' })
+  return composeSqliteFusionPersistence({ db, appHome: '/tmp' })
 }
 
 // Mirrors the proven-valid create payload from agents.test.ts (returns 201).
