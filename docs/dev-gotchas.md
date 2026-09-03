@@ -551,6 +551,32 @@ git checkout -- architecture/          # ← 连同别人刚手写的条目一�
    `rfc294-*` 追加到末尾」，所以新条目必须插在第一个 `rfc294-*` **之前**；append 到文件末尾会让
    N1b 的「RFC-317 subset ledgers project into canonical truth」红，而报错信息不会告诉你是顺序问题。
 
+## 移动源文件后，**拼接出来的路径断言** grep 不到（RFC-352 T6 实撞，2026-09-03）
+
+移完文件当然要全树 grep 旧路径。但守卫里的路径不一定是字面量：
+
+```ts
+// rfc254-no-unref-deadline-guard.test.ts —— 哨兵，证明 walk 真走到了源码树
+expect(files.some((f) => f.endsWith(join('services', 'memoryDistiller.ts')))).toBe(true)
+```
+
+`grep -rn "services/memoryDistiller"` **搜不到这一行**，因为源码里根本没有那个字符串——它是
+`join()` 在运行时拼出来的。于是本地全绿、CI 上 backend shard 红在一条与改动看似无关的守卫上
+（「the scan reaches the source tree」），而且报错只说 `Expected: true / Received: false`，
+不提哪个文件。
+
+移动/重命名源文件后至少扫这三种形态：
+
+```bash
+old=memoryDistiller
+grep -rn "services/$old" packages e2e scripts          # ① 字面量路径 / import
+grep -rn "'services', '$old" packages e2e scripts      # ② join('services', 'x.ts') 拼接
+grep -rn "\b$old\b" packages/backend/tests            # ③ 只提文件名、不带目录的断言
+```
+
+②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
+它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。
+
 ## 对 CI 不检查的共享 md 跑 `prettier --write`，会把别人的行全变成 diff（2026-09-03 实撞）
 
 CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:check:repo-ui` 那张**点名清单**

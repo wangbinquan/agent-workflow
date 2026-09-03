@@ -40,13 +40,13 @@
 //          反过来没有聊天室、多一张编排页。搞反了 ⇒ 用户点进去看到的是永远空白的面板。
 //
 // 判据取自源码单一事实源（纯文本引用，勿改成外链）：
-//   packages/backend/src/services/memoryInject.ts:122-211        loadInjectableMemories 五档各自的 WHERE
-//   packages/backend/src/services/memoryInject.ts:134-153        agent 档吃的是**闭包**（agentIds 复数）
-//   packages/backend/src/services/memoryInject.ts:188-201        repo_group 档：只有用组启动才查
-//   packages/backend/src/services/memoryInject.ts:311-329        formatMemoryBlockWithSnapshot：逐档 clip
-//   packages/backend/src/services/memoryInject.ts:393-408        clipByBudget：首次溢出即截断
-//   packages/backend/src/services/memoryInject.ts:441-516        injectMemoryForRun：task_repos 取**全部**成员仓
-//   packages/backend/src/services/memoryInject.ts:496-500        单仓直启不注入组记忆
+//   packages/backend/src/modules/memory/application/injection/injectMemory.ts（loadInjectableMemories）        loadInjectableMemories 五档各自的 WHERE
+//   packages/backend/src/modules/memory/application/injection/injectMemory.ts（agent 档）        agent 档吃的是**闭包**（agentIds 复数）
+//   packages/backend/src/modules/memory/application/injection/injectMemory.ts（repo_group 档）        repo_group 档：只有用组启动才查
+//   packages/backend/src/modules/memory/domain/injectionRendering.ts（formatMemoryBlockWithSnapshot）        formatMemoryBlockWithSnapshot：逐档 clip
+//   packages/backend/src/modules/memory/application/injection/injectMemory.ts:393-408        clipByBudget：首次溢出即截断
+//   packages/backend/src/modules/memory/application/injection/injectMemory.ts:441-516        injectMemoryForRun：task_repos 取**全部**成员仓
+//   packages/backend/src/modules/memory/application/injection/injectMemory.ts:496-500        单仓直启不注入组记忆
 //   packages/backend/src/services/task.ts:6296                   node-runs 投影出 injectedMemories
 //   packages/frontend/src/lib/injected-memories-card.ts:21-27    decideStatus 三支
 //   packages/frontend/src/lib/injected-memories-card.ts:40-55    SCOPE_ORDER / groupByScope

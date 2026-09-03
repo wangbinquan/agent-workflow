@@ -43,9 +43,9 @@
 //   packages/backend/src/modules/memory/application/distill/schedule.ts:421-431,473-490
 //       startMemoryDistillLoop 开机即 recoverRunning；running→pending，
 //       **attempts 原样不动**、startedAt 清空、nextRunAt 不动
-//   packages/backend/src/services/memoryDistiller.ts:1092-1107
+//   packages/backend/src/modules/memory/application/distill/memoryDistiller.ts:1092-1107
 //       只有 attempts===0 的那一轮才写 user_prompt_md / dedup_snapshot
-//   packages/backend/src/services/memoryDistiller.ts:1132-1151
+//   packages/backend/src/modules/memory/application/distill/memoryDistiller.ts:1132-1151
 //       每次 spawn 之后无条件把 exit_code / stderr_excerpt / session id 落库
 //   packages/frontend/src/routes/memory.distill-jobs.$jobId.tsx:124-190
 //       详情页六段的固定结构

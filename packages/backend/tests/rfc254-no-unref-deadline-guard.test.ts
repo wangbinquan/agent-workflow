@@ -83,7 +83,13 @@ describe('RFC-254 — no unref on deadline timers', () => {
 
   test('the scan reaches the source tree', () => {
     expect(files.length).toBeGreaterThan(200)
-    expect(files.some((f) => f.endsWith(join('services', 'memoryDistiller.ts')))).toBe(true)
+    // 哨兵文件：证明 walk 真的走到了源码树而不是扫了个空。RFC-352 T6 把蒸馏从
+    // `services/memoryDistiller.ts` 迁进 memory 模块，哨兵跟着走。
+    expect(
+      files.some((f) =>
+        f.endsWith(join('modules', 'memory', 'application', 'distill', 'memoryDistiller.ts')),
+      ),
+    ).toBe(true)
   })
 
   test('no src file pairs setTimeout(...resolve...) with .unref', () => {
