@@ -24,7 +24,7 @@ export function createSqliteCollaborationRuntimeMechanics(
         taskId: input.taskId,
         askingNodeId: input.askingNodeId,
         askingNodeRunId: input.askingNodeRunId,
-        containerRunId: input.containerRunId ?? null,
+        containerRunId: input.frame?.containerRunId ?? null,
         intermediaryNodeId: input.intermediaryNodeId,
         questions: [...input.questions],
         ...(input.truncationWarnings === undefined
@@ -39,9 +39,7 @@ export function createSqliteCollaborationRuntimeMechanics(
               askingShardKey: input.askingShardKey,
               iteration: input.iteration,
               // RFC-354: the park row's round inside its frame.
-              ...(input.frameIteration === undefined
-                ? {}
-                : { frameIteration: input.frameIteration }),
+              ...(input.frame === undefined ? {} : { frameIteration: input.frame.iteration }),
               ...(input.parentNodeRunId === undefined
                 ? {}
                 : { parentNodeRunId: input.parentNodeRunId }),

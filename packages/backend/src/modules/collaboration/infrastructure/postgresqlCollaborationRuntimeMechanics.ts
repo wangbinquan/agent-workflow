@@ -862,16 +862,16 @@ async function findSelfGateRun(
         eq(clarifyRounds.intermediaryNodeId, input.intermediaryNodeId),
         eq(clarifyRounds.iteration, input.iteration),
         // RFC-354: frame-scoped — see the SQLite twin (`findSelfGateRunForShard`).
-        (input.containerRunId ?? null) === null
+        (input.frame?.containerRunId ?? null) === null
           ? isNull(clarifyRounds.containerRunId)
-          : eq(clarifyRounds.containerRunId, input.containerRunId as string),
+          : eq(clarifyRounds.containerRunId, input.frame?.containerRunId as string),
         input.askingShardKey === null
           ? isNull(clarifyRounds.askingShardKey)
           : eq(clarifyRounds.askingShardKey, input.askingShardKey),
       ),
     )
     .orderBy(asc(clarifyRounds.createdAt))
-  const frameIteration = input.frameIteration ?? 0
+  const frameIteration = input.frame?.iteration ?? 0
   for (const round of rounds) {
     const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.id, round.nodeRunId)).limit(1)
     const run = runs[0]
@@ -913,9 +913,9 @@ async function openPostgresqlAgentClarify(
                 eq(clarifyRounds.taskId, input.taskId),
                 eq(clarifyRounds.intermediaryNodeId, input.intermediaryNodeId),
                 eq(clarifyRounds.loopIter, input.loopIter),
-                (input.containerRunId ?? null) === null
+                (input.frame?.containerRunId ?? null) === null
                   ? isNull(clarifyRounds.containerRunId)
-                  : eq(clarifyRounds.containerRunId, input.containerRunId as string),
+                  : eq(clarifyRounds.containerRunId, input.frame?.containerRunId as string),
               ),
             )
             .orderBy(desc(clarifyRounds.iteration))
@@ -947,9 +947,9 @@ async function openPostgresqlAgentClarify(
     intermediaryNodeId: input.intermediaryNodeId,
     targetConsumerNodeId: input.kind === 'cross' ? input.targetConsumerNodeId : null,
     parentNodeRunId: input.kind === 'self' ? (input.parentNodeRunId ?? null) : null,
-    containerRunId: input.containerRunId ?? null,
+    containerRunId: input.frame?.containerRunId ?? null,
     loopIter: input.kind === 'cross' ? input.loopIter : 0,
-    frameIteration: input.kind === 'self' ? (input.frameIteration ?? 0) : 0,
+    frameIteration: input.kind === 'self' ? (input.frame?.iteration ?? 0) : 0,
     iteration,
     questionsJson,
     truncationWarningsJson: warningsJson,

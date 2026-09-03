@@ -49,10 +49,14 @@ interface CollaborationAgentClarifyOpenBase {
   readonly askingNodeId: string
   readonly askingNodeRunId: string
   /**
-   * RFC-354 — the asking run's frame; the park row is minted in the same
-   * frame. Optional only for legacy fixtures; production always passes it.
+   * RFC-354 — the asking run's FRAME: the wrapper generation row it hangs off
+   * (`containerRunId`, null at the top scope) and its round inside that frame
+   * (`iteration`). The park row is minted in the same frame, so the
+   * frame-scoped frontier finds it after the answer instead of visiting an
+   * "empty" gate and settling it idle. Optional only for legacy fixtures
+   * (⇒ top scope, round 0); production always passes it.
    */
-  readonly containerRunId?: string | null
+  readonly frame?: { readonly containerRunId: string | null; readonly iteration: number }
   readonly intermediaryNodeId: string
   readonly questions: readonly ClarifyQuestion[]
   readonly truncationWarnings?: readonly ClarifyTruncationWarning[]
@@ -66,14 +70,6 @@ export type CollaborationAgentClarifyOpenInput =
         askingShardKey: string | null
         iteration: number
         parentNodeRunId?: string | null
-        /**
-         * RFC-354 — the asking run's round INSIDE its frame (`node_runs.iteration`
-         * of the park row). Together with `containerRunId` it places the gate row
-         * in the same frame as the question, so the frame-scoped frontier finds
-         * it after the answer instead of visiting an "empty" gate and settling it
-         * idle. Optional only for legacy fixtures (0 = top-scope / first round).
-         */
-        frameIteration?: number
       }
     >
   | Readonly<

@@ -292,8 +292,9 @@ wrapper = 内联 lambda（帧 = container run）；call-workflow = 调用定义�
   PR-1 只在工作组宿主分支透传了 `containerRunId`，agent-single 主路径没传，且 `prepareClarifyGateOpen` 对 self 固定
   `runIteration = 0`。gate 落行后这成了真缺陷——wrapper 体内的 park 行落在顶层帧 `(null, 0)`，答复后帧过滤的 frontier 看到
   「无行」的 gate，N6 已失效，于是派发它、按 idle 铸第二行 `skipped`，任务画布把已答复的闸门显示为跳过。修法：
-  `openAgentClarify(self)` 传 `containerRunId` + 新字段 `frameIteration`（提问 run 的帧内轮次，即 park 行的
-  `node_runs.iteration`），`prepareClarifyGateOpen` 用它铸行，self 复用查找（SQLite `findSelfGateRunForShard` /
+  `openAgentClarify` 的入参把 `containerRunId` 折成一个 `frame: { containerRunId, iteration }` 对象（提问 run 的帧；
+  `iteration` 即 park 行的 `node_runs.iteration`——不另开顶层字段，self 变体本已顶着 12 个顶层字段的 god-surface 上限），
+  `prepareClarifyGateOpen` 以 `frameIteration` 铸行，self 复用查找（SQLite `findSelfGateRunForShard` /
   PostgreSQL `findSelfGateRun`）按 `(container_run_id, 帧内轮次)` 加锁——代际计数每轮从 0 重数，不按帧会让下一轮
   复用上一轮的 gate 行。`clarify_rounds.loop_iter` 对 self 仍为 0（task_questions 投影依赖它），帧信息在
   `container_run_id` + gate 行自身的 `iteration` 上。

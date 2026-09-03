@@ -600,8 +600,10 @@ export async function executeWorkgroupHostMechanics(
               askingShardKey: currentRunRow?.shardKey ?? null,
               // RFC-354: the park row lives in the asking run's frame — the
               // generation row AND the round inside it.
-              containerRunId: currentRunRow?.containerRunId ?? null,
-              frameIteration: currentRunRow?.iteration ?? 0,
+              frame: {
+                containerRunId: currentRunRow?.containerRunId ?? null,
+                iteration: currentRunRow?.iteration ?? 0,
+              },
               intermediaryNodeId: clarifyNodeId,
               iteration: askingGeneration,
               questions: result.clarify.questions,
@@ -4895,8 +4897,11 @@ export async function runAgentSingleNode(
         askingNodeRunId: nodeRunId,
         targetConsumerNodeId: designerNodeId ?? null,
         // RFC-354: the park row lives in the asking run's frame; loopIter is
-        // the round INSIDE that frame.
-        containerRunId: currentRunRowXc?.containerRunId ?? null,
+        // the round INSIDE that frame (the cross round's `loop_iter` column).
+        frame: {
+          containerRunId: currentRunRowXc?.containerRunId ?? null,
+          iteration: currentRunRowXc?.iteration ?? 0,
+        },
         loopIter: currentRunRowXc?.iteration ?? 0,
         questions: lastResult.clarify.questions,
         ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
@@ -4945,8 +4950,10 @@ export async function runAgentSingleNode(
       // generation row + round. Minted at the top frame, a gate inside a loop /
       // git wrapper was invisible to the frame-scoped frontier after the answer,
       // which then visited the "empty" gate and settled it idle (`skipped`).
-      containerRunId: currentRunRow?.containerRunId ?? null,
-      frameIteration: currentRunRow?.iteration ?? 0,
+      frame: {
+        containerRunId: currentRunRow?.containerRunId ?? null,
+        iteration: currentRunRow?.iteration ?? 0,
+      },
       intermediaryNodeId: clarifyNodeId,
       iteration: askingGeneration,
       questions: lastResult.clarify.questions,
