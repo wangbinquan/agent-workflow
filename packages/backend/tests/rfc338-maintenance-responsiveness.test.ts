@@ -88,13 +88,23 @@ describe('RFC-338 maintenance responsiveness', () => {
       clearInterval(httpTimer)
       await Promise.all([...pendingHttp])
 
+      // A real stall shows as ONE gap the size of the maintenance body
+      // (~2 000 ms: the main thread was blocked for the whole run). The budgets
+      // below are half of that — wide enough for scheduler noise on a loaded
+      // 3-core CI runner (main run 33808640685, macOS shard 4/4: a 551 ms tick
+      // gap with the Worker demonstrably off-thread — 80+ ticks, all HTTP and
+      // WS traffic answered), narrow enough that a blocked loop still fails by
+      // a factor of two. The tick / receipt COUNT floors are what prove the
+      // loop kept moving throughout; the gap budgets only bound the worst
+      // single hiccup.
+      const STALL_BUDGET_MS = 1_000
       expect(result.slices).toBeGreaterThan(20)
       expect(loopTicks.length).toBeGreaterThan(40)
-      expect(maxGap(loopTicks)).toBeLessThan(500)
+      expect(maxGap(loopTicks)).toBeLessThan(STALL_BUDGET_MS)
       expect(httpLatencies.length).toBeGreaterThan(20)
-      expect(Math.max(...httpLatencies)).toBeLessThan(1_000)
+      expect(Math.max(...httpLatencies)).toBeLessThan(STALL_BUDGET_MS)
       expect(wsReceipts.length).toBeGreaterThan(20)
-      expect(maxGap(wsReceipts)).toBeLessThan(500)
+      expect(maxGap(wsReceipts)).toBeLessThan(STALL_BUDGET_MS)
     } finally {
       clearInterval(loopTimer)
       clearInterval(wsTimer)
