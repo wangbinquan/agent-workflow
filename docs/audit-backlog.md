@@ -1708,6 +1708,40 @@ SIGKILL 的 daemon(或其子进程)仍持锁**;紧接着 `:307` SIGTERM 用例
 子进程(TerminateProcess 不递归),以及 harness 在起新 daemon 前是否该等锁真正可
 获取而不是固定等待。
 
+## 无 `ORDER BY` 的读在两个 provider 上会漂（RFC-349 实测登记，2026-09-03）
+
+**机制已实测,不是理论**。PostgreSQL provider 走 `drizzle-orm/sqlite-proxy`——**两个 provider 由
+同一份 query builder 产出同一条 SQL**,所以"SQL 一样"是必然的,行为一样却不是。没有 `ORDER BY`
+时,SQLite 返回 rowid 顺序(≈插入顺序),PostgreSQL 返回堆顺序,而**任何 UPDATE 都会把行搬到堆尾**:
+
+```
+-- PostgreSQL（真库实测）
+insert into ordcheck values ('a',1),('b',2),('c',3);
+select id from ordcheck;              -- a,b,c
+update ordcheck set v=99 where id='a';
+select id from ordcheck;              -- b,c,a   ← 行搬走了
+-- 同样操作在 bun:sqlite 上：前后都是 a,b,c
+```
+
+阴险之处:**迁移刚割接完时堆顺序≈插入顺序,看着完全正确**,漂移是在之后的生产运行中随 UPDATE
+慢慢发生的——所以取证跑批也照不出来。
+
+**本轮盘查结论(未做全量,登记为待办)**:全仓 873 处 `.all()` 里,启发式筛出 638 处链上无
+`orderBy`;按层分布**落在 `queries/` / `routes/` / `public/` 的是 0 处,全在 `infrastructure/`**。
+随机抽样 24 条逐条看:绝大多数顺序无关(建 `Map`/`Set`、算 count、收 id 去删,还有几条是启发式
+误命中的 insert);唯二两条真返回列表的(`listTools` / `listJobTemplatesByTypeId`,恰好是同一逻辑
+在两个 provider 各写一份的形态)**两侧都在取回后显式 `.sort()`,而且是打破全部并列的全序**
+(revision → name → id),DB 顺序被抵消。**抽样未发现真实缺陷**。
+
+**待办**:上面是抽样不是普查。要闭合应做的是**行为层**而非代码形状的检查——参考 RFC-353 在
+`unfuseAboveVersion` 上的做法:夹具**故意倒序落库**,再拿两个 provider 各跑一次、对拍返回顺序。
+写矩阵那类"逐表真 INSERT"覆盖不到这一面,因为合成行是按序造的。真出问题的判据也一样:顺序要取
+**字典序等稳定全序**,不要取插入顺序——后者是存储实现的副产品(SQLite 的 rowid 顺序不是承诺,
+VACUUM / 换索引 / 改表都能变),把它当契约等于把 provider 实现细节写进 wire。
+
+同族已修:`ORDER BY x DESC` 在 SQLite 是 NULLS LAST、PostgreSQL 是 NULLS FIRST,SQL 逐字相同、
+结果相反——RFC-349 已加 `platform/persistence/postgresqlNullOrdering.ts` 显式写死并带 parity 守卫。
+
 ## Webhook 权限面（RFC-260 评审门 F-9 登记，2026-08-06）
 
 - **`webhook-triggers:{create,update,delete}` 是 grantable-but-unrenderable 的令牌授权**（RFC-257 引入、RFC-260 评审门发现）：三点是矩阵域点、触发器写路由 `tokenAccess:'allow'`，`grantableMatrixPoints(admin)` 含它们（API 422 校验以此为界），但 `'webhook-triggers'` 不在 `MATRIX_RESOURCES` ⇒ 账户页 token 矩阵永远不渲染该行——admin 经 API 可以发出能改/删触发器的 PAT，而 UI 无法呈现或复核该授权（`permission.ts` 文件头自己警告的「authorization UI lying」镜像形态）。候选修法：把 `webhook-triggers` 纳入 `MATRIX_RESOURCES`（矩阵多一行），或把三条写路由改 `tokenAccess:'never'`（触发器写完全退出令牌面，与 fire 以 owner 身份执行的 D19 模型更一致）。需要产品拍板，未在 RFC-260 内处理（其范围是读面）。
