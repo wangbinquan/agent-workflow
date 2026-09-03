@@ -482,12 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25889,
+      "baseline": 25874,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:fdd3eb46ebfa31534e03fd0485e3f7bf062f84cedbf5de581f96104f66ff295e",
+    "sourceDigest": "sha256:1bca8f42dd07a856c2fce41780edaabce7fb0869cd2da36dec7cb0567242283c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "255daa3108f2495bfdbde1c7d0ae12185773f2fc",
-    "contentDigest": "sha256:a62e590b150fda0f2cb0b107f6f6538943d7453a2be6f43289ce2a6382477085",
+    "currentSnapshotSha": "f3e2901fafcff71afd446578ce74f0b6c593dedd",
+    "contentDigest": "sha256:95021f064c2cb462329c8c110bfeae21f9f9c99a3b8788b23db2f73947d8d43e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
