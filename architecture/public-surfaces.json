@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 897,
+    "consumers": 907,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1365,
+    "methods": 1376,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 25256,
-    "symbols": 1008
+    "recursiveFields": 25360,
+    "symbols": 1016
   },
   "entries": [
     {
@@ -49262,6 +49262,7 @@
             "import:1dc5b5e49c264dc6c757",
             "import:31b426d815e3d91a0412",
             "import:32db6e8314969ba5f0fe",
+            "import:5e235bf49d40017d0720",
             "import:73f94018dc22a2dd8ad7",
             "import:ba1e3dfa291d7b7deafb",
             "import:ffeb63bdfdb7de4e4c02"
@@ -90109,6 +90110,274 @@
     {
       "authority": "context-bound",
       "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:29d0f4c2ad8f773f6e54"
+      ],
+      "context": "knowledge-evolution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$parameter:transaction",
+          "type": "TTx"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:29d0f4c2ad8f773f6e54"
+          ],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.actorUserId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.fusionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.memoryIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:29d0f4c2ad8f773f6e54"
+          ],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.skillName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$parameter:command.skillVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:markFused.$return",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:reassignFusedSkill.$parameter:input.memoryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:reassignFusedSkill.$parameter:input.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:reassignFusedSkill.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:unfuseAboveVersion.$parameter:selector.aboveVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:unfuseAboveVersion.$parameter:selector.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:memory.$method:inTransaction.$return.$method:unfuseAboveVersion.$return",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.targetVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:tx",
+          "type": "TTx"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$return",
+          "type": "readonly string[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/knowledge-evolution/public/participants.ts",
+      "id": "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:8fdaa2e9c71afb426c15b3d976ac29168675346cc28abe3fb11565ee1a6543cf"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "inTransaction",
+          "signatureDigest": "sha256:784b927c24a9939727ffbd828ba94d744c77a8b08111036046701209f5715a86"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "markFused",
+          "signatureDigest": "sha256:818e2c1ce80ea5ef21e6a671bc35fa18d138890ae07d7a51a2bc855c3ca9e2af"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "reassignFusedSkill",
+          "signatureDigest": "sha256:4a5be7debebc3dce700aa670daacd7b07c4600fc13383d895577bf5020793a5e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "unfuseAboveVersion",
+          "signatureDigest": "sha256:c80897cb56d3cfbec5990e51bd358dd3dcf04a9c069f7f9db83aaf0bf39c5576"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "unfuseForRestore",
+          "signatureDigest": "sha256:7e46abe488c9c270ce6365284940b49f80d31f71d32147ae2830efe044832a5a"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:29d0f4c2ad8f773f6e54",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:34dcded1cedaec570299279749656bab238c4d342dec74f2058233c0ebfb6543",
+      "status": "target-context-current-surface",
+      "symbol": "createAsyncSkillRestoreMembership",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:d3c112f796d186aed136",
+        "import:e44c11ea797e01e1ba1a"
+      ],
+      "context": "knowledge-evolution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:unfuse.$call.$parameter:selector.aboveVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:unfuse.$call.$parameter:selector.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:unfuse.$call.$parameter:tx",
+          "type": "TTx"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:unfuse.$call.$return[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:request.targetVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$parameter:tx",
+          "type": "TTx"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:unfuseForRestore.$return[]",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/knowledge-evolution/public/participants.ts",
+      "id": "public:knowledge-evolution:participants:createSyncSkillRestoreMembership",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:37a99dc63df6718a20abf866c78b1537381b777fe96a31962377773f3fb31f6e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "unfuseForRestore",
+          "signatureDigest": "sha256:7f15a06e8a61f79e4cb73594a9e4b19687cd69213308866cf9b23b7bce04bf73"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:d3c112f796d186aed136",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e44c11ea797e01e1ba1a",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e090e1ec305601e77d7701cf90f6f96e8e69143a5a416042bc50d8e36da1e162",
+      "status": "target-context-current-surface",
+      "symbol": "createSyncSkillRestoreMembership",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -94693,6 +94962,50 @@
         "Pick",
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "knowledge-evolution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetVersion",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/knowledge-evolution/public/participants.ts",
+      "id": "public:knowledge-evolution:participants:SkillRestoreMembershipRequest",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership",
+        "public:knowledge-evolution:participants:createSyncSkillRestoreMembership"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:01188ad152fee7c7c937e1d0d5d07cd08c6ba5e3000a5a623417e842559d084d",
+      "status": "target-context-current-surface",
+      "symbol": "SkillRestoreMembershipRequest",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -104686,7 +104999,9 @@
           "signatureDigest": "sha256:870c0a26deaac52b601ef10ed6e89f255695d7aa0a339fd1e1d50afb7b9004e9"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:82867d7d706f853a6771"
+          ],
           "name": "start",
           "signatureDigest": "sha256:8e9f1ff7412b7bd9539c17aeb639bc7998a65dc1711b4e0180ff16821f5fc549"
         },
@@ -104833,7 +105148,86 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "actorUserId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "fusionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "memoryIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "skillName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "skillVersion",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/participants.ts",
+      "id": "public:memory:participants:MemoryMembershipFuseCommand",
+      "members": [
+        "actorUserId",
+        "fusionId",
+        "memoryIds",
+        "now",
+        "skillId",
+        "skillName",
+        "skillVersion"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipFuseCommand",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership",
+        "public:memory:participants:MemoryMembershipParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:938e60e89cda452789cf36d305bd12a1c10129a22201e21d8d7bea05f4b1e1e3",
+      "status": "target-context-current-surface",
+      "symbol": "MemoryMembershipFuseCommand",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [
+        "import:0c408b55ed6873136130",
+        "import:d82b43f3e5bf44c2cdf3",
         "import:f1e6b941772112a3577d"
       ],
       "context": "memory",
@@ -104842,12 +105236,95 @@
       "entrypoint": "participants",
       "fields": [
         {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.actorUserId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130",
+            "import:f1e6b941772112a3577d"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.fusionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.memoryIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130",
+            "import:f1e6b941772112a3577d"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130",
+            "import:d82b43f3e5bf44c2cdf3",
+            "import:f1e6b941772112a3577d"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.skillName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130"
+          ],
+          "fieldPath": "$method:markFused.$parameter:command.skillVersion",
+          "type": "number"
+        },
+        {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:markFused.$return",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130"
+          ],
+          "fieldPath": "$method:reassignFusedSkill.$parameter:input.memoryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130",
+            "import:d82b43f3e5bf44c2cdf3",
+            "import:f1e6b941772112a3577d"
+          ],
+          "fieldPath": "$method:reassignFusedSkill.$parameter:input.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reassignFusedSkill.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d82b43f3e5bf44c2cdf3"
+          ],
           "fieldPath": "$method:unfuseAboveVersion.$parameter:selector.aboveVersion",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
+            "import:0c408b55ed6873136130",
+            "import:d82b43f3e5bf44c2cdf3",
             "import:f1e6b941772112a3577d"
           ],
           "fieldPath": "$method:unfuseAboveVersion.$parameter:selector.skillId",
@@ -104863,11 +105340,27 @@
       "id": "public:memory:participants:MemoryMembershipParticipantInTx",
       "members": [
         "[memoryMembershipParticipantInTxBrand]",
+        "markFused",
+        "reassignFusedSkill",
         "unfuseAboveVersion"
       ],
       "methods": [
         {
+          "consumerEdgeIds": [
+            "import:0c408b55ed6873136130"
+          ],
+          "name": "markFused",
+          "signatureDigest": "sha256:818e2c1ce80ea5ef21e6a671bc35fa18d138890ae07d7a51a2bc855c3ca9e2af"
+        },
+        {
           "consumerEdgeIds": [],
+          "name": "reassignFusedSkill",
+          "signatureDigest": "sha256:4a5be7debebc3dce700aa670daacd7b07c4600fc13383d895577bf5020793a5e"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d82b43f3e5bf44c2cdf3"
+          ],
           "name": "unfuseAboveVersion",
           "signatureDigest": "sha256:c80897cb56d3cfbec5990e51bd358dd3dcf04a9c069f7f9db83aaf0bf39c5576"
         }
@@ -104875,16 +105368,30 @@
       "ownerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipParticipantInTx",
       "productionConsumers": [
         {
+          "context": "knowledge-evolution",
+          "edgeId": "import:0c408b55ed6873136130",
+          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#$file"
+        },
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:d82b43f3e5bf44c2cdf3",
+          "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#$file"
+        },
+        {
           "context": "resource-catalog",
           "edgeId": "import:f1e6b941772112a3577d",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [],
+      "publicTypeConsumerIds": [
+        "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership"
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:d9f703844e9fd04ef6e128f984785e88a3de0c4ff5271381e33753ab549aecdc",
+      "signatureDigest": "sha256:7fcdee94adf03cbd168ac660e7b1a63863dea1ff9f5a9f63e5552b3ec9c677bf",
       "status": "target-context-current-surface",
       "symbol": "MemoryMembershipParticipantInTx",
       "transaction": "caller-tx",
@@ -104899,19 +105406,28 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:899f20cd6d34e882cd89",
+        "import:8fb9b1d35c1f66713879"
+      ],
       "context": "memory",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "participants",
       "fields": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:899f20cd6d34e882cd89",
+            "import:8fb9b1d35c1f66713879"
+          ],
           "fieldPath": "aboveVersion",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:899f20cd6d34e882cd89",
+            "import:8fb9b1d35c1f66713879"
+          ],
           "fieldPath": "skillId",
           "type": "string"
         }
@@ -104924,8 +105440,23 @@
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipUnfuseSelector",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:899f20cd6d34e882cd89",
+          "file": "packages/backend/src/modules/knowledge-evolution/domain/skillRestore.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/domain/skillRestore.ts#$file"
+        },
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:8fb9b1d35c1f66713879",
+          "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
+        "public:knowledge-evolution:participants:createAsyncSkillRestoreMembership",
+        "public:knowledge-evolution:participants:createSyncSkillRestoreMembership",
         "public:memory:participants:MemoryMembershipParticipantInTx"
       ],
       "removeAfterWave": null,
@@ -133455,6 +133986,523 @@
       "symbol": "SkillSnapshotReverifyReceipt",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedAclRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedMetaRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedOwnerUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedOwnerUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedSkillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedVisibility",
+          "type": "z.infer<typeof ResourceVisibilitySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "staleMessage",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:SkillVersionCommitFence",
+      "members": [
+        "expectedAclRevision",
+        "expectedMetaRevision",
+        "expectedOwnerUserId",
+        "expectedSkillId",
+        "expectedVersion",
+        "expectedVisibility",
+        "staleMessage"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillVersionCommitFence",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:participants:SkillVersionCommitParticipantInTx",
+        "public:resource-catalog:participants:SkillVersionCommitRequest"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:149d099d5ba306ef3c462fb4daa5368f97dcc01394cc87ea21a343e0a2c6a698",
+      "status": "target-context-current-surface",
+      "symbol": "SkillVersionCommitFence",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:5ba16fbd2fa9e0009f91"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "after.$parameter:versionIndex",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "after.$return",
+          "type": "R"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "before.$return",
+          "type": "R"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:SkillVersionCommitHooks",
+      "members": [
+        "after",
+        "before"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillVersionCommitHooks",
+      "productionConsumers": [
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:5ba16fbd2fa9e0009f91",
+          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:participants:SkillVersionCommitParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:76753e0fde26f560fa1abd4802f1ca47745dc3bb0c638cc77876f6fcefd302da",
+      "status": "target-context-current-surface",
+      "symbol": "SkillVersionCommitHooks",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 25,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:97e96221989bd5a55196"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:hooks.after.$parameter:versionIndex",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:hooks.after.$return",
+          "type": "R"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:hooks.before.$return",
+          "type": "R"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.authorUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.authorUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.contentHash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.expectedAclRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.expectedMetaRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.expectedOwnerUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.expectedOwnerUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.expectedSkillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.expectedVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.expectedVisibility",
+          "type": "z.infer<typeof ResourceVisibilitySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.fusionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.fusionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.restoredFromVersion.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.restoredFromVersion.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.source",
+          "type": "z.infer<typeof SkillVersionSourceSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.staleMessage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.summary.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$parameter:request.summary.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "fieldPath": "$method:commit.$parameter:request.versionIndex",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:commit.$return",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:SkillVersionCommitParticipantInTx",
+      "members": [
+        "[skillVersionCommitParticipantInTxBrand]",
+        "commit"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:97e96221989bd5a55196"
+          ],
+          "name": "commit",
+          "signatureDigest": "sha256:2cbe33641b46c26e450e5ddc66de6ba8899609e90c7bc69a0d0689378f27d320"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillVersionCommitParticipantInTx",
+      "productionConsumers": [
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:97e96221989bd5a55196",
+          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:4b138fa0bf8238446f507a90dc04b2937cdbeb466bda55eef352b56d6125d0db",
+      "status": "target-context-current-surface",
+      "symbol": "SkillVersionCommitParticipantInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 16,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:181bd729e16f95b71295"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "authorUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "authorUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "contentHash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedAclRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "expectedMetaRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedOwnerUserId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedOwnerUserId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "expectedSkillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "expectedVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "expectedVisibility",
+          "type": "z.infer<typeof ResourceVisibilitySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "fusionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "fusionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "restoredFromVersion.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "restoredFromVersion.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "source",
+          "type": "z.infer<typeof SkillVersionSourceSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "staleMessage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "summary.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "summary.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:181bd729e16f95b71295"
+          ],
+          "fieldPath": "versionIndex",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:SkillVersionCommitRequest",
+      "members": [
+        "authorUserId",
+        "contentHash",
+        "fusionId",
+        "now",
+        "restoredFromVersion",
+        "skillId",
+        "source",
+        "summary",
+        "versionIndex"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#SkillVersionCommitRequest",
+      "productionConsumers": [
+        {
+          "context": "knowledge-evolution",
+          "edgeId": "import:181bd729e16f95b71295",
+          "file": "packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:participants:SkillVersionCommitParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:99959b36ce1d15fe88761a136f01a6c6fb21cefb8c0316a2a918ce34dea5076b",
+      "status": "target-context-current-surface",
+      "symbol": "SkillVersionCommitRequest",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -191505,7 +192553,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4fe45fe621da6e1dc14d4eb132d928da4b06b02c61fae890ac06e8d9cff43e2d",
+  "sourceDigest": "sha256:f66e7c8674ad7a2884c156d3c0ce068f5767b55cb2c8ad8ef640730c53338c5b",
   "targetContexts": [
     "collaboration",
     "development-automation",

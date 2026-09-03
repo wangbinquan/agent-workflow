@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1916,
+    "entries": 1920,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -15868,6 +15868,78 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#createAsyncSkillRestoreMembership",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#createAsyncSkillRestoreMembership",
+      "symbol": "createAsyncSkillRestoreMembership",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#createSyncSkillRestoreMembership",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#createSyncSkillRestoreMembership",
+      "symbol": "createSyncSkillRestoreMembership",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#SyncMemoryMembershipUnfuse",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/application/skillRestoreMembership.ts#SyncMemoryMembershipUnfuse",
+      "symbol": "SyncMemoryMembershipUnfuse",
+      "targetContext": "knowledge-evolution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -17819,6 +17891,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/skills/skillZipImport.ts#createSkillZipImportParticipant",
       "symbol": "createSkillZipImportParticipant",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/skillVersionCommit.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/skillVersionCommit.ts#createSkillVersionCommitParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/skillVersionCommit.ts#createSkillVersionCommitParticipantInTx",
+      "symbol": "createSkillVersionCommitParticipantInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -22308,7 +22405,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -22318,8 +22415,7 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillContentLifecycle.ts#createPostgresqlSkillContentLifecycle",
       "missingControls": [
-        "audit",
-        "authority"
+        "audit"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillContentLifecycle.ts#createPostgresqlSkillContentLifecycle",
       "symbol": "createPostgresqlSkillContentLifecycle",
@@ -23578,20 +23674,20 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
-        "transaction": true
+        "transaction": false
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts#createSqliteSkillRepository",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
-        "event"
+        "event",
+        "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts#createSqliteSkillRepository",
       "symbol": "createSqliteSkillRepository",
@@ -45665,7 +45761,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4fe45fe621da6e1dc14d4eb132d928da4b06b02c61fae890ac06e8d9cff43e2d",
+  "sourceDigest": "sha256:f66e7c8674ad7a2884c156d3c0ce068f5767b55cb2c8ad8ef640730c53338c5b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

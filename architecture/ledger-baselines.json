@@ -391,8 +391,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1916,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1920,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-353 T6/T7（`9911b3a05`…`efbd3d242`）：resource-catalog 新增 domain/skillVersionCommit、application/skillVersionCommit 与双 provider 的技能版本提交 participant；knowledge-evolution 新增 domain/skillRestore 与 application/skillRestoreMembership（技能回滚的成员关系协调，判据自 RC 迁入）；memory 的 participant 合同增 reassignFusedSkill，两处 composition 新增 provider 装配出口，四个根（cli/start、server、cli/postgresqlDaemonApplication、system-operations/composition）承担注入。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 六份账本因此各涨一次，全部是归位与新增合同的账目，不是绕过。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -405,8 +408,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 478,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 479,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-353 T6/T7（`9911b3a05`…`efbd3d242`）：resource-catalog 新增 domain/skillVersionCommit、application/skillVersionCommit 与双 provider 的技能版本提交 participant；knowledge-evolution 新增 domain/skillRestore 与 application/skillRestoreMembership（技能回滚的成员关系协调，判据自 RC 迁入）；memory 的 participant 合同增 reassignFusedSkill，两处 composition 新增 provider 装配出口，四个根（cli/start、server、cli/postgresqlDaemonApplication、system-operations/composition）承担注入。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 六份账本因此各涨一次，全部是归位与新增合同的账目，不是绕过。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -426,8 +432,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6366,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6395,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-353 T6/T7（`9911b3a05`…`efbd3d242`）：resource-catalog 新增 domain/skillVersionCommit、application/skillVersionCommit 与双 provider 的技能版本提交 participant；knowledge-evolution 新增 domain/skillRestore 与 application/skillRestoreMembership（技能回滚的成员关系协调，判据自 RC 迁入）；memory 的 participant 合同增 reassignFusedSkill，两处 composition 新增 provider 装配出口，四个根（cli/start、server、cli/postgresqlDaemonApplication、system-operations/composition）承担注入。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 六份账本因此各涨一次，全部是归位与新增合同的账目，不是绕过。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +456,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5286,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5303,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-353 T6/T7（`9911b3a05`…`efbd3d242`）：resource-catalog 新增 domain/skillVersionCommit、application/skillVersionCommit 与双 provider 的技能版本提交 participant；knowledge-evolution 新增 domain/skillRestore 与 application/skillRestoreMembership（技能回滚的成员关系协调，判据自 RC 迁入）；memory 的 participant 合同增 reassignFusedSkill，两处 composition 新增 provider 装配出口，四个根（cli/start、server、cli/postgresqlDaemonApplication、system-operations/composition）承担注入。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 六份账本因此各涨一次，全部是归位与新增合同的账目，不是绕过。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -461,8 +473,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1008,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1016,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-353 T6/T7（`9911b3a05`…`efbd3d242`）：resource-catalog 新增 domain/skillVersionCommit、application/skillVersionCommit 与双 provider 的技能版本提交 participant；knowledge-evolution 新增 domain/skillRestore 与 application/skillRestoreMembership（技能回滚的成员关系协调，判据自 RC 迁入）；memory 的 participant 合同增 reassignFusedSkill，两处 composition 新增 provider 装配出口，四个根（cli/start、server、cli/postgresqlDaemonApplication、system-operations/composition）承担注入。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 六份账本因此各涨一次，全部是归位与新增合同的账目，不是绕过。退许可笔随后删除本条并重采。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -482,12 +497,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25812,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25859,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-353 T6/T7（`9911b3a05`…`efbd3d242`）：resource-catalog 新增 domain/skillVersionCommit、application/skillVersionCommit 与双 provider 的技能版本提交 participant；knowledge-evolution 新增 domain/skillRestore 与 application/skillRestoreMembership（技能回滚的成员关系协调，判据自 RC 迁入）；memory 的 participant 合同增 reassignFusedSkill，两处 composition 新增 provider 装配出口，四个根（cli/start、server、cli/postgresqlDaemonApplication、system-operations/composition）承担注入。owner / observed-import / exception / public-surface / mutation-entrypoint / transaction-callback 六份账本因此各涨一次，全部是归位与新增合同的账目，不是绕过。退许可笔随后删除本条并重采。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4fe45fe621da6e1dc14d4eb132d928da4b06b02c61fae890ac06e8d9cff43e2d",
+    "sourceDigest": "sha256:f66e7c8674ad7a2884c156d3c0ce068f5767b55cb2c8ad8ef640730c53338c5b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +518,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "341177bfcdb28ce0a1065e8a51905e929941ad53",
-    "contentDigest": "sha256:b3398fcb77964ce1a62283b9e2d2a0f942016cf571ba62997dd17cd1d0904f70",
+    "currentSnapshotSha": "efbd3d2423ad59fef1dd9d28b6ae29dfdd8bc4bf",
+    "contentDigest": "sha256:295c4de6ecd7db3bc6fc154ca6821a69dc8a411cc9e3cbeb200da34b7cce9f0d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
