@@ -38,6 +38,7 @@
 > `modules/knowledge-evolution` 从「源码里根本不存在」到拥有 domain / application / infrastructure / inbound / public / composition 六层：fusion 编排与双 provider 持久化整体归位，融合适配器**不再直写** `memories` / `skills` / `skill_versions`（各经 owner 的 tx-bound participant），技能回滚的成员关系判据从 resource-catalog 迁入 KE，`routes/fusions.ts` 收成 decode-call-map 并迁至 KE inbound，两个 legacy facade（`services/fusion.ts` / `services/skillVersion.ts`）删除。
 > 新功能：`GET /api/skills/:id/provenance` + `SkillVersionHistory` 的融合版本行可展开，看这一版吃进了哪些知识。
 > 两条与立项措辞不符的更正（AC-4「引用为 0」→「**写入**为 0」、AC-6 迁入 KE 的是成员关系协调而非整个 restore）如实记在 proposal §9，未悄悄放宽。
+> **AC-13 已取证**：`fb608f89cc87a3eca9e0f6496e2d762fc7775a19` 的 CI run `33800356235`，run 级 `conclusion == success`、35/35 全绿；本 RFC 十三笔全部是该 sha 的祖先（proposal §12）。
 > 三件套已落档，**批准前不动任何生产代码**。`modules/knowledge-evolution` 今天在源码里根本不存在，它该拥有的散在四处：
 > `services/fusion.ts`(1218) / `modules/memory/public/fusion.ts`(201) / memory infrastructure 的 fusion 双 provider(2062) /
 > `routes/fusions.ts`(226) / RC `legacy/skillVersion.ts` 的 skill-restore(102)。

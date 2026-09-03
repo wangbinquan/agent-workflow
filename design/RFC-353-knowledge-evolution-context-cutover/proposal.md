@@ -199,7 +199,7 @@ T5 推上主干后，`e2e-webkit-nightly`（run `33752894225`）红在
 | AC-10 | 达成 | `rfc353-skill-provenance.test.ts`：不可见的记忆不出现且不留计数；已回滚退回的不再计入 |
 | AC-11 | 达成 | `rfc353-skill-provenance-expand.test.tsx`：复用 `OperationsExpandButton` + `.data-table__expand*` + `memory-row__scope`，空态文案说明「可能已被回滚或不可见」 |
 | AC-12 | 达成 | `PUBLIC_SURFACE_PILOT_DEBT` 回到 10 条（T6 一度加的 7 条随 provider 再导出撤下而消失），RFC-345 的 facade 账本与 exact 兼容边各减一 |
-| AC-13 | 见 §10 | —— |
+| AC-13 | **达成** | 见下方「AC-13 取证」 |
 | AC-14 | 达成 | `rfc353-acl-conflict-draft.test.tsx`；webkit nightly 在 `500a17129` 成功 |
 
 ### AC-4 的更正：「引用为 0」应为「**写入**为 0」
@@ -277,3 +277,24 @@ hunk 一起带走。
 `rfc345-resource-catalog-contracts.test.ts`）超了行宽却没格式化，`format:check` 因此红。
 本 RFC 收尾一笔补格式化。教训与 11.1 同源：**改动面比验证面宽**——脚本批量改了 N 个文件，
 只对其中一部分跑了检查。
+
+
+## 12. AC-13 取证（2026-09-04）
+
+- **sha**：`fb608f89cc87a3eca9e0f6496e2d762fc7775a19`
+- **run**：`33800356235`（workflow `CI`），**run 级 `conclusion == success`，35/35 job 全绿**
+- **本 RFC 的全部提交都是该 sha 的祖先**（`git merge-base --is-ancestor 94767e66a fb608f89c` 通过），
+  即 `9911b3a05` … `94767e66a` 十三笔全部被这一轮覆盖。
+
+**为什么不是本 RFC 自己那个 sha**：本 RFC 收口期间主干上并行着 RFC-354 的 PR-1/2/3，
+每次 push 都会取消前一轮 run。按 `CLAUDE.md` 的规矩，被并发 push 取消时按**含本提交的后继 sha**判。
+中间几轮的红逐条按路径归因过，没有一条落在本 RFC 的改动面（详见 §11 与实施记录）。
+
+**一个取证口径上的坑（已实撞）**：run 被取消时，汇总 job `CI required` 也会显示成 `failure`，
+而被取消的 job 计的是 `cancelled` 不是 `failure`。只按 job 状态粗看会同时得出「红了」和「红在哪」
+两个错误结论——**判绿只认 run 级 `conclusion == success`**。
+
+**还有一次非 push 导致的中断**：`fb608f89c` 首轮以 `cancelled` 收场（32 绿 + 2 个 macOS backend
+分片被 runner 侧中断 + 汇总 job failure），而 `origin/main` 并未前进——排除了「被取代」。
+以 `gh run rerun --failed` 只重跑那两个分片（其余 32 绿保留）后，run 级结论转为 `success`。
+这不是「重跑就过了」——**没有任何一个测试失败过**，中断发生在 runner 层。
