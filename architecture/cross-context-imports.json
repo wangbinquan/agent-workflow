@@ -15386,23 +15386,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/frameBackfill.ts#$file",
-      "fromPath": "packages/backend/src/cli/frameBackfill.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2a69b44d2bd3d8ba40a5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#FrameBackfillDatabase",
-      "toPath": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
-      "toSymbol": "FrameBackfillDatabase",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskCollab.ts#$file",
@@ -45833,23 +45816,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/frameBackfill.ts#$file",
-      "fromPath": "packages/backend/src/cli/frameBackfill.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:81c5fa5444cced41a86e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
-      "toSymbol": "FrameBackfillReport",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead.ts#$file",
@@ -60910,23 +60876,6 @@
       "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toSymbol": "PostgresqlDatabaseClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/frameBackfill.ts#$file",
-      "fromPath": "packages/backend/src/cli/frameBackfill.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:adc3eea7041f96c0822e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#runFrameBackfillOnBoot",
-      "toPath": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
-      "toSymbol": "runFrameBackfillOnBoot",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -79410,6 +79359,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "fromPath": "packages/backend/src/main.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e17e9221f76cb83e5c55",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#runFrameBackfillOnBoot",
+      "toPath": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
+      "toSymbol": "runFrameBackfillOnBoot",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "fromSymbol": "$file",
@@ -90153,9 +90119,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5303,
+    "architectureExceptions": 5301,
     "implementationSccs": 0,
-    "observedEdges": 6395,
+    "observedEdges": 6393,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -107362,22 +107328,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/frameBackfill.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/frameBackfill.ts#$file",
-      "id": "import:2a69b44d2bd3d8ba40a5",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/frameBackfill",
-      "syntax": "static-import",
-      "targetSymbol": "FrameBackfillDatabase",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#FrameBackfillDatabase"
     },
     {
       "edgeKind": "value",
@@ -142372,22 +142322,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/frameBackfill.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/frameBackfill.ts#$file",
-      "id": "import:81c5fa5444cced41a86e",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/frameBackfill",
-      "syntax": "static-import",
-      "targetSymbol": "FrameBackfillReport",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#$file"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/infrastructure/sqliteCodeWorkspaceRead.ts",
@@ -159570,22 +159504,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/frameBackfill.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/frameBackfill.ts#$file",
-      "id": "import:adc3eea7041f96c0822e",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/frameBackfill",
-      "syntax": "static-import",
-      "targetSymbol": "runFrameBackfillOnBoot",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#runFrameBackfillOnBoot"
     },
     {
       "edgeKind": "value",
@@ -180469,6 +180387,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/main.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "id": "import:e17e9221f76cb83e5c55",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/frameBackfill",
+      "syntax": "static-import",
+      "targetSymbol": "runFrameBackfillOnBoot",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#runFrameBackfillOnBoot"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentResourceInventory.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentResourceInventory.ts#$file",
@@ -193021,7 +192955,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f66e7c8674ad7a2884c156d3c0ce068f5767b55cb2c8ad8ef640730c53338c5b",
+  "sourceDigest": "sha256:0a77f316fe13d31bdcf1afa5e0b61658d8708d6a2f4aeac3528f98883ac531d5",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
