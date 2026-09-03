@@ -830,9 +830,15 @@ rollback/admission owner；先落 domain/application contract，再切该 contex
       wrong source-kind/cross-lane 编译与变异门必红；
       migration `0205` 的 `tasks.digital_employee_case_id` 只作 TaskExecution-owned provenance ref：Task detail 通过 DE
       actor-filtered query 投影最小 Case link，不复制 Case name/status，不允许 DE 直接写 Task；expand-only rollback 保留已写 ref；
-- [ ] **E2 memory**：内容/move/query 拆分，`MemoryMoveTx` 跨 RC/SC 同 tx 双授权；RC/SC scope visibility 批量过滤且
-      pagination 下推、不可见 count 无侧信道；distill retry/cancel/query + job/source snapshot；
+- [x] **E2 memory**：内容/move/query 拆分，`MemoryMoveTx` 跨 RC/SC 同 tx 双授权；RC/SC scope visibility 批量过滤且
+      pagination 下推；distill retry/cancel/query + job/source snapshot；
       `TaskMemoryInjectionPort` 只供 runner 且保持 per-run current-approved 语义；
+
+  **实施 successor**：[RFC-352 Memory bounded context 合同归位](../RFC-352-memory-context-cutover/proposal.md)
+  （**Done，2026-09-03**）。`MemoryMoveTx` 与双授权由前置的 RFC-342 / P0-A 交付，本刀完成实现迁位、授权判据上移、
+  SC offered participant 落地与列表 keyset 分页下推。最终验收 `b3883154e` 的 Main CI `33722386454` 35/35
+  attempt-1 success。原文列的「不可见 count 无侧信道」是安全项，按用户 2026-08-26 硬规则**不承接**，已从本条勾选面
+  移除并记在 RFC-352 `plan.md §8`；facade 余 2 条、exact 边余 43 条按 owner 转交，逐条见其 `plan.md §4.1 / §4.3`。
 - [ ] **E3 knowledge-evolution**：fusion aggregate、decision、task launch intent 与 skill/memory exact-set tx participants
       收口；落 RC `SkillProvenanceVisibilityQuery` + Memory `MemoryProvenanceVisibilityQuery`，provenance query 逐 skill/memory
       批量重授权，不泄不可见 id/count；
