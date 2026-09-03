@@ -761,6 +761,22 @@ session 未提交的两个 e2e 覆盖账本推上了主干，当场引发 T16 �
 先 `cp` 到 scratchpad，`git checkout <误提前的commit> -- <files>` 恢复并提交，再把备份原样
 写回工作树——这样对方的磁盘内容一个字节没变，只是重新显示为 M。
 
+**还有一个时间窗口，比 pathspec 本身更隐蔽**（2026-09-03，另一 session 实撞）：你 `git add`
+之后、`git commit` 之前，别的 session 可能提交一次。他们那笔如果**带了精确 pathspec**，你暂存
+的东西安然无恙；如果是裸 `git commit`，你还没提交的暂存内容就被他们发布出去了——而你这边毫无
+察觉，直到 CI 上出现「你没写过的改动署了你的名」或者对方的半截活被你的 commit 带走。
+
+推论有两条，都指向同一件事：
+
+1. **别人守规矩你才安全，所以自己更要守**：这条规则的收益是互惠的，只要有一个 session 裸提交，
+   共享 index 上所有人的在制品都在风险里。
+2. **`git add` 与 `git commit` 之间的窗口要尽量短**。需要长时间验证（跑门禁、等 typecheck）时，
+   先验证、最后一步再 `git add` + `git commit`，不要 add 完就去跑十分钟的测试。
+
+同日另一次实撞补一条**反例**：我用目录 pathspec（`git commit -- architecture/ packages/backend/tests`）
+提交，事后核对没有顺走任何人的文件——但那纯粹是因为当时别人的唯一脏文件恰好不在这几个目录下。
+`git show --name-only` 事后自查能发现问题，却已经推上去了；**事前用文件级 pathspec 才是防线**。
+
 ## SQLite 的读→写升级失败**不等** `busy_timeout`（RFC-351 实测，2026-09-02）
 
 `PRAGMA busy_timeout = 5000` 只覆盖「拿不到锁就等」这一类。**deferred 事务先读后写**是另一
