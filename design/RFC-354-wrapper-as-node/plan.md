@@ -37,7 +37,7 @@ exit 谓词按帧求值）；PR-3 依赖 PR-2（clarify 通道端口已在端口
 | **PR-3** |                                                                                                                                                                                                                                                                                                                                                                                                            |            |
 | T17      | clarify 落行：`ClarifyNodeExecutor` / `CrossClarifyNodeExecutor` 无 open round 时铸 `skipped`；`settlesWithoutRow` 删除；frontier pass-2 删除；**核实点**：self 路径 park 行 → `done` 的转移点（cross 在 `legacySqliteClarify/service.ts:584`）；既有 clarify 用例 + 20 条 e2e 零改动全绿。**落地补记**：`__clarify__ → clarify` 改为真依赖（`dataflow: 'always'`），见 design.md §10「PR-3 实现偏离」     | PR-2       |
 | T18      | 任务详情：`tasks.detail.tsx` 面包屑；`node-history.ts` 按帧分组；`NodeDetailDrawer` / `InboxDrawer` 标签；纯函数测试。**落地补记**：轮次列 / 抽屉 `statFrame` / 运行历史按帧分组均按 `scopePath`（`outer#1 › inner#0`）渲染，平铺工作流零变化；`clarifyRoundForRun` / `displayRetryForRun` 谱系改按帧过滤；InboxDrawer 未动——clarify session DTO 不带帧（只有 `iteration`），补 DTO 属后端改动，记入 §5 债 | PR-2       |
-| T19      | e2e：`canvas-wrapper-membership` 加参数边 / 闭包边 / 返回值边三幕                                                                                                                                                                                                                                                                                                                                          | T16, T18   |
+| T19      | e2e：`canvas-wrapper-membership` 加参数边 / 闭包边 / 返回值边三幕。**落地补记**：三幕都走 Connection Dialog（零拖拽、零歧义）：外部 → loop 本身 = 普通入边即参数（检查器 `wrapper-parameter-list` 列出）；外部 → 成员 = 穿墙闭包边（不进参数列表）；成员 → 自己的 loop = `boundary: 'wrapper-output'`（`loop-return-list` + 退出条件候选）                                                                 | T16, T18   |
 | T20      | 收口：实现门（Codex，只审功能）+ STATE.md / plan.md 状态 Done + 架构账本重采                                                                                                                                                                                                                                                                                                                               | T17～T19   |
 
 ## 5. 进度（2026-09-03）
@@ -74,6 +74,8 @@ exit 谓词按帧求值）；PR-3 依赖 PR-2（clarify 通道端口已在端口
 - T18：`node-history.ts` 加帧原语（`sameFrame` / `frameKeyOf` / `parseScopePath` / `formatFrameBreadcrumb` / `groupHistoryByFrame`），
   `clarifyRoundForRun` / `displayRetryForRun` 谱系按帧过滤；任务详情轮次列、抽屉 `statFrame`、运行历史分帧标题均按 `scopePath`
   渲染，平铺工作流零变化。**债**：InboxDrawer 的反问条目仍只显示 `iteration`——clarify session DTO 不带帧，补齐要动后端 DTO + 双 provider。
+- T19：`canvas-wrapper-membership` 三幕（参数边 / 闭包边 / 返回值边），每幕由 Connection Dialog 建边、从定义回读三元组
+  `source→target[boundary]` 并对照检查器列表；本地 chromium 5/5 绿。
 
 ## 3. 验收清单（对应 proposal §5）
 

@@ -13,7 +13,7 @@
 // 判据取自源码单一事实源：
 //   components/canvas/WorkflowCanvas.tsx:2966-3020  onNodeDragStop 里的矩形命中 + 归属补丁
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 import { clickCanvasControl } from './canvas-controls'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -181,4 +181,197 @@ test('拖出 wrapper ⇒ 真的出组（只增不减的实现会在这里露馅�
     await wrapperMembers(workflowId),
     '拖出去了却还在组里 ⇒ 节点一旦沾过 wrapper 就再也出不来，而画布上它明明在外面',
   ).toEqual(['seed'])
+})
+
+// ---------------------------------------------------------------------------
+// RFC-354 T19 — the three edge roles of a wrapper, each created the way an
+// author creates it (Connection Dialog) and each read back from the definition
+// the runtime executes:
+//   • PARAMETER — an outside producer wired to the loop itself: an ordinary
+//     inbound edge whose target port name IS the parameter (no boundary tag);
+//   • CLOSURE — an outside producer wired straight to a body member: a plain
+//     crossing edge the environment chain resolves at run time; it is NOT a
+//     parameter of the loop, so the loop's parameter list must not grow;
+//   • RETURN — a body member wired to its own loop: the planner tags it
+//     `boundary: 'wrapper-output'`, it shows up as a return value and becomes
+//     an exit-condition candidate.
+// A drag would also do, but the dialog is the zero-ambiguity path and what a
+// keyboard / phone author actually uses.
+// ---------------------------------------------------------------------------
+
+interface DefinitionEdge {
+  id: string
+  source: { nodeId: string; portName: string }
+  target: { nodeId: string; portName: string }
+  boundary?: string
+}
+
+async function readEdges(workflowId: string): Promise<DefinitionEdge[]> {
+  const detail = await api<{ definition: { edges: DefinitionEdge[] } }>(
+    `/api/workflows/${encodeURIComponent(workflowId)}`,
+  )
+  return detail.definition.edges
+}
+
+function triple(edge: DefinitionEdge): string {
+  return `${edge.source.nodeId}.${edge.source.portName}→${edge.target.nodeId}.${edge.target.portName}${
+    edge.boundary === undefined ? '' : `[${edge.boundary}]`
+  }`
+}
+
+/** v6 seed: `inner` inside the loop (already returning `looped`), `outside` beside it. */
+async function seedFramedWorkflow(): Promise<string> {
+  const created = await api<{ id: string }>('/api/workflows', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: `rfc354-t19-${++sequence}`,
+      description: 'RFC-354 T19 fixture',
+      definition: {
+        $schema_version: 6,
+        inputs: [],
+        nodes: [
+          agentNode('inner', 0, 0),
+          agentNode('outside', 0, 600),
+          {
+            id: 'loop',
+            kind: 'wrapper-loop',
+            nodeIds: ['inner'],
+            maxIterations: 3,
+            exitCondition: { kind: 'port-not-empty', portName: 'looped' },
+            position: { x: 0, y: 0 },
+          },
+        ],
+        edges: [
+          {
+            id: 'e_ret',
+            source: { nodeId: 'inner', portName: 'answer' },
+            target: { nodeId: 'loop', portName: 'looped' },
+            boundary: 'wrapper-output',
+          },
+        ],
+      },
+    }),
+  })
+  return created.id
+}
+
+async function openConnectionDialog(page: Page, sourceNodeId: string): Promise<void> {
+  await page
+    .locator(`.react-flow__node[data-id="${sourceNodeId}"] .canvas-node`)
+    .click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Connect next step', exact: true }).click()
+  await expect(page.getByTestId('connection-submit')).toBeVisible()
+}
+
+/** Wire `source.answer → target.<port>` through the dialog and wait for the save. */
+async function connectNew(
+  page: Page,
+  source: string,
+  targetOptionLabel: string,
+  portName: string,
+  expectedPreview: string,
+): Promise<void> {
+  await openConnectionDialog(page, source)
+  await page.getByTestId('connection-target-node').click()
+  await page.getByRole('option', { name: targetOptionLabel, exact: true }).click()
+  await page.getByTestId('connection-mode-new').click()
+  await page.getByTestId('connection-target-port').getByRole('textbox').fill(portName)
+  await expect(page.getByTestId('connection-preview')).toContainText(expectedPreview)
+  await page.getByTestId('connection-submit').click()
+  await expect(page.getByTestId('connection-submit')).toBeHidden()
+  await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
+}
+
+function inspector(page: Page): Locator {
+  return page.locator('[data-inspector-content="node"]')
+}
+
+/**
+ * Select a node from the overview camera (same recipe as
+ * rfc319-canvas-inspectors). `openEditor` above already switched to overview,
+ * and the canvas renders only ONE camera button per mode (overview ⇄ readable),
+ * so the switch is conditional here.
+ */
+async function selectNode(page: Page, nodeId: string): Promise<void> {
+  if ((await page.getByTestId('workflow-camera-overview').count()) > 0) {
+    await clickCanvasControl(page, 'workflow-camera-overview')
+  }
+  await page.waitForTimeout(400)
+  const header = page.locator(`.react-flow__node[data-id="${nodeId}"] .canvas-node__header`)
+  await expect(header).toBeInViewport()
+  // The node just wired keeps its floating toolbar ("Connect next step") open,
+  // and inside a wrapper that toolbar sits right over the wrapper's header —
+  // a pointer click would be intercepted, so deliver the click as the event.
+  await header.dispatchEvent('click')
+  await expect(page.locator(`[id="workflow-inspector-field-${nodeId}-title"]`)).toBeVisible()
+}
+
+async function readSelectOptions(page: Page, trigger: Locator): Promise<string[]> {
+  await trigger.click()
+  const listbox = page.locator('ul[role="listbox"].select__listbox--portal')
+  await expect(listbox).toBeVisible()
+  const labels = await listbox.getByRole('option').allInnerTexts()
+  await page.keyboard.press('Escape')
+  await expect(listbox).toBeHidden()
+  return labels
+}
+
+test('参数边：外部产出接到 loop 本身 ⇒ 普通入边，目标口名就是参数名，检查器参数列表列出它', async ({
+  page,
+}) => {
+  const workflowId = await seedFramedWorkflow()
+  await openEditor(page, workflowId)
+  await connectNew(page, 'outside', 'loop · wrapper-loop', 'brief', 'outside.answer → loop.brief')
+  expect(
+    (await readEdges(workflowId)).map(triple).sort(),
+    '接到 loop 上的边没有原样落进定义、或被误打成边界边 ⇒ 运行时不知道 brief 是这个循环的参数',
+  ).toEqual(['inner.answer→loop.looped[wrapper-output]', 'outside.answer→loop.brief'])
+  await selectNode(page, 'loop')
+  await expect(
+    inspector(page).getByTestId('wrapper-parameter-list'),
+    '参数列表没列出 brief ⇒ 作者看不出循环体能拿到什么',
+  ).toContainText('brief')
+})
+
+test('闭包边：外部产出直接接到循环体成员 ⇒ 穿墙的普通边，不是 loop 的参数', async ({ page }) => {
+  const workflowId = await seedFramedWorkflow()
+  await openEditor(page, workflowId)
+  await connectNew(
+    page,
+    'outside',
+    'rfc319-wf16-agent (inner)',
+    'context',
+    'outside.answer → inner.context',
+  )
+  expect(
+    (await readEdges(workflowId)).map(triple).sort(),
+    '穿墙边被改写成别的形状（补了边界标记 / 挂到了 loop 上）⇒ 运行时按参数而不是闭包解析',
+  ).toEqual(['inner.answer→loop.looped[wrapper-output]', 'outside.answer→inner.context'])
+  await selectNode(page, 'loop')
+  await expect(
+    inspector(page).getByTestId('wrapper-parameter-list'),
+    '闭包边被当成参数列出 ⇒ 两种绑定在界面上分不开',
+  ).not.toContainText('context')
+})
+
+test('返回值边：循环体成员接回自己的 loop ⇒ boundary=wrapper-output，成为返回值与退出条件候选', async ({
+  page,
+}) => {
+  const workflowId = await seedFramedWorkflow()
+  await openEditor(page, workflowId)
+  await connectNew(page, 'inner', 'loop · wrapper-loop', 'final', 'inner.answer → loop.final')
+  expect(
+    (await readEdges(workflowId)).map(triple).sort(),
+    '成员 → 自己的 loop 没有打上 wrapper-output ⇒ 它不是返回值，退出条件读不到它',
+  ).toEqual(['inner.answer→loop.final[wrapper-output]', 'inner.answer→loop.looped[wrapper-output]'])
+  await selectNode(page, 'loop')
+  await expect(inspector(page).getByTestId('loop-return-list')).toContainText('final')
+  const exitOptions = await readSelectOptions(
+    page,
+    inspector(page).getByTestId('loop-exit-port-select'),
+  )
+  expect(
+    exitOptions.some((label) => label.includes('final')),
+    '新返回口没进退出条件候选 ⇒ 作者接了返回值却选不到它',
+  ).toBe(true)
 })
