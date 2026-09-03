@@ -483,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25880,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-354 PR-3 T18（`e9b941558`）：前端 node-history 新增帧原语 `sameFrame` / `frameKeyOf` / `parseScopePath` / `formatFrameBreadcrumb` / `groupHistoryByFrame` 与 `ScopeSegment` / `FrameGroup` 两个类型（owner +7）。退许可笔随后删除本条并重采。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -503,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e9b94155893ecab40c47ff78bb47fd3ebba5e744",
-    "contentDigest": "sha256:3cbbaa8750620af5caf281f88385c1707febeeb8e41203ce899ba5b378800b3f",
+    "currentSnapshotSha": "5a5243addafe1f3fe366b3e8e2a71ed9bd5f8f0b",
+    "contentDigest": "sha256:938094a7e4207b0d701990d8be0da1f79107829af00b552f9549a7b56116c2c9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
