@@ -158,6 +158,7 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
   realTest(
     'no table is rejected for a reason that is about how its statement was rendered',
     async () => {
+      let restoreProvider: (() => void) | undefined
       const runtime = createPostgresqlDatabaseRuntime({
         config: {
           provider: 'postgresql',
@@ -186,7 +187,9 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
             `VALUES ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_write_matrix_source', 'digest', 'active', 1, 1)`,
         )
 
-        selectDatabaseSchemaProvider('postgresql')
+        // 进程级选择必须还原：CI 的 oracle 步骤把好几个测试文件跑在**同一个 bun 进程**里，
+        // 留着 postgresql 投影会渗进后面的文件（跨文件污染在本仓有前科）。
+        restoreProvider = selectDatabaseSchemaProvider('postgresql')
         const db = createPostgresqlDatabaseClient(runtime)
         const facades = sqliteTableFacades()
         const contract = buildLogicalSchemaContract()
@@ -255,6 +258,7 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
         )
         expect(inserted, '一张表都没插进去 ⇒ 矩阵本身没跑起来').toBeGreaterThan(50)
       } finally {
+        restoreProvider?.()
         await runtime.close?.()
       }
     },
