@@ -120,7 +120,19 @@
 > 附带（属 RFC-349，非本 RFC）：e2e harness 的 daemon 诊断回显已由其 owner 在 `b0d5c5bbf` 落地并带测试——
 > 此前 `util/errors.ts` 的 `unhandled error` 只在 `E2E_VERBOSE` 下回显、CI 不设它，正是这条 500 长期被读成 flake 的原因。
 
-> 🚧 **RFC 实施中（Approved / In Progress，2026-08-31）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
+> 🚧 **RFC 收口中（Approved / Closing，2026-09-03）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
+> **T0–T10 全部落地，功能面已闭合**：exact implementation SHA `b3883154eb1cfe575e578ee3cf2664fbb57ce797` 上 Main CI
+> run `33722386454` terminal success；同 SHA 的 hosted `postgresql-evidence`（run `33722869768`）取证 job 全部 success——
+> **Verdict PASS**、crash/resume **26/26**、三平台 compiled smoke 全绿、大迁移 13,209,092 行 / 6,543.8 行每秒 / **errors 0**、
+> 三个相位各 **0 错误**、event-loop max **493.6ms**（门槛 500）；两条门槛 `EVENT_LOOP_GAP_MS=500` 与 `HARD_FREEZE_MS=1000`
+> 全程未调整。
+> **但该 run 整体 conclusion 是 failure**，不能记作 terminal success：取证之后的 `Full regression (backend)` lane 被
+> `The runner has received a shutdown signal` 掐断两次（~20m / ~23m，job 自报 `timeout-minutes: 90`，非超时），**零失败断言**、
+> 两次断点还不同。查明是 **lane 自身的拓扑缺陷、与产品无关**：这条 lane 被 `needs:` 里长期红的取证 job skip 了整个历史，
+> `b3883154e` 是它第一次真跑，而它把 Main CI 分 4 片才跑得完的后端套件塞进一台 VM 串行跑；同一 SHA 上 Main CI 用四个 ~7m 的
+> ubuntu 分片跑完全同一批文件、同一套 env，八片全绿。已在 `adcea41bf` 改成与 Main CI 同构分片并加守卫锁住拓扑。
+> **待办（AC-15）**：最终 SHA 的 Main CI + 九条 scheduled workflows exact-SHA 全绿后翻 Done。逐轮 SHA 与数字见
+> `design/RFC-349-postgresql-provider-one-click-migration/verification.md`。
 > 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：
 > SQLite 继续默认；PostgreSQL server 外置，二进制只带 client/pool/schema/migration；V1 以一次 durable maintenance-window operation 自动完成
 > preflight、source freeze、backup、copy、verify、cutover、resume 与有边界 rollback，不冒领双写/零停机/多 daemon。
