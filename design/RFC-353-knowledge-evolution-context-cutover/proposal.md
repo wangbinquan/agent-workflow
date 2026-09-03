@@ -198,7 +198,7 @@ T5 推上主干后，`e2e-webkit-nightly`（run `33752894225`）红在
 | AC-9 | 达成 | daemon handle 与启动顺序未动，RFC-349 冻结守卫绿 |
 | AC-10 | 达成 | `rfc353-skill-provenance.test.ts`：不可见的记忆不出现且不留计数；已回滚退回的不再计入 |
 | AC-11 | 达成 | `rfc353-skill-provenance-expand.test.tsx`：复用 `OperationsExpandButton` + `.data-table__expand*` + `memory-row__scope`，空态文案说明「可能已被回滚或不可见」 |
-| AC-12 | 达成 | `PUBLIC_SURFACE_PILOT_DEBT` 回到 10 条（T6 一度加的 7 条随 provider 再导出撤下而消失），RFC-345 的 facade 账本与 exact 兼容边各减一 |
+| **AC-12** | **部分达成，措辞已更正** | 「W4-E3 自有 exact ids 归零」与「转交逐条记账」达成（W4-E3 `30 → 27`、facade `346 → 345`、`PUBLIC_SURFACE_PILOT_DEBT` `10 → 6`、RFC-345 兼容边 `49 → 48`）；但「**全局债不增**」**没做到**——见下方「AC-12 的更正」 |
 | AC-13 | **达成** | 见下方「AC-13 取证」 |
 | AC-14 | 达成 | `rfc353-acl-conflict-draft.test.tsx`；webkit nightly 在 `500a17129` 成功 |
 
@@ -224,6 +224,32 @@ descriptor。整体搬迁要么造一条 RC→KE 的反向边（与 KE→RC 一�
 （`domain/skillRestore` + `application/skillRestoreMembership`），**版本铸造与文件系统留在 RC**
 （那本来就是 RC 拥有的东西）。RC 只收到一个「给事务与回滚目标、还我被退回的 id」的窄端口，
 装配在 bootstrap。这比原设想更贴合两个 context 的实际所有权。
+
+### AC-12 的更正：局部都在降，**全局 exception 账本净增 17 条**
+
+收口时我按「pilot 债 10→6、facade 346→345」就把 AC-12 记成了达成，**没有去核全局 exception 计数**。
+补测（`architecture/cross-context-imports.json` 的 `architectureExceptions`）：
+
+| sha | 全局 exception | W4-E1 | W4-E2 | W4-E3 |
+| --- | ---: | ---: | ---: | ---: |
+| `341177bfc`（本刀开工前） | 5286 | 838 | 40 | 30 |
+| `6eb8c676b`（T6/T7 落地） | 5303 | 839 | 44 | 30 |
+| `94767e66a`（本刀收口） | 5313 | 844 | 44 | **27** |
+
+`341177bfc → 6eb8c676b` 这一段**只含本刀的提交**，净增 17 条，逐条是：
+
+- **11 条 `legacy-inbound`**：`cli/start.ts` / `server.ts` / `cli/postgresqlDaemonApplication.ts` /
+  `system-operations/composition.ts` → `memory/composition.ts`、`resource-catalog/composition/skillVersionCommit.ts`、
+  `knowledge-evolution/public/participants.ts`。这是 §10 那条结论的**直接代价**：RFC-317 R2 与 RFC-349
+  provider-cutover 两条约束叠起来，跨 context 的 provider 装配只能落在 bootstrap / system-operation 根上，
+  于是每个根注入一个 participant 就多一条 legacy→module 边。
+- **6 条 `legacy-outbound`**：两个新的技能版本提交 provider adapter → `db/schema`、`db/txSync`、
+  `util/errors`、`platform/persistence/postgresqlDatabaseClient`。新 infrastructure 文件读写自己的表是正常形状，
+  生成器自动分桶到 W9。
+
+全部 17 条都由生成器自动分桶并带 `removeAfterWave`，**没有一条是隐藏的**；但「不增」这个词用错了，
+正确说法是「**本波自有债下降，代价以已入账的形式转到 W9 与各 bootstrap 根**」。下一刀若要真正压这条曲线，
+方向是把 bootstrap 的逐根注入收成一个装配入口（RFC-294 的 `bootstrap 唯一装配`），那属于 W5 / W9 的活。
 
 ### AC-7 的读法：路由里保留 `hasResourceAclBypass`
 
