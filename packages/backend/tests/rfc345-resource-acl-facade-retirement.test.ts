@@ -435,7 +435,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
-    'routes/fusions.ts',
+    'modules/knowledge-evolution/inbound/fusionRoutes.ts',
     ['hasResourceAclBypass'],
     'knowledge-evolution ACL bypass',
     REMOVE_OWNERS.knowledgeEvolution,

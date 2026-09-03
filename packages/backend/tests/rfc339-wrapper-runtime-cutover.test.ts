@@ -426,7 +426,7 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/routes/agents.ts',
       'packages/backend/src/routes/clarify.ts',
       'packages/backend/src/routes/developmentMissions.ts',
-      'packages/backend/src/routes/fusions.ts',
+      'packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts',
       'packages/backend/src/routes/reviews.ts',
       'packages/backend/src/routes/scheduledTasks.ts',
       'packages/backend/src/routes/taskQuestions.ts',

@@ -8,7 +8,12 @@
 //   POST   /api/fusions/:id/cancel       cancel
 //
 // Authentication is the /api/* multiAuth gate; per-fusion authorization (skill
-// write, memory manage, fusion ownership) is enforced in services/fusion.ts.
+// write, memory manage, fusion ownership) is enforced in the KE application.
+//
+// RFC-353 T8（RFC-294 W4-E3）：本文件自 `routes/fusions.ts` 迁入 knowledge-evolution 的
+// inbound 层，并收成 **decode-call-map**——「谁看得见哪条融合」原先在三个 handler 里各手写
+// 一遍（列表过滤 / 待办计数 / 详情 404），现在只解出 viewer 交给 application，判据在
+// `domain/fusionVisibility`。
 
 import { FusionStatusSchema, LaunchFusionSchema, RejectFusionSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
@@ -23,9 +28,10 @@ import {
   type FusionDeps,
 } from '@/modules/knowledge-evolution/public/commands'
 import {
-  awaitingApprovalFusionOwners,
-  getFusion,
-  listFusionSummaries,
+  countVisibleAwaitingApprovalFusions,
+  getVisibleFusion,
+  listVisibleFusionSummaries,
+  type FusionViewer,
 } from '@/modules/knowledge-evolution/public/queries'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
@@ -44,6 +50,12 @@ export interface FusionRouteDependencies {
 }
 
 export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): void {
+  /** 把请求上的操作者解成 application 认识的 viewer；这里不做任何可见性判断。 */
+  function viewerOf(c: Parameters<Parameters<typeof registerRoute>[2]>[0]): FusionViewer {
+    const actor = actorOf(c)
+    return { userId: actor.user.id, aclBypass: hasResourceAclBypass(actor) }
+  }
+
   function fusionDeps(): FusionDeps {
     // RFC-108 T4 (Codex impl gate P2): thread the per-node timeout floor so a
     // hung fusion agent is bounded like any other node. RFC-115: also thread
@@ -102,7 +114,6 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       summary: 'List fusions',
     },
     async (c) => {
-      const actor = actorOf(c)
       const skillId = c.req.query('skillId')
       // Validate ?status against the enum (no `as` cast — RFC-054 W1-7); an
       // unknown value is treated as "no status filter".
@@ -112,14 +123,12 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       const status = statusParsed?.success === true ? statusParsed.data : undefined
       // listFusionSummaries pushes status/skillId into SQL and never reads the
       // proposedDiff, so the inbox's 15s poll stays cheap. Full diff: /:id.
-      const all = await listFusionSummaries(fusionDeps(), {
-        ...(skillId ? { skillId } : {}),
-        ...(status ? { status } : {}),
-      })
-      const visible = hasResourceAclBypass(actor)
-        ? all
-        : all.filter((f) => f.ownerUserId === actor.user.id)
-      return c.json(visible)
+      return c.json(
+        await listVisibleFusionSummaries(fusionDeps(), viewerOf(c), {
+          ...(skillId ? { skillId } : {}),
+          ...(status ? { status } : {}),
+        }),
+      )
     },
   )
 
@@ -137,12 +146,9 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       summary: 'Count of fusions awaiting approval',
     },
     async (c) => {
-      const actor = actorOf(c)
-      const owners = await awaitingApprovalFusionOwners(fusionDeps())
-      const count = hasResourceAclBypass(actor)
-        ? owners.length
-        : owners.filter((o) => o.ownerUserId === actor.user.id).length
-      return c.json({ count })
+      return c.json({
+        count: await countVisibleAwaitingApprovalFusions(fusionDeps(), viewerOf(c)),
+      })
     },
   )
 
@@ -156,13 +162,9 @@ export function mountFusionRoutes(app: Hono, deps: FusionRouteDependencies): voi
       summary: 'Get one fusion',
     },
     async (c) => {
-      const actor = actorOf(c)
-      const fusion = await getFusion(fusionDeps(), c.req.param('id'))
-      // RFC-099-style existence isolation: not-owner / not-found are identical.
-      if (
-        fusion === null ||
-        (!hasResourceAclBypass(actor) && fusion.ownerUserId !== actor.user.id)
-      ) {
+      // RFC-099-style existence isolation：不可见与不存在同形，判据在 application。
+      const fusion = await getVisibleFusion(fusionDeps(), viewerOf(c), c.req.param('id'))
+      if (fusion === null) {
         throw new NotFoundError('fusion-not-found', `fusion '${c.req.param('id')}' not found`)
       }
       return c.json(fusion)

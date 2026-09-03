@@ -398,7 +398,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     // ——新址重实现同名函数不在射程内，兜底只剩「对已删导出的 import 必炸
     // typecheck」；真回潮场景（恢复导出/路由再引用）仍即红。
     const tasksRoute = SRC('routes/tasks.ts')
-    const fusionsRoute = SRC('routes/fusions.ts')
+    const fusionsRoute = SRC('modules/knowledge-evolution/inbound/fusionRoutes.ts')
     expect(tasksRoute).not.toContain('resolveOpencodeCmd')
     expect(tasksRoute).toContain('resolveStructuralDeepConfig(configPath: string)')
     expect(fusionsRoute).not.toContain('resolveOpencodeCmd')

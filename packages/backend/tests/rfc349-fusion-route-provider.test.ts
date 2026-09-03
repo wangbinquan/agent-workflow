@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const ROUTE = resolve(import.meta.dir, '../src/routes/fusions.ts')
+const ROUTE = resolve(import.meta.dir, '../src/modules/knowledge-evolution/inbound/fusionRoutes.ts')
 
 describe('RFC-349 fusion route provider composition', () => {
   test('mount requires closed FusionOperations and never receives a database client', () => {

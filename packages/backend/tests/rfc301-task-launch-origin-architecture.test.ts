@@ -113,13 +113,13 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
 
   test('Fusion has one route-owned create/reject face and both map trusted actor source', () => {
     expect(Object.fromEntries(identifierCalls('createFusion'))).toEqual({
-      'routes/fusions.ts': 1,
+      'modules/knowledge-evolution/inbound/fusionRoutes.ts': 1,
     })
     expect(Object.fromEntries(identifierCalls('rejectFusion'))).toEqual({
-      'routes/fusions.ts': 1,
+      'modules/knowledge-evolution/inbound/fusionRoutes.ts': 1,
     })
     expect(Object.fromEntries(identifierCalls('directTaskInitiatorFromActorSource'))).toEqual({
-      'routes/fusions.ts': 2,
+      'modules/knowledge-evolution/inbound/fusionRoutes.ts': 2,
       'services/execution/executor.ts': 1,
       'modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts': 1,
     })

@@ -8,3 +8,11 @@ export {
   getFusion,
   listFusionSummaries,
 } from '../application/fusionOrchestration'
+
+// RFC-353 T8：带可见性的三条——路由只解 viewer，判据在 application / domain。
+export {
+  countVisibleAwaitingApprovalFusions,
+  getVisibleFusion,
+  listVisibleFusionSummaries,
+  type FusionViewer,
+} from '../application/fusionViews'

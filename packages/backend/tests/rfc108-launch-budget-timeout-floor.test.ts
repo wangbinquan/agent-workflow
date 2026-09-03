@@ -75,7 +75,7 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
     expect(src('routes/reviews.ts')).toContain(
       'requireReviewOperations(operations).submitDecision({',
     )
-    expect(src('routes/fusions.ts')).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
+    expect(src('modules/knowledge-evolution/inbound/fusionRoutes.ts')).toContain('resolveLaunchRuntimeConfig(deps.configPath)')
   })
 
   test('fusion 引擎把 floor 透传进内部 startTask', () => {

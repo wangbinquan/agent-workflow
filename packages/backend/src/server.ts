@@ -188,7 +188,7 @@ import { mountSkillRoutes } from '@/routes/skills'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { mountTaskQuestionRoutes } from '@/routes/taskQuestions'
 import { mountTaskClarifyDirectiveRoutes } from '@/routes/taskClarifyDirective'
-import { mountFusionRoutes } from '@/routes/fusions'
+import { mountFusionRoutes } from '@/modules/knowledge-evolution/inbound/fusionRoutes'
 import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
