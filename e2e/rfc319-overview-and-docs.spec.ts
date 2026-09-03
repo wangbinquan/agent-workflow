@@ -1143,11 +1143,16 @@ test('CFG-34 设置 · Network 分区的文档链接落在真实的 API 文档�
     // 落地页必须是**有内容的**文档页，不是一个空壳 —— 死链和空壳在 URL 上看不出
     // 区别，只有内容能区分。
     await expect(page.getByRole('heading', { name: 'API & MCP access', exact: true })).toBeVisible()
-    const rows = await docTableRows(page)
-    expect(
-      rows.some((r) => r[0] === 'GET' && r[1] === '/api/agents'),
-      '从设置跳过来的文档页是空壳 ⇒ 链接活着，内容没有',
-    ).toBe(true)
+    // 标题可见 ≠ 端点表已经填好：这一页的表格由实时注册表渲染，晚于标题若干帧。
+    // 裸的 `expect(await docTableRows(...))` 不重试，读到的可能是还空着的那一帧
+    // ——CFG-34 因此间歇性红（pg-evidence run 33814856037 的 e2e-3：首跑红、retry 绿）。
+    // 姊妹用例 CFG-39 早就用 `expect.poll` 等这张表，这里照同一条定式。
+    await expect
+      .poll(() => docTableHas(page, 'GET', '/api/agents'), {
+        message: '从设置跳过来的文档页是空壳 ⇒ 链接活着，内容没有',
+        timeout: 30_000,
+      })
+      .toBe(true)
   } finally {
     await side.context.close()
   }
