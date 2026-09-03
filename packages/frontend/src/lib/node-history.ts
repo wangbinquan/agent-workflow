@@ -27,10 +27,109 @@ export function nodeRunHistory(current: NodeRun, runs: readonly NodeRun[]): Node
   return runs
     .filter((r) => r.nodeId === current.nodeId && r.parentNodeRunId === null)
     .sort((a, b) => {
+      // RFC-354: the flat order stands; frame grouping is a separate pass
+      // (`groupHistoryByFrame`, generations in creation order by oldest id).
       if (a.iteration !== b.iteration) return a.iteration - b.iteration
       if (a.reviewIteration !== b.reviewIteration) return a.reviewIteration - b.reviewIteration
       return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
     })
+}
+
+// ---------------------------------------------------------------------------
+// RFC-354 — frames. A run's frame is `(containerRunId, iteration)`: the wrapper
+// generation row it hangs off plus the round inside it. Two runs of the same
+// node at the same `iteration` number are DIFFERENT lineages when they belong
+// to different generations (loop-in-loop: outer round 1 / inner round 0 vs
+// outer round 2 / inner round 0), so every "sibling" filter below scopes on the
+// frame, never on the bare iteration counter. `scopePath` is the derived
+// root→here breadcrumb (`outer:1/inner:0`, '' at the top scope) the daemon
+// writes at mint time; payloads from older daemons default it to ''.
+// ---------------------------------------------------------------------------
+
+/** Same frame ⇔ same generation row AND same round inside it. */
+export function sameFrame(
+  a: Pick<NodeRun, 'containerRunId' | 'iteration'>,
+  b: Pick<NodeRun, 'containerRunId' | 'iteration'>,
+): boolean {
+  return (a.containerRunId ?? null) === (b.containerRunId ?? null) && a.iteration === b.iteration
+}
+
+/** Stable key of a run's frame — the same shape the scheduler uses. */
+export function frameKeyOf(run: Pick<NodeRun, 'containerRunId' | 'iteration'>): string {
+  return `${run.containerRunId ?? ''}#${run.iteration}`
+}
+
+export interface ScopeSegment {
+  /** The wrapper node id whose generation this segment is. */
+  nodeId: string
+  /** The round inside that wrapper. */
+  iteration: number
+}
+
+/**
+ * Parse the daemon's `scope_path` breadcrumb (`outer:1/inner:0`) into
+ * segments. Tolerant by construction: '' → [], a segment without a numeric
+ * round keeps the whole text as the node id with round 0 (node ids may not
+ * contain '/', but a corrupt / hand-edited value must never throw in a render).
+ */
+export function parseScopePath(scopePath: string | null | undefined): ScopeSegment[] {
+  if (scopePath === null || scopePath === undefined || scopePath === '') return []
+  return scopePath.split('/').map((segment) => {
+    const at = segment.lastIndexOf(':')
+    const round = at === -1 ? Number.NaN : Number(segment.slice(at + 1))
+    return Number.isInteger(round) && round >= 0
+      ? { nodeId: segment.slice(0, at), iteration: round }
+      : { nodeId: segment, iteration: 0 }
+  })
+}
+
+/**
+ * Human-facing frame breadcrumb: `outer#1 › inner#0`. '' for a top-scope run
+ * (callers fall back to the bare iteration counter there — a flat workflow
+ * keeps reading exactly as before RFC-354).
+ */
+export function formatFrameBreadcrumb(run: Pick<NodeRun, 'scopePath'>): string {
+  return parseScopePath(run.scopePath)
+    .map((segment) => `${segment.nodeId}#${segment.iteration}`)
+    .join(' › ')
+}
+
+export interface FrameGroup {
+  key: string
+  scopePath: string
+  containerRunId: string | null
+  iteration: number
+  runs: NodeRun[]
+}
+
+/**
+ * Group a node's history by frame, groups in first-appearance order of their
+ * runs (ULID id = creation order) and runs inside a group in the caller's
+ * order. A flat workflow yields one group, so the drawer renders headers only
+ * when there are several.
+ */
+export function groupHistoryByFrame(history: readonly NodeRun[]): FrameGroup[] {
+  const groups = new Map<string, FrameGroup>()
+  for (const run of history) {
+    const key = frameKeyOf(run)
+    const group = groups.get(key)
+    if (group !== undefined) {
+      group.runs.push(run)
+      continue
+    }
+    groups.set(key, {
+      key,
+      scopePath: run.scopePath ?? '',
+      containerRunId: run.containerRunId ?? null,
+      iteration: run.iteration,
+      runs: [run],
+    })
+  }
+  return [...groups.values()].sort((a, b) => {
+    const firstA = a.runs.reduce((min, r) => (r.id < min ? r.id : min), a.runs[0]!.id)
+    const firstB = b.runs.reduce((min, r) => (r.id < min ? r.id : min), b.runs[0]!.id)
+    return firstA < firstB ? -1 : firstA > firstB ? 1 : 0
+  })
 }
 
 /**
@@ -65,7 +164,7 @@ export function clarifyRoundForRun(run: NodeRun, runs: readonly NodeRun[]): numb
     (r) =>
       r.nodeId === run.nodeId &&
       r.parentNodeRunId === null &&
-      r.iteration === run.iteration &&
+      sameFrame(r, run) &&
       r.reviewIteration === run.reviewIteration &&
       (r.shardKey ?? null) === (run.shardKey ?? null) &&
       r.status === 'done' &&
@@ -98,7 +197,7 @@ export function displayRetryForRun(run: NodeRun, runs: readonly NodeRun[]): numb
     (r) =>
       r.nodeId === run.nodeId &&
       r.parentNodeRunId === null &&
-      r.iteration === run.iteration &&
+      sameFrame(r, run) &&
       r.reviewIteration === run.reviewIteration &&
       (r.shardKey ?? null) === (run.shardKey ?? null) &&
       r.id < run.id,
@@ -154,7 +253,13 @@ export function formatIterationLabel(
         : opts.t('workgroups.room.turnKindAssignment'),
     )
   }
-  if (run.iteration > 0) parts.push(opts.t('nodeDrawer.iterLoop', { n: run.iteration }))
+  // RFC-354: inside a wrapper the frame breadcrumb names the generation
+  // (`outer#1 › inner#0`) — a bare `loop#N` cannot tell two generations at the
+  // same round apart. Rows from pre-frame daemons carry no scopePath and keep
+  // the legacy counter.
+  const breadcrumb = formatFrameBreadcrumb(run)
+  if (breadcrumb !== '') parts.push(breadcrumb)
+  else if (run.iteration > 0) parts.push(opts.t('nodeDrawer.iterLoop', { n: run.iteration }))
   if (run.reviewIteration > 0)
     parts.push(opts.t('nodeDrawer.iterReview', { n: run.reviewIteration }))
   if (clarifyRound > 0) parts.push(opts.t('nodeDrawer.iterClarify', { n: clarifyRound }))

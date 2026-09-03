@@ -9873,6 +9873,17 @@ details.form-section[open] > summary {
   border-color: var(--accent);
 }
 
+/* RFC-354 — frame header inside the run history (one per wrapper generation). */
+.retries-history__frame {
+  font-size: 11px;
+  padding: 6px 0 2px;
+}
+
+.retries-history__frame:not(:first-child) {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
 .retries-history__item--active {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);

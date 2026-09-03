@@ -6907,6 +6907,8 @@ export const enUS: Resources = {
     statDuration: 'Duration',
     statExitCode: 'Exit code',
     statIteration: 'Iteration',
+    statFrame: 'Frame',
+    frameTop: 'top scope',
     statRetry: 'Retry',
     statWgRound: 'Workgroup round',
     statTokensIn: 'Tokens in',

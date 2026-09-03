@@ -26,7 +26,9 @@ import { api } from '@/api/client'
 import {
   clarifyRoundForRun,
   displayRetryForRun,
+  formatFrameBreadcrumb,
   formatIterationLabel,
+  groupHistoryByFrame,
   nodeRunHistory,
 } from '@/lib/node-history'
 import {
@@ -393,6 +395,17 @@ function StatsTab({
       <dd>{run.exitCode === null ? t('common.emDash') : run.exitCode}</dd>
       <dt>{t('nodeDrawer.statIteration')}</dt>
       <dd>{run.iteration}</dd>
+      {/* RFC-354 — the frame this run belongs to, as the root→here breadcrumb
+          of wrapper generations (`outer#1 › inner#0`); absent at the top scope
+          and on rows from pre-frame daemons. */}
+      {run.scopePath !== '' && (
+        <>
+          <dt>{t('nodeDrawer.statFrame')}</dt>
+          <dd>
+            <code data-testid="stats-frame">{formatFrameBreadcrumb(run)}</code>
+          </dd>
+        </>
+      )}
       {/* RFC-189 — the authoritative lw workgroup round ordinal (wg_round);
           absent on non-workgroup / free_collab rows. Codex 实现门 P3: api.get
           only CASTS the JSON — a pre-0095 remote daemon omits the field
@@ -482,37 +495,57 @@ function StatsTab({
           <dt>{t('nodeDrawer.statHistory')}</dt>
           <dd>
             <ul className="retries-history" data-testid="stats-history-list">
-              {history.map((r) => {
-                const isActive = r.id === run.id
-                return (
-                  <li key={r.id}>
-                    <button
-                      type="button"
-                      className={`retries-history__item${
-                        isActive ? ' retries-history__item--active' : ''
-                      }`}
-                      aria-current={isActive ? 'true' : undefined}
-                      disabled={isActive}
-                      onClick={() => onPickRetry?.(r.id)}
-                    >
-                      <code>
-                        {formatIterationLabel(
-                          r,
-                          { t },
-                          clarifyRoundForRun(r, history),
-                          displayRetryForRun(r, history),
+              {/* RFC-354: one section per frame when the node ran in several
+                  wrapper generations; a single frame renders no header so a
+                  flat workflow's list is byte-for-byte what it was. */}
+              {groupHistoryByFrame(history).flatMap((group, index, groups) => [
+                ...(groups.length > 1
+                  ? [
+                      <li
+                        key={`frame:${group.key}`}
+                        className="retries-history__frame muted"
+                        data-testid="stats-history-frame"
+                      >
+                        {group.scopePath === ''
+                          ? t('nodeDrawer.frameTop')
+                          : formatFrameBreadcrumb(group)}
+                      </li>,
+                    ]
+                  : []),
+                ...group.runs.map((r) => {
+                  const isActive = r.id === run.id
+                  return (
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        className={`retries-history__item${
+                          isActive ? ' retries-history__item--active' : ''
+                        }`}
+                        aria-current={isActive ? 'true' : undefined}
+                        disabled={isActive}
+                        onClick={() => onPickRetry?.(r.id)}
+                      >
+                        <code>
+                          {formatIterationLabel(
+                            r,
+                            { t },
+                            clarifyRoundForRun(r, history),
+                            displayRetryForRun(r, history),
+                          )}
+                        </code>{' '}
+                        <StatusChip kind={nodeRunStatusToKind(r.status)}>
+                          {t(displayNoderunStatusKey(r))}
+                        </StatusChip>
+                        {r.startedAt !== null && (
+                          <span className="muted">
+                            {new Date(r.startedAt).toLocaleTimeString()}
+                          </span>
                         )}
-                      </code>{' '}
-                      <StatusChip kind={nodeRunStatusToKind(r.status)}>
-                        {t(displayNoderunStatusKey(r))}
-                      </StatusChip>
-                      {r.startedAt !== null && (
-                        <span className="muted">{new Date(r.startedAt).toLocaleTimeString()}</span>
-                      )}
-                    </button>
-                  </li>
-                )
-              })}
+                      </button>
+                    </li>
+                  )
+                }),
+              ])}
             </ul>
           </dd>
         </>

@@ -77,6 +77,7 @@ import {
 } from '@/lib/call-node-nav'
 import { reviewRunDisplay } from '@/lib/reviewRunDisplay'
 import { describeTaskFailure } from '@/lib/task-failure'
+import { formatFrameBreadcrumb } from '@/lib/node-history'
 import {
   canOfferFailedJump,
   deriveTaskDetailCapabilities,
@@ -1861,7 +1862,16 @@ function NodeRunsTable({
                       </>
                     )}
                 </td>
-                <td className="data-table__muted">{r.iteration}</td>
+                <td className="data-table__muted">
+                  {/* RFC-354: inside a wrapper the frame breadcrumb names the
+                      generation (`outer#1 › inner#0`); a flat workflow keeps the
+                      bare round counter. */}
+                  {r.scopePath !== '' ? (
+                    <code data-testid={`node-run-frame-${r.id}`}>{formatFrameBreadcrumb(r)}</code>
+                  ) : (
+                    r.iteration
+                  )}
+                </td>
                 <td className="data-table__muted">{r.retryIndex}</td>
                 <td className="data-table__muted">
                   {displayStartedAt === null
