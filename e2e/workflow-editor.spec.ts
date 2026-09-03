@@ -576,19 +576,23 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
 
     // The issue lands directly on Review's source field, which under schema v6
     // (RFC-354) IS the review node's single inbound edge — there is no source
-    // picker to repair it from. The phone path wires it through the zero-drag
-    // Connection Dialog instead: right-click the producer, choose the review as
-    // its next step, and the planner targets `__review_input__` on its own
-    // (ConnectionDialog.tsx — a review target needs no port choice, so the
-    // phone path still requires no second menu).
+    // picker to repair it from. The phone path wires it from the producer's
+    // Inspector instead: tap the agent card, the compact surface opens its
+    // Inspector, and "Connect next step" there opens the zero-drag Connection
+    // Dialog. A review target locks `__review_input__` on its own
+    // (ConnectionDialog.tsx), so the phone path still needs no second menu.
+    //
+    // The tap is delivered as a `click` event rather than a pointer click: a
+    // pointer click hit-tests the card's centre first, and at 390px the canvas'
+    // top-right layout panel ("Layout selection") sits over it after fitView
+    // (CI run 33795489844) — a canvas-camera artefact, not what this test locks.
     await expect(inspector.getByTestId('review-source-unwired')).toBeVisible()
     await inspector.locator('.dialog__close').click()
-    await page
-      .locator('.react-flow__node')
-      .filter({ hasText: 'w2-3-agent-a' })
-      .locator('.canvas-node')
-      .click({ button: 'right' })
-    await page.getByRole('menuitem', { name: 'Connect next step', exact: true }).click()
+    const producerNode = page.locator('.react-flow__node').filter({ hasText: 'w2-3-agent-a' })
+    await producerNode.dispatchEvent('click')
+    inspector = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(inspector).toBeVisible()
+    await inspector.getByTestId('inspector-connect-next').click()
     await expect(page.getByTestId('connection-submit')).toBeVisible()
     await page.getByTestId('connection-target-node').click()
     await page
@@ -599,17 +603,15 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await page.getByTestId('connection-submit').click()
     await expect(page.getByTestId('connection-submit')).toBeHidden()
     await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
-    // Re-open the review: its source summary now names the producer's port.
-    await page
-      .locator('.react-flow__node')
-      .filter({ hasText: /review/i })
-      .locator('.canvas-node')
-      .click()
+    // Re-open the review the same way: its source summary now names the
+    // producer's port.
+    if (await inspector.isVisible()) await inspector.locator('.dialog__close').click()
+    const reviewNode = page.locator('.react-flow__node').filter({ hasText: /review/i })
+    await reviewNode.dispatchEvent('click')
     inspector = page.getByTestId('workflow-editor-inspector-surface')
     await expect(inspector).toBeVisible()
     await expect(inspector.getByTestId('review-source-summary')).toContainText('answer')
     await inspector.locator('.dialog__close').click()
-
     // Launch validates the exact saved revision through the same fresh gate,
     // then forwards directly to the task wizard when no blocking issue remains.
     await page.getByRole('button', { name: 'Launch task', exact: true }).click()
