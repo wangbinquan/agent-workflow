@@ -147,11 +147,10 @@ const SHAPES = moduleShapes(REPO_ROOT)
 
 /** git 追踪面——判定「零文件目录」是不是未追踪残留，不靠猜。 */
 function trackedFileCount(context: string): number {
-  const result = spawnSync(
-    'git',
-    ['ls-files', '--', `packages/backend/src/modules/${context}`],
-    { cwd: REPO_ROOT, encoding: 'utf8' },
-  )
+  const result = spawnSync('git', ['ls-files', '--', `packages/backend/src/modules/${context}`], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+  })
   if (result.status !== 0) return -1
   return (result.stdout ?? '').split('\n').filter((line) => line.trim().length > 0).length
 }
@@ -162,9 +161,17 @@ function trackedFileCount(context: string): number {
  * 「模块没有 public 合同」意味着它对外完全不可用，或者它的消费者正在走内部路径——
  * 后者恰恰是 R1 要抓的形态。
  */
-const MODULES_WITHOUT_PUBLIC: Readonly<
-  Record<string, { why: string; removeAfterWave: string }>
-> = {}
+const MODULES_WITHOUT_PUBLIC: Readonly<Record<string, { why: string; removeAfterWave: string }>> = {
+  'knowledge-evolution': {
+    why:
+      'RFC-353 T4：本刀先把 fusion 的纯状态机 / 行映射 / prompt 文本 / 内建工作流图从 ' +
+      '`services/fusion.ts` 逐字迁进 domain 层，编排本体还留在 legacy，因此这一刀还没有对外合同。' +
+      '刻意不为一轮过渡去公开 domain 符号（`MERGER_BODY` 一类内建播种文本不该成为对外合同）——' +
+      '那条 legacy→domain 的过渡边已按 R1 入账为 `KE-01`，与本条同在 T5 清偿：' +
+      '编排迁进 application 之后 `public/{commands,queries,participants,types}` 一并落地。',
+    removeAfterWave: 'RFC-294 W4-E3（本 RFC T5 内清偿）',
+  },
+}
 
 /** 非 exact public 入口。与 rfc294-architecture-preflight 的 PUBLIC_SURFACE_PILOT_DEBT 同源。 */
 const NON_EXACT_PUBLIC: Readonly<Record<string, readonly string[]>> = {
@@ -241,8 +248,7 @@ describe('RFC-317 T24 —— R3：模块目录形状', () => {
   test('每条 R3 豁免都写清了 why 与具名波次', () => {
     const bad = Object.entries(MODULES_WITHOUT_PUBLIC)
       .filter(
-        ([, entry]) =>
-          entry.why.trim().length < 20 || !/RFC-\d{3}|W\d/.test(entry.removeAfterWave),
+        ([, entry]) => entry.why.trim().length < 20 || !/RFC-\d{3}|W\d/.test(entry.removeAfterWave),
       )
       .map(([context]) => context)
     expect(bad).toEqual([])
@@ -444,7 +450,10 @@ function openRecordSites(): string[] {
           const valueText =
             value === undefined
               ? '?'
-              : value.getText(unit.source).replace(/\s+/g, ' ').replace(/readonly /g, '')
+              : value
+                  .getText(unit.source)
+                  .replace(/\s+/g, ' ')
+                  .replace(/readonly /g, '')
           const shape = /^\{/.test(valueText)
             ? `{ ${[...valueText.matchAll(/'([^']+)'\s*:/g)].map((m) => m[1]).join(', ')} }`
             : valueText

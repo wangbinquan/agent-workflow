@@ -1836,18 +1836,24 @@
     {
       "boundaryEdgeIds": [
         "import:186a7c5d8c25cc15f81b",
+        "import:2daffcc3fc05d62b3ccd",
         "import:3b1cb3376683e9111ba0",
         "import:3bd00dd7d050ac133fda",
         "import:56a821162cc89ee4c4d1",
-        "import:6692dad8480d723c9ffe",
+        "import:6033214396467ef154fd",
         "import:876806ae9033c19691bc",
         "import:9c7174f59600b4cbff38",
         "import:a142fcc2e08ae599e572",
+        "import:a52c57da4a58eccb535f",
         "import:ae15ad7d98327c9c91e5",
         "import:ae2bbe78ca5b450d6248",
         "import:b28fe1b23538bbcc0faa",
         "import:cdb12dc69f050cf333be",
-        "import:e5fde5facc8f80195fc8"
+        "import:d4f2bdd338aa48bb18bb",
+        "import:dc598dd1d7900ff085db",
+        "import:e5fde5facc8f80195fc8",
+        "import:ec5dbbf5d01066cc4fba",
+        "import:f8065f2b6544779a81d3"
       ],
       "exportedSymbols": [
         "FusionDeps",
@@ -1856,7 +1862,6 @@
         "cancelFusion",
         "createFusion",
         "getFusion",
-        "isValidFusionTransition",
         "listFusionSummaries",
         "reconcileFusion",
         "reconcileRunningFusions",
@@ -7459,5 +7464,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:71c728092327fb291e942360e3fbf1655227ebc41fe5308aecf34d289ebbc76e"
+  "sourceDigest": "sha256:e817605279caf6019cddbd6706815410cb57c0160fb6ad0332566f1ee9f13249"
 }

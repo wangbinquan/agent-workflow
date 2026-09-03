@@ -25,20 +25,12 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type {
-  Fusion,
-  FusionSkipped,
-  FusionStatus,
-  LaunchFusion,
-  WorkflowDefinition,
-} from '@agent-workflow/shared'
+import type { Fusion, FusionStatus, LaunchFusion } from '@agent-workflow/shared'
 import {
   FusionResultManifestSchema,
-  PLATFORM_FUSION_DIR,
   PLATFORM_FUSION_MANIFEST,
   PLATFORM_WORKSPACE_DIR,
   TERMINAL_TASK_STATUSES,
-  WORKFLOW_SCHEMA_VERSION,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
@@ -49,7 +41,6 @@ import {
 } from '@/modules/source-control/composition'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
 import type {
-  FusionBuiltinWorkflowSeed,
   FusionDecisionRecoveryReceipt,
   FusionEngineTaskOperations,
   FusionOperations,
@@ -74,8 +65,32 @@ import {
   SKILL_MERGER_AGENT_NAME,
 } from '@/services/systemResources'
 import { DAEMON_CADENCE } from './daemonCadence'
-/** Reserved scaffolding inside the fusion worktree; never written to the skill. */
-const SCAFFOLD = PLATFORM_FUSION_DIR
+// RFC-353 T4（RFC-294 W4-E3）—— 纯判据 / 纯文本已迁进 knowledge-evolution 的 domain 层。
+// 这里只剩编排；`isValidFusionTransition` 继续从本模块再导出，既有 import 面不变
+// （consumer 在 T8 随路由与恢复入口一起切到 KE public）。
+import {
+  isValidFusionTransition,
+  jsonArray,
+  rowToFusion,
+  MERGER_BODY,
+  MERGER_DESCRIPTION,
+  fusionBuiltinWorkflowSeed,
+  serializeMemoriesForPrompt,
+} from '@/modules/knowledge-evolution/domain'
+export { isValidFusionTransition }
+
+/**
+ * 内建融合资源的身份。`services/systemResources` 是它们的单一事实源（同一份清单还喂着
+ * 「内建资源不在列表里显示」的过滤器），domain 层不去那里取——由这里注入。
+ */
+// 不标注 `FusionBuiltinResourceIdentity`：结构类型在调用处已经把形状校严了，
+// 而多一条 type import 就多一条 legacy→模块的过渡边要入账（T5 一并消失，不值当）。
+const FUSION_BUILTIN_IDENTITY = Object.freeze({
+  workflowId: SKILL_FUSION_WORKFLOW_ID,
+  workflowName: SKILL_FUSION_WORKFLOW_NAME,
+  mergerAgentId: SKILL_MERGER_AGENT_ID,
+  mergerAgentName: SKILL_MERGER_AGENT_NAME,
+})
 const MANIFEST_REL = PLATFORM_FUSION_MANIFEST
 
 type FusionRow = FusionPersistenceRecord
@@ -115,68 +130,9 @@ export interface FusionDeps {
 // Fusion state machine (pure — unit-tested)
 // ---------------------------------------------------------------------------
 
-const FUSION_TRANSITIONS: Record<FusionStatus, readonly FusionStatus[]> = {
-  running: ['awaiting_approval', 'failed', 'canceled'],
-  awaiting_approval: ['applying', 'running', 'canceled', 'failed'],
-  applying: ['done', 'failed'],
-  done: [],
-  rejected: [], // (reserved — rejection re-enters 'running'; terminal 'rejected' is unused in v1)
-  canceled: [],
-  failed: [],
-}
-
-export function isValidFusionTransition(from: FusionStatus, to: FusionStatus): boolean {
-  return FUSION_TRANSITIONS[from]?.includes(to) ?? false
-}
-
 // ---------------------------------------------------------------------------
 // Row mapping
 // ---------------------------------------------------------------------------
-
-function jsonArray(s: string | null): string[] {
-  if (s === null) return []
-  try {
-    const v = JSON.parse(s) as unknown
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function rowToFusion(row: FusionRow): Fusion {
-  let skipped: FusionSkipped[] | null = null
-  if (row.skippedJson !== null) {
-    try {
-      const v = JSON.parse(row.skippedJson) as unknown
-      if (Array.isArray(v)) skipped = v as FusionSkipped[]
-    } catch {
-      skipped = null
-    }
-  }
-  return {
-    id: row.id,
-    skillId: row.skillId,
-    skillName: row.skillName,
-    baseSkillVersion: row.baseSkillVersion,
-    memoryIds: jsonArray(row.memoryIdsJson),
-    intent: row.intent,
-    status: row.status as FusionStatus,
-    iteration: row.iteration,
-    currentTaskId: row.currentTaskId,
-    proposedDiff: row.proposedDiff,
-    incorporatedMemoryIds:
-      row.incorporatedMemoryIdsJson === null ? null : jsonArray(row.incorporatedMemoryIdsJson),
-    skipped,
-    changelog: row.changelog,
-    appliedSkillVersion: row.appliedSkillVersion,
-    ownerUserId: row.ownerUserId,
-    createdAt: row.createdAt,
-    decidedByUserId: row.decidedByUserId,
-    decidedAt: row.decidedAt,
-    decisionReason: row.decisionReason,
-    error: row.error,
-  }
-}
 
 // ---------------------------------------------------------------------------
 // ACL
@@ -191,96 +147,6 @@ function canDecide(actor: Actor, row: FusionRow): boolean {
 // Built-in resource seeding (idempotent)
 // ---------------------------------------------------------------------------
 
-const MERGER_BODY = `You are aw-skill-merger, the agent-workflow platform's skill-fusion worker.
-
-Your job: fuse the APPROVED MEMORIES listed in your prompt into the target SKILL whose files are in your current working directory, following skill-authoring conventions, then report what you incorporated.
-
-## Mandatory ask-back (you are in clarify mode)
-You MUST ask the merger at least one clarifying question BEFORE editing anything. Confirm the merge goal, surface any conflict (a memory contradicting the skill, or two memories contradicting each other) and ask how to resolve it, and resolve every ambiguity. Do NOT edit files or emit output while clarifying — only emit the workflow-clarify envelope using the exact opening tag and required nonce supplied by the user prompt protocol. Keep asking until the merger stops clarifying.
-
-## After the merger stops clarifying — do the merge
-1. Read SKILL.md and the existing support files in your working directory.
-2. Integrate the memories' knowledge into the skill, honoring the merger's answers:
-   - De-duplicate; reconcile conflicts exactly as the merger decided.
-   - Preserve the skill's existing useful content; do not drop it.
-   - Follow conventions: SKILL.md frontmatter keeps a third-person, trigger-rich \`description\`; the body is imperative, < 500 lines; push detail into \`references/\` with clear pointers (progressive disclosure); keep \`name\` matching the directory.
-   - Edit files IN PLACE (SKILL.md and support files). You may add references/ examples/ scripts/.
-3. Write a manifest to \`${MANIFEST_REL}\` (create the \`${SCAFFOLD}/\` dir) — JSON:
-   {"incorporatedMemoryIds": ["<id>", ...], "skipped": [{"memoryId": "<id>", "reason": "..."}], "changelog": "<what changed, markdown>"}
-   List EVERY selected memory in exactly one of incorporated/skipped. Skip a memory only if its knowledge is redundant or the merger declined it — never silently drop.
-4. Emit a short summary in the workflow-output envelope, using the exact opening tag and required nonce supplied by the user prompt protocol, with one \`summary\` port containing a one-paragraph summary.
-
-The \`${SCAFFOLD}/\` directory is framework scaffolding and is never written into the skill — put ONLY the manifest there.`
-
-const MERGER_PROMPT_TEMPLATE = `Fuse the following approved memories into this skill.
-
-## Merge intent
-{{intent}}
-
-## Memories to fuse
-{{memories}}
-
-The skill's files are in your working directory. Clarify with the merger first (mandatory), then edit the files in place and write the result manifest.`
-
-const MERGER_DESCRIPTION =
-  'Built-in skill-fusion worker: merges approved memories into a managed skill (RFC-101).'
-const FUSION_WORKFLOW_DESCRIPTION = 'Built-in memory→skill fusion workflow (RFC-101).'
-
-function canonicalFusionWorkflowDefinition(): WorkflowDefinition {
-  return {
-    $schema_version: WORKFLOW_SCHEMA_VERSION,
-    inputs: [
-      { kind: 'text', key: 'intent', label: 'Merge intent', required: false },
-      { kind: 'text', key: 'memories', label: 'Memories', required: true },
-    ],
-    nodes: [
-      { id: 'in_intent', kind: 'input', inputKey: 'intent' },
-      { id: 'in_memories', kind: 'input', inputKey: 'memories' },
-      {
-        id: 'merger',
-        kind: 'agent-single',
-        agentId: SKILL_MERGER_AGENT_ID,
-        agentName: SKILL_MERGER_AGENT_NAME,
-        promptTemplate: MERGER_PROMPT_TEMPLATE,
-      },
-      { id: 'clarify', kind: 'clarify', title: 'Confirm fusion' },
-    ],
-    edges: [
-      {
-        id: 'e_intent',
-        source: { nodeId: 'in_intent', portName: 'intent' },
-        target: { nodeId: 'merger', portName: 'intent' },
-      },
-      {
-        id: 'e_memories',
-        source: { nodeId: 'in_memories', portName: 'memories' },
-        target: { nodeId: 'merger', portName: 'memories' },
-      },
-      {
-        id: 'e_ask',
-        source: { nodeId: 'merger', portName: '__clarify__' },
-        target: { nodeId: 'clarify', portName: 'questions' },
-      },
-      {
-        id: 'e_ans',
-        source: { nodeId: 'clarify', portName: 'answers' },
-        target: { nodeId: 'merger', portName: '__clarify_response__' },
-      },
-    ],
-    outputs: [],
-  }
-}
-
-function fusionBuiltinWorkflowSeed(): FusionBuiltinWorkflowSeed {
-  return {
-    id: SKILL_FUSION_WORKFLOW_ID,
-    name: SKILL_FUSION_WORKFLOW_NAME,
-    description: FUSION_WORKFLOW_DESCRIPTION,
-    definition: canonicalFusionWorkflowDefinition(),
-    mergerAgentId: SKILL_MERGER_AGENT_ID,
-  }
-}
-
 export async function seedFusionResources(persistence: FusionPersistence): Promise<void> {
   await persistence.seedResources({
     ownerUserId: SYSTEM_USER_ID,
@@ -292,12 +158,15 @@ export async function seedFusionResources(persistence: FusionPersistence): Promi
       syncOutputsOnIterate: true,
       bodyMd: MERGER_BODY,
     },
-    workflow: fusionBuiltinWorkflowSeed(),
+    workflow: fusionBuiltinWorkflowSeed(FUSION_BUILTIN_IDENTITY),
   })
 }
 
 async function fusionWorkflowId(persistence: FusionPersistence): Promise<string> {
-  return await persistence.loadBuiltinWorkflowId(fusionBuiltinWorkflowSeed(), SYSTEM_USER_ID)
+  return await persistence.loadBuiltinWorkflowId(
+    fusionBuiltinWorkflowSeed(FUSION_BUILTIN_IDENTITY),
+    SYSTEM_USER_ID,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -358,14 +227,6 @@ function copyWorktreeContent(src: string, dst: string): void {
     if (entry === '.git' || entry === PLATFORM_WORKSPACE_DIR) continue
     cpSync(join(src, entry), join(dst, entry), { recursive: true })
   }
-}
-
-function serializeMemoriesForPrompt(
-  mems: ReadonlyArray<{ id: string; title: string; bodyMd: string; scopeType: string }>,
-): string {
-  return mems
-    .map((m) => `### Memory ${m.id}\n**${m.title}** _(scope: ${m.scopeType})_\n\n${m.bodyMd}`)
-    .join('\n\n')
 }
 
 // ---------------------------------------------------------------------------

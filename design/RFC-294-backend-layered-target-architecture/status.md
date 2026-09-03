@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:71c728092327fb291e942360e3fbf1655227ebc41fe5308aecf34d289ebbc76e`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e817605279caf6019cddbd6706815410cb57c0160fb6ad0332566f1ee9f13249`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1899 |
+| backend production TS 文件 | 1904 |
 | `services/` 文件 | 347 |
-| `modules/**` 文件 / 非空 context | 1270 / 16 |
+| `modules/**` 文件 / 非空 context | 1275 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 367 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 77 |
-| RFC-317 boundary census（inbound / outbound） | 317 / 20 |
+| RFC-317 boundary census（inbound / outbound） | 318 / 20 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 5248 |
+| `architectureExceptions` | 5256 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6317 |
+| `crossContextImports` | 6325 |
 | `facades` | 347 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25745 |
+| `moduleSymbolOwners` | 25753 |
 | `mutationEntrypoints` | 1910 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 963 |
@@ -97,6 +97,7 @@
 | event-center / public | 5 |
 | identity-access / composition | 5 |
 | integration / public | 5 |
+| knowledge-evolution / domain | 5 |
 | resource-catalog / domain | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
@@ -199,11 +200,11 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3495 |
-| legacy-inbound | 1549 |
+| legacy-inbound | 1555 |
 | provider-mirror | 457 |
 | infrastructure-external | 396 |
 | offered-consumption | 134 |
-| temporary-internal-debt | 106 |
+| temporary-internal-debt | 108 |
 | off-dag-offered | 85 |
 | authority-type-only | 63 |
 | required-implementation | 27 |
@@ -214,8 +215,8 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3495 |
-| legacy-inbound | 1549 |
-| temporary-internal-debt | 106 |
+| legacy-inbound | 1555 |
+| temporary-internal-debt | 108 |
 | off-dag-offered | 85 |
 | no-circular | 6 |
 | external-layer-debt | 5 |
@@ -238,7 +239,7 @@
 | W4-E2 | 43 |
 | W4-E7 | 42 |
 | W4-E4b | 36 |
-| W4-E3 | 13 |
+| W4-E3 | 21 |
 | W9-E | 11 |
 | W2-D/W3/W5 | 7 |
 | W4-E10 | 3 |
