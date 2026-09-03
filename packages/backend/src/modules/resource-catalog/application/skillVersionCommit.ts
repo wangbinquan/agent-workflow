@@ -9,8 +9,8 @@
 // `MemoryMembershipParticipantInTx`、source-control 的 `RepositoryScopeAuthorizationInTx` 一致
 // （RFC-294 capability-forge 守卫：brand + readonly + 唯一工厂 + `Object.freeze` + 私有注册表）。
 
-import { skillVersionCommitParticipantInTxBrand } from '../domain/participantBrands'
 import type {
+  SkillVersionCommitHooks,
   SkillVersionCommitParticipantInTx,
   SkillVersionCommitRequest,
 } from '../public/participants'
@@ -23,7 +23,10 @@ import type {
  * （RFC-294 design §3.3「无 consumer 不公开」）。
  */
 export interface SkillVersionCommitWrites {
-  commit(request: SkillVersionCommitRequest): Promise<number>
+  commit(
+    request: SkillVersionCommitRequest,
+    hooks?: SkillVersionCommitHooks<Promise<void> | void>,
+  ): Promise<number>
 }
 
 /** 私有运行时注册表：只有经本工厂铸出的实例才在册，结构等价的对象不在。 */
@@ -37,11 +40,13 @@ export function createSkillVersionCommitParticipantInTx(
   writes: SkillVersionCommitWrites,
 ): SkillVersionCommitParticipantInTx {
   const participant = Object.freeze({
-    [skillVersionCommitParticipantInTxBrand]: 'skill-version-commit' as const,
-    commit(request: SkillVersionCommitRequest) {
-      return writes.commit(request)
+    commit(
+      request: SkillVersionCommitRequest,
+      hooks?: SkillVersionCommitHooks<Promise<void> | void>,
+    ) {
+      return writes.commit(request, hooks)
     },
-  })
+  }) as unknown as SkillVersionCommitParticipantInTx
   trustedSkillVersionCommitParticipants.add(participant)
   return participant
 }

@@ -12,7 +12,6 @@ import type {
   agentLaunchResourceIntegrityParticipantBrand,
   intentContextResourceAuthorizationSessionBrand,
   skillCatalogBootParticipantBrand,
-  skillVersionCommitParticipantInTxBrand,
 } from '../domain/participantBrands'
 import type {
   AgentPackageMutation,
@@ -422,6 +421,8 @@ export interface SkillVersionCommitHooks<R> {
   readonly after?: (versionIndex: number) => R
 }
 
+declare const skillVersionCommitParticipantInTxBrand: unique symbol
+
 export interface SkillVersionCommitParticipantInTx {
   readonly [skillVersionCommitParticipantInTxBrand]: 'skill-version-commit'
   /** 返回刚写下的版本号（等于 `request.versionIndex`）。 */
@@ -430,4 +431,3 @@ export interface SkillVersionCommitParticipantInTx {
     hooks?: SkillVersionCommitHooks<Promise<void> | void>,
   ): Promise<number>
 }
-
