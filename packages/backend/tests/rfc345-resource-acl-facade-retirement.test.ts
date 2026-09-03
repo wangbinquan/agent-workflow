@@ -1288,4 +1288,10 @@ test('all live classic compatibility consumers have source-derived exact success
     }
     expect(consumers, `${definition.facade} may be deleted only at zero consumers`).toEqual([])
   }
-})
+  // 显式超时：这一条 readdirSync 递归整棵 src 树再逐文件做文本匹配，成本随源码树增长。
+  // 2026-09-03 在 `Backend tests (macos-latest shard 4/4)` 上以 **7013.75ms** 撞上 bun
+  // 默认的 5000ms（同一提交本机整文件 1.1–1.3s）。与 `docs/audit-backlog.md` 里 RFC-227
+  // Seatbelt（5015ms / 本机 380ms）、以及同日 rfc322 棘轮（5058.92ms / 本机 850ms）同族：
+  // 工作量确定且有界，变的是机器速度。处置照那两条——给宽裕但**有限**的上限，真挂住仍会
+  // 失败，不是把上限抬到永不触发。
+}, 30_000)
