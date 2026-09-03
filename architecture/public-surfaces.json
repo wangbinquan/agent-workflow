@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1115,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21970,
+    "recursiveFields": 21973,
     "symbols": 1003
   },
   "entries": [
@@ -2890,7 +2890,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 53,
+        "maxTransitiveLeafFields": 54,
         "maxUnionVariants": 27
       },
       "consumerEdgeIds": [],
@@ -2947,6 +2947,11 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.expectedTaskRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.frameIteration",
           "type": "number"
         },
         {
@@ -4993,7 +4998,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 40,
+        "maxTransitiveLeafFields": 41,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [],
@@ -5066,6 +5071,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.executionContext.token.taskId",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.frameIteration",
+          "type": "number"
         },
         {
           "consumerEdgeIds": [],
@@ -8966,7 +8976,7 @@
       "budget": {
         "maxMethods": 9,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 121,
+        "maxTransitiveLeafFields": 122,
         "maxUnionVariants": 35
       },
       "consumerEdgeIds": [
@@ -9610,6 +9620,13 @@
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.executionContext.token.taskId",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4bfc322fdf6e54abad56"
+          ],
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.frameIteration",
+          "type": "number"
         },
         {
           "consumerEdgeIds": [
@@ -172685,7 +172702,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e7defb2141a428a28e256bcac4e55730cfa0edbc43891c79e09676a3070c49bf",
+  "sourceDigest": "sha256:1716478924c07b3fc363d1683be5820c75304f9b41a2fb3edbf93da063651c44",
   "targetContexts": [
     "collaboration",
     "development-automation",

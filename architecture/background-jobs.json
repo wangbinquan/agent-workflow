@@ -300,9 +300,9 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1483",
+      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1485",
       "kind": "register-call",
-      "line": 1483,
+      "line": 1485,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
@@ -8599,7 +8599,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1555",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1557",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8613,7 +8613,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1555",
+      "symbol": "$setInterval:1557",
       "targetContext": "task-execution"
     },
     {
@@ -8622,7 +8622,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1939",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1941",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8636,7 +8636,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:1939",
+      "symbol": "$setTimeout:1941",
       "targetContext": "task-execution"
     },
     {
@@ -13564,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e7defb2141a428a28e256bcac4e55730cfa0edbc43891c79e09676a3070c49bf"
+  "sourceDigest": "sha256:1716478924c07b3fc363d1683be5820c75304f9b41a2fb3edbf93da063651c44"
 }
