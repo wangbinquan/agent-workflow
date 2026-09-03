@@ -4,6 +4,7 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm'
 import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
 import type {
   BeginHumanGateOperationInput,
   BegunHumanGateOperation,
@@ -384,7 +385,10 @@ export class PostgresqlHumanGateOperationPersistence implements HumanGateOperati
           ),
         )
         .orderBy(
-          asc(collaborationGateOperations.claimExpiresAt),
+          // WHERE 里**故意**收了 claimExpiresAt IS NULL（还没被认领过的操作）。
+          // PostgreSQL 默认把 NULL 排最后，过期认领一旦填满 LIMIT，新操作就再也轮不到。
+          // 见 postgresqlNullOrdering.ts。
+          ascNullsFirst(collaborationGateOperations.claimExpiresAt),
           asc(collaborationGateOperations.updatedAt),
           asc(collaborationGateOperations.id),
         )

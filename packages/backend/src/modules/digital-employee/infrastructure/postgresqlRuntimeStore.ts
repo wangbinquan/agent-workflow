@@ -18,6 +18,7 @@ import {
 import { EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS } from '@agent-workflow/shared'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
 import {
   employeeAttentionBindings,
   employeeCaseEventOrigins,
@@ -609,7 +610,7 @@ export function createPostgresqlRuntimePersistence(
         .from(employeeCases)
         .where(eq(employeeCases.state, 'terminal'))
         .groupBy(employeeCases.employeeId, employeeCases.terminalKind)
-        .orderBy(asc(employeeCases.employeeId), asc(employeeCases.terminalKind))
+        .orderBy(asc(employeeCases.employeeId), ascNullsFirst(employeeCases.terminalKind))
         .limit(maxEmployeeOutcomeGroups + 1)
         .all()
       if (rows.length > maxEmployeeOutcomeGroups) {
@@ -1004,7 +1005,7 @@ export function createPostgresqlRuntimePersistence(
               ),
             ),
           )
-          .orderBy(asc(employeeCases.terminalAt), asc(employeeChannels.id))
+          .orderBy(ascNullsFirst(employeeCases.terminalAt), asc(employeeChannels.id))
           .limit(limit)
           .all()
       ).map((row) => ({ channel: channelRecord(row.channel), childCase: caseRecord(row.child) }))

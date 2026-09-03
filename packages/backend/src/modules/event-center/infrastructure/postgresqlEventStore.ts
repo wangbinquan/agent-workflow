@@ -2,6 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { TriggerContextSchema } from '@agent-workflow/shared'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
 import {
   eventDeliveries,
   eventObserverRuns,
@@ -1084,7 +1085,9 @@ export function createPostgresqlEventStore(db: PostgresqlDatabaseClient): EventS
             ),
           ),
         )
-        .orderBy(asc(observerActivations.nextScanAt), asc(observerActivations.sourceId))
+        // WHERE 里**故意**收了 nextScanAt IS NULL（还没扫过的 observer）。PostgreSQL
+        // 默认把 NULL 排最后，due 的存量填满 LIMIT 20 后新 observer 永远扫不到。
+        .orderBy(ascNullsFirst(observerActivations.nextScanAt), asc(observerActivations.sourceId))
         .limit(20)
 
       for (const candidate of candidates) {

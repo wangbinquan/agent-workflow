@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1893,
+    "backendFiles": 1894,
     "frontendFiles": 621,
-    "legacyFiles": 628,
+    "legacyFiles": 629,
     "moduleFiles": 1265,
-    "productionFiles": 2669,
+    "productionFiles": 2670,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25703
+    "symbolsIncludingFileRoots": 25706
   },
   "entries": [
     {
@@ -153032,6 +153032,42 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "TargetSnapshot",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ascNullsFirst",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "id": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "descNullsLast",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -309111,5 +309147,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2a0960d9528f5a8e0ffd9ba5e895eaeafb825af35b97538567f9068fb28c1f86"
+  "sourceDigest": "sha256:03bb61c5b535d39535d488740ba9bde8e1cae820487a60874c6e502a4bb29e8e"
 }

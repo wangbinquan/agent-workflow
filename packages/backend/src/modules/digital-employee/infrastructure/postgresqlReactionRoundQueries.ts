@@ -1,7 +1,8 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { employeeReactionRounds } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { descNullsLast } from '@/platform/persistence/postgresqlNullOrdering'
 import type { EmployeeReactionRoundQueryPort } from '../public/types'
 
 const SETTLED_ROUND_STATES = ['completed'] as const
@@ -34,7 +35,7 @@ export function createPostgresqlReactionRoundQueries(
             eq(employeeReactionRounds.state, settled),
           ),
         )
-        .orderBy(desc(employeeReactionRounds.settledAt))
+        .orderBy(descNullsLast(employeeReactionRounds.settledAt))
         .limit(1)
         .get()
       return row === undefined ? null : { roundRef: row.id }

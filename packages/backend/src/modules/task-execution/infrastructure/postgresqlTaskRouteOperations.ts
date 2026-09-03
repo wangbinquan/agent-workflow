@@ -72,6 +72,7 @@ import type { OwnerIdentityQueries } from '@/modules/identity-access/public/oper
 import type { FrozenTaskExecutionResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
 import { branchTraceForTask } from '../application/branchTrace'
 import { nextRetryIndex } from '../application/nextRetryIndex'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
@@ -827,7 +828,7 @@ async function taskNodeRuns(
       .select()
       .from(nodeRuns)
       .where(eq(nodeRuns.taskId, taskId))
-      .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id)),
+      .orderBy(ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id)),
     dependencies.db
       .select({
         reviewNodeRunId: docVersions.reviewNodeRunId,

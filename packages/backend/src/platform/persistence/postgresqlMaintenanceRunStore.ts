@@ -1,8 +1,9 @@
 import type { MaintenanceJobKey } from '@agent-workflow/shared'
-import { and, asc, desc, eq, inArray, lt, lte, ne, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, lt, lte, ne, sql } from 'drizzle-orm'
 
 import { maintenanceRuns } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { descNullsLast } from '@/platform/persistence/postgresqlNullOrdering'
 import type {
   ClaimedMaintenanceRun,
   MaintenanceRunRecord,
@@ -331,13 +332,13 @@ export function createPostgresqlMaintenanceRunStore(
           .select()
           .from(maintenanceRuns)
           .where(eq(maintenanceRuns.state, 'running'))
-          .orderBy(desc(maintenanceRuns.startedAt))
+          .orderBy(descNullsLast(maintenanceRuns.startedAt))
           .limit(1),
         db
           .select()
           .from(maintenanceRuns)
           .where(inArray(maintenanceRuns.state, ['succeeded', 'failed']))
-          .orderBy(desc(maintenanceRuns.finishedAt))
+          .orderBy(descNullsLast(maintenanceRuns.finishedAt))
           .limit(1),
         db
           .select()

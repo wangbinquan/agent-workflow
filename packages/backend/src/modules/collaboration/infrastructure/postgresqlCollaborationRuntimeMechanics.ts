@@ -63,6 +63,7 @@ import {
   prepareReviewGateOpen,
 } from '@/modules/collaboration/public/commands'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst, descNullsLast } from '@/platform/persistence/postgresqlNullOrdering'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { isPathishKindString, readPortArtifact } from '@/services/portArtifacts'
 import { pickFreshestRun, pickVisibleUpstreamRun } from '@/services/freshness'
@@ -772,7 +773,7 @@ async function buildPostgresqlReviewPromptContext(
         ne(docVersions.decidedBy, SYSTEM_DECIDER),
       ),
     )
-    .orderBy(desc(docVersions.decidedAt))
+    .orderBy(descNullsLast(docVersions.decidedAt))
     .limit(1)
   const version = rows[0]
   if (version === undefined) return undefined
@@ -795,7 +796,7 @@ async function buildPostgresqlReviewPromptContext(
           ne(docVersions.decidedBy, SYSTEM_DECIDER),
         ),
       )
-      .orderBy(asc(docVersions.itemIndex))
+      .orderBy(ascNullsFirst(docVersions.itemIndex))
     context = {
       comments: round
         .map((row) => (row.decisionReason ?? '').trim())

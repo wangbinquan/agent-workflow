@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm'
 
 import { nodeRuns, taskRepos, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst } from '@/platform/persistence/postgresqlNullOrdering'
 import type {
   CodeNodeRunSnapshot,
   CodeWorkspaceRead,
@@ -66,7 +67,7 @@ export function createPostgresqlCodeWorkspaceRead(db: PostgresqlDatabaseClient):
         .select(nodeProjection)
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(asc(nodeRuns.startedAt), asc(nodeRuns.id))
+        .orderBy(ascNullsFirst(nodeRuns.startedAt), asc(nodeRuns.id))
     },
     async findNodeRun(nodeRunId): Promise<CodeNodeRunSnapshot | null> {
       const rows = await db

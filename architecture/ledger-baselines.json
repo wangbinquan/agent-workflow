@@ -426,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6301,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6311,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-349：新增 platform/persistence/postgresqlNullOrdering.ts（ascNullsFirst / descNullsLast），让 PostgreSQL 的 NULL 排序复刻 SQLite 语义；13 个 PostgreSQL 适配器改用它，随之多出对应的 import 记账与 owner 条目。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5239,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5249,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-349：新增 platform/persistence/postgresqlNullOrdering.ts（ascNullsFirst / descNullsLast），让 PostgreSQL 的 NULL 排序复刻 SQLite 语义；13 个 PostgreSQL 适配器改用它，随之多出对应的 import 记账与 owner 条目。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25703,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25706,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349：新增 platform/persistence/postgresqlNullOrdering.ts（ascNullsFirst / descNullsLast），让 PostgreSQL 的 NULL 排序复刻 SQLite 语义；13 个 PostgreSQL 适配器改用它，随之多出对应的 import 记账与 owner 条目。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2a0960d9528f5a8e0ffd9ba5e895eaeafb825af35b97538567f9068fb28c1f86",
+    "sourceDigest": "sha256:03bb61c5b535d39535d488740ba9bde8e1cae820487a60874c6e502a4bb29e8e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e8134c5c5ae5734cd5870cdcc3a1b9c948074d23",
-    "contentDigest": "sha256:b980509766c57f7bf219a13b120bec9d56456a9c0d45ea42156c15d9336cbff9",
+    "currentSnapshotSha": "db26e5f432943bf5769ddb4ef341ae3c1165617b",
+    "contentDigest": "sha256:30acd998293887dd5dcdf756e552ed906761f16d1528c28b9da378d8e390d238",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

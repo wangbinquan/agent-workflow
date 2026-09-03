@@ -10,6 +10,7 @@ import { and, asc, desc, eq, gte, isNotNull } from 'drizzle-orm'
 
 import { clarifyRounds, committedEvents, docVersions, taskQuestions, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { ascNullsFirst, descNullsLast } from '@/platform/persistence/postgresqlNullOrdering'
 import type { CollaborationCommittedEventProjection } from '../application/ports/collaborationCommittedEventProjection'
 import {
   decodeCollaborationCommittedEvent,
@@ -95,7 +96,7 @@ async function openFrames(
       .where(
         and(eq(docVersions.reviewNodeRunId, gate.nodeRunId), eq(docVersions.decision, 'pending')),
       )
-      .orderBy(asc(docVersions.itemIndex), asc(docVersions.versionIndex))
+      .orderBy(ascNullsFirst(docVersions.itemIndex), asc(docVersions.versionIndex))
       .limit(1)
     const document = documents[0]
     return document === undefined
@@ -182,7 +183,7 @@ async function decisionFrames(
         isNotNull(taskQuestions.triggerRunId),
       ),
     )
-    .orderBy(desc(taskQuestions.dispatchedAt), desc(taskQuestions.updatedAt))
+    .orderBy(descNullsLast(taskQuestions.dispatchedAt), desc(taskQuestions.updatedAt))
     .limit(1)
   const entries = await db
     .select({ id: taskQuestions.id })

@@ -12685,6 +12685,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2336fe40ed208fe40d35",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "descNullsLast",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts",
       "fromSymbol": "$file",
@@ -15097,6 +15114,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:29e64f370accfd5c97e9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/maintenance.ts#$file",
@@ -15315,6 +15349,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#maintenanceState",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "maintenanceState",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2aa1129657d18d22d722",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -18970,6 +19021,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionOwners",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionOwners",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/postgresqlEventStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/infrastructure/postgresqlEventStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:34b04e28d87829ae404d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -29938,6 +30006,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:54d3a12c30c7cc3820a5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts#$file",
@@ -39013,6 +39098,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
       "toPath": "packages/backend/src/util/log.ts",
       "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6e915bec95f7425b6ef7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "descNullsLast",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -52937,6 +53039,23 @@
       "toPath": "packages/backend/src/modules/collaboration/composition.ts",
       "toSymbol": "gateDecisionReceipt",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeWorkspaceRead.ts#$file",
+      "fromPath": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeWorkspaceRead.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:980284a1460341dfcce8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "code-capability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -76792,6 +76911,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlRuntimeStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlRuntimeStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dc33ac8ad4b50651e34e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
       "fromPath": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "fromSymbol": "$file",
@@ -87740,6 +87876,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fc8373dbecd3f2efc4b8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "ascNullsFirst",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/digitalEmployeeAgentTemplates.ts#$file",
       "fromPath": "packages/backend/src/services/digitalEmployeeAgentTemplates.ts",
       "fromSymbol": "$file",
@@ -87905,6 +88058,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlReactionRoundQueries.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlReactionRoundQueries.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fd0da7c361781578a2be",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toSymbol": "descNullsLast",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -89065,9 +89235,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5239,
+    "architectureExceptions": 5249,
     "implementationSccs": 0,
-    "observedEdges": 6301,
+    "observedEdges": 6311,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -103237,6 +103407,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts#$file",
+      "id": "import:2336fe40ed208fe40d35",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "descNullsLast",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteWorkgroupRepository.ts#$file",
@@ -105956,6 +106142,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
+      "id": "import:29e64f370accfd5c97e9",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/composition/maintenance.ts",
@@ -106178,6 +106380,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#maintenanceState"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationCommittedEventProjection.ts#$file",
+      "id": "import:2aa1129657d18d22d722",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
     },
     {
       "edgeKind": "value",
@@ -110354,6 +110572,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionOwners"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/infrastructure/postgresqlEventStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/postgresqlEventStore.ts#$file",
+      "id": "import:34b04e28d87829ae404d",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
     },
     {
       "edgeKind": "type",
@@ -122884,6 +123118,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#commitWorkgroupCreateInTx"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts#$file",
+      "id": "import:54d3a12c30c7cc3820a5",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/persistence/postgresqlResourcePackageAtomicApply.ts",
@@ -133362,6 +133612,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/log.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
+      "id": "import:6e915bec95f7425b6ef7",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "descNullsLast",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast"
     },
     {
       "edgeKind": "value",
@@ -149250,6 +149516,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "code-capability",
+      "fromFile": "packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeWorkspaceRead.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCodeWorkspaceRead.ts#$file",
+      "id": "import:980284a1460341dfcce8",
+      "owner": "code-capability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
     },
     {
       "edgeKind": "value",
@@ -176213,6 +176495,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlRuntimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlRuntimeStore.ts#$file",
+      "id": "import:dc33ac8ad4b50651e34e",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/bundle/legacyResourcePackageMutationDependencies.ts#$file",
@@ -188405,6 +188703,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file",
+      "id": "import:fc8373dbecd3f2efc4b8",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "ascNullsFirst",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#ascNullsFirst"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/digitalEmployeeAgentTemplates.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/digitalEmployeeAgentTemplates.ts#$file",
@@ -188658,6 +188972,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookEndpoints"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/postgresqlReactionRoundQueries.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/postgresqlReactionRoundQueries.ts#$file",
+      "id": "import:fd0da7c361781578a2be",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlNullOrdering",
+      "syntax": "static-import",
+      "targetSymbol": "descNullsLast",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlNullOrdering.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlNullOrdering.ts#descNullsLast"
     },
     {
       "edgeKind": "value",
@@ -190429,7 +190759,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2a0960d9528f5a8e0ffd9ba5e895eaeafb825af35b97538567f9068fb28c1f86",
+  "sourceDigest": "sha256:03bb61c5b535d39535d488740ba9bde8e1cae820487a60874c6e502a4bb29e8e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
