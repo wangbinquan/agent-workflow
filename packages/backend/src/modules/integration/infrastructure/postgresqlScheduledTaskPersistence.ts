@@ -340,7 +340,11 @@ export function createPostgresqlScheduledTaskPersistence(
           .update(scheduledTasks)
           .set({
             consecutiveFailures: sql`${scheduledTasks.consecutiveFailures} + 1`,
-            enabled: sql`CASE WHEN ${scheduledTasks.consecutiveFailures} + 1 >= ${input.maxFailures} THEN 0 ELSE ${scheduledTasks.enabled} END`,
+            // `THEN false`，不是 `THEN 0`：`enabled` 在 PostgreSQL 投影里是 boolean，混进
+            // 整数会让整条 CASE 以 `CASE types boolean and integer cannot be matched`
+            // （42804）失败，连锁失败次数也就永远攒不到自动停用。SQLite 认 false 为 0，
+            // 两侧因此可以保持同一份写法。见 rfc349-boolean-expression-parity.test.ts。
+            enabled: sql`CASE WHEN ${scheduledTasks.consecutiveFailures} + 1 >= ${input.maxFailures} THEN false ELSE ${scheduledTasks.enabled} END`,
             updatedAt: input.recordedAt,
           })
           .where(and(eq(scheduledTasks.id, input.id), eq(scheduledTasks.enabled, true)))
