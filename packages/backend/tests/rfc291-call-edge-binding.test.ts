@@ -201,7 +201,7 @@ describe('resolve 侧：回写不丢绑定（AC-19）', () => {
               name: 'parent-flow',
               description: 'edited',
               definition: {
-                $schema_version: 5,
+                $schema_version: 6, // RFC-354: the authoring boundary takes the current schema
                 inputs: [],
                 nodes: [
                   {
@@ -253,7 +253,7 @@ describe('resolve 侧：回写不丢绑定（AC-19）', () => {
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 5,
+                $schema_version: 6, // RFC-354: the authoring boundary takes the current schema
                 inputs: [],
                 nodes: [{ id: 'c1', kind: 'call-workflow', workflowName: 'some-target' }],
                 edges: [],
@@ -280,7 +280,7 @@ describe('resolve 侧：回写不丢绑定（AC-19）', () => {
               name: 'caller-flow',
               description: '',
               definition: {
-                $schema_version: 5,
+                $schema_version: 6, // RFC-354: the authoring boundary takes the current schema
                 inputs: [],
                 nodes: [
                   {
