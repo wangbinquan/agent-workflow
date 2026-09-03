@@ -15,6 +15,7 @@
 // 改了等于换了一个工作流，存量融合任务的重放会对不上。
 
 import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
 import { PLATFORM_FUSION_DIR, PLATFORM_FUSION_MANIFEST } from '@agent-workflow/shared'
 
 import {
@@ -24,6 +25,48 @@ import {
 } from '../src/modules/knowledge-evolution/domain/fusionPrompt'
 import { canonicalFusionWorkflowDefinition } from '../src/modules/knowledge-evolution/domain/fusionWorkflowSeed'
 import { isValidFusionTransition } from '../src/modules/knowledge-evolution/domain/fusionStateMachine'
+
+/** 16 位就够当绊线；全长哈希在失败信息里只是噪音。 */
+const digest = (text: string): string =>
+  createHash('sha256').update(text, 'utf8').digest('hex').slice(0, 16)
+
+// ---------------------------------------------------------------------------
+// 字节级绊线
+//
+// 下面的 landmark 断言只能逮**已知**段落被删；逮不住未知的截断、少抄一句、改一个词。
+// 这三条 digest 是兜底：任何一个字节的变化都当场红。
+//
+// **红了怎么办**：先分清是「手滑」还是「有意改内建 agent 的契约」。
+//   - 手滑（平移 / 合并 / 编辑器自动换行）：把文本改回去，别改这里的数字；
+//   - 有意改：那是产品行为变更——把新数字与**为什么改**写进同一笔提交，
+//     让下一个人能从这行 diff 追到那次决定。
+// 绝不允许「红了就更新数字」当作例行操作。
+// ---------------------------------------------------------------------------
+describe('RFC-353 T4 — 内建文本的字节级绊线', () => {
+  test('MERGER_BODY 逐字节未变（初稿正是在这里漏抄了 425 个字符）', () => {
+    expect({ length: MERGER_BODY.length, digest: digest(MERGER_BODY) }).toEqual({
+      length: 2260,
+      digest: '118c2dd39ed7d7e3',
+    })
+  })
+
+  test('MERGER_PROMPT_TEMPLATE 逐字节未变', () => {
+    expect({
+      length: MERGER_PROMPT_TEMPLATE.length,
+      digest: digest(MERGER_PROMPT_TEMPLATE),
+    }).toEqual({ length: 268, digest: '873e4524b0fa4eef' })
+  })
+
+  test('内建工作流图逐字节未变（多一个字段也红）', () => {
+    const def = canonicalFusionWorkflowDefinition({
+      workflowId: 'wf',
+      workflowName: 'n',
+      mergerAgentId: 'a',
+      mergerAgentName: 'm',
+    })
+    expect(digest(JSON.stringify(def))).toBe('6de90c3c24f5b59a')
+  })
+})
 
 describe('RFC-353 T4 — merger agent 正文的行为契约', () => {
   test('必答澄清那一条还在', () => {
