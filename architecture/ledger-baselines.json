@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6313,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-352 T6（RFC-294 W4-E2）：蒸馏 1274 行从 `services/memoryDistiller.ts` 整体迁进 `modules/memory/application/distill/`，提示词常量下沉 `domain/distillPrompt.ts`。一份 legacy 文件变成两份模块文件，且迁位让它对 legacy 的 7 条依赖第一次成为可记账的 module→legacy 边（迁位前是 legacy→legacy，跨域图里看不见），因此 owner / observed-import / exception 各涨一次。涨的是账本的分辨率，不是新债。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5251,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-352 T6（RFC-294 W4-E2）：蒸馏 1274 行从 `services/memoryDistiller.ts` 整体迁进 `modules/memory/application/distill/`，提示词常量下沉 `domain/distillPrompt.ts`。一份 legacy 文件变成两份模块文件，且迁位让它对 legacy 的 7 条依赖第一次成为可记账的 module→legacy 边（迁位前是 legacy→legacy，跨域图里看不见），因此 owner / observed-import / exception 各涨一次。涨的是账本的分辨率，不是新债。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -489,14 +483,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25704,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-352 T6（RFC-294 W4-E2）：蒸馏 1274 行从 `services/memoryDistiller.ts` 整体迁进 `modules/memory/application/distill/`，提示词常量下沉 `domain/distillPrompt.ts`。一份 legacy 文件变成两份模块文件，且迁位让它对 legacy 的 7 条依赖第一次成为可记账的 module→legacy 边（迁位前是 legacy→legacy，跨域图里看不见），因此 owner / observed-import / exception 各涨一次。涨的是账本的分辨率，不是新债。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:08bc94eed6634d0f7f5ea8234dffac19e13f6f850dff7dd85922ea6eab3c28fb",
+    "sourceDigest": "sha256:0326da0384f5ea397ddf964c647f64a41ca7dc460bfe4a58b7f59c40fb281295",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -509,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e48508ee4c5506f39d907a340a0d15f787726caa",
-    "contentDigest": "sha256:f78011a5c616583bb78f709660ff173208aacd9d0a92ddbd36e73f616a94630c",
+    "currentSnapshotSha": "c1e73d111c8340d134c2b1e4c9bb39c8c003d573",
+    "contentDigest": "sha256:5e34573e30d5c0b009a157c4b86fbbe77e3047c08cf6ccc7bdba83d7c3bca126",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

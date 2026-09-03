@@ -218,18 +218,29 @@ async function assertTargetCoverage(input: {
     `SELECT table_id, chunk_index, row_count FROM ${metadataTable('logical_copy_chunks')} WHERE operation_id = $1 ORDER BY table_id, chunk_index`,
     [input.operationId],
   )
-  const receiptsByTable = new Map<string, readonly Record<string, unknown>[]>()
+  // RFC-349 —— 这个分组必须是线性的。
+  //
+  // 原来每收一条回执就 `set(tableId, [...current, receipt])` 重建一次数组，对某张表的
+  // k 个分片就是 1+2+…+k 次元素拷贝——**O(k²)**。full 种子里 `node_run_events` 是 1000 万行
+  // ÷ 每片 1000 行 = **1 万个分片**，于是这一个循环要做约 5000 万次同步拷贝；同一循环里
+  // 还按表名对 184 张表做线性 `find`。bun 是单线程的，这段纯同步工作把 daemon 的事件循环
+  // 整个按住：4.5GB / 100 客户端全量取证实测 `verifying` 阶段停顿 **2.8 秒**，100 个客户端
+  // 的 status 轮询同时被拖到 2.8 秒；同样的跑批在 small 种子（分片数少两个数量级）上
+  // 事件循环最大只有 108ms——正是 O(k²) 的指纹。
+  const tablesById = new Map(input.contract.tables.map((table) => [table.id, table]))
+  const receiptsByTable = new Map<string, Record<string, unknown>[]>()
   for (const receipt of receiptRows) {
     const tableId = typeof receipt.table_id === 'string' ? receipt.table_id : ''
-    const table = input.contract.tables.find((candidate) => candidate.id === tableId)
+    const table = tablesById.get(tableId)
     if (table === undefined || table.disposition === 'ARCHIVE_THEN_OMIT') {
       throw new PostgresqlLogicalTargetError(
         'postgresql-target-verification',
         'PostgreSQL target has copy receipts outside the active logical table roster',
       )
     }
-    const current = receiptsByTable.get(tableId) ?? []
-    receiptsByTable.set(tableId, [...current, receipt])
+    const current = receiptsByTable.get(tableId)
+    if (current === undefined) receiptsByTable.set(tableId, [receipt])
+    else current.push(receipt)
   }
 
   for (const table of input.contract.tables) {
