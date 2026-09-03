@@ -48,22 +48,22 @@ T1 生成报告必须把表按 bounded context、prefix、consumer、row estimat
 状态列于 2026-09-02 按 live source 重采（此前整张表停在 Draft 期的 Pending，与已落地的 216 个 PostgreSQL adapter、128 个
 `rfc349-*` 测试文件严重不符）。**「源码已落地」不等于「已验收」**：T10 的 hosted evidence 至今一次都没有绿过，因此 T10/T11 仍未完成。
 
-| 任务        | 内容                                                                                                   | 依赖       | 状态（2026-09-02 live）                                                                                                               |
-| ----------- | ------------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| RFC-349-T0  | proposal/design/plan、RFC index、STATE；只读 source audit                                              | —          | Done                                                                                                                                  |
-| RFC-349-T1  | 用户批准 D1～D14；fresh source-lock、owner/index/remote/candidate-gate audit                           | T0         | Done（184 表 / 222 migration 已落 `schemaContract.ts`）                                                                               |
-| RFC-349-T2  | 184-table schema/consumer contract、双 provider behavior oracle、旧实现 red targets                    | T1         | Done（`buildLogicalSchemaContract` + `rfc349-dual-provider-behavior-oracle`）                                                         |
-| RFC-349-T3  | provider config/runtime/factory、PostgreSQL pool/health/timeout、generation pointer skeleton           | T2         | Done（`databaseProviderRuntime` / `generationStore` / `postgresqlRuntime`）                                                           |
-| RFC-349-T4  | 双 dialect schema、PostgreSQL baseline/forward migrations、codec/constraint projector                  | T2–T3      | Done（`postgresqlSchema` / `postgresqlMigrator` / `postgresqlMigrationHistory`）                                                      |
-| RFC-349-T5  | 全业务 application port + SQLite/PostgreSQL adapter cohort cutover；旧 DB surface 归零                 | T3–T4      | Done（216 个 `postgresql*` adapter；provider-cutover 架构门守 exact 债表）                                                            |
-| RFC-349-T6  | backup/restore/doctor/maintenance/start/runtime provider matrix cutover                                | T4–T5      | Done                                                                                                                                  |
-| RFC-349-T7  | durable one-click migration engine：preflight/freeze/backup/copy/verify/cutover/rollback               | T4–T6      | Done（`databaseMigrationRunner` / `ControlPlane` / `Coordinator`）                                                                    |
-| RFC-349-T8  | 六张 legacy 表 logical archive + target omit；schema count/report gate                                 | T2、T4、T7 | Done（`RFC349_ARCHIVE_THEN_OMIT_TABLES` 六项 + schema 门）                                                                            |
-| RFC-349-T9  | system-operations command/query、Settings/CLI/status/progress/cancel/resume/finalize                   | T7–T8      | Done（`routes/databaseMigrations.ts` + `DatabaseMigrationSection.tsx` + e2e）                                                         |
-| RFC-349-T10 | dual-provider full regression、fault/mutation、large migration、100-client soak、三平台 compiled smoke | T3–T9      | **In Progress**：三平台 compiled、crash 26/26、三相位 0 错误、迁移 0 错误均已绿；只剩 `copying` 的 688.5ms 事件循环停顿待归因（见下） |
-| RFC-349-T11 | exact publication、remote/hosted exact-SHA、canonical/provenance/RFC-294/STATE closeout                | T10        | **Pending**（AC-14/AC-15 未满足，不得标 Done）                                                                                        |
+| 任务        | 内容                                                                                                   | 依赖       | 状态（2026-09-02 live）                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| RFC-349-T0  | proposal/design/plan、RFC index、STATE；只读 source audit                                              | —          | Done                                                                                                                                                                                                                                                                                             |
+| RFC-349-T1  | 用户批准 D1～D14；fresh source-lock、owner/index/remote/candidate-gate audit                           | T0         | Done（184 表 / 222 migration 已落 `schemaContract.ts`）                                                                                                                                                                                                                                          |
+| RFC-349-T2  | 184-table schema/consumer contract、双 provider behavior oracle、旧实现 red targets                    | T1         | Done（`buildLogicalSchemaContract` + `rfc349-dual-provider-behavior-oracle`）                                                                                                                                                                                                                    |
+| RFC-349-T3  | provider config/runtime/factory、PostgreSQL pool/health/timeout、generation pointer skeleton           | T2         | Done（`databaseProviderRuntime` / `generationStore` / `postgresqlRuntime`）                                                                                                                                                                                                                      |
+| RFC-349-T4  | 双 dialect schema、PostgreSQL baseline/forward migrations、codec/constraint projector                  | T2–T3      | Done（`postgresqlSchema` / `postgresqlMigrator` / `postgresqlMigrationHistory`）                                                                                                                                                                                                                 |
+| RFC-349-T5  | 全业务 application port + SQLite/PostgreSQL adapter cohort cutover；旧 DB surface 归零                 | T3–T4      | Done（216 个 `postgresql*` adapter；provider-cutover 架构门守 exact 债表）                                                                                                                                                                                                                       |
+| RFC-349-T6  | backup/restore/doctor/maintenance/start/runtime provider matrix cutover                                | T4–T5      | Done                                                                                                                                                                                                                                                                                             |
+| RFC-349-T7  | durable one-click migration engine：preflight/freeze/backup/copy/verify/cutover/rollback               | T4–T6      | Done（`databaseMigrationRunner` / `ControlPlane` / `Coordinator`）                                                                                                                                                                                                                               |
+| RFC-349-T8  | 六张 legacy 表 logical archive + target omit；schema count/report gate                                 | T2、T4、T7 | Done（`RFC349_ARCHIVE_THEN_OMIT_TABLES` 六项 + schema 门）                                                                                                                                                                                                                                       |
+| RFC-349-T9  | system-operations command/query、Settings/CLI/status/progress/cancel/resume/finalize                   | T7–T8      | Done（`routes/databaseMigrations.ts` + `DatabaseMigrationSection.tsx` + e2e）                                                                                                                                                                                                                    |
+| RFC-349-T10 | dual-provider full regression、fault/mutation、large migration、100-client soak、三平台 compiled smoke | T3–T9      | **Done**：exact SHA `b3883154e` 的 hosted `postgresql-evidence` **Verdict PASS**（run `33722869768`）——crash/resume 26/26、三平台 compiled 全绿、三相位各 0 错误、迁移 0 错误、event-loop max 493.6ms（门槛 500）                                                                                |
+| RFC-349-T11 | exact publication、remote/hosted exact-SHA、canonical/provenance/RFC-294/STATE closeout                | T10        | **进行中**：`b3883154e` 上 Main CI run `33722386454` terminal success、hosted evidence run `33722869768` 取证 job 全绿，但该 run 整体因一条从未真正跑过的回归 lane 的拓扑缺陷未 terminal（`adcea41bf` 已修并加守卫）；AC-15 的最终 exact-SHA 九门收口进行中。verification.md 钉住全部 SHA 与数字 |
 
-**T10 的进展与唯一未关闭项（2026-09-03 按实跑重写）**
+**T10 的实跑记录（2026-09-03，已关闭）**
 
 此前记的 `sqlite-source-mutated` 与「四个 background ticker 在可暂停 factory 之外」都**已不成立**：前者的根因是 SQLite 侧的
 post-commit 投影泵是裸注册、活过整个冻结窗口（PostgreSQL daemon 早就把它组装成可暂停 handle），已收成两侧同构并由
@@ -111,14 +111,22 @@ idempotency / outbox / ordering / apply-recovery，**不覆盖 node 执行的写
 唯一键冲突。本轮已用一次性探针实测过（8 个写手压同一个 node run：0 冲突、0 错误、314 ops/s），
 但没有落成常驻门——需要在矩阵里先播种 task / node_run / owner 三张表，超出本轮范围。
 
-**唯一未关闭项**：`copying` 阶段的 688.5ms 事件循环停顿（门槛 500ms）。`verifying` 的那 2.5 秒
-已定位并修掉（`assertTargetCoverage` 的回执分组是 O(k²)，1 万个分片约 5000 万次同步拷贝）。
-已确认停顿**不是** CPU 饥饿——4 个并行 index build 打 850 万行表时旁观进程的最坏事件循环间隔
-只有 8.1ms；也不是 `digestFile`（4.5GB 流式 sha256 总耗时 5.6s，但最坏间隔 4.0ms）。本机 10 核
-上同一份代码是 221.4ms、托管 2 核上是 688.5ms（约 3 倍，与 CPU 规模一致），因此当前假设是
-「阻塞式计算」与「一次大 GC」二选一。为归因给 daemon 的事件循环采样器加了两件事：门槛可用
-`AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS` 临时调低（默认仍 1s），每条 stall 记录**堆用量与
-增量**（GC 停顿之后堆会掉一大块，阻塞计算不会）。结论落定前不动 `EVENT_LOOP_GAP_MS = 500`。
+**最后一项（`copying` 的事件循环停顿）已关闭**。归因靠两件新工具：daemon 采样器门槛可用
+`AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS` 调低、每条 stall 记录堆用量与增量。调到 120ms 后本机
+测到 180 次 ≥120ms、最坏 251ms、**堆增量为正**——是分配密集的阻塞计算，不是 GC，也不是 fsync
+（同机同时段 fsync p95 0.1ms）；托管侧同期 266 次 ≥300ms、p50 363ms，签名一致。根因是拷贝循环
+每块的三处重复工作，逐一删掉后（同进程 A/B：`tasks` 55.2→12.5ms、`node_runs` 40.1→9.7ms）：
+
+|                | 托管 `40b76d0df` |            托管 `b3883154e` |
+| -------------- | ---------------: | --------------------------: |
+| event-loop max |       654.9ms ❌ |              **493.6ms ✅** |
+| 迁移耗时       |           3,528s |        **2,019s（−42.8%）** |
+| 吞吐           |    3,743.6 行/秒 | **6,543.8 行/秒（+74.8%）** |
+| status p95     |          150.2ms |        **57.7ms（−61.6%）** |
+
+`EVENT_LOOP_GAP_MS = 500` 与 `HARD_FREEZE_MS = 1000` 两条门槛全程未做任何调整。`verifying`
+那 2.5 秒（`assertTargetCoverage` 的 O(k²) 回执分组）在更早一轮已修。已确认停顿**不是** CPU
+饥饿——4 个并行 index build 打 850 万行表时旁观进程最坏间隔只有 8.1ms。
 
 关键路径：
 

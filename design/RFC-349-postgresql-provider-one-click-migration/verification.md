@@ -3,8 +3,12 @@
 本文件是 T11-B 要求的 verification report：把每一轮取证的**确切 SHA、确切数字**钉在这里，
 让任何人都能按图复跑或反驳。**不写结论性形容词，只写测出来的数**。
 
-状态：hosted `postgresql-evidence` 的 exact-SHA 正式门尚未绿（见 §3），因此 RFC-349 仍不是
-Done。本机全量取证已 PASS，记在 §2。
+状态：**功能面已闭合，AC-15 全门收口进行中**。exact implementation SHA
+`b3883154eb1cfe575e578ee3cf2664fbb57ce797` 上 Main CI run `33722386454` terminal success；
+同 SHA 的 hosted `postgresql-evidence`（run `33722869768`）取证 job 全部 success——Verdict
+**PASS**、crash/resume 26/26、三平台 compiled 全绿。**但该 run 整体 conclusion 是 failure**，
+红在取证之后一条从未真正跑过的回归 lane 上（拓扑缺陷，非产品失败；诊断与修复见 §3）。详见 §3，
+本机全量取证记在 §2，修复前后的逐项对照记在 §3 之后。
 
 ---
 
@@ -110,45 +114,66 @@ PostgreSQL**；双 provider oracle 又用「只记录 SQL 文本」的假 runtim
 
 ---
 
-## 3. hosted `postgresql-evidence`（AC-14 正式门，未完成）
+## 3. hosted `postgresql-evidence`（AC-14 正式门）
 
-| 跑批       | SHA         | 结果                                                                                                                                                                                                    |
-| ---------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-02 | `6752ec8c7` | crash/resume 26/26、三平台 compiled 全绿；但 `postgresql-maintenance` 3 个 SERIALIZABLE 逃逸、event-loop max **3628.9ms**                                                                               |
-| 2026-09-03 | `e211f1499` | 含第一轮五个修复。crash/resume **26/26**、三平台 compiled 全绿、三个相位**各 0 错误**、迁移 errors 0、status p95 86.1ms / max 659.0ms。唯一未过：**event-loop max 688.5ms ≥ 500ms**（发生在 `copying`） |
+| 跑批       | SHA                                            | 结果                                                                                                                   |
+| ---------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-02 | `6752ec8c7`                                    | crash/resume 26/26、三平台 compiled 全绿；`postgresql-maintenance` 3 个 SERIALIZABLE 逃逸、event-loop max **3628.9ms** |
+| 2026-09-03 | `e211f1499`                                    | 含第一轮五个修复。三相位各 0 错误、迁移 0 错误；唯一未过 event-loop max **688.5ms**                                    |
+| 2026-09-03 | `40b76d0df`                                    | 含六个语义修复 + 写矩阵首次在 CI 里对真库跑通。唯一未过 event-loop max **654.9ms**                                     |
+| 2026-09-03 | **`b3883154eb1cfe575e578ee3cf2664fbb57ce797`** | **Verdict PASS**（run `33722869768`）                                                                                  |
 
-`e211f1499` 的失败只剩这一条门槛。它不含本轮第二批（缺陷 6–11）的修复——那批改的是业务
-写路径，不在这次取证的负载面上，因此正式门必须在**含全部修复的最终 SHA** 上重跑。
+**最终一轮（`b3883154e`）**：
 
-**688.5ms 已归因并修掉（2026-09-03）**。把 daemon 的事件循环采样器门槛调到 120ms、每条 stall
-一并记堆用量与增量之后，本机全量迁移测到 **128 次 ≥120ms、最坏 251ms**，且**堆增量为正**
-（+1 ~ +15MiB，间或有一次 −86 / −108MiB 的回收）——是**分配密集的阻塞计算**，不是 GC 停顿，
-也不是 fsync（同机同时段实测 fsync p95 0.1ms）。
+- Crash/resume **26/26**；三平台 compiled smoke（Linux / macOS / Windows）全绿；
+- 大迁移：13,209,092 行 / **6,543.8 行每秒** / 2,018,552.8ms，**errors 0**；
+- status p95 **57.7ms** / max 651.0ms；**event-loop max 493.6ms**（门槛 500ms）；
+- 三个相位 `sqlite-normal` / `postgresql-normal` / `postgresql-maintenance` 各 **0 错误**，
+  API p95 14.4 / 35.8 / 53.7ms。
 
-顺着这条线量到根因在拷贝循环的**每块两遍重复工作**：
+与上一轮（`40b76d0df`，同口径、同 runner 规格）的逐项对照，差别只有本轮那三处迁移路径的减法：
 
-| 每块（250 行）    |   文件 | verify | serialize | 写入合计 |
-| ----------------- | -----: | -----: | --------: | -------: |
-| `tasks`           | 2.03MB | 18.5ms |     9.2ms |   28.0ms |
-| `node_runs`       | 1.75MB | 22.0ms |    16.1ms |   30.1ms |
-| `node_run_events` | 0.24MB |  2.5ms |     1.8ms |    4.7ms |
+| 指标                  |   `40b76d0df` |       `b3883154e` |   变化 |
+| --------------------- | ------------: | ----------------: | -----: |
+| event-loop max        |    654.9ms ❌ |    **493.6ms ✅** | −24.6% |
+| 迁移耗时              | 3,528,429.8ms | **2,018,552.8ms** | −42.8% |
+| 拷贝吞吐              | 3,743.6 行/秒 | **6,543.8 行/秒** | +74.8% |
+| status p95            |       150.2ms |        **57.7ms** | −61.6% |
+| 迁移错误 / 三相位错误 |     0 / 0-0-0 |         0 / 0-0-0 |      — |
 
-两处都是纯重复：①写完立刻 `readLogicalTableChunk` 读回来（再 `JSON.parse` + Zod + 摘要一遍），
-而文件刚 fsync 完、读的是页缓存；②`createLogicalTableChunk` 刚构造出来的块在写路径又被
-`verifyLogicalTableChunk` 验一遍，而它的 payload 刚过 Zod、digest 刚按同一份 canonical JSON
-算过。同一进程里的 A/B：
+排名最前的 12 条停顿仍是 `accepting-writes` 阶段 ~651ms 的 status 等待——那是**割接窗口本身**
+（`handover()` 屏障，进程级 provider 选择正在移动时把新到达的 listener 调用挡住），有意、有界，
+硬门槛 `HARD_FREEZE_MS = 1000` 留有 35% 余量；D3 本来就写明 V1 是维护窗口、不承诺零停机。
 
-| 每块                     | 旧路径 |     新路径 | 降幅 |
-| ------------------------ | -----: | ---------: | ---: |
-| `tasks` 2.03MB           | 55.2ms | **12.5ms** | −77% |
-| `node_runs` 1.75MB       | 40.1ms |  **9.7ms** | −76% |
-| `node_run_events` 0.24MB |  7.4ms |  **2.2ms** | −71% |
+#### 同 run 里 `Full regression (backend)` lane 的中断：lane 拓扑缺陷，非产品失败
 
-「构造即已校验」的标记住在模块私有的 WeakSet 里，只有构造函数往里加；从磁盘 / 网络 / 调用方
-手里拿到的对象都进不来，照旧完整校验，构造出来的块另外 `Object.freeze`。守卫见
-`rfc349-chunk-write-no-readback.test.ts`（含「篡改的块仍然抛 corrupt」「构造出来的块不可改写」）。
+`b3883154e` 是这条 lane **有史以来第一次真正执行**——此前每个 evidence run 的取证 job 都是红的，
+`needs: [crash-large-and-soak, compiled-external-postgresql]` 把它全 skip 了（近 8 个 run 逐个查过，
+该 job 的 conclusion 一律缺席）。两次执行都以
+`The runner has received a shutdown signal / The operation was canceled` 中断，证据链：
 
-`EVENT_LOOP_GAP_MS = 500` 这条门槛**没有动过**。
+| 观测              | 第 1 次                       | 第 2 次                       |
+| ----------------- | ----------------------------- | ----------------------------- |
+| 起止              | 07:13:41Z → 07:33:37Z（~20m） | 07:42:49Z → 08:05:37Z（~23m） |
+| 失败断言 `(fail)` | **0**                         | **0**                         |
+| 断点              | `skill-zip-commit` 附近       | `rfc199-…-ratchet` 附近       |
+| 已跑通用例        | 8,895                         | 9,158                         |
+
+（日志里 grep 到的三条 `(fail)` 是**测试名里含 "(fail)" 字样**的 `(pass)` 行，非真失败。）
+
+- **不是超时**：job 声明 `timeout-minutes: 90`，两次都在 20–23 分钟被掐；超时的报错文案也不是这条。
+- **不是产品回归**：同一 SHA 上 Main CI（run `33722386454`）用**四个 ~7m 的 ubuntu 分片**跑完
+  **同一批文件、同一套 env**（`RUN_GIT_NETWORK=1` + `RUN_CHAOS=1`），八片（ubuntu×4 + macOS×4）
+  全绿；两次断点还不在同一个文件。
+- **是 lane 自身的拓扑**：Main CI 早就写明后端套件（~740 文件、`--isolate` 串行）必须分片，
+  这条 lane 却把四片的量塞进一台 VM 串行跑（~29m + 4 倍的临时产物），从没被验证过能跑完。
+
+修复（`adcea41bf`）：lane 按 Main CI 同样确定性分 4 片。Bun 按路径分配，每个文件仍恰好跑一次，
+覆盖面不变，单 VM 负载降到 1/4。新增守卫锁住这个拓扑——四条 backend lane 对应 shard 1..4 无缺口、
+step 条件收所有分片、与 Main CI 参照拓扑对齐；实测把 lane 改回单片时该用例变红（缺一片会静默
+少跑四分之一套件却仍报绿，所以逐条断言）。
+
+`EVENT_LOOP_GAP_MS = 500` 与 `HARD_FREEZE_MS = 1000` 两条门槛全程**未做任何调整**。
 
 ### 修复后的本机对照跑批（同一台机器、同一数据集）
 

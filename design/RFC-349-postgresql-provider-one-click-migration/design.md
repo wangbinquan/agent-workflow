@@ -1,7 +1,9 @@
 # RFC-349 设计 — 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract
 
-配套 [`proposal.md`](./proposal.md)。当前状态：Approved / In Progress；用户已于 2026-08-31 批准 D1～D14，并授权完整实现、
-commit 与 push。
+配套 [`proposal.md`](./proposal.md)。当前状态：**Approved / Closing（2026-09-03）**——exact SHA
+`b3883154eb1cfe575e578ee3cf2664fbb57ce797` 上 Main CI terminal success、hosted
+`postgresql-evidence` 取证 job 全绿；AC-15 的最终 exact-SHA 全门收口进行中，取证逐项见
+[`verification.md`](./verification.md)。
 
 ## 1. 设计结论
 
