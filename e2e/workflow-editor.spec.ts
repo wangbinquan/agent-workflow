@@ -550,7 +550,7 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     await inspector.locator('.dialog__close').click()
 
     // Canvas Add → review, still without drag/touch precision gestures. A
-    // review without inputSource is intentionally invalid; the seeded agent's
+    // review without a source edge is intentionally invalid; the seeded agent's
     // markdown output is compatible and the same connection planner repairs it.
     await page.getByTestId('workflow-canvas-add').click()
     const palette = page.getByTestId('workflow-node-picker-dialog')
@@ -574,14 +574,40 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
     inspector = page.getByTestId('workflow-editor-inspector-surface')
     await expect(inspector).toBeVisible()
 
-    // The issue lands directly on Review's source field. Repair the connection
-    // there instead of asking a phone user to find a producer that focus/fitView
-    // may have moved outside the viewport. Choosing the source writes both
-    // inputSource and its synchronized edge; its sole reviewable Markdown port
-    // is filled automatically so the phone path does not require a second menu.
-    await inspector.getByRole('combobox', { name: 'Content source', exact: true }).click()
-    await page.getByRole('option').filter({ hasText: 'w2-3-agent-a' }).click()
-    await expect(inspector.getByTestId('review-source-port')).toContainText('answer')
+    // The issue lands directly on Review's source field, which under schema v6
+    // (RFC-354) IS the review node's single inbound edge — there is no source
+    // picker to repair it from. The phone path wires it through the zero-drag
+    // Connection Dialog instead: right-click the producer, choose the review as
+    // its next step, and the planner targets `__review_input__` on its own
+    // (ConnectionDialog.tsx — a review target needs no port choice, so the
+    // phone path still requires no second menu).
+    await expect(inspector.getByTestId('review-source-unwired')).toBeVisible()
+    await inspector.locator('.dialog__close').click()
+    await page
+      .locator('.react-flow__node')
+      .filter({ hasText: 'w2-3-agent-a' })
+      .locator('.canvas-node')
+      .click({ button: 'right' })
+    await page.getByRole('menuitem', { name: 'Connect next step', exact: true }).click()
+    await expect(page.getByTestId('connection-submit')).toBeVisible()
+    await page.getByTestId('connection-target-node').click()
+    await page
+      .getByRole('option')
+      .filter({ hasText: /review/i })
+      .click()
+    await expect(page.getByTestId('connection-target-port')).toContainText('__review_input__')
+    await page.getByTestId('connection-submit').click()
+    await expect(page.getByTestId('connection-submit')).toBeHidden()
+    await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
+    // Re-open the review: its source summary now names the producer's port.
+    await page
+      .locator('.react-flow__node')
+      .filter({ hasText: /review/i })
+      .locator('.canvas-node')
+      .click()
+    inspector = page.getByTestId('workflow-editor-inspector-surface')
+    await expect(inspector).toBeVisible()
+    await expect(inspector.getByTestId('review-source-summary')).toContainText('answer')
     await inspector.locator('.dialog__close').click()
 
     // Launch validates the exact saved revision through the same fresh gate,

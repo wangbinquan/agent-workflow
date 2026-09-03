@@ -19,7 +19,7 @@ const AGENT_CHANGESET =
   '{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:e2e-auditor","payload":{"name":"e2e-auditor","description":"audits code for e2e","outputs":["findings"],"bodyMd":"You audit."}}]}'
 
 const OVERLAPPING_WORKFLOW_CHANGESET =
-  '{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:e2e-workflow-worker","payload":{"name":"e2e-workflow-worker","description":"handles and reviews workflow requests","outputs":["draft","answer"],"bodyMd":"Complete the requested work."}},{"opId":"op-2","action":"create","resourceType":"workflow","tempRef":"$new:e2e-workflow","payload":{"name":"e2e-workflow-preview","description":"workflow graph preview fixture","definition":{"$schema_version":5,"inputs":[],"nodes":[{"id":"worker","kind":"agent-single","agentRef":"$new:e2e-workflow-worker","promptTemplate":"Produce a draft.","position":{"x":0,"y":0}},{"id":"reviewer","kind":"agent-single","agentRef":"$new:e2e-workflow-worker","promptTemplate":"Review the draft: {{draft}}","position":{"x":0,"y":0}},{"id":"final_output","kind":"output","ports":[{"name":"answer","bind":{"nodeId":"reviewer","portName":"answer"}}],"position":{"x":0,"y":0}}],"edges":[{"id":"worker_to_reviewer","source":{"nodeId":"worker","portName":"draft"},"target":{"nodeId":"reviewer","portName":"draft"}},{"id":"reviewer_to_output","source":{"nodeId":"reviewer","portName":"answer"},"target":{"nodeId":"final_output","portName":"answer"}}]}}}]}'
+  '{"$schema_version":1,"ops":[{"opId":"op-1","action":"create","resourceType":"agent","tempRef":"$new:e2e-workflow-worker","payload":{"name":"e2e-workflow-worker","description":"handles and reviews workflow requests","outputs":["draft","answer"],"bodyMd":"Complete the requested work."}},{"opId":"op-2","action":"create","resourceType":"workflow","tempRef":"$new:e2e-workflow","payload":{"name":"e2e-workflow-preview","description":"workflow graph preview fixture","definition":{"$schema_version":6,"inputs":[],"nodes":[{"id":"worker","kind":"agent-single","agentRef":"$new:e2e-workflow-worker","promptTemplate":"Produce a draft.","position":{"x":0,"y":0}},{"id":"reviewer","kind":"agent-single","agentRef":"$new:e2e-workflow-worker","promptTemplate":"Review the draft: {{draft}}","position":{"x":0,"y":0}},{"id":"final_output","kind":"output","position":{"x":0,"y":0}}],"edges":[{"id":"worker_to_reviewer","source":{"nodeId":"worker","portName":"draft"},"target":{"nodeId":"reviewer","portName":"draft"}},{"id":"reviewer_to_output","source":{"nodeId":"reviewer","portName":"answer"},"target":{"nodeId":"final_output","portName":"answer"}}]}}}]}'
 
 // RFC-254 freezes the legacy workflow stub byte-for-byte. RFC-302 opts into
 // the all-overlapping input above explicitly, without rewriting that contract.
@@ -54,7 +54,7 @@ const NESTED_CYCLE_WORKFLOW_CHANGESET = JSON.stringify({
         name: 'e2e-nested-cycle-workflow',
         description: 'nested wrapper and legal loop cycle fixture',
         definition: {
-          $schema_version: 5,
+          $schema_version: 6,
           inputs: [],
           nodes: [
             {
@@ -62,7 +62,7 @@ const NESTED_CYCLE_WORKFLOW_CHANGESET = JSON.stringify({
               kind: 'wrapper-loop',
               nodeIds: ['git_scope'],
               maxIterations: 3,
-              exitCondition: { kind: 'port-empty', nodeId: 'worker_a', portName: 'out' },
+              exitCondition: { kind: 'port-empty', portName: 'diff' },
               position: { x: 0, y: 0 },
             },
             {
@@ -96,6 +96,15 @@ const NESTED_CYCLE_WORKFLOW_CHANGESET = JSON.stringify({
               id: 'b_to_a',
               source: { nodeId: 'worker_b', portName: 'out' },
               target: { nodeId: 'worker_a', portName: 'feedback' },
+            },
+            // RFC-354 (schema v6): the loop exit reads the loop's OWN return
+            // port; `diff` is promoted from the direct member `git_scope` each
+            // round (a `wrapper-output` edge, not a v5 `exitCondition.nodeId`).
+            {
+              id: 'git_to_loop',
+              boundary: 'wrapper-output',
+              source: { nodeId: 'git_scope', portName: 'git_diff' },
+              target: { nodeId: 'outer_loop', portName: 'diff' },
             },
           ],
         },

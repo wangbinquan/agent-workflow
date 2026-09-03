@@ -74,7 +74,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 /** The judge closes `closePort`; the other branch runs. */
 function definitionFor(closePort: 'all_clear' | 'need_fix') {
   return {
-    $schema_version: 4,
+    $schema_version: 6,
     inputs: [],
     nodes: [
       {
@@ -87,16 +87,9 @@ function definitionFor(closePort: 'all_clear' | 'need_fix') {
       },
       { id: 'fixer', kind: 'agent-single', agentName: 'rfc306-worker', agentId: workerAgentId },
       { id: 'greeter', kind: 'agent-single', agentName: 'rfc306-worker', agentId: workerAgentId },
-      {
-        id: 'out_fix',
-        kind: 'output',
-        ports: [{ name: 'fix_result', bind: { nodeId: 'fixer', portName: 'summary' } }],
-      },
-      {
-        id: 'out_ok',
-        kind: 'output',
-        ports: [{ name: 'ok_result', bind: { nodeId: 'greeter', portName: 'summary' } }],
-      },
+      // RFC-354 (schema v6): an output node's ports are its inbound edges.
+      { id: 'out_fix', kind: 'output' },
+      { id: 'out_ok', kind: 'output' },
     ],
     edges: [
       {
@@ -108,6 +101,16 @@ function definitionFor(closePort: 'all_clear' | 'need_fix') {
         id: 'e_ok',
         source: { nodeId: 'judge', portName: 'all_clear' },
         target: { nodeId: 'greeter', portName: 'note' },
+      },
+      {
+        id: 'e_out_fix',
+        source: { nodeId: 'fixer', portName: 'summary' },
+        target: { nodeId: 'out_fix', portName: 'fix_result' },
+      },
+      {
+        id: 'e_out_ok',
+        source: { nodeId: 'greeter', portName: 'summary' },
+        target: { nodeId: 'out_ok', portName: 'ok_result' },
       },
     ],
   }
@@ -284,6 +287,8 @@ test('the task detail canvas greys out the path that was not taken', async ({
   // The skipped node is rendered as such…
   const skipped = page.locator('.canvas-node[data-status="skipped"]')
   await expect(skipped).toHaveCount(2, { timeout: 30_000 })
-  // …and the edge feeding it is drawn as an inactive line.
-  await expect(page.locator('.react-flow__edge.canvas-edge--inactive')).toHaveCount(1)
+  // …and every edge of the path not taken is drawn as an inactive line: the
+  // closed `need_fix` port into `fixer`, and — since RFC-354 made an output
+  // node's ports real edges — the skipped `fixer` into `out_fix` as well.
+  await expect(page.locator('.react-flow__edge.canvas-edge--inactive')).toHaveCount(2)
 })

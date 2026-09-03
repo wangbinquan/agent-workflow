@@ -559,7 +559,11 @@ test('RFC-302 nested wrappers and a legal loop cycle remain commit-ready and geo
       (op) => op.resourceType === 'workflow',
     )?.payload.definition
     expect(draftDefinition).toBeTruthy()
-    expect(draftDefinition!.edges.map((edge) => edge.id)).toEqual(['a_to_b', 'b_to_a'])
+    expect(draftDefinition!.edges.map((edge) => edge.id)).toEqual([
+      'a_to_b',
+      'b_to_a',
+      'git_to_loop',
+    ])
     const byId = new Map(draftDefinition!.nodes.map((node) => [node.id, node] as const))
     const outer = byId.get('outer_loop')!
     const inner = byId.get('git_scope')!
