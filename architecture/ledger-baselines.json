@@ -322,10 +322,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
       "baseline": 43,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。",
-      "allowGrowth": {
-        "why": "RFC-353 T5（RFC-294 W4-E3）：fusion 编排与双 provider 持久化从 `services/fusion.ts` 与 `modules/memory/infrastructure/*Fusion*` 整体迁进 knowledge-evolution，端口从 `memory/public/fusion.ts`（memory 的 NON_EXACT_PUBLIC 例外）拆成 KE 的 exact `public/{types,participants}`，并补出 `public/{commands,queries,operations}` 让 `routes/fusions.ts` / `cli/start.ts` / `system-operations` 不再直插 application（RFC-317 R1）。public 面因此 963→994——**换掉的是一个住在错误 owner 里的聚合契约**；observed-import / exception / owner 随新模块落位同涨。off-dag 账本 39→43 是同一批边把终点从 memory 换成 knowledge-evolution（形态与条数未变，只是指向了正确的 owner）。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。"
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -430,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6336,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-353 T5（RFC-294 W4-E3）：fusion 编排与双 provider 持久化从 `services/fusion.ts` 与 `modules/memory/infrastructure/*Fusion*` 整体迁进 knowledge-evolution，端口从 `memory/public/fusion.ts`（memory 的 NON_EXACT_PUBLIC 例外）拆成 KE 的 exact `public/{types,participants}`，并补出 `public/{commands,queries,operations}` 让 `routes/fusions.ts` / `cli/start.ts` / `system-operations` 不再直插 application（RFC-317 R1）。public 面因此 963→994——**换掉的是一个住在错误 owner 里的聚合契约**；observed-import / exception / owner 随新模块落位同涨。off-dag 账本 39→43 是同一批边把终点从 memory 换成 knowledge-evolution（形态与条数未变，只是指向了正确的 owner）。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -454,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5266,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-353 T5（RFC-294 W4-E3）：fusion 编排与双 provider 持久化从 `services/fusion.ts` 与 `modules/memory/infrastructure/*Fusion*` 整体迁进 knowledge-evolution，端口从 `memory/public/fusion.ts`（memory 的 NON_EXACT_PUBLIC 例外）拆成 KE 的 exact `public/{types,participants}`，并补出 `public/{commands,queries,operations}` 让 `routes/fusions.ts` / `cli/start.ts` / `system-operations` 不再直插 application（RFC-317 R1）。public 面因此 963→994——**换掉的是一个住在错误 owner 里的聚合契约**；observed-import / exception / owner 随新模块落位同涨。off-dag 账本 39→43 是同一批边把终点从 memory 换成 knowledge-evolution（形态与条数未变，只是指向了正确的 owner）。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -471,10 +462,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 994,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-353 T5（RFC-294 W4-E3）：fusion 编排与双 provider 持久化从 `services/fusion.ts` 与 `modules/memory/infrastructure/*Fusion*` 整体迁进 knowledge-evolution，端口从 `memory/public/fusion.ts`（memory 的 NON_EXACT_PUBLIC 例外）拆成 KE 的 exact `public/{types,participants}`，并补出 `public/{commands,queries,operations}` 让 `routes/fusions.ts` / `cli/start.ts` / `system-operations` 不再直插 application（RFC-317 R1）。public 面因此 963→994——**换掉的是一个住在错误 owner 里的聚合契约**；observed-import / exception / owner 随新模块落位同涨。off-dag 账本 39→43 是同一批边把终点从 memory 换成 knowledge-evolution（形态与条数未变，只是指向了正确的 owner）。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -495,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25756,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-353 T5（RFC-294 W4-E3）：fusion 编排与双 provider 持久化从 `services/fusion.ts` 与 `modules/memory/infrastructure/*Fusion*` 整体迁进 knowledge-evolution，端口从 `memory/public/fusion.ts`（memory 的 NON_EXACT_PUBLIC 例外）拆成 KE 的 exact `public/{types,participants}`，并补出 `public/{commands,queries,operations}` 让 `routes/fusions.ts` / `cli/start.ts` / `system-operations` 不再直插 application（RFC-317 R1）。public 面因此 963→994——**换掉的是一个住在错误 owner 里的聚合契约**；observed-import / exception / owner 随新模块落位同涨。off-dag 账本 39→43 是同一批边把终点从 memory 换成 knowledge-evolution（形态与条数未变，只是指向了正确的 owner）。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -515,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1e5a478939003832a8df5c617c1fd5fe86a74ca9",
-    "contentDigest": "sha256:a29be3c2ba26f87ff155b6067e22038739d8f85eff949dc0c685be4c6380dfaa",
+    "currentSnapshotSha": "250bd75607a115c47f49e946e4a438a01cd73478",
+    "contentDigest": "sha256:0bfeb76f810d0ee0d5e7dd9f4e3b70cacd9b11167bca14e797be0a8cb3a2c93b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
