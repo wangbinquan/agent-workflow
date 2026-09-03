@@ -133,18 +133,20 @@
 > 附带（属 RFC-349，非本 RFC）：e2e harness 的 daemon 诊断回显已由其 owner 在 `b0d5c5bbf` 落地并带测试——
 > 此前 `util/errors.ts` 的 `unhandled error` 只在 `E2E_VERBOSE` 下回显、CI 不设它，正是这条 500 长期被读成 flake 的原因。
 
-> 🚧 **RFC 收口中（Approved / Closing，2026-09-03）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
-> **T0–T10 全部落地，功能面已闭合**：exact implementation SHA `b3883154eb1cfe575e578ee3cf2664fbb57ce797` 上 Main CI
-> run `33722386454` terminal success；同 SHA 的 hosted `postgresql-evidence`（run `33722869768`）取证 job 全部 success——
-> **Verdict PASS**、crash/resume **26/26**、三平台 compiled smoke 全绿、大迁移 13,209,092 行 / 6,543.8 行每秒 / **errors 0**、
-> 三个相位各 **0 错误**、event-loop max **493.6ms**（门槛 500）；两条门槛 `EVENT_LOOP_GAP_MS=500` 与 `HARD_FREEZE_MS=1000`
-> 全程未调整。
-> **但该 run 整体 conclusion 是 failure**，不能记作 terminal success：取证之后的 `Full regression (backend)` lane 被
-> `The runner has received a shutdown signal` 掐断两次（~20m / ~23m，job 自报 `timeout-minutes: 90`，非超时），**零失败断言**、
-> 两次断点还不同。查明是 **lane 自身的拓扑缺陷、与产品无关**：这条 lane 被 `needs:` 里长期红的取证 job skip 了整个历史，
-> `b3883154e` 是它第一次真跑，而它把 Main CI 分 4 片才跑得完的后端套件塞进一台 VM 串行跑；同一 SHA 上 Main CI 用四个 ~7m 的
-> ubuntu 分片跑完全同一批文件、同一套 env，八片全绿。已在 `adcea41bf` 改成与 Main CI 同构分片并加守卫锁住拓扑。
-> **待办（AC-15）**：最终 SHA 的 Main CI + 九条 scheduled workflows exact-SHA 全绿后翻 Done。逐轮 SHA 与数字见
+> ✅ **RFC 已完成（Done，2026-09-03）：[RFC-349 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract](design/RFC-349-postgresql-provider-one-click-migration/proposal.md)。**
+> **产品代码冻结在 `b3883154eb1cfe575e578ee3cf2664fbb57ce797`**——此后各笔（`adcea41bf` / `1e5a47893` 及若干文档）只动 CI 配置、
+> 测试守卫与文档，`git diff b3883154e..1e5a47893 -- 'packages/*/src'` 为空。
+> **AC-14**：`b3883154e` 与 `adcea41bf` 两轮 hosted `postgresql-evidence`（run `33722869768` / `33732387691`）取证 job 均
+> **Verdict PASS**——crash/resume **26/26**、三平台 compiled smoke 全绿、1320 万行大迁移 **errors 0**、三相位各 **0 错误**、
+> event-loop max 493.6ms / 498.1ms（门槛 500）。两条门槛 `EVENT_LOOP_GAP_MS=500` 与 `HARD_FREEZE_MS=1000` 全程**未调整**。
+> **AC-15**：最终 SHA `1e5a47893` 的 Main CI **success**；九条适用 scheduled workflows 中 **8 条**在 `26c511895`（含全部产品代码）
+> 上 success。第 9 条 `postgresql-evidence` 在最终 SHA 上回归 lane 与 compiled 全绿、crash job 因**两条纯延迟门槛**未过——
+> 同代码同数据下机器吞吐只有独占跑批的 **35%**（2298 vs 6544 行/秒），`errors` 仍为 0、行数一致；**用户 2026-09-03 判定
+> 「只是时间问题就不用重跑」**，据此收口。
+> **过程**：修掉 **11 个真缺陷**（第一轮五个可用性/性能，第二轮六个**只在 PostgreSQL 上成立**的语义缺陷：identity 列渲染成 null
+> 导致 node_run_events 一条写不进、node run 热写路径 SSI 误报、LIKE 大小写、NULL 排序、count/sum 返回字符串、布尔列被赋整数），
+> 新增逐表对真库执行真 INSERT 的写矩阵与四条 parity 守卫；另修掉 evidence 回归 lane 三处从未被验证过的配置缺陷（单 VM 跑全套的
+> 单片拓扑、缺 `fetch-depth: 0`、缺 opencode 安装），各带守卫。逐轮 SHA 与数字见
 > `design/RFC-349-postgresql-provider-one-click-migration/verification.md`。
 > 起于“SQLite 重维护冻结已根治后，平台多人使用时如何切 PostgreSQL、能否一键自动迁移，以及 184 张表能否同步收缩”。Draft 裁决：
 > SQLite 继续默认；PostgreSQL server 外置，二进制只带 client/pool/schema/migration；V1 以一次 durable maintenance-window operation 自动完成

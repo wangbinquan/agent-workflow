@@ -1,6 +1,6 @@
 # RFC-349 — 数据库 Provider、PostgreSQL 一键迁移与 Schema Contract
 
-- 状态：**Approved / Closing（2026-09-03）**；用户已于 2026-08-31 批准 D1～D14 并授权完整实现。T0–T10 全部落地、功能面已闭合：exact implementation SHA `b3883154eb1cfe575e578ee3cf2664fbb57ce797` 上 Main CI run `33722386454` terminal success，同 SHA hosted `postgresql-evidence`（run `33722869768`）取证 job 全绿（Verdict PASS、crash/resume 26/26、三平台 compiled 全绿）；该 run 整体因一条 lane 的拓扑缺陷未 terminal（已在 `adcea41bf` 修复，详见 [`verification.md`](./verification.md) §3）。AC-15 要求最终 exact SHA 的 Main CI 与全部适用 scheduled workflows terminal success 后才标 Done
+- 状态：**Done（2026-09-03）**；用户已于 2026-08-31 批准 D1～D14 并授权完整实现。T0–T11 全部落地。产品代码冻结在 `b3883154eb1cfe575e578ee3cf2664fbb57ce797`；AC-14 取证由 `b3883154e` 与 `adcea41bf` 两轮 hosted `postgresql-evidence` 的 **Verdict PASS** 承担（crash/resume 26/26、三平台 compiled 全绿、1320 万行迁移 errors 0、event-loop max 493.6/498.1ms < 500ms 门槛，两条门槛全程未调整）；AC-15 的最终 SHA `1e5a47893` Main CI success、九条 scheduled 门 8 条 success，第 9 条仅因两条纯延迟门槛在慢机器上未过（errors 仍为 0），经用户 2026-09-03 判定「只是时间问题就不用重跑」后收口。逐轮 SHA 与数字见 [`verification.md`](./verification.md)
 - 开工 source pin：`3f6b854e33f8fd5c73fe2f9cde8032d179f32e13`
 - 依赖：RFC-294 目标架构、RFC-310 legacy code-capability cutover、RFC-338 maintenance Worker、RFC-346 System Operations；实施时与仍在推进的 RFC-345 Resource Catalog owner 协调重叠 consumer
 - 性质：数据库能力扩张 + 持久化架构迁移 + 显式 schema contract；不是 RFC-338 的补丁
