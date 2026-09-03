@@ -208,6 +208,21 @@ describe('daemon diagnostic echo filter', () => {
     ])
   })
 
+  test('lets the daemon event-loop stall warning through as well', () => {
+    // 一次大迁移里 daemon 冻结几百毫秒，取证报告只给一个跨窗口的 max，日志里什么都没有
+    // ——2026-09-03 追托管那 688.5ms 时缺的正是这条。stall 行自带门槛，正常跑一条都没有。
+    const filter = harnessTestApi.createDaemonDiagnosticFilter()
+
+    expect(
+      filter(
+        '[ts] INFO  [daemon] ready\n' +
+          '[ts] WARN  [maintenance-service] event loop stalled gapMs=688 heapMib=412 heapDeltaMib=-180\n',
+      ),
+    ).toEqual([
+      '[ts] WARN  [maintenance-service] event loop stalled gapMs=688 heapMib=412 heapDeltaMib=-180',
+    ])
+  })
+
   test('rejoins a record split across two chunks', () => {
     const filter = harnessTestApi.createDaemonDiagnosticFilter()
 

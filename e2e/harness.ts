@@ -410,7 +410,11 @@ function mockNpmRegistryEnv(home: string): Record<string, string> {
  * values, so even a stack stays on one line), so the filter is line-based and
  * carries the partial trailing line between chunks.
  */
-const DAEMON_DIAGNOSTIC_LINE = /\bERROR\b.*unhandled error/
+const DAEMON_DIAGNOSTIC_LINE =
+  // `event loop stalled` 一并放行：一次大迁移里 daemon 冻结几百毫秒，取证报告只会给一个
+  // 跨窗口的 max，日志里却什么都没有——2026-09-03 追托管那 688.5ms 时缺的正是这条。它有
+  // 自己的门槛（默认 1s，`AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS` 可调），正常跑一条都没有。
+  /\bERROR\b.*unhandled error|event loop stalled/
 /** Cap the carry-over so a daemon that never emits a newline cannot grow it. */
 const DAEMON_DIAGNOSTIC_CARRY_LIMIT = 64 * 1024
 
