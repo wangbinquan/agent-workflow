@@ -1690,6 +1690,24 @@ markdown-diff-table-word 新成员/macOS unsaved-guard——上轮在 Windows �
 theme-css-ratchet 三 OS 红 owning=9269c5ee(结构变更 UI 三连修复:dock hover
 误引未定义 `--fg`),已以 `var(--text)`/`var(--border-strong)` 修复另行提交。
 
+第六次复现(2026-09-03,run 33732673793 attempt 1,commit 0e9bd2907):Windows
+e2e shard 1/4 同一支 `crash-recovery.spec.ts` 再红,但**机制与前五次不同**,单独记:
+`:237` SIGKILL 用例的 retry #1 起 daemon 时被自己的单实例 flock 挡回——
+`another daemon is already running pid=8912 lock=…\.daemon.lock`,即**上一轮被
+SIGKILL 的 daemon(或其子进程)仍持锁**;紧接着 `:307` SIGTERM 用例
+`waitForStatus(A-running-sigterm)` 10s 未离开 `pending`(被同一个占锁进程连累)。
+前五次记的是 `pollUntilTerminal` 超时,属负载/预算;这次是 **Windows 上 SIGKILL
+后锁未及时释放**,更像句柄回收时序而非机器慢。attempt 2 同 SHA 全绿。
+
+归因(commit 侧已排除):当次提交只动了 `.github/workflows/postgresql-evidence.yml`
+(另一条 workflow,Main CI 不跑)、两个后端测试文件与 `docs/`;`e2e/` 与
+`packages/*/src` 对其中任何东西**零引用**(grep 确认),够不到 daemon 生命周期。
+近 14 个 main run 里这是该分片首次红。
+
+**待办**:若再见到"占锁"形态,应查 Windows 下 SIGKILL 是否只杀了父进程而留下持锁
+子进程(TerminateProcess 不递归),以及 harness 在起新 daemon 前是否该等锁真正可
+获取而不是固定等待。
+
 ## Webhook 权限面（RFC-260 评审门 F-9 登记，2026-08-06）
 
 - **`webhook-triggers:{create,update,delete}` 是 grantable-but-unrenderable 的令牌授权**（RFC-257 引入、RFC-260 评审门发现）：三点是矩阵域点、触发器写路由 `tokenAccess:'allow'`，`grantableMatrixPoints(admin)` 含它们（API 422 校验以此为界），但 `'webhook-triggers'` 不在 `MATRIX_RESOURCES` ⇒ 账户页 token 矩阵永远不渲染该行——admin 经 API 可以发出能改/删触发器的 PAT，而 UI 无法呈现或复核该授权（`permission.ts` 文件头自己警告的「authorization UI lying」镜像形态）。候选修法：把 `webhook-triggers` 纳入 `MATRIX_RESOURCES`（矩阵多一行），或把三条写路由改 `tokenAccess:'never'`（触发器写完全退出令牌面，与 fire 以 owner 身份执行的 D19 模型更一致）。需要产品拍板，未在 RFC-260 内处理（其范围是读面）。
