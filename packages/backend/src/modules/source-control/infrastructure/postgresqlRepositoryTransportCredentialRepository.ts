@@ -2,7 +2,7 @@
 // The asynchronous provider client and transaction stay infrastructure-private;
 // application/public surfaces receive only Promise-based closed records.
 
-import { and, eq, sql } from 'drizzle-orm'
+import { and, count, eq } from 'drizzle-orm'
 import { RepositoryTransportMappingV1Schema } from '@agent-workflow/shared'
 import type { CodeHostProvider, RepositoryTransportMappingV1 } from '@agent-workflow/shared'
 
@@ -178,7 +178,7 @@ async function mutationFenceMatches(
       .limit(1)
       .all(),
     tx
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: count() })
       .from(userRepositoryTransportCredentials)
       .where(eq(userRepositoryTransportCredentials.provider, provider))
       .limit(1)
@@ -325,7 +325,7 @@ export class PostgresqlRepositoryTransportCredentialRepository implements Reposi
 
   async personalCount(provider: CodeHostProvider): Promise<number> {
     const rows = await this.db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: count() })
       .from(userRepositoryTransportCredentials)
       .where(eq(userRepositoryTransportCredentials.provider, provider))
       .limit(1)

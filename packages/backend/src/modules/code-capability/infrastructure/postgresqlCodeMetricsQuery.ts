@@ -2,7 +2,7 @@
 // model. Provider SQL stays in infrastructure; application owns the bucket and
 // outcome projection shared with SQLite.
 
-import { and, eq, gte, isNotNull, sql } from 'drizzle-orm'
+import { and, count, eq, gte, isNotNull } from 'drizzle-orm'
 
 import { codeFindings, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import { createCodeMetricsQuery } from '@/modules/code-capability/application/codeMetricsQuery'
@@ -27,7 +27,7 @@ export function createPostgresqlCodeMetricsRead(db: PostgresqlDatabaseClient): C
           capability: codeWorkItems.capability,
           outcome: codeWorkRounds.outcome,
           endedAt: codeWorkRounds.endedAt,
-          n: sql<number>`count(*)`,
+          n: count(),
         })
         .from(codeWorkRounds)
         .innerJoin(codeWorkItems, eq(codeWorkRounds.workItemId, codeWorkItems.id))

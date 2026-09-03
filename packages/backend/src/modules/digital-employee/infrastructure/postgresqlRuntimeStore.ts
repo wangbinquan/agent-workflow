@@ -1,6 +1,7 @@
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   ilike,
@@ -605,7 +606,7 @@ export function createPostgresqlRuntimePersistence(
         .select({
           employeeId: employeeCases.employeeId,
           terminalKind: employeeCases.terminalKind,
-          count: sql<number>`count(*)`,
+          count: count(),
         })
         .from(employeeCases)
         .where(eq(employeeCases.state, 'terminal'))
@@ -744,7 +745,7 @@ export function createPostgresqlRuntimePersistence(
       const facetBase = facetConditions.length === 0 ? undefined : and(...facetConditions)
       const countWhere = async (stateWhere?: SQL) => {
         const row = await db
-          .select({ value: sql<number>`count(*)` })
+          .select({ value: count() })
           .from(employeeCases)
           .where(
             facetBase === undefined

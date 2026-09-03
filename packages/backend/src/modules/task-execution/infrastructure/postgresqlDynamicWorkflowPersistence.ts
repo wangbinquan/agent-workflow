@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, count, eq } from 'drizzle-orm'
 
 import { agents, nodeRuns, tasks, workgroupTaskState } from '@/db/schema'
 import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
@@ -45,7 +45,7 @@ export class PostgresqlDynamicWorkflowPersistence implements DynamicWorkflowPers
 
   async countNodeRuns(taskId: string, nodeId: string): Promise<number> {
     const rows = await this.db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: count() })
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
       .limit(1)

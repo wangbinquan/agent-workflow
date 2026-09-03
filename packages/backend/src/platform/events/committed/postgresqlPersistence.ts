@@ -5,6 +5,7 @@ import { canonicalJson } from '@agent-workflow/shared'
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   inArray,
@@ -665,7 +666,7 @@ export function createPostgresqlCommittedEventDeliveryPersistence(
       }
       const where = conditions.length === 0 ? undefined : and(...conditions)
       const countRow = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({ count: count() })
         .from(committedEventDeliveries)
         .innerJoin(committedEvents, eq(committedEvents.id, committedEventDeliveries.eventId))
         .where(where)

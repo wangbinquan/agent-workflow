@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, lt, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNotNull, lt, or, sql, type SQL } from 'drizzle-orm'
 import {
   DIGITAL_EMPLOYEE_MISSION_STATUSES,
   digitalEmployeeTaskStatus,
@@ -63,7 +63,7 @@ function statusesFor(filters: MissionPageFilters): string[] {
 
 async function facets(db: PostgresqlDatabaseClient): Promise<MissionPageProjection['facets']> {
   const rows = await db
-    .select({ status: developmentMissions.status, n: sql<number>`count(*)` })
+    .select({ status: developmentMissions.status, n: count() })
     .from(developmentMissions)
     .groupBy(developmentMissions.status)
     .all()
@@ -81,7 +81,7 @@ async function facets(db: PostgresqlDatabaseClient): Promise<MissionPageProjecti
 
 async function counts(db: PostgresqlDatabaseClient, where: SQL): Promise<Record<string, number>> {
   const rows = await db
-    .select({ status: developmentMissions.status, n: sql<number>`count(*)` })
+    .select({ status: developmentMissions.status, n: count() })
     .from(developmentMissions)
     .where(where)
     .groupBy(developmentMissions.status)
@@ -161,7 +161,7 @@ export function createPostgresqlMissionReadModelQueries(
         .select({
           employeeId: developmentMissions.employeeId,
           terminalKind: developmentMissions.status,
-          count: sql<number>`count(*)`,
+          count: count(),
         })
         .from(developmentMissions)
         .where(

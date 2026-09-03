@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   mcpRuntimeTestCreateReceipts,
@@ -89,7 +89,7 @@ export function createPostgresqlMcpRuntimeTestPersistence(
         const sessionEventCount =
           (
             await tx
-              .select({ count: sql<number>`count(*)` })
+              .select({ count: count() })
               .from(mcpRuntimeTestEvents)
               .where(eq(mcpRuntimeTestEvents.testSessionId, input.sessionId))
               .get()
@@ -98,7 +98,11 @@ export function createPostgresqlMcpRuntimeTestPersistence(
           (
             await tx
               .select({
-                bytes: sql<number>`coalesce(sum(${mcpRuntimeTestTurns.captureEventBytes}), 0)`,
+                // `.mapWith(Number)`：PostgreSQL 的 sum(bigint) 是 numeric，驱动按 SQLSTATE 规范
+                // 原样交回**字符串**；没有 mapper 的话这里会拿到 '12345' 并在算术里变成拼接。
+                bytes: sql`coalesce(sum(${mcpRuntimeTestTurns.captureEventBytes}), 0)`.mapWith(
+                  Number,
+                ),
               })
               .from(mcpRuntimeTestTurns)
               .where(eq(mcpRuntimeTestTurns.sessionId, input.sessionId))

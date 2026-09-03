@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import {
@@ -29,12 +29,7 @@ export function createPostgresqlWebhookDeliveryQueries(
       ]
       const where = conditions.length === 0 ? undefined : and(...conditions)
       const total =
-        (
-          await db
-            .select({ count: sql<number>`count(*)` })
-            .from(webhookDeliveries)
-            .where(where)
-        )[0]?.count ?? 0
+        (await db.select({ count: count() }).from(webhookDeliveries).where(where))[0]?.count ?? 0
       const offset = (input.page - 1) * input.limit
       const items =
         offset >= total

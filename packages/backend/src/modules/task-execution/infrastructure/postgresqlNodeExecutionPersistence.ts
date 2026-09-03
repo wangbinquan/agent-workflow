@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, notLike, sql } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, isNotNull, isNull, notLike } from 'drizzle-orm'
 
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -98,7 +98,7 @@ export class PostgresqlNodeExecutionPersistence implements NodeExecutionPersiste
 
   async countAgentTextEvents(nodeRunId: string, frameworkPrefix: string): Promise<number> {
     const rows = await this.db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: count() })
       .from(nodeRunEvents)
       .where(
         and(

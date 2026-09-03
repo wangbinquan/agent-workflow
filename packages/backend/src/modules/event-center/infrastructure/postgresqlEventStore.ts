@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { TriggerContextSchema } from '@agent-workflow/shared'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -590,13 +590,8 @@ export function createPostgresqlEventStore(db: PostgresqlDatabaseClient): EventS
           : [eq(eventSubscriptions.subscriberRef, input.subscriberRef)]),
       )
       const total = Number(
-        (
-          await db
-            .select({ count: sql<number>`count(*)` })
-            .from(eventSubscriptions)
-            .where(where)
-            .get()
-        )?.count ?? 0,
+        (await db.select({ count: count() }).from(eventSubscriptions).where(where).get())?.count ??
+          0,
       )
       const items = (
         await db
@@ -617,7 +612,7 @@ export function createPostgresqlEventStore(db: PostgresqlDatabaseClient): EventS
             .select({
               sourceId: eventSubscriptions.sourceId,
               sourceRevision: eventSubscriptions.sourceRevision,
-              count: sql<number>`count(*)`,
+              count: count(),
             })
             .from(eventSubscriptions)
             .where(
@@ -844,13 +839,7 @@ export function createPostgresqlEventStore(db: PostgresqlDatabaseClient): EventS
           : [eq(eventDeliveries.subscriberRef, input.subscriberRef)]),
       )
       const total = Number(
-        (
-          await db
-            .select({ count: sql<number>`count(*)` })
-            .from(eventDeliveries)
-            .where(where)
-            .get()
-        )?.count ?? 0,
+        (await db.select({ count: count() }).from(eventDeliveries).where(where).get())?.count ?? 0,
       )
       const items = (
         await db
@@ -913,7 +902,7 @@ export function createPostgresqlEventStore(db: PostgresqlDatabaseClient): EventS
       const total = Number(
         (
           await db
-            .select({ count: sql<number>`count(*)` })
+            .select({ count: count() })
             .from(eventRecords)
             .innerJoin(
               eventTypeCatalog,

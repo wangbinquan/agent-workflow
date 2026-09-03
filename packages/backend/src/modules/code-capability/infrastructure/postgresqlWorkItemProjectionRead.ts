@@ -1,6 +1,6 @@
 // RFC-349 — PostgreSQL projection for bounded code work-item history.
 
-import { and, desc, eq, lt, sql, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, lt, type SQL } from 'drizzle-orm'
 
 import { codeRoundStages, codeWorkItems, codeWorkRounds } from '@/db/schema'
 import {
@@ -55,7 +55,7 @@ async function projectRounds(
   limit: number,
 ): Promise<{ rounds: CodeRoundProjection[]; hidden: number }> {
   const [counted] = await db
-    .select({ n: sql<number>`count(*)` })
+    .select({ n: count() })
     .from(codeWorkRounds)
     .where(eq(codeWorkRounds.workItemId, workItemId))
   const total = counted?.n ?? 0

@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { count, sql } from 'drizzle-orm'
 
 import { tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -12,7 +12,7 @@ export function createPostgresqlHealthDatabaseReadModel(
   return Object.freeze({
     async countRunningTasks() {
       const rows = await db
-        .select({ n: sql<number>`count(*)` })
+        .select({ n: count() })
         .from(tasks)
         .where(sql`status = 'running'`)
       return Number(rows[0]?.n ?? 0)
