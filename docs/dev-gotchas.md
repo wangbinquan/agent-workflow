@@ -859,6 +859,31 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 `packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts` 与四条
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
+## 被 `needs:` 挡着从没跑过的 CI lane，等于**没被验证过能跑完**（RFC-349 实测，2026-09-03）
+
+`postgresql-evidence` 的 `functional-regression` lane 写着 `needs: [crash-large-and-soak,
+compiled-external-postgresql]`。取证 job 一直红，于是这条 lane **自建起每一个 run 都是 skip**
+（近 8 个 run 逐个查，该 job 的 conclusion 一律缺席）。等取证终于绿了、它第一次真跑，两次都被
+`The runner has received a shutdown signal / The operation was canceled` 掐断——**零失败断言**、
+两次断在不同文件、~20m 与 ~23m（job 自己声明 `timeout-minutes: 90`，不是超时）。
+
+**归因姿势**（别一看红就当产品回归，也别"重跑就过了"）：
+
+1. `grep -c "(fail)" ` 数失败断言。**注意假阳性**：测试名里带 "(fail)" 字样的 `(pass)` 行会被
+   数进去，要按 `^…Z \(fail\)` 这种行首形态数。
+2. 拿 `started_at` / `completed_at` 和 job 的 `timeout-minutes` 对一下，先把"超时"排除掉。
+3. **去找同一 SHA 上跑同一批文件的另一条已知绿的 lane**。这次是 Main CI：同一批后端文件、同一套
+   env（`RUN_GIT_NETWORK` + `RUN_CHAOS`），四个 ~7m 的 ubuntu 分片 + 四个 macOS 分片全绿。
+   同集合同环境在别处绿、在这里两次断在不同位置 ⇒ 是 lane 的资源形态，不是代码。
+4. 查这条 lane 的**历史 conclusion**。从没成功过 ≠ 一直是坏的，很可能是**从没运行过**。
+
+**根因**：Main CI 早就在注释里写明后端套件（~740 文件、`--isolate` 串行）必须分 4 片跑，这条
+lane 却把四片的量塞进一台 VM（~29m 串行 + 4 倍临时产物）。修法就是让它和 Main CI 同构分片；
+Bun 按路径确定性分配，每个文件仍恰好跑一次，覆盖面不变。
+
+**顺带**：给这类"拓扑必须和参照 lane 一致"的约束加守卫时，要断言**分片无缺口**（1..4 逐个在场），
+因为少一片会**静默少跑四分之一套件却仍报绿**——比整条 lane 红危险得多。
+
 ## SQLite 的读→写升级失败**不等** `busy_timeout`（RFC-351 实测，2026-09-02）
 
 `PRAGMA busy_timeout = 5000` 只覆盖「拿不到锁就等」这一类。**deferred 事务先读后写**是另一
