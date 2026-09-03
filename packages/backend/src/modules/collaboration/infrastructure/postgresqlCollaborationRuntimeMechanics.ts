@@ -66,7 +66,8 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { ascNullsFirst, descNullsLast } from '@/platform/persistence/postgresqlNullOrdering'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { isPathishKindString, readPortArtifact } from '@/services/portArtifacts'
-import { pickFreshestRun, pickVisibleUpstreamRun } from '@/services/freshness'
+import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
+import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
 import { parseConsumedJson } from '@/services/freshness'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -905,6 +906,9 @@ async function openPostgresqlAgentClarify(
                 eq(clarifyRounds.taskId, input.taskId),
                 eq(clarifyRounds.intermediaryNodeId, input.intermediaryNodeId),
                 eq(clarifyRounds.loopIter, input.loopIter),
+                (input.containerRunId ?? null) === null
+                  ? isNull(clarifyRounds.containerRunId)
+                  : eq(clarifyRounds.containerRunId, input.containerRunId as string),
               ),
             )
             .orderBy(desc(clarifyRounds.iteration))
@@ -936,6 +940,7 @@ async function openPostgresqlAgentClarify(
     intermediaryNodeId: input.intermediaryNodeId,
     targetConsumerNodeId: input.kind === 'cross' ? input.targetConsumerNodeId : null,
     parentNodeRunId: input.kind === 'self' ? (input.parentNodeRunId ?? null) : null,
+    containerRunId: input.containerRunId ?? null,
     loopIter: input.kind === 'cross' ? input.loopIter : 0,
     iteration,
     questionsJson,
@@ -951,6 +956,7 @@ async function openPostgresqlAgentClarify(
     intermediaryNodeId: input.intermediaryNodeId,
     targetConsumerNodeId: projection.targetConsumerNodeId,
     parentNodeRunId: projection.parentNodeRunId,
+    containerRunId: projection.containerRunId,
     loopIter: projection.loopIter,
     iteration,
     questionsJson,
@@ -967,6 +973,7 @@ async function openPostgresqlAgentClarify(
             status: existing.status as 'pending' | 'running' | 'awaiting_human',
             iteration: existing.iteration,
             parentNodeRunId: existing.parentNodeRunId,
+            containerRunId: existing.containerRunId,
             shardKey: existing.shardKey,
             startedAt: existing.startedAt,
           },
@@ -1133,6 +1140,8 @@ async function autoApproveEmptyPostgresqlReview(input: {
   readonly expectedTaskRevision: number
   readonly taskId: string
   readonly nodeId: string
+  /** RFC-354 — the frame the review node is dispatched in. */
+  readonly containerRunId: string | null
   readonly iteration: number
   readonly reviewIteration: number
   readonly sourceNodeId: string
@@ -1268,6 +1277,7 @@ async function autoApproveEmptyPostgresqlReview(input: {
         nodeId: input.nodeId,
         status: 'awaiting_review',
         cause: 'review-park',
+        containerRunId: input.containerRunId,
         iteration: input.iteration,
         overrides: {
           reviewIteration: input.reviewIteration,
@@ -1423,7 +1433,33 @@ async function dispatchPostgresqlReviewNode(
     .select()
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.nodeId, sourceNodeId)))
-  const sourceRun = pickVisibleUpstreamRun(sourceRuns, input.iteration)
+  // RFC-354: the source is read in the frame the environment chain resolves it
+  // to from the review node's own frame (see the SQLite twin).
+  const reviewFrame = { containerRunId: input.containerRunId ?? null, iteration: input.iteration }
+  const frameChain = await loadFrameChain(
+    async (id) =>
+      (
+        await db
+          .select({
+            id: nodeRuns.id,
+            nodeId: nodeRuns.nodeId,
+            containerRunId: nodeRuns.containerRunId,
+            iteration: nodeRuns.iteration,
+          })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, id))
+          .limit(1)
+      )[0] ?? null,
+    reviewFrame,
+  )
+  const sourceFrame = resolveSourceFrame({
+    sourceNodeId,
+    targetNodeId: input.node.id,
+    parents: buildWorkflowScopeParentMap(input.definition),
+    frame: reviewFrame,
+    containerRowById: frameChain.lookup,
+  })
+  const sourceRun = sourceFrame.ok ? pickLatestRunInFrame(sourceRuns, sourceFrame.frame) : undefined
   if (sourceRun === undefined || sourceRun.status !== 'done') {
     return {
       kind: 'failed',
@@ -1595,6 +1631,7 @@ async function dispatchPostgresqlReviewNode(
       expectedTaskRevision: task.lifecycleRevision,
       taskId: input.taskId,
       nodeId: input.node.id,
+      containerRunId: input.containerRunId ?? null,
       iteration: input.iteration,
       reviewIteration,
       sourceNodeId,
@@ -1632,6 +1669,7 @@ async function dispatchPostgresqlReviewNode(
   const prepared = await prepareReviewGateOpen(context, {
     taskId: input.taskId,
     reviewNodeId: input.node.id,
+    containerRunId: input.containerRunId ?? null,
     iteration: input.iteration,
     reviewIteration,
     consumedUpstreamRunsJson: consumed,

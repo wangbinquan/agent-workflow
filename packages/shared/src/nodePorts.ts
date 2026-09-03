@@ -232,6 +232,12 @@ const PORT_DERIVERS = {
       systemOutputs: [{ name: CLARIFY_SOURCE_PORT_NAME }],
     }
   },
+  // RFC-354 — wrapper-git / wrapper-loop PARAMETERS are edge-derived exactly
+  // like agent-single inputs (an inbound edge's target portName IS the
+  // parameter name), so `dataInputs` stays empty here: this table is pure
+  // declaration and never consults edges (header). The body reads a parameter
+  // through a `wrapper-input` boundary edge whose source port must be one of
+  // those edge-derived names (validator `wrapper-input-port-missing`).
   'wrapper-git': (): DeclaredPorts => ({
     ...NO_PORTS,
     dataOutputs: [{ name: 'git_diff', kind: 'list<path<*>>' }],

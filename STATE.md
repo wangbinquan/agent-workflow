@@ -2,8 +2,16 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-03）：[RFC-354 节点语义统一：参数 / 返回值 / 闭包 + 帧（全部 14 种节点，任意深度嵌套）](design/RFC-354-wrapper-as-node/proposal.md)。**
-> 三件套已落档，**批准前不动任何生产代码**。起点是用户问「校验不允许 loop 嵌 loop，能不能直接放开」——不能：
+> 🚧 **进行中 RFC（In Progress，PR-1 已推 main，2026-09-03）：[RFC-354 节点语义统一：参数 / 返回值 / 闭包 + 帧（全部 14 种节点，任意深度嵌套）](design/RFC-354-wrapper-as-node/proposal.md)。**
+> **PR-1（T1～T10）已落地**：`node_runs.container_run_id` / `scope_path` + `clarify_rounds.container_run_id`（迁移 0223）、帧 = 既有 wrapper 代际行
+> `(container_run_id, iteration)`、`domain/environmentChain.ts`（词法环境链：本地 / 闭包 / 参数按帧解析，`closure-binding-unresolved` 直接失败）、
+> `domain/containerMembership.ts`（唤醒 / 活性 / 重试级联统一按帧成员关系）、loop 退出条件 / 绑定按环境链读（gap4 走闭包）、
+> 启动期一次性回填作业 + `aw doctor --backfill-containers`、validator 放开任意深度嵌套（fanout 体内 wrapper 除外）、
+> loop / git 入边即参数（画布可连、检查器只读列出）、`NodeRun` DTO 带 `containerRunId` / `scopePath`。
+> `scheduler-audit-s06` 已翻转为 `rfc354-nested-loop-frames`（外 2 × 内 2 = 真实 4 次调起）；闭包语义由 `rfc354-nested-frames-closure` 真实调度锁定。
+> **下一步 PR-2（T11～T16）**：schema v5→v6 + 纯升级器（PortRef 字段退役由边表达、loop 返回值改 `wrapper-output` 边、系统通道折进端口表）；
+> **PR-3（T17～T20）**：clarify 落 `skipped` 行、任务详情按帧分组、e2e、实现门。进度与偏离项见 `design/RFC-354-wrapper-as-node/plan.md §5`。
+> 起点是用户问「校验不允许 loop 嵌 loop，能不能直接放开」——不能：
 > `wrapper-loop-nested` 遮的是真缺陷（`node_runs` 只有扁平 `iteration`，外层第 2 轮起内层静默 no-op，`scheduler-audit-s06` 锁着）。
 > 追问「包装器为什么不按节点抽象、和子工作流有什么区别」后对账：wrapper 只是「kind + 平铺兄弟 id」，没有输入端口，体内靠
 > **穿墙边** + 「iteration ≤ 窗口取最高」偷读外部值——「跨 scope 可见性」整类规则都来自这个墙洞；`call-workflow` 才是真的

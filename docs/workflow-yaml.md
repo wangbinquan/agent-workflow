@@ -207,8 +207,14 @@ Surfaces a port on the task detail page's **Outputs** panel.
 
 The single output port `git_diff: list<path<*>>` is a newline-delimited,
 sorted changed-path list (tracked and untracked) between the wrapper's before
-and after snapshots. Arbitrary inner agent ports do not cross the wrapper
-boundary.
+and after snapshots.
+
+A wrapper is a node like any other (RFC-354): an ordinary edge **into** the
+wrapper declares a parameter (the target port name is the parameter name), and
+a `boundary: wrapper-input` edge hands that parameter to a node inside the
+scope. Inner agent ports never leak out on their own; an edge from a node
+outside the wrapper straight to a node inside it is a _closure_ — the inner
+node reads the outer value as it was when the wrapper was entered.
 
 ### `wrapper-loop`
 
@@ -234,6 +240,16 @@ boundary.
 files only. Each iteration's inner scope runs against the most recent
 upstream values (and any prior iteration's writes that landed in the
 worktree).
+
+Loops take parameters and closures exactly like `wrapper-git` (see above), and
+they nest to any depth — `wrapper-loop` inside `wrapper-loop` included. Every
+entry into a wrapper opens a fresh _generation_: the inner scope's node runs
+are keyed by the frame `(generation, iteration)`, so an outer loop's second
+round re-executes the inner loop from its first iteration instead of reusing
+the first round's rows, and the inner `exitCondition` / `outputBindings` only
+ever read the current generation. A node referenced by `exitCondition` from
+outside the loop is read as a closure (the value captured when the loop was
+entered).
 
 ### `review`
 
@@ -457,9 +473,11 @@ Fanout boundary plumbing is explicit:
 ```
 
 Boundary edges describe container plumbing, not ordinary DAG dependencies.
-Wrapper containment must form a tree; `wrapper-loop` inside another
-`wrapper-loop` is currently rejected, while git-in-loop and loop-in-git are
-supported.
+`wrapper-git` and `wrapper-loop` use the same `wrapper-input` plumbing for their
+parameters. Wrapper containment must form a tree and may nest to any depth
+(loop-in-loop, git-in-loop, loop-in-git, …); the one exclusion is a wrapper
+inside a `wrapper-fanout` scope (`wrapper-fanout-unsupported-inner-kind`) —
+a fan-out shard is a single agent run.
 
 ## Validation
 

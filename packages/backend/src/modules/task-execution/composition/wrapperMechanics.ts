@@ -62,7 +62,7 @@ import {
   parseIsoJsonMap,
   parseIsoSubmodules,
   pickString,
-  readPortRowAtIteration,
+  readPortRowAtFrame,
   resolveMergeConflicts,
   resolveUpstreamInputs,
   shouldRetryNodeFailure,
@@ -73,6 +73,8 @@ import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
 import { sha256Hex } from '@/util/hash'
 import type { WrapperDataPort } from '../application/ports/wrapperData'
+import { loadFrameChain } from '../application/frameChain'
+import { resolveSourceFrameInScope } from '../domain/environmentChain'
 import type { WrapperScopeDriverPort } from '../application/ports/wrapperScopeDriver'
 import type {
   WrapperWorkspacePort,
@@ -145,21 +147,47 @@ export function createWrapperMechanicsPorts(
           : { executionContext: state.opts.executionContext }),
       })
     },
-    readPort: (nodeId, portName, iteration) =>
-      readPortRowAtIteration(
+    // RFC-354: `frame` is the READER's frame — the body frame `(generation,
+    // round)` a loop evaluates its exit condition / output bindings in. The
+    // producing node is read in the frame the environment chain resolves it
+    // to: a body node locally, a node outside the wrapper as a captured free
+    // variable (one generation row outward per enclosing wrapper). A source
+    // that is not lexically visible fails loudly instead of reading ''.
+    readPort: async (nodeId, portName, frame) => {
+      const chain = await loadFrameChain(
+        (id: string) => state.opts.persistence.nodeExecution.read(id),
+        frame,
+      )
+      const scopeRow =
+        frame.containerRunId === null ? undefined : chain.lookup(frame.containerRunId)
+      const resolved = resolveSourceFrameInScope({
+        sourceNodeId: nodeId,
+        scope: scopeRow?.nodeId ?? null,
+        parents: state.containerOf,
+        frame,
+        containerRowById: chain.lookup,
+      })
+      if (!resolved.ok) {
+        throw new Error(
+          `closure-binding-unresolved: port '${nodeId}.${portName}' is not visible from frame ` +
+            `${frame.containerRunId ?? 'top'}#${frame.iteration} (${resolved.reason}${resolved.scopeId === null ? '' : ` at ${resolved.scopeId}`})`,
+        )
+      }
+      return await readPortRowAtFrame(
         state.opts.persistence.nodeExecution,
         state.taskId,
         nodeId,
         portName,
-        iteration,
-      ),
-    resolveInputs: (nodeId, iteration) =>
+        resolved.frame,
+      )
+    },
+    resolveInputs: (nodeId, frame) =>
       resolveUpstreamInputs(
         state.opts.persistence.nodeExecution,
         state.taskId,
         state.definition.edges,
         nodeId,
-        iteration,
+        frame,
         executionLog,
         state.definition,
         state.containerOf,
@@ -307,6 +335,7 @@ export function createWrapperMechanicsPorts(
       return state.driveScope(innerState, {
         scopeId: input.scope.wrapperId,
         scopeIds: new Set(input.scope.directNodeIds),
+        containerRunId: input.containerRunId,
         iteration: input.iteration,
         log: executionLog.child(`${label}:${input.scope.wrapperId}`),
       })
@@ -610,6 +639,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       status: 'pending',
       cause: forcedProcessRetry ? 'process-retry' : 'fanout-shard',
       retryIndex: args.processRetryIndex ?? 0,
+      containerRunId: wrapperRunId,
       iteration,
       overrides: {
         parentNodeRunId: wrapperRunId,
@@ -1153,6 +1183,7 @@ async function dispatchFanoutAggregatorAttempt(
       status: 'pending',
       cause: forcedProcessRetry ? 'process-retry' : 'fanout-aggregator',
       retryIndex: args.processRetryIndex ?? 0,
+      containerRunId: wrapperRunId,
       iteration,
       overrides: { parentNodeRunId: wrapperRunId },
       ...(state.opts.executionContext === undefined

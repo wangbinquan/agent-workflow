@@ -26,6 +26,8 @@ export interface NodeRunMintInheritance {
   readonly reviewIteration: number
   readonly shardKey: string | null
   readonly parentNodeRunId: string | null
+  /** RFC-354 — a rerun / placeholder stays in the frame of the row it is minted from. */
+  readonly containerRunId?: string | null
   readonly preSnapshot: string | null
   readonly continuationSlotKey?: string | null
   readonly lineageSlotPathJson?: string | null
@@ -62,6 +64,13 @@ export interface NodeRunMintInput {
   >
   readonly cause: RerunCause
   readonly retryIndex?: number
+  /**
+   * RFC-354 — the frame (wrapper generation row) this row hangs off; null at
+   * the top scope. `undefined` means "inherit from `inheritFrom`, else top".
+   */
+  readonly containerRunId?: string | null
+  /** RFC-354 — explicit breadcrumb; omitted = derived from the container row by the adapter. */
+  readonly scopePath?: string
   readonly iteration?: number
   readonly inheritFrom?: NodeRunMintInheritance | null
   readonly overrides?: NodeRunMintOverrides
@@ -80,6 +89,9 @@ export interface NodeRunMintRecord {
   readonly reviewIteration: number
   readonly shardKey: string | null
   readonly parentNodeRunId: string | null
+  readonly containerRunId: string | null
+  /** null = "derive from the container row" — the adapter resolves it before insert. */
+  readonly scopePath: string | null
   readonly preSnapshot: string | null
   readonly shardValueHash: string | null
   readonly consumedUpstreamRunsJson: string | null

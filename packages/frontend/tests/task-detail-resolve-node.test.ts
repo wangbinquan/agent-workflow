@@ -21,6 +21,8 @@ function makeRun(id: string, nodeId: string): NodeRun {
     retryIndex: 0,
     wgRound: null,
     rerunCause: null,
+    containerRunId: null,
+    scopePath: '',
     reviewIteration: 0,
     status: 'done',
     startedAt: null,

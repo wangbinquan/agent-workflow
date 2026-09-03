@@ -158,7 +158,7 @@ describe('S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholes
       taskId,
       [chainEdge()],
       'fix',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
     // [FLIP] 修复（长期方案：按 shardKey 解析 child 行）后：inputs.findings
@@ -184,7 +184,7 @@ describe('S-5 layer 1 — resolveUpstreamInputs excludes shard child rows wholes
       taskId,
       [chainEdge()],
       'fix',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
     // 唯一差别是 parentNodeRunId=null —— 内容立即可见。证明层 1 的空结果

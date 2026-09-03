@@ -2,8 +2,8 @@
   "activeTableCount": 178,
   "archiveOnlyTableCount": 6,
   "baselineId": "0000_rfc349_baseline_v1",
-  "contractDigest": "sha256:99c8b91bc3e8dcb123b3783dec558ef8b7958c7c3eca4922959862d78d846729",
-  "planDigest": "sha256:1717280adc985a64263c72d73142092cadae50ec935e0a385d568a0becea9a3e",
+  "contractDigest": "sha256:05a9771c5c3f8551073010fd0d123f01388813d6ac553076f1a602eb1d72c2c8",
+  "planDigest": "sha256:8a257cc1555dbfa970f6896341e104e8e88688b41fde78d30be8d104a8e59723",
   "statements": [
     {
       "digest": "sha256:e421e3eb972c6504590f83ebd92f1a2eb76e8c95f2515c6641943e3aea99c31f",
@@ -96,7 +96,7 @@
       "logicalId": "capability_templates"
     },
     {
-      "digest": "sha256:206d7cdc653156d09652a4972769a0be86b5ea6b142a79cc8165ed64d83d3f0a",
+      "digest": "sha256:373eae2c0e53cda63a6ef9489c17cf22971739bff29162c21d5efc9356e7b694",
       "kind": "table",
       "logicalId": "clarify_rounds"
     },
@@ -626,7 +626,7 @@
       "logicalId": "node_run_outputs"
     },
     {
-      "digest": "sha256:76f72a9a19040231eef497dfeb7360ee038dec1b78e24c0f08be4d0ed5c6912e",
+      "digest": "sha256:7debcf4601ff368466b857ff4ccf94b3e50865a6bc73f00c995667f4ac056f01",
       "kind": "table",
       "logicalId": "node_runs"
     },
@@ -996,7 +996,7 @@
       "logicalId": "clarify_rounds:index:idx_clarify_rounds_kind_status"
     },
     {
-      "digest": "sha256:eef0ed49607c5fc7b457f79d6fd3bb3727d40bcfb673e76ef12a5b3c5d23defc",
+      "digest": "sha256:c876c9c78a00b19186721cbbbf672950f50ae07f082a4a65709e4edaf2bd05a3",
       "kind": "index",
       "logicalId": "clarify_rounds:index:idx_clarify_rounds_asking"
     },
@@ -1999,6 +1999,11 @@
       "digest": "sha256:42e35abaaaaf4c5b369381f18786a85114e30b168033c7711d37a609608de5b4",
       "kind": "index",
       "logicalId": "node_runs:index:idx_node_runs_parent"
+    },
+    {
+      "digest": "sha256:4c8255ff1be5b64923354184c6b6a8a59d963f75dfc51a174a9d76617868b2c4",
+      "kind": "index",
+      "logicalId": "node_runs:index:idx_node_runs_container"
     },
     {
       "digest": "sha256:e01b427a41d855f1c0fe3d34be15f0c2a2fde4a271445cee562aede097df3355",
@@ -3571,7 +3576,7 @@
       "logicalId": "contract-table"
     },
     {
-      "digest": "sha256:a414c77b2a1d519d197c3b247c703483e31f2e8e86e8c097c16fde6414b430a1",
+      "digest": "sha256:3a7791476b1291c50906d13dc9a4f52215a04d4652fa7bd397c213dadf58def6",
       "kind": "metadata",
       "logicalId": "contract-row"
     },

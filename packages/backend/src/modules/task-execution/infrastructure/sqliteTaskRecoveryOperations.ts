@@ -636,6 +636,7 @@ export function createSqliteTaskRecoveryOperations(
           spawnBinaryPath: nodeRuns.spawnBinaryPath,
           spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
           parentNodeRunId: nodeRuns.parentNodeRunId,
+          containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)
@@ -712,6 +713,7 @@ export function createSqliteTaskRecoveryOperations(
         spawnBinaryPath: nodeRuns.spawnBinaryPath,
         spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
         parentNodeRunId: nodeRuns.parentNodeRunId,
+        containerRunId: nodeRuns.containerRunId,
         childTaskId: nodeRuns.childTaskId,
       }
       const runCandidates = await db
@@ -792,6 +794,7 @@ export function createSqliteTaskRecoveryOperations(
           spawnBinaryPath: nodeRuns.spawnBinaryPath,
           spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
           parentNodeRunId: nodeRuns.parentNodeRunId,
+          containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)
@@ -820,6 +823,7 @@ export function createSqliteTaskRecoveryOperations(
           spawnBinaryPath: nodeRuns.spawnBinaryPath,
           spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
           parentNodeRunId: nodeRuns.parentNodeRunId,
+          containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)

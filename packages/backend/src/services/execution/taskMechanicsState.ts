@@ -14,6 +14,13 @@ export interface TaskScopeArgs {
   /** Wrapper node that owns this scope; null for the workflow root. */
   readonly scopeId: string | null
   readonly scopeIds: Set<string>
+  /**
+   * RFC-354 — the FRAME this scope runs in: the wrapper generation row
+   * (`openGeneration`) whose body is being driven, null at the workflow root.
+   * Together with `iteration` (the round inside that frame) it is the
+   * identity every row minted here hangs off — nested wrappers never collide.
+   */
+  readonly containerRunId: string | null
   readonly iteration: number
   readonly log: Logger
 }

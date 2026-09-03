@@ -233,7 +233,12 @@ describe('RFC-199 strict workflow validation targets', () => {
     // RFC-306 增加 1 条 `exit-condition-port-not-branch`（`port-inactive` 退出条件指向
     // 非分支端口 ⇒ 该条件永不成立，循环只会跑到 max_iterations 才失败），锚在
     // loop-exit-condition 字段上 ⇒ 146。
-    expect(emissions).toHaveLength(146)
+    // RFC-354 retires two emissions (`wrapper-loop-nested` — nesting is legal
+    // now that node_runs carries a frame axis; the loop/git "does not accept
+    // inbound edges" branch — an inbound edge is a wrapper parameter) and adds
+    // one (`wrapper-fanout-unsupported-inner-kind`, the schema-time mirror of
+    // the runtime fan-out body rejection) ⇒ 145.
+    expect(emissions).toHaveLength(145)
     for (const emission of emissions) {
       const start = emission.index ?? 0
       const nextPush = source.indexOf('issues.push({', start)

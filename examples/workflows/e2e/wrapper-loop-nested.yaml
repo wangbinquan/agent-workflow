@@ -1,12 +1,12 @@
-name: e2e-invalid-wrapper-loop-nested
-description: Intentionally invalid loop-in-loop definition used to verify the static launch gate.
+name: e2e-wrapper-loop-nested
+description: Loop-in-loop definition (RFC-354): nesting validates and runs like any other wrapper nesting.
 definition:
   $schema_version: 4
   inputs: []
   nodes:
     - id: outer_loop
       kind: wrapper-loop
-      title: Invalid outer loop
+      title: Outer loop
       nodeIds: [inner_loop]
       maxIterations: 2
       exitCondition:
@@ -21,7 +21,7 @@ definition:
       size: { width: 780, height: 420 }
     - id: inner_loop
       kind: wrapper-loop
-      title: Invalid nested loop
+      title: Nested loop
       nodeIds: [loop_worker]
       maxIterations: 2
       exitCondition:

@@ -951,26 +951,36 @@ export function validateWorkflowDef(
   }
   const scopeParents = scopeTree.parents
 
-  // RFC-094 (audit S-6) — wrapper-loop nested (transitively) inside another
-  // wrapper-loop is a BROKEN topology, not a cost concern: node_runs rows are
-  // keyed (taskId, nodeId, iteration) with no parent-scope axis, so from the
-  // outer loop's 2nd round the inner loop's frontier hits round-1 done rows
-  // and the whole inner scope silently no-ops (current behavior locked by
-  // scheduler-audit-s06-nested-loop-inner-noop.test.ts). Error — blocks task
-  // launch (not canvas save) until nested-loop support lands (audit WP-6c).
-  // The walk is transitive: loop→git→loop / loop→fanout→loop collide on the
-  // same iteration axis. Contrast wrapper-fanout-nested above, which stays a
-  // warning (multiplicative cost, not broken semantics).
+  // RFC-354 — the loop-in-loop ban (RFC-094 `wrapper-loop-nested`, audit S-6)
+  // is retired: node_runs carries the frame axis (`container_run_id`), so a
+  // nested loop's rounds no longer collide with the outer loop's rows and
+  // nesting of any depth is plain recursion. What stays a schema-time error is
+  // the fan-out BODY: fanout dispatch is agent-specialized
+  // (`engine/wrapper/fanoutStrategy.ts` rejects every other inner kind at run
+  // time with `v1-unsupported-inner-kind`), so say it here instead of letting
+  // the definition save clean and die at launch. Kinds that already carry
+  // their own fan-out placement rule (script, call-*) are skipped so one
+  // misplaced node reads as one issue. Transitive, like every containment walk
+  // in this file.
   {
     const nodeKindById = new Map(nodes.map((n) => [n.id, n.kind]))
     for (const node of nodes) {
-      if (node.kind !== 'wrapper-loop') continue
+      if (
+        node.kind === 'agent-single' ||
+        node.kind === 'script' ||
+        node.kind === 'call-workflow' ||
+        node.kind === 'call-workgroup'
+      ) {
+        continue
+      }
       let cur = innerToWrapper.get(node.id)
-      for (let hop = 0; cur !== undefined && hop < nodes.length; hop++) {
-        if (nodeKindById.get(cur) === 'wrapper-loop') {
+      const seen = new Set<string>()
+      while (cur !== undefined && !seen.has(cur)) {
+        seen.add(cur)
+        if (nodeKindById.get(cur) === 'wrapper-fanout') {
           issues.push({
-            code: 'wrapper-loop-nested',
-            message: `wrapper-loop '${node.id}' is nested inside wrapper-loop '${cur}' — inner iterations silently no-op from the outer loop's 2nd round (audit S-6); restructure to a single loop until nested-loop support lands`,
+            code: 'wrapper-fanout-unsupported-inner-kind',
+            message: `node '${node.id}' (${node.kind}) sits inside wrapper-fanout '${cur}' — fan-out bodies dispatch single agents only; move it outside the fan-out`,
             pointer: node.id,
             target: target.node(node.id),
           })
@@ -1070,7 +1080,11 @@ export function validateWorkflowDef(
     }
     // Output and agent-input ports are accepted: output node declares its
     // inputs explicitly; agent nodes accept any port name (the runner exposes
-    // them as prompt vars). Wrappers don't accept inbound edges.
+    // them as prompt vars). RFC-354: wrapper-git / wrapper-loop accept any
+    // port name too — an inbound edge IS a wrapper parameter, edge-derived
+    // exactly like an agent input; the body reads it through a
+    // `wrapper-input` boundary edge (rule 4e checks that edge's source port
+    // against these parameters).
     if (tgt.kind === 'output') {
       const ins = inputPorts.get(tgt.id) ?? new Set()
       if (!ins.has(edge.target.portName)) {
@@ -1081,13 +1095,6 @@ export function validateWorkflowDef(
           target: target.nodePort(tgt.id, 'input', edge.target.portName),
         })
       }
-    } else if (tgt.kind === 'wrapper-git' || tgt.kind === 'wrapper-loop') {
-      issues.push({
-        code: 'edge-target-port-missing',
-        message: `edge '${edge.id}': wrapper '${tgt.id}' does not accept inbound edges in v1`,
-        pointer: edge.id,
-        target: target.nodePort(tgt.id, 'input', edge.target.portName),
-      })
     } else if (tgt.kind === 'review' && edge.target.portName !== REVIEW_INPUT_PORT_NAME) {
       issues.push({
         code: 'edge-target-port-missing',
@@ -3074,20 +3081,33 @@ export function validateWorkflowDef(
     if (edge.boundary === undefined) continue
     if (edge.boundary === 'wrapper-input') {
       const wrapper = nodeById.get(edge.source.nodeId)
-      if (wrapper === undefined || wrapper.kind !== 'wrapper-fanout') {
+      // RFC-354: every wrapper kind has parameters now. A fanout declares them
+      // (`inputs[]`, shard-source typing); wrapper-git / wrapper-loop derive
+      // them from their plain inbound edges, exactly like agent inputs.
+      if (wrapper === undefined || !isWrapperKind(wrapper.kind)) {
         issues.push({
           code: 'boundary-input-source-not-wrapper',
-          message: `edge '${edge.id}' boundary='wrapper-input' source.nodeId '${edge.source.nodeId}' is not a wrapper-fanout node`,
+          message: `edge '${edge.id}' boundary='wrapper-input' source.nodeId '${edge.source.nodeId}' is not a wrapper node`,
           pointer: edge.id,
           target: target.edge(edge.id),
         })
         continue
       }
-      const declared = readWrapperFanoutInputs(wrapper).some((p) => p.name === edge.source.portName)
-      if (!declared) {
+      const parameterNames =
+        wrapper.kind === 'wrapper-fanout'
+          ? new Set(readWrapperFanoutInputs(wrapper).map((p) => p.name))
+          : new Set(
+              edges
+                .filter((e) => e.boundary === undefined && e.target.nodeId === wrapper.id)
+                .map((e) => e.target.portName),
+            )
+      if (!parameterNames.has(edge.source.portName)) {
         issues.push({
           code: 'boundary-input-port-not-declared',
-          message: `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not declared in wrapper-fanout '${wrapper.id}' inputs[]`,
+          message:
+            wrapper.kind === 'wrapper-fanout'
+              ? `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not declared in wrapper-fanout '${wrapper.id}' inputs[]`
+              : `edge '${edge.id}' boundary='wrapper-input' source.portName '${edge.source.portName}' is not a parameter of ${wrapper.kind} '${wrapper.id}' — connect an upstream edge to '${wrapper.id}.${edge.source.portName}' first`,
           pointer: edge.id,
           target: target.nodePort(wrapper.id, 'input', edge.source.portName),
         })
@@ -3096,7 +3116,7 @@ export function validateWorkflowDef(
       if (!wrapperInner.has(edge.target.nodeId)) {
         issues.push({
           code: 'boundary-input-target-not-inner',
-          message: `edge '${edge.id}' boundary='wrapper-input' target.nodeId '${edge.target.nodeId}' is not in wrapper-fanout '${wrapper.id}' nodeIds[]`,
+          message: `edge '${edge.id}' boundary='wrapper-input' target.nodeId '${edge.target.nodeId}' is not in ${wrapper.kind} '${wrapper.id}' nodeIds[]`,
           pointer: edge.id,
           target: target.edge(edge.id),
         })

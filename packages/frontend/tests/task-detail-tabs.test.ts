@@ -30,6 +30,8 @@ function makeRun(over: Partial<NodeRun>): NodeRun {
     retryIndex: 0,
     wgRound: null,
     rerunCause: null,
+    containerRunId: null,
+    scopePath: '',
     reviewIteration: 0,
     status: 'done',
     startedAt: null,

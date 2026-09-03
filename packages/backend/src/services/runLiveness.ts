@@ -42,6 +42,7 @@ import { isTerminalNodeRunStatus, type NodeKind, type NodeRunStatus } from '@age
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
 import { wrapperInnerDescendants } from './dispatchFrontier'
+import { containerMemberRuns } from '@/modules/task-execution/public/queries'
 
 /**
  * 判定所需的最小行投影。刻意不用 `typeof nodeRuns.$inferSelect` —— 回收器
@@ -54,6 +55,9 @@ export interface LivenessRunRow {
   pid: number | null
   spawnBinaryPath: string | null
   parentNodeRunId: string | null
+  /** RFC-354 — the generation row this run hangs off (null = top scope). Optional
+   * only for pre-RFC-354 fixtures; a DB row always carries the column. */
+  containerRunId?: string | null
   /**
    * RFC-243: the child task a call node_run launched (NULL everywhere else).
    * Optional so pre-RFC-243 callers/tests keep constructing the row shape.
@@ -262,7 +266,7 @@ function resolveWithoutDriver(
   }
   // ③ delegated —— 容器行的子依赖就是它的下层 run。
   if (evidence.kind === 'delegated') {
-    const inner = innerRunsOf(row, rows, evidence.innerNodeIds)
+    const inner = innerRunsOf(row, rows)
     if (inner.length === 0) {
       // 无驱动 + 零下层：没有任何协程会再造出下层，这不是「空窗」而是残骸。
       // （空窗只发生在驱动活着时，已被 ① 罩住。）
@@ -292,27 +296,23 @@ function isTerminalStatusRow(row: LivenessRunRow): boolean {
 }
 
 /**
- * 容器行的下层 run。两条既有路合并，不动数据模型（design §3）：
- *   - 定义层：`wrapperInnerDescendants` 的传递内层后代（git / loop 内层节点
- *     当普通节点跑，行上没有父指针，包含关系只存在于冻结的工作流定义里）。
- *   - 数据层：`parentNodeRunId === 本行 id` 的子行（fanout 分片 / 聚合 /
- *     merge-resolve / commit-push 的 session 子行）。
+ * 容器行的下层 run（RFC-354）：帧成员关系一条原语——`containerRunId` 链穿过本行的
+ * 全部行（任意深度，`containerMemberRuns`），并上 `parentNodeRunId === 本行 id` 的
+ * 子行（fanout 分片 / 聚合 / merge-resolve / commit-push 的 session 子行）。
  *
- * 刻意不给 git/loop 内层行补父指针：`parentNodeRunId !== null` 在 scheduler
- * 多处被当作「这是 fan-out 子行」的判据，nodeRunMint 更把「直接 mint 成
- * running 的行必须是子行」立成了不变量，补指针等于一次性改写这些语义。
+ * 改动前这里靠「定义层的 wrapperInnerDescendants ∪ 父指针」近似：内层节点 id 在
+ * 定义里只有一份，同一节点跨代际的行无法区分，所以活性只能不分代际地看
+ * 「任一下层当下活着」。帧成员关系把「这次执行的下层」精确到生成行，不再需要
+ * 定义层的近似；`classifyRunLiveness` 的 `innerNodeIds` 仅作分类证据保留。
  *
- * 活性判断刻意不引入迭代窗口：`wrapperRevivalEvidence` 因「唤醒」语义需要按
- * 迭代过滤并因此带着一条 depth-1 盲区；活性不关心新鲜度 —— 任一下层当下
- * 活着就是证据，与它属于哪次迭代无关（代价见 design §5 已知边界）。
+ * 活性判断仍不引入新鲜度：任一成员当下活着就是证据，与它属于哪轮无关。
  */
 function innerRunsOf(
   wrapperRow: LivenessRunRow,
   rows: readonly LivenessRunRow[],
-  innerNodeIds: ReadonlySet<string>,
 ): LivenessRunRow[] {
+  const members = new Set(containerMemberRuns(wrapperRow.id, rows).map((r) => r.id))
   return rows.filter(
-    (r) =>
-      r.id !== wrapperRow.id && (r.parentNodeRunId === wrapperRow.id || innerNodeIds.has(r.nodeId)),
+    (r) => r.id !== wrapperRow.id && (r.parentNodeRunId === wrapperRow.id || members.has(r.id)),
   )
 }

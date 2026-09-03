@@ -138,7 +138,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       [edge('designer', 'spec', 'review', 'doc')],
       'review',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
     // FLIPPED vs PR-A baseline: the fresh clarify rerun wins (corrected read).
@@ -173,7 +173,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       [edge('designer', 'spec', 'review', 'doc')],
       'review',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
     // FLIPPED vs PR-A baseline: done row read, pending skipped (corrected read).
@@ -203,10 +203,28 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
     )
     const e = [edge('builder', 'out', 'sink', 'in')]
     expect(
-      (await resolveUpstreamInputs(nodePersistence(db), taskId, e, 'sink', 0, log)).inputs.in,
+      (
+        await resolveUpstreamInputs(
+          nodePersistence(db),
+          taskId,
+          e,
+          'sink',
+          { containerRunId: null, iteration: 0 },
+          log,
+        )
+      ).inputs.in,
     ).toBe('ITER0')
     expect(
-      (await resolveUpstreamInputs(nodePersistence(db), taskId, e, 'sink', 1, log)).inputs.in,
+      (
+        await resolveUpstreamInputs(
+          nodePersistence(db),
+          taskId,
+          e,
+          'sink',
+          { containerRunId: null, iteration: 1 },
+          log,
+        )
+      ).inputs.in,
     ).toBe('ITER1')
   })
 
@@ -244,7 +262,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       [edge('a', 'o', 'sink', 'merged'), edge('b', 'o', 'sink', 'merged')],
       'sink',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
     expect(inputs.merged).toBe('AAA\n\n---\n\nBBB')
@@ -281,7 +299,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       [edge('questioner', 'spec', 'review', 'doc')],
       'review',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
     expect(inputs.doc).toBe('answered content')
@@ -313,7 +331,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       [edge('source', 'out', 'sink', 'normal'), mirror],
       'sink',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
     )
 
@@ -381,7 +399,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       edges,
       'sink',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
       definition,
     )
@@ -396,7 +414,7 @@ describe('RFC-074 — resolveUpstreamInputs unified picker + consumed provenance
       taskId,
       edges,
       'cross',
-      0,
+      { containerRunId: null, iteration: 0 },
       log,
       definition,
     )

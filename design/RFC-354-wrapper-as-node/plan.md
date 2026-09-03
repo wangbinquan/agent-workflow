@@ -40,6 +40,19 @@ exit 谓词按帧求值）；PR-3 依赖 PR-2（clarify 通道端口已在端口
 | T19  | e2e：`canvas-wrapper-membership` 加参数边 / 闭包边 / 返回值边三幕                                                                                                                                                                                             | T16, T18   |
 | T20  | 收口：实现门（Codex，只审功能）+ STATE.md / plan.md 状态 Done + 架构账本重采                                                                                                                                                                                   | T17～T19   |
 
+## 5. 进度（2026-09-03）
+
+**PR-1 已推 `main`（T1～T10）**。落位与偏离项：
+
+- T1：`domain/environmentChain.ts`（`resolveSourceFrame` / `resolveSourceFrameInScope` / `parentFrameOf` / `childScopePath`）、`domain/containerMembership.ts`、`application/frameChain.ts`；plan 里的 `resolveInEnvironment` 以这两个名字落地。
+- T3：迁移 `0223_rfc354_node_run_frames.sql`（node_runs 两列 + 索引、clarify_rounds 一列 + `idx_clarify_rounds_asking` 重建）；RFC-349 schema-contract 与 PostgreSQL baseline / journal 同批重采。
+- T4：`domain/frameBackfill.ts`（纯规划器，oracle 测试）+ `application/frameBackfillJob.ts` + 双 provider store + `composition/frameBackfill.ts`；SQLite / PostgreSQL 启动各接一次（`maintenance_state` 标记 `rfc354.frame-backfill.v1`），`aw doctor --backfill-containers` 强制重走（daemon 运行中拒绝）。**未做**「`scope_path` ↔ `container_run_id` 守卫」——`scope_path` 由 adapter 从容器行派生（`childScopePath`），铸行时不再继承（`rfc354-mint-record-frame` 锁定），守卫失去对象。
+- T6：`readPortRowAtIteration` → `readPortRowAtFrame`（只读一帧）；wrapper 读点（`wrapperMechanics.readPort`）先按环境链解析来源帧，loop 的 exitCondition / outputBindings 与 gap4（体外来源）同走此路；`resolveUpstreamInputs` 逐来源解析。
+- T7：`wrapperRevivalEvidence` / `runLiveness.innerRunsOf` / `retryNode` 级联（同帧继承）已切成员关系；**未做** `topLevelOnly` → `excludeBornRunningChildren` 改名（38 处纯改名，留 PR-3 收口一并做，避免与并发 session 撞文件）；`nodeRollback` 无迭代逻辑，无需改。
+- T8：`ClarifyGateRoundProjection.containerRunId` + round 复用键 / designer readiness 按帧（origin run 的帧）；PostgreSQL 同源。
+- T9：`scheduler-audit-s06` 翻转并更名 `rfc354-nested-loop-frames`；`rfc354-nested-frames-closure`（闭包一次绑定 / 本地按帧 / 顶层只跑一次）；`rfc354-environment-chain` 覆盖两跳（三层）解析；`lifecycle-wrapper-nested` 的形状不变量仍成立，未重写。**留 PR-3**：三层以上嵌套的真实调度用例、resume / 重试嵌套用例。
+- T10：`NodeRun` DTO 三层带 `containerRunId` / `scopePath`；画布 loop / git 接受入边（参数），wrapper→成员边统一标 `wrapper-input`；检查器只读「参数（入边）」行。**偏离**：`<WrapperBoundaryPortRow>` 抽取推迟到 PR-2——fanout 的 inputs 行是可编辑声明、loop / git 的参数行是按边派生的只读行，形态不同；PR-2 loop 返回值改 `wrapper-output` 边后两者才同形。
+
 ## 3. 验收清单（对应 proposal §5）
 
 - [ ] AC-1 s06 翻转 + 三层嵌套（T9）

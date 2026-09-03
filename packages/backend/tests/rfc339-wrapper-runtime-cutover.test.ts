@@ -48,6 +48,7 @@ function loopRequest(): WrapperExecutionRequest<'wrapper-loop'> {
       directNodeIds: [],
       path: [{ wrapperId: 'loop', kind: 'wrapper-loop' }],
     },
+    containerRunId: null,
     iteration: 0,
     execution: {},
   }

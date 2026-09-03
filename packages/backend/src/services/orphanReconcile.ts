@@ -148,6 +148,7 @@ export async function reconcileDeadRunningRuns(deps: ReconcileDeps): Promise<Rec
       pid: run.pid,
       spawnBinaryPath: run.spawnBinaryPath,
       parentNodeRunId: run.parentNodeRunId,
+      containerRunId: run.containerRunId ?? null,
       childTaskId: run.childTaskId,
     }))
 

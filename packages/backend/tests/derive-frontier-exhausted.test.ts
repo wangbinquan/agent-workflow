@@ -70,7 +70,7 @@ describe("RFC-076 PR-B — deriveFrontier 'exhausted' bucketing", () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ down: ['lw'] }),
       NONE, // inFlight
       NONE, // dispatchedThisInvocation
@@ -101,7 +101,7 @@ describe("RFC-076 PR-B — deriveFrontier 'exhausted' bucketing", () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ down: ['lw'] }),
       NONE,
       NONE,

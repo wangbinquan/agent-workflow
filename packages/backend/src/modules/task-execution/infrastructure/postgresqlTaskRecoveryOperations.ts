@@ -647,6 +647,7 @@ export function createPostgresqlTaskRecoveryOperations(
           spawnBinaryPath: nodeRuns.spawnBinaryPath,
           spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
           parentNodeRunId: nodeRuns.parentNodeRunId,
+          containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)
@@ -723,6 +724,7 @@ export function createPostgresqlTaskRecoveryOperations(
         spawnBinaryPath: nodeRuns.spawnBinaryPath,
         spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
         parentNodeRunId: nodeRuns.parentNodeRunId,
+        containerRunId: nodeRuns.containerRunId,
         childTaskId: nodeRuns.childTaskId,
       }
       const runCandidates = await db
@@ -835,6 +837,7 @@ export function createPostgresqlTaskRecoveryOperations(
           spawnBinaryPath: nodeRuns.spawnBinaryPath,
           spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
           parentNodeRunId: nodeRuns.parentNodeRunId,
+          containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)
@@ -863,6 +866,7 @@ export function createPostgresqlTaskRecoveryOperations(
           spawnBinaryPath: nodeRuns.spawnBinaryPath,
           spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
           parentNodeRunId: nodeRuns.parentNodeRunId,
+          containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)

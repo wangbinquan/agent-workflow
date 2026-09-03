@@ -110,7 +110,17 @@ describe('S-22（纯函数面）— retryNode 后的行集：目标可跑、canc
       row('b', 'canceled'),
       row('a', 'failed', { retryIndex: 1 }), // retryNode 铸的 'queued for retry' 行（更晚 id ⇒ latest）
     ]
-    const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, upstreams, NONE, NONE, NONE)
+    const f = deriveFrontier(
+      rows,
+      definition,
+      scopeNodes,
+      scopeIds,
+      { containerRunId: null, iteration: 0 },
+      upstreams,
+      NONE,
+      NONE,
+      NONE,
+    )
     expect(f.ready).toEqual(['a', 'b'])
     // b 不再是无桶黑洞：直接回 ready，不入任何停泊桶、不入 blocked 诊断。
     expect(f.completed.has('b')).toBe(false)
@@ -130,7 +140,17 @@ describe('S-22（纯函数面）— retryNode 后的行集：目标可跑、canc
       row('b', 'canceled'),
       row('a', 'done', { retryIndex: 1 }), // 重试已成功
     ]
-    const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, upstreams, NONE, NONE, NONE)
+    const f = deriveFrontier(
+      rows,
+      definition,
+      scopeNodes,
+      scopeIds,
+      { containerRunId: null, iteration: 0 },
+      upstreams,
+      NONE,
+      NONE,
+      NONE,
+    )
     expect(f.completed.has('a')).toBe(true)
     // 旧缺陷形态是「ready 空、四桶全空、allSettled=false」⇒ runScope 唯一落
     // `scheduler stalled` 兜底。RFC-095 后 b 获得显式归宿：ready。

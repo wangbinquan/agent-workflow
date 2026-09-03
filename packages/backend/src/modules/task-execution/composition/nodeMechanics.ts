@@ -53,7 +53,9 @@ import type {
   TaskMechanicsState,
 } from '@/services/execution/taskMechanicsState'
 import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
-import { pickFreshestRun, pickUpstreamSourceRun } from '@/services/freshness'
+import { pickFrameSourceRun, pickFreshestRun } from '@/services/freshness'
+import { loadFrameChain } from '../application/frameChain'
+import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
 import {
   createIsoUnderLock,
   markMergeFailed,
@@ -600,6 +602,8 @@ export async function executeWorkgroupHostMechanics(
               askingNodeId: req.nodeId,
               askingNodeRunId: req.nodeRunId,
               askingShardKey: currentRunRow?.shardKey ?? null,
+              // RFC-354: the park row lives in the asking run's frame.
+              containerRunId: currentRunRow?.containerRunId ?? null,
               intermediaryNodeId: clarifyNodeId,
               iteration: askingGeneration,
               questions: result.clarify.questions,
@@ -943,6 +947,8 @@ export type OneNodeResult = NodeMechanicsResult
 
 export interface OneNodeArgs {
   node: WorkflowNode
+  /** RFC-354 — the frame (wrapper generation row) the node is dispatched in; null at the top scope. */
+  containerRunId: string | null
   iteration: number
   log: Logger
 }
@@ -1275,7 +1281,7 @@ export async function runCallWorkflowNode(
     taskId,
     definition.edges,
     node.id,
-    iteration,
+    { containerRunId: args.containerRunId, iteration },
     log,
     definition,
     state.containerOf,
@@ -1306,6 +1312,7 @@ export async function runCallWorkflowNode(
       ? {}
       : { executionContext: state.opts.executionContext }),
     taskId,
+    containerRunId: args.containerRunId,
     nodeId: node.id,
     iteration,
     consumedUpstreamJson,
@@ -2294,7 +2301,7 @@ export async function runCodeHostCallNode(
     taskId,
     definition.edges,
     node.id,
-    iteration,
+    { containerRunId: args.containerRunId, iteration },
     log,
     definition,
     state.containerOf,
@@ -2324,6 +2331,7 @@ export async function runCodeHostCallNode(
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
+    containerRunId: args.containerRunId,
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
@@ -2602,7 +2610,7 @@ export async function runScriptNode(
     taskId,
     definition.edges,
     node.id,
-    iteration,
+    { containerRunId: args.containerRunId, iteration },
     log,
     definition,
     state.containerOf,
@@ -2626,6 +2634,7 @@ export async function runScriptNode(
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
+    containerRunId: args.containerRunId,
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
@@ -2783,6 +2792,7 @@ export async function runScriptNode(
             status: 'pending',
             cause: 'process-retry',
             retryIndex: retryIndex + attempt,
+            containerRunId: args.containerRunId,
             iteration,
             overrides: { consumedUpstreamRunsJson: consumedUpstreamJson },
           })
@@ -3244,6 +3254,8 @@ export async function judgeBranchActivation(
   state: SchedulerState,
   node: WorkflowNode,
   iteration: number,
+  /** RFC-354 — the frame the node is dispatched in; the skipped row lives there. */
+  containerRunId: string | null,
 ): Promise<OneNodeResult | null> {
   const { taskId, definition, log } = state
   // Fast path: a node with NO inbound dependency at all can never be branched
@@ -3263,6 +3275,7 @@ export async function judgeBranchActivation(
   const existing = await state.opts.persistence.nodeExecution.list({
     taskId,
     nodeId: node.id,
+    containerRunId,
     iteration,
   })
   const latest = pickFreshestRun(existing, { topLevelOnly: true })
@@ -3273,7 +3286,7 @@ export async function judgeBranchActivation(
     taskId,
     definition,
     node,
-    iteration,
+    frame: { containerRunId, iteration },
     parents: state.containerOf,
     ...(forceActivated ? { forceActivated: true } : {}),
   })
@@ -3321,6 +3334,7 @@ export async function judgeBranchActivation(
       nodeId: node.id,
       status: 'pending',
       cause: 'branch-skip',
+      containerRunId,
       iteration,
       overrides: { consumedUpstreamRunsJson: consumedJson },
     })
@@ -3359,9 +3373,16 @@ export async function runOutputNode(
   const bindings = readBindings(node, 'ports')
   const projected: Array<{
     binding: Binding
-    row: Awaited<ReturnType<typeof readPortRowAtIteration>>
+    row: Awaited<ReturnType<typeof readPortRowAtFrame>>
   }> = []
   const consumed: Record<string, string> = {}
+  // RFC-354 — an output node is a consumer like any other: each bound source is
+  // read in the frame the environment chain resolves it to.
+  const frame: FrameCoordinate = { containerRunId: args.containerRunId, iteration }
+  const chain = await loadFrameChain(
+    (id) => state.opts.persistence.nodeExecution.read(id),
+    frame,
+  )
   for (const b of bindings) {
     const resolved = resolveWorkflowSourceRef(definition, b.bind, node.id, state.containerOf)
     if (!resolved.ok) {
@@ -3371,14 +3392,28 @@ export async function runOutputNode(
         message: 'wrapper-output-boundary-missing',
       }
     }
+    const sourceFrame = resolveSourceFrame({
+      sourceNodeId: resolved.source.nodeId,
+      targetNodeId: node.id,
+      parents: state.containerOf,
+      frame,
+      containerRowById: chain.lookup,
+    })
+    if (!sourceFrame.ok) {
+      return {
+        kind: 'failed',
+        summary: `output node ${node.id}: source '${resolved.source.nodeId}.${resolved.source.portName}' is not lexically visible (${sourceFrame.reason})`,
+        message: 'closure-binding-unresolved',
+      }
+    }
     // RFC-193 D16: copy kind + archive reference with the content — an
     // output node is pure projection, its row must stay artifact-readable.
-    const row = await readPortRowAtIteration(
+    const row = await readPortRowAtFrame(
       state.opts.persistence.nodeExecution,
       taskId,
       resolved.source.nodeId,
       resolved.source.portName,
-      iteration,
+      sourceFrame.frame,
     )
     if (row.runId !== null) consumed[resolved.source.nodeId] = row.runId
     projected.push({ binding: b, row })
@@ -3388,6 +3423,7 @@ export async function runOutputNode(
     nodeId: node.id,
     status: 'done',
     cause: 'io-virtual',
+    containerRunId: args.containerRunId,
     iteration,
     overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
   })
@@ -3427,6 +3463,7 @@ export async function runInputNode(
     nodeId: node.id,
     status: 'done',
     cause: 'io-virtual',
+    containerRunId: args.containerRunId,
     iteration,
   })
   // RFC-004: an input node's single output port is named after its inputKey,
@@ -3452,6 +3489,7 @@ export async function runReviewNode(
     appHome: opts.appHome,
     definition,
     node,
+    containerRunId: args.containerRunId,
     iteration,
     // RFC-193 D9: the review's fallback read root is THIS scope's canonical.
     scopeRoot: state.scopeRoot,
@@ -3506,6 +3544,7 @@ export async function runCrossClarifyNode(
       nodeId: node.id,
       status: 'pending',
       cause: 'cross-clarify-guard',
+      containerRunId: args.containerRunId,
       iteration,
     })
     await setRunStatus(state, {
@@ -3542,6 +3581,7 @@ export async function runCrossClarifyNode(
       nodeId: node.id,
       status: 'pending',
       cause: 'cross-clarify-guard',
+      containerRunId: args.containerRunId,
       iteration,
     })
     // RFC-217 T9: the pending→done short-circuit transition (+ its reason
@@ -3635,7 +3675,7 @@ export async function runAgentSingleNode(
     taskId,
     definition.edges,
     node.id,
-    iteration,
+    { containerRunId: args.containerRunId, iteration },
     log,
     definition,
     state.containerOf,
@@ -3715,6 +3755,7 @@ export async function runAgentSingleNode(
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
     taskId,
     nodeId: node.id,
+    containerRunId: args.containerRunId,
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
@@ -3889,6 +3930,7 @@ export async function runAgentSingleNode(
           status: 'pending',
           cause: 'process-retry',
           retryIndex: attempt,
+          containerRunId: args.containerRunId,
           iteration,
           overrides: {
             reviewIteration: inheritedReviewIteration,
@@ -4789,6 +4831,9 @@ export async function runAgentSingleNode(
         askingNodeId: node.id,
         askingNodeRunId: nodeRunId,
         targetConsumerNodeId: designerNodeId ?? null,
+        // RFC-354: the park row lives in the asking run's frame; loopIter is
+        // the round INSIDE that frame.
+        containerRunId: currentRunRowXc?.containerRunId ?? null,
         loopIter: currentRunRowXc?.iteration ?? 0,
         questions: lastResult.clarify.questions,
         ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
@@ -4882,7 +4927,11 @@ export async function resolveUpstreamInputs(
   taskId: string,
   edges: WorkflowEdge[],
   nodeId: string,
-  iteration: number,
+  // RFC-354 — the consumer's FRAME (wrapper generation row + round). Every
+  // source is read in the frame the environment chain resolves it to: a local
+  // in this frame, a closure / parameter in an enclosing frame — never by a
+  // numeric iteration window.
+  frame: FrameCoordinate,
   log: Logger,
   definition?: WorkflowDefinition,
   parents?: ReadonlyMap<string, string>,
@@ -4906,6 +4955,9 @@ export async function resolveUpstreamInputs(
   // Keyed by source nodeId — all edges from the same source resolve to the same
   // picked run, so this stays consistent across multi-port fan-in.
   const consumed: Record<string, string> = {}
+  // The generation rows between this frame and the top, loaded once; the
+  // pure frame walk below looks them up synchronously.
+  const chain = await loadFrameChain((id) => persistence.read(id), frame)
 
   for (const edge of incoming) {
     const resolved =
@@ -4918,20 +4970,34 @@ export async function resolveUpstreamInputs(
       )
     }
     const source = resolved.source
+    // RFC-354 — lexical environment lookup. The source lives either in this
+    // frame (a sibling in the same wrapper generation and round) or in an
+    // enclosing frame (a value captured from outside the body, or a wrapper
+    // parameter); the walk decides which, and a source that is not lexically
+    // visible is a definition error surfaced loudly, never an empty string.
+    // Without a definition (legacy fixtures) every source is read in the
+    // consumer's own frame.
+    const sourceFrame =
+      definition === undefined || parents === undefined
+        ? frame
+        : resolveSourceFrame({
+            sourceNodeId: source.nodeId,
+            targetNodeId: nodeId,
+            parents,
+            frame,
+            containerRowById: chain.lookup,
+          })
+    if (!('containerRunId' in sourceFrame) && !sourceFrame.ok) {
+      throw new Error(
+        `closure-binding-unresolved: source '${source.nodeId}.${source.portName}' is not lexically visible from '${nodeId}' (${sourceFrame.reason})`,
+      )
+    }
+    const readFrame = 'containerRunId' in sourceFrame ? sourceFrame : sourceFrame.frame
     const rows = await persistence.list({ taskId, nodeId: source.nodeId })
-    // RFC-074 (decision D10 / design §5.1): unify the source-run picker with
-    // the freshness picker. Previously this sorted by (iteration desc,
-    // retryIndex desc) with NO cci term and NO status filter — so it could read
-    // a STALE pre-clarify row (higher retryIndex, lower cci) or even a pending
-    // row's empty output while a done row carried the real content (the
-    // three-picker drift the RFC indicts; baseline PB1/PB2). Now: among
-    // top-level DONE rows within the iteration window, pick the highest
-    // iteration (cross-boundary "latest visible", e.g. git-wrapper / loop
-    // carry) and, within that iteration, the freshest by isFresherNodeRun.
-    // RFC-098 B3 (audit S-7): the two-phase picker body now lives in
-    // freshness.ts (pickUpstreamSourceRun) so computeWrapperConsumed shares
-    // the exact same口径 — behavior here is unchanged.
-    const run = pickUpstreamSourceRun(rows, iteration)
+    // RFC-074 (decision D10 / design §5.1): the source picker is the freshness
+    // picker — settled (done ∪ skipped, RFC-306) top-level rows only, freshest
+    // by pure id order — restricted by RFC-354 to exactly one frame.
+    const run = pickFrameSourceRun(rows, readFrame)
     if (!run) {
       log.warn('upstream node_run not found', { taskId, sourceNodeId: source.nodeId })
       continue
@@ -4974,12 +5040,15 @@ export async function resolveUpstreamInputs(
  * alongside `content`, or the projected row 404s on the port-artifacts API
  * and goes dark after worktree GC (Codex design-gate P1).
  */
-export async function readPortRowAtIteration(
+export async function readPortRowAtFrame(
   persistence: NodeExecutionPersistence,
   taskId: string,
   nodeId: string,
   portName: string,
-  iteration: number,
+  // RFC-354 — the FRAME the producing node is read in (the caller resolves
+  // it through the environment chain when the source sits in an enclosing
+  // scope); rows of any other frame are invisible here.
+  frame: FrameCoordinate,
 ): Promise<{
   runId: string | null
   content: string
@@ -4995,21 +5064,18 @@ export async function readPortRowAtIteration(
   active: boolean
 }> {
   const rows = await persistence.list({ taskId, nodeId })
-  // Pick the freshest DONE top-level run visible at this iteration. For a
-  // normal in-loop source, the current iteration wins. For a historical
-  // snapshot that references an outer source, iteration 0 remains visible in
-  // later loop rounds instead of turning into a synthetic empty value.
-  // RFC-096 (audit 附录 C #5): the done-only filter aligns this read with
+  // Pick the freshest SETTLED top-level run of exactly this frame.
+  // RFC-096 (audit 附录 C #5): the settled-only filter aligns this read with
   // buildFreshestSettledPerNode / the RFC-074 freshness口径 — without it, a
   // freshly minted non-done row (e.g. a concurrent designer-rerun pending
   // row) was picked as freshest, had no outputs, and the port read returned
   // '': a loop `port-empty` exit condition false-fired and the wrapper
   // persisted '' outputs. Non-done rows never have outputs (the runner only
   // persists ports on done), so skipping them can only surface the newest
-  // REAL content. (The RFC-040 shadowing fix — pure id over retryIndex — is
-  // inherited from isFresherNodeRun; the old comment describing the retired
-  // (clarifyIteration, retryIndex, id) triple was stale and is gone.)
-  const chosen = pickUpstreamSourceRun(rows, iteration)
+  // REAL content. RFC-354 retired the "iteration ≤ window" carry: a value
+  // from an enclosing scope is reached by resolving its frame first, not by
+  // letting an older round leak through.
+  const chosen = pickFrameSourceRun(rows, frame)
   if (chosen === undefined) {
     // No settled run at all. `active: true` (not false) on purpose: "nothing has
     // run yet" is not a branch decision, and reporting it as inactive would let

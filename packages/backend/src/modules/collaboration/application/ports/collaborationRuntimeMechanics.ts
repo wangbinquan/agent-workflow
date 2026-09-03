@@ -15,6 +15,11 @@ export interface CollaborationReviewDispatchInput {
   readonly appHome: string
   readonly definition: WorkflowDefinition
   readonly node: WorkflowNode
+  /**
+   * RFC-354 — the frame the review node is dispatched in; its park row lives
+   * there. Optional only for legacy fixtures; production always passes it.
+   */
+  readonly containerRunId?: string | null
   readonly iteration: number
   readonly scopeRoot: string
   readonly repoDirName?: string
@@ -43,6 +48,11 @@ interface CollaborationAgentClarifyOpenBase {
   readonly taskId: string
   readonly askingNodeId: string
   readonly askingNodeRunId: string
+  /**
+   * RFC-354 — the asking run's frame; the park row is minted in the same
+   * frame. Optional only for legacy fixtures; production always passes it.
+   */
+  readonly containerRunId?: string | null
   readonly intermediaryNodeId: string
   readonly questions: readonly ClarifyQuestion[]
   readonly truncationWarnings?: readonly ClarifyTruncationWarning[]

@@ -25,6 +25,11 @@ function whereQuery(input: NodeExecutionQuery) {
   else if (input.parentNodeRunId !== undefined) {
     conditions.push(eq(nodeRuns.parentNodeRunId, input.parentNodeRunId))
   }
+  // RFC-354 — one frame: null = the top scope, a run id = that wrapper generation's body.
+  if (input.containerRunId === null) conditions.push(isNull(nodeRuns.containerRunId))
+  else if (input.containerRunId !== undefined) {
+    conditions.push(eq(nodeRuns.containerRunId, input.containerRunId))
+  }
   return and(...conditions)
 }
 

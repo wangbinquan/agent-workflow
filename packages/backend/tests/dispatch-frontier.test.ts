@@ -36,6 +36,8 @@ function run(over: Partial<Row>): Row {
     errorMessage: null,
     consumedUpstreamRunsJson: null,
     wrapperProgressJson: null,
+    // RFC-354: top scope unless a fixture places the row in a generation's frame.
+    containerRunId: null,
     ...over,
   } as unknown as Row
 }
@@ -189,9 +191,17 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
       iteration: 0,
       wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
     })
+    // RFC-354: the inner rerun is a MEMBER of the wrapper generation (its
+    // frame is the wrapper row), at whatever round the loop is on.
     const rows = [
       wrapperRow,
-      run({ id: '01P', nodeId: 'inner_agent', status: 'pending', iteration: 2 }),
+      run({
+        id: '01P',
+        nodeId: 'inner_agent',
+        status: 'pending',
+        iteration: 2,
+        containerRunId: wrapperRow.id,
+      }),
     ]
     expect(isDispatchable(wrapperRow, 'wrapper-loop', NO_FRESH, rows, wrapDef)).toBe(true)
   })
@@ -209,79 +219,144 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
     // inner only has a DONE row at iter 2 — no pending → user hasn't answered.
     const rows = [
       wrapperRow,
-      run({ id: '01D', nodeId: 'inner_agent', status: 'done', iteration: 2 }),
+      run({
+        id: '01D',
+        nodeId: 'inner_agent',
+        status: 'done',
+        iteration: 2,
+        containerRunId: wrapperRow.id,
+      }),
     ]
     expect(isDispatchable(wrapperRow, 'wrapper-loop', NO_FRESH, rows, wrapDef)).toBe(false)
   })
 })
 
-describe('RFC-076 PR-A — wrapperHasFreshInnerWork (HIGH-1 iteration window)', () => {
+// RFC-354 — the revival scan is the wrapper generation's MEMBERSHIP: rows
+// whose frame chain passes through the wrapper row, at any round and any
+// nesting depth. The old "iteration window read off the progress payload"
+// (HIGH-1) is gone with the depth-1 blind spot it carried.
+describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation membership)', () => {
   const loopDef = def([
     { id: 'lw', kind: 'wrapper-loop', nodeIds: ['a', 'c'] },
     { id: 'a', kind: 'agent-single' },
     { id: 'c', kind: 'clarify' },
   ])
-
-  // HIGH-1 KEY: wrapper row at iteration 0, inner rerun at loop counter 2.
-  test('loop: inner pending at progress.iteration (i≥1) while wrapper row at iter 0 → true', () => {
-    const wrapperRow = run({
+  const parkedLoop = () =>
+    run({
       nodeId: 'lw',
-      iteration: 0, // parentIteration
+      iteration: 0, // the round of the ENCLOSING frame, not of the body
       status: 'awaiting_human',
       wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
     })
-    const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 2 })]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(true)
+
+  test('loop: an inner pending in this generation counts, whatever round it is on', () => {
+    const wrapperRow = parkedLoop()
+    for (const iteration of [0, 1, 2]) {
+      const rows = [
+        wrapperRow,
+        run({
+          id: '01P',
+          nodeId: 'a',
+          status: 'pending',
+          iteration,
+          containerRunId: wrapperRow.id,
+        }),
+      ]
+      expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(true)
+    }
   })
 
-  // Iteration window must be precise: a pending at the WRONG iteration doesn't count.
-  test('loop: inner pending at iteration 1 but progress.iteration 2 → false (window precise)', () => {
-    const wrapperRow = run({
-      nodeId: 'lw',
-      iteration: 0,
-      status: 'awaiting_human',
-      wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
-    })
-    const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 1 })]
+  test('loop: an inner pending that belongs to ANOTHER generation of the same wrapper → false', () => {
+    const wrapperRow = parkedLoop()
+    const rows = [
+      wrapperRow,
+      run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 2, containerRunId: 'OTHER_GEN' }),
+    ]
     expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
   })
 
   test('loop: no inner pending anywhere → false', () => {
-    const wrapperRow = run({
-      nodeId: 'lw',
-      iteration: 0,
-      status: 'awaiting_human',
-      wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
-    })
-    const rows = [wrapperRow, run({ id: '01D', nodeId: 'a', status: 'done', iteration: 2 })]
+    const wrapperRow = parkedLoop()
+    const rows = [
+      wrapperRow,
+      run({ id: '01D', nodeId: 'a', status: 'done', iteration: 2, containerRunId: wrapperRow.id }),
+    ]
     expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
   })
 
-  test('loop: malformed/absent progress → fallback iteration 0', () => {
+  test('loop: wrapper progress is not consulted — a member counts even with absent progress', () => {
     const wrapperRow = run({
       nodeId: 'lw',
       iteration: 0,
       status: 'awaiting_human',
       wrapperProgressJson: null,
     })
-    const atZero = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 0 })]
-    expect(wrapperHasFreshInnerWork(wrapperRow, atZero, loopDef)).toBe(true)
-    const atTwo = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 2 })]
-    expect(wrapperHasFreshInnerWork(wrapperRow, atTwo, loopDef)).toBe(false)
+    const rows = [
+      wrapperRow,
+      run({
+        id: '01P',
+        nodeId: 'a',
+        status: 'pending',
+        iteration: 2,
+        containerRunId: wrapperRow.id,
+      }),
+    ]
+    expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(true)
   })
 
-  // git inner shares the wrapper's own iteration.
-  test('git: inner pending at the wrapper row iteration → true', () => {
+  test('git: an inner pending in this generation → true; in another generation → false', () => {
     const gitDef = def([
       { id: 'gw', kind: 'wrapper-git', nodeIds: ['a'] },
       { id: 'a', kind: 'agent-single' },
     ])
     const wrapperRow = run({ nodeId: 'gw', iteration: 3, status: 'awaiting_review' })
-    const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 3 })]
+    const rows = [
+      wrapperRow,
+      run({
+        id: '01P',
+        nodeId: 'a',
+        status: 'pending',
+        iteration: 0,
+        containerRunId: wrapperRow.id,
+      }),
+    ]
     expect(wrapperHasFreshInnerWork(wrapperRow, rows, gitDef)).toBe(true)
-    // pending at a different iteration → false
-    const wrong = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 0 })]
+    const wrong = [
+      wrapperRow,
+      run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 3, containerRunId: 'OTHER_GEN' }),
+    ]
     expect(wrapperHasFreshInnerWork(wrapperRow, wrong, gitDef)).toBe(false)
+  })
+
+  // The depth-1 blind spot (RFC-098 §B3 revision #8) is closed: evidence born
+  // inside a NESTED loop's own generation still releases the outer wrapper.
+  test('nested: a pending inside the inner loop generation releases the OUTER wrapper', () => {
+    const nestedDef = def([
+      { id: 'outer', kind: 'wrapper-loop', nodeIds: ['inner'] },
+      { id: 'inner', kind: 'wrapper-loop', nodeIds: ['a'] },
+      { id: 'a', kind: 'agent-single' },
+    ])
+    const outerRow = run({ id: '01OUT', nodeId: 'outer', iteration: 0, status: 'awaiting_human' })
+    const innerGen = run({
+      id: '01IN',
+      nodeId: 'inner',
+      iteration: 1,
+      status: 'awaiting_human',
+      containerRunId: '01OUT',
+    })
+    const deepPending = run({
+      id: '01P',
+      nodeId: 'a',
+      iteration: 3,
+      status: 'pending',
+      containerRunId: '01IN',
+    })
+    expect(wrapperHasFreshInnerWork(outerRow, [outerRow, innerGen, deepPending], nestedDef)).toBe(
+      true,
+    )
+    expect(wrapperHasFreshInnerWork(innerGen, [outerRow, innerGen, deepPending], nestedDef)).toBe(
+      true,
+    )
   })
 })
 
@@ -306,10 +381,11 @@ describe('RFC-098 B3 — wrapperRevivalEvidence (review done∧fresh extension)'
     status: 'awaiting_review',
     wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 1, phase: 'awaiting' }),
   })
-  // Helper rows must be TOP-LEVEL (parentNodeRunId null) so the in-window
-  // freshest-done map sees them.
+  // Helper rows must be TOP-LEVEL (parentNodeRunId null) so the per-frame
+  // freshest-settled map sees them, and MEMBERS of the parked generation
+  // (RFC-354: their frame is the wrapper row).
   function top(over: Partial<Row>): Row {
-    return run({ parentNodeRunId: null, ...over } as Partial<Row>)
+    return run({ parentNodeRunId: null, containerRunId: '01W', ...over } as Partial<Row>)
   }
 
   test('正例：窗口内 review done∧fresh 行即证据 → 谓词放行（approve 形态）', () => {
@@ -345,11 +421,11 @@ describe('RFC-098 B3 — wrapperRevivalEvidence (review done∧fresh extension)'
     expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
   })
 
-  test('窗口规则对 review done 同样生效：落在窗口外的 review done 不解锁', () => {
+  test('成员规则对 review done 同样生效：属于另一代际的 review done 不解锁', () => {
     const rows = [
       parked,
-      // review done at iteration 0 — outside the progress window (1).
-      top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 0 }),
+      // review done inside ANOTHER generation of the same wrapper — not a member.
+      top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 1, containerRunId: 'OTHER_GEN' }),
     ]
     expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
   })

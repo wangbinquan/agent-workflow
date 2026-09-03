@@ -242,6 +242,7 @@ import {
   type ValidatorContext,
 } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { createLogger } from '@/util/log'
+import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
@@ -1080,6 +1081,24 @@ export async function composePostgresqlDaemonApplication(
     taskTermination: composePostgresqlTaskSourceTermination(input.db),
   })
   await webhookTerminalControl.reconcileOnBoot()
+  // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed
+  // (marker-gated; a single maintenance_state read on every later boot).
+  try {
+    const backfill = await runFrameBackfillOnBoot({ provider: 'postgresql', db: input.db })
+    if (!backfill.skipped) {
+      log.info('rfc354 frame backfill completed on boot', {
+        tasks: backfill.tasks,
+        rowsUpdated: backfill.rowsUpdated,
+        roundsUpdated: backfill.roundsUpdated,
+        unreadableTasks: backfill.unreadableTasks.length,
+        unresolvedRows: backfill.unresolvedRows,
+      })
+    }
+  } catch (err) {
+    log.warn('rfc354 frame backfill on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
   const webhookDispatcher = createWebhookDispatcher({
     persistence: composePostgresqlWebhookDispatchPersistence(input.db),
     deliveryPersistence: composePostgresqlWebhookDeliveryPersistence(input.db),

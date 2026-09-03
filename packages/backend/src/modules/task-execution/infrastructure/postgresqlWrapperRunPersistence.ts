@@ -1,8 +1,8 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNull } from 'drizzle-orm'
 
 import { nodeRuns } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { pickUpstreamSourceRun } from '@/services/freshness'
+import { pickFrameSourceRun } from '@/services/freshness'
 import type { WrapperRunPersistence } from '../application/ports/wrapperRunPersistence'
 import {
   assertPostgresqlTaskOwnerlessTx,
@@ -24,6 +24,10 @@ export class PostgresqlWrapperRunPersistence implements WrapperRunPersistence {
         and(
           eq(nodeRuns.taskId, input.taskId),
           eq(nodeRuns.nodeId, input.nodeId),
+          // RFC-354: a generation is keyed by its frame, not by iteration alone.
+          input.containerRunId === null
+            ? isNull(nodeRuns.containerRunId)
+            : eq(nodeRuns.containerRunId, input.containerRunId),
           eq(nodeRuns.iteration, input.iteration),
         ),
       )
@@ -45,13 +49,13 @@ export class PostgresqlWrapperRunPersistence implements WrapperRunPersistence {
     input: Parameters<WrapperRunPersistence['resolveConsumed']>[0],
   ): ReturnType<WrapperRunPersistence['resolveConsumed']> {
     const consumed: Record<string, string> = {}
-    for (const sourceNodeId of input.sourceNodeIds) {
+    for (const source of input.sources) {
       const rows = await this.db
         .select()
         .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.nodeId, sourceNodeId)))
-      const run = pickUpstreamSourceRun(rows, input.iteration)
-      if (run !== undefined) consumed[sourceNodeId] = run.id
+        .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.nodeId, source.nodeId)))
+      const run = pickFrameSourceRun(rows, source.frame)
+      if (run !== undefined) consumed[source.nodeId] = run.id
     }
     return consumed
   }

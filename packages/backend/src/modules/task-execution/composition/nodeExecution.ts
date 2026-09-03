@@ -46,9 +46,14 @@ const gateways = new WeakMap<TaskMechanicsState, NodeExecutionGateway>()
 
 function legacyArgs(
   state: TaskMechanicsState,
-  request: Pick<NodeStepRequest, 'node' | 'iteration'>,
+  request: Pick<NodeStepRequest, 'node' | 'iteration' | 'containerRunId'>,
 ): OneNodeArgs {
-  return { node: request.node as WorkflowNode, iteration: request.iteration, log: state.log }
+  return {
+    node: request.node as WorkflowNode,
+    containerRunId: request.containerRunId,
+    iteration: request.iteration,
+    log: state.log,
+  }
 }
 
 function legacyHostPort(
@@ -134,7 +139,12 @@ function buildGateway(
 
   return new NodeExecutionGateway(new ClosedNodeExecutorRegistry(executors), {
     async judge(request) {
-      const outcome = await judgeBranchActivation(state, request.node, request.iteration)
+      const outcome = await judgeBranchActivation(
+        state,
+        request.node,
+        request.iteration,
+        request.containerRunId,
+      )
       return outcome === null ? { kind: 'active' } : { kind: 'inactive', outcome }
     },
   })
@@ -161,6 +171,7 @@ export function executeNode(
     node: args.node,
     task: { taskId: state.taskId },
     scope: { scopeId: state.containerOf.get(args.node.id) ?? null },
+    containerRunId: args.containerRunId,
     iteration: args.iteration,
     execution: { ...(state.opts.signal === undefined ? {} : { signal: state.opts.signal }) },
   })

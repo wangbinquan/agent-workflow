@@ -89,7 +89,7 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       upstreams,
       NONE, // inFlight 空
       dispatched,
@@ -120,7 +120,7 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       upstreams,
       NONE,
       NONE, // 新调用：去重集为空
@@ -142,7 +142,7 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       upstreams,
       new Set(['sib']), // sib in flight
       dispatched,
@@ -165,7 +165,7 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       upstreams,
       NONE,
       dispatched,

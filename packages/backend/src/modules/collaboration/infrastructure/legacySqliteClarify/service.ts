@@ -158,6 +158,11 @@ function safeParseArray<T>(json: string | null): T[] | undefined {
 }
 
 const kindIs = (kind: ClarifyRoundKind) => eq(clarifyRounds.kind, kind)
+// RFC-354 — rounds are keyed by frame: the generation row the asking run hangs off (null = top scope).
+const frameIs = (containerRunId: string | null) =>
+  containerRunId === null
+    ? isNull(clarifyRounds.containerRunId)
+    : eq(clarifyRounds.containerRunId, containerRunId)
 
 // ---------------------------------------------------------------------------
 // createClarifyRound — kind-generalized runner-side entry point.
@@ -176,6 +181,12 @@ interface CreateRoundCommon {
   questions: ClarifyQuestion[]
   /** Non-fatal parser warnings (option/question truncations). */
   truncationWarnings?: ClarifyTruncationWarning[]
+  /**
+   * RFC-354 — the asking run's frame; the park row is minted in the same
+   * frame. Optional only so legacy fixtures that open rounds outside any
+   * wrapper keep compiling; production callers always pass the frame.
+   */
+  containerRunId?: string | null
   /** Defaults to Date.now(). Override for deterministic tests. */
   now?: () => number
 }
@@ -273,6 +284,7 @@ export async function createClarifyRound(
           eq(clarifyRounds.taskId, args.taskId),
           eq(clarifyRounds.intermediaryNodeId, args.intermediaryNodeId),
           eq(clarifyRounds.loopIter, args.loopIter),
+          frameIs(args.containerRunId ?? null),
         ),
       )
       .orderBy(desc(clarifyRounds.iteration))
@@ -308,6 +320,7 @@ export async function createClarifyRound(
       intermediaryNodeId: args.intermediaryNodeId,
       targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
       parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
+      containerRunId: args.containerRunId ?? null,
       loopIter: args.kind === 'cross' ? args.loopIter : 0,
       iteration,
       questionsJson,
@@ -325,6 +338,7 @@ export async function createClarifyRound(
       intermediaryNodeId: args.intermediaryNodeId,
       targetConsumerNodeId: args.kind === 'cross' ? args.targetConsumerNodeId : null,
       parentNodeRunId: args.kind === 'self' ? (args.parentNodeRunId ?? null) : null,
+      containerRunId: args.containerRunId ?? null,
       loopIter: args.kind === 'cross' ? args.loopIter : 0,
       iteration,
       questionsJson,
@@ -341,6 +355,7 @@ export async function createClarifyRound(
               status: existingRun.status as 'pending' | 'running' | 'awaiting_human',
               iteration: existingRun.iteration,
               parentNodeRunId: existingRun.parentNodeRunId,
+              containerRunId: existingRun.containerRunId,
               shardKey: existingRun.shardKey,
               startedAt: existingRun.startedAt,
             },
@@ -422,6 +437,8 @@ export interface EvaluateDesignerRerunReadinessArgs {
   definition: WorkflowDefinition
   /** Limit the readiness scan to a specific loop iteration. Non-loop = 0. */
   loopIter: number
+  /** RFC-354 — the frame the rounds live in; undefined = not frame-scoped (legacy callers). */
+  containerRunId?: string | null
   /**
    * RFC-128 P3 — origin node-run ids (= the round's intermediary run id, which
    * equals task_questions.origin_node_run_id) of the designer questions being
@@ -496,6 +513,7 @@ export async function evaluateDesignerRerunReadiness(
           eq(clarifyRounds.taskId, args.taskId),
           eq(clarifyRounds.intermediaryNodeId, nodeId),
           eq(clarifyRounds.loopIter, args.loopIter),
+          ...(args.containerRunId === undefined ? [] : [frameIs(args.containerRunId)]),
         ),
       )
       .orderBy(desc(clarifyRounds.iteration))

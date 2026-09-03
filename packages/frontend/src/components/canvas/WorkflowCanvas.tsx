@@ -4041,16 +4041,6 @@ export function affectsEdgeDefinition(changes: EdgeChange[]): boolean {
   return changes.some((c) => c.type === 'remove' || c.type === 'add' || c.type === 'replace')
 }
 
-/** True when a connection targets a wrapper kind that has no inbound ports. */
-export function isUnsupportedWrapperInbound(
-  definition: WorkflowDefinition,
-  connection: { target?: string | null },
-): boolean {
-  if (connection.target === null || connection.target === undefined) return false
-  const target = definition.nodes.find((node) => node.id === connection.target)
-  return target?.kind === 'wrapper-git' || target?.kind === 'wrapper-loop'
-}
-
 /**
  * Translate an xyflow Connection landing on the catch-all left handle
  * (RFC-003) into a regular connection: target portName defaults to the

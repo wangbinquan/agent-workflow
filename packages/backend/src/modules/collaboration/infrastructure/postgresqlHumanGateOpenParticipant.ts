@@ -268,6 +268,7 @@ async function projectReviewGateOpen(
       nodeId: node.nodeId,
       status: 'awaiting_review',
       cause: 'review-park',
+      containerRunId: node.containerRunId,
       iteration: node.iteration,
       overrides: {
         reviewIteration: node.reviewIteration,
@@ -421,6 +422,7 @@ async function projectClarifyGateOpen(
       nodeId: node.nodeId,
       status: 'awaiting_human',
       cause: node.cause,
+      containerRunId: node.containerRunId,
       iteration: node.runIteration,
       overrides: {
         parentNodeRunId: node.parentNodeRunId,

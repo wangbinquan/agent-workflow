@@ -72,7 +72,16 @@ describe('RFC-076 PR-A — wrapper-fanout uses own iteration (progress ignored)'
 
   test('inner pending at wrapperRow.iteration (3) → true (own iteration, NOT progress 9)', () => {
     const wrapperRow = fanoutAwaitingRow()
-    const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 3 })]
+    const rows = [
+      wrapperRow,
+      run({
+        id: '01P',
+        nodeId: 'a',
+        status: 'pending',
+        iteration: 3,
+        containerRunId: wrapperRow.id,
+      }),
+    ]
     expect(wrapperHasFreshInnerWork(wrapperRow, rows, fanoutDef)).toBe(true)
   })
 
@@ -84,7 +93,16 @@ describe('RFC-076 PR-A — wrapper-fanout uses own iteration (progress ignored)'
 
   test('isDispatchable(awaiting_review wrapper-fanout) routes to wrapperHasFreshInnerWork → true', () => {
     const wrapperRow = fanoutAwaitingRow()
-    const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 3 })]
+    const rows = [
+      wrapperRow,
+      run({
+        id: '01P',
+        nodeId: 'a',
+        status: 'pending',
+        iteration: 3,
+        containerRunId: wrapperRow.id,
+      }),
+    ]
     // WRAPPER_KINDS.has('wrapper-fanout') === true → routes into the wrapper carve-out;
     // inner pending at the wrapper's own iteration (3) makes it dispatchable.
     expect(isDispatchable(wrapperRow, 'wrapper-fanout', NO_FRESH, rows, fanoutDef)).toBe(true)

@@ -44,7 +44,7 @@ const CATALOG_FILES = [
   'clarify-cross-agent-roundtrip.yaml',
   'wrapper-loop-exhausted.yaml',
   'wrapper-fanout-unsupported-inner.yaml',
-  'invalid-wrapper-loop-nested.yaml',
+  'wrapper-loop-nested.yaml',
   'runtime-lifecycle.yaml',
 ] as const
 
@@ -531,9 +531,12 @@ function outputValue(data: NodeRunsResponse, runId: string, port: string): strin
   return data.outputs.find((output) => output.nodeRunId === runId && output.port === port)?.value
 }
 
-test('catalog: every YAML imports; runnable definitions validate; nested loop is rejected', async () => {
+test('catalog: every YAML imports; runnable definitions validate; a wrapper inside a fan-out is rejected statically', async () => {
+  // RFC-354: loop-in-loop validates like any other nesting (the RFC-094
+  // `wrapper-loop-nested` ban is retired), while the fan-out body rule moved
+  // from a runtime failure to a schema-time error.
   const staticallyValid = CATALOG_FILES.filter(
-    (file) => file !== 'invalid-wrapper-loop-nested.yaml',
+    (file) => file !== 'wrapper-fanout-unsupported-inner.yaml',
   )
   for (const file of staticallyValid) {
     const receipt = await validate(file)
@@ -542,9 +545,12 @@ test('catalog: every YAML imports; runnable definitions validate; nested loop is
     expect(receipt.ok, `${file} validation result`).toBe(true)
   }
 
-  const invalid = await validate('invalid-wrapper-loop-nested.yaml')
+  const invalid = await validate('wrapper-fanout-unsupported-inner.yaml')
   expect(invalid.ok).toBe(false)
-  expect(invalid.issues.map((issue) => issue.code)).toContain('wrapper-loop-nested')
+  expect(invalid.issues.map((issue) => issue.code)).toContain(
+    'wrapper-fanout-unsupported-inner-kind',
+  )
+  expect(invalid.issues.map((issue) => issue.code)).not.toContain('wrapper-loop-nested')
 })
 
 test('workflow launch input contract rejects missing, unknown, and picker-incompatible values', async () => {
@@ -1215,19 +1221,22 @@ test('wrapper-loop exhaustion is a terminal failure and preserves the exhausted 
   expect(runsFor(data, 'loop_worker').map((run) => run.iteration)).toEqual([0, 1])
 })
 
-test('wrapper-fanout current v1 limitation fails closed before an inner wrapper can run', async () => {
-  const task = await launchOk('wrapper-fanout-unsupported-inner.yaml', {
-    docs: 'docs/a.md',
-  })
-  const final = await waitForTerminal(task.id)
-  expect(final.status).toBe('failed')
-
-  const data = await nodeRuns(task.id)
-  const fanout = onlyRun(data, 'fan_wrap')
-  expect(fanout.status).toBe('failed')
-  expect(fanout.errorMessage).toContain('v1-unsupported-inner-kind:wrapper-git')
-  expect(runsFor(data, 'inner_git')).toEqual([])
-  expect(runsFor(data, 'inner_mutator')).toEqual([])
+test('a wrapper inside a fan-out never starts: the launch gate rejects it with the exact issue', async () => {
+  // RFC-354: the fan-out body rule moved from a runtime failure
+  // (`v1-unsupported-inner-kind`) to the schema-time
+  // `wrapper-fanout-unsupported-inner-kind`, so the task is refused before any
+  // row is minted.
+  const result = await launch('wrapper-fanout-unsupported-inner.yaml', { docs: 'docs/a.md' })
+  expect(result.response.status).toBe(422)
+  const body = (await result.response.json()) as {
+    code: string
+    details?: { issues?: ValidationIssue[] }
+  }
+  expect(body.code).toBe('workflow-invalid')
+  expect(body.details?.issues?.map((issue) => issue.code)).toContain(
+    'wrapper-fanout-unsupported-inner-kind',
+  )
+  expect(result.task).toBeUndefined()
 })
 
 test('runtime lifecycle: a fresh-session process retry fails once, then succeeds on the configured retry', async () => {
@@ -1285,14 +1294,8 @@ test('runtime lifecycle: cancel interrupts a running subprocess and prevents out
   expect(runsFor(data, 'final_output')).toEqual([])
 })
 
-test('invalid loop-in-loop never starts: launch gate returns workflow-invalid with the exact issue', async () => {
-  const result = await launch('invalid-wrapper-loop-nested.yaml')
-  expect(result.response.status).toBe(422)
-  const body = (await result.response.json()) as {
-    code: string
-    details?: { issues?: ValidationIssue[] }
-  }
-  expect(body.code).toBe('workflow-invalid')
-  expect(body.details?.issues?.map((issue) => issue.code)).toContain('wrapper-loop-nested')
-  expect(result.task).toBeUndefined()
+test('loop-in-loop launches: the RFC-094 nesting ban is retired (RFC-354)', async () => {
+  const result = await launch('wrapper-loop-nested.yaml')
+  await expectHttp(result.response, 201, 'launch wrapper-loop-nested.yaml')
+  expect(result.task).toBeDefined()
 })

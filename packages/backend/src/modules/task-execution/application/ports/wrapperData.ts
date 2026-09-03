@@ -32,8 +32,23 @@ export interface WrapperDataPort {
   }): void
 
   persistProgress(runId: string, progress: WrapperProgress): Promise<void>
-  readPort(nodeId: string, portName: string, iteration: number): Promise<WrapperOutputValue>
-  resolveInputs(nodeId: string, iteration: number): Promise<WrapperResolvedInputs>
+  /**
+   * RFC-354 — reads are addressed by FRAME `(containerRunId, iteration)`: the
+   * wrapper generation row the consumer hangs off plus the round inside it.
+   * `readPort` reads a port of a node in exactly that frame (a body node of
+   * this generation at this round); `resolveInputs` resolves every inbound
+   * edge of `nodeId` as seen from that frame — locals in the same frame,
+   * closures / parameters in the enclosing frames (environment chain).
+   */
+  readPort(
+    nodeId: string,
+    portName: string,
+    frame: { readonly containerRunId: string | null; readonly iteration: number },
+  ): Promise<WrapperOutputValue>
+  resolveInputs(
+    nodeId: string,
+    frame: { readonly containerRunId: string | null; readonly iteration: number },
+  ): Promise<WrapperResolvedInputs>
   recordConsumed(runId: string, consumed: Readonly<Record<string, string>>): void
   priorFanoutConsumed(
     nodeId: string,

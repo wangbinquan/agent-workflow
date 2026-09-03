@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm'
 
 import { nodeRuns } from '@/db/schema'
 import { buildNodeRunMintRecord } from '../application/buildNodeRunMintRecord'
+import { childScopePath } from '../domain/environmentChain'
 import type { NodeRunMintInput } from '../application/ports/nodeRunLifecyclePersistence'
 import type { PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
 
@@ -22,7 +23,29 @@ export function createPostgresqlNodeRunMintParticipantInTx(
 ): PostgresqlNodeRunMintParticipantInTx {
   return Object.freeze({
     async mint(input: NodeRunMintInput) {
-      const values = buildNodeRunMintRecord(input)
+      const record = buildNodeRunMintRecord(input)
+      // RFC-354 — derive the breadcrumb from the generation row this row hangs
+      // off; the record carries null exactly when the caller left it to us.
+      let scopePath = record.scopePath
+      if (scopePath === null) {
+        const container =
+          record.containerRunId === null
+            ? undefined
+            : (
+                await tx
+                  .select({ nodeId: nodeRuns.nodeId, scopePath: nodeRuns.scopePath })
+                  .from(nodeRuns)
+                  .where(eq(nodeRuns.id, record.containerRunId))
+                  .limit(1)
+              )[0]
+        scopePath =
+          container === undefined
+            ? ''
+            : childScopePath(container.scopePath, container.nodeId, record.iteration)
+      }
+      const values = { ...record, scopePath }
+      // Prior generations of the SAME frame are superseded by this mint (frame
+      // is part of the key — see the SQLite twin).
       const priorRows = await tx
         .select({ id: nodeRuns.id })
         .from(nodeRuns)
@@ -31,6 +54,9 @@ export function createPostgresqlNodeRunMintParticipantInTx(
             eq(nodeRuns.taskId, values.taskId),
             eq(nodeRuns.nodeId, values.nodeId),
             eq(nodeRuns.iteration, values.iteration),
+            values.containerRunId === null
+              ? isNull(nodeRuns.containerRunId)
+              : eq(nodeRuns.containerRunId, values.containerRunId),
             isNull(nodeRuns.parentNodeRunId),
             lt(nodeRuns.id, values.id),
             ...(values.shardKey === null ? [] : [eq(nodeRuns.shardKey, values.shardKey)]),

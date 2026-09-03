@@ -26,6 +26,8 @@ export interface NodeRunRow {
   readonly status: NodeRunStatus
   readonly iteration: number
   readonly parentNodeRunId: string | null
+  /** RFC-354 — the frame (wrapper generation row) this row hangs off; null at the top scope. */
+  readonly containerRunId: string | null
   readonly mergeState: string | null
   readonly shardKey: string | null
   readonly consumedUpstreamRunsJson: string | null
@@ -179,25 +181,92 @@ export function isFresherNodeRun<R extends { id: string }>(
   return candidate.id > incumbent.id
 }
 
+// RFC-354 retired `pickUpstreamSourceRun` / `pickVisibleUpstreamRun` — the
+// RFC-098 B3 "iteration ≤ window, highest wins" cross-boundary carry. It only
+// coincided with lexical scoping for one loop level (audit S-6: a nested
+// loop's body read the wrong generation). A source in an enclosing scope is
+// now reached by resolving its FRAME first (task-execution/domain/
+// environmentChain) and reading inside that frame (`pickFrameSourceRun`);
+// nothing leaks across rounds or generations.
+
 /**
- * RFC-098 B3 (audit S-7,「freshest-run 抽一次别 fork」第二缝) — the ONE
- * sanctioned iteration-window source picker, extracted verbatim from
- * resolveUpstreamInputs (task-execution node mechanics) so wrapper-consumed computation uses
- * the EXACT same口径 as the agent input read-point. Among top-level DONE rows
- * whose iteration ≤ `iterationWindow`, pick the highest iteration
- * (cross-boundary "latest visible", e.g. git-wrapper / loop carry) and,
- * within that iteration, the freshest by isFresherNodeRun (pure ULID order).
- *
- * NOT the same as pickFreshestRun: that picker is pure-id-ordered with no
- * iteration term and no window — using it for source resolution would let a
- * later-minted row at a HIGHER iteration win even outside the caller's
- * visibility window. Two distinct contracts, both living here so neither
- * gets forked.
+ * RFC-354 — the freshest SETTLED top-level row of a node across ALL frames:
+ * the read a task-boundary projection needs (a child task's output nodes
+ * feeding a parent `call-workflow`), where the caller is outside every frame
+ * of the task and "the task's answer" is simply its latest settled row.
+ * Everything inside a task reads by frame (`pickFrameSourceRun`).
  */
-export function pickUpstreamSourceRun<
-  R extends { id: string; iteration: number; parentNodeRunId: string | null; status: string },
->(rows: readonly R[], iterationWindow: number): R | undefined {
-  return pickVisibleUpstreamRun(rows.filter(isSettledRunStatus), iterationWindow)
+export function pickLatestSettledRun<
+  R extends { id: string; parentNodeRunId: string | null; status: string },
+>(rows: readonly R[]): R | undefined {
+  let run: R | undefined
+  for (const r of rows) {
+    if (r.parentNodeRunId !== null) continue
+    if (!isSettledRunStatus(r)) continue
+    if (isFresherNodeRun(r, run)) run = r
+  }
+  return run
+}
+
+/**
+ * RFC-354 — the LATEST top-level row of a node inside one frame, any status.
+ * For readers that must judge the freshest row themselves (the review
+ * dispatch fails loudly with `review-upstream-not-done` when the newest row
+ * is not done, instead of silently reading an older done row).
+ */
+export function pickLatestRunInFrame<
+  R extends {
+    id: string
+    iteration: number
+    parentNodeRunId: string | null
+    containerRunId: string | null
+  },
+>(rows: readonly R[], frame: { containerRunId: string | null; iteration: number }): R | undefined {
+  let run: R | undefined
+  for (const r of rows) {
+    if (r.parentNodeRunId !== null) continue
+    if ((r.containerRunId ?? null) !== frame.containerRunId || r.iteration !== frame.iteration) {
+      continue
+    }
+    if (isFresherNodeRun(r, run)) run = r
+  }
+  return run
+}
+
+/**
+ * RFC-354 — the frame-level source picker that replaces the iteration window
+ * above. A consumer reads an upstream inside exactly ONE frame
+ * `(containerRunId, iteration)` — its own frame for a local variable, or the
+ * frame `resolveSourceFrame` (task-execution/domain/environmentChain) walked
+ * to for a captured free variable / wrapper parameter. Within that frame the
+ * answer is the freshest SETTLED (done ∪ skipped, RFC-306) top-level row by
+ * pure id order. There is deliberately no fallback to an earlier round or a
+ * neighbouring container: a value that is not in the environment is not a
+ * value, and the caller surfaces `closure-binding-unresolved`.
+ *
+ * Lives next to pickUpstreamSourceRun on purpose (audit S-7: one home for
+ * pickers, no forks); the window picker is retired once every call site has
+ * moved to frames.
+ */
+export function pickFrameSourceRun<
+  R extends {
+    id: string
+    iteration: number
+    parentNodeRunId: string | null
+    containerRunId: string | null
+    status: string
+  },
+>(rows: readonly R[], frame: { containerRunId: string | null; iteration: number }): R | undefined {
+  let run: R | undefined
+  for (const r of rows) {
+    if (r.parentNodeRunId !== null) continue
+    if ((r.containerRunId ?? null) !== frame.containerRunId || r.iteration !== frame.iteration) {
+      continue
+    }
+    if (!isSettledRunStatus(r)) continue
+    if (isFresherNodeRun(r, run)) run = r
+  }
+  return run
 }
 
 /**
@@ -226,26 +295,6 @@ export function isSettledRunStatus(row: { status: string }): boolean {
  * of silently falling back to an older done document; ordinary data inputs use
  * the done-only shell above.
  */
-export function pickVisibleUpstreamRun<
-  R extends { id: string; iteration: number; parentNodeRunId: string | null },
->(rows: readonly R[], iterationWindow: number): R | undefined {
-  let run: R | undefined
-  for (const r of rows) {
-    if (r.iteration > iterationWindow) continue
-    if (r.parentNodeRunId !== null) continue
-    if (run === undefined) {
-      run = r
-      continue
-    }
-    if (r.iteration > run.iteration) {
-      run = r
-      continue
-    }
-    if (r.iteration === run.iteration && isFresherNodeRun(r, run)) run = r
-  }
-  return run
-}
-
 /**
  * RFC-098 B3 (audit S-20) — strict equality of two consumed-provenance maps
  * (`{ upstreamNodeId: nodeRunId }`). Used by the fanout wrapper's consumed
@@ -314,11 +363,15 @@ export function pickReusableShardRun<
 export function buildFreshestSettledPerNode(
   rows: ReadonlyArray<NodeRunRow>,
   scopeIds: Set<string>,
-  iteration: number,
+  // RFC-354 — one frame: the wrapper generation row (null at the top) + round.
+  frame: { readonly containerRunId: string | null; readonly iteration: number },
 ): Map<string, NodeRunRow> {
   const m = new Map<string, NodeRunRow>()
   for (const r of rows) {
-    if (r.iteration !== iteration) continue
+    // `?? null` normalizes plain test-fixture rows; a real DB row always carries the column.
+    if ((r.containerRunId ?? null) !== frame.containerRunId || r.iteration !== frame.iteration) {
+      continue
+    }
     if (!scopeIds.has(r.nodeId)) continue
     if (r.parentNodeRunId !== null) continue
     // RFC-306: `skipped` joins `done` here — see isSettledRunStatus. This map is

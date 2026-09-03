@@ -38,7 +38,7 @@ const NODE_POINTER_CODES = new Set([
   'wrapper-child-node-missing',
   'wrapper-child-multiple-parents',
   'wrapper-fanout-nested',
-  'wrapper-loop-nested',
+  'wrapper-fanout-unsupported-inner-kind',
   'wrapper-loop-inner-data-cycle',
   'wrapper-children-outside-bounds',
   'review-rerunnable-out-of-scope',

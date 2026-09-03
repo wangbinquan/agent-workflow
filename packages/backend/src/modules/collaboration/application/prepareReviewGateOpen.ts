@@ -39,6 +39,8 @@ export interface ReviewGateOpenDocumentDraft {
 export interface PrepareReviewGateOpenInput {
   readonly taskId: string
   readonly reviewNodeId: string
+  /** RFC-354 — the frame the review node is dispatched in. */
+  readonly containerRunId: string | null
   readonly iteration: number
   readonly reviewIteration: number
   readonly consumedUpstreamRunsJson: string
@@ -207,6 +209,7 @@ export class ReviewGateOpenPreparation {
       id: reviewNodeRunId,
       taskId: input.taskId,
       nodeId: input.reviewNodeId,
+      containerRunId: input.containerRunId,
       iteration: input.iteration,
       reviewIteration: input.reviewIteration,
       previousConsumedUpstreamRunsJson:

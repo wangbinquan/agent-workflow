@@ -37,6 +37,8 @@ function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
     retryIndex: partial.retryIndex ?? 0,
     wgRound: null,
     rerunCause: null,
+    containerRunId: null,
+    scopePath: '',
     reviewIteration: partial.reviewIteration ?? 0,
     status: partial.status ?? 'done',
     startedAt: partial.startedAt ?? null,

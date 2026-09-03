@@ -92,7 +92,12 @@ export class GitStrategy implements WrapperStrategy<'wrapper-git'> {
       }
     }
 
-    const result = await this.scopeDriver.drive({ scope, iteration, workspace: scene })
+    const result = await this.scopeDriver.drive({
+      scope,
+      containerRunId: generation.runId,
+      iteration,
+      workspace: scene,
+    })
     if (result.kind === 'canceled') {
       return wrapperSettlement('canceled', {
         kind: 'canceled',

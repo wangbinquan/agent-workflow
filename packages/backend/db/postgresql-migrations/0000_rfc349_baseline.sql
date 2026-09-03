@@ -173,6 +173,7 @@ CREATE TABLE "agent_workflow"."clarify_rounds" (
   "intermediary_node_run_id" TEXT COLLATE "C" NOT NULL,
   "target_consumer_node_id" TEXT COLLATE "C",
   "loop_iter" BIGINT NOT NULL DEFAULT 0,
+  "container_run_id" TEXT COLLATE "C",
   "iteration" BIGINT NOT NULL DEFAULT 0,
   "questions_json" TEXT COLLATE "C" NOT NULL,
   "answers_json" TEXT COLLATE "C",
@@ -1998,6 +1999,8 @@ CREATE TABLE "agent_workflow"."node_runs" (
   "task_id" TEXT COLLATE "C" NOT NULL,
   "node_id" TEXT COLLATE "C" NOT NULL,
   "parent_node_run_id" TEXT COLLATE "C",
+  "container_run_id" TEXT COLLATE "C",
+  "scope_path" TEXT COLLATE "C" NOT NULL DEFAULT '',
   "iteration" BIGINT NOT NULL DEFAULT 0,
   "shard_key" TEXT COLLATE "C",
   "retry_index" BIGINT NOT NULL DEFAULT 0,
@@ -3214,7 +3217,7 @@ CREATE INDEX "idx_clarify_rounds_task" ON "agent_workflow"."clarify_rounds" ("ta
 CREATE INDEX "idx_clarify_rounds_kind_status" ON "agent_workflow"."clarify_rounds" ("kind", "status");
 
 -- index: clarify_rounds:index:idx_clarify_rounds_asking
-CREATE INDEX "idx_clarify_rounds_asking" ON "agent_workflow"."clarify_rounds" ("asking_node_id", "loop_iter", "iteration");
+CREATE INDEX "idx_clarify_rounds_asking" ON "agent_workflow"."clarify_rounds" ("asking_node_id", "container_run_id", "loop_iter", "iteration");
 
 -- index: clarify_rounds:index:idx_clarify_rounds_intermediary
 CREATE INDEX "idx_clarify_rounds_intermediary" ON "agent_workflow"."clarify_rounds" ("intermediary_node_id", "loop_iter", "iteration");
@@ -3815,6 +3818,9 @@ CREATE INDEX "idx_node_runs_task" ON "agent_workflow"."node_runs" ("task_id", "n
 
 -- index: node_runs:index:idx_node_runs_parent
 CREATE INDEX "idx_node_runs_parent" ON "agent_workflow"."node_runs" ("parent_node_run_id");
+
+-- index: node_runs:index:idx_node_runs_container
+CREATE INDEX "idx_node_runs_container" ON "agent_workflow"."node_runs" ("task_id", "container_run_id", "node_id", "iteration");
 
 -- index: node_runs:index:idx_node_runs_child_task
 CREATE INDEX "idx_node_runs_child_task" ON "agent_workflow"."node_runs" ("child_task_id");
@@ -4759,7 +4765,7 @@ CREATE TABLE "agent_workflow_meta"."schema_migrations" (baseline_id TEXT PRIMARY
 CREATE TABLE "agent_workflow_meta"."schema_contract" (singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton), contract_digest TEXT NOT NULL, active_table_count BIGINT NOT NULL, archive_only_table_count BIGINT NOT NULL);
 
 -- metadata: contract-row
-INSERT INTO "agent_workflow_meta"."schema_contract" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:99c8b91bc3e8dcb123b3783dec558ef8b7958c7c3eca4922959862d78d846729', 178, 6);
+INSERT INTO "agent_workflow_meta"."schema_contract" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:05a9771c5c3f8551073010fd0d123f01388813d6ac553076f1a602eb1d72c2c8', 178, 6);
 
 -- metadata: logical-copy-operations
 CREATE TABLE "agent_workflow_meta"."logical_copy_operations" (operation_id TEXT PRIMARY KEY, source_generation_id TEXT NOT NULL, contract_digest TEXT NOT NULL, plan_digest TEXT NOT NULL, stage TEXT NOT NULL CHECK (stage IN ('prepared', 'copying', 'verified', 'activated', 'finalized')), created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL);

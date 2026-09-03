@@ -532,7 +532,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-341 collaboration cutover bump 到 222 with
     // 0222_rfc341_collaboration_committed_event_cutover：review / clarify / questions
     // 三个 family 同步切到 dispatchable epoch 2。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(222)
+    // RFC-354 bump 到 223 with 0223_rfc354_node_run_frames：node_runs /
+    // clarify_rounds 各加一根帧轴（container_run_id）+ scope_path 面包屑。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(223)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

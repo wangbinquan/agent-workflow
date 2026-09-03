@@ -837,6 +837,20 @@ failed/canceled/awaiting 与最终 merge conflict/failure 均保持原失败或�
 
 注意 v1 **不实现跨轮反馈端口**：每轮迭代是 wrapper 内子图的一次独立执行；跨轮的"状态"完全靠 worktree 文件落盘（fix 写文件 → 下轮 audit 看新内容）。
 
+**帧（RFC-354）**：伪代码里的"每个内层 node_run.iteration = iteration"只说了一半——
+`iteration` 是**帧内**的轮次，帧本身是 `(container_run_id, iteration)`：
+`container_run_id` 指向本次 wrapper 执行铸的**生成行**（`openGeneration`，cause
+`wrapper-init`），顶层作用域为 `(null, 0)`。wrapper 每被进入一次（外层 loop 的每一轮）
+都铸一条新的生成行，内层行挂在它下面，所以 loop 嵌 loop 任意深度都不会把外层第 1 轮与
+第 2 轮的内层行混成同一把键（审计 S-6 的静默 no-op 已由 `rfc354-nested-loop-frames`
+翻转锁定）。`scope_path` 是派生的只写面包屑（`wrapperId:iteration/…`），调度从不读它。
+
+读取按**词法环境**解析（`domain/environmentChain.ts`）：入边是参数、出边是返回值、
+穿越 wrapper 边界的边是闭包——同帧读本地，来源在外层作用域时沿生成行逐层向外走一跳
+（`resolveSourceFrame` / `resolveSourceFrameInScope`），loop 的 exitCondition /
+outputBindings 也走同一条链；来源在词法上不可见时 `closure-binding-unresolved` 直接失败，
+绝不回退到别的帧、绝不读成空串。旧的"iteration ≤ 窗口取最高"拾取器已退役。
+
 UI 颜色：
 
 - 当前迭代正在跑的内层节点：黄
@@ -874,9 +888,13 @@ on exit (内部所有节点 done 后，同样在写锁内):
 
 嵌套：
 
-- **git wrapper 嵌套 loop wrapper 内**：每轮迭代 fresh-mint 独立 wrapper 行，
-  entry preDirty 天然含前轮残留 → 扣除后即"那一轮"的增量 diff（不再是 0..N
-  累计并集）；外层"last-iter wins"由 resolveUpstreamInputs 最高 iteration 优先保证
+- **git wrapper 嵌套 loop wrapper 内**：每轮迭代 fresh-mint 独立 wrapper 行（RFC-354
+  起即每轮一条生成行、内层行按帧挂靠），entry preDirty 天然含前轮残留 → 扣除后即
+  "那一轮"的增量 diff（不再是 0..N 累计并集）；外层"last-iter wins"由环境链解析保证——
+  下游读到的是 loop 退出那一轮的帧里的 git wrapper 行
+- **loop wrapper 嵌套 loop wrapper 内（RFC-354 起支持，任意深度）**：外层每一轮为内层
+  铸一条新的生成行，内层各轮的行挂在该生成行下；内层 exitCondition / outputBindings 只读
+  本代际的行，穿墙边按闭包绑定到外层帧
 - **loop wrapper 嵌套 git wrapper 内**：git wrapper 的 baseline/preDirty 在 loop 第一轮启动前抓，post 在 loop 成功退出（满足条件 / 达到上限后按策略继续）后抓 → 输出整个 loop 期间的总 diff；loop exhausted 仍按失败传播
 - **跨代 interplay（已知开放点，RFC-098 修订 #9 记录）**：wrapper 因上游 rerun
   判 stale 重跑时**不回滚 worktree**（wrapper 行不抓 preSnapshot），第二代的

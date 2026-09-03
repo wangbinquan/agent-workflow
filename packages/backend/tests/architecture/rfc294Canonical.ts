@@ -2452,6 +2452,20 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'ExclusiveDaemonLockProof+VerifiedTakeoverOrOutcomeProof',
     }
   }
+  // RFC-354 T4 — the one-shot frame backfill rewrites `container_run_id` /
+  // `scope_path` of rows minted before frames existed. It runs at daemon boot
+  // under the single-instance lock BEFORE the scheduler / auto-resume starts
+  // (or from `doctor --backfill-containers`, which refuses while a daemon is
+  // up), touches only rows whose frame is still unset, and is gated by the
+  // `maintenance_state` completion marker — no task is claimed or driven.
+  if (/modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)FrameBackfillStore\.ts/.test(value)) {
+    return {
+      authorityKind: 'recovery-proof',
+      controlSubtype: null,
+      revisionPredicate: 'boot-once-maintenance-marker-and-unset-frame-only',
+      requiredBrandedProof: 'ExclusiveDaemonLockProof(boot-before-scheduler)',
+    }
+  }
   if (
     /modules\/task-execution\/application\/applySourceTerminationEffect\.ts|services\/task\.ts#cancelTask|services\/terminalSweep\.ts/.test(
       value,

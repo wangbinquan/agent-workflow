@@ -6389,6 +6389,11 @@ export const enUS: Resources = {
     addPort: '+ Add port',
     innerNodeIds: 'Inner node ids',
     innerNodeIdsHint: 'Edit by composing nodes via the canvas menu.',
+    wrapperParams: 'Parameters (inbound edges)',
+    wrapperParamsHint:
+      'Edges into the wrapper are its parameters; after `→` is the boundary edge handing that parameter to an inner node. Connect them on the canvas, exactly like any node.',
+    wrapperParamsNone:
+      'No parameters yet — connect an edge from an outside node into this wrapper to declare one.',
     fanoutInputs: 'Inputs',
     fanoutInputsHint:
       'Declared input ports. EXACTLY ONE must be marked as shard source and its kind must be list<T>; others are broadcast to every shard.',
@@ -7827,7 +7832,8 @@ export const enUS: Resources = {
       'wrapper-loop-max-iterations': 'The loop wrapper is missing maxIterations.',
       'wrapper-loop-continue-on-max-iterations':
         'The loop continuation switch must be true or false.',
-      'wrapper-loop-nested': 'Loop wrappers cannot nest inside each other.',
+      'wrapper-fanout-unsupported-inner-kind':
+        'A fan-out wrapper body may only contain single-agent nodes.',
       'wrapper-loop-output-binding-out-of-scope':
         'A loop output binding must reference a direct member of the loop body.',
       'wrapper-output-boundary-missing':

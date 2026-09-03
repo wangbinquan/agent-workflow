@@ -32,8 +32,8 @@ SQLite、scheduler 和 OpenCode 测试桩执行的工作流。
 | `clarify-cross-agent-roundtrip.yaml`    | awaiting_human → done          | `clarify-cross-agent`、默认仅 asker 重跑、designer 不被隐式重跑                             |
 | `runtime-lifecycle.yaml`                | done / failed / cancelled      | fresh-session retry、永久失败耗尽、全局节点 timeout、运行中 cancel、禁止失败输出投影        |
 | `wrapper-loop-exhausted.yaml`           | failed                         | maxIterations 用尽、wrapper `exhausted` 终态                                                |
-| `wrapper-fanout-unsupported-inner.yaml` | failed                         | 当前 fanout v1 对内部 wrapper 的显式运行时拒绝                                              |
-| `invalid-wrapper-loop-nested.yaml`      | importable / launch rejected   | 当前 loop-in-loop 静态 `wrapper-loop-nested` 防线                                           |
+| `wrapper-fanout-unsupported-inner.yaml` | importable / launch rejected   | fanout 体内放 wrapper 在校验期即拒（RFC-354 `wrapper-fanout-unsupported-inner-kind`）       |
+| `wrapper-loop-nested.yaml`              | done                           | loop-in-loop（RFC-354：嵌套即递归，帧 `container_run_id` 隔离每一轮）                       |
 
 ## 状态空间
 
@@ -98,5 +98,5 @@ generation/shard、review/clarify 恢复、retry/timeout/cancel 和输出投影�
 | Loop → Git            | 支持     | `wrapper-loop-around-git.yaml`          |
 | Git → Fanout          | 支持     | `wrapper-git-around-fanout.yaml`        |
 | Loop → Fanout         | 支持     | `wrapper-loop-around-fanout.yaml`       |
-| Fanout → 任意 wrapper | v1 拒绝  | `wrapper-fanout-unsupported-inner.yaml` |
-| Loop → Loop           | 静态拒绝 | `invalid-wrapper-loop-nested.yaml`      |
+| Fanout → 任意 wrapper | 静态拒绝 | `wrapper-fanout-unsupported-inner.yaml` |
+| Loop → Loop           | 支持     | `wrapper-loop-nested.yaml`              |

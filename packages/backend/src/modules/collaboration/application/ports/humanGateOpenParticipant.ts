@@ -16,6 +16,8 @@ export interface HumanGateNodeRunMintInput {
   readonly nodeId: string
   readonly status: 'awaiting_review' | 'awaiting_human'
   readonly cause: RerunCause
+  /** RFC-354 — the frame the park row lives in (the asking / reviewed run's frame). */
+  readonly containerRunId?: string | null
   readonly iteration: number
   readonly overrides?: Readonly<{
     reviewIteration?: number

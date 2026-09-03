@@ -21,6 +21,11 @@ export interface NodeStepRequest<K extends NodeKind = NodeKind> {
   readonly node: NodeOfKind<K>
   readonly task: NodeExecutionTaskRef
   readonly scope: NodeExecutionScopeRef
+  /**
+   * RFC-354 — the frame (wrapper generation row) this step runs in; null at
+   * the top scope. `iteration` is the round inside that frame.
+   */
+  readonly containerRunId: string | null
   readonly iteration: number
   readonly execution: NodeExecutionContextRef
 }

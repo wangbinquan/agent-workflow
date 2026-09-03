@@ -136,7 +136,6 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
 
 - **只在 `main` 上开发：不建分支、不用 worktree、不用 stash（硬规则，无例外，
   用户 2026-08-23 明令）**。四条约束一起生效，缺一条都会退回被禁止的形态：
-
   1. **不建任何分支**。所有工作直接在 `main` 上提交并推送，也不要开 PR 走流程。
   2. **不用 `git worktree`**（开发用途）。不许 `git worktree add` 出「只含自己
      改动的干净树」来跑门禁 / 过 Codex / 做对照实验。**唯一例外是产品自身的
@@ -148,7 +147,6 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
   4. **本地 `main` 必须时刻与 `origin/main` 同步，不得有任何落后**。
 
   **多人并发下的提交纪律**（本仓工作树同时有多个 session 在改）：
-
   - 各自开发各自的代码，**只提交自己改过的文件**——按路径精确 `git add <file>`，
     严禁 `git add .` / `git add -A`。
   - **提交时也必须带 pathspec：`git commit -- <你的路径…>`**。只做精确 `git add`
@@ -166,7 +164,7 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
 
   **同步的正确姿势（无 stash 可用时）**：脏树（躺着别人的未提交改动）上
   `git rebase` / `git pull --rebase` 会被 git 直接拒绝（`cannot rebase: You have
-  unstaged changes`），而它的 `--autostash` 属于被禁的 stash。因此：
+unstaged changes`），而它的 `--autostash` 属于被禁的 stash。因此：
 
   ```
   git add <只加自己的文件> && git commit      # 先把自己的工作固化
@@ -190,6 +188,7 @@ chrome / 自写一套 CSS。整个系统的视觉与交互风格要保持一致�
   **那些写法一律作废**；它们记录的底层危害（共享树上门禁结果无法归因、并发 diff 吞掉
   review）依然真实，处置改为：**在主树上跑，红了按路径归因**——先在 `origin/main`
   的既有 CI 结果上确认该守卫本来是绿的，再判断这条红是不是自己的。
+
 - **面向代码最合理，优于改动最小**：审计给「正解 / 过渡」两案时选正解、backfill 优于双读回退、删除优于 deprecate。别为「快一点」留过渡态。
 - **services/ 目录组织轻规则（2026-08-12 审计决策 D18）**：新增服务文件时，若与某前缀家族（**≥5 个文件且互引**）同域，优先落入同名子目录（例：clarify 家族归 `services/clarify/`）；存量平铺文件**不做一次性大迁移**（多人并发树上批量改名必撞车），随各域下一个 RFC 顺带迁入，迁移时留同名 facade 保 import 路径稳定。
 - **澄清先行、研究先行，再写 RFC**：用户给设计想法时，先研究仓内既有能力，再反复提问澄清全部细节，**绝不自主假设**；然后才落 RFC 三件套。
@@ -233,7 +232,7 @@ This pattern — record-state → run-agents → diff/aggregate → fan-out — 
 - **Output XML envelope** — `<workflow-output><port name="...">...</port></workflow-output>`. Agent declares `outputs: [...]` in frontmatter; framework appends an English protocol block to user prompt to instruct format. Last envelope in stdout wins.
 - **Multi-process node** — declares `sourcePort` (typically a git wrapper's `git_diff`, which emits a `list<path<*>>` of changed paths). Sharding is RFC-103 **kind-aware list splitting**（`splitListItems` / `splitMarkdownDocs`，list 逐项一 shard；空源 = 全 outlet 置空 + 直接 done；shardKey 冲突以 `#idx` 后缀消歧）。（早期提案所述 per-file / per-N-files / per-directory 的 diff 文本分片已随 RFC-060 删除 agent-multi 而退役；其残留死代码 `util/diffSplit.ts` 已按 2026-08-12 审计决策 D12 于 RFC-284 中删除，勿复活——见 `design/system-commons-unification-audit-2026-08-12.md` 与 `design/RFC-210-recursive-submodule-isolation/proposal.md`。）Aggregation by shard_key dictionary order. **Failure semantics are fail-all-after-join** — any failed shard fails the whole wrapper, with no partial aggregation and **no auto `errors` port** (the `errors` port and partial tolerance described in `design/proposal.md` are DEFERRED, not implemented in v1; see `design/design.md` §6.3 and the lock in `packages/backend/tests/scheduler-audit-s18-s19-fanout-failure-semantics.test.ts`).
 - **Git wrapper** — no inputs, single output `git_diff` (snapshots commit + worktree before first inner node, after last; composes diff incl. untracked).
-- **Loop wrapper** — `max_iterations` + `exit_condition` (port-empty / port-equals / port-count-lt). v1 has **no cross-iteration feedback ports**; cross-iter state is via worktree files only. Wrappers nest arbitrarily; `git in loop` = per-iter diff (last-iter wins as output); `loop in git` = full-loop total diff.
+- **Loop wrapper** — `max_iterations` + `exit_condition` (port-empty / port-equals / port-count-lt). v1 has **no cross-iteration feedback ports**; cross-iter state is via worktree files only. Wrappers nest arbitrarily — including `loop in loop` at any depth (RFC-354: every node_run carries a **frame** `(container_run_id, iteration)`, the wrapper _generation row_ it hangs off plus the round inside it; inbound edges are parameters, outbound edges return values, edges crossing a wrapper boundary are closures resolved through the environment chain, `domain/environmentChain.ts`); `git in loop` = per-iter diff (last-iter wins as output); `loop in git` = full-loop total diff.
 - **Process lifecycle** — runtime children are ordinary processes, not isolated tenants. The daemon still records PIDs, bounds output, enforces timeout/cancel, escalates TERM→KILL across the process tree, drains pipes, and repairs interrupted rows after restart. Script `readonly` means disposable worktree plus no merge-back, not filesystem write denial.
 - **Resource ACL（RFC-099 / RFC-231）** — 代理/技能/MCP/插件/工作流/工作组六类资源各带单一 `owner_user_id` + `visibility('public'|'private')` + 通用 `resource_grants` 授权表；未授权用户完全不可见（列表过滤、详情 404 与不存在同形）。所有用户可创建，受支持的新建路径统一为创建者 owner + `private` + 零 grants；存量行不回填，框架 built-in 显式保持 `public`，缺失 visibility/SQLite 的 `public` default 只作 legacy/raw-SQL 兼容。启动任务只校验工作流本身可用（引用闭包隐式授权），保存工作流/代理时只校验**新增**引用（`services/resourceRefs.ts`）。任务成员（owner+collaborator）即评审/反问的回答权边界（节点级指派机制已删除）；任务继续走独立的成员制**私有**模型、无 visibility 开关。归属记录（user id + 任务关系角色快照 {owner,user,admin}）只落审计列与 UI，**绝不进入 agent prompt**（rfc099-prompt-isolation 测试双层锁定，approval_meta 端口已剔除 decidedBy）。反问支持服务端逐题协作草稿（last-write-wins + 逐题归属 + 提交冻结）。记忆权限现状（2026-08-12 按源码对账更正，原「repo/global 仍 admin」记载过期）：读面——资源 scope 随绑定资源可见性，repo/repo_group/global 全员可读（`services/memory.ts` canViewMemory；RFC-285 Q4 例外：status='candidate' 的未审蒸馏行仅资源管理员可读，人审发布后回到全员面）；管理面——随 scope 资源写权 + 资源管理员（admin+manager，isResourceAdminRole）全量兜底（canManageMemory）。单一事实源：`services/resourceAcl.ts`。
 - **Task lifecycle** — worktree per task at `~/.agent-workflow/worktrees/{repo-slug}/{task-id}`. Base branch chosen at launch time (default repo HEAD). Task status states: `pending / running / done / failed / canceled / interrupted (daemon restart) / awaiting_review / awaiting_human`（RFC-097 勘误：任务级从无 `exhausted`——它只是 node_run 状态〔loop 触顶〕，loop 耗尽时任务以 `failed` 收场）. Writes go through `setTaskStatus`/`trySetTaskStatus` (services/lifecycle.ts, RFC-097 CAS + 转移表；直写被 s14 守卫禁止). Cancel keeps worktree; resume rolls each retried node back to its `pre_snapshot` (git stash hash); single-node retry cascades downstream by default. Retries produce independent `node_runs` keyed by `retry_index`.

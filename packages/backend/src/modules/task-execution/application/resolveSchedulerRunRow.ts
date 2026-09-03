@@ -11,6 +11,9 @@ export interface SchedulerRunRowCandidate {
   readonly reviewIteration: number
   readonly shardKey: string | null
   readonly parentNodeRunId: string | null
+  /** RFC-354 — optional so hand-built fixtures keep compiling; real rows always carry it. */
+  readonly containerRunId?: string | null
+  readonly scopePath?: string
   readonly preSnapshot?: string | null
   readonly continuationSlotKey?: string | null
   readonly lineageSlotPathJson?: string | null
@@ -22,6 +25,8 @@ export interface ResolveSchedulerRunRowInput<R extends SchedulerRunRowCandidate>
   readonly projections: NodeExecutionPersistence
   readonly taskId: string
   readonly nodeId: string
+  /** RFC-354 — the frame the node is dispatched in; null at the top scope. */
+  readonly containerRunId: string | null
   readonly iteration: number
   readonly consumedUpstreamJson: string
   readonly rows: readonly R[]
@@ -101,6 +106,7 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     status: 'pending',
     cause: schedulerMintCause(latestExisting),
     retryIndex,
+    containerRunId: input.containerRunId,
     iteration: input.iteration,
     inheritFrom:
       latestExisting === undefined
@@ -109,6 +115,7 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
             reviewIteration: latestExisting.reviewIteration,
             shardKey: latestExisting.shardKey,
             parentNodeRunId: latestExisting.parentNodeRunId,
+            containerRunId: latestExisting.containerRunId ?? null,
             preSnapshot: latestExisting.preSnapshot ?? null,
             continuationSlotKey: latestExisting.continuationSlotKey ?? null,
             lineageSlotPathJson: latestExisting.lineageSlotPathJson ?? null,

@@ -120,9 +120,11 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
     const { definition } = this.data
     const { shardPort, itemKind, innerIds, agentsMap, agentFailures } = prepared
     const wrapperRunId = generation.runId
+    // RFC-354: the wrapper's own inputs are read in the frame the wrapper node
+    // lives in (its parameters, resolved from outside the body).
     const { inputs: upstreamInputs, consumed: wrapperConsumed } = await this.data.resolveInputs(
       node.id,
-      iteration,
+      { containerRunId: request.containerRunId, iteration },
     )
     const rawContent = upstreamInputs[shardPort.name] ?? ''
 
@@ -264,7 +266,11 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
       }
 
       const boundaryEdges = findBoundaryEdgesToInner(definition, node.id, innerId)
-      const { inputs: innerUpstream } = await this.data.resolveInputs(innerId, iteration)
+      // RFC-354: the body node's own inbound edges are read in THIS generation's frame.
+      const { inputs: innerUpstream } = await this.data.resolveInputs(innerId, {
+        containerRunId: wrapperRunId,
+        iteration,
+      })
       for (const edge of boundaryEdges) {
         if (edge.source.portName === shardPort.name) continue
         const value = upstreamInputs[edge.source.portName] ?? ''

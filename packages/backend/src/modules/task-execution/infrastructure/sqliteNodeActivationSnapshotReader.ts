@@ -10,12 +10,30 @@ export class SqliteNodeActivationSnapshotReader implements NodeActivationSnapsho
     return await this.db
       .select({
         id: nodeRuns.id,
+        nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         iteration: nodeRuns.iteration,
         parentNodeRunId: nodeRuns.parentNodeRunId,
+        containerRunId: nodeRuns.containerRunId,
       })
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  }
+
+  async findRun(nodeRunId: string) {
+    const row = this.db
+      .select({
+        id: nodeRuns.id,
+        nodeId: nodeRuns.nodeId,
+        status: nodeRuns.status,
+        iteration: nodeRuns.iteration,
+        parentNodeRunId: nodeRuns.parentNodeRunId,
+        containerRunId: nodeRuns.containerRunId,
+      })
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .get()
+    return row ?? null
   }
 
   async findOutputActivation(nodeRunId: string): Promise<ReadonlyMap<string, boolean>> {

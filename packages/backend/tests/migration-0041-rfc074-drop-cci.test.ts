@@ -182,8 +182,12 @@ describe('RFC-074 migration 0041 — DROP clarify_iteration preserves row data',
       expect(cols).toContain('lineage_slot_path_json')
       expect(cols).toContain('operation_generation')
       expect(cols).toContain('spawn_launch_nonce')
+      // RFC-354 (0223): + container_run_id / scope_path — the execution frame
+      // (generation row the run hangs off + derived root→here breadcrumb).
+      expect(cols).toContain('container_run_id')
+      expect(cols).toContain('scope_path')
       expect(cols.length).toBe(
-        cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 4,
+        cols0040.length - 1 + 7 + 6 + 3 + 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 1 + 4 + 2,
       )
 
       // 4b. row count unchanged.

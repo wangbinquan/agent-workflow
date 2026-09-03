@@ -9,6 +9,8 @@ export type ReviewGateNodeProjection = Readonly<{
   id: string
   taskId: string
   nodeId: string
+  /** RFC-354 — the frame the review park row lives in. */
+  containerRunId: string | null
   iteration: number
   reviewIteration: number
   previousConsumedUpstreamRunsJson: string | null
@@ -116,6 +118,7 @@ function decodeNode(value: unknown): ReviewGateNodeProjection {
     id: stringField(value, 'id'),
     taskId: stringField(value, 'taskId'),
     nodeId: stringField(value, 'nodeId'),
+    containerRunId: nullableString(value, 'containerRunId'),
     iteration: nonNegativeInteger(value, 'iteration'),
     reviewIteration: nonNegativeInteger(value, 'reviewIteration'),
     previousConsumedUpstreamRunsJson,

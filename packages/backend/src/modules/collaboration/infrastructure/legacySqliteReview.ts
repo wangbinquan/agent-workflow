@@ -133,7 +133,8 @@ import {
 } from '@/db/schema'
 import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
 import { chunkedAll } from '@/util/sqlChunk'
-import { pickFreshestRun, pickVisibleUpstreamRun } from '@/services/freshness'
+import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
+import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
 import { parseConsumedJson } from '@/services/freshness'
 import {
   assertNodeRunSourceTerminationAdmission,
@@ -526,6 +527,11 @@ export interface DispatchReviewArgs {
   appHome: string
   definition: WorkflowDefinition
   node: WorkflowNode // the review node
+  /**
+   * RFC-354 — the frame the review node is dispatched in; its park row lives
+   * there. Optional only for legacy fixtures; production always passes it.
+   */
+  containerRunId?: string | null
   iteration: number
   /**
    * RFC-193 D9 — the CONTAINING SCOPE's canonical root, used ONLY as the
@@ -573,6 +579,7 @@ export function dispatchReviewNode(args: DispatchReviewArgs): Promise<DispatchRe
 
 async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
   const { db, taskId, appHome, definition, node, iteration, scopeRoot, repoDirName } = args
+  const containerRunId = args.containerRunId ?? null
 
   // Re-read only after acquiring the coordinator. A cancel that linearized
   // first must make dispatch a zero-write loser; S1 repair legitimately calls
@@ -646,12 +653,37 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     .select()
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, sourceNodeId)))
-  // RFC-096: shared picker, top-level only (fan-out child rows skipped —
-  // multi-process review per-shard is RFC-005 T14). Deliberately NO statusIn
-  // filter: the freshest row must be checked for done-ness below — filtering
-  // would silently fall back to an OLDER done row instead of failing loudly
-  // with review-upstream-not-done.
-  const sourceRun = pickVisibleUpstreamRun(sourceRuns, iteration)
+  // RFC-354: the source is read in the frame the environment chain resolves it
+  // to from the review node's own frame (a sibling in this generation and
+  // round, or a value captured from an enclosing scope).
+  // RFC-096: top-level only (fan-out child rows skipped — multi-process review
+  // per-shard is RFC-005 T14). Deliberately NO status filter: the freshest row
+  // must be checked for done-ness below — filtering would silently fall back
+  // to an OLDER done row instead of failing loudly with review-upstream-not-done.
+  const reviewFrame = { containerRunId, iteration }
+  const frameChain = await loadFrameChain(
+    async (id) =>
+      (
+        await db
+          .select({
+            id: nodeRuns.id,
+            nodeId: nodeRuns.nodeId,
+            containerRunId: nodeRuns.containerRunId,
+            iteration: nodeRuns.iteration,
+          })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, id))
+      )[0] ?? null,
+    reviewFrame,
+  )
+  const sourceFrame = resolveSourceFrame({
+    sourceNodeId,
+    targetNodeId: node.id,
+    parents: buildWorkflowScopeParentMap(definition),
+    frame: reviewFrame,
+    containerRowById: frameChain.lookup,
+  })
+  const sourceRun = sourceFrame.ok ? pickLatestRunInFrame(sourceRuns, sourceFrame.frame) : undefined
   if (sourceRun === undefined || sourceRun.status !== 'done') {
     return {
       kind: 'failed',
@@ -947,6 +979,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               nodeId: node.id,
               status: 'awaiting_review',
               cause: 'review-park',
+              containerRunId,
               iteration,
               overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
             })
@@ -1033,6 +1066,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     const prepared = await prepareReviewGateOpen(collaboration, {
       taskId,
       reviewNodeId: node.id,
+      containerRunId,
       iteration,
       reviewIteration,
       consumedUpstreamRunsJson: consumedJson,
@@ -1132,6 +1166,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       nodeId: node.id,
       status: 'awaiting_review',
       cause: 'review-park',
+      containerRunId,
       iteration,
       overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
     })
@@ -3734,6 +3769,8 @@ async function submitReviewDecisionUnlocked(
           status: 'pending',
           cause: rerun.rerunPolicy.mintCause,
           retryIndex: up.nextRetry,
+          // RFC-354: the rerun stays in the frame of the row it replaces.
+          containerRunId: up.latest.containerRunId,
           iteration: up.latest.iteration,
           overrides: { parentNodeRunId: null, preSnapshot: up.latest.preSnapshot, startedAt: null },
         })

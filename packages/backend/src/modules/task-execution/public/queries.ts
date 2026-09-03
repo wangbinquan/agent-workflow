@@ -4,6 +4,21 @@ import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shar
 
 export { parseLoopExitCondition } from '@agent-workflow/shared'
 
+// RFC-354 — frame primitives offered to the legacy `services/` pickers and
+// predicates (dispatchFrontier / freshness / runLiveness) until they move in.
+export { containerMemberRuns, frameChainOf } from '../domain/containerMembership'
+export { loadFrameChain, type FrameChain } from '../application/frameChain'
+export {
+  childScopePath,
+  parentFrameOf,
+  resolveSourceFrame,
+  resolveSourceFrameInScope,
+  TOP_FRAME,
+  type ContainerRunRow,
+  type FrameCoordinate,
+  type SourceFrameResolution,
+} from '../domain/environmentChain'
+
 /**
  * Task Execution owns the public-task window used by System Overview.  The
  * adapter applies the exact owner/collaborator visibility rule and never

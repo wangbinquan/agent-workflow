@@ -21,19 +21,19 @@
 //     resume anchor), but only when its inner scope has fresh post-answer work.
 //
 //   - wrapperRevivalEvidence(wrapperRow, rows, definition) — round-3 HIGH-1,
-//     extended by RFC-098 B3 (audit S-3). A wrapper-loop parks its OWN
-//     top-level row at `parentIteration`, but its inner descendants (and the
-//     clarify/review rerun minted on answer) live at the loop counter `i`.
-//     Scanning the wrapper's own iteration would miss the i≥1 rerun → the
-//     answered task would re-park forever ("scheduler stalled"). So the scan
-//     window comes from the wrapper PROGRESS payload's iteration for loops,
-//     and from the wrapper row's own iteration for git wrappers (git inner
-//     shares the wrapper iteration). `wrapperHasFreshInnerWork` is the
-//     boolean shell kept for the existing predicate consumers.
+//     extended by RFC-098 B3 (audit S-3), re-based on frames by RFC-354. A
+//     parked wrapper's revival evidence (the pending rerun / the fresh done
+//     review minted on answer) is any such row among the generation's MEMBERS
+//     — every row whose frame chain passes through the wrapper generation row
+//     (`containerMemberRuns`), at any nesting depth. The old scan read ONE
+//     iteration window off the wrapper progress payload and therefore could
+//     not see evidence born inside a nested loop (the depth-1 blind spot).
+//     `wrapperHasFreshInnerWork` is the boolean shell kept for the existing
+//     predicate consumers.
 //
 // PURE module: only types + freshness primitives (isNodeRunFresh /
 // isFresherNodeRun / buildFreshestSettledPerNode, freshness.ts) +
-// readWrapperRevivalIteration (task-execution public query). No DB / scheduler
+// containerMemberRuns (task-execution public query). No DB / scheduler
 // import. The frontier ORCHESTRATION (read rows → latestPerNode → freshestSettled
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
@@ -46,7 +46,7 @@ import {
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
-import { readWrapperRevivalIteration } from '@/modules/task-execution/public/queries'
+import { containerMemberRuns } from '@/modules/task-execution/public/queries'
 
 // RFC-311：收窄到 freshness 的调度列合同（本文件消费 id/nodeId/status/iteration/
 // supersededByReview/wrapperProgressJson，全部 ⊂ 合同），使 tick 投影行可直达。
@@ -246,31 +246,33 @@ export function wrapperRevivalEvidence(
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
 ): WrapperRevivalEvidence | null {
-  const node = definition.nodes.find((n) => n.id === wrapperRow.nodeId)
-  const kind = node?.kind
-  let innerIter: number
-  if (kind === 'wrapper-loop') {
-    innerIter = readWrapperRevivalIteration(wrapperRow.wrapperProgressJson)
-  } else {
-    // wrapper-git (and any non-loop wrapper): inner shares the wrapper iteration.
-    innerIter = wrapperRow.iteration
-  }
+  // RFC-354 — the scan window is the wrapper generation's MEMBERSHIP (every row
+  // whose frame chain passes through this generation row, at any depth), not
+  // a single iteration number. Evidence born inside a nested loop lives in
+  // that loop's own frame and is found here all the same — the depth-1 blind
+  // spot (RFC-098 §B3 revision #8) is gone. Wrapper progress / iteration is no
+  // longer consulted: frames carry the round themselves.
+  const members = containerMemberRuns(wrapperRow.id, rows)
   const inner = wrapperInnerDescendants(wrapperRow.nodeId, definition)
   const kindById = new Map(definition.nodes.map((n) => [n.id, n.kind]))
-  // Built lazily — most calls see no inner done review row at the window.
-  let innerFreshest: Map<string, NodeRunRow> | null = null
+  // A done review row is evidence only while it is the FRESH settled row of
+  // its node inside its own frame; the map is built lazily per frame.
+  const freshestByFrame = new Map<string, Map<string, NodeRunRow>>()
   let best: NodeRunRow | undefined
-  for (const r of rows) {
+  for (const r of members) {
     if (!inner.has(r.nodeId)) continue
-    if (r.iteration !== innerIter) continue
     let qualifies = false
     if (r.status === 'pending') {
       qualifies = true
     } else if (r.status === 'done' && kindById.get(r.nodeId) === 'review') {
-      if (innerFreshest === null) {
-        innerFreshest = buildFreshestSettledPerNode(rows, inner, innerIter)
+      const frame = { containerRunId: r.containerRunId, iteration: r.iteration }
+      const key = `${frame.containerRunId ?? ''}#${frame.iteration}`
+      let freshest = freshestByFrame.get(key)
+      if (freshest === undefined) {
+        freshest = buildFreshestSettledPerNode(rows, inner, frame)
+        freshestByFrame.set(key, freshest)
       }
-      qualifies = isNodeRunFresh(r, innerFreshest)
+      qualifies = isNodeRunFresh(r, freshest)
     }
     if (!qualifies) continue
     if (isFresherNodeRun(r, best)) best = r

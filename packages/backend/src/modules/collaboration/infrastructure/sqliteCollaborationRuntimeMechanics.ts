@@ -24,6 +24,7 @@ export function createSqliteCollaborationRuntimeMechanics(
         taskId: input.taskId,
         askingNodeId: input.askingNodeId,
         askingNodeRunId: input.askingNodeRunId,
+        containerRunId: input.containerRunId ?? null,
         intermediaryNodeId: input.intermediaryNodeId,
         questions: [...input.questions],
         ...(input.truncationWarnings === undefined

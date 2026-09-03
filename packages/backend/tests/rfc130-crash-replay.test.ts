@@ -101,7 +101,7 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
         def,
         scopeNodes,
         scopeIds,
-        0,
+        { containerRunId: null, iteration: 0 },
         upstreamsOf,
         empty,
         empty,

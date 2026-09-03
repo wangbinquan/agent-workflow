@@ -82,6 +82,8 @@ export interface MintInheritSource {
   reviewIteration: number
   shardKey: string | null
   parentNodeRunId: string | null
+  /** RFC-354 — a rerun / placeholder stays in the frame of the row it is minted from. */
+  containerRunId?: string | null
   preSnapshot: string | null
   /** RFC-328 causal slot/generation inheritance; optional for legacy fixtures. */
   continuationSlotKey?: string | null
@@ -166,6 +168,10 @@ export interface MintNodeRunArgs {
   cause: RerunCause
   /** Default 0. */
   retryIndex?: number
+  /** RFC-354 — the frame this row hangs off; undefined = inherit, else top scope (null). */
+  containerRunId?: string | null
+  /** RFC-354 — explicit breadcrumb; omitted = derived from the container row. */
+  scopePath?: string
   /** Default 0. */
   iteration?: number
   /** Single-list inheritance (see {@link MintInheritSource}); null/undefined = defaults. */
@@ -641,6 +647,8 @@ export interface ResolveSchedulerRunRowArgs<R extends SchedulerRunRowCandidate> 
   db: LegacySqliteNodeRunDatabase
   taskId: string
   nodeId: string
+  /** RFC-354 — the frame the node is dispatched in; null at the top scope. */
+  containerRunId: string | null
   iteration: number
   /** 复用 pending 行 / 铸新行都要盖上的 provenance 戳（RFC-074）。 */
   consumedUpstreamJson: string
@@ -675,6 +683,7 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     projections: operations.projections,
     taskId: args.taskId,
     nodeId: args.nodeId,
+    containerRunId: args.containerRunId,
     iteration: args.iteration,
     consumedUpstreamJson: args.consumedUpstreamJson,
     rows: args.rows,

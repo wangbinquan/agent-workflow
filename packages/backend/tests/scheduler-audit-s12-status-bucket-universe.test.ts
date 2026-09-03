@@ -131,7 +131,7 @@ function classify(
     definition,
     scopeNodes,
     scopeIds,
-    0,
+    { containerRunId: null, iteration: 0 },
     new Map(),
     NONE, // inFlight 空：遗弃行场景
     NONE, // dispatchedThisInvocation 空：排除 S-1 的去重干扰
@@ -193,7 +193,17 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
       row('up', 'done', { id: '02UP' }),
       row('n', 'skipped', { consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }) }),
     ]
-    const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, new Map(), NONE, NONE, NONE)
+    const f = deriveFrontier(
+      rows,
+      definition,
+      scopeNodes,
+      scopeIds,
+      { containerRunId: null, iteration: 0 },
+      new Map(),
+      NONE,
+      NONE,
+      NONE,
+    )
     expect(f.ready).toContain('n')
     expect([...f.completed]).not.toContain('n')
   })
@@ -211,7 +221,17 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
         supersededByReview: 'iterated',
       }),
     ]
-    const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, new Map(), NONE, NONE, NONE)
+    const f = deriveFrontier(
+      rows,
+      definition,
+      scopeNodes,
+      scopeIds,
+      { containerRunId: null, iteration: 0 },
+      new Map(),
+      NONE,
+      NONE,
+      NONE,
+    )
     // 五出口仍全空，但卡点不再不可见：三节点全部入 blocked 诊断。
     expect(f.ready).toEqual([])
     expect(f.awaitingHuman).toEqual([])
@@ -244,7 +264,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       new Map(),
       NONE,
       dispatched,
@@ -262,7 +282,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       new Map(),
       NONE,
       dispatched,
@@ -305,7 +325,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       new Map([['down', ['up']]]),
       NONE,
       NONE,

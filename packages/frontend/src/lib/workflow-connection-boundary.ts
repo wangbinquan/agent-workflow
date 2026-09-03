@@ -2,16 +2,26 @@
 // transition reconciler, and legacy drag adapter. Kept dependency-free from
 // React/xyflow so planning stays pure and directly testable.
 
-import type { WorkflowDefinition, WorkflowEdge, WorkflowNode } from '@agent-workflow/shared'
+import {
+  isWrapperKind,
+  type WorkflowDefinition,
+  type WorkflowEdge,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 
-/** Tag wrapper → inner crossings as runtime fan-out input boundaries. */
+/**
+ * Tag wrapper → inner crossings as runtime input boundaries. RFC-354: every
+ * wrapper kind hands its parameters to its body this way — a wrapper-git /
+ * wrapper-loop parameter (declared by an ordinary inbound edge) reaches the
+ * inner consumer through the same `wrapper-input` edge fan-out always used.
+ */
 export function markBoundaryWrapperInput(
   definition: WorkflowDefinition,
   edge: WorkflowEdge,
 ): WorkflowEdge {
   if (edge.boundary !== undefined) return edge
   const source = definition.nodes.find((node) => node.id === edge.source.nodeId)
-  if (source === undefined || source.kind !== 'wrapper-fanout') return edge
+  if (source === undefined || !isWrapperKind(source.kind)) return edge
   const innerIds = (source as Record<string, unknown>).nodeIds
   const memberIds = Array.isArray(innerIds)
     ? innerIds.filter((entry): entry is string => typeof entry === 'string')

@@ -25,6 +25,44 @@ import { InspectorFieldAnchor } from './InspectorFieldAnchor'
 import { InspectorSection } from './InspectorSection'
 import type { EditProps } from './types'
 
+/**
+ * RFC-354 — the wrapper's parameters and their hand-off into the body, read
+ * straight off the edges (a parameter is declared by an ordinary inbound edge;
+ * a `wrapper-input` boundary edge hands it to an inner consumer). Read-only:
+ * both are authored on the canvas, exactly like an agent's inputs.
+ */
+function WrapperParameterList({ node, definition }: Pick<EditProps, 'node' | 'definition'>) {
+  const { t } = useTranslation()
+  const params = definition.edges.filter(
+    (edge) => edge.target.nodeId === node.id && edge.boundary === undefined,
+  )
+  const handoffs = definition.edges.filter(
+    (edge) => edge.boundary === 'wrapper-input' && edge.source.nodeId === node.id,
+  )
+  return (
+    <Field label={t('inspector.wrapperParams')} hint={t('inspector.wrapperParamsHint')}>
+      <div className="muted" data-testid="wrapper-parameter-list">
+        {params.length === 0
+          ? t('inspector.wrapperParamsNone')
+          : params.map((edge) => (
+              <div key={edge.id}>
+                <code>{edge.target.portName}</code> ← <code>{edge.source.nodeId}</code>.
+                <code>{edge.source.portName}</code>
+                {handoffs
+                  .filter((handoff) => handoff.source.portName === edge.target.portName)
+                  .map((handoff) => (
+                    <span key={handoff.id}>
+                      {' '}
+                      → <code>{handoff.target.nodeId}</code>.<code>{handoff.target.portName}</code>
+                    </span>
+                  ))}
+              </div>
+            ))}
+      </div>
+    </Field>
+  )
+}
+
 export function WrapperGitLoopEdit({
   node,
   agents,
@@ -53,6 +91,7 @@ export function WrapperGitLoopEdit({
                 : inner.map((i) => <code key={i}>{i} </code>)}
             </div>
           </Field>
+          <WrapperParameterList node={node} definition={definition} />
         </InspectorSection>
       </div>
     )
@@ -146,6 +185,7 @@ export function WrapperGitLoopEdit({
         </InspectorFieldAnchor>
       </InspectorSection>
       <InspectorSection title={t('inspector.sectionFlow')}>
+        <WrapperParameterList node={node} definition={definition} />
         <InspectorFieldAnchor nodeId={node.id} field="loop-exit-condition">
           <Field
             label={t('inspector.fieldExitConditionKind')}

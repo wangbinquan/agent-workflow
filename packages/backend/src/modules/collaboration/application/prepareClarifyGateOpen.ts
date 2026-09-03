@@ -31,6 +31,8 @@ export interface ClarifyGateOpenReuseNodeRun {
   readonly status: 'pending' | 'running' | 'awaiting_human'
   readonly iteration: number
   readonly parentNodeRunId: string | null
+  /** RFC-354 — the reused row's frame (optional only for legacy fixtures). */
+  readonly containerRunId?: string | null
   readonly shardKey: string | null
   readonly startedAt: number | null
 }
@@ -44,6 +46,11 @@ export interface PrepareClarifyGateOpenInput {
   readonly intermediaryNodeId: string
   readonly targetConsumerNodeId: string | null
   readonly parentNodeRunId: string | null
+  /**
+   * RFC-354 — the asking run's frame; the park row is minted in the same
+   * frame. Optional only for legacy fixtures; production always passes it.
+   */
+  readonly containerRunId?: string | null
   readonly loopIter: number
   readonly iteration: number
   readonly questionsJson: string
@@ -217,6 +224,8 @@ export class ClarifyGateOpenPreparation {
       nodeId: input.intermediaryNodeId,
       runIteration: reused?.iteration ?? (input.kind === 'self' ? 0 : input.loopIter),
       parentNodeRunId: reused === undefined ? input.parentNodeRunId : reused.parentNodeRunId,
+      containerRunId:
+        reused === undefined ? (input.containerRunId ?? null) : (reused.containerRunId ?? null),
       shardKey: reused === undefined ? input.askingShardKey : reused.shardKey,
       previousStartedAt: reused?.startedAt ?? null,
       startedAt:
@@ -238,6 +247,7 @@ export class ClarifyGateOpenPreparation {
       intermediaryNodeRunId: nodeRunId,
       targetConsumerNodeId: input.kind === 'cross' ? input.targetConsumerNodeId : null,
       loopIter: input.kind === 'cross' ? input.loopIter : 0,
+      containerRunId: node.containerRunId,
       iteration: input.iteration,
       questionsJson: input.questionsJson,
       answersJson: null,

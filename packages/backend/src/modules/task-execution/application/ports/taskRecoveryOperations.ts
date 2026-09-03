@@ -66,6 +66,8 @@ export interface TaskRecoveryRunRecord {
   readonly spawnLaunchNonce: string | null
   readonly parentNodeRunId: string | null
   readonly childTaskId: string | null
+  /** RFC-354 — the generation row the run hangs off (null = top scope). */
+  readonly containerRunId?: string | null
   readonly lastEventTs?: number | null
 }
 

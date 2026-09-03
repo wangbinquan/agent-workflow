@@ -456,6 +456,10 @@ function genericCompatibility(
   context: WorkflowSemanticContext,
 ): ConnectionCompatibility {
   if (targetNode.kind === 'agent-single' || targetNode.kind === 'output') return 'compatible'
+  // RFC-354: a wrapper-git / wrapper-loop parameter has no declared kind of
+  // its own (the port table derives it from this very edge), so any source is
+  // acceptable — the inner consumer's kind check happens on the boundary edge.
+  if (targetNode.kind === 'wrapper-git' || targetNode.kind === 'wrapper-loop') return 'compatible'
   const targetPort = declaredPorts(targetNode, definition, context.agentsByName).dataInputs.find(
     (port) => port.name === targetPortName,
   )
@@ -492,10 +496,11 @@ function targetCompatibility(
     if (target.portName !== REVIEW_INPUT_PORT_NAME) return 'incompatible'
     return reviewSourceCompatibility(definition, source, context).compatibility
   }
+  // RFC-354: wrapper-git / wrapper-loop take parameters through ordinary
+  // inbound edges (the target port name IS the parameter name), so they are
+  // generic targets like an agent — only kinds with no inbound data stay out.
   if (
     targetNode.kind === 'input' ||
-    targetNode.kind === 'wrapper-git' ||
-    targetNode.kind === 'wrapper-loop' ||
     targetNode.kind === 'clarify' ||
     targetNode.kind === 'clarify-cross-agent'
   ) {
@@ -581,8 +586,6 @@ function planGenericConnection(
   }
   if (
     targetNode.kind === 'input' ||
-    targetNode.kind === 'wrapper-git' ||
-    targetNode.kind === 'wrapper-loop' ||
     targetNode.kind === 'clarify' ||
     targetNode.kind === 'clarify-cross-agent'
   ) {

@@ -10,6 +10,8 @@ import {
 import { wrapperExternalUpstreamSources } from '@/services/dispatchFrontier'
 import { createLogger } from '@/util/log'
 import { broadcastNodeStatus, type SchedulerState } from './nodeMechanics'
+import { loadFrameChain } from '../application/frameChain'
+import { resolveSourceFrame } from '../domain/environmentChain'
 
 function isSupersedableTransitionError(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code
@@ -87,9 +89,14 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
       kind: K,
       request: WrapperExecutionRequest<K>,
     ): Promise<OpenWrapperGeneration<K>> {
+      // RFC-354: a generation is keyed by the FRAME the wrapper node lives in
+      // (`request.containerRunId`, null at the top) plus the round inside it —
+      // a nested loop re-entered on the outer loop's 2nd round finds no
+      // resumable row and mints a fresh generation instead of reusing round 1.
       const existing = await state.opts.persistence.wrapperRuns.findResumable({
         taskId: state.taskId,
         nodeId: request.node.id,
+        containerRunId: request.containerRunId,
         iteration: request.iteration,
       })
       if (existing !== null) {
@@ -121,21 +128,41 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
         }
       }
 
-      const consumed =
-        kind === 'wrapper-fanout'
-          ? undefined
-          : await state.opts.persistence.wrapperRuns.resolveConsumed({
-              taskId: state.taskId,
-              sourceNodeIds: [
-                ...wrapperExternalUpstreamSources(request.node.id, state.definition),
-              ].sort(),
-              iteration: request.iteration,
-            })
+      // RFC-354 — capture the closure: every external source the body reads is
+      // bound to the settled row visible in the frame the environment chain
+      // resolves it to, from the frame the wrapper node itself lives in. A
+      // source the chain cannot see is left out (the body read fails loudly).
+      let consumed: Readonly<Record<string, string>> | undefined
+      if (kind !== 'wrapper-fanout') {
+        const frame = { containerRunId: request.containerRunId, iteration: request.iteration }
+        const chain = await loadFrameChain(
+          (id: string) => state.opts.persistence.nodeExecution.read(id),
+          frame,
+        )
+        const sources: Array<{ nodeId: string; frame: typeof frame }> = []
+        for (const sourceNodeId of [
+          ...wrapperExternalUpstreamSources(request.node.id, state.definition),
+        ].sort()) {
+          const resolved = resolveSourceFrame({
+            sourceNodeId,
+            targetNodeId: request.node.id,
+            parents: state.containerOf,
+            frame,
+            containerRowById: chain.lookup,
+          })
+          if (resolved.ok) sources.push({ nodeId: sourceNodeId, frame: resolved.frame })
+        }
+        consumed = await state.opts.persistence.wrapperRuns.resolveConsumed({
+          taskId: state.taskId,
+          sources,
+        })
+      }
       const runId = await state.opts.persistence.nodeRuns.mint({
         taskId: state.taskId,
         nodeId: request.node.id,
         status: 'pending',
         cause: 'wrapper-init',
+        containerRunId: request.containerRunId,
         iteration: request.iteration,
         ...(consumed === undefined
           ? {}

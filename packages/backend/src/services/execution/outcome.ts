@@ -23,7 +23,7 @@
 import type { TaskExecutionOutcomeReadModel } from '@/modules/task-execution/public/types'
 import { createSqliteTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
-import { pickUpstreamSourceRun } from '@/services/freshness'
+import { pickLatestSettledRun } from '@/services/freshness'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
 import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
 import {
@@ -143,7 +143,9 @@ function projectOutputNodePorts(
   const result: ExecutionOutcome['outputs'] = {}
   for (const { id: nodeId, portNames } of outputNodes) {
     const rows = runs.filter((r) => r.nodeId === nodeId)
-    const picked = pickUpstreamSourceRun(rows, Number.POSITIVE_INFINITY)
+    // RFC-354: a task-boundary projection sits outside every frame of the task —
+    // the answer is the node's latest settled row, whatever frame produced it.
+    const picked = pickLatestSettledRun(rows)
     if (picked === undefined) {
       // task done ⟹ every output node has a settled row (lifecycle invariant T3);
       // defensive for hand-edited fixtures / historical rows.

@@ -61,7 +61,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['in'], out: ['a'] }),
       NONE,
       NONE,
@@ -83,7 +83,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['in'] }),
       NONE,
       NONE,
@@ -106,7 +106,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['in'] }),
       NONE,
       NONE,
@@ -129,7 +129,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['in'] }),
       NONE,
       NONE,
@@ -145,7 +145,17 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       { id: 'c', kind: 'clarify' },
     ])
     const rows = [row('a', 'done'), row('c', 'awaiting_human')]
-    const f = deriveFrontier(rows, definition, scopeNodes, scopeIds, 0, ups({}), NONE, NONE, NONE)
+    const f = deriveFrontier(
+      rows,
+      definition,
+      scopeNodes,
+      scopeIds,
+      { containerRunId: null, iteration: 0 },
+      ups({}),
+      NONE,
+      NONE,
+      NONE,
+    )
     expect(f.awaitingHuman).toEqual(['c'])
     expect(f.ready).toEqual([])
     expect(f.allSettled).toBe(false)
@@ -170,7 +180,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ designer: ['in'], builder: ['designer'] }),
       NONE,
       NONE,
@@ -195,7 +205,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['in'] }),
       NONE,
       NONE,
@@ -216,7 +226,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['up'] }),
       NONE,
       NONE,
@@ -240,7 +250,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ a: ['in'] }),
       NONE,
       new Set(['a']), // already dispatched this invocation
@@ -272,7 +282,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ designer: ['in'], rev1: ['designer'], questioner: ['rev1'] }),
       NONE,
       NONE,
@@ -296,8 +306,9 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       iteration: 0,
       wrapperProgressJson: JSON.stringify({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
     })
-    // Inner pending lives at the loop counter 2 (different nodeId, in definition.nodes
-    // via the wrapper's nodeIds — here we add it so wrapperInnerDescendants finds it).
+    // Inner pending lives at the loop counter 2 INSIDE the wrapper generation
+    // (RFC-354: its frame is the wrapper row; the definition carries the node via
+    // the wrapper's nodeIds so wrapperInnerDescendants finds it).
     const defWithInner = {
       nodes: [
         { id: 'lw', kind: 'wrapper-loop', nodeIds: ['inner'] },
@@ -305,14 +316,14 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       ],
       edges: [],
     } as unknown as WorkflowDefinition
-    const innerPending = row('inner', 'pending', { iteration: 2 })
+    const innerPending = row('inner', 'pending', { iteration: 2, containerRunId: wrapperRow.id })
     const rows = [wrapperRow, innerPending]
     const f = deriveFrontier(
       rows,
       defWithInner,
       [{ id: 'lw', kind: 'wrapper-loop' }] as unknown as WorkflowNode[],
       new Set(['lw']),
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({}),
       NONE,
       NONE,

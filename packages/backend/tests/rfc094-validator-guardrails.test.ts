@@ -1,12 +1,11 @@
 // RFC-094 (audit WP-6a) — validator guardrails for broken topologies.
 //
 // What this locks in (design/RFC-094-validator-guardrails/design.md §1):
-//   1. `wrapper-loop-nested` (error): a wrapper-loop nested — directly OR
-//      transitively through other wrappers — inside another wrapper-loop is
-//      rejected. node_runs rows have no parent-scope axis, so the inner loop
-//      silently no-ops from the outer loop's 2nd round (audit S-6; runtime
-//      current behavior locked by scheduler-audit-s06). Non-loop-in-loop
-//      wrapper combinations stay legal.
+//   1. (RFC-354 flip) `wrapper-loop-nested` is RETIRED: node_runs now carries
+//      a frame axis (container_run_id), so a nested loop's rounds no longer
+//      collide with the outer loop's rows. Rule 1 below asserts the code never
+//      fires for any nesting shape; the fan-out body rule that replaces the
+//      loop→fanout→loop case lives in rfc354-validator-node-semantics.test.ts.
 //   2. `fanout-inner-chain-unsupported` (error): a non-boundary data edge
 //      between two inner nodes of the same wrapper-fanout whose target is not
 //      the aggregator is rejected (audit S-5: the dispatch side never feeds
@@ -98,25 +97,27 @@ function codesFor(d: WorkflowDefinition, pointer?: string): string[] {
   return res.issues.filter((i) => pointer === undefined || i.pointer === pointer).map((i) => i.code)
 }
 
-describe('RFC-094 rule 1 — wrapper-loop-nested (audit S-6)', () => {
-  test('direct loop-in-loop → error on the inner loop', () => {
+describe('RFC-094 rule 1 — wrapper-loop-nested (retired by RFC-354: nesting is legal)', () => {
+  test('direct loop-in-loop → no nesting error on the inner loop', () => {
     const d = def([loop('outer', ['inner']), loop('inner', ['w']), agent('w')])
-    expect(codesFor(d, 'inner')).toContain('wrapper-loop-nested')
+    expect(codesFor(d, 'inner')).not.toContain('wrapper-loop-nested')
   })
 
-  test('transitive loop→git→loop → error (same iteration-axis collision)', () => {
+  test('transitive loop→git→loop → no nesting error', () => {
     const d = def([loop('outer', ['g']), git('g', ['inner']), loop('inner', ['w']), agent('w')])
-    expect(codesFor(d, 'inner')).toContain('wrapper-loop-nested')
+    expect(codesFor(d, 'inner')).not.toContain('wrapper-loop-nested')
   })
 
-  test('transitive loop→fanout→loop → error', () => {
+  test('transitive loop→fanout→loop → rejected for the FAN-OUT BODY, not for nesting', () => {
     const d = def([
       loop('outer', ['fan']),
       fanout('fan', ['inner']),
       loop('inner', ['w']),
       agent('w'),
     ])
-    expect(codesFor(d, 'inner')).toContain('wrapper-loop-nested')
+    const inner = codesFor(d, 'inner')
+    expect(inner).not.toContain('wrapper-loop-nested')
+    expect(inner).toContain('wrapper-fanout-unsupported-inner-kind')
   })
 
   test('non-loop-in-loop combinations stay legal: git-in-loop / loop-in-git / fanout-in-loop / single loop', () => {

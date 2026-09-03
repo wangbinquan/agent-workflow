@@ -11,6 +11,8 @@ export type ClarifyGateNodeProjection = Readonly<{
   nodeId: string
   runIteration: number
   parentNodeRunId: string | null
+  /** RFC-354 — the frame the park row lives in (the asking run's frame). */
+  containerRunId: string | null
   shardKey: string | null
   previousStartedAt: number | null
   startedAt: number | null
@@ -28,6 +30,8 @@ export type ClarifyGateRoundProjection = Readonly<{
   intermediaryNodeRunId: string
   targetConsumerNodeId: string | null
   loopIter: number
+  /** RFC-354 — the frame the round (and its park row) lives in; null = top scope. */
+  containerRunId: string | null
   iteration: number
   questionsJson: string
   answersJson: null
@@ -137,6 +141,7 @@ function decodeNode(value: unknown): ClarifyGateNodeProjection {
     id: stringField(value, 'id'),
     taskId: stringField(value, 'taskId'),
     nodeId: stringField(value, 'nodeId'),
+    containerRunId: nullableString(value, 'containerRunId'),
     runIteration: nonNegativeInteger(value, 'runIteration'),
     parentNodeRunId: nullableString(value, 'parentNodeRunId'),
     shardKey: nullableString(value, 'shardKey'),
@@ -198,6 +203,7 @@ function decodeRound(value: unknown): ClarifyGateRoundProjection {
     intermediaryNodeRunId: stringField(value, 'intermediaryNodeRunId'),
     targetConsumerNodeId,
     loopIter,
+    containerRunId: nullableString(value, 'containerRunId'),
     iteration: nonNegativeInteger(value, 'iteration'),
     questionsJson: stringField(value, 'questionsJson'),
     answersJson: null,

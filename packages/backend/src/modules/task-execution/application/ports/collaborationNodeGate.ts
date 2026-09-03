@@ -5,6 +5,11 @@ interface AgentClarifyGateRequestBase {
   readonly taskId: string
   readonly askingNodeId: string
   readonly askingNodeRunId: string
+  /**
+   * RFC-354 — the asking run's frame; the park row is minted in the same
+   * frame. Optional only for legacy fixtures; production always passes it.
+   */
+  readonly containerRunId?: string | null
   readonly intermediaryNodeId: string
   readonly questions: readonly ClarifyQuestion[]
   readonly truncationWarnings?: readonly ClarifyTruncationWarning[]

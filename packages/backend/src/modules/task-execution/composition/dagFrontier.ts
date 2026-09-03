@@ -133,7 +133,11 @@ export function deriveFrontier(
   definition: WorkflowDefinition,
   scopeNodes: WorkflowNode[],
   scopeIds: Set<string>,
-  iteration: number,
+  // RFC-354 — the FRAME being scheduled: the wrapper generation row this scope
+  // runs in (null at the top) plus the round inside it. Rows of other frames —
+  // an earlier round, a sibling generation, a nested wrapper's body — are
+  // invisible here, which is exactly what makes nested loops safe (audit S-6).
+  frame: { readonly containerRunId: string | null; readonly iteration: number },
   upstreamsOf: Map<string, string[]>,
   inFlight: ReadonlySet<string>,
   dispatchedThisInvocation: ReadonlySet<string>,
@@ -147,14 +151,17 @@ export function deriveFrontier(
   // every non-deferred task → byte-for-byte today's frontier (golden-lock).
   deferredHandlerNodeIds: ReadonlySet<string> = new Set(),
 ): Frontier {
+  const { containerRunId, iteration } = frame
   const latestPerNode = new Map<string, FrontierRunRow>()
   for (const r of rows) {
-    if (r.iteration !== iteration) continue
+    // `?? null` normalizes plain test-fixture rows (same idiom as
+    // isReviewSupersededRow); a real DB row always carries the column.
+    if ((r.containerRunId ?? null) !== containerRunId || r.iteration !== iteration) continue
     if (!scopeIds.has(r.nodeId)) continue
     if (r.parentNodeRunId !== null) continue // skip fan-out child rows
     if (isFresherNodeRun(r, latestPerNode.get(r.nodeId))) latestPerNode.set(r.nodeId, r)
   }
-  const freshestSettled = buildFreshestSettledPerNode(rows, scopeIds, iteration)
+  const freshestSettled = buildFreshestSettledPerNode(rows, scopeIds, frame)
 
   // Pass 1 — done∧fresh (old seed口径) + exhausted (loop-max true terminal,
   // HIGH-2). An asking agent's `done` run with an OPEN clarify session is NOT a

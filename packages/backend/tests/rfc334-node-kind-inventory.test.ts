@@ -37,6 +37,7 @@ function request<K extends NodeKind>(kind: K, signal?: AbortSignal): NodeStepReq
     node: { id: `node-${kind}`, kind } as WorkflowNode & { readonly kind: K },
     task: { taskId: 'task-1' },
     scope: { scopeId: null },
+    containerRunId: null,
     iteration: 0,
     execution: { signal },
   }

@@ -2121,6 +2121,30 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // 5b4b. RFC-354 T4: one-shot frame backfill for node_runs rows minted before
+  // frames existed (migration 0223 adds the columns, only the daemon can fill
+  // them — it needs each task's frozen snapshot). Marker-gated: every later boot
+  // is a single maintenance_state read. Must run BEFORE auto-resume (step 8+)
+  // so a resumed nested wrapper sees its body rows in the right generation.
+  try {
+    const { runFrameBackfillOnBoot } =
+      await import('@/modules/task-execution/composition/frameBackfill')
+    const backfill = await runFrameBackfillOnBoot({ provider: 'sqlite', db })
+    if (!backfill.skipped) {
+      log.info('rfc354 frame backfill completed on boot', {
+        tasks: backfill.tasks,
+        rowsUpdated: backfill.rowsUpdated,
+        roundsUpdated: backfill.roundsUpdated,
+        unreadableTasks: backfill.unreadableTasks.length,
+        unresolvedRows: backfill.unresolvedRows,
+      })
+    }
+  } catch (err) {
+    log.warn('rfc354 frame backfill on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // 5b5. RFC-165 (§9): heal stored path-mode scheduled launch payloads to their
   // faithful file:// form (fetchBeforeLaunch:true / missing dirs → disabled with
   // an explanatory lastError). MUST run before the HTTP server serves the

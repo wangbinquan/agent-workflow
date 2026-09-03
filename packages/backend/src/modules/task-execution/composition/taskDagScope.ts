@@ -17,7 +17,7 @@ export async function runScope(
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): Promise<TaskScopeOutcome> {
   const { taskId, definition, opts } = state
-  const { scopeId, scopeIds, iteration, log } = args
+  const { scopeId, scopeIds, containerRunId, iteration, log } = args
 
   // RFC-076 PR-B — completion-driven dispatch frontier (replaces the
   // snapshot-batch + Promise.all-barrier + rescan/recompute reconcile model).
@@ -165,7 +165,7 @@ export async function runScope(
         definition,
         scopeNodes,
         scopeIds,
-        iteration,
+        { containerRunId, iteration },
         upstreamsOf,
         new Set(inFlight.keys()),
         dispatchedThisInvocation,
@@ -183,10 +183,9 @@ export async function runScope(
         if (anchor !== undefined) dispatchedPendingRowIds.add(anchor)
         inFlight.set(
           nodeId,
-          executeNode(state, { node, iteration, log }, wrapperRuntimeFactory).then((result) => ({
-            nodeId,
-            result,
-          })),
+          executeNode(state, { node, containerRunId, iteration, log }, wrapperRuntimeFactory).then(
+            (result) => ({ nodeId, result }),
+          ),
         )
       }
     }

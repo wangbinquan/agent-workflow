@@ -18,8 +18,10 @@
 //      reversible (RFC-306 D10). A skipped row without provenance is never
 //      "fresh", so the frontier re-dispatches it every tick — a busy loop.
 
-import { pickUpstreamSourceRun } from '@/services/freshness'
+import { pickFrameSourceRun } from '@/services/freshness'
 import { joinModeOf, resolveWorkflowSourceRef } from '@agent-workflow/shared'
+import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
+import { loadFrameChain } from './frameChain'
 import type { PortRef, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {
   edgeActivationOf,
@@ -52,12 +54,17 @@ export async function resolveNodeActivationForDispatch(args: {
   taskId: string
   definition: WorkflowDefinition
   node: WorkflowNode
-  iteration: number
+  /** RFC-354 — the frame the node is about to be dispatched in. */
+  frame: FrameCoordinate
   parents?: ReadonlyMap<string, string>
   /** RFC-306 §10 — set when the operator pressed "run anyway" on this node. */
   forceActivated?: boolean
 }): Promise<NodeActivationDecision> {
-  const { reader, taskId, definition, node, iteration } = args
+  const { reader, taskId, definition, node, frame } = args
+  // RFC-354 — the judgment reads each source in the frame the environment
+  // chain resolves it to, exactly like resolveUpstreamInputs will a moment
+  // later (requirement 1 above).
+  const chain = await loadFrameChain((id) => reader.findRun(id), frame)
   // Explicit dataflow edges + the implicit references the scheduler already
   // treats as dependencies (review.inputSource / output ports[].bind). Design
   // gate P1#2: judging activation on edges alone leaves review and output nodes
@@ -89,7 +96,20 @@ export async function resolveNodeActivationForDispatch(args: {
 
     if (!runByNode.has(source.nodeId)) {
       const rows = await reader.findRuns(taskId, source.nodeId)
-      const picked = pickUpstreamSourceRun(rows, iteration)
+      // A source the chain cannot see degrades to `unresolved` (⇒ active),
+      // the same way an unresolvable wrapper boundary does above; the loud
+      // failure belongs to resolveUpstreamInputs.
+      const sourceFrame =
+        args.parents === undefined
+          ? { ok: true as const, frame }
+          : resolveSourceFrame({
+              sourceNodeId: source.nodeId,
+              targetNodeId: node.id,
+              parents: args.parents,
+              frame,
+              containerRowById: chain.lookup,
+            })
+      const picked = sourceFrame.ok ? pickFrameSourceRun(rows, sourceFrame.frame) : undefined
       runByNode.set(source.nodeId, picked)
       if (picked !== undefined) {
         consumed[source.nodeId] = picked.id

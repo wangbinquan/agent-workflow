@@ -706,7 +706,7 @@ describe('RFC-144 deriveFrontier — abandoned 分桶（穷举 switch 的新格�
         def,
         scopeNodes,
         scopeIds,
-        0,
+        { containerRunId: null, iteration: 0 },
         upstreamsOf,
         empty,
         empty,

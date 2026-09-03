@@ -21,6 +21,7 @@ import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
 import { doctorCommand, formatDoctor } from './cli/doctor'
+import { frameBackfillCommand } from './cli/frameBackfill'
 import { migrateCommand } from './cli/migrate'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand } from './cli/start'
@@ -446,6 +447,25 @@ async function main(): Promise<void> {
     }
 
     case 'doctor': {
+      // RFC-354 T4 — manual entry of the one-shot frame backfill (the daemon
+      // runs it at boot; this forces a re-walk with the daemon stopped).
+      if (Bun.argv.includes('--backfill-containers')) {
+        const result = await frameBackfillCommand({
+          openDatabase: async () => {
+            const provider = await resolveCommandProvider()
+            return {
+              database:
+                provider.provider === 'sqlite'
+                  ? { provider: 'sqlite', db: provider.db }
+                  : { provider: 'postgresql', db: provider.db },
+              close: () => provider.runtime.close(),
+            }
+          },
+        })
+        process.stdout.write(result.output)
+        if (result.status !== 'ok') process.exit(1)
+        break
+      }
       const result = await doctorCommand()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
@@ -579,6 +599,9 @@ async function main(): Promise<void> {
       console.log('  status                            print daemon status (PID, /health)')
       console.log('  version                           print version')
       console.log('  doctor                            run health checks (does not start daemon)')
+      console.log(
+        '  doctor --backfill-containers      re-run the RFC-354 frame backfill (daemon stopped)',
+      )
       console.log(
         '  downgrade-audit rfc-295            read-only compatibility gate before RFC-295 rollback',
       )

@@ -2343,13 +2343,30 @@ async function assertDesignerReady(
   // so the readiness scan can match the dispatched sessions and skip them; an UNRESOLVED sibling
   // (not in this set) still rejects the dispatch (golden lock H3/H2 multi-source readiness).
   const dispatchedOrigins = new Set(graphSubset.map((e) => e.originNodeRunId))
-  for (const loopIter of new Set(graphSubset.map((e) => e.loopIter))) {
+  // RFC-354: readiness is scoped per FRAME (loop_iter + the generation row the
+  // cross-clarify run hangs off). The origin run's frame IS the round's frame, so
+  // the rounds of a nested loop's different outer rounds never gate (or satisfy)
+  // each other.
+  const originFrames = new Map<string, string | null>()
+  for (const row of await db
+    .select({ id: nodeRuns.id, containerRunId: nodeRuns.containerRunId })
+    .from(nodeRuns)
+    .where(inArray(nodeRuns.id, [...dispatchedOrigins]))) {
+    originFrames.set(row.id, row.containerRunId)
+  }
+  const frames = new Map<string, { loopIter: number; containerRunId: string | null }>()
+  for (const e of graphSubset) {
+    const containerRunId = originFrames.get(e.originNodeRunId) ?? null
+    frames.set(`${e.loopIter}|${containerRunId ?? ''}`, { loopIter: e.loopIter, containerRunId })
+  }
+  for (const { loopIter, containerRunId } of frames.values()) {
     const readiness = await evaluateDesignerRerunReadiness({
       db,
       taskId,
       designerNodeId: targetNodeId,
       definition,
       loopIter,
+      containerRunId,
       dispatchedOrigins,
     })
     if (!readiness.ready) {

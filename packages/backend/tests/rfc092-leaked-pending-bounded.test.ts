@@ -87,7 +87,7 @@ describe('RFC-092 纯函数层 — 行 id 一次性豁免的有界退化', () =>
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ d: ['in'] }),
       NONE,
       new Set(['d']), // 本调用已派发过
@@ -118,7 +118,7 @@ describe('RFC-092 纯函数层 — 行 id 一次性豁免的有界退化', () =>
       definition,
       scopeNodes,
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
       ups({ d: ['in'] }),
       NONE,
       new Set(['d']),

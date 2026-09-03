@@ -892,6 +892,9 @@ async function taskNodeRuns(
       wgRound: row.wgRound ?? null,
       rerunCause: row.rerunCause ?? null,
       reviewIteration: row.reviewIteration,
+      // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
+      containerRunId: row.containerRunId ?? null,
+      scopePath: row.scopePath ?? '',
       status: row.status,
       startedAt: row.startedAt,
       finishedAt: row.finishedAt,
@@ -1556,6 +1559,7 @@ async function retryNode(
                 reviewIteration: selected.reviewIteration,
                 shardKey: selected.shardKey,
                 parentNodeRunId: selected.parentNodeRunId,
+                containerRunId: selected.containerRunId,
                 preSnapshot: selected.preSnapshot,
                 continuationSlotKey: selected.continuationSlotKey,
                 lineageSlotPathJson: selected.lineageSlotPathJson,

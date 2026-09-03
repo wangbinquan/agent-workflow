@@ -1796,7 +1796,23 @@ export const nodeRuns = sqliteTable(
       .references(() => tasks.id, { onDelete: 'cascade' }),
     nodeId: text('node_id').notNull(), // node id within workflow definition
     parentNodeRunId: text('parent_node_run_id'), // multi-process fan-out parent / loop iteration parent
-    iteration: integer('iteration').notNull().default(0), // loop iteration index
+    /**
+     * RFC-354 — the FRAME this row hangs off: the wrapper generation row
+     * (`wrapper-init` mint, see openGeneration) whose body this row belongs
+     * to; NULL at the top scope. A loop round's identity is
+     * `(container_run_id, iteration)`, so nested wrappers never collide.
+     * Distinct from `parent_node_run_id`, which stays the born-running
+     * (fan-out shard / commit-push) child pointer.
+     */
+    containerRunId: text('container_run_id'),
+    /**
+     * RFC-354 — derived, write-once breadcrumb of the frame chain from the
+     * root: `wrapperId:iteration/…`, `''` at the top scope. For UI / SQL
+     * prefix queries / diagnostics only — scheduling reads `container_run_id`,
+     * never this column (a guard asserts the two agree).
+     */
+    scopePath: text('scope_path').notNull().default(''),
+    iteration: integer('iteration').notNull().default(0), // RFC-354: round index INSIDE the frame
     shardKey: text('shard_key'), // multi-process shard identifier (e.g. file path)
     retryIndex: integer('retry_index').notNull().default(0), // 0 = first attempt
     /**
@@ -2146,6 +2162,13 @@ export const nodeRuns = sqliteTable(
   (t) => ({
     taskIdx: index('idx_node_runs_task').on(t.taskId, t.nodeId, t.iteration, t.retryIndex),
     parentIdx: index('idx_node_runs_parent').on(t.parentNodeRunId),
+    // RFC-354: every dispatch tick lists the rows of ONE frame.
+    containerIdx: index('idx_node_runs_container').on(
+      t.taskId,
+      t.containerRunId,
+      t.nodeId,
+      t.iteration,
+    ),
     childTaskIdx: index('idx_node_runs_child_task').on(t.childTaskId), // RFC-243
     // RFC-311：orphanReconcile(10min)/autoKill(5min)/orphans(boot)/pluginGenerationGc(1h)
     // 四处周期扫描共用。不能用 partial（WHERE status IN …）：SQLite 的 partial-index
@@ -2913,7 +2936,13 @@ export const clarifyRounds = sqliteTable(
     // wrapper-loop iter (RFC-056 partial persistence). 0 for kind='self' or
     // cross outside a loop.
     loopIter: integer('loop_iter').notNull().default(0),
-    // Monotonic round counter scoped to (intermediary_node_id, loop_iter).
+    /**
+     * RFC-354 — the frame (wrapper generation row) the asking run belongs to;
+     * NULL at the top scope. `loop_iter` narrows to "round INSIDE that frame",
+     * so nested loops never reuse a round from another generation.
+     */
+    containerRunId: text('container_run_id'),
+    // Monotonic round counter scoped to (intermediary_node_id, container_run_id, loop_iter).
     // RFC-023's iteration_index and RFC-056's iteration map to this column
     // in migration 0031.
     iteration: integer('iteration').notNull().default(0),
@@ -2956,7 +2985,13 @@ export const clarifyRounds = sqliteTable(
   (t) => ({
     taskIdx: index('idx_clarify_rounds_task').on(t.taskId),
     kindStatusIdx: index('idx_clarify_rounds_kind_status').on(t.kind, t.status),
-    askingIdx: index('idx_clarify_rounds_asking').on(t.askingNodeId, t.loopIter, t.iteration),
+    // RFC-354: the frame column joins the round key (migration 0223 rebuilds it).
+    askingIdx: index('idx_clarify_rounds_asking').on(
+      t.askingNodeId,
+      t.containerRunId,
+      t.loopIter,
+      t.iteration,
+    ),
     intermediaryIdx: index('idx_clarify_rounds_intermediary').on(
       t.intermediaryNodeId,
       t.loopIter,

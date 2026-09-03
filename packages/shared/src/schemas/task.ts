@@ -1291,6 +1291,15 @@ export const NodeRunSchema = z.object({
    * counts purely technical retries like process crashes).
    */
   reviewIteration: z.number().int().nonnegative().default(0),
+  /**
+   * RFC-354 — the execution FRAME: `containerRunId` is the wrapper generation
+   * row this run hangs off (null at the top scope; `iteration` above is the
+   * round INSIDE that frame), `scopePath` the derived root→here breadcrumb
+   * (`wrapperId:iteration/…`, '' at the top). Defaulted for payloads from
+   * older daemons.
+   */
+  containerRunId: z.string().nullable().default(null),
+  scopePath: z.string().default(''),
   status: NodeRunStatusSchema,
   startedAt: z.number().int().nullable(),
   finishedAt: z.number().int().nullable(),

@@ -109,7 +109,12 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
   }): Promise<WrapperSettlement> {
     const { request, generation, workspace, bindings, iteration, maxIterations, reason } = input
     for (const binding of bindings) {
-      const value = await this.data.readPort(binding.bind.nodeId, binding.bind.portName, iteration)
+      // RFC-354: the bound body node is read in THIS generation's frame at the
+      // round the loop exited on.
+      const value = await this.data.readPort(binding.bind.nodeId, binding.bind.portName, {
+        containerRunId: generation.runId,
+        iteration,
+      })
       await this.data.upsertOutput({
         runId: generation.runId,
         portName: binding.name,
@@ -192,7 +197,14 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         iteration,
         phase: 'inner-running',
       })
-      const result = await this.scopeDriver.drive({ scope, iteration, workspace: scene })
+      // RFC-354: the body runs in the frame of THIS generation row; a nested
+      // loop re-entered on our next round opens a fresh generation of its own.
+      const result = await this.scopeDriver.drive({
+        scope,
+        containerRunId: generation.runId,
+        iteration,
+        workspace: scene,
+      })
       if (result.kind === 'canceled') {
         return wrapperSettlement('canceled', {
           kind: 'canceled',
@@ -233,7 +245,7 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
       const port = await this.data.readPort(
         prepared.exitCondition.nodeId,
         prepared.exitCondition.portName,
-        iteration,
+        { containerRunId: generation.runId, iteration },
       )
       if (
         evaluateExitCondition(prepared.exitCondition, {

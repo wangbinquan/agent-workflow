@@ -633,6 +633,7 @@ async function runTaskEngineOrchestratorInner(
               {
                 scopeId: null,
                 scopeIds: topLevelIds,
+                containerRunId: null,
                 iteration: 0,
                 log,
               },
@@ -700,6 +701,7 @@ async function runTaskEngineOrchestratorInner(
                 {
                   scopeId: null,
                   scopeIds: topLevelIds,
+                  containerRunId: null,
                   iteration: 0,
                   log,
                 },

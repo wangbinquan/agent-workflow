@@ -6338,7 +6338,17 @@ export async function retryNode(
           .select()
           .from(nodeRuns)
           .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
-        const prev = pickFreshestRun(existing, { topLevelOnly: true })
+        // RFC-354: a cascaded placeholder inherits from the freshest row in the RETRIED
+        // ROW'S FRAME (same generation row + round) so it re-arms the node in the
+        // generation the user is actually retrying; a downstream node with no row in
+        // that frame (it lives in an enclosing scope, or in a nested wrapper whose own
+        // placeholder re-opens it) falls back to the freshest top-level row as before.
+        const sameFrame = existing.filter(
+          (r) => r.containerRunId === runRow.containerRunId && r.iteration === runRow.iteration,
+        )
+        const prev = pickFreshestRun(sameFrame.length > 0 ? sameFrame : existing, {
+          topLevelOnly: true,
+        })
         // RFC-284 T21：口径=全行集（刻意含 child rows），收编 nextRetryIndex。
         const nextRetry = nextRetryIndex(existing)
         const inherit = nodeId === runRow.nodeId ? runRow : prev
@@ -6801,6 +6811,8 @@ export async function getTaskNodeRuns(
       shardKey: nodeRuns.shardKey,
       wgRound: nodeRuns.wgRound,
       reviewIteration: nodeRuns.reviewIteration,
+      containerRunId: nodeRuns.containerRunId,
+      scopePath: nodeRuns.scopePath,
       startedAt: nodeRuns.startedAt,
       finishedAt: nodeRuns.finishedAt,
       pid: nodeRuns.pid,
@@ -6933,6 +6945,9 @@ export async function getTaskNodeRuns(
       // RFC-182 P1-3 — wire the mint cause for wg-aware history labels.
       rerunCause: r.rerunCause ?? null,
       reviewIteration: r.reviewIteration,
+      // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
+      containerRunId: r.containerRunId ?? null,
+      scopePath: r.scopePath ?? '',
       status: r.status,
       startedAt: r.startedAt,
       finishedAt: r.finishedAt,

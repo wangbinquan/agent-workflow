@@ -12,6 +12,10 @@ export interface NodeExecutionSnapshot {
   readonly taskId: string
   readonly nodeId: string
   readonly parentNodeRunId: string | null
+  /** RFC-354 — the frame (wrapper generation row) this row hangs off; null at the top scope. */
+  readonly containerRunId: string | null
+  /** RFC-354 — derived root→here breadcrumb (`wrapperId:iteration/…`), `''` at the top scope. */
+  readonly scopePath: string
   readonly iteration: number
   readonly shardKey: string | null
   readonly retryIndex: number
@@ -114,6 +118,8 @@ export interface NodeExecutionQuery {
   readonly parentNodeRunId?: string | null
   /** Restrict to wrapper/fanout children without selecting one generation. */
   readonly childOnly?: boolean
+  /** RFC-354 — restrict to one frame: null = the top scope, an id = that generation's body. */
+  readonly containerRunId?: string | null
 }
 
 export type NodeExecutionProjectionPatch = Partial<

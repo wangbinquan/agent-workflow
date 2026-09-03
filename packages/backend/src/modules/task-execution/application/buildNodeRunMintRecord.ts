@@ -42,6 +42,17 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
   const operationGeneration =
     overrides.operationGeneration ??
     (inherited === null ? 0 : (inherited.operationGeneration ?? 0) + 1)
+  // RFC-354 — the frame. An explicit `containerRunId` (the scheduler knows the
+  // frame it dispatches in) wins; a placeholder / rerun minted from an existing
+  // row stays in that row's frame. `scopePath` is NEVER inherited: it encodes
+  // the container chain AND this row's own round, so a row re-minted into a
+  // fresh generation (outer round 2 of a nested loop) or at another round would
+  // carry a stale breadcrumb. A null here means "derive from the container
+  // row" — the adapter fills it in (`childScopePath`) so no call site has to
+  // read the generation row itself.
+  const containerRunId =
+    input.containerRunId !== undefined ? input.containerRunId : (inherited?.containerRunId ?? null)
+  const scopePath = containerRunId === null ? '' : (input.scopePath ?? null)
 
   if (input.status === 'running' && parentNodeRunId === null) {
     throw new Error(
@@ -62,6 +73,8 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     reviewIteration,
     shardKey,
     parentNodeRunId,
+    containerRunId,
+    scopePath,
     preSnapshot,
     shardValueHash: overrides.shardValueHash ?? null,
     consumedUpstreamRunsJson: overrides.consumedUpstreamRunsJson ?? null,

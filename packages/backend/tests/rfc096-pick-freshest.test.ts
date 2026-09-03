@@ -208,7 +208,7 @@ describe('RFC-096 buildFreshestSettledPerNode — post-migration smoke', () => {
     const m = buildFreshestSettledPerNode(
       [oldDone, freshDone, wrongIteration, childRow, nonDone, outOfScope],
       scopeIds,
-      0,
+      { containerRunId: null, iteration: 0 },
     )
     expect(m.size).toBe(1)
     expect(m.get('a')?.id).toBe(freshDone.id)
@@ -221,7 +221,10 @@ describe('RFC-096 buildFreshestSettledPerNode — post-migration smoke', () => {
     const b1 = fullRow('b')
     const a2 = fullRow('a')
     const b2 = fullRow('b')
-    const m = buildFreshestSettledPerNode([a1, b1, a2, b2], scopeIds, 0)
+    const m = buildFreshestSettledPerNode([a1, b1, a2, b2], scopeIds, {
+      containerRunId: null,
+      iteration: 0,
+    })
     expect(m.get('a')?.id).toBe(a2.id)
     expect(m.get('b')?.id).toBe(b2.id)
   })
