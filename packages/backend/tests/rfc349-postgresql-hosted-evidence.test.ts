@@ -175,6 +175,34 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(mainCi).toContain('--shard=${{ matrix.shard }}/4')
   })
 
+  // Why this test exists: sharding was only the FIRST way this lane diverged
+  // from the reference backend job. Once it could finish, run 33732387691 red on
+  // two more config gaps, each a real test failure rather than a runner death:
+  //   backend-4 — the four RFC-294 N1a provenance guards ("reachable from HEAD")
+  //     need the full history Main CI pins with `fetch-depth: 0`; this lane took
+  //     the depth-1 default.
+  //   backend-1 — `doctor returns ok when opencode + git present` exercises a
+  //     real PATH binary on purpose, and Main CI installs it; this lane did not.
+  // A lane that calls itself "the repository's complete regression lanes" has to
+  // carry the reference job's environment, not just its command. Locking each
+  // dimension separately so the next gap names itself.
+  test('gives the backend regression lane the same job environment as Main CI', () => {
+    const workflow = readFileSync(WORKFLOW_PATH, 'utf8')
+    const regressionJob = / {2}functional-regression:[\s\S]*$/u.exec(workflow)?.[0]
+    const mainCi = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+    expect(regressionJob).toBeDefined()
+
+    // Full history: the provenance guards replay a published snapshot.
+    expect(regressionJob).toContain('fetch-depth: 0')
+    expect(mainCi).toContain('fetch-depth: 0')
+
+    // A real opencode on PATH: doctor and runtime-diagnostic tests want one.
+    expect(regressionJob).toContain('bun install -g opencode-ai@latest')
+    expect(mainCi).toContain('bun install -g opencode-ai@latest')
+    // …and it must reach every backend shard, not just a single historical lane.
+    expect(regressionJob).toContain("if: startsWith(matrix.lane, 'backend-')")
+  })
+
   test('locks before/after crash coverage for every migration phase and the first target chunk', () => {
     expect(RFC349_DATABASE_MIGRATION_PHASES).toEqual([
       'planned',
