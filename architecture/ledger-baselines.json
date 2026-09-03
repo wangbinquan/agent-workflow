@@ -406,10 +406,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 476,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-349：PostgreSQL 上被省略的 identity 列渲染成 `default`，以及 node run 写事务改走聚合根行锁——新增 withPostgresqlNodeRunAggregateTransaction / lockPostgresqlNodeRunAggregateRoot 两个符号与它们的 import/transaction 记账。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -430,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6301,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-349：PostgreSQL 上被省略的 identity 列渲染成 `default`，以及 node run 写事务改走聚合根行锁——新增 withPostgresqlNodeRunAggregateTransaction / lockPostgresqlNodeRunAggregateRoot 两个符号与它们的 import/transaction 记账。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -454,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5239,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-349：PostgreSQL 上被省略的 identity 列渲染成 `default`，以及 node run 写事务改走聚合根行锁——新增 withPostgresqlNodeRunAggregateTransaction / lockPostgresqlNodeRunAggregateRoot 两个符号与它们的 import/transaction 记账。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -492,14 +483,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25703,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349：PostgreSQL 上被省略的 identity 列渲染成 `default`，以及 node run 写事务改走聚合根行锁——新增 withPostgresqlNodeRunAggregateTransaction / lockPostgresqlNodeRunAggregateRoot 两个符号与它们的 import/transaction 记账。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c8ca57d5f1bd2cad2057ab34fb114c6008c0db115a00fec8f5550c636f6382d2",
+    "sourceDigest": "sha256:2a0960d9528f5a8e0ffd9ba5e895eaeafb825af35b97538567f9068fb28c1f86",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5509595c21df0a6c1967eb2c9409412e838033d6",
-    "contentDigest": "sha256:5280f9f038cba3734ffc6abd8d3216c9ae5ea003624d070dbfaad86f0538771d",
+    "currentSnapshotSha": "e8134c5c5ae5734cd5870cdcc3a1b9c948074d23",
+    "contentDigest": "sha256:b980509766c57f7bf219a13b120bec9d56456a9c0d45ea42156c15d9336cbff9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

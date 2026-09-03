@@ -86,10 +86,13 @@ jobs:
           sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER USER postgres PASSWORD 'postgres'"
           sudo -u postgres dropdb --if-exists rfc349_evidence
           sudo -u postgres dropdb --if-exists rfc349_target_faults
+          sudo -u postgres dropdb --if-exists rfc349_write_matrix
           sudo -u postgres createdb rfc349_evidence
           sudo -u postgres createdb rfc349_target_faults
+          sudo -u postgres createdb rfc349_write_matrix
           echo 'RFC349_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_evidence' >> "$GITHUB_ENV"
           echo 'RFC349_TARGET_FAULTS_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_target_faults' >> "$GITHUB_ENV"
+          echo 'RFC349_WRITE_MATRIX_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_write_matrix' >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -106,6 +109,7 @@ jobs:
             packages/backend/tests/rfc349-migration-control-plane.test.ts \
             packages/backend/tests/rfc349-migration-store-lock-recovery.test.ts \
             packages/backend/tests/rfc349-postgresql-target-faults.integration.test.ts \
+            packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts \
             packages/backend/tests/rfc349-postgresql-hosted-evidence.test.ts
 
       - name: Build compiled daemon, worker entries, and deterministic runtime

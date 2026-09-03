@@ -1,4 +1,4 @@
-import { and, desc, eq, getTableColumns, inArray, like, or } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, ilike, inArray, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -347,7 +347,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
     if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
     if (filter.search !== undefined) {
       const term = `%${filter.search}%`
-      conditions.push(or(like(memories.title, term), like(memories.bodyMd, term))!)
+      conditions.push(or(ilike(memories.title, term), ilike(memories.bodyMd, term))!)
     }
     const where = conditions.length === 0 ? undefined : and(...conditions)
     const rows = await (where === undefined
@@ -402,7 +402,7 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       if (filter.scopeId !== undefined) conditions.push(eq(memories.scopeId, filter.scopeId))
       if (filter.search !== undefined) {
         const term = `%${filter.search}%`
-        conditions.push(or(like(memories.title, term), like(memories.bodyMd, term))!)
+        conditions.push(or(ilike(memories.title, term), ilike(memories.bodyMd, term))!)
       }
       const where = conditions.length === 0 ? undefined : and(...conditions)
       const rows = await (where === undefined

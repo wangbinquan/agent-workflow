@@ -3,9 +3,9 @@ import {
   asc,
   desc,
   eq,
+  ilike,
   inArray,
   isNull,
-  like,
   lt,
   lte,
   ne,
@@ -698,11 +698,11 @@ export function createPostgresqlRuntimePersistence(
         const term = `%${input.q}%`
         conditions.push(
           or(
-            like(employeeCases.name, term),
-            like(employeeCases.id, term),
-            like(employeeCases.employeeId, term),
-            like(employeeCases.blockReason, term),
-            like(employeeContextRecords.stateJson, term),
+            ilike(employeeCases.name, term),
+            ilike(employeeCases.id, term),
+            ilike(employeeCases.employeeId, term),
+            ilike(employeeCases.blockReason, term),
+            ilike(employeeContextRecords.stateJson, term),
           )!,
         )
       }
