@@ -52,9 +52,6 @@ export function buildScopeUpstreams(
   const upstreams = new Map<string, string[]>()
   for (const node of scopeNodes) upstreams.set(node.id, [])
 
-  const kindById = new Map<string, string>()
-  for (const node of definition.nodes) kindById.set(node.id, node.kind)
-
   const addProjected = (sourceNodeId: string, targetNodeId: string): void => {
     const projected = projectWorkflowDependency(sourceNodeId, targetNodeId, parents)
     if (projected === null || projected.scopeId !== scopeId) return
@@ -67,7 +64,7 @@ export function buildScopeUpstreams(
 
   for (const edge of definition.edges) {
     if (edge.boundary !== undefined) continue
-    if (channelEdgeDataflowSkip(edge, (id) => kindById.get(id))) continue
+    if (channelEdgeDataflowSkip(edge)) continue
     const resolved = resolveWorkflowSourceRef(definition, edge.source, edge.target.nodeId, parents)
     addProjected(resolved.ok ? resolved.source.nodeId : edge.source.nodeId, edge.target.nodeId)
   }

@@ -95,19 +95,23 @@ export interface DeclaredPort {
    * `systemOutputs` = source side).
    *  - `promptInjected`: content arrives via a dedicated prompt block, so
    *    prompt auto-append must skip the empty `## <port>` header;
-   *  - `dataflow`: whether an edge on this port is a dispatch dependency —
-   *    'never' skips it; 'unless-target-clarify' skips it only when the
-   *    TARGET is an RFC-023 `clarify` node (dispatched out-of-band), so an
-   *    RFC-056 `clarify-cross-agent` target keeps the edge as a real
-   *    dependency (2026-05-22: skipping it made cross-clarify a no-upstream
-   *    leaf that re-fired every tick).
+   *  - `dataflow`: whether an edge on this port is a dispatch dependency.
+   *    'never' — a prompt injection / out-of-band channel, never a readiness
+   *    gate; 'always' — a structural upstream like any data edge.
+   *    `__clarify__` is 'always' (RFC-354 D7): a clarify gate is a row-backed
+   *    node whose asker is its upstream, so the gate is visited only once the
+   *    asker settled — a branch-skipped asker closes it, an open round parks
+   *    it, and nothing fires at t0. (The v5 'unless-target-clarify' carve-out
+   *    existed only because the gate was dispatched out-of-band; RFC-056
+   *    cross gates were always real dependencies — 2026-05-22: skipping them
+   *    made cross-clarify a no-upstream leaf that re-fired every tick.)
    */
   channel?: SystemChannelBehaviour
 }
 
 export interface SystemChannelBehaviour {
   promptInjected: boolean
-  dataflow: 'never' | 'unless-target-clarify'
+  dataflow: 'never' | 'always'
 }
 
 /** The port kind a workflow input's value arrives as (undefined = no declared kind). */
@@ -280,7 +284,7 @@ const PORT_DERIVERS = {
       systemOutputs: [
         {
           name: CLARIFY_SOURCE_PORT_NAME,
-          channel: { promptInjected: false, dataflow: 'unless-target-clarify' },
+          channel: { promptInjected: false, dataflow: 'always' },
         },
       ],
     }
@@ -527,19 +531,14 @@ export function promptInjectedPortNames(): ReadonlySet<string> {
 /**
  * Dataflow-dependency skip for dispatch-gating graph walks (taskDagGraph /
  * inboundEdges / dispatchFrontier). Returns true when the edge must be
- * SKIPPED (it is not a dataflow dependency). `kindOfTarget` resolves the
- * target node's kind — scope-local or whole-definition lookup, per caller.
+ * SKIPPED (it is not a dataflow dependency): a channel port declared
+ * `dataflow: 'never'` on its own side. The port table alone decides — the
+ * target node's kind no longer matters (RFC-354 D7).
  */
-export function channelEdgeDataflowSkip(
-  e: EdgeEnds,
-  kindOfTarget: (nodeId: string) => string | undefined,
-): boolean {
+export function channelEdgeDataflowSkip(e: EdgeEnds): boolean {
   const index = systemChannelPorts()
   const src = index.get(e.source.portName)
-  if (src !== undefined && src.side === 'source') {
-    if (src.dataflow === 'never') return true
-    if (src.dataflow === 'unless-target-clarify') return kindOfTarget(e.target.nodeId) === 'clarify'
-  }
+  if (src !== undefined && src.side === 'source') return src.dataflow === 'never'
   const tgt = index.get(e.target.portName)
   return tgt !== undefined && tgt.side === 'target' && tgt.dataflow === 'never'
 }

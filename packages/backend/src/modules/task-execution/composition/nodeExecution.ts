@@ -10,6 +10,7 @@ import {
   runCallWorkflowNode,
   runCodeHostCallNode,
   runCrossClarifyNode,
+  runIdleClarifyNode,
   runInputNode,
   runOutputNode,
   runReviewNode,
@@ -79,6 +80,7 @@ function collaborationPort(state: TaskMechanicsState): CollaborationNodeGatePort
   const mechanics: CollaborationRuntimeMechanics = state.opts.collaborationRuntime
   return {
     requestReview: (request) => runReviewNode(state, legacyArgs(state, request), mechanics),
+    settleIdleClarify: (request) => runIdleClarifyNode(state, legacyArgs(state, request)),
     inspectCrossClarify: (request) =>
       runCrossClarifyNode(state, legacyArgs(state, request), mechanics),
     async openAgentClarify(request) {
@@ -124,7 +126,7 @@ function buildGateway(
     output: new OutputNodeExecutor(virtualIo),
     ...wrappers,
     review: new ReviewNodeExecutor(collaboration),
-    clarify: new ClarifyNodeExecutor(),
+    clarify: new ClarifyNodeExecutor(collaboration),
     'clarify-cross-agent': new CrossClarifyNodeExecutor(collaboration),
     'call-workflow': new CallWorkflowNodeExecutor(childCalls),
     'call-workgroup': new CallWorkgroupNodeExecutor(childCalls),

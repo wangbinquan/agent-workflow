@@ -29,7 +29,7 @@ import {
   type EdgeActivation,
   type NodeActivation,
 } from '../domain/branchActivation'
-import { collectDataflowInboundEdges, nodeKindIndex } from '../domain/inboundEdges'
+import { collectDataflowInboundEdges } from '../domain/inboundEdges'
 import type { NodeActivationSnapshotReader } from './ports/nodeActivationSnapshotReader'
 
 export interface NodeActivationDecision {
@@ -68,7 +68,6 @@ export async function resolveNodeActivationForDispatch(args: {
   const incoming: Array<{ source: PortRef; targetPortName: string }> = collectDataflowInboundEdges(
     definition.edges,
     node.id,
-    nodeKindIndex(definition),
   ).map((e) => ({ source: e.source, targetPortName: e.target.portName }))
 
   const consumed: Record<string, string> = {}

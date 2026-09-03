@@ -63,13 +63,13 @@ export interface NodeKindBehavior {
    */
   isAgent: boolean
   /**
-   * deriveFrontier pass-2 (C1/N6): the kind's graph visit is a no-op that
-   * writes NO node_run row; the node counts as settled once its upstreams
-   * are done and no open session blocks it. Consumed by the scheduler's
-   * SETTLES_WITHOUT_ROW_KINDS derivation and stuckTaskDetector's
-   * awaiting-human family scan.
+   * RFC-354 D7 — the kind parks on a clarify session (its human gate is an
+   * `awaiting_human` row minted by collaboration when an agent asks). A graph
+   * visit that finds no open round mints a `skipped` row ("gate not
+   * triggered") instead of settling without a row, so every node's lifecycle
+   * is row-backed. Consumed by stuckTaskDetector's awaiting-human family scan.
    */
-  settlesWithoutRow: boolean
+  clarifyGate: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -86,41 +86,41 @@ export interface NodeKindBehavior {
  * (RFC-060 PR-E removed agent-multi.)
  *
  * "Non-process kinds" — input, output, review, clarify family — no cascade
- * (RFC-052), no process, no session. The clarify family additionally settles
- * without a row (C1/N6).
+ * (RFC-052), no process, no session. The clarify family additionally parks on
+ * a clarify session and settles an idle visit as `skipped` (RFC-354 D7).
  */
 export const NODE_KIND_BEHAVIORS = {
   'agent-single': {
     retryCascade: 'mint-placeholder',
     isAgent: true,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   'wrapper-git': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   'wrapper-loop': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   // RFC-060 — wrapper-fanout shares the wrapper-* row: holds a container
   // node_run whose status is driven by inner subgraph shards + aggregator.
   'wrapper-fanout': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   review: {
     retryCascade: 'skip',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   clarify: {
     retryCascade: 'skip',
     isAgent: false,
-    settlesWithoutRow: true,
+    clarifyGate: true,
   },
   // RFC-056 — cross-agent clarify shares the clarify row. The distinct
   // runtime semantics (multi-source aggregation, reject persistence,
@@ -129,17 +129,17 @@ export const NODE_KIND_BEHAVIORS = {
   'clarify-cross-agent': {
     retryCascade: 'skip',
     isAgent: false,
-    settlesWithoutRow: true,
+    clarifyGate: true,
   },
   input: {
     retryCascade: 'skip',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   output: {
     retryCascade: 'skip',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   // RFC-243 — call nodes represent real execution (an independent child
   // task), so they cascade on retry and count as process-bearing; they own
@@ -148,12 +148,12 @@ export const NODE_KIND_BEHAVIORS = {
   'call-workflow': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   'call-workgroup': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   // RFC-253 — a script node runs a real subprocess in the task worktree, so it
   // cascades on retry and is process-bearing. It owns NO model session (no
@@ -163,7 +163,7 @@ export const NODE_KIND_BEHAVIORS = {
   script: {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   // RFC-269 — a code-host call issues one real outbound API request with real
   // external side effects (a comment gets posted, an MR gets merged), so it
@@ -177,7 +177,7 @@ export const NODE_KIND_BEHAVIORS = {
   'code-host-call': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
   // RFC-304 / **RFC-310 retired the execution chain** — read this row as a
   // RETIRED kind, not a live one.
@@ -206,7 +206,7 @@ export const NODE_KIND_BEHAVIORS = {
   'code-round': {
     retryCascade: 'mint-placeholder',
     isAgent: false,
-    settlesWithoutRow: false,
+    clarifyGate: false,
   },
 } as const satisfies Record<NodeKind, NodeKindBehavior>
 
@@ -248,12 +248,12 @@ export function isAgentNodeKind(kind: NodeKind | string | null | undefined): boo
 }
 
 /**
- * RFC-146 — settles-without-row family (C1/N6): graph-visit no-op kinds
- * whose completion is derived, not row-backed. The scheduler derives its
- * SETTLES_WITHOUT_ROW set from this.
+ * RFC-146 → RFC-354 D7 — the clarify-gate family: kinds whose human gate is
+ * a clarify session (`awaiting_human` park row) and whose idle visit settles
+ * as a `skipped` row. stuckTaskDetector's awaiting-human scan derives from it.
  */
-export function nodeKindSettlesWithoutRow(kind: NodeKind | string | null | undefined): boolean {
+export function nodeKindIsClarifyGate(kind: NodeKind | string | null | undefined): boolean {
   return kind != null && Object.hasOwn(NODE_KIND_BEHAVIORS, kind)
-    ? NODE_KIND_BEHAVIORS[kind as NodeKind].settlesWithoutRow
+    ? NODE_KIND_BEHAVIORS[kind as NodeKind].clarifyGate
     : false
 }

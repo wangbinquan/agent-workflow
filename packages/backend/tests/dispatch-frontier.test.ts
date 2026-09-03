@@ -597,15 +597,16 @@ describe('RFC-098 B3 — wrapperExternalUpstreamSources', () => {
         { id: 'e1', s: ['cl', 'answers'], t: ['ag', '__clarify_response__'] },
         { id: 'e2', s: ['cc', 'to_designer'], t: ['ag', '__external_feedback__'] },
         { id: 'e3', s: ['cc', 'to_questioner'], t: ['ag', '__clarify_response__'] },
-        // external agent.__clarify__ → inner clarify node → filtered (clarify
-        // nodes are dispatched out-of-band).
+        // external agent.__clarify__ → inner clarify node → KEPT (RFC-354 D7:
+        // the gate is a row-backed node and its asker is a real dependency —
+        // v5 filtered this one because the gate was dispatched out-of-band).
         { id: 'e4', s: ['helper', '__clarify__'], t: ['cl', 'questions'] },
         // external questioner.__clarify__ → inner clarify-cross-agent → KEPT
-        // (real dataflow dep — the buildScopeUpstreams carve-out).
+        // (real dataflow dep, as it always was).
         { id: 'e5', s: ['questioner', '__clarify__'], t: ['inner-cc', 'questions'] },
       ],
     )
-    expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['questioner'])
+    expect([...wrapperExternalUpstreamSources('lw', d)]).toEqual(['helper', 'questioner'])
   })
 
   test('review input edge: an external source counts; an in-scope one does not', () => {

@@ -5,7 +5,7 @@
 // RFC-146 重铸后表的准入标准 = 每一维都有 grep 可证的运行时消费者：
 //   retryCascade → services/task.ts retryNode 级联；
 //   isAgent → isAgentNodeKind（收敛 5 处 agent-single 判定）；
-//   settlesWithoutRow → scheduler SETTLES_WITHOUT_ROW 派生 + stuckTaskDetector。
+//   clarifyGate → stuckTaskDetector 的 awaiting-human clarify 家族（RFC-354 D7：空访问铸 skipped 行）。
 //
 // ⚠️ RFC-317 T43 改了两处，都是被实测逼出来的：
 //
@@ -34,7 +34,7 @@ import {
   isAgentNodeKind,
   isWrapperKind,
   nodeKindParticipatesInRetryCascade,
-  nodeKindSettlesWithoutRow,
+  nodeKindIsClarifyGate,
   type NodeKind,
 } from '@agent-workflow/shared'
 
@@ -42,16 +42,16 @@ import {
 type Row = {
   readonly retryCascade: 'mint-placeholder' | 'skip'
   readonly isAgent: boolean
-  readonly settlesWithoutRow: boolean
+  readonly clarifyGate: boolean
 }
 
 const PROCESS_BEARING: Row = {
   retryCascade: 'mint-placeholder',
   isAgent: false,
-  settlesWithoutRow: false,
+  clarifyGate: false,
 }
-const INERT: Row = { retryCascade: 'skip', isAgent: false, settlesWithoutRow: false }
-const SETTLES: Row = { retryCascade: 'skip', isAgent: false, settlesWithoutRow: true }
+const INERT: Row = { retryCascade: 'skip', isAgent: false, clarifyGate: false }
+const SETTLES: Row = { retryCascade: 'skip', isAgent: false, clarifyGate: true }
 
 /**
  * **全 14 行**的期望值。`satisfies Record<NodeKind, Row>` 让新增一个 NodeKind 却
@@ -59,7 +59,7 @@ const SETTLES: Row = { retryCascade: 'skip', isAgent: false, settlesWithoutRow: 
  */
 const EXPECTED_ROWS = {
   // 唯一拥有模型 session 的 kind。
-  'agent-single': { retryCascade: 'mint-placeholder', isAgent: true, settlesWithoutRow: false },
+  'agent-single': { retryCascade: 'mint-placeholder', isAgent: true, clarifyGate: false },
   // 三个容器：持一行 node_run，状态由内部子图驱动。
   'wrapper-git': PROCESS_BEARING,
   'wrapper-loop': PROCESS_BEARING,
@@ -103,14 +103,14 @@ describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
   test('派生谓词与表引用同源（逐 kind property）', () => {
     for (const k of NODE_KIND) {
       expect(isAgentNodeKind(k)).toBe(NODE_KIND_BEHAVIORS[k].isAgent)
-      expect(nodeKindSettlesWithoutRow(k)).toBe(NODE_KIND_BEHAVIORS[k].settlesWithoutRow)
+      expect(nodeKindIsClarifyGate(k)).toBe(NODE_KIND_BEHAVIORS[k].clarifyGate)
       expect(nodeKindParticipatesInRetryCascade(k)).toBe(
         NODE_KIND_BEHAVIORS[k].retryCascade === 'mint-placeholder',
       )
     }
   })
 
-  test('结构关系：isAgent ⊂ 级联族；级联族 = agent ∪ wrapper ∪ call ∪ script ∪ code-host ∪ code-round；settlesWithoutRow ∩ 级联族 = ∅', () => {
+  test('结构关系：isAgent ⊂ 级联族；级联族 = agent ∪ wrapper ∪ call ∪ script ∪ code-host ∪ code-round；clarifyGate ∩ 级联族 = ∅', () => {
     // RFC-243：call 节点是第三类持行载体——真实执行体是独立子任务，
     // 自身无 session（isAgent=false）也非容器（不入 WRAPPER_NODE_KINDS）。
     // RFC-253：script 是第四类——它自己就是那个进程（有 pid、有退出码），
@@ -132,7 +132,7 @@ describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
           isCodeHostKind(k) ||
           isCodeRoundKind(k),
       )
-      if (NODE_KIND_BEHAVIORS[k].settlesWithoutRow) expect(cascades).toBe(false)
+      if (NODE_KIND_BEHAVIORS[k].clarifyGate) expect(cascades).toBe(false)
     }
   })
 
@@ -146,7 +146,7 @@ describe('RFC-146 NODE_KIND_BEHAVIORS — 全真表', () => {
       // `isProcess` 也在这条防线里了：它有过运行时消费者的**外形**（一个谓词），
       // 但那个谓词自己零生产调用者。回潮判据与愿望维完全一样。
       expect(row.isProcess).toBeUndefined()
-      expect(Object.keys(row).sort()).toEqual(['isAgent', 'retryCascade', 'settlesWithoutRow'])
+      expect(Object.keys(row).sort()).toEqual(['clarifyGate', 'isAgent', 'retryCascade'])
     }
   })
 })

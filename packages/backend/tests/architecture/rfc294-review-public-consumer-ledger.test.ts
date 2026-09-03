@@ -213,7 +213,6 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   { id: 'public:task-execution:events:taskLifecycleObservation', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:queries:isValidLoopExitCondition', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:queries:parseLoopExitCondition', removeAfterWave: 'W4-E1' },
-  { id: 'public:task-execution:types:SETTLES_WITHOUT_ROW_KINDS', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:TaskExecutionCommandResult', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:TaskReviewNodeDescriptor', removeAfterWave: 'W4-E1' },
   { id: 'public:task-execution:types:TaskSessionEventSource', removeAfterWave: 'W4-E1' },

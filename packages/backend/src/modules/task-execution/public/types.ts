@@ -286,5 +286,3 @@ export interface WrapperExecutionScope {
 export interface WrapperExecutionScopeReadModel {
   find(wrapperId: string, kind: WrapperExecutionKind): WrapperExecutionScope
 }
-
-export { SETTLES_WITHOUT_ROW_KINDS } from '../composition/dagFrontier'

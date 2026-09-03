@@ -27,7 +27,7 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { edgeActivationOf } from '../domain/branchActivation'
-import { collectDataflowInboundEdges, nodeKindIndex } from '../domain/inboundEdges'
+import { collectDataflowInboundEdges } from '../domain/inboundEdges'
 import type {
   BranchTraceRunSnapshot,
   BranchTraceSnapshotReader,
@@ -106,12 +106,11 @@ export async function getTaskBranchTrace(
   }
 
   const parents = buildWorkflowScopeParentMap(definition)
-  const kindById = nodeKindIndex(definition)
   const inactiveEdges: BranchTraceEdge[] = []
   const decisions: BranchTrace['decisions'] = []
 
   for (const node of definition.nodes) {
-    for (const edge of collectDataflowInboundEdges(definition.edges, node.id, kindById)) {
+    for (const edge of collectDataflowInboundEdges(definition.edges, node.id)) {
       const resolved = resolveWorkflowSourceRef(definition, edge.source, node.id, parents)
       const source = resolved.ok ? resolved.source : edge.source
       const run = latest.get(source.nodeId)

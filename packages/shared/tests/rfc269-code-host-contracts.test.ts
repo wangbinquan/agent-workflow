@@ -552,7 +552,7 @@ describe('RFC-269 节点 kind 接线', () => {
     expect(NODE_KIND_BEHAVIORS['code-host-call']).toEqual({
       retryCascade: 'mint-placeholder',
       isAgent: false,
-      settlesWithoutRow: false,
+      clarifyGate: false,
     })
   })
 

@@ -93,13 +93,15 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('C1 — clarify leaf with NO row + upstream done → settles-without-row (completed), allSettled', () => {
+  test('C1 — clarify gate with NO row + asker done → READY like any node (RFC-354 D7), never completed without a row', () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
       { id: 'c', kind: 'clarify' },
     ])
-    // clarify node 'c' has NO row; its channel edges are dropped so it has no structural upstream.
+    // RFC-354 D7: the gate is row-backed and `a.__clarify__ → c` is a real
+    // dependency (port table `dataflow: 'always'`), so the asker is its
+    // structural upstream. Before, 'c' "settled without a row" here.
     const rows = [row('in', 'done'), row('a', 'done')]
     const f = deriveFrontier(
       rows,
@@ -107,22 +109,25 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       scopeNodes,
       scopeIds,
       { containerRunId: null, iteration: 0 },
-      ups({ a: ['in'] }),
+      ups({ a: ['in'], c: ['a'] }),
       NONE,
       NONE,
       NONE,
     )
-    expect(f.completed.has('c')).toBe(true)
-    expect(f.ready).toEqual([])
-    expect(f.allSettled).toBe(true)
+    expect(f.completed.has('c')).toBe(false)
+    expect(f.ready).toEqual(['c'])
+    expect(f.allSettled).toBe(false)
   })
 
-  test('N6 — clarify leaf with an OPEN session → NOT completed (no false-complete)', () => {
+  test('N6 — clarify gate with an OPEN session and no row yet → neither completed nor ready (window parked)', () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
       { id: 'c', kind: 'clarify' },
     ])
+    // The asker's done row is a clarify park (askingRunIds) once the session
+    // exists; openClarifyNodeIds is the positive evidence that closes the
+    // "asker settled, park row not yet minted" window on the gate itself.
     const rows = [row('in', 'done'), row('a', 'done')]
     const f = deriveFrontier(
       rows,
@@ -130,12 +135,14 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       scopeNodes,
       scopeIds,
       { containerRunId: null, iteration: 0 },
-      ups({ a: ['in'] }),
+      ups({ a: ['in'], c: ['a'] }),
       NONE,
       NONE,
       new Set(['c']), // openClarifyNodeIds — a session is open/imminent
     )
     expect(f.completed.has('c')).toBe(false)
+    expect(f.ready).not.toContain('c')
+    expect(f.blocked.map((b) => `${b.nodeId}:${b.reason}`)).toContain('c:open-clarify-window')
     expect(f.allSettled).toBe(false)
   })
 

@@ -1,12 +1,7 @@
 // RFC-332 — pure DAG frontier owner.
 
-import type {
-  MergeStateOrNull,
-  NodeKind,
-  WorkflowDefinition,
-  WorkflowNode,
-} from '@agent-workflow/shared'
-import { NODE_KIND, NODE_KIND_BEHAVIORS, isMergeStateSettled } from '@agent-workflow/shared'
+import type { MergeStateOrNull, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { isMergeStateSettled } from '@agent-workflow/shared'
 import {
   areTransitiveUpstreamsCompleted,
   buildFreshestSettledPerNode,
@@ -60,23 +55,6 @@ export interface Frontier {
   blocked: Array<{ nodeId: string; status: string; reason: string }>
   /** every in-scope node is completed ⇒ scope may return done. */
   allSettled: boolean
-}
-
-// Graph-visit no-op kinds write NO node_run row (C1); they settle without one
-// once upstreams are done and no session is open (N6). RFC-146: derived from
-// the behavior table (today: clarify / clarify-cross-agent) instead of a
-// hand-maintained literal twin.
-export const SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>(
-  NODE_KIND.filter((k) => NODE_KIND_BEHAVIORS[k].settlesWithoutRow),
-)
-
-function isLiveStatus(status: string): boolean {
-  return (
-    status === 'pending' ||
-    status === 'running' ||
-    status === 'awaiting_human' ||
-    status === 'awaiting_review'
-  )
 }
 
 /**
@@ -215,17 +193,10 @@ export function deriveFrontier(
     // scheduler-boundary-loop-exhausted-resume.test.ts.
     else if (r.status === 'exhausted') exhausted.push(nodeId)
   }
-  // Pass 2 — settles-without-row (C1/N6). clarify nodes have no structural
-  // upstream (channel edges dropped) so are leaves; cross-clarify depends on its
-  // questioner (settled in pass 1), so one pass over pass-1 `completed` suffices.
-  for (const n of scopeNodes) {
-    if (completed.has(n.id)) continue
-    if (!SETTLES_WITHOUT_ROW_KINDS.has(n.kind)) continue
-    const latest = latestPerNode.get(n.id)
-    if (latest !== undefined && isLiveStatus(latest.status)) continue
-    if (openClarifyNodeIds.has(n.id)) continue
-    if (areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed)) completed.add(n.id)
-  }
+  // RFC-354 D7: there is no settles-without-row pass any more. A clarify gate
+  // that nobody asked is dispatched like every other ready node and settles as
+  // a `skipped` row (executor); one with an open session carries its
+  // `awaiting_human` park row and is kept out of `ready` below.
 
   // RFC-092 (audit S-1, design §1.2b): node ids whose ASKING run still has an
   // open (un-answered) clarify session. submitClarifyAnswers mints the rerun
@@ -337,7 +308,13 @@ export function deriveFrontier(
         : null
     const staleSkipReleasable =
       staleSkipEvidenceId !== null && !dispatchedPendingRowIds.has(staleSkipEvidenceId)
+    // RFC-354 D7 (keeps RFC-076 N6): a clarify gate with no row yet whose
+    // session is already open / imminent is NOT dispatched — the park row is
+    // about to be minted by collaboration; visiting it now would settle it
+    // idle (`skipped`) against a question that is being asked.
+    const clarifyWindowOpen = latest === undefined && openClarifyNodeIds.has(n.id)
     const dispatchable =
+      !clarifyWindowOpen &&
       areTransitiveUpstreamsCompleted(n.id, upstreamsOf, completed) &&
       !inFlight.has(n.id) &&
       (pendingAnchorReleasable ||

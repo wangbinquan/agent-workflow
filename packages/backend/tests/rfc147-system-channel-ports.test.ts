@@ -31,7 +31,7 @@ const edge = (sourcePort: string, targetPort: string, targetNode = 'T') => ({
 describe('端口表的通道投影 — 表值锁', () => {
   test('恰好 5 端口，逐行 side/promptInjected/dataflow', () => {
     expect(Object.fromEntries(systemChannelPorts())).toEqual({
-      __clarify__: { side: 'source', promptInjected: false, dataflow: 'unless-target-clarify' },
+      __clarify__: { side: 'source', promptInjected: false, dataflow: 'always' },
       __clarify_response__: { side: 'target', promptInjected: true, dataflow: 'never' },
       __external_feedback__: { side: 'target', promptInjected: true, dataflow: 'never' },
       to_designer: { side: 'source', promptInjected: false, dataflow: 'never' },
@@ -129,62 +129,40 @@ describe('家族 B — touchesSystemChannelPort 任一侧宽判（sync-diff 展�
   })
 })
 
-describe('家族 D — channelEdgeDataflowSkip nuanced 语义格（先钉后收）', () => {
-  const kindOf =
-    (kinds: Record<string, string>) =>
-    (id: string): string | undefined =>
-      kinds[id]
-
-  test('__clarify__ → clarify 节点：跳（runner 带外派发，防 agent→clarify→agent 环）', () => {
-    expect(
-      channelEdgeDataflowSkip(edge('__clarify__', 'questions', 'C'), kindOf({ C: 'clarify' })),
-    ).toBe(true)
+describe('家族 D — channelEdgeDataflowSkip 语义格（端口表单独裁决，目标 kind 不参与）', () => {
+  test('__clarify__ → clarify 节点：保留（RFC-354 D7：gate 是行支撑节点，asker 是它的结构上游）', () => {
+    // 曾经是「跳（runner 带外派发）」：gate 不落行时，只有绕过依赖才不会在 t0 空转。
+    // gate 落行后依赖回归常态——asker 未 settle 则 gate 不被访问，asker 被分支
+    // 关闭则 gate 随之 skipped，asker 提问则 gate 以 awaiting_human 行 park。
+    // agent→clarify→agent 不成环：`__clarify_response__` 那一侧仍是 'never'。
+    expect(channelEdgeDataflowSkip(edge('__clarify__', 'questions', 'C'))).toBe(false)
   })
 
   test('__clarify__ → clarify-cross-agent：保留（cross 合法等待 questioner——2026-05-22 泄洪修复）', () => {
-    expect(
-      channelEdgeDataflowSkip(
-        edge('__clarify__', 'questions', 'X'),
-        kindOf({ X: 'clarify-cross-agent' }),
-      ),
-    ).toBe(false)
+    expect(channelEdgeDataflowSkip(edge('__clarify__', 'questions', 'X'))).toBe(false)
   })
 
   test('__clarify__ → 其他/未知 kind（残迹边）：保留', () => {
-    expect(
-      channelEdgeDataflowSkip(edge('__clarify__', 'in', 'A'), kindOf({ A: 'agent-single' })),
-    ).toBe(false)
-    expect(channelEdgeDataflowSkip(edge('__clarify__', 'in', 'GONE'), kindOf({}))).toBe(false)
+    expect(channelEdgeDataflowSkip(edge('__clarify__', 'in', 'A'))).toBe(false)
+    expect(channelEdgeDataflowSkip(edge('__clarify__', 'in', 'GONE'))).toBe(false)
   })
 
   test('target 侧注入口（response/feedback）：一律跳', () => {
-    expect(
-      channelEdgeDataflowSkip(
-        edge('answers', '__clarify_response__', 'A'),
-        kindOf({ A: 'agent-single' }),
-      ),
-    ).toBe(true)
-    expect(
-      channelEdgeDataflowSkip(
-        edge('to_designer', '__external_feedback__', 'D'),
-        kindOf({ D: 'agent-single' }),
-      ),
-    ).toBe(true)
+    expect(channelEdgeDataflowSkip(edge('answers', '__clarify_response__', 'A'))).toBe(true)
+    expect(channelEdgeDataflowSkip(edge('to_designer', '__external_feedback__', 'D'))).toBe(true)
   })
 
   test('source 侧 to_designer / to_questioner：一律跳', () => {
-    expect(channelEdgeDataflowSkip(edge('to_designer', 'in', 'D'), kindOf({}))).toBe(true)
-    expect(channelEdgeDataflowSkip(edge('to_questioner', 'in', 'Q'), kindOf({}))).toBe(true)
+    expect(channelEdgeDataflowSkip(edge('to_designer', 'in', 'D'))).toBe(true)
+    expect(channelEdgeDataflowSkip(edge('to_questioner', 'in', 'Q'))).toBe(true)
   })
 
   test('普通数据边：保留', () => {
-    expect(channelEdgeDataflowSkip(edge('out', 'in', 'B'), kindOf({ B: 'agent-single' }))).toBe(
-      false,
-    )
+    expect(channelEdgeDataflowSkip(edge('out', 'in', 'B'))).toBe(false)
   })
 
   test('反侧畸形（source=__clarify_response__）：不跳——分侧语义与家族 A 对齐', () => {
-    expect(channelEdgeDataflowSkip(edge('__clarify_response__', 'in', 'B'), kindOf({}))).toBe(false)
+    expect(channelEdgeDataflowSkip(edge('__clarify_response__', 'in', 'B'))).toBe(false)
   })
 })
 

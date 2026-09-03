@@ -14,31 +14,22 @@
 // done:
 //   * `boundary !== undefined` — fanout wrapper-input/-output edges are
 //     structural mirrors, not row-to-row dataflow;
-//   * `channelEdgeDataflowSkip` — clarify / cross-clarify channels are prompt
-//     injections, with the deliberate carve-out that
-//     `agent.__clarify__ → clarify-cross-agent` IS a real dependency.
+//   * `channelEdgeDataflowSkip` — the prompt-injected clarify / cross-clarify
+//     channels (`__clarify_response__`, `__external_feedback__`, `to_*`) are
+//     not dataflow; `agent.__clarify__ → <gate>` IS a real dependency for both
+//     gate kinds (RFC-354 D7: a gate is a row-backed node whose asker is its
+//     structural upstream).
 
 import { channelEdgeDataflowSkip } from '@agent-workflow/shared'
-import type { NodeKind, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
+import type { WorkflowEdge } from '@agent-workflow/shared'
 
 export function collectDataflowInboundEdges(
   edges: readonly WorkflowEdge[],
   nodeId: string,
-  kindById: ReadonlyMap<string, NodeKind>,
 ): WorkflowEdge[] {
   return edges.filter(
-    (e) =>
-      e.target.nodeId === nodeId &&
-      e.boundary === undefined &&
-      !channelEdgeDataflowSkip(e, (targetId) => kindById.get(targetId)),
+    (e) => e.target.nodeId === nodeId && e.boundary === undefined && !channelEdgeDataflowSkip(e),
   )
-}
-
-/** Convenience: the kind index both call sites build from a definition. */
-export function nodeKindIndex(
-  definition: WorkflowDefinition | undefined,
-): ReadonlyMap<string, NodeKind> {
-  return new Map(definition?.nodes.map((node) => [node.id, node.kind]) ?? [])
 }
 
 // RFC-354 (schema v6): there are no implicit inbound references any more —

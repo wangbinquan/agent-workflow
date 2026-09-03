@@ -120,10 +120,15 @@ describe('RFC-146: task engine 三处表接线形态锁', () => {
     )
   })
 
-  test('SETTLES_WITHOUT_ROW_KINDS 从行为表派生（字面量孪生不得回潮）', () => {
-    expect(frontierSrc).toMatch(
-      /SETTLES_WITHOUT_ROW_KINDS = new Set<NodeKind>\(\s*\n\s*NODE_KIND\.filter\(\(k\) => NODE_KIND_BEHAVIORS\[k\]\.settlesWithoutRow\)/,
+  test('RFC-354 D7：frontier 不再有「无行判完成」家族，clarify 家族只在 stuckTaskDetector 里按行为表派生', () => {
+    expect(frontierSrc).not.toContain('SETTLES_WITHOUT_ROW')
+    expect(frontierSrc).not.toContain('settlesWithoutRow')
+    const detectorSrc = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'stuckTaskDetector.ts'),
+      'utf8',
     )
+    expect(detectorSrc).toContain('nodeKindIsClarifyGate(n.kind)')
+    expect(detectorSrc).not.toMatch(/n\.kind === 'clarify(-cross-agent)?'/)
   })
 
   test('NodeExecutorRegistry 用 NodeKind 映射与运行时 key/kind 对拍取代 agent fall-through', () => {

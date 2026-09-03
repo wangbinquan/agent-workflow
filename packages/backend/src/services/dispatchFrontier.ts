@@ -141,7 +141,6 @@ export function wrapperExternalUpstreamSources(
   const scope = wrapperInnerDescendants(wrapperNodeId, definition)
   scope.add(wrapperNodeId)
   const parents = buildWorkflowScopeParentMap(definition)
-  const kindById = new Map(definition.nodes.map((n) => [n.id, n.kind]))
   const sources = new Set<string>()
   for (const e of definition.edges) {
     if (!scope.has(e.target.nodeId)) continue
@@ -149,7 +148,7 @@ export function wrapperExternalUpstreamSources(
     // RFC-147: same shared registry projection buildScopeUpstreams uses —
     // the historical hand-copied block (whose comment demanded "keep the
     // two in lockstep") is gone; lockstep is now structural.
-    if (channelEdgeDataflowSkip(e, (id) => kindById.get(id))) continue
+    if (channelEdgeDataflowSkip(e)) continue
     const resolved = resolveWorkflowSourceRef(definition, e.source, e.target.nodeId, parents)
     sources.add(resolved.ok ? resolved.source.nodeId : e.source.nodeId)
   }

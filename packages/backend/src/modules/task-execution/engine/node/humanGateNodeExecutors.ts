@@ -12,12 +12,18 @@ export class ReviewNodeExecutor implements NodeExecutor<'review'> {
   }
 }
 
-/** Graph visits are no-ops; runner-emitted questions use collaboration directly. */
+/**
+ * RFC-354 D7 — a graph visit finds no open round (runner-emitted questions
+ * open their own round through collaboration and park the node), so the gate
+ * settles as a `skipped` row: every node's lifecycle is row-backed.
+ */
 export class ClarifyNodeExecutor implements NodeExecutor<'clarify'> {
   readonly kind = 'clarify' as const
 
-  async execute(_request: NodeStepRequest<'clarify'>): Promise<NodeStepOutcome> {
-    return { kind: 'ok', summary: '', message: '' }
+  constructor(private readonly gates: CollaborationNodeGatePort) {}
+
+  execute(request: NodeStepRequest<'clarify'>): Promise<NodeStepOutcome> {
+    return this.gates.settleIdleClarify(request)
   }
 }
 

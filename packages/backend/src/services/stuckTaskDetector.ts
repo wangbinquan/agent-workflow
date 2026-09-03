@@ -30,7 +30,7 @@
 import {
   TERMINAL_NODE_RUN_STATUSES as SHARED_TERMINAL_NODE_RUN_STATUSES,
   TERMINAL_TASK_STATUSES as SHARED_TERMINAL_TASK_STATUSES,
-  nodeKindSettlesWithoutRow,
+  nodeKindIsClarifyGate,
   taskWorkspacePhase,
   type TaskWorkspacePhase,
 } from '@agent-workflow/shared'
@@ -449,10 +449,9 @@ function findRepairHint(
   for (const n of nodes) {
     if (typeof n?.id !== 'string' || typeof n?.kind !== 'string') continue
     if (n.kind === 'review') reviewIds.add(n.id)
-    // RFC-146 (design D7): the awaiting-human clarify family here is exactly
-    // the settles-without-row family — both mean "parks on a human session,
-    // no per-attempt row of its own". Derive from the behavior table.
-    if (nodeKindSettlesWithoutRow(n.kind)) clarifyIds.add(n.id)
+    // RFC-146 (design D7) → RFC-354 D7: the awaiting-human clarify family is
+    // the behavior table's clarify-gate family (parks on a clarify session).
+    if (nodeKindIsClarifyGate(n.kind)) clarifyIds.add(n.id)
   }
   if (reviewIds.size === 0 && clarifyIds.size === 0) return null
 

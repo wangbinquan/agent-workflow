@@ -142,18 +142,20 @@ describe('RFC-056 scheduler — no runaway pending cross-clarify rows', () => {
     const buildIdx = src.indexOf('function buildScopeUpstreams')
     expect(buildIdx).toBeGreaterThan(-1)
     const body = src.slice(buildIdx, buildIdx + 3000)
-    // RFC-147 → RFC-354 D6: the inline predicate moved to the port table's
+    // RFC-147 → RFC-354 D6/D7: the inline predicate moved to the port table's
     // projection — anchor both hops so neither silently regresses:
     // buildScopeUpstreams consults channelEdgeDataflowSkip, and the port table
-    // marks __clarify__ as 'unless-target-clarify' (cross-clarify targets KEEP
-    // the edge; the behavior grid lives in rfc147-system-channel-ports.test.ts).
+    // marks __clarify__ as `dataflow: 'always'` (a questioner → cross gate edge
+    // is a real dependency; so is asker → clarify gate since the gate became a
+    // row-backed node — the behavior grid lives in
+    // rfc147-system-channel-ports.test.ts).
     expect(body).toContain('channelEdgeDataflowSkip(')
     const portTableSrc = readFileSync(
       resolve(import.meta.dir, '..', '..', 'shared', 'src', 'nodePorts.ts'),
       'utf-8',
     )
     expect(portTableSrc).toMatch(
-      /name:\s*CLARIFY_SOURCE_PORT_NAME,\s*channel:\s*\{[^}]*dataflow:\s*'unless-target-clarify'/,
+      /name:\s*CLARIFY_SOURCE_PORT_NAME,\s*channel:\s*\{[^}]*dataflow:\s*'always'/,
     )
   })
 

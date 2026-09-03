@@ -17,10 +17,7 @@ import {
   type EnvelopeFollowupOutcome,
   type RetryShapeState,
 } from '@/modules/task-execution/domain/envelopeRetryPolicy'
-import {
-  collectDataflowInboundEdges,
-  nodeKindIndex,
-} from '@/modules/task-execution/domain/inboundEdges'
+import { collectDataflowInboundEdges } from '@/modules/task-execution/domain/inboundEdges'
 import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
 import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
 import { findClarifyNode } from '@/services/clarify/service'
@@ -3262,8 +3259,7 @@ export async function judgeBranchActivation(
   // zero extra queries per dispatch — "existing behavior is unchanged" has to
   // hold for cost as well as for outcome. RFC-354 (schema v6): review / output
   // dependencies are ordinary edges now, so edges are the whole test.
-  const hasInbound =
-    collectDataflowInboundEdges(definition.edges, node.id, nodeKindIndex(definition)).length > 0
+  const hasInbound = collectDataflowInboundEdges(definition.edges, node.id).length > 0
   if (!hasInbound) return null
   const existing = await state.opts.persistence.nodeExecution.list({
     taskId,
@@ -3300,6 +3296,45 @@ export async function judgeBranchActivation(
   //
   // Anything else (done / failed / interrupted / canceled / absent) is a settled
   // generation; the skip is a NEW generation on top of it, so it mints normally.
+  await recordSkippedRun(state, {
+    node,
+    containerRunId,
+    iteration,
+    latest,
+    reason: decision.activation.reason,
+    consumedJson,
+  })
+  log.info('node skipped — inbound branch inactive', {
+    nodeId: node.id,
+    iteration,
+    reason: decision.activation.reason,
+    inactiveFrom: decision.edges
+      .filter((e) => e.activation.kind === 'inactive')
+      .map((e) => `${e.sourceNodeId}.${e.sourcePortName}`),
+  })
+  return { kind: 'ok', summary: '', message: 'branch-skipped' }
+}
+
+/**
+ * Settle a node as `skipped` in its frame (RFC-306 branch skip, RFC-354 D7
+ * idle clarify gate). A pending anchor minted out of band is reused (it would
+ * otherwise stay "latest" and re-run against the very decision that closed
+ * it); a parked human gate is superseded first; anything settled is history
+ * and the skip mints a new generation on top of it.
+ */
+async function recordSkippedRun(
+  state: SchedulerState,
+  input: {
+    readonly node: WorkflowNode
+    readonly containerRunId: string | null
+    readonly iteration: number
+    readonly latest: NodeExecutionSnapshot | undefined
+    readonly reason: string
+    readonly consumedJson: string
+  },
+): Promise<string> {
+  const { taskId } = state
+  const { node, containerRunId, iteration, latest, reason, consumedJson } = input
   let nodeRunId: string
   if (latest?.status === 'pending') {
     nodeRunId = latest.id
@@ -3310,7 +3345,7 @@ export async function judgeBranchActivation(
     })
     await transitionRunStatus(state, {
       nodeRunId,
-      event: { kind: 'mark-skipped', reason: decision.activation.reason },
+      event: { kind: 'mark-skipped', reason },
       extra: { finishedAt: Date.now() },
     })
   } else {
@@ -3333,20 +3368,55 @@ export async function judgeBranchActivation(
     })
     await transitionRunStatus(state, {
       nodeRunId,
-      event: { kind: 'mark-skipped', reason: decision.activation.reason },
+      event: { kind: 'mark-skipped', reason },
       extra: { finishedAt: Date.now() },
     })
   }
   broadcastNodeStatus(taskId, nodeRunId, node.id, 'skipped')
-  log.info('node skipped — inbound branch inactive', {
+  return nodeRunId
+}
+
+/**
+ * RFC-354 D7 — a clarify gate visited with no open round. Nobody asked, so the
+ * gate never triggered: the node settles as a `skipped` row in this frame,
+ * exactly like a closed branch, instead of "completing" without any row. When
+ * an agent later asks, collaboration mints a fresher `awaiting_human` park row
+ * and the node parks; the answer closes that row as `done`.
+ */
+export async function runIdleClarifyNode(
+  state: SchedulerState,
+  args: OneNodeArgs,
+): Promise<OneNodeResult> {
+  const { taskId, log } = state
+  const { node, iteration } = args
+  const existing = await state.opts.persistence.nodeExecution.list({
+    taskId,
     nodeId: node.id,
+    containerRunId: args.containerRunId,
     iteration,
-    reason: decision.activation.reason,
-    inactiveFrom: decision.edges
-      .filter((e) => e.activation.kind === 'inactive')
-      .map((e) => `${e.sourceNodeId}.${e.sourcePortName}`),
   })
-  return { kind: 'ok', summary: '', message: 'branch-skipped' }
+  const latest = pickFreshestRun(existing, { topLevelOnly: true })
+  if (
+    latest?.status === 'pending' ||
+    latest?.status === 'running' ||
+    latest?.status === 'awaiting_human' ||
+    latest?.status === 'awaiting_review'
+  ) {
+    // A live row belongs to someone else's lifecycle — a session opened between
+    // the frontier's read and this visit, or a pending anchor collaboration is
+    // about to park on. Leave it alone; the scope reads it at the next derivation.
+    return { kind: 'ok', summary: '', message: 'clarify-gate-open' }
+  }
+  await recordSkippedRun(state, {
+    node,
+    containerRunId: args.containerRunId,
+    iteration,
+    latest,
+    reason: 'clarify-gate-idle',
+    consumedJson: '{}',
+  })
+  log.info('clarify gate idle — settled as skipped', { nodeId: node.id, iteration })
+  return { kind: 'ok', summary: '', message: 'clarify-gate-idle' }
 }
 
 export async function runOutputNode(
@@ -3603,12 +3673,12 @@ export async function runCrossClarifyNode(
     broadcastNodeStatus(taskId, stopRunId, node.id, 'done')
     return { kind: 'ok', summary: '', message: 'cross-clarify-persistent-stop' }
   }
-  // Common path: no live row, no persistent stop, questioner valid. Don't
-  // pre-create — the runner's createClarifyRound(kind='cross') will create a row
-  // when the questioner emits <workflow-clarify>. Return ok so the
-  // dispatcher marks this node "scheduled for this pass"; the lifecycle
-  // hand-off to awaiting_human happens later via the runner path.
-  return { kind: 'ok', summary: '', message: '' }
+  // Common path: no live row, no persistent stop, questioner valid — and the
+  // questioner has already settled without asking (this node is only ready once
+  // its questioner is done). RFC-354 D7: the gate never triggered, settle it as
+  // a `skipped` row; a question emitted by a LATER questioner run mints its own
+  // fresher park row through createClarifyRound(kind='cross').
+  return runIdleClarifyNode(state, args)
 }
 
 export async function runAgentSingleNode(
@@ -4933,15 +5003,14 @@ export async function resolveUpstreamInputs(
   // row-to-row dataflow. Reading them here would either observe a still-running
   // wrapper/channel row (and emit a false "missing upstream" warning) or, when
   // an older channel output exists, inject it into a reserved agent input and
-  // record false consumed provenance. Keep agent.__clarify__ → cross-clarify:
-  // channelEdgeDataflowSkip deliberately treats that direction as a real
-  // dependency when the target kind is clarify-cross-agent.
+  // record false consumed provenance. `agent.__clarify__ → <gate>` IS kept
+  // (RFC-354 D7): the asker is the gate's structural upstream for both gate
+  // kinds — the port table's `dataflow` flag decides, not the target's kind.
   //
   // RFC-306: the projection now lives in task-execution/domain/inboundEdges so
   // the branch-activation judgment reads EXACTLY the same edge set — see that
   // module's header for why a second hand-rolled copy would be a bug factory.
-  const kindById = nodeKindIndex(definition)
-  const incoming = collectDataflowInboundEdges(edges, nodeId, kindById)
+  const incoming = collectDataflowInboundEdges(edges, nodeId)
   // RFC-074 provenance: which upstream node_run each source edge actually read.
   // Keyed by source nodeId — all edges from the same source resolve to the same
   // picked run, so this stays consistent across multi-port fan-in.

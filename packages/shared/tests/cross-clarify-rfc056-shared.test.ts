@@ -122,7 +122,7 @@ describe("RFC-056 NODE_KIND_BEHAVIORS['clarify-cross-agent']", () => {
     expect(NODE_KIND_BEHAVIORS['clarify-cross-agent']).toEqual({
       retryCascade: 'skip',
       isAgent: false,
-      settlesWithoutRow: true,
+      clarifyGate: true,
     })
   })
 })

@@ -105,7 +105,7 @@ xyflow sub-flow 本就是平铺 + `parentId`；validator / layout / sync-diff / 
 ### D6 — 系统通道折进端口表
 
 `systemChannelPorts.ts` 的 `SYSTEM_CHANNEL_PORTS`（5 条 spec：`side` / `promptInjected` / `dataflow`）删除；
-`DeclaredPort` 增可选 `channel?: { promptInjected: boolean; dataflow: 'never' | 'unless-target-clarify' }`，挂在
+`DeclaredPort` 增可选 `channel?: { promptInjected: boolean; dataflow: 'never' | 'always' }`（PR-3 T17 起；PR-2 曾原样搬入 v5 的 `'unless-target-clarify'`，见下文 PR-3 偏离），挂在
 `PORT_DERIVERS` 里 agent / clarify / clarify-cross-agent 的 `systemInputs` / `systemOutputs` 条目上（`nodePorts.ts:198-205`、
 `:263-276`）。`channelEdgeDataflowSkip` / `isSystemChannelEdge` / `touchesSystemChannelPort` / `PROMPT_INJECTED_PORT_NAMES`
 改为从 `declaredPorts` 派生（4 backend + 4 shared 消费文件）。`rfc147-system-channel-ports` 的「注册表 ↔ 端口表」drift
@@ -272,3 +272,18 @@ wrapper = 内联 lambda（帧 = container run）；call-workflow = 调用定义�
 - **复活证据按停驻轮次取窗**（PR-1 收红时补上的 D5 细则）：`containerMemberRunsInRound`——loop 取 progress 记录的轮次，
   git / fan-out 取 wrapper 行自身 iteration；嵌套代际以其直接成员行的轮次归属整棵子树。成员关系不看轮次会让停驻在第 k 轮的
   loop 把第 0 轮的旧 pending 当新证据，resume 后又弹回 park（S-3 当年的死循环形态）。
+
+### PR-3 实现偏离（2026-09-04，T17 clarify 落行时发现）
+
+- **`agent.__clarify__ → clarify` 成为真依赖**（D6 词汇 `'unless-target-clarify'` → `'always'`，`channelEdgeDataflowSkip` 去掉
+  `kindOfTarget` 参数、只看端口表）。D7 把 gate 做成行支撑节点后，v5 那条「target 是 clarify 就绕过依赖」的特例失去存在理由——
+  它当年只是为了让**不落行**的 gate 不在 t0 空转；保留它反而让落行的 gate 在 t0 就被访问、先铸一行 `skipped`，随后 agent 发问再铸
+  park 行（`scheduler-clarify-dispatch` 当场从单行变双行）。依赖回归常态后：asker 未 settle → gate 不被访问；asker 被分支关闭 →
+  gate 与任何下游一样被判 inactive、落 `skipped`；asker 发问 → collaboration 铸的 `awaiting_human` 行是 gate 的唯一一行；
+  无人接线的 gate 无上游 → t0 访问、落 `skipped`（`clarify-gate-idle`）。agent→clarify→agent 不成环：`__clarify_response__`
+  那一侧仍是 `'never'`。cross gate 早就是真依赖（2026-05-22 泄洪修复），本次只是把两种 gate 拉平。
+- **`skipped` 行不带 reason 列**：与 RFC-306 分支跳过同形（`branch-skip` cause 铸 pending → `mark-skipped`，`errorMessage` 为空），
+  idle 原因只进日志；任务详情把它按「闸门未触发」展示，是否另标「无人发问」留给 T18 的展示层决定。
+- **「wired asker 跑了但没问」不是可达的 idle 路径**：RFC-100 强制反问让接了 clarify 通道的 agent 首轮必须发问，否则
+  `clarify-required-*` 失败；所以 idle 路径只有两条——asker 被分支关闭从未运行、或 gate 根本没接线。测试按这两条写
+  （`rfc354-clarify-idle-skip`）。

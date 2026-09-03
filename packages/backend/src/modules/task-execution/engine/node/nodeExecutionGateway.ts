@@ -1,4 +1,4 @@
-import { nodeKindSettlesWithoutRow, type NodeKind } from '@agent-workflow/shared'
+import type { NodeKind } from '@agent-workflow/shared'
 import type {
   WorkgroupHostExecutionRequest,
   WorkgroupHostExecutionResult,
@@ -27,10 +27,12 @@ export class NodeExecutionGateway {
       return { kind: 'canceled', summary: 'task canceled', message: 'signal aborted' }
     }
 
-    if (!nodeKindSettlesWithoutRow(request.node.kind)) {
-      const decision = await this.branchActivation.judge(request)
-      if (decision.kind === 'inactive') return decision.outcome
-    }
+    // RFC-354 D7: every kind is judged. A clarify gate's `__clarify__` inbound
+    // edge is a real dependency, so a branch-skipped asker closes the gate
+    // exactly like any other downstream node; an unwired gate has no inbound
+    // and is always active (it then settles idle, `runIdleClarifyNode`).
+    const decision = await this.branchActivation.judge(request)
+    if (decision.kind === 'inactive') return decision.outcome
 
     return this.registry.resolve(request.node.kind).execute(request)
   }
