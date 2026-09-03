@@ -109,7 +109,7 @@ import {
   parseMultipartLaunch,
   resolveUploadLimits,
 } from '@/services/launchMultipart'
-import { parseInjectedSnapshotJson } from '@/modules/memory/public/injection'
+import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { deriveReviewRoundTiming } from '@/services/reviewRoundStart'

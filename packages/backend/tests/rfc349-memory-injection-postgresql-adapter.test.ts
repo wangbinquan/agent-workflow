@@ -10,7 +10,10 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { injectMemoryForRun, loadInjectedSnapshotFromFirstAttempt } from '@/modules/memory/application/injection/injectMemory'
+import {
+  injectMemoryForRun,
+  loadInjectedSnapshotFromFirstAttempt,
+} from '@/modules/memory/application/injection/injectMemory'
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {

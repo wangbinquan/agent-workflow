@@ -630,15 +630,7 @@ describe('source-code grep guards', () => {
 
   test('injectionRendering.ts must keep BEGIN/END anchors (downstream may regex-strip)', () => {
     const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'memory',
-        'domain',
-        'injectionRendering.ts',
-      ),
+      resolve(import.meta.dir, '..', 'src', 'modules', 'memory', 'domain', 'injectionRendering.ts'),
       'utf8',
     )
     expect(src).toContain('--- BEGIN INJECTED MEMORY ---')

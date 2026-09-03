@@ -314,8 +314,11 @@
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 38,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。"
+      "baseline": 39,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。",
+      "allowGrowth": {
+        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+      }
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -398,7 +401,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 477,
+      "baseline": 475,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -419,8 +422,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6291,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6293,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -440,22 +446,28 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5236,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5238,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+      }
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 353,
+      "baseline": 351,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 945,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 950,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -475,12 +487,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25672,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25683,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-352 T1/T2（RFC-294 W4-E2）：`services/memoryInject.ts` 按分层拆成 memory 的 domain （纯渲染 + 快照编解码）与 application（编排），`services/distillerSourceContext.ts` 迁成 `domain/sourceContext.ts`。一份 legacy 文件变成三份模块文件，因此 owner / observed-import / exception / public-surface 的条目数各涨一次；off-dag 边那一条是把 TE 的 REST 投影对 memory public 的消费**显式入账**（此前它是 legacy→legacy，图里看不见）。涨的是账本的分辨率，不是新债。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25",
+    "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -493,8 +508,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "12333eb8811848c32393e08adeb22e5f949ec74f",
-    "contentDigest": "sha256:ddce2e39d6c5c4154d1c897b02f3ef8bb8c16ab079f0b339971b18e896eda184",
+    "currentSnapshotSha": "65179b8cf2ef997c3c6cb8fbe60ec16f6d1e8dd9",
+    "contentDigest": "sha256:df3af309a711b16b75cfbc6a697c5c089b951fe3f07bda0cb040fbd023d5237d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

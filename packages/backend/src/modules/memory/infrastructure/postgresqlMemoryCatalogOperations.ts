@@ -17,6 +17,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
+import type { ResourceAccess } from '@agent-workflow/shared'
 import {
   cachedRepos,
   memories,
@@ -32,6 +33,14 @@ import type {
   PrincipalSource,
 } from '@/modules/identity-access/public/participants'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
+import {
+  decideMemoryRowManageStamp,
+  decideMemoryScopeManage,
+  decideMemoryScopeView,
+  memoryScopeNeedsResourceAccess,
+  type MemoryScopeAuthorizationFacts,
+  type MemoryScopeKind,
+} from '../domain/scopeAuthorization'
 import type { ResourceMemoryScopeRef } from '@/modules/resource-catalog/public/types'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -280,6 +289,25 @@ export function composePostgresqlMemoryCatalogOperations(input: {
   readonly contexts: DirectCommandContextFactory
   readonly authorization: MemoryResourceScopeAccessParticipant<PostgresqlTransaction>
 }): MemoryCatalogOperations {
+  /**
+   * 取一条 scope 的授权事实。平台 scope 不查资源访问档（查了也用不上），
+   * 与 SQLite 侧保持相同的查询次数。判定本身在 `domain/scopeAuthorization.ts`。
+   */
+  const readScopeAuthorizationFacts = async (
+    authority: MemoryScopeAuthority,
+    scope: MemoryScopeRef,
+  ): Promise<MemoryScopeAuthorizationFacts> => {
+    const hasAclBypass = hasResourceAclBypass(authority.actor)
+    const scopeType = scope.scopeType as MemoryScopeKind
+    if (hasAclBypass || !memoryScopeNeedsResourceAccess(scopeType)) {
+      return { hasAclBypass, scopeType, resourceAccess: null }
+    }
+    const resourceAccess = await input.db.transaction(
+      async (tx) => await accessOf(input.authorization, tx, authority, scope),
+    )
+    return { hasAclBypass, scopeType, resourceAccess }
+  }
+
   const loadJobLanguages = async (ids: readonly string[]) => {
     const languages = new Map<string, 'zh-CN' | 'en-US' | null>()
     if (ids.length === 0) return languages
@@ -368,32 +396,14 @@ export function composePostgresqlMemoryCatalogOperations(input: {
       return rows.map(rowToMemory).filter((memory) => matchesTagFilter(memory.tags, filter))
     },
     getById,
+    // RFC-352：判据住在 `domain/scopeAuthorization.ts`，与 SQLite 侧共用同一份。
+    // 此前两个 provider 各写一遍同样的级联，只改一边就是判据漂移——用户看到的权限
+    // 会取决于部署选了哪个数据库。这里只负责取事实。
     async canView(authority, scope) {
-      if (hasResourceAclBypass(authority.actor)) return true
-      if (
-        scope.scopeType === 'repo' ||
-        scope.scopeType === 'repo_group' ||
-        scope.scopeType === 'global'
-      ) {
-        return true
-      }
-      return await input.db.transaction(
-        async (tx) => (await accessOf(input.authorization, tx, authority, scope)) !== 'none',
-      )
+      return decideMemoryScopeView(await readScopeAuthorizationFacts(authority, scope))
     },
     async canManage(authority, scope) {
-      if (hasResourceAclBypass(authority.actor)) return true
-      if (
-        scope.scopeType === 'repo' ||
-        scope.scopeType === 'repo_group' ||
-        scope.scopeType === 'global'
-      ) {
-        return false
-      }
-      return await input.db.transaction(async (tx) => {
-        const access = await accessOf(input.authorization, tx, authority, scope)
-        return access === 'write' || access === 'own'
-      })
+      return decideMemoryScopeManage(await readScopeAuthorizationFacts(authority, scope))
     },
     async filterVisible<T extends MemoryScopeRef>(
       authority: MemoryScopeAuthority,
@@ -409,15 +419,17 @@ export function composePostgresqlMemoryCatalogOperations(input: {
           if (!access.has(key))
             access.set(key, await input.authorization.accessOf(tx, authority, ref))
         }
-        return rows.filter((row) => {
-          if (
-            row.scopeType === 'repo' ||
-            row.scopeType === 'repo_group' ||
-            row.scopeType === 'global'
-          )
-            return true
-          return row.scopeId !== null && access.get(`${row.scopeType}:${row.scopeId}`) !== 'none'
-        })
+        return rows.filter((row) =>
+          decideMemoryScopeView({
+            hasAclBypass: false,
+            scopeType: row.scopeType as MemoryScopeKind,
+            resourceAccess:
+              row.scopeId === null
+                ? null
+                : ((access.get(`${row.scopeType}:${row.scopeId}`) as ResourceAccess | undefined) ??
+                  null),
+          }),
+        )
       })
     },
     async annotateManageRights<T extends MemoryScopeRef>(
@@ -437,11 +449,15 @@ export function composePostgresqlMemoryCatalogOperations(input: {
         }
         return rows.map((row) => ({
           ...row,
-          canManage:
-            (row.scopeType === 'agent' || row.scopeType === 'workflow') && row.scopeId !== null
-              ? access.get(`${row.scopeType}:${row.scopeId}`) === 'write' ||
-                access.get(`${row.scopeType}:${row.scopeId}`) === 'own'
-              : false,
+          canManage: decideMemoryRowManageStamp({
+            hasAclBypass: false,
+            scopeType: row.scopeType as MemoryScopeKind,
+            resourceAccess:
+              row.scopeId === null
+                ? null
+                : ((access.get(`${row.scopeType}:${row.scopeId}`) as ResourceAccess | undefined) ??
+                  null),
+          }),
         }))
       })
     },

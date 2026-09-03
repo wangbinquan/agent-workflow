@@ -73,6 +73,14 @@ import type {
   ResourceMemoryScopeRef,
   ResourceScopeAccess,
 } from '@/modules/resource-catalog/public/types'
+import {
+  decideMemoryRowManageStamp,
+  decideMemoryScopeManage,
+  decideMemoryScopeView,
+  memoryScopeNeedsResourceAccess,
+  type MemoryScopeAuthorizationFacts,
+  type MemoryScopeKind,
+} from '../domain/scopeAuthorization'
 import { hasResourceAclBypass } from '@/services/resourceAcl'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
@@ -1094,47 +1102,51 @@ function resourceScopeAccessInTx(
   return authority.authorization.inTransaction(tx, authority).accessOf(authority.authority, ref)
 }
 
-/** Read visibility (D12): repo/global → everyone; agent/workflow → resource viewers. */
+/**
+ * Read visibility (D12): repo/global → everyone; agent/workflow → resource viewers.
+ *
+ * RFC-352：判据本身住在 `domain/scopeAuthorization.ts`（唯一一份，两个 provider 共用）；
+ * 这里只负责取事实——是否 bypass、以及资源 scope 的访问档。
+ */
 export async function canViewMemory(
   db: DbClient,
   authority: MemoryResourceScopeAuthority,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
-  const actor = authority.actor
-  if (hasResourceAclBypass(actor)) return true
-  // RFC-248 AC-29: repo_group 与 repo/global 同档——全员可读。
-  if (
-    scope.scopeType === 'repo' ||
-    scope.scopeType === 'repo_group' ||
-    scope.scopeType === 'global'
-  ) {
-    return true
-  }
-  return dbTxSync(db, (tx) => resourceScopeAccessInTx(tx, authority, scope) !== 'none')
+  return decideMemoryScopeView(readScopeAuthorizationFacts(db, authority, scope))
 }
 
-/** Management rights (D12): scope-resource owner or ACL bypass; repo/global require bypass. */
+/**
+ * Management rights (D12): scope-resource owner or ACL bypass; repo/global require bypass.
+ * RFC-324 D9 起资源 scope 也认 `write` 档。判据同样住在 domain。
+ */
 export async function canManageMemory(
   db: DbClient,
   authority: MemoryResourceScopeAuthority,
   scope: MemoryScopeRef,
 ): Promise<boolean> {
-  const actor = authority.actor
-  if (hasResourceAclBypass(actor)) return true
-  // RFC-248/RFC-305: repo_group 与 repo/global 同档——仅 ACL bypass 可管。
-  if (
-    scope.scopeType === 'repo' ||
-    scope.scopeType === 'repo_group' ||
-    scope.scopeType === 'global'
-  ) {
-    return false
+  return decideMemoryScopeManage(readScopeAuthorizationFacts(db, authority, scope))
+}
+
+/**
+ * 取一条 scope 的授权事实。平台 scope 不查资源访问档（查了也用不上，见
+ * `memoryScopeNeedsResourceAccess`）——这一点也保持了迁移前的查询次数。
+ */
+function readScopeAuthorizationFacts(
+  db: DbClient,
+  authority: MemoryResourceScopeAuthority,
+  scope: MemoryScopeRef,
+): MemoryScopeAuthorizationFacts {
+  const hasAclBypass = hasResourceAclBypass(authority.actor)
+  const scopeType = scope.scopeType as MemoryScopeKind
+  if (hasAclBypass || !memoryScopeNeedsResourceAccess(scopeType)) {
+    return { hasAclBypass, scopeType, resourceAccess: null }
   }
-  // RFC-324 D9 —— 「随 scope 资源写权」现在包含 `write` 授权档：能改这个 agent /
-  // workflow 的人，也能管它名下的记忆。读面（canViewMemory）不受影响。
-  return dbTxSync(db, (tx) => {
-    const access = resourceScopeAccessInTx(tx, authority, scope)
-    return access === 'write' || access === 'own'
-  })
+  return {
+    hasAclBypass,
+    scopeType,
+    resourceAccess: dbTxSync(db, (tx) => resourceScopeAccessInTx(tx, authority, scope)),
+  }
 }
 
 /**
@@ -1158,14 +1170,14 @@ export async function filterMemoriesByScopeVisibility<T extends MemoryScopeRef>(
     }
     return access
   })
-  return rows.filter((r) => {
-    // RFC-248 AC-29: repo_group 与 repo/global 同档。
-    if (r.scopeType === 'repo' || r.scopeType === 'repo_group' || r.scopeType === 'global') {
-      return true
-    }
-    if (r.scopeId === null) return false
-    return accessByScope.get(`${r.scopeType}:${r.scopeId}`) !== 'none'
-  })
+  return rows.filter((r) =>
+    decideMemoryScopeView({
+      hasAclBypass: false,
+      scopeType: r.scopeType as MemoryScopeKind,
+      resourceAccess:
+        r.scopeId === null ? null : (accessByScope.get(`${r.scopeType}:${r.scopeId}`) ?? null),
+    }),
+  )
 }
 
 /**
@@ -1192,9 +1204,11 @@ export async function annotateMemoryManageRights<T extends MemoryScopeRef>(
   })
   return rows.map((r) => ({
     ...r,
-    canManage:
-      (r.scopeType === 'agent' || r.scopeType === 'workflow') && r.scopeId !== null
-        ? accessByScope.get(`${r.scopeType}:${r.scopeId}`) === 'own'
-        : false,
+    canManage: decideMemoryRowManageStamp({
+      hasAclBypass: false,
+      scopeType: r.scopeType as MemoryScopeKind,
+      resourceAccess:
+        r.scopeId === null ? null : (accessByScope.get(`${r.scopeType}:${r.scopeId}`) ?? null),
+    }),
   }))
 }

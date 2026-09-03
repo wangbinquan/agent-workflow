@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 353,
+    "serviceFiles": 351,
     "thinFacades": 77
   },
   "entries": [
@@ -1116,20 +1116,6 @@
       "status": "legacy-implementation",
       "targetContext": "task-execution",
       "targetLayer": "engine"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "clipHeadTail",
-        "renderSessionTreeToDistillerMd"
-      ],
-      "file": "packages/backend/src/services/distillerSourceContext.ts",
-      "id": "facade:packages/backend/src/services/distillerSourceContext.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/distillerSourceContext.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "legacy-implementation",
-      "targetContext": "memory",
-      "targetLayer": "application"
     },
     {
       "boundaryEdgeIds": [],
@@ -3270,7 +3256,9 @@
     {
       "boundaryEdgeIds": [
         "import:52753b3eea6e966edf79",
+        "import:5fb04846559fecacec88",
         "import:6b02740364016507d547",
+        "import:8bbdf0ecedfee2d0635a",
         "import:d34368e078e7e4b24407"
       ],
       "exportedSymbols": [
@@ -3382,41 +3370,6 @@
       "file": "packages/backend/src/services/memoryDistillSessionView.ts",
       "id": "facade:packages/backend/src/services/memoryDistillSessionView.ts",
       "ownerEntryId": "owner:packages/backend/src/services/memoryDistillSessionView.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "legacy-implementation",
-      "targetContext": "memory",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:75b384fc2248893d81f3",
-        "import:8a37f46ab8dec2d564cf",
-        "import:d4d8e82d67d39cf0f6be",
-        "import:ea8d08829c1dc4ca440a",
-        "import:f49bc6a9a230e01c90c8"
-      ],
-      "exportedSymbols": [
-        "DEFAULT_INJECTION_BUDGET",
-        "InjectMemoryResult",
-        "InjectableMemoryRow",
-        "InjectableMemorySet",
-        "LoadInjectableMemoriesOptions",
-        "MemoryEnvelopeFencing",
-        "ScopeBudget",
-        "clipByBudget",
-        "estimateTokens",
-        "formatMemoryBlock",
-        "formatMemoryBlockFromSnapshot",
-        "formatMemoryBlockWithSnapshot",
-        "injectMemoryForRun",
-        "loadInjectableMemories",
-        "loadInjectedSnapshotFromFirstAttempt",
-        "memoryFencingForNonce",
-        "parseInjectedSnapshotJson"
-      ],
-      "file": "packages/backend/src/services/memoryInject.ts",
-      "id": "facade:packages/backend/src/services/memoryInject.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/memoryInject.ts#$file",
       "removeAfterWave": "W4-E2",
       "status": "legacy-implementation",
       "targetContext": "memory",
@@ -4707,8 +4660,11 @@
         "import:6c106e47305a3b3ebdc5",
         "import:a6fb16c2bb04fa5da12f",
         "import:c6c1a3eab289cb08185f",
+        "import:c6d83040f9bf48f345f9",
         "import:c74b0ad40adb1d4f2de1",
         "import:cb91aa44b71df5165d3c",
+        "import:dba082fcaa3501c2d332",
+        "import:ddb1a9cb8d5a6063f9cf",
         "import:ef6d239c3d1ca57471ef"
       ],
       "exportedSymbols": [
@@ -6421,6 +6377,7 @@
         "import:64746f05d652dbf0ec5c",
         "import:6695adac0aea33d43c69",
         "import:69ae4ee0bf8c08beb2f4",
+        "import:6bf62bbba05495414805",
         "import:704d1fd2d3d305b188e0",
         "import:70e2c384abc62cae8ab5",
         "import:716be69ae2cd0c0f70ea",
@@ -7617,5 +7574,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25"
+  "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b"
 }

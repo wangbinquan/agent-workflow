@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1888 |
-| `services/` 文件 | 353 |
-| `modules/**` 文件 / 非空 context | 1254 / 16 |
+| backend production TS 文件 | 1891 |
+| `services/` 文件 | 351 |
+| `modules/**` 文件 / 非空 context | 1259 / 16 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 5236 |
+| `architectureExceptions` | 5238 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6291 |
-| `facades` | 353 |
+| `crossContextImports` | 6293 |
+| `facades` | 351 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25672 |
+| `moduleSymbolOwners` | 25683 |
 | `mutationEntrypoints` | 1909 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 945 |
-| `transactionExternalEffects` | 477 |
+| `publicSurfaces` | 950 |
+| `transactionExternalEffects` | 475 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -82,11 +82,12 @@
 | source-control / application | 9 |
 | development-automation / engine | 7 |
 | event-center / infrastructure | 7 |
+| memory / public | 7 |
 | task-execution / public | 7 |
 | event-center / application | 6 |
 | identity-access / public | 6 |
 | intent / composition | 6 |
-| memory / public | 6 |
+| memory / application | 6 |
 | source-control / domain | 6 |
 | code-capability / composition | 5 |
 | collaboration / public | 5 |
@@ -95,7 +96,6 @@
 | event-center / public | 5 |
 | identity-access / composition | 5 |
 | integration / public | 5 |
-| memory / application | 5 |
 | resource-catalog / domain | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
@@ -107,6 +107,7 @@
 | digital-employee / domain | 3 |
 | event-center / domain | 3 |
 | identity-access / domain | 3 |
+| memory / domain | 3 |
 | runtime-management / application | 3 |
 | source-control / composition | 3 |
 | system-operations / domain | 3 |
@@ -142,8 +143,8 @@
 | integration | 28 |
 | source-control | 28 |
 | intent | 19 |
-| memory | 9 |
 | bootstrap | 8 |
+| memory | 7 |
 | system-operations | 4 |
 | knowledge-evolution | 3 |
 | digital-employee | 1 |
@@ -166,7 +167,7 @@
 | platform | 17 |
 | source-control | 17 |
 | identity-access | 14 |
-| memory | 8 |
+| memory | 6 |
 | knowledge-evolution | 2 |
 | bootstrap | 1 |
 | digital-employee | 1 |
@@ -185,7 +186,7 @@
 | W5 | 16 |
 | W4-E0 | 14 |
 | W9 | 14 |
-| W4-E2 | 8 |
+| W4-E2 | 6 |
 | W9-E | 5 |
 | W4-E3 | 2 |
 | W2-D/W3/W5 | 1 |
@@ -197,13 +198,13 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3477 |
-| legacy-inbound | 1555 |
+| legacy-outbound | 3474 |
+| legacy-inbound | 1559 |
 | provider-mirror | 457 |
 | infrastructure-external | 394 |
 | offered-consumption | 122 |
 | temporary-internal-debt | 107 |
-| off-dag-offered | 84 |
+| off-dag-offered | 85 |
 | authority-type-only | 63 |
 | required-implementation | 27 |
 | external-layer-debt | 5 |
@@ -212,10 +213,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3477 |
-| legacy-inbound | 1555 |
+| legacy-outbound | 3474 |
+| legacy-inbound | 1559 |
 | temporary-internal-debt | 107 |
-| off-dag-offered | 84 |
+| off-dag-offered | 85 |
 | no-circular | 6 |
 | external-layer-debt | 5 |
 | no-util-to-upper | 2 |
@@ -224,8 +225,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2694 |
-| W4-E1 | 837 |
+| W9 | 2697 |
+| W4-E1 | 838 |
 | W4-C | 435 |
 | W4-E0 | 214 |
 | W4 | 207 |
@@ -233,7 +234,7 @@
 | W4-E4a | 176 |
 | W5 | 145 |
 | W4-E8 | 113 |
-| W4-E2 | 67 |
+| W4-E2 | 65 |
 | W4-E9 | 61 |
 | W4-E7 | 42 |
 | W4-E4b | 33 |
@@ -261,12 +262,12 @@
 | event-center | 22 |
 | execution-contract | 22 |
 | code-capability | 19 |
+| memory | 15 |
 | integration | 13 |
-| memory | 10 |
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 945）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 950）
 
 | context | 数量 |
 | --- | --- |

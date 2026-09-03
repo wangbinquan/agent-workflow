@@ -387,14 +387,16 @@
       "layer": "application",
       "core": false,
       "files": [
-        "packages/backend/src/services/memoryInject.ts"
+        "packages/backend/src/modules/memory/domain/injectionRendering.ts",
+        "packages/backend/src/modules/memory/application/injection/injectMemory.ts"
       ],
       "singleSourceOf": "Loads approved memories for the 5 scopes, clips by per-scope budget, renders the single '## Learned context' block appended to the primary agent's inline prompt, and produces the persisted snapshot.",
-      "claimAudit": "Claims DEFAULT_INJECTION_BUDGET (:376) is the single source of the budget and that the block shape is grep-guarded. Real gap: the per-scope query fan at :133-205 is five hand-written arms with no exhaustiveness over the scope union, and the fencing of memory bodies is opt-in via a defaulted `envelopeNonce = ''` parameter (:306-322) \u2014 an empty nonce renders bodies unfenced. AUDITED BY NOBODY.",
+      "claimAudit": "Claims DEFAULT_INJECTION_BUDGET is the single source of the budget and that the block shape is grep-guarded. Real gap: the per-scope query fan in loadInjectableMemories is five hand-written arms with no exhaustiveness over the scope union. The defaulted-envelopeNonce gap called out by the earlier audit is closed: RFC-317 T39 turned fencing into a required discriminant (memoryFencingForNonce + rfc317-memory-fencing-explicit). RFC-352 split the kernel across memory domain (pure rendering + snapshot codec) and application (orchestration behind MemoryInjectionReadStore); the exhaustiveness gap is unchanged and still AUDITED BY NOBODY.",
       "auditedBy": "critic",
       "guards": [],
       "canonicalOwnerEntryIds": [
-        "owner:packages/backend/src/services/memoryInject.ts#$file"
+        "owner:packages/backend/src/modules/memory/application/injection/injectMemory.ts#$file",
+        "owner:packages/backend/src/modules/memory/domain/injectionRendering.ts#$file"
       ]
     },
     {
@@ -1412,13 +1414,13 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25",
+    "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "12333eb8811848c32393e08adeb22e5f949ec74f",
-    "contentDigest": "sha256:507f884c1526cd2a376699ee9c1113cc819adb7c88405ddfcd5f3bf1c7619924",
+    "currentSnapshotSha": "65179b8cf2ef997c3c6cb8fbe60ec16f6d1e8dd9",
+    "contentDigest": "sha256:b822cd448232f544e55ed72ffc90c33bc99761ff0bed23ad18462308ee6a6110",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 850,
-    "exactEntrypointFiles": 61,
+    "consumers": 855,
+    "exactEntrypointFiles": 62,
     "governedFieldSurfaces": 5,
-    "methods": 884,
+    "methods": 887,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18862,
-    "symbols": 945
+    "recursiveFields": 18887,
+    "symbols": 950
   },
   "entries": [
     {
@@ -68226,6 +68226,370 @@
       "unresolvedTypeRefs": [
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:ddb1a9cb8d5a6063f9cf"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:ddb1a9cb8d5a6063f9cf"
+          ],
+          "fieldPath": "$call.$parameter:fencing.$variant:0.kind",
+          "type": "'fenced'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ddb1a9cb8d5a6063f9cf"
+          ],
+          "fieldPath": "$call.$parameter:fencing.$variant:0.nonce",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ddb1a9cb8d5a6063f9cf"
+          ],
+          "fieldPath": "$call.$parameter:fencing.$variant:1.kind",
+          "type": "'legacy-unfenced'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:snapshot.$variant:0",
+          "type": "readonly InjectedMemorySnapshot[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:snapshot.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:formatMemoryBlockFromSnapshot",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:5043faa7fd7b3c50522d615f6ba1a9ad23f62f036dd0203be1788d2938bcc061"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:ddb1a9cb8d5a6063f9cf",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:4c355e7fcc128fd629053a6305a768b27c48b056ce8bc6aadf4dd8697f3513e9",
+      "status": "target-context-current-surface",
+      "symbol": "formatMemoryBlockFromSnapshot",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.kind",
+          "type": "'fenced'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.nonce",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.kind",
+          "type": "'legacy-unfenced'"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:MemoryEnvelopeFencing",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:memory:types:formatMemoryBlockFromSnapshot",
+        "public:memory:types:memoryFencingForNonce"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:a707ca7cd976fc56e60ed92f3c3ad7402a665d175565a9530a46e792bcca2c6b",
+      "status": "target-context-current-surface",
+      "symbol": "MemoryEnvelopeFencing",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:c6d83040f9bf48f345f9"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nonce.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nonce.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nonce.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c6d83040f9bf48f345f9"
+          ],
+          "fieldPath": "$call.$return.$variant:0.kind",
+          "type": "'fenced'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c6d83040f9bf48f345f9"
+          ],
+          "fieldPath": "$call.$return.$variant:0.nonce",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c6d83040f9bf48f345f9"
+          ],
+          "fieldPath": "$call.$return.$variant:1.kind",
+          "type": "'legacy-unfenced'"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:memoryFencingForNonce",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:0fe236a3eb44c657056a456c93740f65ce203d86ce15d9cfb5f9dffcfb24c37e"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c6d83040f9bf48f345f9",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:3dd1f94406d18a8b50d9ced72e1da82d8b69f2dfea313aba8988eb6bc7a99634",
+      "status": "target-context-current-surface",
+      "symbol": "memoryFencingForNonce",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:4d24fb166a62f0ded862",
+        "import:6bf62bbba05495414805"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:raw.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:raw.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0[]",
+          "type": "z.infer<typeof InjectedMemorySnapshotSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:parseInjectedSnapshotJson",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:0b769553f50b637859c3bdf5c1f33fd8b4430dd7a8b03656adf1668fbdfcf2dd"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:4d24fb166a62f0ded862",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:6bf62bbba05495414805",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b9915bd3b66a0337f0756d86088faa7cc58c8934406b737fcc236dc04f5035ce",
+      "status": "target-context-current-surface",
+      "symbol": "parseInjectedSnapshotJson",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:dba082fcaa3501c2d332"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:dba082fcaa3501c2d332"
+          ],
+          "fieldPath": "agent",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "global",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:dba082fcaa3501c2d332"
+          ],
+          "fieldPath": "repo",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repoGroup",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:dba082fcaa3501c2d332"
+          ],
+          "fieldPath": "workflow",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/types.ts",
+      "id": "public:memory:types:ScopeBudget",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:dba082fcaa3501c2d332",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5df6d5892190535bf19a56330770fded46959bc7f44833add77541bbc8b56b90",
+      "status": "target-context-current-surface",
+      "symbol": "ScopeBudget",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -151971,7 +152335,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25",
+  "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b",
   "targetContexts": [
     "collaboration",
     "development-automation",

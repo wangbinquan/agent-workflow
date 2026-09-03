@@ -185,12 +185,17 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
     expect(await canManageMemory(db, resourceScopeAuthority(db, writer), scope)).toBe(true)
   })
 
-  // 现状锁，不是背书：`annotateMemoryManageRights` 的判据停在 RFC-099 D12 的
-  // 「只有 owner」，而 `canManageMemory` 在 RFC-324 D9 之后已经放宽到 `write|own`。
-  // 于是拿到 `write` 授权的人：API 允许他管，但列表给他盖的 `canManage` 是 false
-  // （前端据此不显示审批 / 编辑 / 归档按钮）。RFC-352 是结构迁移、不改行为，
-  // 因此这里把这处**既存差异**锁住；要修它得单独立项并明确是产品行为变更。
-  test('现状差异：write 授权者 canManageMemory=true，但列表 canManage 盖的是 false', async () => {
+  // RFC-352 修掉的一处 provider 漂移（用户 2026-09-03 裁定按 `write|own` 对齐）。
+  //
+  // 合并前这段判据被抄了两遍且已经分叉：SQLite 侧的 `annotateMemoryManageRights` 停在
+  // RFC-099 D12 的「只有 owner」，PostgreSQL 侧的 `annotateManageRights` 跟上了
+  // RFC-324 D9 的 `write|own`。于是同一个拿到 `write` 授权的人，在 SQLite 部署上看不到
+  // 审批 / 编辑 / 归档按钮、在 PostgreSQL 部署上看得到——而两边的 API 门都放行，
+  // 界面欠了他本来就有的能力。合并成一份判据就必须选一个值，选的是与 API 门一致的那个。
+  //
+  // 这条测试锁的就是「列表标记 == API 门」。它变红只有两种可能：判据又分叉了，
+  // 或者有人在没立项的情况下改了权限档位。
+  test('列表逐行 canManage 与 API 门一致：write 授权者两边都是 true', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const owner = actorOfRole('user', 'u_owner')
     const writer = actorOfRole('user', 'u_writer')
@@ -199,6 +204,41 @@ describe('RFC-352 W4-E2 迁移 oracle — 补齐的格子', () => {
     const scope = { scopeType: 'agent' as const, scopeId: agentId }
     const authority = resourceScopeAuthority(db, writer)
     expect(await canManageMemory(db, authority, scope)).toBe(true)
+    const [stamped] = await annotateMemoryManageRights(db, authority, [scope])
+    expect(stamped?.canManage).toBe(true)
+  })
+
+  test('平台 scope 的列表标记仍是「仅 ACL bypass」——对齐没有放宽这一档', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const user = actorOfRole('user')
+    const admin = actorOfRole('admin')
+    const rows = (['repo', 'repo_group', 'global'] as const).map((scopeType) => ({
+      scopeType,
+      scopeId: 's1',
+    }))
+    const stampedForUser = await annotateMemoryManageRights(
+      db,
+      resourceScopeAuthority(db, user),
+      rows,
+    )
+    expect(stampedForUser.map((r) => r.canManage)).toEqual([false, false, false])
+    const stampedForAdmin = await annotateMemoryManageRights(
+      db,
+      resourceScopeAuthority(db, admin),
+      rows,
+    )
+    expect(stampedForAdmin.map((r) => r.canManage)).toEqual([true, true, true])
+  })
+
+  test('非 owner、无授权的人：读不到也管不到，列表标记同样是 false', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    const owner = actorOfRole('user', 'u_owner')
+    const stranger = actorOfRole('user', 'u_stranger')
+    const agentId = await seedAgent(db, owner.user.id)
+    const scope = { scopeType: 'agent' as const, scopeId: agentId }
+    const authority = resourceScopeAuthority(db, stranger)
+    expect(await canViewMemory(db, authority, scope)).toBe(false)
+    expect(await canManageMemory(db, authority, scope)).toBe(false)
     const [stamped] = await annotateMemoryManageRights(db, authority, [scope])
     expect(stamped?.canManage).toBe(false)
   })

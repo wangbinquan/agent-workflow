@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 5236,
+    "architectureExceptions": 5238,
     "backgroundJobs": 367,
-    "crossContextImports": 6291,
-    "facades": 353,
+    "crossContextImports": 6293,
+    "facades": 351,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25672,
+    "moduleSymbolOwners": 25683,
     "mutationEntrypoints": 1909,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 945,
-    "transactionExternalEffects": 477
+    "publicSurfaces": 950,
+    "transactionExternalEffects": 475
   },
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1888,
+    "backendProductionFiles": 1891,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -91,7 +91,7 @@
       },
       {
         "context": "memory",
-        "files": 28
+        "files": 33
       },
       {
         "context": "resource-catalog",
@@ -118,7 +118,7 @@
         "files": 325
       }
     ],
-    "moduleFiles": 1254,
+    "moduleFiles": 1259,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -159,10 +159,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 353,
+    "serviceFiles": 351,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:23aff58f0846d3e533a02e8241a7887c18c049243e7a72394f16580af5e24e25"
+  "sourceDigest": "sha256:974fc918bff175f0e41b95286214dc056aa1f479f543426998d3268333b4880b"
 }
