@@ -366,8 +366,30 @@ export function createLogicalTableChunk(input: {
     migrationKey: input.table.migrationKey,
     rows: input.rows,
   })
-  return { payload, digest: logicalChunkDigest(payload) }
+  // `Object.freeze`：块一旦被标成「构造即已校验」，写路径就不再复算 digest，所以至少要挡住
+  // 「构造完再把 payload / digest 换掉」这种改法。行数组本身没有深冻结——深冻结 250 行 × N
+  // 个值的开销正好抵消这次优化；调用方拿到块之后立刻写盘，中间不碰它。
+  const chunk = Object.freeze({ payload, digest: logicalChunkDigest(payload) })
+  chunksVerifiedByConstruction.add(chunk)
+  return chunk
 }
+
+/**
+ * 本函数刚刚构造出来的块：payload 刚过 `LogicalTableChunkPayloadSchema`、digest 刚按同一份
+ * canonical JSON 算过。写路径再 `verifyLogicalTableChunk` 一遍是纯重复——实测（250 行一块）
+ * 那一遍占整个写入的 **65%–73%**：
+ *
+ *   tasks（2.03MB）           verify 18.5ms / serialize 9.2ms / 写入合计 28.0ms
+ *   node_runs（1.75MB）       verify 22.0ms / serialize 16.1ms / 写入合计 30.1ms
+ *   node_run_events（0.24MB） verify  2.5ms / serialize  1.8ms / 写入合计  4.7ms
+ *
+ * 一次全量迁移 5 万多块，这一遍就是主线程上最大的一块同步开销，而托管取证唯一未过的门正是
+ * 迁移期间的事件循环停顿。
+ *
+ * 这个集合是**模块私有**的，只有上面的构造函数会往里加：从磁盘、网络或任何调用方手里拿到的
+ * 对象都进不来，照旧走完整校验。`readLogicalTableChunk` 也照旧每次都验。
+ */
+const chunksVerifiedByConstruction = new WeakSet<LogicalTableChunk>()
 
 export function verifyLogicalTableChunk(value: unknown): LogicalTableChunk {
   const parsed = LogicalTableChunkSchema.safeParse(value)
@@ -480,7 +502,7 @@ export function persistLogicalTableChunk(
   operationRoot: string,
   chunk: LogicalTableChunk,
 ): PersistedLogicalTableChunk {
-  const verified = verifyLogicalTableChunk(chunk)
+  const verified = chunksVerifiedByConstruction.has(chunk) ? chunk : verifyLogicalTableChunk(chunk)
   const table = TableIdSchema.parse(verified.payload.table)
   const area = verified.payload.disposition === 'ARCHIVE_THEN_OMIT' ? 'legacy-archive' : 'chunks'
   const path = join(
