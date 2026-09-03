@@ -97,7 +97,7 @@ W4-E2 桶：开工时 96 条 → T8 后 54 条 → T9 后 **35 条**。facade：
 | **AC-9**  | 达成                        | `memory-distill` 仍在 `cli/start.ts` / `cli/postgresqlDaemonApplication.ts` 注册为可暂停 handle；`rfc349-postgresql-preflight` 冻结守卫绿                                                                                        |
 | **AC-10** | **按转交口径达成**          | 见 §4.1 / §4.3：W4-E2 现 43 条 = bootstrap→composition 全仓形态 11 + `ws/broadcaster` 8 + runtime 3 + off-dag offered 9 + 两个路由文件 10 + RC legacy consumer 1 + facade 自身 1；memory **自有且修法在自己文件里**的已归零     |
 | **AC-11** | 达成                        | 零 schema / migration / WS 改动；`GET /api/memories` 不带分页参数时逐字节保持 `{items}`（`routes-memories.test.ts` 既有断言未改）；前端只增 load-more。各波分母见 §4.3，无回升                                                  |
-| **AC-12** | 见 §4.4                     | exact-SHA hosted CI 取证                                                                                                                                                                                                        |
+| **AC-12** | 达成                        | `b3883154e` 的 Main CI run `33722386454` 为 35/35 attempt-1 terminal success，本 RFC 全部提交都在其祖先里；逐条推导与两次自推红的记账见 §4.4                                                                                     |
 
 ## 4.3 T10 查出的桶归属错误（`routes/memories.ts`）
 
@@ -116,6 +116,45 @@ resource-catalog public 的 **8 条**边全记进了 W4-E1——而「把这个 
 
 纠正后：**W4-E2 35 → 43、W4-E1 846 → 838**，全局总数不变。其余 23 个兜底 route 文件的归属是同类问题，
 但属全局记账裁决，随下一批账本工作处理（已登记进 RFC-294 `plan.md §14`）。
+
+## 4.4 AC-12 —— exact-SHA hosted 取证
+
+**最终验收：`b3883154eb1cfe575e578ee3cf2664fbb57ce797` 的 Main CI run `33722386454` 为 35/35
+attempt-1 terminal success。** 本 RFC 的全部提交都在它的祖先里（逐条 `git merge-base --is-ancestor`
+核过）：`eb8b331db`(T8) / `1ab271af2`(T9) / `247331ae5`(T10) / `0f740aab2` / `39c98c4af`。
+
+为什么取证落在别人的提交上：共享 main 上并发 push 会取消在跑的 run（仓规），本 RFC 自己那几笔的
+exact-SHA run 依次被取消——`0f740aab2` 被 `d609603ae` 取消、`39c98c4af` 被 `b3883154e` 取消。按
+`docs/dev-gotchas.md` 的既定处置，看**含本提交的 superseding commit** 的绿。
+
+同 SHA 的 `postgresql-evidence` run `33722398147` 红，**不在本 RFC 归属面**：四条腿全部红在
+`actions/checkout` 阶段（`git fetch --depth=1 origin +refs/heads/b3883154e*:...` 把 SHA 当成 ref
+pattern 去取，exit 1），一条测试都没跑到；它属 RFC-349 的取证 workflow，同 SHA 已由 owner 重跑
+（`33722869768`）。
+
+### 过程中的两次自推红（都已修，如实记账）
+
+| 红                             | 提交                                        | 原因                                                                                                                                                       | 收在                                             |
+| ------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| CI `33718571164` Backend 4/4   | `1ab271af2`                                 | 删掉 `sqliteMemoryCatalog.ts` 那条 `@/services/resourceAcl` import 后，RFC-345 的 `EXACT_COMPATIBILITY_DEBT` 该条变 stale（账本与实测须逐条相等）        | `247331ae5`                                      |
+| CI `33720659496` Backend 2/4   | `247331ae5`                                 | 账本删了条目，`ledger-baselines.json` 的 `baseline` 没跟着减小（RFC-317 T16 判「逐字相等」，**减**了也要动）；另有 4 条已兑现的一次性 `allowGrowth` 未当期退役（T17） | `0f740aab2`                                      |
+
+两次同一个形状：**验证面比改动面窄**——只跑了 `tests/architecture/` 与几个点名守卫，而这两条判据分别住在
+`tests/rfc345-resource-acl-facade-retirement.test.ts` 与 `tests/architecture/rfc317-ledger-highwater.test.ts`。
+可操作的预防步骤已沉淀进 `docs/dev-gotchas.md`（`39c98c4af`）：拿**被 import 的那个文件路径**去 `tests/` 搜
+字符串字面量，命中的多半就是账本；要跑哪些测试按「被改动路径出现在哪些测试里」定，不按目录定。
+本 RFC 最后一轮按这条重跑了 29 个文件 262 例 + 整个 `tests/architecture/` 421 例，全绿。
+
+### 并发协调实录（共享工作树）
+
+- 重采账本时工作树上躺着并发 session 未提交的 `platform/persistence/sqliteLogicalSourceProtocol.ts`，
+  它会把 `background-jobs.json` 里 `SqliteLogicalSourceWorkerEventSchema` 那条从 `long-running` 翻成
+  `periodic`。重采前把该文件**临时**还原成 HEAD 版、采完立刻按备份还回（前后 sha256 与 `git diff`
+  逐字节一致，已核），本 RFC 的账本因此不含他人在制品。
+- 该 session 随后提交了那个改动（`d609603ae`）却没重采账本，会红 `rfc294-canonical-manifests`。已把
+  具体条目、判据与修法发给对方，由 owner 在 `b3883154e` 补上——本 RFC 不代其重采。
+- `git add` 时共享 index 里已有对方 7 个文件；`git commit -- <pathspec>` 挡住了，本 RFC 各笔提交
+  逐一核过 `git diff --cached --name-only` 只含自己的路径。
 
 ## 5. 并发协调
 

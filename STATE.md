@@ -8,9 +8,15 @@
 > `design.md:3441` 落 source-control offered `RepositoryScopeAuthorizationInTx` 薄 participant；列表下推 keyset 分页。
 > **提交链**：`49b714d89`（T1/T2 注入 + 源上下文）→ `9954be7bd`（收红 + T3 单一授权判据）→ `e48508ee4`（T4 不再直读
 > source-control 仓库表）→ `0dc1662ec`（T6 蒸馏 + T4 participant 能力铸造合同）→ `2bb6dfcc0`（T7 调度，并清掉主干上
-> 重复的调度器）→ `e211f1499`（收 T6 的拼接路径哨兵）→ `eb8b331db`（T8 分页）→ `1ab271af2`（T9 内部 import 归 public
+> 重复的调度器）→ `e211f1499`（收 T6 的拼接路径哨兵）→ `eb8b331db`（T8 分页）→ `1ab271af2`（T9：内部 import 归
+> public、R4 判据修正、账本重采）→ `247331ae5`（T10：收 T9 推红的 main、补完 AC-6、纠正桶归属、RFC 收口）→
+> `0f740aab2`（收 T10 推红的 main：销账后基线未同步减小）→ `39c98c4af`（把这两次红的通用形状沉淀进
+> `docs/dev-gotchas.md`）。
 >
-> - R4 判据修正 + 账本重采）。
+> **两次自推红都记在这里，不粉饰**：都是同一个形状——**验证面比改动面窄**。删掉 `sqliteMemoryCatalog.ts` 那条
+> legacy import 之后，RFC-345 的 `EXACT_COMPATIBILITY_DEBT`（住在 `tests/rfc345-resource-acl-facade-retirement.test.ts`，
+> 不在 `tests/architecture/`）当场 stale；删完账本条目又忘了把 `ledger-baselines.json` 的 baseline 一起减小
+> （T16 判「逐字相等」，减了也要动）。可操作的预防步骤已写进 `docs/dev-gotchas.md`。
 >
 > **两处与「行为逐字不变」的偏离，都是本刀查出的真 bug / 用户当场拍板**：
 >
@@ -36,7 +42,13 @@
 > 撞到的 canManage 漂移同类。已收成 `domain/candidateVisibility.ts` 一份判据经 `memory/public/types` 消费，
 > 路由的 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types`；源码层锁「路由里不得再出现手写的
 > `status !== 'candidate'`」。
-> 逐 AC 证据、T9 的退役 / 转交账与 T10 的桶归属纠正见 `design/RFC-352-memory-context-cutover/plan.md §4.1–§4.3`。
+> **最终验收（AC-12）**：`b3883154e` 的 Main CI run `33722386454` 为 **35/35 attempt-1 terminal success**，
+> 本 RFC 的全部提交都在它的祖先里（逐条 `git merge-base --is-ancestor` 核过）。本 RFC 自己那几笔的 exact-SHA run
+> 依次被并发 push 取消（共享 main 常态），按仓规看含本提交的 superseding commit 的绿。同 SHA 的
+> `postgresql-evidence` 红在 `actions/checkout`（把 SHA 当 ref pattern 去 fetch，一条测试都没跑到），属 RFC-349
+> 的取证 workflow、已由 owner 同 SHA 重跑，不在本 RFC 归属面。
+> 逐 AC 证据、T9 的退役 / 转交账、T10 的桶归属纠正与并发协调实录见
+> `design/RFC-352-memory-context-cutover/plan.md §4.1–§4.4`。
 
 > ✅ **RFC-294 账本重分桶与分母重设完成（2026-09-02，零生产改动、零 wave credit）。**
 > 起于 `plan.md §14` 那条挂了两天的「必须在下一个 wave 立项时裁决的输入」：RFC-349 双 provider 把 canonical 分母抬了
