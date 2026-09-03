@@ -171,7 +171,17 @@
       "why": "RFC-353 T9：PostgreSQL bootstrap 装配技能来源追溯路由时，要按 memory 的 `FusedIntoSkillMemory` / `MemoryScopeAuthority` 标注注入函数的形参。**纯类型边**，无运行时依赖；跨 context 的 provider 装配本来就只能在 bootstrap 完成（见 `docs/dev-gotchas.md` 对应条）。",
       "introducedByRFC": "RFC-353",
       "removeAfterWave": "RFC-294 W5（bootstrap 装配下沉到各 context 的 composition 之后）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:52424fb0651a5a617ef4",
+        "import:cfcf787a704c957abf0b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/memory/public/catalog.ts#FusedIntoSkillMemory",
+        "owner:packages/backend/src/modules/memory/public/catalog.ts#MemoryScopeAuthority"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1214,7 +1224,15 @@
       "why": "RFC-353 T8：fusion 路由自 `routes/fusions.ts` 迁入 KE 的 inbound 层。inbound 是模块自己的入站适配层（RFC-317 D3 承认），bootstrap 必须能挂载它——这条边是「路由归位」的**结果**，不是绕过；它随 legacy 路由注册表整体退役而消失。",
       "introducedByRFC": "RFC-353",
       "removeAfterWave": "RFC-294 W5（legacy 路由注册表退役）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:dba8fca3abd82a44e3b1"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -1227,7 +1245,15 @@
       "why": "RFC-353 T9：技能来源追溯路由归 KE（取数横跨 resource-catalog 与 memory，拼装是知识演化的判断）。理由同上一条——bootstrap 挂载模块 inbound。",
       "introducedByRFC": "RFC-353",
       "removeAfterWave": "RFC-294 W5（legacy 路由注册表退役）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:474be99ec8509ad0b8a2"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#mountSkillProvenanceRoutes"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -3824,7 +3850,17 @@
       "why": "RFC-353 T11：`services/skillVersion.ts` 门面删除后，最后一个消费者（intent 的 `StagedSkillVersion` 类型标注）改指 RC 自己的实现。**纯类型边**；此前它经门面转一手，那条门面边同样在账上——形状没变差，少了一个门面文件。",
       "introducedByRFC": "RFC-353",
       "removeAfterWave": "RFC-294 W4-D（intent 的 vertical slice）",
-      "findingId": "G-01"
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:bc6fa8ec28d8eecabca6"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/journalArtifacts.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#StagedSkillVersion"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/intent/journalArtifacts.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -9225,15 +9261,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a371d9d1828f246c55e892feed78fcd53df794857e613980decf995914a3271e",
+    "sourceDigest": "sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "7f16fd99fa19ea62cd075d175d6de2e3125ddad0",
-    "contentDigest": "sha256:ed3b7ab304f7097304b836d9bbc9dde1bcdca7ef71bc5e64169f834e6b778353",
+    "currentSnapshotSha": "082a88b1c9b028cb5f1e3099f77caae8fa046868",
+    "contentDigest": "sha256:89dbfc48951bed64aebf1356d68d0fa4f76620b0a3d4536647a1507e99950748",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

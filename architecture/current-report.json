@@ -1,22 +1,22 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 493,
-    "architectureExceptions": 5301,
+    "ambientWiring": 494,
+    "architectureExceptions": 5312,
     "backgroundJobs": 367,
-    "crossContextImports": 6393,
-    "facades": 346,
+    "crossContextImports": 6408,
+    "facades": 345,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25859,
+    "moduleSymbolOwners": 25888,
     "mutationEntrypoints": 1920,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 1016,
+    "publicSurfaces": 1008,
     "transactionExternalEffects": 479
   },
   "metrics": {
-    "ambientWiringEntries": 493,
+    "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1927,
+    "backendProductionFiles": 1930,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -50,7 +50,7 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 77,
-    "inboundBoundaryEdges": 312,
+    "inboundBoundaryEdges": 313,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -91,11 +91,11 @@
       },
       {
         "context": "knowledge-evolution",
-        "files": 17
+        "files": 21
       },
       {
         "context": "memory",
-        "files": 37
+        "files": 38
       },
       {
         "context": "resource-catalog",
@@ -122,7 +122,7 @@
         "files": 333
       }
     ],
-    "moduleFiles": 1296,
+    "moduleFiles": 1301,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -163,10 +163,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 346,
+    "serviceFiles": 345,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a77f316fe13d31bdcf1afa5e0b61658d8708d6a2f4aeac3528f98883ac531d5"
+  "sourceDigest": "sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce"
 }

@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 346,
-    "thinFacades": 77
+    "serviceFiles": 345,
+    "thinFacades": 76
   },
   "entries": [
     {
@@ -2192,6 +2192,7 @@
         "import:652105d7426799d664a8",
         "import:8972277511fe0ebe008d",
         "import:9a191139daf3a215a44e",
+        "import:bc6fa8ec28d8eecabca6",
         "import:bd1c0df40e1f75d7af6c",
         "import:c207385d46fb1f5c8306",
         "import:f6b8a8a9dccf5d7eda0f"
@@ -2679,7 +2680,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:2bdb0a1458d9337cff72"
+        "import:2bdb0a1458d9337cff72",
+        "import:9bc8047f5efc4f5ec80f"
       ],
       "exportedSymbols": [
         "resolveCommitPushConfig",
@@ -4075,6 +4077,7 @@
         "import:6c3ec33a8e3fa135a9a6",
         "import:6cee441cb150cfaa0ed2",
         "import:6ddc62a9fefbc7c3d891",
+        "import:6e75758711e280b00e37",
         "import:71341ca5313111cdd068",
         "import:793297c65f3e0c421e42",
         "import:795b00b862e9e2d43be0",
@@ -5612,19 +5615,6 @@
       "removeAfterWave": "W4-E0",
       "status": "thin-facade",
       "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:3e06df9edb097df798f4"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/skillVersion.ts",
-      "id": "facade:packages/backend/src/services/skillVersion.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/skillVersion.ts#$file",
-      "removeAfterWave": "W4-E3",
-      "status": "thin-facade",
-      "targetContext": "knowledge-evolution",
       "targetLayer": "application"
     },
     {
@@ -7428,5 +7418,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a77f316fe13d31bdcf1afa5e0b61658d8708d6a2f4aeac3528f98883ac531d5"
+  "sourceDigest": "sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce"
 }

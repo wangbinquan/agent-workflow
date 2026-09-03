@@ -188,6 +188,94 @@
       "targetContext": "identity-access"
     },
     {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:110",
+      "kind": "register-call",
+      "line": 110,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:142",
+      "kind": "register-call",
+      "line": 142,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:158",
+      "kind": "register-call",
+      "line": 158,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:177",
+      "kind": "register-call",
+      "line": 177,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:191",
+      "kind": "register-call",
+      "line": 191,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:220",
+      "kind": "register-call",
+      "line": 220,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#registerRoute:79",
+      "kind": "register-call",
+      "line": 79,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/fusionRoutes.ts#mountFusionRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountFusionRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#registerRoute:39",
+      "kind": "register-call",
+      "line": 39,
+      "ownerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#mountSkillProvenanceRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountSkillProvenanceRoutes",
+      "targetContext": "knowledge-evolution"
+    },
+    {
       "callee": "registerMint",
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:548",
@@ -2243,83 +2331,6 @@
       "removeAfterWave": "W6/W9",
       "symbol": "mountExecutionContractRoutes",
       "targetContext": "task-execution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:130",
-      "kind": "register-call",
-      "line": 130,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:149",
-      "kind": "register-call",
-      "line": 149,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:172",
-      "kind": "register-call",
-      "line": 172,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:186",
-      "kind": "register-call",
-      "line": 186,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:215",
-      "kind": "register-call",
-      "line": 215,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:64",
-      "kind": "register-call",
-      "line": 64,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/routes/fusions.ts",
-      "id": "ambient:packages/backend/src/routes/fusions.ts#registerRoute:95",
-      "kind": "register-call",
-      "line": 95,
-      "ownerEntryId": "owner:packages/backend/src/routes/fusions.ts#mountFusionRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountFusionRoutes",
-      "targetContext": "knowledge-evolution"
     },
     {
       "callee": "registerRoute",
@@ -5338,9 +5349,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:2990",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3010",
       "kind": "register-call",
-      "line": 2990,
+      "line": 3010,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5349,9 +5360,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1298",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1303",
       "kind": "register-call",
-      "line": 1298,
+      "line": 1303,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5360,9 +5371,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2799",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:2804",
       "kind": "register-call",
-      "line": 2799,
+      "line": 2804,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5371,9 +5382,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3050",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3070",
       "kind": "register-call",
-      "line": 3050,
+      "line": 3070,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createComposedApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createComposedApp",
@@ -5441,7 +5452,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 493,
+    "ambientWiring": 494,
     "disabled": 11,
     "entries": 367,
     "executionLocal": 52,
@@ -13553,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0a77f316fe13d31bdcf1afa5e0b61658d8708d6a2f4aeac3528f98883ac531d5"
+  "sourceDigest": "sha256:9312a1df58fa6ae08f6d5ade3cf727155e08ccf76ede5bc5f6f703ba5ea769ce"
 }
