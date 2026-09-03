@@ -17,6 +17,7 @@ import { and, eq, gt } from 'drizzle-orm'
 import { memories } from '@/db/schema'
 import type { DbTxSync } from '@/db/txSync'
 
+import type { MemoryMembershipWrites } from '../application/memoryMembership'
 import { fusedProvenanceStamp, memoriesToUnfuseAbove } from '../domain/fusionMembership'
 
 /**
@@ -32,12 +33,7 @@ import { fusedProvenanceStamp, memoriesToUnfuseAbove } from '../domain/fusionMem
  * 与 RFC-352 给 source-control 落 `RepositoryScopeExistenceReads` 是同一形状——
  * provider 只出「怎么读怎么写」，capability 由 application 的唯一工厂铸。
  */
-export function sqliteMemoryMembershipWrites(tx: DbTxSync): {
-  unfuseAboveVersion(input: {
-    readonly skillId: string
-    readonly aboveVersion: number
-  }): Promise<readonly string[]>
-} {
+export function sqliteMemoryMembershipWrites(tx: DbTxSync): MemoryMembershipWrites {
   return Object.freeze({
     async unfuseAboveVersion(input: {
       readonly skillId: string

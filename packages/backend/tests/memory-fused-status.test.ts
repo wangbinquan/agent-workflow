@@ -6,6 +6,7 @@
 // affected memories in the SAME transaction (invariant: fused ⟺ knowledge is
 // in the current skill version).
 
+import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -15,7 +16,8 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { memories } from '../src/db/schema'
 import { dbTxSync } from '../src/db/txSync'
-import { fuseMemoriesTx, patchMemory, unfuseMemoriesTx } from '../src/services/memory'
+import { fuseMemoriesTx, patchMemory } from '../src/services/memory'
+import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 import {
   createManagedSkill,
   writeSkillContent,
@@ -215,13 +217,21 @@ describe('restore un-fuses memories fused after the target version', () => {
       return null
     })
 
-    const res = restoreSkillVersion(h.db, h.fsOpts, skill.id, 1, 'admin', 'rollback')
+    const res = restoreSkillVersion(
+      h.db,
+      h.fsOpts,
+      skill.id,
+      1,
+      'admin',
+      TEST_SKILL_RESTORE_MEMBERSHIP,
+      'rollback',
+    )
     expect(res.unfusedMemoryIds).toEqual([fusedAtV2])
     expect(statusOf(h.db, fusedAtV2)).toBe('approved') // un-fused, re-injectable
     expect(statusOf(h.db, fusedAtV1)).toBe('fused') // still in v1 content
   })
 
-  test('unfuseMemoriesTx clears provenance', () => {
+  test('unfuseAboveVersionSync clears provenance', () => {
     const m = insertApprovedGlobalMemory(h.db, 'm')
     dbTxSync(h.db, (tx) =>
       fuseMemoriesTx(tx, {
@@ -235,7 +245,7 @@ describe('restore un-fuses memories fused after the target version', () => {
       }),
     )
     const unfused = dbTxSync(h.db, (tx) =>
-      unfuseMemoriesTx(tx, { skillId: 'skill-lint', aboveVersion: 0 }),
+      unfuseAboveVersionSync(tx, { skillId: 'skill-lint', aboveVersion: 0 }),
     )
     expect(unfused).toEqual([m])
     const row = h.db.select().from(memories).where(eqId(m)).all() as Array<{

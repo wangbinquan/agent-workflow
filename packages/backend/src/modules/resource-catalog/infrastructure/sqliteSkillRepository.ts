@@ -19,6 +19,7 @@ import {
   listSkillVersions,
   restoreSkillVersion,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { unfuseAboveVersionSync } from '@/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 import type { SkillRepository } from '../application/skills/ports'
 
 /**
@@ -109,6 +110,8 @@ export function createSqliteSkillRepository(
         current.id,
         version,
         authority.user.id,
+        // RFC-353 T3：memory 那一半经注入，与 PostgreSQL 侧同源（那边一直是注入的）。
+        { unfuseAboveVersion: (tx, selector) => unfuseAboveVersionSync(tx, selector) },
         input.reason,
         current.ownerUserId ?? null,
         input.expectedToken,

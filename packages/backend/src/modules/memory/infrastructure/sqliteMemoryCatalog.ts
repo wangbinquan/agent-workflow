@@ -85,7 +85,6 @@ import type {
   RepositoryScopeTarget,
 } from '@/modules/source-control/public/participants'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
-import { unfuseAboveVersionSync } from './sqliteMemoryMembershipParticipant'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
 export interface MemoryWithChain {
@@ -1120,27 +1119,6 @@ export function fuseMemoriesTx(
     fused.push(id)
   }
   return fused
-}
-
-/**
- * RFC-101: un-fuse memories whose knowledge no longer lives in the skill after
- * a restore to `aboveVersion` (status fused→approved, provenance cleared).
- * Runs inside the restore transaction. Returns the un-fused ids.
- *
- * RFC-353 T2：判据与顺序已收进 memory 的 offered participant
- * （`infrastructure/sqliteMemoryMembershipParticipant.ts` + `domain/fusionMembership.ts`）。
- * 这里只剩一个同步壳，供 resource-catalog 的 legacy restore 路径继续调用；
- * 该 consumer 在 T7 随 skill-restore coordinator 迁进 knowledge-evolution 后即删。
- *
- * 为什么曾经需要收：这半边 PostgreSQL 早就有 owned participant、SQLite 却没有，
- * 于是同一判据两个来源、实测已经漂——两边选中的集合一样但**返回顺序不一样**，
- * 而这个数组经 `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire。
- */
-export function unfuseMemoriesTx(
-  tx: DbTxSync,
-  args: { skillId: string; aboveVersion: number },
-): string[] {
-  return unfuseAboveVersionSync(tx, args)
 }
 
 export async function deleteMemory(db: DbClient, id: string): Promise<void> {

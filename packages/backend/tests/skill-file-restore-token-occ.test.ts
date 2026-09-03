@@ -5,6 +5,7 @@
 // frontend's single canonical token store guard concurrent file/version edits so a
 // paused SkillFileTree can't clobber a save that landed in between.
 
+import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -80,7 +81,17 @@ describe('RFC-170 F3 — file/restore composite-token OCC', () => {
     const t0 = await token()
     await writeSkillFile(db, fsOpts, skillId, 'a.txt', 'aaa', 'u', undefined, t0) // v2, advances
     expect(() =>
-      restoreSkillVersion(db, fsOpts, skillId, 1, 'u', undefined, undefined, t0),
+      restoreSkillVersion(
+        db,
+        fsOpts,
+        skillId,
+        1,
+        'u',
+        TEST_SKILL_RESTORE_MEMBERSHIP,
+        undefined,
+        undefined,
+        t0,
+      ),
     ).toThrow(ConflictError)
   })
 

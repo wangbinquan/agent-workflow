@@ -3,23 +3,19 @@ import { and, eq, gt } from 'drizzle-orm'
 import { memories } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
+import { createMemoryMembershipParticipantInTx } from '../application/memoryMembership'
+import type {
+  MemoryMembershipParticipantInTx,
+  MemoryMembershipUnfuseSelector,
+} from '../public/participants'
 import { fusedProvenanceStamp, orderMembershipIds } from '../domain/fusionMembership'
 
 type PostgresqlMemoryTransaction = Parameters<
   Parameters<PostgresqlDatabaseClient['transaction']>[0]
 >[0]
 
-export interface PostgresqlSkillMemoryFusionParticipantInTx {
-  unfuseAboveVersion(input: {
-    readonly skillId: string
-    readonly aboveVersion: number
-  }): Promise<readonly string[]>
-}
-
 export interface PostgresqlSkillMemoryFusionParticipantFactory {
-  inTransaction(
-    transaction: PostgresqlMemoryTransaction,
-  ): PostgresqlSkillMemoryFusionParticipantInTx
+  inTransaction(transaction: PostgresqlMemoryTransaction): MemoryMembershipParticipantInTx
 }
 
 /**
@@ -32,10 +28,8 @@ export function composePostgresqlSkillMemoryFusionParticipantFactory(): Postgres
     inTransaction(
       transaction: Parameters<PostgresqlSkillMemoryFusionParticipantFactory['inTransaction']>[0],
     ) {
-      return Object.freeze({
-        async unfuseAboveVersion(
-          input: Parameters<PostgresqlSkillMemoryFusionParticipantInTx['unfuseAboveVersion']>[0],
-        ) {
+      return createMemoryMembershipParticipantInTx({
+        async unfuseAboveVersion(input: MemoryMembershipUnfuseSelector) {
           // 清哪几列由 memory domain 的**同一份** stamp 决定，不在这里手写第二遍。
           const rows = await transaction
             .update(memories)

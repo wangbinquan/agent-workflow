@@ -13,6 +13,7 @@
 //   - five-type transfer collision + workflow exception:
 //     rfc223-owner-transfer.test.ts
 
+import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -452,7 +453,15 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           .get(),
       ).toEqual({ status: 'fused', skillId: skillA.id })
 
-      restoreSkillVersion(db, fsOpts, skillA.id, 1, '__system__', 'PR-9 restore')
+      restoreSkillVersion(
+        db,
+        fsOpts,
+        skillA.id,
+        1,
+        '__system__',
+        TEST_SKILL_RESTORE_MEMBERSHIP,
+        'PR-9 restore',
+      )
       expect(
         await db
           .select({

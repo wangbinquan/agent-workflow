@@ -321,8 +321,11 @@
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 43,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。"
+      "baseline": 44,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。",
+      "allowGrowth": {
+        "why": "RFC-353 T3（RFC-294 W4-E3）：memory 落 offered `MemoryMembershipParticipantInTx`（带 brand + 唯一 owner 工厂 + 私有注册表），SQLite 侧的技能回滚不再从 legacy `@/services/memory` 直接 import `unfuseMemoriesTx`、改为与 PostgreSQL 侧同源的注入；resource-catalog 那份**重复声明的同形接口**同批删除，改用 memory 公共合同。因此 public-surface / owner / observed-import / exception / mutation-entrypoint 各涨一次——换掉的是「同一件事两条取用路径、其中一条穿 legacy facade」。同批把零消费者的 `unfuseMemoriesTx` 删除（删除优于 deprecate）。"
+      }
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -391,8 +394,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1910,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1911,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-353 T3（RFC-294 W4-E3）：memory 落 offered `MemoryMembershipParticipantInTx`（带 brand + 唯一 owner 工厂 + 私有注册表），SQLite 侧的技能回滚不再从 legacy `@/services/memory` 直接 import `unfuseMemoriesTx`、改为与 PostgreSQL 侧同源的注入；resource-catalog 那份**重复声明的同形接口**同批删除，改用 memory 公共合同。因此 public-surface / owner / observed-import / exception / mutation-entrypoint 各涨一次——换掉的是「同一件事两条取用路径、其中一条穿 legacy facade」。同批把零消费者的 `unfuseMemoriesTx` 删除（删除优于 deprecate）。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -426,8 +432,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6336,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6337,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-353 T3（RFC-294 W4-E3）：memory 落 offered `MemoryMembershipParticipantInTx`（带 brand + 唯一 owner 工厂 + 私有注册表），SQLite 侧的技能回滚不再从 legacy `@/services/memory` 直接 import `unfuseMemoriesTx`、改为与 PostgreSQL 侧同源的注入；resource-catalog 那份**重复声明的同形接口**同批删除，改用 memory 公共合同。因此 public-surface / owner / observed-import / exception / mutation-entrypoint 各涨一次——换掉的是「同一件事两条取用路径、其中一条穿 legacy facade」。同批把零消费者的 `unfuseMemoriesTx` 删除（删除优于 deprecate）。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +456,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5266,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5267,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-353 T3（RFC-294 W4-E3）：memory 落 offered `MemoryMembershipParticipantInTx`（带 brand + 唯一 owner 工厂 + 私有注册表），SQLite 侧的技能回滚不再从 legacy `@/services/memory` 直接 import `unfuseMemoriesTx`、改为与 PostgreSQL 侧同源的注入；resource-catalog 那份**重复声明的同形接口**同批删除，改用 memory 公共合同。因此 public-surface / owner / observed-import / exception / mutation-entrypoint 各涨一次——换掉的是「同一件事两条取用路径、其中一条穿 legacy facade」。同批把零消费者的 `unfuseMemoriesTx` 删除（删除优于 deprecate）。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -461,8 +473,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 994,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 996,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-353 T3（RFC-294 W4-E3）：memory 落 offered `MemoryMembershipParticipantInTx`（带 brand + 唯一 owner 工厂 + 私有注册表），SQLite 侧的技能回滚不再从 legacy `@/services/memory` 直接 import `unfuseMemoriesTx`、改为与 PostgreSQL 侧同源的注入；resource-catalog 那份**重复声明的同形接口**同批删除，改用 memory 公共合同。因此 public-surface / owner / observed-import / exception / mutation-entrypoint 各涨一次——换掉的是「同一件事两条取用路径、其中一条穿 legacy facade」。同批把零消费者的 `unfuseMemoriesTx` 删除（删除优于 deprecate）。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -482,12 +497,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25756,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25762,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-353 T3（RFC-294 W4-E3）：memory 落 offered `MemoryMembershipParticipantInTx`（带 brand + 唯一 owner 工厂 + 私有注册表），SQLite 侧的技能回滚不再从 legacy `@/services/memory` 直接 import `unfuseMemoriesTx`、改为与 PostgreSQL 侧同源的注入；resource-catalog 那份**重复声明的同形接口**同批删除，改用 memory 公共合同。因此 public-surface / owner / observed-import / exception / mutation-entrypoint 各涨一次——换掉的是「同一件事两条取用路径、其中一条穿 legacy facade」。同批把零消费者的 `unfuseMemoriesTx` 删除（删除优于 deprecate）。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29",
+    "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +518,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "250bd75607a115c47f49e946e4a438a01cd73478",
-    "contentDigest": "sha256:0bfeb76f810d0ee0d5e7dd9f4e3b70cacd9b11167bca14e797be0a8cb3a2c93b",
+    "currentSnapshotSha": "1e7f94be6bd5a7a5158af9b217de9ffe103468b5",
+    "contentDigest": "sha256:f3f47c3f9344bb0c28e2720b19a07c0fe38f051192bca78e001c505005df8cca",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

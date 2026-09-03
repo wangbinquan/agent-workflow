@@ -7,6 +7,7 @@
 // oracles (memoriesToUnfuseOnRestore, gitStyleDirDiff, hashDir) are unit-tested
 // directly so PR-B can build the fusion flow on a trusted base.
 
+import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -238,7 +239,15 @@ describe('skill versioning funnel', () => {
     })
     await writeSkillContent(h.db, h.fsOpts, created.id, { bodyMd: 'changed' }, 'u')
     expect(liveSkillMd(h, created.id)).toContain('changed')
-    const { version } = restoreSkillVersion(h.db, h.fsOpts, created.id, 1, 'admin', 'rollback')
+    const { version } = restoreSkillVersion(
+      h.db,
+      h.fsOpts,
+      created.id,
+      1,
+      'admin',
+      TEST_SKILL_RESTORE_MEMBERSHIP,
+      'rollback',
+    )
     expect(version.versionIndex).toBe(3) // new version, never destructive
     expect(version.source).toBe('restore')
     expect(version.restoredFromVersion).toBe(1)

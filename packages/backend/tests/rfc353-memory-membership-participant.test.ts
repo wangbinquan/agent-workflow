@@ -32,7 +32,7 @@ import {
   fusedProvenanceStamp,
   memoriesToUnfuseAbove,
 } from '../src/modules/memory/domain/fusionMembership'
-import { unfuseMemoriesTx } from '../src/modules/memory/infrastructure/sqliteMemoryCatalog'
+import { unfuseAboveVersionSync } from '../src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SQLITE_ADAPTER = resolve(
@@ -177,7 +177,9 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
       })),
       { skillId: 'skl_1', aboveVersion: 1 },
     )
-    const actual = dbTxSync(db, (tx) => unfuseMemoriesTx(tx, { skillId: 'skl_1', aboveVersion: 1 }))
+    const actual = dbTxSync(db, (tx) =>
+      unfuseAboveVersionSync(tx, { skillId: 'skl_1', aboveVersion: 1 }),
+    )
     expect(expected).toEqual(['m_b', 'm_c', 'm_d'])
     expect(actual).toEqual(expected)
   })
@@ -206,7 +208,9 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
       })),
       { skillId: 'skl_1', aboveVersion: 2 },
     )
-    const actual = dbTxSync(db, (tx) => unfuseMemoriesTx(tx, { skillId: 'skl_1', aboveVersion: 2 }))
+    const actual = dbTxSync(db, (tx) =>
+      unfuseAboveVersionSync(tx, { skillId: 'skl_1', aboveVersion: 2 }),
+    )
     expect(expected).toEqual(['m_v', 'm_z'])
     expect(actual).toEqual(expected)
   })
@@ -214,7 +218,7 @@ describe('RFC-353 T1 — 真 SQLite 与纯函数逐字一致', () => {
   test('被选中的行状态与 provenance 真的按 stamp 清空了', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seed(db, OUT_OF_ORDER)
-    dbTxSync(db, (tx) => unfuseMemoriesTx(tx, { skillId: 'skl_1', aboveVersion: 1 }))
+    dbTxSync(db, (tx) => unfuseAboveVersionSync(tx, { skillId: 'skl_1', aboveVersion: 1 }))
     const rows = db.select().from(memories).all()
     const byId = new Map(rows.map((r) => [r.id, r]))
     for (const id of ['m_b', 'm_c', 'm_d']) {

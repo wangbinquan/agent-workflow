@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1910,
+    "entries": 1911,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -16142,6 +16142,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/memory/application/memoryMembership.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/memoryMembership.ts#createMemoryMembershipParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/memoryMembership.ts#createMemoryMembershipParticipantInTx",
+      "symbol": "createMemoryMembershipParticipantInTx",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryDistillRuntimeResolver.ts#RuntimeProfileRow",
@@ -23557,7 +23582,7 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
-        "transaction": false
+        "transaction": true
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts",
       "finalCriterion": "W3/W4 owner cutover",
@@ -23566,8 +23591,7 @@
         "audit",
         "authority",
         "authorization",
-        "event",
-        "transaction"
+        "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts#createSqliteSkillRepository",
       "symbol": "createSqliteSkillRepository",
@@ -45521,7 +45545,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29",
+  "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

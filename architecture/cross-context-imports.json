@@ -29770,6 +29770,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:53e44c32fa61799adeff",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#unfuseAboveVersionSync",
+      "toPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "toSymbol": "unfuseAboveVersionSync",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryTransportConnectionProjection.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/application/repositoryTransportConnectionProjection.ts",
       "fromSymbol": "$file",
@@ -63447,23 +63464,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b61340b2a86fc4bdfa63",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-E2",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memory.ts#$file",
-      "toPath": "packages/backend/src/services/memory.ts",
-      "toSymbol": "unfuseMemoriesTx",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -84493,6 +84493,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f1e6b941772112a3577d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E2",
+      "rule": "off-dag-offered",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipParticipantInTx",
+      "toPath": "packages/backend/src/modules/memory/public/participants.ts",
+      "toSymbol": "MemoryMembershipParticipantInTx",
+      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts#$file",
       "fromPath": "packages/backend/src/platform/persistence/sqlite/legacyResourcePackageBundleApply.ts",
       "fromSymbol": "$file",
@@ -89524,9 +89541,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5266,
+    "architectureExceptions": 5267,
     "implementationSccs": 0,
-    "observedEdges": 6336,
+    "observedEdges": 6337,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -123181,6 +123198,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/backupManifest.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/backupManifest.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteSkillRepository.ts#$file",
+      "id": "import:53e44c32fa61799adeff",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-C",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/memory/infrastructure/sqliteMemoryMembershipParticipant",
+      "syntax": "static-import",
+      "targetSymbol": "unfuseAboveVersionSync",
+      "toContext": "memory",
+      "toFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#unfuseAboveVersionSync"
     },
     {
       "edgeKind": "value",
@@ -161648,22 +161681,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#$file",
-      "id": "import:b61340b2a86fc4bdfa63",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W4-E2",
-      "role": "legacy-outbound",
-      "specifier": "@/services/memory",
-      "syntax": "static-import",
-      "targetSymbol": "unfuseMemoriesTx",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/memory.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/memory.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#$file",
@@ -185199,6 +185216,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts#$file",
+      "id": "import:f1e6b941772112a3577d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E2",
+      "role": "off-dag-offered",
+      "specifier": "@/modules/memory/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "MemoryMembershipParticipantInTx",
+      "toContext": "memory",
+      "toFile": "packages/backend/src/modules/memory/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipParticipantInTx"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyRounds.ts",
@@ -191448,7 +191481,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29",
+  "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

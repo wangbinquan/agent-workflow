@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1908,
+    "backendFiles": 1909,
     "frontendFiles": 621,
     "legacyFiles": 628,
-    "moduleFiles": 1280,
-    "productionFiles": 2684,
+    "moduleFiles": 1281,
+    "productionFiles": 2685,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25756
+    "symbolsIncludingFileRoots": 25762
   },
   "entries": [
     {
@@ -75366,6 +75366,66 @@
       "currentContext": "memory",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/memory/application/memoryMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/memoryMembership.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/application/memoryMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/memoryMembership.ts#createMemoryMembershipParticipantInTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createMemoryMembershipParticipantInTx",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/application/memoryMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/memoryMembership.ts#isTrustedMemoryMembershipParticipant",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isTrustedMemoryMembershipParticipant",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/application/memoryMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/memoryMembership.ts#MemoryMembershipWrites",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "MemoryMembershipWrites",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/memory/application/memoryMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/application/memoryMembership.ts#trustedMemoryMembershipParticipants",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "trustedMemoryMembershipParticipants",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/memory/application/ports/distillReadStore.ts",
       "id": "owner:packages/backend/src/modules/memory/application/ports/distillReadStore.ts#$file",
       "removeAfterWave": null,
@@ -77118,18 +77178,6 @@
       "currentContext": "memory",
       "currentLayer": "infrastructure",
       "exported": true,
-      "file": "packages/backend/src/modules/memory/infrastructure/postgresqlSkillMemoryFusionParticipant.ts",
-      "id": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlSkillMemoryFusionParticipant.ts#PostgresqlSkillMemoryFusionParticipantInTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlSkillMemoryFusionParticipantInTx",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "infrastructure",
-      "exported": true,
       "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
       "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#_scopeKey",
       "removeAfterWave": null,
@@ -77621,18 +77669,6 @@
     {
       "currentContext": "memory",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
-      "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#unfuseMemoriesTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "unfuseMemoriesTx",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
       "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file",
@@ -78030,6 +78066,44 @@
       "signatureDigest": "sha256:1c117501f8ebf908f3e296bf232ab9e90cf07d682144c0e627170c3f770b4856",
       "status": "current-module",
       "symbol": "MemoryDistillEnqueuer",
+      "targetContext": "memory",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipParticipantInTx",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:d9f703844e9fd04ef6e128f984785e88a3de0c4ff5271381e33753ab549aecdc",
+      "status": "current-module",
+      "symbol": "MemoryMembershipParticipantInTx",
+      "targetContext": "memory",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/memory/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/memory/public/participants.ts#memoryMembershipParticipantInTxBrand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "memoryMembershipParticipantInTxBrand",
+      "targetContext": "memory",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipUnfuseSelector",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:5ac4bd6e8805be9b5b2785e53f00326c83cb6372119ad4022fc3ca6cd123916e",
+      "status": "current-module",
+      "symbol": "MemoryMembershipUnfuseSelector",
       "targetContext": "memory",
       "targetLayer": "public"
     },
@@ -95943,6 +96017,18 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#SkillRestoreMemoryMembership",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillRestoreMemoryMembership",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#SkillRow",
@@ -103773,18 +103859,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlSkillMemoryFusionParticipantFactory",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts#PostgresqlSkillMemoryFusionParticipantInTx",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlSkillMemoryFusionParticipantInTx",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -309764,5 +309838,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29"
+  "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585"
 }

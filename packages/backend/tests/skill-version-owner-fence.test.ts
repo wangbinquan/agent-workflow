@@ -13,6 +13,7 @@
 // `expectedOwnerUserId` — tracked in IMPLEMENTATION §7. Below: the funnel guard is
 // exercised directly, then the combined-save wiring at the service boundary.
 
+import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -197,14 +198,32 @@ describe('RFC-170 (4th-review [high]) — secondary-writer owner-fence wiring (f
 
   test('restoreSkillVersion: owner transferred after authorization → 409', async () => {
     await db.update(skills).set({ ownerUserId: 'B' }).where(eq(skills.name, 'foo'))
-    expect(() => restoreSkillVersion(db, fsOpts, skillId, 1, 'A', undefined, 'A')).toThrow(
-      ConflictError,
-    )
+    expect(() =>
+      restoreSkillVersion(
+        db,
+        fsOpts,
+        skillId,
+        1,
+        'A',
+        TEST_SKILL_RESTORE_MEMBERSHIP,
+        undefined,
+        'A',
+      ),
+    ).toThrow(ConflictError)
   })
 
   test('owner unchanged → file write + restore succeed under the fence', async () => {
     await writeSkillFile(db, fsOpts, skillId, 'templates/c.txt', 'ccc', 'A', 'A')
-    const restored = restoreSkillVersion(db, fsOpts, skillId, 1, 'A', undefined, 'A')
+    const restored = restoreSkillVersion(
+      db,
+      fsOpts,
+      skillId,
+      1,
+      'A',
+      TEST_SKILL_RESTORE_MEMBERSHIP,
+      undefined,
+      'A',
+    )
     expect(restored.version.versionIndex).toBeGreaterThan(1)
   })
 })

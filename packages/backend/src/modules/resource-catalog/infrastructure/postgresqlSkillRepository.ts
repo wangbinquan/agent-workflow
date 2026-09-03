@@ -1,3 +1,4 @@
+import type { MemoryMembershipParticipantInTx } from '@/modules/memory/public/participants'
 import type {
   CombinedSaveSkill,
   CreateManagedSkill,
@@ -53,18 +54,14 @@ export interface PostgresqlSkillVersionPlan<TResult> {
  * Memory owns fusion provenance. Resource Catalog only asks the selected
  * provider to clear provenance that is newer than the restored Skill version,
  * using the exact transaction already reserved for the Skill version bump.
+ *
+ * RFC-353 T3：这里原本**自己复制了一份同形的 `…ParticipantInTx` 接口**，与 memory 那边
+ * 各自演进（结构类型让它一直编译得过，所以谁也没发现）。现在直接用 memory 公共合同里的
+ * `MemoryMembershipParticipantInTx`——它带私有 brand、只能由 memory 的唯一 owner 工厂铸造，
+ * 结构等价的对象再也伪造不出来。
  */
-export interface PostgresqlSkillMemoryFusionParticipantInTx {
-  unfuseAboveVersion(input: {
-    readonly skillId: string
-    readonly aboveVersion: number
-  }): Promise<readonly string[]>
-}
-
 export interface PostgresqlSkillMemoryFusionParticipantFactory {
-  inTransaction(
-    transaction: PostgresqlResourceCatalogTransaction,
-  ): PostgresqlSkillMemoryFusionParticipantInTx
+  inTransaction(transaction: PostgresqlResourceCatalogTransaction): MemoryMembershipParticipantInTx
 }
 
 export interface PostgresqlSkillDeletePlan {

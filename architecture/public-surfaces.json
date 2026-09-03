@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 891,
+    "consumers": 892,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1357,
+    "methods": 1358,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 25112,
-    "symbols": 994
+    "recursiveFields": 25117,
+    "symbols": 996
   },
   "entries": [
     {
@@ -104736,6 +104736,118 @@
       "version": 1
     },
     {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:f1e6b941772112a3577d"
+      ],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unfuseAboveVersion.$parameter:selector.aboveVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f1e6b941772112a3577d"
+          ],
+          "fieldPath": "$method:unfuseAboveVersion.$parameter:selector.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unfuseAboveVersion.$return",
+          "type": "readonly string[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/participants.ts",
+      "id": "public:memory:participants:MemoryMembershipParticipantInTx",
+      "members": [
+        "[memoryMembershipParticipantInTxBrand]",
+        "unfuseAboveVersion"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "unfuseAboveVersion",
+          "signatureDigest": "sha256:c80897cb56d3cfbec5990e51bd358dd3dcf04a9c069f7f9db83aaf0bf39c5576"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipParticipantInTx",
+      "productionConsumers": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:f1e6b941772112a3577d",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlSkillRepository.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:d9f703844e9fd04ef6e128f984785e88a3de0c4ff5271381e33753ab549aecdc",
+      "status": "target-context-current-surface",
+      "symbol": "MemoryMembershipParticipantInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "memory",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "aboveVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "skillId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/memory/public/participants.ts",
+      "id": "public:memory:participants:MemoryMembershipUnfuseSelector",
+      "members": [
+        "aboveVersion",
+        "skillId"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryMembershipUnfuseSelector",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:memory:participants:MemoryMembershipParticipantInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5ac4bd6e8805be9b5b2785e53f00326c83cb6372119ad4022fc3ca6cd123916e",
+      "status": "target-context-current-surface",
+      "symbol": "MemoryMembershipUnfuseSelector",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
       "authority": "request-authority",
       "budget": {
         "maxMethods": 5,
@@ -190167,7 +190279,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:48f23eab6741461a3df3a85ec60573992e1d2b6da011be241b8e872984a1ef29",
+  "sourceDigest": "sha256:ef26ae16b399b5d6e7e989773a79506cc047a9a72f36fbedc68e516add350585",
   "targetContexts": [
     "collaboration",
     "development-automation",

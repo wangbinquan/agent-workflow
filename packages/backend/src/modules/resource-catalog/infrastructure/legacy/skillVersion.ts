@@ -50,7 +50,6 @@ import {
   beginOperation,
   finishOperation,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import { unfuseMemoriesTx } from '@/services/memory'
 import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
@@ -875,12 +874,28 @@ export interface RestoreResult {
  * destructive. Memories fused at a version > target are un-fused in the SAME
  * transaction as the version bump (invariant: fused ⟺ knowledge is in current).
  */
+/**
+ * RFC-353 T3：memory 那一半（把「融进更高版本」的记忆退回待用）由调用方**注入**，
+ * 不再从 `@/services/memory` 直接 import。
+ *
+ * 由来：这件事 PostgreSQL 侧早就是注入的（`postgresqlSkillContentLifecycle.prepareRestore`
+ * 拿 memory 的 participant），SQLite 侧却穿过一个 legacy facade——同一件事两条取用路径，
+ * 而且实测已经漂过（两边选中的集合一样、**返回顺序不一样**）。收成注入之后两侧同源。
+ */
+export interface SkillRestoreMemoryMembership {
+  unfuseAboveVersion(
+    tx: DbTxSync,
+    selector: { readonly skillId: string; readonly aboveVersion: number },
+  ): string[]
+}
+
 export function restoreSkillVersion(
   db: DbClient,
   opts: SkillVersionFsOptions,
   skillId: string,
   target: number,
   authorUserId: string | null,
+  memoryMembership: SkillRestoreMemoryMembership,
   reason?: string,
   // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
   expectedOwnerUserId?: string | null,
@@ -930,7 +945,7 @@ export function restoreSkillVersion(
         // double-injection, not data loss. The complete fix records each
         // fusion version's incorporated memory ids on skill_versions and
         // re-fuses from the target's set; deferred to a follow-up (design §10).
-        unfusedMemoryIds = unfuseMemoriesTx(tx, {
+        unfusedMemoryIds = memoryMembership.unfuseAboveVersion(tx, {
           skillId,
           aboveVersion: target,
         })
