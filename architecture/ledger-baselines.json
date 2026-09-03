@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25704,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25705,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 给 daemon 的事件循环冻结加一条带时间戳的 WARN（新增常量 EVENT_LOOP_STALL_LOG_MS）。追迁移期间那 2.8 秒停顿时唯一缺的就是「它发生在哪一刻」——`/api/maintenance/status` 只给 30 秒滚动窗口的最大值，daemon 自己一声不吭，定位只能靠离线逐个操作实测耗时。门槛 1s，比采样周期高三个数量级，正常运行一条都不会有。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0326da0384f5ea397ddf964c647f64a41ca7dc460bfe4a58b7f59c40fb281295",
+    "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c1e73d111c8340d134c2b1e4c9bb39c8c003d573",
-    "contentDigest": "sha256:5e34573e30d5c0b009a157c4b86fbbe77e3047c08cf6ccc7bdba83d7c3bca126",
+    "currentSnapshotSha": "b56b23386b1d079a787f15cdfe1dab04a54c5ebe",
+    "contentDigest": "sha256:3ff6632de243c9f1c3ea8a0c64d33bbc6384e174c5632a31fdba58a8ec66c8be",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

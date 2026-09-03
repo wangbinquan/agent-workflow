@@ -35,7 +35,7 @@ import {
   recoverRunning,
   retryFailedJob,
   startMemoryDistillLoop,
-} from '../src/services/memoryDistillScheduler'
+} from '../src/modules/memory/application/distill/schedule'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { DistillerSpawnFn } from '../src/modules/memory/application/distill/memoryDistiller'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'

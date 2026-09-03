@@ -16,7 +16,7 @@ import {
   recoverRunning,
   retryFailedJob,
   startMemoryDistillLoop,
-} from '@/services/memoryDistillScheduler'
+} from './application/distill/schedule'
 import { PostgresqlMemoryDistillReadStore } from './infrastructure/postgresqlMemoryDistillReadStore'
 import { SqliteMemoryDistillReadStore } from './infrastructure/sqliteMemoryDistillReadStore'
 import { PostgresqlMemoryDistillWorkStore } from './infrastructure/postgresqlMemoryDistillWorkStore'

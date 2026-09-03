@@ -20,7 +20,7 @@ import {
   enqueueDistillJob,
   resetMemoryDistillLangProviderForTest,
   setMemoryDistillLangProvider,
-} from '../src/services/memoryDistillScheduler'
+} from '../src/modules/memory/application/distill/schedule'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 

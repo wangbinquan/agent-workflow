@@ -6,7 +6,7 @@
     "moduleFiles": 1264,
     "productionFiles": 2671,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25704
+    "symbolsIncludingFileRoots": 25705
   },
   "entries": [
     {
@@ -145604,6 +145604,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "EVENT_LOOP_SAMPLE_MS",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/background/maintenanceService.ts",
+      "id": "owner:packages/backend/src/platform/background/maintenanceService.ts#EVENT_LOOP_STALL_LOG_MS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "EVENT_LOOP_STALL_LOG_MS",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -309123,5 +309135,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0326da0384f5ea397ddf964c647f64a41ca7dc460bfe4a58b7f59c40fb281295"
+  "sourceDigest": "sha256:743e5ad7ec4af2db3d169da6b6902f745d94501cd9df1f157631c9ee15b66af9"
 }

@@ -24,7 +24,7 @@ import {
   type HostRunLite,
   type MemberLite,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workgroup/room'
-import { extractAgentIdsFromSnapshot } from '../src/services/memoryDistillScheduler'
+import { extractAgentIdsFromSnapshot } from '../src/modules/memory/application/distill/schedule'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
 import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'
 

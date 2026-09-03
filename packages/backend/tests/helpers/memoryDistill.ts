@@ -4,7 +4,7 @@ import { SqliteMemoryDistillRuntimeResolver } from '@/modules/memory/infrastruct
 import { createSqliteMemoryDistillSessionCapture } from '@/modules/memory/infrastructure/memoryDistillSessionCapture'
 import { SqliteMemoryDistillWorkStore } from '@/modules/memory/infrastructure/sqliteMemoryDistillWorkStore'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import { enqueueDistillJob } from '@/services/memoryDistillScheduler'
+import { enqueueDistillJob } from '@/modules/memory/application/distill/schedule'
 import { appHome } from '@/util/paths'
 
 export function createSqliteMemoryDistillTestContext(db: DbClient, root = appHome()) {

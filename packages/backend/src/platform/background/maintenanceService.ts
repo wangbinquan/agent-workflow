@@ -31,6 +31,8 @@ const ADMISSION_MAX_RETRY_DELAY_MS = 30_000
 const ADMISSION_BUSY_TIMEOUT_MS = 5
 const EVENT_LOOP_SAMPLE_MS = 50
 const EVENT_LOOP_WINDOW_MS = 30_000
+/** 只记真正的冻结：正常运行的间隔是采样周期上下几毫秒，一秒是三个数量级之外。 */
+const EVENT_LOOP_STALL_LOG_MS = 1_000
 
 interface MaintenanceServiceCommonOptions {
   readonly appHome: string
@@ -299,7 +301,14 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   const eventLoopTimer = setInterval(() => {
     const monotonicNow = performance.now()
     const wallNow = Date.now()
-    eventLoopSamples.push({ at: wallNow, gapMs: monotonicNow - previousEventLoopSampleAt })
+    const gapMs = monotonicNow - previousEventLoopSampleAt
+    // RFC-349 —— 卡顿要留下时间戳，否则只有一个跨窗口的 max，事后无法与任何日志对齐。
+    // 一次大迁移里追一段多秒级冻结，缺的正是「它发生在哪一刻」：`/api/maintenance/status`
+    // 只给滚动窗口的最大值，而 daemon 自己一声不吭。超过一秒才记，正常运行一条都不会有。
+    if (gapMs >= EVENT_LOOP_STALL_LOG_MS) {
+      log.warn('event loop stalled', { gapMs: Math.round(gapMs) })
+    }
+    eventLoopSamples.push({ at: wallNow, gapMs })
     previousEventLoopSampleAt = monotonicNow
     const cutoff = wallNow - EVENT_LOOP_WINDOW_MS
     while (eventLoopSamples[0] !== undefined && eventLoopSamples[0].at < cutoff) {
