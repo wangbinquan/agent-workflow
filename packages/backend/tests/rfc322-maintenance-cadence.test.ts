@@ -487,7 +487,12 @@ describe('RFC-322 登记棘轮（AC-2）', () => {
     // 新增 hourly 循环请走 startMaintenanceTicker 并在 MAINTENANCE_PHASE 登记相位，
     // 否则它会和另外 14 个在整点同刻引爆——这正是本 RFC 要消灭的形状。
     expect(offenders).toEqual([])
-  })
+    // 显式超时：这一条要把 src 下约 1900 个文件读进来做文本扫描，成本随源码树增长。
+    // 2026-09-03 在 `Backend tests (macos-latest shard 1/4)` 上以 **5058.92ms** 撞上
+    // bun 默认的 5000ms（同一提交本机整文件 850ms），与 `docs/audit-backlog.md` 里
+    // RFC-227 Seatbelt 那条 5015ms/本机 380ms 逐字同形，处置照它：给一个宽裕但**有限**
+    // 的上限，真挂住仍然会失败，不是把上限抬到永不触发。
+  }, 30_000)
 
   test('MAINTENANCE_PHASE 的每个 job 都接到了 ticker 或 RFC-338 coordinator', () => {
     const all = tsFiles(SRC)

@@ -43,10 +43,26 @@ function walk(dir: string): readonly string[] {
   return out
 }
 
-const SOURCES = walk(BACKEND_SRC).map((path) => ({
-  path: path.slice(ROOT.length + 1).replaceAll('\\', '/'),
-  text: readFileSync(path, 'utf8'),
-}))
+interface BackendSource {
+  readonly path: string
+  readonly text: string
+}
+
+// Read on demand, not at module scope: `src/` is ~1900 files / ~17 MiB, and four
+// of the six tests below only need two or three named files. Eagerly slurping the
+// tree made this file's I/O cost independent of what was actually asked for.
+let sourcesCache: readonly BackendSource[] | null = null
+function backendSources(): readonly BackendSource[] {
+  return (sourcesCache ??= walk(BACKEND_SRC).map((path) => ({
+    path: path.slice(ROOT.length + 1).replaceAll('\\', '/'),
+    text: readFileSync(path, 'utf8'),
+  })))
+}
+
+function backendSource(suffix: string): BackendSource {
+  const full = resolve(ROOT, suffix)
+  return { path: suffix, text: readFileSync(full, 'utf8') }
+}
 
 // The single place allowed to spell the union out: it derives from the tuple.
 const CANONICAL_UNION_FILE = 'packages/backend/src/platform/persistence/schemaContract.ts'
@@ -102,7 +118,7 @@ const PROVIDER_FORK_LEDGER = {
 
 function providerForkCounts(): Record<string, number> {
   const counts: Record<string, number> = {}
-  for (const source of SOURCES) {
+  for (const source of backendSources()) {
     const relative = source.path.slice('packages/backend/src/'.length)
     let forks = 0
     for (const line of source.text.split('\n')) {
@@ -123,10 +139,12 @@ describe('RFC-349 provider completeness', () => {
 
     // A hand-copied `'sqlite' | 'postgresql'` does not grow when the tuple does,
     // so each copy is a place a third provider silently fails to reach.
-    const handWritten = SOURCES.filter(
-      (source) =>
-        source.path !== CANONICAL_UNION_FILE && /'sqlite'\s*\|\s*'postgresql'/u.test(source.text),
-    ).map((source) => source.path)
+    const handWritten = backendSources()
+      .filter(
+        (source) =>
+          source.path !== CANONICAL_UNION_FILE && /'sqlite'\s*\|\s*'postgresql'/u.test(source.text),
+      )
+      .map((source) => source.path)
     expect(handWritten).toEqual([])
   })
 
@@ -153,20 +171,18 @@ describe('RFC-349 provider completeness', () => {
   })
 
   test('the two measured silent-fallthrough forks now read the traits table', () => {
-    const contract = SOURCES.find((source) => source.path === CANONICAL_UNION_FILE)
-    expect(contract).toBeDefined()
+    const contract = backendSource(CANONICAL_UNION_FILE)
     // literalSql must not branch on a provider literal any more.
-    expect(contract?.text).not.toContain("if (provider === 'postgresql') return value ? 'TRUE'")
-    expect(contract?.text).toContain('booleanLiteral')
+    expect(contract.text).not.toContain("if (provider === 'postgresql') return value ? 'TRUE'")
+    expect(contract.text).toContain('booleanLiteral')
 
-    const maintenance = SOURCES.find((source) =>
-      source.path.endsWith('platform/background/maintenanceService.ts'),
+    const maintenance = backendSource(
+      'packages/backend/src/platform/background/maintenanceService.ts',
     )
-    expect(maintenance).toBeDefined()
-    expect(maintenance?.text).not.toContain(
+    expect(maintenance.text).not.toContain(
       "options.provider === 'postgresql' ? postgresqlRetryableCode : retryableSqliteWriteErrorCode",
     )
-    expect(maintenance?.text).toContain('classifyRetryable')
+    expect(maintenance.text).toContain('classifyRetryable')
   })
   test('no provider fork exists outside the ledger, and none grows silently', () => {
     const expected: Record<string, number> = {}
@@ -199,11 +215,8 @@ describe('RFC-349 provider completeness', () => {
     // all. Deriving this enum would let it through and hand every fork above its
     // `else` branch instead. Widen it deliberately, as the last step of adapting
     // a provider — after the traits table and the ledger above are answered.
-    const store = SOURCES.find((source) =>
-      source.path.endsWith('platform/persistence/generationStore.ts'),
-    )
-    expect(store).toBeDefined()
-    expect(store?.text).toContain("z.enum(['sqlite', 'postgresql'])")
-    expect(store?.text).not.toContain('z.enum(DATABASE_PROVIDERS)')
+    const store = backendSource('packages/backend/src/platform/persistence/generationStore.ts')
+    expect(store.text).toContain("z.enum(['sqlite', 'postgresql'])")
+    expect(store.text).not.toContain('z.enum(DATABASE_PROVIDERS)')
   })
 })
