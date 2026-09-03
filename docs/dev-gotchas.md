@@ -411,6 +411,24 @@ done
 3. 脚本里做了一串命令后，**别只看最后一句的 echo**——它可能是 shell 内建、在 PATH 毁掉之后
    照样打印。判据取实际结果（这里是 `git log --oneline -1` 有没有变），不是脚本自己的口播。
 
+## zsh 不对未加引号的 `$FILES` 做分词：`git add $FILES` 整串当一个路径（2026-09-04 一天撞两次）
+
+bash 里 `FILES="a b c"; git add $FILES` 是三个路径，zsh 里是**一个**叫 `a b c` 的路径：
+`fatal: pathspec 'a b c' did not match any files`。危险不在报错本身，而在**后面的链**：
+
+```bash
+git add $FILES && git commit -- $FILES <<'MSG' … MSG
+git fetch origin main; git merge --ff-only origin/main; git push origin main   # ← 照样跑
+```
+
+`add` 失败让 `&&` 短路掉了 commit，但 `;` 隔开的 push 照跑——推上去的是**上一笔**。RFC-354 T17
+实撞：代码笔 `458801486` 单独上了 main，配套的架构账本笔没提上，主干在一分钟窗口里是架构守卫红。
+另一次是 `bunx prettier --check $FILES` 静默成「检查了一个不存在的文件」。
+
+定式：①路径清单写进文件，用 `$(cat list.txt)` 展开（命令替换会分词），或 `xargs`；②add → commit →
+push 全程 `&&`，push 前 `git log --oneline -1` 看到自己的 commit 才推；③别指望 `set -o shwordsplit`——
+每个 Bash 调用都是新 shell。
+
 ## ANSI 色码会让「自己拼的 grep 检查」恒不匹配（2026-08-24 一天内踩两次）
 
 工具带色输出时，`[warn]` 实际是 `[\e[33mwarn\e[39m]`、`fixture failed` 实际是 `\e[0m\e[31mfixture failed\e[0m`。于是两类东西会静默失效：
@@ -449,6 +467,20 @@ xyflow v12 在节点被 ResizeObserver 测量出来之前，把它渲染成 `vis
    照 `e2e/canvas-controls.ts` 的 `clickCanvasControl` 那样，把实际命中的元素描述进断言消息。
 
 范例落在 `e2e/rfc253-script-node.spec.ts` 的 `stableCenter` 与它下面那条命中探针。
+
+**同一族的第二种形状：坐标能命中，但命中的是浮在卡片上面的别人**（RFC-354 T19 / 390px 用例，
+2026-09-04，CI run 33795489844 三平台同形）。指针点击先做命中测试，而画布上有两类东西会常态化地压在
+卡片中心：①窄视口下右上角的布局面板（`workflow-canvas__layout-panel` 的「Layout selection」按钮）
+在 fitView 之后正好盖住第一张卡片；②刚被接线 / 选中的节点保留着浮动工具条（`workflow-canvas__node-actions`，
+「Connect next step」等），而 wrapper 体内成员的工具条正压在 wrapper 头部上。症状都是
+`locator.click: Timeout` + call log 里 `<button …> from <div class="react-flow__node-toolbar …"> subtree
+intercepts pointer events`，本地因视口 / 相机不同往往复现不了。
+
+定式：用例锁的是「连了什么边、检查器列了什么」，不是「这个像素能不能点到」——把选择 / 打开菜单当作
+**事件**投递（`locator.dispatchEvent('click')` / `'contextmenu'`），或者走不依赖画布几何的入口
+（紧凑 Inspector 的 `inspector-connect-next` → Connection Dialog）。`force: true` 只用来**诊断**是不是遮挡，
+不留在最终版。范例：`e2e/workflow-editor.spec.ts` 390px 用例、`e2e/canvas-wrapper-membership.spec.ts`
+的 `selectNode`。
 
 ## 「写了两行库、回执长得对」≠ 这件事在跑（RFC-309 实测，2026-08-17）
 
