@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1115,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21973,
+    "recursiveFields": 21975,
     "symbols": 1003
   },
   "entries": [
@@ -4998,7 +4998,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 41,
+        "maxTransitiveLeafFields": 42,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [],
@@ -5025,16 +5025,6 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.askingShardKey.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.containerRunId.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.containerRunId.$variant:1",
           "type": "null"
         },
         {
@@ -5074,7 +5064,17 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.frameIteration",
+          "fieldPath": "$variant:0.frame.containerRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.frame.containerRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.frame.iteration",
           "type": "number"
         },
         {
@@ -5129,16 +5129,6 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.containerRunId.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.containerRunId.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.executionContext.intentId",
           "type": "string"
         },
@@ -5171,6 +5161,21 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:1.executionContext.token.taskId",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.frame.containerRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.frame.containerRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.frame.iteration",
+          "type": "number"
         },
         {
           "consumerEdgeIds": [],
@@ -8976,7 +8981,7 @@
       "budget": {
         "maxMethods": 9,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 122,
+        "maxTransitiveLeafFields": 123,
         "maxUnionVariants": 35
       },
       "consumerEdgeIds": [
@@ -9565,16 +9570,6 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.containerRunId.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.containerRunId.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.executionContext.intentId",
           "type": "string"
         },
@@ -9622,10 +9617,23 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.frame.containerRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.frame.containerRunId.$variant:1",
+          "type": "null"
+        },
+        {
           "consumerEdgeIds": [
-            "import:4bfc322fdf6e54abad56"
+            "import:4bfc322fdf6e54abad56",
+            "import:b14aa8333d3ba66a4213",
+            "import:b4f584cdff29e8b03ffc",
+            "import:fd588ef079a3308acfbf"
           ],
-          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.frameIteration",
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:0.frame.iteration",
           "type": "number"
         },
         {
@@ -9709,16 +9717,6 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.containerRunId.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.containerRunId.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.executionContext.intentId",
           "type": "string"
         },
@@ -9764,6 +9762,26 @@
           ],
           "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.executionContext.token.taskId",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.frame.containerRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.frame.containerRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4bfc322fdf6e54abad56",
+            "import:b14aa8333d3ba66a4213",
+            "import:b4f584cdff29e8b03ffc",
+            "import:fd588ef079a3308acfbf"
+          ],
+          "fieldPath": "$method:openAgentClarify.$parameter:input.$variant:1.frame.iteration",
+          "type": "number"
         },
         {
           "consumerEdgeIds": [
@@ -172702,7 +172720,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1716478924c07b3fc363d1683be5820c75304f9b41a2fb3edbf93da063651c44",
+  "sourceDigest": "sha256:32be015f4c370349d48f8ce7d7d9a1809f0da939782336e2d7acb317cc4cc89e",
   "targetContexts": [
     "collaboration",
     "development-automation",
