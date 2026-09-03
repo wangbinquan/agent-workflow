@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25706,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25707,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349：事件循环 stall 日志门槛改为可用 AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS 调低，新增导出 eventLoopStallLogThreshold 供守卫直接断言夹取行为。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5c7217dedbf80e9065ad1e2800564702a741e1ff5ab4ee56fb7e6c17d1432c45",
+    "sourceDigest": "sha256:cde547445c8598d52c8ffd0dc4997b741708d36549aa537d80eca12c2056bfd4",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "57a556980b6a768ca6188cadb4da251542e693b6",
-    "contentDigest": "sha256:c4a9ba740a2c64122fbb6cb3889b67c71e01eb5184a9f6dd38dc0c163e92b1d1",
+    "currentSnapshotSha": "99a4c967434c961e6646bd0606a9a815f293521a",
+    "contentDigest": "sha256:6fc01bebca83fce68658063c0204e4f03b04d09222fbd6d5ceb37f91ebc70ed2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

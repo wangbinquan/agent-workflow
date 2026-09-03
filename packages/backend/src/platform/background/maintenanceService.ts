@@ -31,8 +31,22 @@ const ADMISSION_MAX_RETRY_DELAY_MS = 30_000
 const ADMISSION_BUSY_TIMEOUT_MS = 5
 const EVENT_LOOP_SAMPLE_MS = 50
 const EVENT_LOOP_WINDOW_MS = 30_000
-/** 只记真正的冻结：正常运行的间隔是采样周期上下几毫秒，一秒是三个数量级之外。 */
-const EVENT_LOOP_STALL_LOG_MS = 1_000
+/**
+ * 只记真正的冻结：正常运行的间隔是采样周期上下几毫秒，一秒是三个数量级之外。
+ *
+ * 做归因时可以用 `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS` 临时调低——一次大迁移里的
+ * 亚秒级停顿默认不会留下任何痕迹，而 `/api/maintenance/status` 只给滚动窗口的最大值，
+ * 事后无从对齐。取值被夹在 [采样周期×2, 60s]，写错也不会把日志刷成噪声。
+ */
+const EVENT_LOOP_STALL_LOG_MS = eventLoopStallLogThreshold(process.env)
+
+export function eventLoopStallLogThreshold(
+  env: Readonly<Record<string, string | undefined>>,
+): number {
+  const raw = Number(env.AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS)
+  if (!Number.isFinite(raw)) return 1_000
+  return Math.min(60_000, Math.max(EVENT_LOOP_SAMPLE_MS * 2, Math.round(raw)))
+}
 
 interface MaintenanceServiceCommonOptions {
   readonly appHome: string
@@ -298,6 +312,7 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
   let lastCheckpointSucceededAt = Date.now()
   const eventLoopSamples: Array<{ at: number; gapMs: number }> = []
   let previousEventLoopSampleAt = performance.now()
+  let previousHeapUsed = process.memoryUsage().heapUsed
   const eventLoopTimer = setInterval(() => {
     const monotonicNow = performance.now()
     const wallNow = Date.now()
@@ -305,9 +320,17 @@ export function startMaintenanceService(options: MaintenanceServiceOptions): Mai
     // RFC-349 —— 卡顿要留下时间戳，否则只有一个跨窗口的 max，事后无法与任何日志对齐。
     // 一次大迁移里追一段多秒级冻结，缺的正是「它发生在哪一刻」：`/api/maintenance/status`
     // 只给滚动窗口的最大值，而 daemon 自己一声不吭。超过一秒才记，正常运行一条都不会有。
+    // 堆用量一并记：**阻塞式计算**与**一次大 GC** 在延迟上长得一模一样，只有堆的走向
+    // 能把它们分开——GC 停顿之后堆会掉一大块，阻塞计算之后不会。
+    const heapUsed = process.memoryUsage().heapUsed
     if (gapMs >= EVENT_LOOP_STALL_LOG_MS) {
-      log.warn('event loop stalled', { gapMs: Math.round(gapMs) })
+      log.warn('event loop stalled', {
+        gapMs: Math.round(gapMs),
+        heapMib: Math.round(heapUsed / 1024 / 1024),
+        heapDeltaMib: Math.round((heapUsed - previousHeapUsed) / 1024 / 1024),
+      })
     }
+    previousHeapUsed = heapUsed
     eventLoopSamples.push({ at: wallNow, gapMs })
     previousEventLoopSampleAt = monotonicNow
     const cutoff = wallNow - EVENT_LOOP_WINDOW_MS
