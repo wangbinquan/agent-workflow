@@ -1574,11 +1574,9 @@ const CROSS_CONTEXT_PILOT_DEBT: string[] = [
 // forbidden type import`（该符号此前经 `memory/public/fusion.ts` 进入 memory 公共面，fusion
 // 端口迁走后不再在那条面上）。
 const PUBLIC_SURFACE_PILOT_DEBT: string[] = [
+  // RFC-353 T12 销账：KE 的编排入口此前经 `public/commands.ts` 上到公共面，那四条债随之成立；
+  // 该 public 文件已因「只被自家 inbound 消费」被撤掉，四条债不再是 violation，按规则删除并改小 baseline。
   'modules/integration/public/mrTerminalControl.ts: non-exact public entrypoint',
-  'modules/knowledge-evolution/application/fusionOrchestration.ts#approveFusion: forbidden type Partial',
-  'modules/knowledge-evolution/application/fusionOrchestration.ts#approveFusion: forbidden type import @/auth/actor#Actor',
-  'modules/knowledge-evolution/application/fusionOrchestration.ts#cancelFusion: forbidden type import @/auth/actor#Actor',
-  'modules/knowledge-evolution/application/fusionOrchestration.ts#rejectFusion: forbidden type import @/auth/actor#Actor',
   'modules/memory/public/catalog.ts: non-exact public entrypoint',
   'modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts#TaskExecutionResourceAuthority: forbidden type import @/auth/actor#Actor',
   'modules/task-execution/public/taskRoutes.ts#TaskRouteOperations: forbidden type import @/auth/actor#Actor',

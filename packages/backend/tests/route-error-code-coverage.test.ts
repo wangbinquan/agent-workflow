@@ -75,6 +75,11 @@ function stripComments(src: string): string {
 // corpus would silently drop the ratchet's pressure on exactly those branches.
 const routeFiles = [
   ...trackedFiles('packages/backend/src/routes/*.ts'),
+  // RFC-353 T8 起，路由开始按 RFC-294 的目标架构落到 owner context 的 `inbound/` 下。
+  // **语料必须跟着走**：只扫 `routes/` 会让「路由搬了个位置」看起来像「这些错误码消失了」，
+  // 而真正的危害是反过来的——搬走之后这些分支就再也不受本守卫约束了。
+  // 缩小语料 = 静默丢掉压力，正是本文件开头那段注释在防的事。
+  ...trackedFiles('packages/backend/src/modules/*/inbound/*.ts'),
   ...trackedFiles(
     'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/taskActions.ts',
   ),
@@ -155,7 +160,8 @@ const UNCOVERED_BASELINE: readonly string[] = [
   'events-limit-invalid',
   'events-since-invalid',
   'fusion-invalid',
-  'fusion-not-found',
+  // 'fusion-not-found' 已由 `rfc353-fusion-inbound.test.ts` 点名（RFC-353 T8 的存在性隔离断言），
+  // 按「baseline 只缩不涨」从表里移除。
   'fusion-reject-invalid',
   'members-invalid',
   'port-artifact-bad-item',

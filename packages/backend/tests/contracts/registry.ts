@@ -484,6 +484,8 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'GET', path: '/api/skills/:id/versions/diff' },
   { method: 'GET', path: '/api/skills/:id/versions/:v/content' },
   { method: 'POST', path: '/api/skills/:id/versions/:v/restore' },
+  // RFC-353 T9: 技能来源追溯——逐版本列出融入的记忆（实现归 knowledge-evolution 的 inbound）。
+  { method: 'GET', path: '/api/skills/:id/provenance' },
 
   // ---- intent sessions (RFC-234 intent builder) ----
   { method: 'POST', path: '/api/intent-sessions' },

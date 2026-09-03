@@ -14,13 +14,14 @@
 // e2e 交叉核对这两条是它独有的）。它的覆盖面**不完整**，别再据此认为「全都注册了」。
 
 import { describe, test, expect } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { ENDPOINTS, type HttpMethod } from './contracts/registry'
 import { CALL_WILDCARD, callIsRegistered, compilePatterns } from './architecture/routeMatch'
 import { EXEMPT_MOUNTS } from '../src/routes/registry'
 
 const ROUTES_DIR = resolve(import.meta.dir, '..', 'src', 'routes')
+const MODULES_DIR = resolve(import.meta.dir, '..', 'src', 'modules')
 
 // Match `app.get('/path', ...)`, `app.post('/path', ...)`, etc. We strip
 // comment lines first so commented-out routes don't get picked up. Tolerant
@@ -67,8 +68,24 @@ function listTsFilesRecursive(dir: string): string[] {
   return out
 }
 
+/**
+ * 客户端可达的 HTTP 面 = `src/routes/**` **加上**各 bounded context 自己的 inbound 路由。
+ *
+ * RFC-353 T8 起，路由开始按 RFC-294 的目标架构落到 owner context 的 `inbound/` 下
+ * （第一批是 knowledge-evolution 的 fusion 与技能来源追溯）。**扫描面必须跟着走**：
+ * 只扫 `routes/` 会让「路由搬了个位置」变成「注册表里凭空多出 7 条僵尸」，
+ * 而真正的危害是反过来的——搬走之后这些端点就再也不受契约注册表约束了。
+ * 缩小语料 = 静默丢掉守卫的压力，这正是本文件存在要防的那类事。
+ */
 function listRouteFiles(): string[] {
-  return listTsFilesRecursive(ROUTES_DIR)
+  const files = listTsFilesRecursive(ROUTES_DIR)
+  for (const entry of readdirSync(MODULES_DIR, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const inbound = join(MODULES_DIR, entry.name, 'inbound')
+    if (!existsSync(inbound)) continue
+    files.push(...listTsFilesRecursive(inbound))
+  }
+  return files
 }
 
 function stripLineComments(src: string): string {
