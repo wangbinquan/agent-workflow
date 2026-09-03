@@ -1368,6 +1368,8 @@ async function dispatchPostgresqlReviewNode(
   dependencies: PostgresqlCollaborationRuntimeMechanicsDependencies,
   input: Parameters<CollaborationRuntimeMechanics['dispatchReviewNode']>[0],
 ): Promise<Awaited<ReturnType<CollaborationRuntimeMechanics['dispatchReviewNode']>>> {
+  // RFC-354 (schema v6): normalize a possibly pre-v6 snapshot-derived definition once.
+  const definition = migrateWorkflowDefinitionToLatest(input.definition)
   const taskRows = await db
     .select({
       status: tasks.status,
@@ -1399,7 +1401,7 @@ async function dispatchPostgresqlReviewNode(
     }
   }
   // RFC-354 (schema v6): the reviewed source is the review node's `__review_input__` edge.
-  const configured = reviewInputSource(input.definition, input.node.id)
+  const configured = reviewInputSource(definition, input.node.id)
   if (configured === null) {
     return {
       kind: 'failed',
@@ -1408,10 +1410,10 @@ async function dispatchPostgresqlReviewNode(
     }
   }
   const source = resolveWorkflowSourceRef(
-    input.definition,
+    definition,
     configured,
     input.node.id,
-    buildWorkflowScopeParentMap(input.definition),
+    buildWorkflowScopeParentMap(definition),
   )
   if (!source.ok) {
     return {
@@ -1448,7 +1450,7 @@ async function dispatchPostgresqlReviewNode(
   const sourceFrame = resolveSourceFrame({
     sourceNodeId,
     targetNodeId: input.node.id,
-    parents: buildWorkflowScopeParentMap(input.definition),
+    parents: buildWorkflowScopeParentMap(definition),
     frame: reviewFrame,
     containerRowById: frameChain.lookup,
   })
@@ -1477,8 +1479,8 @@ async function dispatchPostgresqlReviewNode(
   }
   const upstreamKind =
     output.kind ??
-    (await postgresqlUpstreamPortKind(db, input.definition, sourceNodeId, sourcePortName)) ??
-    (await postgresqlUpstreamPortKind(db, input.definition, configured.nodeId, configured.portName))
+    (await postgresqlUpstreamPortKind(db, definition, sourceNodeId, sourcePortName)) ??
+    (await postgresqlUpstreamPortKind(db, definition, configured.nodeId, configured.portName))
   const multi = isMultiDocReviewInput(upstreamKind ?? '')
   const inline = multi && isInlineMarkdownListReviewInput(upstreamKind ?? '')
   const artifact = readPortArtifact({

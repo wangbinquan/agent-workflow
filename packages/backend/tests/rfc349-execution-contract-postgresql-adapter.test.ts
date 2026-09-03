@@ -161,8 +161,19 @@ describe('RFC-349 PostgreSQL execution-contract adapter', () => {
     const definition = {
       $schema_version: 2,
       inputs: [{ key: 'prompt', label: 'Prompt', kind: 'text', required: true }],
-      nodes: [{ id: 'result', kind: 'output', ports: [{ name: 'contract-result' }] }],
-      edges: [],
+      // RFC-354 (schema v6): an output port is an inbound edge, so the result
+      // port has to be wired from a producer.
+      nodes: [
+        { id: 'impl', kind: 'agent-single', agentId: 'agent-1', agentName: 'Implementer' },
+        { id: 'result', kind: 'output' },
+      ],
+      edges: [
+        {
+          id: 'e_result',
+          source: { nodeId: 'impl', portName: 'result' },
+          target: { nodeId: 'result', portName: 'contract-result' },
+        },
+      ],
     }
     const fake = fixture([[['Contract workflow', 4, JSON.stringify(definition)]]])
     const adapter = createPostgresqlExecutionContractResourceAdapter(fake.db)
@@ -179,7 +190,7 @@ describe('RFC-349 PostgreSQL execution-contract adapter', () => {
       kind: 'workflow',
       name: 'Contract workflow',
       available: true,
-      detail: 'Contract workflow; closed contract workflow; 1 node(s)',
+      detail: 'Contract workflow; closed contract workflow; 2 node(s)',
     })
     expect(fake.executions[0]?.sql).toContain('from "agent_workflow"."workflows"')
     expect(fake.executions[0]?.parameters).toEqual(['workflow-1', 1])

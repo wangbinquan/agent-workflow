@@ -36,6 +36,7 @@ import {
   type TaskActorRole,
   type TaskQuestionPhase,
   type WorkflowDefinition,
+  migrateWorkflowDefinitionToLatest,
 } from '@agent-workflow/shared'
 import { and, asc, desc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -191,7 +192,9 @@ function parseReviewNodeMeta(
 ): Map<string, { title: string; description: string }> {
   const result = new Map<string, { title: string; description: string }>()
   try {
-    const definition = JSON.parse(workflowSnapshot) as WorkflowDefinition
+    const definition = migrateWorkflowDefinitionToLatest(
+      JSON.parse(workflowSnapshot) as WorkflowDefinition,
+    )
     for (const node of definition.nodes ?? []) {
       if (node.kind !== 'review') continue
       result.set(node.id, {

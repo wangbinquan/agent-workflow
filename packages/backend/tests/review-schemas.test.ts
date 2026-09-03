@@ -117,7 +117,6 @@ describe('RFC-005 ReviewNodeSchema strict', () => {
   const valid = {
     id: 'rev_1',
     kind: 'review' as const,
-    inputSource: { nodeId: 'designer', portName: 'design' },
     title: 'Design Review',
     description: 'Review the design doc',
     rerunnableOnReject: ['designer'],
@@ -131,9 +130,9 @@ describe('RFC-005 ReviewNodeSchema strict', () => {
     expect(out.rollbackFilesOnIterate).toBe(false) // default
   })
 
-  test('rejects when inputSource missing', () => {
-    const { inputSource: _drop, ...rest } = valid
-    expect(() => ReviewNodeSchema.parse(rest)).toThrow()
+  test('carries no inputSource: the reviewed source is the __review_input__ edge (RFC-354)', () => {
+    const out = ReviewNodeSchema.parse(valid)
+    expect('inputSource' in out).toBe(false)
   })
 
   test('rejects when kind != review', () => {

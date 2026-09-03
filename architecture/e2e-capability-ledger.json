@@ -8778,7 +8778,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-28 output 检查器：新增端口 / 绑定上游 / 删除，端口列表与画布边始终同步 @nightly"
+          "test": "WF-28 output 检查器：端口就是入边——逐边列出、Remove 即删边、删空后回到空态 @nightly"
         }
       ]
     },
@@ -8792,7 +8792,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-29 review 检查器：内容来源只接受 Markdown 端口，重跑集合只给可达上游，回滚开关落库 @nightly"
+          "test": "WF-29 review 检查器：内容来源就是 __review_input__ 入边（只读摘要 + 断开），重跑集合只给可达上游，回滚开关落库 @nightly"
         }
       ]
     },
@@ -8824,11 +8824,11 @@
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-31 wrapper-git 检查器：只有显示名与成员清单，绝不出现任何循环旋钮 @nightly"
+          "test": "WF-31 wrapper-loop 检查器：迭代上限下钳到 1、返回值就是 wrapper-output 边、退出条件只认自己的返回口 @nightly"
         },
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-31 wrapper-loop 检查器：迭代上限下钳到 1、退出条件只认当前成员、输出绑定落库 @nightly"
+          "test": "WF-31 wrapper-loop 检查器：迭代上限下钳到 1、返回值就是 wrapper-output 边、退出条件只认自己的返回口 @nightly"
         }
       ]
     },
@@ -8842,7 +8842,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-canvas-inspectors.spec.ts",
-          "test": "WF-32 wrapper-fanout 检查器：分片源是单例、必须是 list<T>，入站接线与派生输出如实呈现 @nightly"
+          "test": "WF-32 wrapper-fanout 检查器：参数就是入边、分片源是其中一条的 Select、派生输出如实呈现 @nightly"
         }
       ]
     },

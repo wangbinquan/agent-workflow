@@ -579,7 +579,11 @@ export function dispatchReviewNode(args: DispatchReviewArgs): Promise<DispatchRe
 }
 
 async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<DispatchReviewResult> {
-  const { db, taskId, appHome, definition, node, iteration, scopeRoot, repoDirName } = args
+  const { db, taskId, appHome, node, iteration, scopeRoot, repoDirName } = args
+  // RFC-354 (schema v6): the reviewed source is the `__review_input__` edge. A
+  // definition reaching this boundary may still be a pre-v6 stored snapshot
+  // (repair dispatch, direct callers) — normalize once; a v6 document is a no-op.
+  const definition = migrateWorkflowDefinitionToLatest(args.definition)
   const containerRunId = args.containerRunId ?? null
 
   // Re-read only after acquiring the coordinator. A cancel that linearized
@@ -1681,7 +1685,9 @@ function parseReviewNodeMeta(
 ): Map<string, { title: string; description: string }> {
   const meta = new Map<string, { title: string; description: string }>()
   try {
-    const def = JSON.parse(workflowSnapshot) as WorkflowDefinition
+    const def = migrateWorkflowDefinitionToLatest(
+      JSON.parse(workflowSnapshot) as WorkflowDefinition,
+    )
     for (const node of def.nodes ?? []) {
       if ((node as { kind?: string }).kind !== 'review') continue
       const n = node as Record<string, unknown>
@@ -2031,7 +2037,9 @@ export async function getReviewDetail(
   let rerunnableOnIterate: string[] = []
   if (taskRow !== undefined) {
     try {
-      const def = JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition
+      const def = migrateWorkflowDefinitionToLatest(
+        JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
+      )
       const node = def.nodes.find((n) => n.id === summary.reviewNodeId)
       if (node !== undefined) {
         const cfgReject = (node as Record<string, unknown>).rerunnableOnReject
@@ -4103,7 +4111,9 @@ async function planRerun(
   const { db } = args
   let definition: WorkflowDefinition | null = null
   try {
-    definition = JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition
+    definition = migrateWorkflowDefinitionToLatest(
+      JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
+    )
   } catch {
     throw new ValidationError(
       'workflow-snapshot-corrupt',
@@ -4568,7 +4578,9 @@ export async function buildSiblingOutputsBlock(
   if (taskRow === undefined) return undefined
   let definition: WorkflowDefinition
   try {
-    definition = JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition
+    definition = migrateWorkflowDefinitionToLatest(
+      JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
+    )
   } catch {
     return undefined
   }

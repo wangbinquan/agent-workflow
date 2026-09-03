@@ -151,9 +151,24 @@ describe('declaredPorts — 逐 kind 表值锁', () => {
       agentId: writer.id,
       agentName: 'writer',
     }
-    const multi = { id: 'r1', kind: 'review', inputSource: { nodeId: 'up', portName: 'docs' } }
-    const single = { id: 'r2', kind: 'review', inputSource: { nodeId: 'up', portName: 'doc' } }
-    const defn = defOf([up, multi, single])
+    // RFC-354 (schema v6): the reviewed source is the review's `__review_input__` edge.
+    const multi = { id: 'r1', kind: 'review' }
+    const single = { id: 'r2', kind: 'review' }
+    const defn = {
+      ...defOf([up, multi, single]),
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'up', portName: 'docs' },
+          target: { nodeId: 'r1', portName: '__review_input__' },
+        },
+        {
+          id: 'e2',
+          source: { nodeId: 'up', portName: 'doc' },
+          target: { nodeId: 'r2', portName: '__review_input__' },
+        },
+      ],
+    } as WorkflowDefinition
     const agents = new Map([[writer.id, writer]])
     expect(names(declaredPorts(multi as never, defn, agents).dataOutputs)).toEqual([
       'accepted',
