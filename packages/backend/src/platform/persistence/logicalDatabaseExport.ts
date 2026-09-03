@@ -3,6 +3,7 @@
 // already-verified chunks are re-bound from the preserved legacy artifact while
 // all active tables are read from one provider snapshot.
 
+import { databaseProviderTraits } from './providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -161,10 +162,17 @@ function expectedRoster(input: {
   readonly provider: DatabaseProvider
   readonly contract: LogicalSchemaContract
 }): string[] {
-  return input.contract.tables
-    .filter((table) => input.provider === 'sqlite' || table.disposition !== 'ARCHIVE_THEN_OMIT')
-    .map((table) => table.id)
-    .sort()
+  return (
+    input.contract.tables
+      // Only the migration SOURCE still physically holds the archived tables.
+      .filter(
+        (table) =>
+          databaseProviderTraits(input.provider).migrationRole === 'source' ||
+          table.disposition !== 'ARCHIVE_THEN_OMIT',
+      )
+      .map((table) => table.id)
+      .sort()
+  )
 }
 
 function createTableEntryAccumulator(input: {

@@ -2,6 +2,7 @@
 // generation. The durable pointer is authoritative; config only supplies the
 // selected provider's mechanism settings and may never silently override it.
 
+import { unhandledDatabaseProvider } from './databaseProviders'
 import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { openDb, type DbClient, type OpenDbOptions } from '@/db/client'
 import {
@@ -112,6 +113,12 @@ export function resolveDatabaseProviderRuntime(
     })
   }
 
+  // The residual after the SQLite branch must be exactly 'postgresql'; adding a
+  // provider to DATABASE_PROVIDERS widens it and this call stops compiling,
+  // instead of the new provider quietly reaching the PostgreSQL body below.
+  if (generation.payload.provider !== 'postgresql') {
+    return unhandledDatabaseProvider(generation.payload.provider)
+  }
   // The provider equality above narrows config independently of the pointer.
   if (options.config.provider !== 'postgresql') {
     throw new DatabaseProviderRuntimeError(

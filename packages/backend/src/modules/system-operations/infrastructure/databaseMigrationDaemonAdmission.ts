@@ -3,6 +3,7 @@
 // bootstrap supplies provider-composition and background-writer callbacks,
 // while this state machine owns the no-new-work + bounded-drain invariant.
 
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
 
@@ -229,7 +230,8 @@ export function createDatabaseMigrationDaemonAdmission(
     freezeAndDrain,
     async reopenSqlite(input) {
       assertLive()
-      if (phase === 'open' && provider === 'sqlite') return
+      // Already open on the migration source ⇒ nothing to reopen.
+      if (phase === 'open' && databaseProviderTraits(provider).migrationRole === 'source') return
       assertOperation(input.operationId)
       if (phase !== 'frozen' && phase !== 'switching' && phase !== 'recovering') {
         throw new DatabaseMigrationDaemonAdmissionError(

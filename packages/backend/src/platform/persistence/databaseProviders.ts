@@ -12,3 +12,18 @@
 export const DATABASE_PROVIDERS = ['sqlite', 'postgresql'] as const
 
 export type DatabaseProvider = (typeof DATABASE_PROVIDERS)[number]
+
+/**
+ * Compile-time exhaustiveness sink for provider dispatch.
+ *
+ * Put it in the residual branch of every provider fork. While the union is
+ * fully handled the argument narrows to `never` and this is unreachable; the
+ * moment a provider is added to `DATABASE_PROVIDERS`, the residual widens to
+ * that provider and the call **fails to compile** — which is the whole point.
+ * It throws rather than returning so a hand-written cast cannot make it silent.
+ */
+export function unhandledDatabaseProvider(value: never): never {
+  const shown =
+    typeof value === 'string' ? value : ((value as { provider?: unknown })?.provider ?? value)
+  throw new Error(`unhandled database provider: ${String(shown)}`)
+}

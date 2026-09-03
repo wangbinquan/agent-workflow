@@ -2,6 +2,7 @@
 // The target remains inactive: generation-pointer activation is a separate
 // coordinator checkpoint after database and filesystem application both pass.
 
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -127,7 +128,8 @@ function validateEnvelope(
     manifest.database.schemaDigest !== envelope.payload.schemaDigest ||
     envelope.payload.activeTableCount !== contract.activeTableCount ||
     envelope.payload.archiveOnlyTableCount !== contract.archiveOnlyTableCount ||
-    (manifest.database.provider === 'postgresql' && manifest.database.rawSqlitePath !== null)
+    (databaseProviderTraits(manifest.database.provider).migrationRole === 'target' &&
+      manifest.database.rawSqlitePath !== null)
   ) {
     throw new PortableDatabaseRestoreError(
       'portable-restore-envelope',

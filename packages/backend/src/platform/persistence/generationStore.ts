@@ -4,6 +4,7 @@
 // a verified complete generation or fails closed; it never guesses a provider
 // from config, a half-written target, or the newest-looking database.
 
+import { databaseProviderTraits } from './providerTraits'
 import { sha256Hex } from '@/util/hash'
 import {
   chmodSync,
@@ -44,7 +45,12 @@ const DatabaseGenerationPayloadSchema = z
         message: 'operationId and manifestDigest must either both be present or both be null',
       })
     }
-    if (value.provider === 'postgresql' && value.operationId === null) {
+    // A generation that was migrated INTO a target must name the manifest that
+    // produced it; the source generation legitimately has none.
+    if (
+      databaseProviderTraits(value.provider).migrationRole === 'target' &&
+      value.operationId === null
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['operationId'],

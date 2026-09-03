@@ -1,5 +1,7 @@
 // `agent-workflow start` — daemon foreground entry.
 
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
@@ -1384,7 +1386,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
   // catch below only guards truly unexpected filesystem-level throws.
-  if (bootGeneration.payload.provider === 'sqlite') {
+  // Staging a restore dir next to the db file is an embedded-file operation;
+  // an external-server provider restores through its own target path.
+  if (databaseProviderTraits(bootGeneration.payload.provider).storage === 'embedded-file') {
     try {
       const applied = await applyPendingRestoreIfAny({
         appHome: Paths.root,
@@ -1488,6 +1492,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
   // migrations. A pending migration without its rollback generation is fatal;
   // backupOnMigration=false is the operator's explicit opt-out.
+  // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
+  // this and stops compiling instead of taking the SQLite path further down.
+  if (databaseProvider.provider !== 'sqlite' && databaseProvider.provider !== 'postgresql') {
+    return unhandledDatabaseProvider(databaseProvider)
+  }
   if (databaseProvider.provider === 'postgresql') {
     const initialLifecycle = Object.freeze({
       operationId: 'daemon-start',
@@ -1508,8 +1517,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       initialSession: initial.session,
       sessionFactory: {
         async create(lifecycleInput) {
-          if (lifecycleInput.provider === 'sqlite') {
+          const sessionProvider = lifecycleInput.provider
+          if (sessionProvider === 'sqlite') {
             throw new Error('sqlite-provider-session-source-retired')
+          }
+          // Everything below assumes the PostgreSQL session shape; a third
+          // provider widens this residual and stops compiling.
+          if (sessionProvider !== 'postgresql') {
+            return unhandledDatabaseProvider(sessionProvider)
           }
           const nextConfig = loadConfig(Paths.config)
           const nextProvider = resolveDatabaseProviderRuntime({
@@ -3269,8 +3284,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     initialSession: initialProviderSession,
     sessionFactory: {
       async create(input) {
-        if (input.provider === 'sqlite') {
+        const sessionProvider = input.provider
+        if (sessionProvider === 'sqlite') {
           throw new Error('sqlite-provider-session-source-retired')
+        }
+        // Everything below assumes the PostgreSQL session shape; a third
+        // provider widens this residual and stops compiling.
+        if (sessionProvider !== 'postgresql') {
+          return unhandledDatabaseProvider(sessionProvider)
         }
         const nextConfig = loadConfig(Paths.config)
         const nextProvider = resolveDatabaseProviderRuntime({

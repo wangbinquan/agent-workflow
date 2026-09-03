@@ -2,6 +2,7 @@
 // Mirrors design.md §11.3.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -174,13 +175,16 @@ export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
       ok: report.ok,
       message:
         `${report.provider} generation ${report.generationId}: ${details}` +
-        (!report.ok && report.provider === 'sqlite'
+        (!report.ok && databaseProviderTraits(report.provider).storage === 'embedded-file'
           ? ' — recover: agent-workflow restore <backup>'
           : ''),
     }
     if (resolved.provider === 'sqlite') {
       return [providerCheck, checkLifecycleHealth(), checkSealedCredentials()]
     }
+    // Everything below reads the PostgreSQL runtime handle; a third variant on
+    // ResolvedDatabaseProviderRuntime widens this residual and stops compiling.
+    if (resolved.provider !== 'postgresql') return unhandledDatabaseProvider(resolved)
     return [
       providerCheck,
       await checkPostgresqlLifecycleHealth(resolved.runtime),

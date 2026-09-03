@@ -2,6 +2,7 @@
 // the only place that assembles source, target, control-plane and admission
 // mechanisms; public commands never receive provider clients or transactions.
 
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { randomUUID } from 'node:crypto'
 import { existsSync, statSync } from 'node:fs'
 import { sha256Hex } from '@/util/hash'
@@ -564,10 +565,12 @@ export function createDatabaseMigrationCoordinator(
 
     async overview(): Promise<DatabaseRuntimeOverview> {
       const generation = liveGeneration().payload
-      const postgresqlOperationId =
-        generation.provider === 'postgresql' ? generation.operationId : null
+      // One named question — "is the live generation a migration target?" — instead
+      // of four independent provider-literal comparisons in this one function.
+      const liveRole = databaseProviderTraits(generation.provider).migrationRole
+      const postgresqlOperationId = liveRole === 'target' ? generation.operationId : null
       let sourceGenerationId = generation.generationId
-      if (generation.provider === 'postgresql') {
+      if (liveRole === 'target') {
         if (postgresqlOperationId === null) {
           throw new DatabaseMigrationCoordinatorError(
             'database-migration-target-config-mismatch',
@@ -579,11 +582,10 @@ export function createDatabaseMigrationCoordinator(
       }
       const source = inspectRetainedSqlite(sourceGenerationId)
 
-      let databaseFingerprint =
-        generation.provider === 'sqlite' ? (source?.databaseFingerprint ?? null) : null
+      let databaseFingerprint = liveRole === 'source' ? (source?.databaseFingerprint ?? null) : null
       let serverVersion: string | null = null
       let target: DatabaseMigrationTargetView | null = null
-      if (generation.provider === 'postgresql' && postgresqlOperationId !== null) {
+      if (liveRole === 'target' && postgresqlOperationId !== null) {
         const manifest = controlPlane.readManifest(postgresqlOperationId)
         target = targetConfig(manifest.payload.target)
         const runtime = createPostgresqlDatabaseRuntime({

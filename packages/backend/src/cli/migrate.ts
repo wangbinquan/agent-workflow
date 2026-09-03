@@ -3,6 +3,7 @@
 // exists as a recovery / debug fallback when the daemon won't start due to
 // a failed migration that needs inspection.
 
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { loadConfig } from '@/config'
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
@@ -20,6 +21,11 @@ export async function migrateCommand(): Promise<{ output: string }> {
     operationsRoot: Paths.databaseMigrationsDir,
     contract,
   })
+  // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
+  // this and stops compiling, instead of falling into the SQLite path below.
+  if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
+    return unhandledDatabaseProvider(provider)
+  }
   if (provider.provider === 'postgresql') {
     try {
       const receipt = await migratePostgresqlSchema({ runtime: provider.runtime })

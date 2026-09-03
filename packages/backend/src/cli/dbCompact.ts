@@ -9,6 +9,7 @@
 // 与 `backup`/`restore` 同一条闸门：先看 PID 文件，daemon 在跑就拒绝并告诉用户
 // 先 `agent-workflow stop`。
 
+import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { Database } from 'bun:sqlite'
 import { existsSync, statSync } from 'node:fs'
@@ -49,7 +50,9 @@ export function dbCompactCommand(): DbCompactResult {
     operationsRoot: Paths.databaseMigrationsDir,
     contract: buildLogicalSchemaContract(),
   })
-  if (generation.payload.provider === 'postgresql') {
+  // Compaction is an embedded-file operation; an external server's storage
+  // reclamation is owned by its own autovacuum/operator policy.
+  if (databaseProviderTraits(generation.payload.provider).storage !== 'embedded-file') {
     return {
       status: 'ok',
       output:

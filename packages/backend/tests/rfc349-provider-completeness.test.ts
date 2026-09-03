@@ -89,31 +89,16 @@ const CANONICAL_UNION_FILE = 'packages/backend/src/platform/persistence/schemaCo
 //   boot-fence           the deliberate closed list that refuses to boot a
 //                        provider nobody has adapted yet (see the test below).
 const PROVIDER_FORK_LEDGER = {
-  'cli/database.ts': { forks: 1, fence: 'embedded-question' },
-  'cli/dbCompact.ts': { forks: 1, fence: 'migration-pair' },
-  'cli/doctor.ts': { forks: 2, fence: 'embedded-question' },
-  'cli/migrate.ts': { forks: 1, fence: 'migration-pair' },
-  'cli/start.ts': { forks: 4, fence: 'discriminated-union' },
+  'cli/database.ts': { forks: 1, fence: 'display-text' },
+  'cli/doctor.ts': { forks: 1, fence: 'fenced-dispatch' },
+  'cli/migrate.ts': { forks: 1, fence: 'fenced-dispatch' },
+  'cli/start.ts': { forks: 1, fence: 'fenced-dispatch' },
   'db/providerSchema.ts': { forks: 1, fence: 'projection-fenced' },
-  'main.ts': { forks: 5, fence: 'discriminated-union' },
+  'main.ts': { forks: 6, fence: 'fenced-dispatch' },
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
-  'modules/system-operations/infrastructure/databaseMigrationCoordinator.ts': {
-    forks: 4,
-    fence: 'migration-pair',
-  },
-  'modules/system-operations/infrastructure/databaseMigrationDaemonAdmission.ts': {
-    forks: 1,
-    fence: 'embedded-question',
-  },
-  'modules/system-operations/infrastructure/portableDatabaseRestore.ts': {
-    forks: 1,
-    fence: 'migration-pair',
-  },
   'platform/background/maintenanceService.ts': { forks: 2, fence: 'discriminated-union' },
   'platform/background/maintenanceWorkerSupervisor.ts': { forks: 1, fence: 'discriminated-union' },
-  'platform/persistence/databaseProviderRuntime.ts': { forks: 1, fence: 'discriminated-union' },
-  'platform/persistence/generationStore.ts': { forks: 1, fence: 'boot-fence' },
-  'platform/persistence/logicalDatabaseExport.ts': { forks: 1, fence: 'migration-pair' },
+  'platform/persistence/databaseProviderRuntime.ts': { forks: 1, fence: 'fenced-dispatch' },
 } as const
 
 function providerForkCounts(): Record<string, number> {
@@ -197,15 +182,53 @@ describe('RFC-349 provider completeness', () => {
 
   test('every ledger entry declares which fence makes its fork safe', () => {
     const fences = new Set([
+      'fenced-dispatch',
       'discriminated-union',
       'projection-fenced',
-      'embedded-question',
-      'migration-pair',
-      'boot-fence',
+      'display-text',
     ])
     for (const [path, entry] of Object.entries(PROVIDER_FORK_LEDGER)) {
       expect(fences.has(entry.fence), `${path} declares an unknown fence`).toBe(true)
       expect(entry.forks, `${path} must declare at least one fork`).toBeGreaterThan(0)
+    }
+  })
+
+  test('every fenced-dispatch file actually carries the never sink', () => {
+    // `fenced-dispatch` is a claim, so check it: the file must call
+    // `unhandledDatabaseProvider` in the residual branch. Without that call the
+    // literal comparison is an ordinary fork again and a third provider takes
+    // whichever branch happens to be the `else`.
+    for (const [path, entry] of Object.entries(PROVIDER_FORK_LEDGER)) {
+      if (entry.fence !== 'fenced-dispatch') continue
+      const text = backendSource(`packages/backend/src/${path}`).text
+      expect(text, `${path} claims fenced-dispatch but never sinks the residual`).toContain(
+        'unhandledDatabaseProvider(',
+      )
+    }
+  })
+
+  test('no trait is declared without a consumer', () => {
+    // A trait nobody reads drifts away from the branch it was meant to replace —
+    // that already happened once here with a `maintenanceWorker` trait that was
+    // added and then removed the same day for exactly this reason.
+    const traits = backendSource('packages/backend/src/platform/persistence/providerTraits.ts').text
+    const declared = [...traits.matchAll(/^\s{2}readonly (\w+):/gmu)].map((m) => m[1])
+    expect(declared.sort()).toEqual([
+      'booleanLiteral',
+      'classifyRetryable',
+      'migrationRole',
+      'storage',
+    ])
+    const consumers = backendSources().filter(
+      (source) =>
+        !source.path.endsWith('providerTraits.ts') &&
+        source.text.includes('databaseProviderTraits('),
+    )
+    for (const trait of declared) {
+      expect(
+        consumers.some((source) => source.text.includes(`.${trait}`)),
+        `trait ${trait} has no consumer outside the traits table`,
+      ).toBe(true)
     }
   })
 

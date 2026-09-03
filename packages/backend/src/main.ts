@@ -9,6 +9,7 @@
 //   migrate  P-1-05 ✓
 //   backup   P-5-02
 
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { appVersion } from './util/version'
 import { runGitCredentialSubcommand } from './util/gitCredentialLease'
 import { SYSTEM_USER_ID } from './auth/systemIdentity'
@@ -101,6 +102,13 @@ function readPortFlag(argv: string[]): number | undefined {
 
 async function composeUserCommandBootstrap() {
   const provider = await resolveCommandProvider()
+  // Residual fence for every `provider.provider === 'sqlite' ? … : …` below: while
+  // the bootstrap union has exactly these two variants this is unreachable, and a
+  // third one widens `provider` here so this stops compiling — rather than every
+  // ternary below silently handing the new provider the PostgreSQL branch.
+  if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
+    return unhandledDatabaseProvider(provider)
+  }
   const identityAccess =
     provider.provider === 'sqlite'
       ? createIdentityAccessRuntime({ db: provider.db })
@@ -158,11 +166,17 @@ async function resolveCommandProvider() {
         db: runtime.openClient(),
       })
     }
-    return Object.freeze({
-      provider: 'sqlite' as const,
-      runtime,
-      db: runtime.openClient({ migrationsFolder: await resolveMigrationsFolder() }),
-    })
+    if (runtime.provider === 'sqlite') {
+      return Object.freeze({
+        provider: 'sqlite' as const,
+        runtime,
+        db: runtime.openClient({ migrationsFolder: await resolveMigrationsFolder() }),
+      })
+    }
+    // Both variants handled above, so `runtime` is `never` here. A third variant
+    // on ResolvedDatabaseProviderRuntime widens it and this stops compiling,
+    // instead of the new provider silently taking the SQLite bootstrap.
+    return unhandledDatabaseProvider(runtime)
   } catch (error) {
     await runtime.close()
     throw error
@@ -171,6 +185,13 @@ async function resolveCommandProvider() {
 
 async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap> {
   const provider = await resolveCommandProvider()
+  // Residual fence for every `provider.provider === 'sqlite' ? … : …` below: while
+  // the bootstrap union has exactly these two variants this is unreachable, and a
+  // third one widens `provider` here so this stops compiling — rather than every
+  // ternary below silently handing the new provider the PostgreSQL branch.
+  if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
+    return unhandledDatabaseProvider(provider)
+  }
   const identityAccess =
     provider.provider === 'sqlite'
       ? createIdentityAccessRuntime({ db: provider.db })
