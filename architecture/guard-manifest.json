@@ -63,18 +63,6 @@
       "lines": 68
     },
     {
-      "id": "canvas-wrapper-inbound-guard",
-      "file": "packages/frontend/tests/canvas-wrapper-inbound-guard.test.ts",
-      "runner": "vitest",
-      "mechanism": "behaviour",
-      "corpusScanner": false,
-      "minCorpusFiles": null,
-      "assertsAbsence": false,
-      "negativeFixture": false,
-      "classified": true,
-      "lines": 34
-    },
-    {
       "id": "clarify-baseline-source-locks",
       "file": "packages/frontend/tests/clarify-baseline-source-locks.test.ts",
       "runner": "vitest",

@@ -1,5 +1,5 @@
 name: e2e-wrapper-loop-nested
-description: Loop-in-loop definition (RFC-354): nesting validates and runs like any other wrapper nesting.
+description: 'Loop-in-loop definition (RFC-354): nesting validates and runs like any other wrapper nesting.'
 definition:
   $schema_version: 4
   inputs: []

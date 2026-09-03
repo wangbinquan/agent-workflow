@@ -5,12 +5,12 @@
 //
 // Same gate as `db compact`: the walk rewrites node_runs rows the scheduler
 // owns while a task runs, so it refuses while the daemon is up.
+//
+// The walk itself is injected by the bootstrap (`main.ts` composes the
+// provider-specific database + task-execution's composition); this file stays
+// free of module imports on purpose (RFC-317 R1: only bootstrap files import a
+// context's composition).
 
-import {
-  runFrameBackfillOnBoot,
-  type FrameBackfillDatabase,
-  type FrameBackfillReport,
-} from '@/modules/task-execution/composition/frameBackfill'
 import { isProcessAlive } from '@/util/process'
 import { readPidFromLock } from '@/util/lock'
 import { Paths } from '@/util/paths'
@@ -20,7 +20,14 @@ export interface FrameBackfillCommandResult {
   output: string
 }
 
-export function formatFrameBackfillReport(report: FrameBackfillReport): string {
+/** `report` is the structural mirror of task-execution's `FrameBackfillReport`. */
+export function formatFrameBackfillReport(report: {
+  readonly tasks: number
+  readonly rowsUpdated: number
+  readonly roundsUpdated: number
+  readonly unreadableTasks: readonly string[]
+  readonly unresolvedRows: number
+}): string {
   const lines = [
     `frame backfill: ${report.tasks} task(s) walked, ${report.rowsUpdated} node run(s) and ${report.roundsUpdated} clarify round(s) updated`,
   ]
@@ -38,10 +45,8 @@ export function formatFrameBackfillReport(report: FrameBackfillReport): string {
 }
 
 export async function frameBackfillCommand(input: {
-  readonly openDatabase: () => Promise<{
-    readonly database: FrameBackfillDatabase
-    readonly close: () => Promise<void>
-  }>
+  /** Opens the live database, walks every task with `force`, closes it. */
+  readonly run: () => Promise<Parameters<typeof formatFrameBackfillReport>[0]>
   readonly daemonPid?: () => number | null
 }): Promise<FrameBackfillCommandResult> {
   const pid = (input.daemonPid ?? (() => readPidFromLock(Paths.lock)))()
@@ -54,11 +59,6 @@ export async function frameBackfillCommand(input: {
         `Stop it first:  agent-workflow stop\n`,
     }
   }
-  const opened = await input.openDatabase()
-  try {
-    const report = await runFrameBackfillOnBoot(opened.database, { force: true })
-    return { status: 'ok', output: formatFrameBackfillReport(report) }
-  } finally {
-    await opened.close()
-  }
+  const report = await input.run()
+  return { status: 'ok', output: formatFrameBackfillReport(report) }
 }

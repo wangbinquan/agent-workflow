@@ -22,6 +22,7 @@ import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
 import { doctorCommand, formatDoctor } from './cli/doctor'
 import { frameBackfillCommand } from './cli/frameBackfill'
+import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { migrateCommand } from './cli/migrate'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand } from './cli/start'
@@ -451,14 +452,17 @@ async function main(): Promise<void> {
       // runs it at boot; this forces a re-walk with the daemon stopped).
       if (Bun.argv.includes('--backfill-containers')) {
         const result = await frameBackfillCommand({
-          openDatabase: async () => {
+          run: async () => {
             const provider = await resolveCommandProvider()
-            return {
-              database:
+            try {
+              return await runFrameBackfillOnBoot(
                 provider.provider === 'sqlite'
                   ? { provider: 'sqlite', db: provider.db }
                   : { provider: 'postgresql', db: provider.db },
-              close: () => provider.runtime.close(),
+                { force: true },
+              )
+            } finally {
+              await provider.runtime.close()
             }
           },
         })

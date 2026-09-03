@@ -325,16 +325,20 @@ describe('AUDIT S-4 regression lock: wrapper-git subtracts unchanged pre-existin
           kind: 'wrapper-loop',
           nodeIds: ['wg'],
           maxIterations: 2,
-          // audit emits findings 'iter-{n}' per call → exit precisely
-          // after the SECOND iteration (deterministic 2 full rounds, then
-          // task done — unlike the existing 1-iteration git-in-loop test
-          // at scheduler.test.ts:847 which can never observe pollution).
+          // Exactly TWO full rounds, then the task completes: the exit
+          // predicate is never satisfied and `continueOnMaxIterations` lets
+          // the loop finish instead of exhausting (unlike the existing
+          // 1-iteration git-in-loop test at scheduler.test.ts:847 which can
+          // never observe pollution). RFC-354: a loop's exit condition reads a
+          // DIRECT member of its body — `wg` here; `audit` sits behind the git
+          // wrapper's boundary and is not lexically visible to the loop.
           exitCondition: {
             kind: 'port-equals',
-            nodeId: 'audit',
-            portName: 'findings',
-            value: 'iter-1',
+            nodeId: 'wg',
+            portName: 'git_diff',
+            value: '__NEVER__',
           },
+          continueOnMaxIterations: true,
           outputBindings: [],
         },
       ] as unknown as WorkflowDefinition['nodes'],

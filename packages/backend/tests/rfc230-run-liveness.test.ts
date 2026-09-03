@@ -157,6 +157,8 @@ describe('RFC-230 — classifyRunLiveness', () => {
 // --- ③ 证据链解析 -----------------------------------------------------------
 
 describe('RFC-230 — resolveRunLiveness', () => {
+  // RFC-354: inner rows carry `containerRunId: 'W'` — liveness delegation follows
+  // frame membership (the generation row), not the definition's node ids.
   const wrapperRow = row({ id: 'W', nodeId: 'w' })
 
   test('driver 门短路一切：任务仍被调度器持有 ⇒ 活', () => {
@@ -171,7 +173,7 @@ describe('RFC-230 — resolveRunLiveness', () => {
   })
 
   test('wrapper 内层 agent 进程活着 ⇒ wrapper 判活（事故正例）', () => {
-    const inner = row({ id: 'A', nodeId: 'a', pid: 777 })
+    const inner = row({ id: 'A', nodeId: 'a', containerRunId: 'W', pid: 777 })
     const v = resolveRunLiveness({
       row: wrapperRow,
       rows: [wrapperRow, inner],
@@ -183,7 +185,7 @@ describe('RFC-230 — resolveRunLiveness', () => {
   })
 
   test('wrapper 内层全部终态 + 无驱动 ⇒ 判死，理由 inner-all-terminal', () => {
-    const inner = row({ id: 'A', nodeId: 'a', pid: 777, status: 'done' })
+    const inner = row({ id: 'A', nodeId: 'a', containerRunId: 'W', pid: 777, status: 'done' })
     const v = resolveRunLiveness({
       row: wrapperRow,
       rows: [wrapperRow, inner],
@@ -195,7 +197,7 @@ describe('RFC-230 — resolveRunLiveness', () => {
   })
 
   test('内层 running 但进程确已消失 ⇒ wrapper 也判死', () => {
-    const inner = row({ id: 'A', nodeId: 'a', pid: 777 })
+    const inner = row({ id: 'A', nodeId: 'a', containerRunId: 'W', pid: 777 })
     const v = resolveRunLiveness({
       row: wrapperRow,
       rows: [wrapperRow, inner],
@@ -208,7 +210,7 @@ describe('RFC-230 — resolveRunLiveness', () => {
 
   test('内层 pending / awaiting_human ⇒ 有未完成的工作，判活', () => {
     for (const status of ['pending', 'awaiting_human', 'awaiting_review']) {
-      const inner = row({ id: 'A', nodeId: 'a', status })
+      const inner = row({ id: 'A', nodeId: 'a', containerRunId: 'W', status })
       const v = resolveRunLiveness({
         row: wrapperRow,
         rows: [wrapperRow, inner],
@@ -281,8 +283,8 @@ describe('RFC-230 — resolveRunLiveness', () => {
 
   test('嵌套三层：最内层活 ⇒ 最外层活（跨迭代亦然，活性不看新鲜度）', () => {
     const outer = row({ id: 'O', nodeId: 'outer' })
-    const mid = row({ id: 'M', nodeId: 'mid' })
-    const leaf = row({ id: 'L', nodeId: 'leaf', pid: 555 })
+    const mid = row({ id: 'M', nodeId: 'mid', containerRunId: 'O' })
+    const leaf = row({ id: 'L', nodeId: 'leaf', containerRunId: 'M', pid: 555 })
     const v = resolveRunLiveness({
       row: outer,
       rows: [outer, mid, leaf],
@@ -295,8 +297,8 @@ describe('RFC-230 — resolveRunLiveness', () => {
 
   test('嵌套三层：最内层已死 ⇒ 最外层判死', () => {
     const outer = row({ id: 'O', nodeId: 'outer' })
-    const mid = row({ id: 'M', nodeId: 'mid' })
-    const leaf = row({ id: 'L', nodeId: 'leaf', pid: 555, status: 'failed' })
+    const mid = row({ id: 'M', nodeId: 'mid', containerRunId: 'O' })
+    const leaf = row({ id: 'L', nodeId: 'leaf', containerRunId: 'M', pid: 555, status: 'failed' })
     const v = resolveRunLiveness({
       row: outer,
       rows: [outer, mid, leaf],
@@ -364,7 +366,7 @@ async function seedTask(db: DbClient, definition: WorkflowDefinition): Promise<s
 async function seedRun(
   db: DbClient,
   taskId: string,
-  over: { nodeId: string; status: string; pid?: number | null },
+  over: { nodeId: string; status: string; pid?: number | null; containerRunId?: string | null },
 ): Promise<string> {
   const id = ulid()
   await db.insert(nodeRuns).values({
@@ -373,6 +375,8 @@ async function seedRun(
     nodeId: over.nodeId,
     status: over.status as 'running',
     pid: over.pid ?? null,
+    // RFC-354 — an inner row hangs off its wrapper's generation row.
+    containerRunId: over.containerRunId ?? null,
     startedAt: NOW - 50_000, // 远早于 grace
   })
   return id
@@ -383,7 +387,12 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
-    await seedRun(db, taskId, { nodeId: 'a', status: 'running', pid: 777 })
+    await seedRun(db, taskId, {
+      nodeId: 'a',
+      containerRunId: wrapperId,
+      status: 'running',
+      pid: 777,
+    })
     const res = await reconcileDeadRunningRuns({
       operations: taskRecoveryOperations(db),
       graceMs: 1000,
@@ -402,7 +411,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
-    await seedRun(db, taskId, { nodeId: 'a', status: 'done', pid: 777 })
+    await seedRun(db, taskId, { nodeId: 'a', containerRunId: wrapperId, status: 'done', pid: 777 })
     const res = await reconcileDeadRunningRuns({
       operations: taskRecoveryOperations(db),
       graceMs: 1000,
@@ -420,7 +429,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
-    await seedRun(db, taskId, { nodeId: 'a', status: 'done', pid: 777 })
+    await seedRun(db, taskId, { nodeId: 'a', containerRunId: wrapperId, status: 'done', pid: 777 })
     const res = await reconcileDeadRunningRuns({
       operations: taskRecoveryOperations(db),
       graceMs: 1000,
@@ -472,7 +481,7 @@ describe('RFC-230 — reconcileDeadRunningRuns 对 wrapper 行的处置', () => 
     const db = createInMemoryDb(MIGRATIONS)
     const taskId = await seedTask(db, gitWrapperDef())
     const wrapperId = await seedRun(db, taskId, { nodeId: 'w', status: 'running' })
-    await seedRun(db, taskId, { nodeId: 'a', status: 'done', pid: 777 })
+    await seedRun(db, taskId, { nodeId: 'a', containerRunId: wrapperId, status: 'done', pid: 777 })
     await seedRun(db, taskId, { nodeId: 'solo', status: 'pending' }) // 任务仍有活
     const res = await reconcileDeadRunningRuns({
       operations: taskRecoveryOperations(db),

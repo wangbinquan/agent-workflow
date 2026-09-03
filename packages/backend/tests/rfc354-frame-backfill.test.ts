@@ -317,36 +317,30 @@ describe('RFC-354 T4 — SQLite store end-to-end', () => {
 
 describe('RFC-354 T4 — doctor --backfill-containers', () => {
   test('refuses while the daemon is running', async () => {
-    let opened = false
+    let ran = false
     const result = await frameBackfillCommand({
       daemonPid: () => process.pid,
-      openDatabase: async () => {
-        opened = true
-        throw new Error('must not open the database')
+      run: async () => {
+        ran = true
+        throw new Error('must not walk the database')
       },
     })
     expect(result.status).toBe('daemon-running')
     expect(result.output).toContain('agent-workflow stop')
-    expect(opened).toBe(false)
+    expect(ran).toBe(false)
   })
 
   test('walks the database with force and reports counts', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedLegacyTask(db)
-    let closed = false
     const result = await frameBackfillCommand({
       daemonPid: () => null,
-      openDatabase: async () => ({
-        database: { provider: 'sqlite', db },
-        close: async () => {
-          closed = true
-        },
-      }),
+      // the bootstrap composes provider + walk; the command only gates and formats
+      run: () => runFrameBackfillOnBoot({ provider: 'sqlite', db }, { force: true }),
     })
     expect(result.status).toBe('ok')
     expect(result.output).toContain(
       '1 task(s) walked, 4 node run(s) and 1 clarify round(s) updated',
     )
-    expect(closed).toBe(true)
   })
 })

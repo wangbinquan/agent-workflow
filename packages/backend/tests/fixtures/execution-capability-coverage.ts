@@ -192,24 +192,40 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
       evidence: [workflowMatrix('git inside loop exposes')],
     },
     {
+      // RFC-354: loop-in-loop is supported at any depth (frames); the catalog
+      // test validates `wrapper-loop-nested.yaml` statically and the nested
+      // runtime is locked by tests/rfc354-nested-loop-frames.test.ts.
       id: 'wrapper-loop::wrapper-loop',
-      classification: 'static-rejected',
-      evidence: [workflowMatrix('invalid loop-in-loop never starts')],
+      classification: 'supported',
+      evidence: [
+        workflowMatrix('loop-in-loop launches'),
+        fast('packages/backend/tests/rfc354-nested-loop-frames.test.ts', 'loop-in-loop'),
+      ],
     },
     {
       id: 'wrapper-loop::wrapper-fanout',
       classification: 'supported',
       evidence: [workflowMatrix('loop around fanout uses')],
     },
+    // RFC-354: a wrapper inside a fan-out body is rejected at SCHEMA time
+    // (`wrapper-fanout-unsupported-inner-kind`, the launch gate never starts the
+    // task); the runtime fail-closed path stays as defence in depth.
     {
       id: 'wrapper-fanout::wrapper-git',
-      classification: 'runtime-rejected',
-      evidence: [workflowMatrix('current v1 limitation fails closed')],
+      classification: 'static-rejected',
+      evidence: [
+        workflowMatrix('a wrapper inside a fan-out never starts'),
+        fast(
+          'packages/backend/tests/scheduler-wrapper-fanout-e2e.test.ts',
+          'every nested wrapper kind fails closed',
+        ),
+      ],
     },
     {
       id: 'wrapper-fanout::wrapper-loop',
-      classification: 'runtime-rejected',
+      classification: 'static-rejected',
       evidence: [
+        workflowMatrix('a wrapper inside a fan-out never starts'),
         fast(
           'packages/backend/tests/scheduler-wrapper-fanout-e2e.test.ts',
           'every nested wrapper kind fails closed',
@@ -218,8 +234,9 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
     },
     {
       id: 'wrapper-fanout::wrapper-fanout',
-      classification: 'runtime-rejected',
+      classification: 'static-rejected',
       evidence: [
+        workflowMatrix('a wrapper inside a fan-out never starts'),
         fast(
           'packages/backend/tests/scheduler-wrapper-fanout-e2e.test.ts',
           'every nested wrapper kind fails closed',
