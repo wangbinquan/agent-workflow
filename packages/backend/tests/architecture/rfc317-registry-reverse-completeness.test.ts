@@ -95,7 +95,9 @@ const REGISTRIES: readonly RegistryUnderGuard[] = [
     declaringFile: 'packages/shared/src/node-kind-behavior.ts',
     keys: Object.keys(Object.values(NODE_KIND_BEHAVIORS)[0] ?? {}),
     consumption: 'direct',
-    keyExemptions: { isAgent: 'isAgentNodeKind' },
+    // RFC-354 D7：`clarifyGate` 列（原 settlesWithoutRow）只经 `nodeKindIsClarifyGate`
+    // 读——frontier 不再按列直读（pass-2 已删），链上的活消费者是 stuckTaskDetector。
+    keyExemptions: { isAgent: 'isAgentNodeKind', clarifyGate: 'nodeKindIsClarifyGate' },
     why: '表的维度（列）。RFC-146 的准入标准就是「每一维都有 grep 可证的运行时消费者」，这条把那句话变成可执行判据。',
   },
   // RFC-354 D6：`SYSTEM_CHANNEL_PORTS` 注册表已折进端口表（`DeclaredPort.channel`，

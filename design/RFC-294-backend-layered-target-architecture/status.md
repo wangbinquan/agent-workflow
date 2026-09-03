@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:bce3ffed76c75804ea942baf362fecfbff3a5ccff56a4197f88b01e8c0f3a5f5`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0a900c0f2ee74da28fa25433b7c023c3b34ba01a430f12a7462942601f1e540c`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -35,10 +35,10 @@
 | `crossContextImports` | 6409 |
 | `facades` | 345 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25874 |
+| `moduleSymbolOwners` | 25873 |
 | `mutationEntrypoints` | 1920 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 1004 |
+| `publicSurfaces` | 1003 |
 | `transactionExternalEffects` | 479 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -254,7 +254,7 @@
 | context | 数量 |
 | --- | --- |
 | resource-catalog | 246 |
-| task-execution | 206 |
+| task-execution | 205 |
 | collaboration | 125 |
 | identity-access | 65 |
 | system-operations | 63 |
@@ -271,13 +271,13 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 1004）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 148 / 1003）
 
 | context | 数量 |
 | --- | --- |
 | collaboration | 48 |
 | digital-employee | 18 |
-| task-execution | 16 |
+| task-execution | 15 |
 | system-operations | 12 |
 | code-capability | 11 |
 | event-center | 8 |

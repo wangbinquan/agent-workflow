@@ -2,7 +2,7 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（In Progress，PR-1 + PR-2 已推 main，2026-09-04）：[RFC-354 节点语义统一：参数 / 返回值 / 闭包 + 帧（全部 14 种节点，任意深度嵌套）](design/RFC-354-wrapper-as-node/proposal.md)。**
+> 🚧 **进行中 RFC（In Progress，PR-1 + PR-2 + PR-3 T17 已推 main，2026-09-04）：[RFC-354 节点语义统一：参数 / 返回值 / 闭包 + 帧（全部 14 种节点，任意深度嵌套）](design/RFC-354-wrapper-as-node/proposal.md)。**
 > **PR-1（T1～T10）已落地**：`node_runs.container_run_id` / `scope_path` + `clarify_rounds.container_run_id`（迁移 0223）、帧 = 既有 wrapper 代际行
 > `(container_run_id, iteration)`、`domain/environmentChain.ts`（词法环境链：本地 / 闭包 / 参数按帧解析，`closure-binding-unresolved` 直接失败）、
 > `domain/containerMembership.ts`（唤醒 / 活性 / 重试级联统一按帧成员关系）、loop 退出条件 / 绑定按环境链读（gap4 走闭包）、
@@ -15,7 +15,10 @@
 > `systemChannelPorts.ts` 删除），validator 改边规则（棘轮 145 → 132），运行时 loop 每轮先提升返回值再判 exit、fanout 分片 kind 取参数边 source 口
 > （未声明 ⇒ `list<string>`）、`input` 节点端口带工作流输入的值形状 kind；画布只写边（`connectionSync` 双写删除、loop 右侧返回行 + `__return__`
 > 条、检查器只读列表 + Select）；32 个示例作升级器 golden。实现偏离逐条见 `design/RFC-354-wrapper-as-node/design.md §10`。
-> **下一步 PR-3（T17～T20）**：clarify 落 `skipped` 行、任务详情按帧分组、e2e 三幕、实现门。进度与偏离项见 `design/RFC-354-wrapper-as-node/plan.md §5`。
+> **PR-3 T17 已落地**：clarify / cross gate 落行（无 open round ⇒ `skipped`，`settlesWithoutRow` / frontier pass-2 删除），且
+> `agent.__clarify__ → <gate>` 改为真依赖（端口表 `dataflow: 'always'`，`channelEdgeDataflowSkip(e)` 只看端口表）——asker 未 settle 则 gate
+> 不被访问、asker 被分支关闭则 gate 一起 skipped、asker 发问则 park 行是唯一一行；偏离记入 design.md §10「PR-3 实现偏离」。
+> **下一步 PR-3 余下（T18～T20）**：任务详情按帧分组 / 面包屑、e2e `canvas-wrapper-membership` 三幕、实现门（只审功能）+ Done 收口。进度见 `design/RFC-354-wrapper-as-node/plan.md §5`。
 > 起点是用户问「校验不允许 loop 嵌 loop，能不能直接放开」——不能：
 > `wrapper-loop-nested` 遮的是真缺陷（`node_runs` 只有扁平 `iteration`，外层第 2 轮起内层静默 no-op，`scheduler-audit-s06` 锁着）。
 > 追问「包装器为什么不按节点抽象、和子工作流有什么区别」后对账：wrapper 只是「kind + 平铺兄弟 id」，没有输入端口，体内靠

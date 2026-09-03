@@ -27744,31 +27744,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/task-execution/composition/dagFrontier.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/composition/dagFrontier.ts#SETTLES_WITHOUT_ROW_KINDS",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/dagFrontier.ts#SETTLES_WITHOUT_ROW_KINDS",
-      "symbol": "SETTLES_WITHOUT_ROW_KINDS",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/task-execution/composition/frameBackfill.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/composition/frameBackfill.ts#runFrameBackfillOnBoot",
@@ -28012,6 +27987,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCrossClarifyNode",
       "symbol": "runCrossClarifyNode",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runIdleClarifyNode",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runIdleClarifyNode",
+      "symbol": "runIdleClarifyNode",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -45761,7 +45761,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bce3ffed76c75804ea942baf362fecfbff3a5ccff56a4197f88b01e8c0f3a5f5",
+  "sourceDigest": "sha256:0a900c0f2ee74da28fa25433b7c023c3b34ba01a430f12a7462942601f1e540c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -6,7 +6,7 @@
     "methods": 1115,
     "opaqueTypeRefs": 14,
     "recursiveFields": 21970,
-    "symbols": 1004
+    "symbols": 1003
   },
   "entries": [
     {
@@ -167901,36 +167901,6 @@
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "types",
-      "fields": [],
-      "file": "packages/backend/src/modules/task-execution/public/types.ts",
-      "id": "public:task-execution:types:SETTLES_WITHOUT_ROW_KINDS",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:c8bfbd578b219b9e977fe40cc5d605814622dea0d209c1586ecfed5c796398cc",
-      "status": "target-context-current-surface",
-      "symbol": "SETTLES_WITHOUT_ROW_KINDS",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "task-execution",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
       "fields": [
         {
           "consumerEdgeIds": [],
@@ -172715,7 +172685,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bce3ffed76c75804ea942baf362fecfbff3a5ccff56a4197f88b01e8c0f3a5f5",
+  "sourceDigest": "sha256:0a900c0f2ee74da28fa25433b7c023c3b34ba01a430f12a7462942601f1e540c",
   "targetContexts": [
     "collaboration",
     "development-automation",
