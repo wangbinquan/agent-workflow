@@ -90,9 +90,11 @@ jobs:
           sudo -u postgres createdb rfc349_evidence
           sudo -u postgres createdb rfc349_target_faults
           sudo -u postgres createdb rfc349_write_matrix
-          echo 'RFC349_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_evidence' >> "$GITHUB_ENV"
-          echo 'RFC349_TARGET_FAULTS_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_target_faults' >> "$GITHUB_ENV"
-          echo 'RFC349_WRITE_MATRIX_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_write_matrix' >> "$GITHUB_ENV"
+          {
+            echo 'RFC349_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_evidence'
+            echo 'RFC349_TARGET_FAULTS_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_target_faults'
+            echo 'RFC349_WRITE_MATRIX_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/rfc349_write_matrix'
+          } >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

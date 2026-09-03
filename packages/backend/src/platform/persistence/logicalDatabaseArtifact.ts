@@ -457,17 +457,45 @@ export function logicalChunkPath(
   return join(operationRoot, area, table.id, `chunk-${String(chunkIndex).padStart(8, '0')}.json`)
 }
 
-export function writeLogicalTableChunk(operationRoot: string, chunk: LogicalTableChunk): string {
-  const table = TableIdSchema.parse(chunk.payload.table)
-  const area = chunk.payload.disposition === 'ARCHIVE_THEN_OMIT' ? 'legacy-archive' : 'chunks'
+export interface PersistedLogicalTableChunk {
+  readonly path: string
+  /** The verified, canonical chunk exactly as written. */
+  readonly chunk: LogicalTableChunk
+  readonly bytes: number
+}
+
+/**
+ * 写一块并把**写下去的那一份**原样交回。
+ *
+ * 拷贝循环此前的写法是 `write` 之后再 `readLogicalTableChunk(path)` 读回来——同一块因此要
+ * 被 `JSON.parse` + Zod 校验 + 摘要各多做一遍。实测（250 行）：普通块 write 4.1ms /
+ * readback 3.0ms，`tasks` 这种 70 列的宽表 write 32.3ms / readback 23.3ms。一次全量迁移
+ * 有 5 万多块，读回这一步既是**四成**的同步耗时，也是同样比例的临时字符串垃圾——而它证明
+ * 不了什么：文件刚 fsync 完，读回来命中的是页缓存。
+ *
+ * 写路径本来就在 `verifyLogicalTableChunk` 里做了 Zod + 摘要校验，`durableWriteOnce` 又对
+ * 已存在的文件逐字节比对（不一致直接判冲突），所以交回内存里那一份与读回来完全等价。
+ */
+export function persistLogicalTableChunk(
+  operationRoot: string,
+  chunk: LogicalTableChunk,
+): PersistedLogicalTableChunk {
+  const verified = verifyLogicalTableChunk(chunk)
+  const table = TableIdSchema.parse(verified.payload.table)
+  const area = verified.payload.disposition === 'ARCHIVE_THEN_OMIT' ? 'legacy-archive' : 'chunks'
   const path = join(
     operationRoot,
     area,
     table,
-    `chunk-${String(chunk.payload.chunkIndex).padStart(8, '0')}.json`,
+    `chunk-${String(verified.payload.chunkIndex).padStart(8, '0')}.json`,
   )
-  durableWriteOnce(path, canonicalSchemaJson(verifyLogicalTableChunk(chunk)))
-  return path
+  const body = canonicalSchemaJson(verified)
+  durableWriteOnce(path, body)
+  return { path, chunk: verified, bytes: Buffer.byteLength(body, 'utf8') }
+}
+
+export function writeLogicalTableChunk(operationRoot: string, chunk: LogicalTableChunk): string {
+  return persistLogicalTableChunk(operationRoot, chunk).path
 }
 
 export function readLogicalTableChunk(path: string): LogicalTableChunk {

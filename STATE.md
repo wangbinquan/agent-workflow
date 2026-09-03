@@ -295,10 +295,42 @@ called before any query`。十九处判据统一补上 `errno`；守卫
 > 250ms」+「单条越 1s」。原判据是单样本尾部门，实测在互不相关的提交上反复红绿（一天里 4 红
 > 8 绿），每次都是 p95<=50ms、errors=0、只有 max 越线——它测的是共享 runner 的调度抖动。
 >
-> **仍未关闭**：`postgresql-evidence` 尚未跑绿；CI 那条 100 客户端 / full 种子（10M events、
-> 4.3GB SQLite）的 run 在 2026-09-02 06:35 以 **exit 143（SIGTERM）** 结束，种子完成后静默 30
-> 分钟——疑似 runner 资源（内存/磁盘）而非产品，尚未定论。下一步：本机小规模收敛到零错误后，
-> 按 exact SHA 重新 dispatch 一次 hosted run 看它停在哪。
+> **2026-09-03 接手（第一轮：可用性 / 性能，全部已修）**：本机 4.5GB / 100 客户端全量取证从
+> PASS 不了到 **Verdict PASS**，途中修掉五个真缺陷，逐条数据见
+> `design/RFC-349-postgresql-provider-one-click-migration/verification.md` §1：daemon 关停必失败
+> （seal 过的 claim gate 被 pause 拒绝，close participants / identity shutdown / 数据库关闭一步都没跑）、
+> SQLite 侧 post-commit 投影泵裸注册活过冻结窗口（这才是 `sqlite-source-mutated` 的真根因，
+> 上面第 14 条的四条 ticker 不是）、拷完目标库没 `ANALYZE`（割接后一分钟 3210 次 40001）、
+> 成员替换的 SSI 页级误报（改聚合根行锁，22.9% → 0.0%）、安全备份的 `PRAGMA quick_check`
+> 留在主线程且跑两遍（事件循环停顿 18.1s）+ `assertTargetCoverage` 的 O(k²) 回执分组。
+>
+> **2026-09-03（第二轮：把真适配器接到真 PostgreSQL 上，又抓到六个语义缺陷）**：前一轮取证只跑
+> HTTP/WS 负载与迁移本身，双 provider oracle 用的又是「只记录 SQL 文本」的假 runtime——证明得了
+> 走哪条事务/fence 路径，证明不了那条 SQL 在真库上跑不跑得动。补上这一层后连着暴出六个**只在
+> PostgreSQL 上成立**的缺陷（逐条见 `verification.md` §1b）：
+>
+> 18. identity 列被 Drizzle 渲染成字面量 `null`（SQLite 读作「分配下一个 rowid」）——**选
+>     PostgreSQL 时 `node_run_events` 一条都写不进去**，agent 每输出一行就要写它；
+> 19. node run 热写路径的 SSI 页级误报：`task_execution_owners` 每任务一行，小部署上就是几行的
+>     小表，8 并发满速冲突率 81.2%、逃逸 234。改 READ COMMITTED + node run 行锁后 0% / 0 逃逸；
+> 20. `LIKE` 大小写语义相反 ⇒ 记忆搜索、案件搜索切库后静默少召回；
+> 21. NULL 排序相反 ⇒ human gate 认领扫描与 event-center observer 扫描（都**故意**把 NULL 收进
+>     候选集）掉到队尾，存量填满 LIMIT 后新条目永远轮不到；
+> 22. `count(*)`/`sum(bigint)` 以**字符串**返回 ⇒ 算术变拼接、JSON 里数字变字符串、分页与配额
+>     判断被静默改写；
+> 23. 布尔列被赋整数 ⇒ 定时任务失败自停用抛 42804，任务永远停不掉。
+>
+> 补的门：`rfc349-postgresql-write-matrix.integration.test.ts` 逐表对真 PostgreSQL 执行真 INSERT
+> （按 SQLSTATE 判缺陷，挂在 `postgresql-evidence` 上），加四条静态守卫
+> （search-case / null-ordering / numeric-projection / boolean-expression parity），全部验证过对回退敏感。
+>
+> **仍未关闭**：托管 `postgresql-evidence` 在 `e211f1499` 上只剩**一条**未过——`copying` 阶段
+> event-loop max **688.5ms ≥ 500ms**（crash/resume 26/26、三平台 compiled、三个相位各 0 错误、
+> 迁移 0 错误都已绿；上一轮还是 3628.9ms + SERIALIZABLE 逃逸）。本机 10 核同一份代码是 221.4ms、
+> 托管 2 核 688.5ms，约 3 倍——与 CPU 规模一致，也可能是一次大 GC。已给 daemon 采样器加可调门槛
+> （`AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`）与堆用量/增量记录做归因，harness 会把这类行回显进
+> job log。归因结论落定前**不动** `EVENT_LOOP_GAP_MS = 500`。含全部修复的 exact SHA
+> `40b76d0df` 已重新 dispatch。**AC-14 / AC-15 未满足前 RFC-349 不得标 Done。**
 
 > ✅ **RFC 已完成（Done，2026-08-30）：[RFC-348 Intent 能力全景注册表：INTENT.md 从注册表派生、新增能力强制完成意图登记](design/RFC-348-intent-capability-teaching-registry/proposal.md)。**
 > 起于用户实证「意图构建里 Agent 总是不满足需求、AI 没看到能力全景」。落地：`modules/intent/domain/teaching/**` 三张编译期穷尽注册表

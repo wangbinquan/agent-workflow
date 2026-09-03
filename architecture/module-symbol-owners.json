@@ -6,7 +6,7 @@
     "moduleFiles": 1265,
     "productionFiles": 2670,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25707
+    "symbolsIncludingFileRoots": 25709
   },
   "entries": [
     {
@@ -150884,6 +150884,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "OperationIdSchema",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "id": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#PersistedLogicalTableChunk",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "PersistedLogicalTableChunk",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "id": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#persistLogicalTableChunk",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "persistLogicalTableChunk",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -309159,5 +309183,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cde547445c8598d52c8ffd0dc4997b741708d36549aa537d80eca12c2056bfd4"
+  "sourceDigest": "sha256:739ad8dd680b159cbf4b1eacc3be2764490b4f4d0acbce0bacf5a9812dff9a92"
 }

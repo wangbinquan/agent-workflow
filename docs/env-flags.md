@@ -17,6 +17,7 @@
 | `AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY` | `backend/src/cli/start.ts`                              | 仅与 dev lock handoff 同时启用：类型包同 revision 漂移时使用内存草稿，不改冻结 DB 行 |
 | `AGENT_WORKFLOW_OPENCODE_BIN`             | `backend/src/services/runtime/opencode/driver.ts`       | opencode 默认 head 覆盖（runtime 行 / config 均未指定时；RFC-143 起保留的历史通道）  |
 | `AGENT_WORKFLOW_DATABASE_URL`             | `backend/src/platform/persistence/postgresqlRuntime.ts` | PostgreSQL provider 默认连接 URL 变量；配置只保存变量名，状态/日志/回执不复制密钥值  |
+| `AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS`  | `backend/src/platform/background/maintenanceService.ts` | 事件循环停顿记 WARN 的门槛毫秒（默认 1000，夹在 [采样周期×2, 60000]）；调低用于归因  |
 
 ## 框架 ↔ 子进程契约（daemon 写入、child 读取）
 

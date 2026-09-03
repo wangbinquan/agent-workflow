@@ -42265,23 +42265,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:78622b2a99b623b9a5e9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#readLogicalTableChunk",
-      "toPath": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toSymbol": "readLogicalTableChunk",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
       "fromSymbol": "$file",
@@ -67272,6 +67255,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c250b156b87727d961cb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#persistLogicalTableChunk",
+      "toPath": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "toSymbol": "persistLogicalTableChunk",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts",
       "fromSymbol": "$file",
@@ -74169,23 +74169,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#ReviewDecisionManifestBridge",
       "toPath": "packages/backend/src/services/humanGateComposition.ts",
       "toSymbol": "ReviewDecisionManifestBridge",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d4f780e8e216925a67b7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#writeLogicalTableChunk",
-      "toPath": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toSymbol": "writeLogicalTableChunk",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -89235,9 +89218,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5249,
+    "architectureExceptions": 5248,
     "implementationSccs": 0,
-    "observedEdges": 6311,
+    "observedEdges": 6310,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -137279,22 +137262,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts#$file",
-      "id": "import:78622b2a99b623b9a5e9",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/logicalDatabaseArtifact",
-      "syntax": "static-import",
-      "targetSymbol": "readLogicalTableChunk",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#readLogicalTableChunk"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts#$file",
@@ -165823,6 +165790,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts#$file",
+      "id": "import:c250b156b87727d961cb",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/logicalDatabaseArtifact",
+      "syntax": "static-import",
+      "targetSymbol": "persistLogicalTableChunk",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#persistLogicalTableChunk"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts#$file",
@@ -173436,22 +173419,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/humanGateComposition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#ReviewDecisionManifestBridge"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/fileDatabaseMigrationArtifactStore.ts#$file",
-      "id": "import:d4f780e8e216925a67b7",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/logicalDatabaseArtifact",
-      "syntax": "static-import",
-      "targetSymbol": "writeLogicalTableChunk",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#writeLogicalTableChunk"
     },
     {
       "edgeKind": "value",
@@ -190759,7 +190726,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cde547445c8598d52c8ffd0dc4997b741708d36549aa537d80eca12c2056bfd4",
+  "sourceDigest": "sha256:739ad8dd680b159cbf4b1eacc3be2764490b4f4d0acbce0bacf5a9812dff9a92",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
