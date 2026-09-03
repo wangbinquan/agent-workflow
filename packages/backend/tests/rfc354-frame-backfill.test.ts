@@ -282,7 +282,11 @@ describe('RFC-354 T4 — SQLite store end-to-end', () => {
       .from(maintenanceState)
       .where(eq(maintenanceState.key, FRAME_BACKFILL_MARKER_KEY))
     expect(marker.length).toBe(1)
-    expect(JSON.parse(marker[0]!.value)).toMatchObject({ tasks: 1, rowsUpdated: 4, roundsUpdated: 1 })
+    expect(JSON.parse(marker[0]!.value)).toMatchObject({
+      tasks: 1,
+      rowsUpdated: 4,
+      roundsUpdated: 1,
+    })
 
     // Next boot: the marker short-circuits the walk.
     const second = await runFrameBackfillOnBoot({ provider: 'sqlite', db })
@@ -340,7 +344,9 @@ describe('RFC-354 T4 — doctor --backfill-containers', () => {
       }),
     })
     expect(result.status).toBe('ok')
-    expect(result.output).toContain('1 task(s) walked, 4 node run(s) and 1 clarify round(s) updated')
+    expect(result.output).toContain(
+      '1 task(s) walked, 4 node run(s) and 1 clarify round(s) updated',
+    )
     expect(closed).toBe(true)
   })
 })
