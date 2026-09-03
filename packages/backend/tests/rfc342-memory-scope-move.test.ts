@@ -3,8 +3,10 @@
 // These tests lock the command boundary, old+new scope authorization, durable
 // event atomicity, mutation races, and the eventual prompt-injection audience.
 
-import { createRepositoryScopeAuthorizationInTx } from '../src/modules/source-control/application/repositoryScopeAuthorization'
-import { sqliteRepositoryScopeExistenceReads } from '../src/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import {
+  createRepositoryScopeAuthorizationInTx,
+  sqliteRepositoryScopeExistenceReads,
+} from '../src/modules/source-control/public/participants'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'

@@ -1,6 +1,6 @@
 # RFC-352 — Memory bounded context 合同归位（RFC-294 W4-E2）
 
-- 状态：Draft（2026-09-03；待用户批准）
+- 状态：**Done（2026-09-03）**——用户当日批准 D1～D6 与 AC-1～AC-12 并授权完整实现；T8 分页按用户选定的选项 B 纳入本 RFC
 - current-source pin：`6752ec8c7`（`HEAD=origin/main`）
 - 所属波次：RFC-294 `plan.md §8` 的 **W4-E2 memory**；前置 W4-A（RFC-344）/ W4-C（RFC-345）/ W4-E0（RFC-347）均已 Done
 - 分母：账本重分桶（`48078eaa2`）之后，`W4-E2` 桶为 **67 条 exact edge**、**8 个 facade**

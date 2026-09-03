@@ -1235,6 +1235,11 @@ import=0；终局指标全绿。
 > - **R4 legacy-inbound 按消费者记账**：legacy 文件消费模块**已发布 public 面**的边，归**消费者**所属的波（深入模块内部的
 >   仍归被调模块）。这是用户当日给 RFC-345 T9 定的「修法落在谁的代码里就归谁的波」的机器化；不这么记，已 Done 的
 >   W4-C/W4-E0/W4-E7 桶里会永远挂着别人的活。
+>   **2026-09-03（RFC-352 T9）修正判据**：初版把「已发布面」写成 EXACT 入口（`publicLocation`），漏掉了 `public/` 下
+>   已登记的非 exact 入口（`NON_EXACT_PUBLIC`，如 memory 的 `catalog.ts` / `fusion.ts`）。就 R4 而言两者没有分别——
+>   消费者拿到的都是模块对外承诺的东西。判据改用 `isPublishedSurface`（`public/<file>` 一层即算），
+>   W4-E2 由此 `54→35`（9 条 `services/fusion.ts→memory` 归 W4-E3 等），W4-E3 `2→13`、W4-E1 `841→843`、W4-B `187→186`、
+>   W9 `2712→2713`。分母重设的结论不变，只是把「按消费者记」记得更准。
 >
 > 同批把 `scripts/depcheck.ts` 里 8 条 `KNOWN_VIOLATIONS` 逐条钉上 `removeWave: 'W5'`（review §B4；此前 `removeWhen` 写
 > 「属独立切片（未编号）」的条目被兜进 `RFC-owner-cutover`，在任何 wave 的退出门里都不出现）。结果：exception

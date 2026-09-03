@@ -101,6 +101,17 @@ export interface RepositoryCommitPublicationParticipant {
 // NotFound / Forbidden 组装——两边的既有错误码与文案因此逐字不变。
 // ---------------------------------------------------------------------------
 
+// RFC-352 T9 —— 唯一 owner 工厂与两个 provider 的事实读取器经 public 暴露。
+// memory 是 `memory → source-control` 这条 DAG offered 边上的合法消费者，但**必须经 public**：
+// T8 落地时它直接 import 了 `application/` 与 `infrastructure/`，那是跨 context 深入内部，
+// RFC-317 R2 当场入账。这里补齐 public 出口，把那 4 条边变回正常的 offered 消费。
+export { createRepositoryScopeAuthorizationInTx } from '../application/repositoryScopeAuthorization'
+export type { RepositoryScopeExistenceReads } from '../application/repositoryScopeAuthorization'
+export {
+  postgresqlRepositoryScopeExistenceReads,
+  sqliteRepositoryScopeExistenceReads,
+} from '../infrastructure/repositoryScopeAuthorization'
+
 /** 一个仓库 scope 或仓库组 scope 的目标。 */
 export interface RepositoryScopeTarget {
   readonly kind: 'repo' | 'repo_group'

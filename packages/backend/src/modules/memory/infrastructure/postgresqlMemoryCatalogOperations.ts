@@ -20,8 +20,10 @@ import { buildActor, type Actor, type ActorSource } from '@/auth/actor'
 import type { ResourceAccess } from '@agent-workflow/shared'
 import { listMemoryPage, type MemoryPageRow } from '../application/listPage'
 import type { MemoryPageAnchor } from '../domain/listPagination'
-import { createRepositoryScopeAuthorizationInTx } from '@/modules/source-control/application/repositoryScopeAuthorization'
-import { postgresqlRepositoryScopeExistenceReads } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import {
+  createRepositoryScopeAuthorizationInTx,
+  postgresqlRepositoryScopeExistenceReads,
+} from '@/modules/source-control/public/participants'
 import type {
   RepositoryScopeAuthorizationInTx,
   RepositoryScopeTarget,
@@ -38,7 +40,7 @@ import type {
   DirectCommandContextFactory,
   PrincipalSource,
 } from '@/modules/identity-access/public/participants'
-import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
+import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import {
   decideMemoryRowManageStamp,
   decideMemoryScopeManage,

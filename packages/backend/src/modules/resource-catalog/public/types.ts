@@ -1,3 +1,10 @@
+// RFC-352 T9 —— `resource-acl:bypass` 判定经 public 暴露。
+// 由来：memory 的两个 provider 此前从**不同地方**取同一个谓词——SQLite 侧走 legacy
+// `@/services/resourceAcl`、PostgreSQL 侧直接深入 `resource-catalog/domain/resourceAccess`
+// （跨 context 内部 import，RFC-317 R2 入账）。同一判据两个来源正是本 RFC 反复撞到的漂移形状，
+// 因此由 owner（resource-catalog）在 public 面给出唯一出口。
+export { hasResourceAclBypass } from '../domain/resourceAccess'
+
 import { asBundleResourceType } from '@agent-workflow/shared'
 import type {
   Agent,

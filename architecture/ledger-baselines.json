@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6311,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-352 T8（RFC-294 W4-E2）：`GET /api/memories` 新增可选分页（任一分页参数出现才切封套，无参调用逐字节不变）。新增 memory 的 domain 分页原语、application 分页编排与两个 provider 的 keyset 批取，因此 owner / observed-import / exception 各涨一次。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -450,11 +447,8 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5249,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-352 T8（RFC-294 W4-E2）：`GET /api/memories` 新增可选分页（任一分页参数出现才切封套，无参调用逐字节不变）。新增 memory 的 domain 分页原语、application 分页编排与两个 provider 的 keyset 批取，因此 owner / observed-import / exception 各涨一次。"
-      }
+      "baseline": 5243,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -467,8 +461,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 954,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 959,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-352 T9（RFC-294 W4-E2）：把 memory 对 source-control 与 resource-catalog 的**内部**import 改成经各自 public 消费——source-control 的 public 补出唯一 owner 工厂与两个 reads，resource-catalog 的 public 补出 `hasResourceAclBypass`（此前 memory 两个 provider 从不同地方取同一谓词）。公共面因此各多几个符号，换掉的是 5 条跨 context 深入内部的边。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -489,14 +486,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25729,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-352 T8（RFC-294 W4-E2）：`GET /api/memories` 新增可选分页（任一分页参数出现才切封套，无参调用逐字节不变）。新增 memory 的 domain 分页原语、application 分页编排与两个 provider 的 keyset 批取，因此 owner / observed-import / exception 各涨一次。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f5b5c010aa724f36bf98ce934808b8fb696b6b4487b56ab01f37bbfdf1f24581",
+    "sourceDigest": "sha256:f1c51b3cf8e7622e9d8b7f7037ba9a990ffd05239296c652adffdad86cfb5b45",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -509,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4f69feffaeb09740ec9aee817dbd78bbef5353cb",
-    "contentDigest": "sha256:2690a033a4008da8d0656eb7a19ee9e98789ed5fee9d33743bfd4f0dc1c2b74a",
+    "currentSnapshotSha": "eb8b331db2bc3d308a2df2195d1c5bf6786773e6",
+    "contentDigest": "sha256:e564bc17751d4f3578e55aeb784616e2a53cc5c9371168cc309aa18a98ad6096",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

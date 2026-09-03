@@ -819,6 +819,22 @@ function publicLocation(path: string): { context: string; entrypoint: string } |
   return { context: location.context, entrypoint: match[1]! }
 }
 
+/**
+ * RFC-352 T9 —— 「这条路径是不是模块**已发布**的面」。
+ *
+ * 与 `publicLocation` 的区别只有一处、但对记账很关键：那个函数只认 EXACT 入口
+ * （commands/queries/participants/events/operations/types），而 `public/` 下还有一批**已登记**的
+ * 非 exact 入口（`NON_EXACT_PUBLIC`，例如 memory 的 `catalog.ts` / `fusion.ts`）。
+ * 就 R4「legacy 消费模块已发布面 ⇒ 记消费者的波」这条规则而言，两者没有分别：
+ * 消费者拿到的都是模块对外承诺的东西，剩下的活都是把**消费者**搬进它自己的 context。
+ * 用 EXACT 判会让 `services/fusion.ts` 这样的消费者被错记到被调模块头上
+ * （实测：9 条 fusion→memory 的边挂在 W4-E2，而修法全在 knowledge-evolution 的文件里）。
+ */
+function isPublishedSurface(path: string): boolean {
+  const location = moduleLocation(path)
+  return location !== null && /^public\/[^/]+$/.test(location.rest)
+}
+
 function requiredPortLocation(path: string): { context: string } | null {
   const location = moduleLocation(path)
   if (location === null) return null
@@ -913,7 +929,7 @@ function observedContextEdges(
               // 它自己的 context，因此这条边归消费者所属的波；深入模块内部（composition / infrastructure /
               // application）的 legacy-inbound 才是被调模块自己的债，仍记在被调模块的波上。
               // 不这么记，已经 Done 的波（W4-C / W4-E0 / W4-E7）桶里会永远挂着别人的活。
-              publicLocation(item.toFile) !== null
+              isPublishedSurface(item.toFile)
               ? targetRemoveAfterWaveFor(unit.path, '$file')
               : targetRemoveAfterWaveFor(
                   item.toFile,

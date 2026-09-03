@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 859,
+    "consumers": 865,
     "exactEntrypointFiles": 62,
     "governedFieldSurfaces": 5,
-    "methods": 890,
+    "methods": 895,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 18932,
-    "symbols": 954
+    "recursiveFields": 18960,
+    "symbols": 959
   },
   "entries": [
     {
@@ -105255,6 +105255,77 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:154ce719aa99e6033abd",
+        "import:c83208e594e80466e61f"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:154ce719aa99e6033abd",
+            "import:c83208e594e80466e61f"
+          ],
+          "fieldPath": "$call.$parameter:actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:hasResourceAclBypass",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:40f893d7d4e7ad46b11c54d63dd09c52e5fde3086928f343651fa8cfee1a1802"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "memory",
+          "edgeId": "import:154ce719aa99e6033abd",
+          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalog.ts#$file"
+        },
+        {
+          "context": "memory",
+          "edgeId": "import:c83208e594e80466e61f",
+          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:1ea8fa761f003b034d903f76f332e4790160b35a1da21a399246079cc104bb23",
+      "status": "target-context-current-surface",
+      "symbol": "hasResourceAclBypass",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:3d706dee1b436915ce1d",
         "import:73a2907814e1add2cc78"
       ],
@@ -116805,6 +116876,219 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:105f7f16cf975a6cdbbf",
+        "import:2f8013f06fb7a7d85380"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:105f7f16cf975a6cdbbf",
+            "import:2f8013f06fb7a7d85380"
+          ],
+          "fieldPath": "$call.$parameter:reads.$method:exists.$parameter:target.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:reads.$method:exists.$parameter:target.kind.$variant:0",
+          "type": "'repo'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:reads.$method:exists.$parameter:target.kind.$variant:1",
+          "type": "'repo_group'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:reads.$method:exists.$parameter:transaction",
+          "type": "Transaction"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:reads.$method:exists.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:reads.$method:exists.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2f8013f06fb7a7d85380"
+          ],
+          "fieldPath": "$call.$return.$method:canManage.$parameter:subject.hasResourceAclBypass",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:105f7f16cf975a6cdbbf",
+            "import:2f8013f06fb7a7d85380"
+          ],
+          "fieldPath": "$call.$return.$method:canManage.$parameter:target.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:canManage.$parameter:target.kind.$variant:0",
+          "type": "'repo'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:canManage.$parameter:target.kind.$variant:1",
+          "type": "'repo_group'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:canManage.$parameter:transaction",
+          "type": "Transaction"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:canManage.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:canManage.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:105f7f16cf975a6cdbbf",
+            "import:2f8013f06fb7a7d85380"
+          ],
+          "fieldPath": "$call.$return.$method:exists.$parameter:target.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$parameter:target.kind.$variant:0",
+          "type": "'repo'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$parameter:target.kind.$variant:1",
+          "type": "'repo_group'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$parameter:transaction",
+          "type": "Transaction"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:createRepositoryScopeAuthorizationInTx",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:7a079371a09d825ed0d674a38072b40cc9e964702b6c3ff3dae4c603acba7646"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:105f7f16cf975a6cdbbf",
+            "import:2f8013f06fb7a7d85380"
+          ],
+          "name": "canManage",
+          "signatureDigest": "sha256:e43b01ac88e81f71a9f4feeac6abc32e833cef524da3ef654e946a0deac07ee4"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2f8013f06fb7a7d85380"
+          ],
+          "name": "exists",
+          "signatureDigest": "sha256:2614e819b86f2ecf5c76767443fa1c0d1dbb7f35adf63fd726576363388fd306"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "memory",
+          "edgeId": "import:105f7f16cf975a6cdbbf",
+          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file"
+        },
+        {
+          "context": "memory",
+          "edgeId": "import:2f8013f06fb7a7d85380",
+          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:9f6f0768b9d60490d023061664f176af6bfd486722d5b0dbd6847cc81cbae00d",
+      "status": "target-context-current-surface",
+      "symbol": "createRepositoryScopeAuthorizationInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:30b9f97c9cc45ce6d3ed"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:postgresqlRepositoryScopeExistenceReads",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "memory",
+          "edgeId": "import:30b9f97c9cc45ce6d3ed",
+          "file": "packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:9922dd2208dd2fb9de2188a240cad04b367c76cb54bc84f1331c536a32ee9876",
+      "status": "target-context-current-surface",
+      "symbol": "postgresqlRepositoryScopeExistenceReads",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:231680eabbc212ea1018"
       ],
       "context": "source-control",
@@ -117672,12 +117956,83 @@
           "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:createRepositoryScopeAuthorizationInTx"
+      ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:69553c3cbb4d584b87cd00c1ddb7bcffb97651d369df00717bdfd125cfaa4202",
       "status": "target-context-current-surface",
       "symbol": "RepositoryScopeAuthorizationInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$parameter:target.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$parameter:target.kind.$variant:0",
+          "type": "'repo'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$parameter:target.kind.$variant:1",
+          "type": "'repo_group'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$parameter:transaction",
+          "type": "Transaction"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:RepositoryScopeExistenceReads",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "exists",
+          "signatureDigest": "sha256:2614e819b86f2ecf5c76767443fa1c0d1dbb7f35adf63fd726576363388fd306"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:createRepositoryScopeAuthorizationInTx"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2161a3154dd38a05e6e9615c5b04f9c0da57df6dc733f7e28d963ac0047775a1",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryScopeExistenceReads",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -117714,7 +118069,9 @@
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeMaybePromise",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:source-control:participants:RepositoryScopeAuthorizationInTx"
+        "public:source-control:participants:RepositoryScopeAuthorizationInTx",
+        "public:source-control:participants:RepositoryScopeExistenceReads",
+        "public:source-control:participants:createRepositoryScopeAuthorizationInTx"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -117754,7 +118111,8 @@
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeSubject",
       "productionConsumers": [],
       "publicTypeConsumerIds": [
-        "public:source-control:participants:RepositoryScopeAuthorizationInTx"
+        "public:source-control:participants:RepositoryScopeAuthorizationInTx",
+        "public:source-control:participants:createRepositoryScopeAuthorizationInTx"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -117824,7 +118182,9 @@
         }
       ],
       "publicTypeConsumerIds": [
-        "public:source-control:participants:RepositoryScopeAuthorizationInTx"
+        "public:source-control:participants:RepositoryScopeAuthorizationInTx",
+        "public:source-control:participants:RepositoryScopeExistenceReads",
+        "public:source-control:participants:createRepositoryScopeAuthorizationInTx"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -117944,6 +118304,45 @@
       "unresolvedTypeRefs": [
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:53bd97d32063d6d121db"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:sqliteRepositoryScopeExistenceReads",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "memory",
+          "edgeId": "import:53bd97d32063d6d121db",
+          "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryCatalogOperations.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5f71413e152d2326f579d451cc865245e54462627a06aaf4e1088e51d205617c",
+      "status": "target-context-current-surface",
+      "symbol": "sqliteRepositoryScopeExistenceReads",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -152777,7 +153176,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f5b5c010aa724f36bf98ce934808b8fb696b6b4487b56ab01f37bbfdf1f24581",
+  "sourceDigest": "sha256:f1c51b3cf8e7622e9d8b7f7037ba9a990ffd05239296c652adffdad86cfb5b45",
   "targetContexts": [
     "collaboration",
     "development-automation",

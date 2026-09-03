@@ -1,6 +1,8 @@
 import { listMemoryPage } from '../application/listPage'
-import { createRepositoryScopeAuthorizationInTx } from '@/modules/source-control/application/repositoryScopeAuthorization'
-import { sqliteRepositoryScopeExistenceReads } from '@/modules/source-control/infrastructure/repositoryScopeAuthorization'
+import {
+  createRepositoryScopeAuthorizationInTx,
+  sqliteRepositoryScopeExistenceReads,
+} from '@/modules/source-control/public/participants'
 import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
 import type { DbTxSync } from '@/db/txSync'
 import type { DbClient } from '@/db/client'

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f5b5c010aa724f36bf98ce934808b8fb696b6b4487b56ab01f37bbfdf1f24581`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f1c51b3cf8e7622e9d8b7f7037ba9a990ffd05239296c652adffdad86cfb5b45`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,7 +30,7 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 5249 |
+| `architectureExceptions` | 5243 |
 | `backgroundJobs` | 367 |
 | `crossContextImports` | 6311 |
 | `facades` | 347 |
@@ -38,7 +38,7 @@
 | `moduleSymbolOwners` | 25729 |
 | `mutationEntrypoints` | 1910 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 954 |
+| `publicSurfaces` | 959 |
 | `transactionExternalEffects` | 476 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -198,12 +198,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3494 |
+| legacy-outbound | 3493 |
 | legacy-inbound | 1546 |
 | provider-mirror | 457 |
 | infrastructure-external | 395 |
-| offered-consumption | 128 |
-| temporary-internal-debt | 111 |
+| offered-consumption | 134 |
+| temporary-internal-debt | 106 |
 | off-dag-offered | 85 |
 | authority-type-only | 63 |
 | required-implementation | 27 |
@@ -213,9 +213,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3494 |
+| legacy-outbound | 3493 |
 | legacy-inbound | 1546 |
-| temporary-internal-debt | 111 |
+| temporary-internal-debt | 106 |
 | off-dag-offered | 85 |
 | no-circular | 6 |
 | external-layer-debt | 5 |
@@ -225,23 +225,23 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2712 |
-| W4-E1 | 841 |
+| W9 | 2713 |
+| W4-E1 | 843 |
 | W4-C | 436 |
 | W4-E0 | 214 |
 | W4 | 207 |
-| W4-B | 187 |
+| W4-B | 186 |
 | W4-E4a | 176 |
 | W5 | 145 |
 | W4-E8 | 113 |
 | W4-E9 | 61 |
-| W4-E2 | 54 |
 | W4-E7 | 42 |
 | W4-E4b | 36 |
+| W4-E2 | 35 |
+| W4-E3 | 13 |
 | W9-E | 11 |
 | W2-D/W3/W5 | 7 |
 | W4-E10 | 3 |
-| W4-E3 | 2 |
 | W4-E5 | 2 |
 
 ## 6. Public surface（`public-surfaces.json`）
@@ -250,13 +250,13 @@
 
 | context | 数量 |
 | --- | --- |
-| resource-catalog | 241 |
+| resource-catalog | 242 |
 | task-execution | 198 |
 | collaboration | 125 |
 | identity-access | 65 |
 | system-operations | 63 |
 | digital-employee | 51 |
-| source-control | 41 |
+| source-control | 45 |
 | development-automation | 39 |
 | intent | 31 |
 | event-center | 22 |
@@ -267,7 +267,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 954）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 149 / 959）
 
 | context | 数量 |
 | --- | --- |

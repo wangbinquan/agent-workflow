@@ -84,7 +84,7 @@ import type {
   RepositoryScopeAuthorizationInTx,
   RepositoryScopeTarget,
 } from '@/modules/source-control/public/participants'
-import { hasResourceAclBypass } from '@/services/resourceAcl'
+import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
 export interface MemoryWithChain {

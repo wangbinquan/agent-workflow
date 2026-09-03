@@ -1,7 +1,7 @@
 # RFC-352 实施计划 — Memory bounded context 合同归位
 
 - 状态：**Approved / In Progress**（用户 2026-09-03 批准 D1～D6 与 AC-1～AC-12 并授权完整实现）
-- 进度：T1～T4 ✅ / T6 ✅ / T7 ✅ / T8 ✅（分页，用户 2026-09-03 选定选项 B 在本 RFC 内做）；T9 部分完成（facade 8 → 3，`services/memory.ts` 按归属转交）；T10 未开
+- 进度：**T1～T10 全部完成（2026-09-03）**。T5 并入 T2（注入迁位时一并完成）；T8 按用户选定的选项 B 在本 RFC 内做；T9 的退役 / 转交逐条见 §4.1
 - current-source pin：`6752ec8c7`
 - 开工分母（账本重分桶 `48078eaa2` 之后）：W4-E2 exact edge **67**、facade **8**
 
@@ -38,6 +38,49 @@
 AC-4 SC participant 落地且错绑必红 / AC-5 权限矩阵逐格不变 / AC-6 路由只 decode-call-map /
 AC-7 分页两 provider 对拍 / AC-8 蒸馏行为 oracle / AC-9 冻结守卫 / AC-10 转交记账 /
 AC-11 零 schema-wire-前端 / AC-12 exact-SHA hosted CI 终态成功。
+
+## 4.1 T9 执行结果（2026-09-03）——退役 / 转交逐条
+
+判据沿用用户 2026-09-02 给 RFC-345 T9 定的规则：**修法完全落在 `modules/memory/**` 内部的才由本 RFC 退役；
+需要往别的 context 的文件里塞注入、或需要新开公共合同的，转交该 consumer 所属的波。\*\*
+
+W4-E2 桶：开工时 96 条 → T8 后 54 条 → T9 后 **35 条**。facade：8 → **2**。
+
+### 本刀退役的（memory 自己的）
+
+| 项                                                                                                                                                                          |        条数 | 做法                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `services/memoryInject.ts` / `distillerSourceContext.ts` / `memoryDistiller.ts` / `memoryDistillScheduler.ts` / `memoryDistillJobDetail.ts` / `memoryDistillSessionView.ts` | 6 个 facade | 按分层迁进模块（T2 / T6 / T7），后两个的函数体只是转发给 `MemoryDistillQueries`，路由改为直接调 port                                                                                             |
+| memory → source-control 的**内部** import                                                                                                                                   |           4 | T8 落地时直接 import 了 SC 的 `application/` 与 `infrastructure/`；T9 由 SC 在 `public/` 补出唯一 owner 工厂与两个 reads，改为正常的 offered 消费（`memory → source-control` 本就在设计 DAG 上） |
+| memory → resource-catalog `domain/resourceAccess`                                                                                                                           |           1 | 同一谓词此前两个 provider 从不同地方取（SQLite 走 legacy `@/services/resourceAcl`、PostgreSQL 深入 RC domain）。由 owner 在 `resource-catalog/public/types.ts` 给出唯一出口，两侧统一            |
+
+### 转交的（修法在别人的文件里）
+
+| 项                                                                              |                     条数 | 转交给             | 理由                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------- | -----------------------: | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services/fusion.ts` → `memory/public/fusion`                                   |                        9 | **W4-E3**          | fusion 属 knowledge-evolution；剩下的活是把**消费者**搬进它自己的 context                                                                                                                                                    |
+| `routes/memories.ts` / `routes/fusions.ts` → memory public                      |                        5 | 各自 consumer 的波 | 同上                                                                                                                                                                                                                         |
+| memory → `ws/broadcaster`                                                       |                        8 | **W9**             | 目标形态是 commit 后由平台事件面投递，不由 application 直连 broadcaster                                                                                                                                                      |
+| `memoryDistillSessionCapture` → `services/runtime/*`                            |                        3 | **W4-E4b**         | runtime 驱动合同归 runtime-management                                                                                                                                                                                        |
+| TE / collaboration → memory public（off-dag）                                   |                        9 | **W4-E1 / W4**     | 合法消费但不在设计 §3.1 DAG 上；已在 `OFF_DAG_OFFERED_EDGE_DEBT` 逐条登记，反向补 DAG 会造成双向 context 边                                                                                                                  |
+| `resource-catalog/infrastructure/legacy/skillVersion.ts` → `services/memory.ts` | 1（带走最后一个 facade） | **W4-C**           | 该 facade 的两个生产 consumer 一个在 `platform/persistence/sqlite/systemOverviewReadModel.ts`、一个在 RC legacy；修法是给平台读模型注入 memory 的 query port、给 RC 提供 tx-bound unfuse participant——都不在 memory 的文件里 |
+| `services/runtime/opencode/distillSessionCapture.ts`（facade）                  |                        1 | **W4-E4b**         | 落在 runtime 目录下，随 runtime-management 迁                                                                                                                                                                                |
+
+### 明确不在本刀处理、也不单方面重新归属的
+
+`server.ts` / `cli/start.ts` / `cli/postgresqlDaemonApplication.ts` → `memory/composition*` 共 **11 条**。
+它们是 bootstrap 装配模块的边，而这在 RFC-294 里正是 **W9-A DaemonContainer** 要重构的形态。
+但实测这是**全仓普遍形态**：同样的 bootstrap→composition 边共 **381 条、横跨 10 个波**
+（W4-C 71 / W4-E8 68 / W4-B 59 / W4-E1 42 / W4-E9 39 / W5 34 / W4 26 / W4-E4a 17 / W4-E7 14 / W4-E2 11）。
+把它们整体改记 W9 是一次跨波重新归属，属独立决策，**不由 memory 这一刀单方面做**。
+
+### 顺带修正的记账规则（R4 放宽）
+
+`rfc294Canonical.ts` 的 R4（「legacy 消费模块已发布面 ⇒ 记消费者的波」）此前只认 EXACT public 入口，
+而 `public/` 下还有一批**已登记**的非 exact 入口（`NON_EXACT_PUBLIC`，如 memory 的 `catalog.ts` / `fusion.ts`）。
+就这条规则而言两者没有分别——消费者拿到的都是模块对外承诺的东西。用 EXACT 判会把
+`services/fusion.ts` 这类消费者错记到被调模块头上（实测 9 条 fusion→memory 的边挂在 W4-E2，
+而修法全在 knowledge-evolution 的文件里）。已改为「路径在 `public/` 下即算已发布面」。
 
 ## 5. 并发协调
 
