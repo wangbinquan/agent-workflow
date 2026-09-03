@@ -60,15 +60,32 @@ T1 生成报告必须把表按 bounded context、prefix、consumer、row estimat
 | RFC-349-T7  | durable one-click migration engine：preflight/freeze/backup/copy/verify/cutover/rollback               | T4–T6      | Done（`databaseMigrationRunner` / `ControlPlane` / `Coordinator`）                        |
 | RFC-349-T8  | 六张 legacy 表 logical archive + target omit；schema count/report gate                                 | T2、T4、T7 | Done（`RFC349_ARCHIVE_THEN_OMIT_TABLES` 六项 + schema 门）                                |
 | RFC-349-T9  | system-operations command/query、Settings/CLI/status/progress/cancel/resume/finalize                   | T7–T8      | Done（`routes/databaseMigrations.ts` + `DatabaseMigrationSection.tsx` + e2e）             |
-| RFC-349-T10 | dual-provider full regression、fault/mutation、large migration、100-client soak、三平台 compiled smoke | T3–T9      | **In Progress**：三平台 compiled 已绿；large migration 仍 `sqlite-source-mutated`（见下） |
+| RFC-349-T10 | dual-provider full regression、fault/mutation、large migration、100-client soak、三平台 compiled smoke | T3–T9      | **In Progress**：三平台 compiled、crash 26/26、三相位 0 错误均已绿；只剩 `verifying` 的残留事件循环停顿（见下） |
 | RFC-349-T11 | exact publication、remote/hosted exact-SHA、canonical/provenance/RFC-294/STATE closeout                | T10        | **Pending**（AC-14/AC-15 未满足，不得标 Done）                                            |
 
-**T10 未关闭的确切原因**：`postgresql-evidence` 的 `PostgreSQL crash matrix + 100-client full seed` 在 4.3GB full-seed 上于 `copying`
-阶段以 `{"category":"source-integrity","detailCode":"sqlite-source-mutated","retryable":false}` 收场——冻结窗内仍有写手或 checkpoint
-漏出。实测：另一条连接执行一次**裸 `PRAGMA wal_checkpoint(TRUNCATE)`**，零逻辑变更也会让 reader 的 `data_version` 加一，因此
-`assertUnchanged` 的三个信号里究竟哪个动了，是归因的前提；`sqliteLogicalSource.assertUnchanged` 已改为逐项点名漂移信号，下一次
-hosted run 即可定位。另需复核 `cli/start.ts` §8 的四个 background ticker（limits / backup / submoduleRefresh / batchImportGc）——它们
-起在 provider session 的可暂停 factory **之外**，而 PostgreSQL daemon 侧的同类是 `backupRuntimeFactory` 等可暂停 handle。
+**T10 的进展与唯一未关闭项（2026-09-03 按实跑重写）**
+
+此前记的 `sqlite-source-mutated` 与「四个 background ticker 在可暂停 factory 之外」都**已不成立**：前者的根因是 SQLite 侧的
+post-commit 投影泵是裸注册、活过整个冻结窗口（PostgreSQL daemon 早就把它组装成可暂停 handle），已收成两侧同构并由
+`rfc349-sqlite-daemon-pausable-writers` 守住；后者的四条 ticker 早已在 `providerBackgroundWriterFactories` 里，同一条守卫逐条钉着。
+
+4.5GB / 13,208,775 行 / 100 客户端的全量取证，现在**已绿的部分**：
+
+- crash/resume **26/26**；
+- `sqlite-normal` / `postgresql-normal` / `postgresql-maintenance` 三相位 HTTP 错误 **0 / 0 / 0**；
+- 三平台 compiled smoke 全绿；
+- 迁移期间 status 错误 **0**（曾经是 101）。
+
+途中修掉的五个真缺陷，各带回归用例：daemon 关停必失败（seal 过的 claim gate 被 pause 拒绝，close participants /
+identity shutdown / 数据库关闭一步都没跑）、投影泵活过冻结窗口、目标库拷完没 `ANALYZE`（割接后一分钟服务端记 3210 次 40001，
+因为没有统计的表被规划成顺序扫描、而顺序扫描在 SERIALIZABLE 下持整表 predicate lock）、成员替换的 SSI 页级误报
+（改用聚合根行锁，实测冲突率 22.9% → 0.0%）、以及安全备份的 `PRAGMA quick_check` 留在主线程且跑了两遍
+（本机事件循环停顿 18.1s / 托管 11.1s）。
+
+**唯一未关闭项**：`verifying` 阶段仍有约 2.5 秒的事件循环停顿（门槛 500ms）。已确认它**不是** CPU 饥饿——4 个并行 index build
+打 850 万行表时旁观进程的最坏事件循环间隔只有 8.1ms；也不是 `digestFile`（4.5GB 流式 sha256 总耗时 5.6s，但最坏间隔 4.0ms）。
+其中约 300ms 已定位并修掉（`assertTargetCoverage` 的回执分组是 O(k²)，1 万个分片约 5000 万次同步拷贝）。剩余部分正在用新加的
+`event loop stalled` 日志（超过 1s 当场记时间戳）配合取证的停顿阶段归因定位。
 
 关键路径：
 
