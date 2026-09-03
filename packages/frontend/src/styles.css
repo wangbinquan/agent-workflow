@@ -29465,3 +29465,33 @@ button.status-chip {
 ) {
   white-space: nowrap !important;
 }
+
+/* RFC-353 T10 —— 技能版本行的来源展开区。
+ * 复用 `.data-table__expanded-row` 的底纹与 `.memory-row__scope` 的 scope 徽标，
+ * 这里只补「一行一条知识」的排布，不新造一套视觉。 */
+.skill-provenance {
+  padding: 10px 16px;
+}
+.skill-provenance__caption {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+.skill-provenance__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.skill-provenance__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.skill-provenance__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

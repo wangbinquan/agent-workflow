@@ -3128,6 +3128,10 @@ export interface Resources {
     versionSourceRestore: string
     versionSourceImport: string
     versionRestoredFrom: string
+    provenanceExpand: string
+    provenanceCollapse: string
+    provenanceCaption: string
+    provenanceEmpty: string
     versionCompare: string
     versionRestore: string
     versionRestoreConfirm: string
@@ -10283,6 +10287,10 @@ export const zhCN: Resources = {
     versionSourceRestore: '回退',
     versionSourceImport: '导入',
     versionRestoredFrom: '回退自 v{{n}}',
+    provenanceExpand: '展开 v{{n}} 融入的知识',
+    provenanceCollapse: '收起 v{{n}} 融入的知识',
+    provenanceCaption: '融入 v{{n}} 的知识',
+    provenanceEmpty: '这一版已没有仍记在册的融合知识——可能已被回滚，或对你不可见。',
     versionCompare: '与当前对比',
     versionRestore: '回退到此版本',
     versionRestoreConfirm: '将技能回退到 v{{n}}？这会以 v{{n}} 的内容生成一个新版本。',

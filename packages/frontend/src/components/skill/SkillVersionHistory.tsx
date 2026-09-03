@@ -1,12 +1,19 @@
 // RFC-101 PR-A — skill version history panel: list past versions, diff any
 // version against current, and restore (forward-only). Reuses the shared
 // DiffViewer / Dialog / ConfirmButton / Empty+Loading primitives.
+//
+// RFC-353 T10 —— 每个「融合」版本可以展开，看这一版到底吃进了哪些知识。
+// 展开区复用 `OperationsExpandButton` 与 `.data-table__expand*` 那套既有原语
+// （与事件中心的投递详情、仓库组同一形态），不自写 chrome。
+// 来源数据来自 `GET /api/skills/:id/provenance`：**整份一次取回**，不按行请求——
+// 版本行本来就不多，逐行取会在展开三四行时打出四五个并发请求，且每次折叠再展开又重来。
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   SkillContent,
+  SkillProvenance,
   SkillVersion,
   SkillVersionDiff,
   SkillVersionSource,
@@ -19,6 +26,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
+import { OperationsExpandButton } from '@/components/operations/OperationsExpandButton'
 import { TableViewport } from '@/components/TableViewport'
 
 const SOURCE_KEY: Record<SkillVersionSource, string> = {
@@ -61,6 +69,18 @@ export function SkillVersionHistory({
     queryKey: ['skills', skillId, 'versions'],
     queryFn: ({ signal }) => api.get(`/api/skills/${enc}/versions`, undefined, signal),
   })
+
+  // RFC-353 T10：展开的版本号（一次只展开一行，和事件中心的投递详情同一交互）。
+  const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
+  // 只在用户第一次展开时才去取——技能详情页的默认视图不该为一个折叠区多打一次请求。
+  const provenance = useQuery<SkillProvenance>({
+    queryKey: ['skills', skillId, 'provenance'],
+    enabled: expandedVersion !== null,
+    queryFn: ({ signal }) => api.get(`/api/skills/${enc}/provenance`, undefined, signal),
+  })
+  const fusedByVersion = new Map(
+    (provenance.data?.versions ?? []).map((v) => [v.versionIndex, v.memories]),
+  )
 
   const [diffFrom, setDiffFrom] = useState<number | null>(null)
   const diff = useQuery<SkillVersionDiff>({
@@ -125,10 +145,30 @@ export function SkillVersionHistory({
           <TableViewport label={t('skills.versionsSection')} minWidth="lg">
             <table className="data-table data-table--compact">
               <tbody>
-                {versions.data.map((v) => {
+                {versions.data.flatMap((v) => {
                   const isCurrent = v.versionIndex === currentVersion
-                  return (
+                  // 只有融合版本有来源可展开——其余来源（编辑 / 导入 / 回滚 / 初始）不吃记忆，
+                  // 给它们一个永远空的展开箭头只会让人以为数据丢了。
+                  const expandable = v.source === 'fusion'
+                  const expanded = expandable && expandedVersion === v.versionIndex
+                  const detailsId = `skill-version-provenance-${v.versionIndex}`
+                  return [
                     <tr key={v.id}>
+                      <td className="data-table__expand">
+                        {expandable && (
+                          <OperationsExpandButton
+                            expanded={expanded}
+                            controls={detailsId}
+                            label={
+                              expanded
+                                ? t('skills.provenanceCollapse', { n: v.versionIndex })
+                                : t('skills.provenanceExpand', { n: v.versionIndex })
+                            }
+                            testid={`skill-version-provenance-toggle-${v.versionIndex}`}
+                            onToggle={() => setExpandedVersion(expanded ? null : v.versionIndex)}
+                          />
+                        )}
+                      </td>
                       <td>
                         <strong>{t('skills.versionLabel', { n: v.versionIndex })}</strong>{' '}
                         <span className={`chip chip--tight chip--${v.source}`}>
@@ -178,8 +218,48 @@ export function SkillVersionHistory({
                           </>
                         )}
                       </td>
-                    </tr>
-                  )
+                    </tr>,
+                    ...(expanded
+                      ? [
+                          <tr
+                            key={`${v.id}-provenance`}
+                            id={detailsId}
+                            className="data-table__expanded-row"
+                          >
+                            <td colSpan={5} className="skill-provenance">
+                              {provenance.data === undefined && provenance.isLoading ? (
+                                <LoadingState size="compact" />
+                              ) : provenance.data === undefined ? (
+                                <ErrorBanner
+                                  error={provenance.error}
+                                  onRetry={() => void provenance.refetch()}
+                                />
+                              ) : (fusedByVersion.get(v.versionIndex) ?? []).length === 0 ? (
+                                <EmptyState size="compact" title={t('skills.provenanceEmpty')} />
+                              ) : (
+                                <>
+                                  <p className="skill-provenance__caption muted">
+                                    {t('skills.provenanceCaption', { n: v.versionIndex })}
+                                  </p>
+                                  <ul className="skill-provenance__list">
+                                    {(fusedByVersion.get(v.versionIndex) ?? []).map((m) => (
+                                      <li key={m.id} className="skill-provenance__item">
+                                        <span
+                                          className={`memory-row__scope memory-row__scope--${m.scopeType}`}
+                                        >
+                                          {t(`memory.scope.${m.scopeType}`)}
+                                        </span>
+                                        <span className="skill-provenance__title">{m.title}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                            </td>
+                          </tr>,
+                        ]
+                      : []),
+                  ]
                 })}
               </tbody>
             </table>

@@ -3763,6 +3763,11 @@ export const enUS: Resources = {
     versionSourceRestore: 'restored',
     versionSourceImport: 'imported',
     versionRestoredFrom: 'restored from v{{n}}',
+    provenanceExpand: 'Show what v{{n}} absorbed',
+    provenanceCollapse: 'Hide what v{{n}} absorbed',
+    provenanceCaption: 'Knowledge absorbed into v{{n}}',
+    provenanceEmpty:
+      'Nothing from this fusion is still recorded here — the knowledge may have been rolled back or is not visible to you.',
     versionCompare: 'Compare to current',
     versionRestore: 'Restore',
     versionRestoreConfirm:
