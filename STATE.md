@@ -25,7 +25,8 @@
 > 报 1 条 P1 + 2 条 P3 并全部修复——P1 是 wrapper 体内 self 反问的 park 行落在顶层帧，答复后 gate 被再派发多铸 `skipped`
 > （`2ebb9db60`：`openAgentClarify(self)` 传 `containerRunId` + `frameIteration`，两个 provider 的复用查找按帧加锁，rfc040 两条
 > resume 用例锁 gate 行恰为 `['done']`）；门同时指出「既有 clarify 用例零改动全绿」不足以验收 wrapper 内 D7（那些用例不断言 gate 行）。
-> CI 取证：PR-3 主体 `fb608f89c` run 33800356235 success；实现门收口笔随 tip `c279d6570` 的 run 判绿。
+> CI 取证：PR-3 主体 `fb608f89c` run 33800356235 success；实现门收口（含 `CollaborationAgentClarifyOpenInput` 折成 `frame`
+> 字段守住 12 顶层字段上限的收红 `4f03b764e`）后的 tip `bf492f063` run 33806729877 success。
 > **留下的债**（plan.md §5）：InboxDrawer 反问条目仍只显示 `iteration`（clarify session DTO 不带帧）；self 代际计数
 > `priorDoneGenerationsForRun` 仍只按 `(iteration, shardKey)` 不按 `containerRunId`（同轮次不同代际会互相计数，仅影响反问轮编号）。
 > 起点是用户问「校验不允许 loop 嵌 loop，能不能直接放开」——不能：

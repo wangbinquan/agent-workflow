@@ -100,7 +100,7 @@ exit 谓词按帧求值）；PR-3 依赖 PR-2（clarify 通道端口已在端口
 - [x] AC-14 前端（T10, T16, T18） — 画布只写边 + 任务详情按帧
 - [x] AC-15 fanout 校验（T2, T15） — `wrapper-fanout-shard-source-*`
 - [x] AC-16 文档（T10, T16） — `docs/workflow-yaml.md` v6 + design §10 偏离
-- [x] AC-17 三个 PR 各自 exact SHA CI 绿 — PR-1 `87aab47cb`、PR-2 `e1e538b1b`（e2e 收红后 `fb608f89c` run 33800356235 全绿）、PR-3 `fb608f89c`；实现门收口笔随 tip run 判绿
+- [x] AC-17 三个 PR 各自 exact SHA CI 绿 — PR-1 `87aab47cb`、PR-2 `e1e538b1b`（e2e 收红后 `fb608f89c` run 33800356235 全绿）、PR-3 `fb608f89c`；实现门收口 + god-surface 收红后的 tip `bf492f063` run 33806729877 全绿
 
 ## 4. 已知踩坑预案（摘自 `docs/dev-gotchas.md`，动手前再扫一遍）
 
