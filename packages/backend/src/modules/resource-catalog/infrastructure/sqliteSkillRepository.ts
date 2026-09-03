@@ -18,8 +18,8 @@ import {
   getSkillVersionContent,
   listSkillVersions,
   restoreSkillVersion,
+  type SkillRestoreMembershipPort,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { unfuseAboveVersionSync } from '@/modules/memory/infrastructure/sqliteMemoryMembershipParticipant'
 import type { SkillRepository } from '../application/skills/ports'
 
 /**
@@ -32,6 +32,9 @@ import type { SkillRepository } from '../application/skills/ports'
 export function createSqliteSkillRepository(
   db: DbClient,
   fsOptions: SkillFsOptions,
+  // RFC-353 T7：回滚时「哪些记忆退回待用」由 knowledge-evolution 的协调器裁定，
+  // bootstrap 注入。此前这里直接 import memory 的 infrastructure——跨 context 内部 import。
+  restoreMembership: SkillRestoreMembershipPort,
 ): SkillRepository {
   const repository: SkillRepository = {
     list: () => listSkills(db),
@@ -110,8 +113,7 @@ export function createSqliteSkillRepository(
         current.id,
         version,
         authority.user.id,
-        // RFC-353 T3：memory 那一半经注入，与 PostgreSQL 侧同源（那边一直是注入的）。
-        { unfuseAboveVersion: (tx, selector) => unfuseAboveVersionSync(tx, selector) },
+        restoreMembership,
         input.reason,
         current.ownerUserId ?? null,
         input.expectedToken,

@@ -6,15 +6,15 @@ import type {
   SkillCatalogModule,
   WorkflowCatalogModule,
 } from '../public/operations'
-import type {
-  PostgresqlSkillContentLifecycle,
-  PostgresqlSkillMemoryFusionParticipantFactory,
-} from '../infrastructure/postgresqlSkillRepository'
+import type { PostgresqlSkillContentLifecycle } from '../infrastructure/postgresqlSkillRepository'
 import {
   createPostgresqlAgentPersistenceSemantics,
   type AgentRuntimeProfileLookup,
 } from '../infrastructure/postgresqlAgentPersistenceSemantics'
-import { createPostgresqlSkillContentLifecycle } from '../infrastructure/postgresqlSkillContentLifecycle'
+import {
+  createPostgresqlSkillContentLifecycle,
+  type PostgresqlSkillRestoreMembershipPort,
+} from '../infrastructure/postgresqlSkillContentLifecycle'
 import { createPostgresqlWorkflowPersistenceSemantics } from '../infrastructure/postgresqlWorkflowPersistenceSemantics'
 import { composePostgresqlAgentImportQueries } from './agentImportQueries'
 import {
@@ -46,13 +46,13 @@ export function composePostgresqlClassicCatalogs(input: {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
   readonly runtimeProfiles: AgentRuntimeProfileLookup
-  readonly memoryFusion: PostgresqlSkillMemoryFusionParticipantFactory
+  readonly restoreMembership: PostgresqlSkillRestoreMembershipPort
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }): PostgresqlClassicCatalogBundle {
   const skillContent = createPostgresqlSkillContentLifecycle({
     db: input.db,
     appHome: input.appHome,
-    memoryFusion: input.memoryFusion,
+    restoreMembership: input.restoreMembership,
   })
   const agentResourceInventory = composePostgresqlAgentResourceInventorySource({
     db: input.db,

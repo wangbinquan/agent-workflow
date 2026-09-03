@@ -16,6 +16,7 @@ import type {
   SkillDeleteConfirmationPort,
   SkillRepository,
 } from '../application/skills/ports'
+import type { SkillRestoreMembershipPort } from '../infrastructure/legacy/skillVersion'
 import { createSqliteSkillRepository } from '../infrastructure/sqliteSkillRepository'
 import { createSqliteSkillZipImportParticipant } from '../infrastructure/sqliteSkillZipImport'
 import { createPostgresqlSkillZipImportParticipant } from '../infrastructure/postgresqlSkillZipImport'
@@ -32,6 +33,12 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 export interface SkillCatalogCompositionDependencies {
   readonly db: DbClient
   readonly appHome: string
+  /**
+   * RFC-353 T7：回滚时「哪些记忆退回待用」由 knowledge-evolution 的协调器裁定。
+   * 由 bootstrap 交进来——RFC-294 的目标边表里没有 `resource-catalog → knowledge-evolution`，
+   * resource-catalog 不能自己去取。
+   */
+  readonly restoreMembership: SkillRestoreMembershipPort
 }
 
 type SkillAclOperationApplication = Parameters<typeof createSkillOperationDescriptors>[6]
@@ -121,7 +128,11 @@ export function composePostgresqlSkillCatalog(
 export function composeSkillCatalog(
   input: SkillCatalogCompositionDependencies,
 ): SkillCatalogModule {
-  const repository = createSqliteSkillRepository(input.db, { appHome: input.appHome })
+  const repository = createSqliteSkillRepository(
+    input.db,
+    { appHome: input.appHome },
+    input.restoreMembership,
+  )
   const access: SkillAccessPort = Object.freeze({
     filterVisible: (authority: SkillOperationContext, rows: readonly Skill[]) =>
       filterVisibleRows(input.db, authority, 'skill', [...rows]),

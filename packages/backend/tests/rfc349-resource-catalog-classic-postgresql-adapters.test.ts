@@ -71,7 +71,9 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(bundle).toContain('createPostgresqlAgentPersistenceSemantics({')
     expect(bundle).toContain('createPostgresqlWorkflowPersistenceSemantics({')
     expect(bundle).toContain('createPostgresqlSkillContentLifecycle({')
-    expect(bundle).toContain('memoryFusion: input.memoryFusion')
+    // RFC-353 T7：回滚成员关系由 knowledge-evolution 裁定、bootstrap 注入，
+    // 这里断言的是「bundle 把它原样传给内容生命周期」这条装配事实（名字随之改了）。
+    expect(bundle).toContain('restoreMembership: input.restoreMembership')
     expect(bundle).toContain('runtimeProfiles: input.runtimeProfiles')
     expect(bundle).toContain('composePostgresqlAgentCatalog({')
     expect(bundle).toContain('composePostgresqlWorkflowCatalog({')
@@ -87,8 +89,9 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(workflow).toContain('assertDefinitionReferences({')
     expect(skill).toContain('export function createPostgresqlSkillContentLifecycle(')
     expect(skill).toContain("kind: input.reserve === undefined ? 'version-write' : 'reserve'")
-    expect(skill).toContain('.unfuseAboveVersion({')
-    expect(skill).toContain('inTransaction(transaction)')
+    // RFC-353 T7：回滚的「退回哪些记忆」判据迁给了 knowledge-evolution，resource-catalog
+    // 只把事务与回滚目标交出去；断言随之改为这条注入面（原判据的锁在 KE 侧）。
+    expect(skill).toContain('.unfuseForRestore(transaction, {')
     expect(skill).toContain(".set({ phase: 'db-committed' })")
     expect(skill).toContain('swapInStaged(state.filesDir, state.opId)')
     expect(skill).toContain("await retireOperation(db, state.opId, 'done')")

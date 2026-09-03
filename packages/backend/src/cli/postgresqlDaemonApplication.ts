@@ -197,6 +197,7 @@ import {
   composeWebhookLaunchAdmission,
   composeWebhookTriggerValidation,
 } from '@/modules/integration/composition/webhookAdmission'
+import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import {
   composePostgresqlWebhookDispatchPersistence,
   composePostgresqlWebhookTriggerServiceDependencies,
@@ -462,7 +463,11 @@ export async function composePostgresqlDaemonApplication(
     db: input.db,
     appHome: input.appHome,
     runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },
-    memoryFusion: composePostgresqlSkillMemoryFusionParticipantFactory(),
+    // RFC-353 T7：回滚该退回哪些记忆归 knowledge-evolution 裁定；它消费 memory 的
+    // participant，resource-catalog 只收到一个「给事务、还 id」的窄端口。
+    restoreMembership: createAsyncSkillRestoreMembership(
+      composePostgresqlSkillMemoryFusionParticipantFactory(),
+    ),
     resourceCatalog,
   })
   const mcpProbeStore = composePostgresqlMcpProbeStore(input.db)

@@ -50,6 +50,12 @@ export function sqliteMemoryMembershipWrites(tx: DbTxSync): MemoryMembershipWrit
     async markFused(command: MemoryMembershipFuseCommand): Promise<readonly string[]> {
       return markFusedSync(tx, command)
     },
+    async reassignFusedSkill(input: {
+      readonly memoryId: string
+      readonly skillId: string
+    }): Promise<void> {
+      reassignFusedSkillSync(tx, input)
+    },
   })
 }
 
@@ -123,7 +129,9 @@ export function unfuseAboveVersionSync(
  * 只是「谁能写」这件事，不该由 knowledge-evolution 自己伸手。
  */
 export function reassignFusedSkillSync(
-  db: DbClient,
+  // 非事务（`repairProvenance` 逐条修复）与事务内（participant 的第三个方法）都会调它，
+  // 两种句柄的 `update` 形状相同。
+  db: DbClient | DbTxSync,
   input: { readonly memoryId: string; readonly skillId: string },
 ): void {
   db.update(memories)

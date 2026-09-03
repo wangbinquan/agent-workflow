@@ -32,6 +32,7 @@ import type {
 export interface MemoryMembershipWrites {
   unfuseAboveVersion(selector: MemoryMembershipUnfuseSelector): Promise<readonly string[]>
   markFused(command: MemoryMembershipFuseCommand): Promise<readonly string[]>
+  reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }): Promise<void>
 }
 
 /**
@@ -53,6 +54,9 @@ export function createMemoryMembershipParticipantInTx(
     },
     markFused(command: MemoryMembershipFuseCommand) {
       return writes.markFused(command)
+    },
+    reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }) {
+      return writes.reassignFusedSkill(input)
     },
   }) as unknown as MemoryMembershipParticipantInTx
   trustedMemoryMembershipParticipants.add(participant)

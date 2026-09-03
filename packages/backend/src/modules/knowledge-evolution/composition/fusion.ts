@@ -3,7 +3,6 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { createPostgresqlFusionPersistence as createPostgresqlFusionPersistenceAdapter } from '../infrastructure/postgresqlFusionRepository'
 import { createSqliteFusionPersistence as createSqliteFusionPersistenceAdapter } from '../infrastructure/sqliteFusionRepository'
 import {
-  composePostgresqlFusedSkillReassignment,
   composePostgresqlSkillMemoryFusionParticipantFactory,
   markFusedSync,
   reassignFusedSkillSync,
@@ -43,10 +42,18 @@ export function composePostgresqlFusionPersistence(input: {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
 }): FusionPersistence {
+  const memoryMembership = composePostgresqlSkillMemoryFusionParticipantFactory()
   return createPostgresqlFusionPersistenceAdapter({
     ...input,
-    memoryMembership: composePostgresqlSkillMemoryFusionParticipantFactory(),
-    fusedSkillReassignment: composePostgresqlFusedSkillReassignment(input.db),
+    memoryMembership,
+    // RFC-353 T6/T7：provenance 修复也走 memory 的同一个 participant。逐条各自开事务——
+    // 单条 UPDATE 与此前的裸写等价，但不再需要把 provider 的原始 client 泄漏到 public 面上。
+    fusedSkillReassignment: Object.freeze({
+      reassign: async (repair: { readonly memoryId: string; readonly skillId: string }) =>
+        await input.db.transaction(
+          async (tx) => await memoryMembership.inTransaction(tx).reassignFusedSkill(repair),
+        ),
+    }),
     skillVersionCommit: composePostgresqlSkillVersionCommitParticipantFactory(),
   })
 }

@@ -313,6 +313,8 @@ import {
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { enforceLimits } from '@/services/limits'
 import { initializeRuntimeRegistryBoot } from '@/platform/runtime-registry/composition'
+import { createSyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
+import { unfuseAboveVersionSync } from '@/modules/memory/public/participants'
 
 export interface StartOptions {
   port?: number
@@ -2283,7 +2285,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     importQueries: composeSqliteAgentImportQueries(db),
     resourceIntegrityQueries: agentResourceIntegrity.queries,
   })
-  const skillCatalog = composeSkillCatalog({ db, appHome: Paths.root })
+  const skillCatalog = composeSkillCatalog({
+    db,
+    appHome: Paths.root,
+    // RFC-353 T7：回滚该退回哪些记忆由 knowledge-evolution 裁定；resource-catalog 不能
+    // import knowledge-evolution（RFC-294 目标边表无此反向边），所以在 bootstrap 装配。
+    restoreMembership: createSyncSkillRestoreMembership((tx, selector) =>
+      unfuseAboveVersionSync(tx, selector),
+    ),
+  })
   const pluginCatalog = composePluginCatalog({ db, coordinator: pluginOperationCoordinator })
   const workflowCatalog = composeWorkflowCatalog({ db })
   const workgroupCatalog = composeWorkgroupCatalog({ db })

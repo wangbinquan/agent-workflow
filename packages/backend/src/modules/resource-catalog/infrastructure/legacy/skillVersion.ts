@@ -839,17 +839,21 @@ export interface RestoreResult {
  * transaction as the version bump (invariant: fused ⟺ knowledge is in current).
  */
 /**
- * RFC-353 T3：memory 那一半（把「融进更高版本」的记忆退回待用）由调用方**注入**，
- * 不再从 `@/services/memory` 直接 import。
+ * RFC-353 T3/T7：回滚要退回哪些记忆，由调用方**注入一个协调器**决定。
  *
  * 由来：这件事 PostgreSQL 侧早就是注入的（`postgresqlSkillContentLifecycle.prepareRestore`
  * 拿 memory 的 participant），SQLite 侧却穿过一个 legacy facade——同一件事两条取用路径，
  * 而且实测已经漂过（两边选中的集合一样、**返回顺序不一样**）。收成注入之后两侧同源。
+ *
+ * T7 进一步把「回滚时该退回哪些」这条判据交给 knowledge-evolution（`memoriesToUnfuseOnRestore`）：
+ * 本端口从此只说「拿去这个事务与这个回滚目标，还我被退回的 id」，resource-catalog 既不认识
+ * memory 也不认识 aboveVersion 的算法。装配在 bootstrap——RFC-294 的目标边表里
+ * `resource-catalog → knowledge-evolution` 不存在，RC 不能 import KE。
  */
-export interface SkillRestoreMemoryMembership {
-  unfuseAboveVersion(
+export interface SkillRestoreMembershipPort {
+  unfuseForRestore(
     tx: DbTxSync,
-    selector: { readonly skillId: string; readonly aboveVersion: number },
+    request: { readonly skillId: string; readonly targetVersion: number },
   ): string[]
 }
 
@@ -859,7 +863,7 @@ export function restoreSkillVersion(
   skillId: string,
   target: number,
   authorUserId: string | null,
-  memoryMembership: SkillRestoreMemoryMembership,
+  memoryMembership: SkillRestoreMembershipPort,
   reason?: string,
   // RFC-170 (4th-review [high]): owner the route authorized against; funnel 409s on drift.
   expectedOwnerUserId?: string | null,
@@ -900,18 +904,11 @@ export function restoreSkillVersion(
         // Un-fuse in the SAME tx as the version bump so the fused⟺in-current
         // invariant never observes a torn state.
         //
-        // KNOWN v1 LIMITATION (Codex P2 #4): this un-fuses memories absorbed at
-        // a version > target, but does NOT re-fuse memories that the target
-        // version included if a prior restore-below already un-fused them
-        // (provenance is cleared on un-fuse, so we can't re-derive it). The
-        // narrow case "restore to v1, then restore forward to v2" thus leaves a
-        // memory approved whose knowledge is back in the skill → mild
-        // double-injection, not data loss. The complete fix records each
-        // fusion version's incorporated memory ids on skill_versions and
-        // re-fuses from the target's set; deferred to a follow-up (design §10).
-        unfusedMemoryIds = memoryMembership.unfuseAboveVersion(tx, {
+        // 选中规则与它的 v1 已知缺口都住在 knowledge-evolution 的
+        // `domain/skillRestore.ts#memoriesToUnfuseOnRestore`——这里只负责把事务交过去。
+        unfusedMemoryIds = memoryMembership.unfuseForRestore(tx, {
           skillId,
-          aboveVersion: target,
+          targetVersion: target,
         })
       },
     },

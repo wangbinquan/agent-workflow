@@ -85,25 +85,14 @@ export function composePostgresqlSkillMemoryFusionParticipantFactory(): Postgres
             .run()
           return Object.freeze(ids)
         },
+        async reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }) {
+          await transaction
+            .update(memories)
+            .set({ fusedIntoSkillId: input.skillId })
+            .where(eq(memories.id, input.memoryId))
+            .run()
+        },
       })
-    },
-  })
-}
-
-/**
- * RFC-353 T6 —— RFC-223 provenance 修复用的**非事务**写入面（PostgreSQL 侧）。
- * 理由同 SQLite 版：`repairProvenance` 逐条修复、没有外层事务，但写的仍是 memory 的列。
- */
-export function composePostgresqlFusedSkillReassignment(db: PostgresqlDatabaseClient): {
-  reassign(input: { readonly memoryId: string; readonly skillId: string }): Promise<void>
-} {
-  return Object.freeze({
-    async reassign(input: { readonly memoryId: string; readonly skillId: string }): Promise<void> {
-      await db
-        .update(memories)
-        .set({ fusedIntoSkillId: input.skillId })
-        .where(eq(memories.id, input.memoryId))
-        .run()
     },
   })
 }

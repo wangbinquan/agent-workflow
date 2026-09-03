@@ -32,6 +32,11 @@ import { sha256Hex } from '@/util/hash'
 import { realpathInside, realpathWriteInside, safeJoin } from '@/util/safePath'
 
 import type { SkillOperationContext } from '../public/participants'
+import type {
+  PostgresqlSkillContentLifecycle,
+  PostgresqlSkillDeletePlan,
+  PostgresqlSkillVersionPlan,
+} from './postgresqlSkillRepository'
 import { cleanupOpDirs, opStagedDir, swapInStaged } from './legacy/skillFsPublish'
 import { assertRegularFileTree, collectFiles, hashRegularFileTree } from './legacy/skillHash'
 import {
@@ -52,12 +57,6 @@ import {
   runPostgresqlResourceCatalogTransaction,
   type PostgresqlResourceCatalogTransaction,
 } from './postgresql/repositorySupport'
-import type {
-  PostgresqlSkillMemoryFusionParticipantFactory,
-  PostgresqlSkillContentLifecycle,
-  PostgresqlSkillDeletePlan,
-  PostgresqlSkillVersionPlan,
-} from './postgresqlSkillRepository'
 
 const SKILL_MAIN = 'SKILL.md'
 
@@ -532,10 +531,26 @@ function assertNotMainFile(path: string): void {
  * Durable PostgreSQL skill lifecycle. The factory owns filesystem paths and
  * the skill-operation journal; bootstrap supplies only the provider and app root.
  */
+/**
+ * RFC-353 T7 —— resource-catalog 侧看到的回滚成员关系端口：给事务与回滚目标，还我被退回的 id。
+ * 实现由 knowledge-evolution 提供（`createAsyncSkillRestoreMembership`），bootstrap 注入。
+ */
+export interface PostgresqlSkillRestoreMembershipPort {
+  unfuseForRestore(
+    transaction: PostgresqlResourceCatalogTransaction,
+    request: { readonly skillId: string; readonly targetVersion: number },
+  ): Promise<readonly string[]>
+}
+
 export function createPostgresqlSkillContentLifecycle(input: {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
-  readonly memoryFusion: PostgresqlSkillMemoryFusionParticipantFactory
+  /**
+   * RFC-353 T7：回滚时「哪些记忆退回待用」由 knowledge-evolution 的协调器裁定，bootstrap 注入。
+   * resource-catalog 从此既不认识 memory，也不必知道 `aboveVersion` 是怎么算出来的
+   * ——RFC-294 的目标边表里没有 `resource-catalog → knowledge-evolution`，反向取用不成立。
+   */
+  readonly restoreMembership: PostgresqlSkillRestoreMembershipPort
 }): PostgresqlSkillContentLifecycle {
   return Object.freeze<PostgresqlSkillContentLifecycle>({
     async isAvailable(skill) {
@@ -721,9 +736,9 @@ export function createPostgresqlSkillContentLifecycle(input: {
           // The Memory-owned participant and Skill version bump share this
           // transaction, so fused provenance never observes a torn restore.
           unfusedMemoryIds = Object.freeze([
-            ...(await input.memoryFusion.inTransaction(transaction).unfuseAboveVersion({
+            ...(await input.restoreMembership.unfuseForRestore(transaction, {
               skillId: request.current.id,
-              aboveVersion: request.version,
+              targetVersion: request.version,
             })),
           ])
           await base.commitInTransaction(transaction, versionIndex)

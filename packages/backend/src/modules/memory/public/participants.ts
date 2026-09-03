@@ -47,6 +47,16 @@ export interface MemoryMembershipParticipantInTx {
    * （审批之间记忆可能被归档、被别的融合吃掉），不是防御性代码。
    */
   markFused(command: MemoryMembershipFuseCommand): Promise<readonly string[]>
+
+  /**
+   * RFC-223 provenance 修复：把某条记忆的 `fusedIntoSkillId` 改判为解析出的技能
+   * （或隔离哨兵）。同样走事务——调用方逐条修复时自带事务即可。
+   *
+   * 为什么挂在这个 tx-bound 合同上而不是另出一个「拿 db 的工厂」：后者会把
+   * provider 的原始 client 类型（drizzle 的 `SqliteRemoteDatabase`）暴到 public 面上，
+   * 等于给所有 public 面开一个「可以泄漏 provider client」的口子。
+   */
+  reassignFusedSkill(input: { readonly memoryId: string; readonly skillId: string }): Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -68,8 +78,5 @@ export {
   sqliteMemoryMembershipWrites,
   unfuseAboveVersionSync,
 } from '../infrastructure/sqliteMemoryMembershipParticipant'
-export {
-  composePostgresqlFusedSkillReassignment,
-  composePostgresqlSkillMemoryFusionParticipantFactory,
-} from '../infrastructure/postgresqlSkillMemoryFusionParticipant'
+export { composePostgresqlSkillMemoryFusionParticipantFactory } from '../infrastructure/postgresqlSkillMemoryFusionParticipant'
 export { createMemoryMembershipParticipantInTx } from '../application/memoryMembership'

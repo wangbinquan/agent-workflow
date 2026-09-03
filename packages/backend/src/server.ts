@@ -398,6 +398,8 @@ import {
   composeSqliteWebhookIngressPersistence,
   type WebhookIngressPersistence,
 } from '@/modules/integration/composition/webhookIngress'
+import { createSyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
+import { unfuseAboveVersionSync } from '@/modules/memory/public/participants'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
@@ -1978,7 +1980,14 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     db: effectiveDeps.db,
     coordinator: pluginOperationCoordinator,
   })
-  const skillCatalog = composeSkillCatalog({ db: effectiveDeps.db, appHome: Paths.root })
+  const skillCatalog = composeSkillCatalog({
+    db: effectiveDeps.db,
+    appHome: Paths.root,
+    // RFC-353 T7：同 `cli/start.ts`——回滚的成员关系判据归 knowledge-evolution，bootstrap 装配。
+    restoreMembership: createSyncSkillRestoreMembership((tx, selector) =>
+      unfuseAboveVersionSync(tx, selector),
+    ),
+  })
   const workflowCatalog = composeWorkflowCatalog({ db: effectiveDeps.db })
   const workgroupCatalog = composeWorkgroupCatalog({ db: effectiveDeps.db })
   const resourcePackageCatalog =
