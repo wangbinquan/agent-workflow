@@ -10441,6 +10441,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1e30c3f72eca6cdd29c3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
+      "toPath": "packages/backend/src/db/txSync.ts",
+      "toSymbol": "DbTxSync",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/recovery.ts#$file",
       "fromPath": "packages/backend/src/services/recovery.ts",
       "fromSymbol": "$file",
@@ -85919,6 +85936,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#$file",
+      "fromPath": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f7ab23bb94b689aca18b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#memories",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "memories",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file",
@@ -89184,9 +89218,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5246,
+    "architectureExceptions": 5248,
     "implementationSccs": 0,
-    "observedEdges": 6314,
+    "observedEdges": 6317,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -100873,6 +100907,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DatabaseMigrationQueries"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#$file",
+      "id": "import:1e30c3f72eca6cdd29c3",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/txSync",
+      "syntax": "static-import",
+      "targetSymbol": "DbTxSync",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/txSync.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "type",
@@ -152460,6 +152510,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#$file",
+      "id": "import:9fe96a2b24fc2029a64c",
+      "owner": "memory",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/sqliteCustomEventSourceStore.ts#$file",
@@ -186667,6 +186733,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#webhookTriggerFires"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "memory",
+      "fromFile": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#$file",
+      "id": "import:f7ab23bb94b689aca18b",
+      "owner": "memory",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "memories",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#memories"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts",
@@ -190756,7 +190838,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:43b63ef184b9591817aeec615d4f44b341efe6fa717259fac419cb6127031ba8",
+  "sourceDigest": "sha256:71c728092327fb291e942360e3fbf1655227ebc41fe5308aecf34d289ebbc76e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

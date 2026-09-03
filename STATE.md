@@ -2,6 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-03）：[RFC-353 Knowledge Evolution bounded context 归位（RFC-294 W4-E3）](design/RFC-353-knowledge-evolution-context-cutover/proposal.md)。**
+> 三件套已落档，**批准前不动任何生产代码**。`modules/knowledge-evolution` 今天在源码里根本不存在，它该拥有的散在四处：
+> `services/fusion.ts`(1218) / `modules/memory/public/fusion.ts`(201) / memory infrastructure 的 fusion 双 provider(2062) /
+> `routes/fusions.ts`(226) / RC `legacy/skillVersion.ts` 的 skill-restore(102)。
+> **立项前查明两处真问题**：① fusion 持久化是跨聚合 god repository（`sqliteFusionPersistence.ts` 直写七张表），
+> 而 design 给 KE 的禁止清单第一条就是「memory/skill row」——原样搬进去等于给债换门牌；② 同一判据两个 provider
+> 一份有一份没有（解融合在 PostgreSQL 有 owned participant、SQLite 从 legacy facade 直接 import），与 RFC-352 开局
+> 撞到的 canManage 漂移同类。
+> 用户当日裁决 D1～D5：切「归位 + 切 participants」（E3 原文本就含 participants 收口）、skill-restore 迁进 KE、
+> 只落 KE 的 `GetSkillProvenance`、形态取「版本行展开列融入的记忆」。顺带退役 RFC-345 转交的 `services/memory.ts`
+> 最后一个 RC consumer。安全项按用户 2026-08-26 硬规则不承接。
+> **诚实提示**：这一刀比账本上的「13 条边 / 2 个 facade」大得多，逐面规模见 `plan.md §5`。
+
 > ✅ **RFC 完工（Done，2026-09-03）：[RFC-352 Memory bounded context 合同归位（RFC-294 W4-E2）](design/RFC-352-memory-context-cutover/proposal.md)。**
 > 把 `services/` 里的注入（570 行）/ 蒸馏（1274）/ 调度（480）/ 源上下文（153）四块实现按分层迁进 `modules/memory`；
 > 把 `canViewMemory` / `canManageMemory` 从 SQLite adapter 提到 `domain/scopeAuthorization.ts` 的单一判据；按 RFC-294

@@ -3,6 +3,8 @@ import { and, eq, gt } from 'drizzle-orm'
 import { memories } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
+import { fusedProvenanceStamp, orderMembershipIds } from '../domain/fusionMembership'
+
 type PostgresqlMemoryTransaction = Parameters<
   Parameters<PostgresqlDatabaseClient['transaction']>[0]
 >[0]
@@ -34,17 +36,10 @@ export function composePostgresqlSkillMemoryFusionParticipantFactory(): Postgres
         async unfuseAboveVersion(
           input: Parameters<PostgresqlSkillMemoryFusionParticipantInTx['unfuseAboveVersion']>[0],
         ) {
+          // 清哪几列由 memory domain 的**同一份** stamp 决定，不在这里手写第二遍。
           const rows = await transaction
             .update(memories)
-            .set({
-              status: 'approved',
-              fusedIntoSkillId: null,
-              fusedIntoSkill: null,
-              fusedIntoSkillVersion: null,
-              fusedAt: null,
-              fusedByUserId: null,
-              fusedFusionId: null,
-            })
+            .set(fusedProvenanceStamp(null))
             .where(
               and(
                 eq(memories.status, 'fused'),
@@ -54,7 +49,11 @@ export function composePostgresqlSkillMemoryFusionParticipantFactory(): Postgres
             )
             .returning({ id: memories.id })
             .all()
-          return Object.freeze(rows.map((row: { readonly id: string }) => row.id).sort())
+          // 顺序同样只有一个来源：`UPDATE … RETURNING` 已经把选中规则判过了，
+          // 剩下的排序走 domain 的同一个 `orderMembershipIds`，不在这里写第二个 `.sort()`。
+          return Object.freeze(
+            orderMembershipIds(rows.map((row: { readonly id: string }) => row.id)),
+          )
         },
       })
     },

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1897,
+    "backendFiles": 1899,
     "frontendFiles": 621,
     "legacyFiles": 629,
-    "moduleFiles": 1268,
-    "productionFiles": 2673,
+    "moduleFiles": 1270,
+    "productionFiles": 2675,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25734
+    "symbolsIncludingFileRoots": 25745
   },
   "entries": [
     {
@@ -74545,6 +74545,102 @@
       "currentContext": "memory",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#FusedProvenance",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FusedProvenance",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#fusedProvenanceStamp",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "fusedProvenanceStamp",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#FusedProvenanceStamp",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FusedProvenanceStamp",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#FusionMembershipRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FusionMembershipRow",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#memoriesToUnfuseAbove",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "memoriesToUnfuseAbove",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#orderMembershipIds",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "orderMembershipIds",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/domain/fusionMembership.ts",
+      "id": "owner:packages/backend/src/modules/memory/domain/fusionMembership.ts#UnfuseSelector",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "UnfuseSelector",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/memory/domain/injectionRendering.ts",
       "id": "owner:packages/backend/src/modules/memory/domain/injectionRendering.ts#$file",
       "removeAfterWave": null,
@@ -76794,6 +76890,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SqliteMemoryInjectionReadStore",
+      "targetContext": "memory",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "memory",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#sqliteMemoryMembershipWrites",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "sqliteMemoryMembershipWrites",
+      "targetContext": "memory",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "memory",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts",
+      "id": "owner:packages/backend/src/modules/memory/infrastructure/sqliteMemoryMembershipParticipant.ts#unfuseAboveVersionSync",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "unfuseAboveVersionSync",
       "targetContext": "memory",
       "targetLayer": "infrastructure"
     },
@@ -309483,5 +309615,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:43b63ef184b9591817aeec615d4f44b341efe6fa717259fac419cb6127031ba8"
+  "sourceDigest": "sha256:71c728092327fb291e942360e3fbf1655227ebc41fe5308aecf34d289ebbc76e"
 }

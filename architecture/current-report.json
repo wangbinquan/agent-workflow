@@ -2,12 +2,12 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 5246,
+    "architectureExceptions": 5248,
     "backgroundJobs": 367,
-    "crossContextImports": 6314,
+    "crossContextImports": 6317,
     "facades": 347,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25734,
+    "moduleSymbolOwners": 25745,
     "mutationEntrypoints": 1910,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 963,
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1897,
+    "backendProductionFiles": 1899,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -91,7 +91,7 @@
       },
       {
         "context": "memory",
-        "files": 39
+        "files": 41
       },
       {
         "context": "resource-catalog",
@@ -118,7 +118,7 @@
         "files": 325
       }
     ],
-    "moduleFiles": 1268,
+    "moduleFiles": 1270,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -164,5 +164,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:43b63ef184b9591817aeec615d4f44b341efe6fa717259fac419cb6127031ba8"
+  "sourceDigest": "sha256:71c728092327fb291e942360e3fbf1655227ebc41fe5308aecf34d289ebbc76e"
 }

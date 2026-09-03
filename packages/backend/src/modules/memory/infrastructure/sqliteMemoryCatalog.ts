@@ -18,7 +18,7 @@
 // a separate concern owned by this module: see canViewMemory / canManageMemory
 // (RFC-099 D12), which follow the scope resource's ACL.
 
-import { and, desc, eq, gt, inArray, like, lt, or, getTableColumns } from 'drizzle-orm'
+import { and, desc, eq, inArray, like, lt, or, getTableColumns } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type {
   Memory,
@@ -85,6 +85,7 @@ import type {
   RepositoryScopeTarget,
 } from '@/modules/source-control/public/participants'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
+import { unfuseAboveVersionSync } from './sqliteMemoryMembershipParticipant'
 
 /** A memory row + its (possibly empty) supersede ancestor chain. */
 export interface MemoryWithChain {
@@ -1125,37 +1126,21 @@ export function fuseMemoriesTx(
  * RFC-101: un-fuse memories whose knowledge no longer lives in the skill after
  * a restore to `aboveVersion` (status fused→approved, provenance cleared).
  * Runs inside the restore transaction. Returns the un-fused ids.
+ *
+ * RFC-353 T2：判据与顺序已收进 memory 的 offered participant
+ * （`infrastructure/sqliteMemoryMembershipParticipant.ts` + `domain/fusionMembership.ts`）。
+ * 这里只剩一个同步壳，供 resource-catalog 的 legacy restore 路径继续调用；
+ * 该 consumer 在 T7 随 skill-restore coordinator 迁进 knowledge-evolution 后即删。
+ *
+ * 为什么曾经需要收：这半边 PostgreSQL 早就有 owned participant、SQLite 却没有，
+ * 于是同一判据两个来源、实测已经漂——两边选中的集合一样但**返回顺序不一样**，
+ * 而这个数组经 `skill-catalog.restore-skill-version.v1` 的 `unfusedMemoryIds` 直接上 wire。
  */
 export function unfuseMemoriesTx(
   tx: DbTxSync,
   args: { skillId: string; aboveVersion: number },
 ): string[] {
-  const rows = tx
-    .select()
-    .from(memories)
-    .where(
-      and(
-        eq(memories.status, 'fused'),
-        eq(memories.fusedIntoSkillId, args.skillId),
-        gt(memories.fusedIntoSkillVersion, args.aboveVersion),
-      ),
-    )
-    .all() as MemoryRow[]
-  for (const row of rows) {
-    tx.update(memories)
-      .set({
-        status: 'approved',
-        fusedIntoSkillId: null,
-        fusedIntoSkill: null,
-        fusedIntoSkillVersion: null,
-        fusedAt: null,
-        fusedByUserId: null,
-        fusedFusionId: null,
-      })
-      .where(eq(memories.id, row.id))
-      .run()
-  }
-  return rows.map((r) => r.id)
+  return unfuseAboveVersionSync(tx, args)
 }
 
 export async function deleteMemory(db: DbClient, id: string): Promise<void> {

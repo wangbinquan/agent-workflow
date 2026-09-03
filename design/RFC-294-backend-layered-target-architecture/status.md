@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:43b63ef184b9591817aeec615d4f44b341efe6fa717259fac419cb6127031ba8`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:71c728092327fb291e942360e3fbf1655227ebc41fe5308aecf34d289ebbc76e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1897 |
+| backend production TS 文件 | 1899 |
 | `services/` 文件 | 347 |
-| `modules/**` 文件 / 非空 context | 1268 / 16 |
+| `modules/**` 文件 / 非空 context | 1270 / 16 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 493 |
-| `architectureExceptions` | 5246 |
+| `architectureExceptions` | 5248 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6314 |
+| `crossContextImports` | 6317 |
 | `facades` | 347 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25734 |
+| `moduleSymbolOwners` | 25745 |
 | `mutationEntrypoints` | 1910 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 963 |
@@ -67,7 +67,7 @@
 | task-execution / engine | 20 |
 | integration / composition | 19 |
 | system-operations / infrastructure | 19 |
-| memory / infrastructure | 15 |
+| memory / infrastructure | 16 |
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
 | digital-employee / application | 13 |
@@ -83,12 +83,12 @@
 | memory / application | 9 |
 | development-automation / engine | 7 |
 | event-center / infrastructure | 7 |
+| memory / domain | 7 |
 | memory / public | 7 |
 | task-execution / public | 7 |
 | event-center / application | 6 |
 | identity-access / public | 6 |
 | intent / composition | 6 |
-| memory / domain | 6 |
 | source-control / domain | 6 |
 | code-capability / composition | 5 |
 | collaboration / public | 5 |
@@ -198,10 +198,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3493 |
+| legacy-outbound | 3495 |
 | legacy-inbound | 1549 |
 | provider-mirror | 457 |
-| infrastructure-external | 395 |
+| infrastructure-external | 396 |
 | offered-consumption | 134 |
 | temporary-internal-debt | 106 |
 | off-dag-offered | 85 |
@@ -213,7 +213,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3493 |
+| legacy-outbound | 3495 |
 | legacy-inbound | 1549 |
 | temporary-internal-debt | 106 |
 | off-dag-offered | 85 |
@@ -225,7 +225,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2713 |
+| W9 | 2715 |
 | W4-E1 | 838 |
 | W4-C | 436 |
 | W4-E0 | 214 |
