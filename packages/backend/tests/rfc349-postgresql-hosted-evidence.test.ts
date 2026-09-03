@@ -115,7 +115,14 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(realFaultTest).toContain('expect(await copyState(runtime, chunk)).toEqual({')
 
     expect(regressionJob).toBeDefined()
-    expect(regressionJob).toContain('needs: [crash-large-and-soak, compiled-external-postgresql]')
+    // The lanes stay gated on real PostgreSQL evidence, but on the ~2-minute
+    // three-platform compiled smoke rather than the crash/soak job: gating on the
+    // long job made the workflow's wall clock the SUM of the two (~2 hours for
+    // ~25 minutes of work). What keeps these lanes from being read as provider
+    // evidence is the `evidenceRole` naming and the RFC349_* absence asserted
+    // below, not which job they queue behind.
+    expect(regressionJob).toContain('needs: [compiled-external-postgresql]')
+    expect(regressionJob).not.toContain('needs: [crash-large-and-soak')
     for (const lane of RFC349_T10_FULL_REGRESSION_TOPOLOGY) {
       expect(regressionJob).toContain(lane.command)
     }
@@ -352,8 +359,15 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(workflow).toContain("Get-Service -Name 'postgresql-x64-*'")
     expect(workflow).toContain('bun run build:binary:e2e')
     expect(workflow).toContain('--mode compiled-smoke')
-    expect(workflow).toContain("github.event_name == 'schedule' && 'full'")
+    // The cron runs the `weekly` drift tier (see RFC349_EVIDENCE_TIERS for the
+    // measured breakdown that made a full-tier cron a two-hour run); `full` stays
+    // dispatchable and is what the RFC's acceptance evidence was taken on. The
+    // 100-client tier and the crash matrix are unchanged at every tier.
+    expect(workflow).toContain("github.event_name == 'schedule' && 'weekly'")
+    expect(workflow).toContain('options: [weekly, full, small]')
     expect(workflow).toContain("github.event_name == 'schedule' && '100'")
+    expect(workflow).toContain("github.event_name == 'schedule' && '180'")
+    expect(workflow).toContain("github.event_name == 'schedule' && 'all'")
     expect(workflow).toContain('--mode crash-and-soak')
     expect(workflow).toContain('actions/upload-artifact@v6')
     expect(workflow).not.toContain('services:\n')

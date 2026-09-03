@@ -20,11 +20,11 @@ on:
         required: false
         default: ''
       scale:
-        description: 'RFC-311 seed scale (full is the acceptance tier)'
+        description: 'Seed tier (weekly = drift tier; full = the acceptance tier)'
         required: false
         type: choice
-        options: [full, small]
-        default: full
+        options: [weekly, full, small]
+        default: weekly
       clients:
         description: 'Concurrent HTTP/WS/status clients'
         required: false
@@ -49,7 +49,10 @@ jobs:
   crash-large-and-soak:
     name: PostgreSQL crash matrix + 100-client full seed
     runs-on: ubuntu-24.04
-    timeout-minutes: 210
+    # The `weekly` tier lands around 25 minutes; a hang must not sit on a runner for
+    # three and a half hours to prove it. `full` keeps the old cap because 13.2M rows
+    # legitimately take 86-137 minutes depending on how fast the hosted VM is.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.scale == 'full') && 210 || 60 }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -124,7 +127,11 @@ jobs:
           # max。取证跑批本来就是诊断场景，把门槛压到 300ms 让 daemon 当场记下时刻与堆走向
           # （harness 会把这类行回显进 job log）。正常相位一条都不会有。
           AGENT_WORKFLOW_EVENT_LOOP_STALL_LOG_MS: '300'
-          EVIDENCE_SCALE: ${{ github.event_name == 'schedule' && 'full' || inputs.scale }}
+          # The cron runs the `weekly` drift tier: same 184 tables, same multi-slice
+          # copy and archive paths, same 100 clients and 180s phases as `full`, on a
+          # tenth of the rows. `full` (13.2M rows) is what RFC-349's acceptance was
+          # taken on — dispatch it by hand whenever evidence needs re-taking.
+          EVIDENCE_SCALE: ${{ github.event_name == 'schedule' && 'weekly' || inputs.scale }}
           EVIDENCE_CLIENTS: ${{ github.event_name == 'schedule' && '100' || inputs.clients }}
           EVIDENCE_DURATION: ${{ github.event_name == 'schedule' && '180' || inputs.duration_seconds }}
           EVIDENCE_CRASH_POINTS: ${{ github.event_name == 'schedule' && 'all' || inputs.crash_points }}
@@ -240,14 +247,23 @@ jobs:
           retention-days: 30
 
   # These are the repository's complete regression lanes, not substitutes for
-  # real PostgreSQL evidence. They run only after the external-provider jobs
-  # above pass. Frontend tests are UI-only, and ordinary browser homes remain
-  # provider-neutral/SQLite unless a spec explicitly performs a cutover. The
-  # real provider claim comes solely from the target integration, compiled
-  # smoke, crash matrix and soak jobs.
+  # real PostgreSQL evidence. Frontend tests are UI-only, and ordinary browser
+  # homes remain provider-neutral/SQLite unless a spec explicitly performs a
+  # cutover. The real provider claim comes solely from the target integration,
+  # compiled smoke, crash matrix and soak jobs.
+  #
+  # These gate on the compiled smoke alone, NOT on the crash/soak job. The gate's
+  # purpose is to skip nine VMs when the provider is broken at this SHA, and the
+  # three-platform compiled smoke settles that in ~2 minutes. Hanging them off the
+  # crash job instead put a 25-minute (weekly tier; 86-137 at full) job in front of
+  # a 25-minute lane and made the workflow's wall clock the SUM of the two — the
+  # single reason a run that finishes its actual work in ~25 minutes took ~2 hours.
+  # Nothing about the honesty of the labels below depends on that ordering: it is
+  # the `evidenceRole` names and the absence of any RFC349_* URL in this job that
+  # keep these lanes from being read as provider evidence.
   functional-regression:
     name: Full regression after PostgreSQL evidence (${{ matrix.lane }})
-    needs: [crash-large-and-soak, compiled-external-postgresql]
+    needs: [compiled-external-postgresql]
     strategy:
       fail-fast: false
       matrix:

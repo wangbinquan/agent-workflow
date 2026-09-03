@@ -258,3 +258,39 @@ p95 175ms）。
 listener 调用挡在屏障后（进程级 provider 选择正在移动，放行就会用旧 composition 编译出目标
 形状的 SQL）。它是有意的、有界的，硬门槛是 1000ms，本机与托管分别留有约 38% / 36% 的余量；
 D3 本来就写明 V1 是维护窗口、不承诺零停机。托管那 11 条 ~643ms 是同一件事。
+
+## 4. 收口后：周跑改用 `weekly` 档（2026-09-04）
+
+**验收取证不受影响**——AC-14 依然由 `b3883154e` / `adcea41bf` 两轮 **full 档** Verdict PASS
+承担（§3），`full` 一个数都没动，随时可 `workflow_dispatch` 重跑。本节只记录**周跑那条 cron**
+此后跑哪一档、为什么。
+
+**起因**：整条 workflow 一次要约两小时。按 run `33732387691`（PASS 那轮）逐项拆开：
+
+| 相位                     |       耗时 | 由什么驱动                                             |
+| ------------------------ | ---------: | ------------------------------------------------------ |
+| 大迁移（1320 万行）      |   56.8 min | 数据量（`migration.durationMs` 3409070，3874.4 行/秒） |
+| `eventsArchive`          |   14.0 min | 数据量（1540 片 / `workerSliceMsTotal` 841826）        |
+| 三个运行相位             |    9.0 min | `duration_seconds` × 3，与数据量无关                   |
+| seed 生成                |     ~4 min | 数据量                                                 |
+| crash 矩阵 26 点         |    0.5 min | 与数据量无关（每点自带小夹具）                         |
+| 固定开销                 |     ~3 min | checkout / install / build / PG 起停                   |
+| **crash job 合计**       | **86 min** |                                                        |
+| 其后串跑的 9 条回归 lane |    ~25 min | `needs:` 串在 crash job 之后，于是整条 = 两者之**和**  |
+
+前两项**只由数据量驱动**，而本套的判据是「迁移零错误、行数逐表一致、主线程不冻结、维护作业
+按有界切片推进并收敛」——不是「必须搬 1320 万行」。所以：
+
+1. **cron 改跑 `weekly` 档**（full 的 1/10：1 万任务 / 30 万 node_runs / 100 万事件 /
+   1 万投递 / 500 仓，共 132 万行；归档目标 20 万行 ≈ 200 片）。184 张表照跑、多切片拷贝与
+   多切片归档照走、**100 客户端与 180 秒相位一字未改**、crash 矩阵仍是 26/26。
+   按实测最慢的一轮（2298 行/秒，run `33743436967`）算，迁移约 9.6 分钟。
+2. **9 条回归 lane 改挂在 ~2 分钟的三平台 compiled smoke 上**，不再挂在 crash job 后面。
+   它们本就不产出 provider 证据（`evidenceRole` 命名与「本 job 不含任何 `RFC349_*` URL」
+   两条守卫锁着），串在长 job 后面只是把整条 workflow 的墙钟变成两段之和。
+3. **`timeout-minutes` 随档位取值**：`weekly` 60 分钟、手动 `full` 仍是 210 分钟。
+
+档位表是 `RFC349_EVIDENCE_TIERS`（`packages/backend/tests/helpers/rfc349PostgresqlHostedEvidence.ts`），
+三档的种子计数此后**逐表断言**（原先只核对 full）：档位只改工作量、不改判据，少播一行当场红。
+守卫见 `rfc349-evidence-latency-stats.test.ts` §`evidence tiers keep the same oracles at a
+smaller workload` 与 `rfc349-postgresql-hosted-evidence.test.ts`。

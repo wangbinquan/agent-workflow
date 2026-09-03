@@ -15,7 +15,13 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { evidenceArchiveRetainRows, latencyStats } from './helpers/rfc349PostgresqlHostedEvidence'
+import {
+  evidenceArchiveRetainRows,
+  latencyStats,
+  parseRfc349EvidenceArgs,
+  rfc349ExpectedSeedCounts,
+  RFC349_EVIDENCE_TIERS,
+} from './helpers/rfc349PostgresqlHostedEvidence'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -93,7 +99,8 @@ describe('RFC-349 evidence latency stats survive a full-tier sample count', () =
 describe('RFC-349 evidence archive workload is bounded', () => {
   test('the full seed archives a bounded slice count, not nine million rows', () => {
     const fullSeedEvents = 10_000_000
-    const retained = evidenceArchiveRetainRows(fullSeedEvents)
+    const target = RFC349_EVIDENCE_TIERS.full.archiveTargetRows
+    const retained = evidenceArchiveRetainRows(fullSeedEvents, target)
     const archived = fullSeedEvents - retained
 
     expect(archived).toBe(1_500_000)
@@ -104,13 +111,76 @@ describe('RFC-349 evidence archive workload is bounded', () => {
   })
 
   test('a small seed still archives, and never asks to retain less than the floor', () => {
-    expect(evidenceArchiveRetainRows(100_000)).toBe(1_000)
-    expect(evidenceArchiveRetainRows(0)).toBe(1_000)
-    expect(evidenceArchiveRetainRows(1_500_500)).toBe(1_000)
+    const target = RFC349_EVIDENCE_TIERS.full.archiveTargetRows
+    expect(evidenceArchiveRetainRows(100_000, target)).toBe(1_000)
+    expect(evidenceArchiveRetainRows(0, target)).toBe(1_000)
+    expect(evidenceArchiveRetainRows(1_500_500, target)).toBe(1_000)
   })
 
   test('retention grows with the seed once the seed exceeds the target', () => {
-    expect(evidenceArchiveRetainRows(4_000_000)).toBe(2_500_000)
-    expect(evidenceArchiveRetainRows(20_000_000)).toBe(18_500_000)
+    const target = RFC349_EVIDENCE_TIERS.full.archiveTargetRows
+    expect(evidenceArchiveRetainRows(4_000_000, target)).toBe(2_500_000)
+    expect(evidenceArchiveRetainRows(20_000_000, target)).toBe(18_500_000)
+  })
+})
+
+// 为什么这组测试存在：full 档一次跑 86–137 分钟，其中 56.8 分钟是搬 1320 万行、
+// 14.0 分钟是 1540 片归档（run 33732387691 实测）——两项都只由数据量驱动。周跑改用
+// `weekly` 档把 job 压进 30 分钟后，最容易悄悄丢掉的就是「它还是不是同一套判据」：
+// 档位一旦被调成单切片归档、或某张表被漏播，取证会在一个变小的语料上照样"通过"。
+// 下面逐条锁住：每档的归档仍是多切片、种子计数自洽、weekly 是 full 的十分之一。
+describe('RFC-349 evidence tiers keep the same oracles at a smaller workload', () => {
+  test('every tier archives across many bounded slices, never one or two', () => {
+    for (const [name, tier] of Object.entries(RFC349_EVIDENCE_TIERS)) {
+      const archived =
+        tier.seed.events - evidenceArchiveRetainRows(tier.seed.events, tier.archiveTargetRows)
+      const slices = archived / 1_000
+      expect({ name, multiSlice: slices >= 20 }).toEqual({ name, multiSlice: true })
+      // 归档量不得超过该档播下去的事件总量，否则这一档根本归档不完、只会耗到停滞判据。
+      expect({ name, withinSeed: archived <= tier.seed.events }).toEqual({ name, withinSeed: true })
+    }
+  })
+
+  test('expected seed counts derive from the tier table, node runs included', () => {
+    expect(rfc349ExpectedSeedCounts('full')).toEqual({
+      tasks: 100_000,
+      nodeRuns: 3_000_000,
+      events: 10_000_000,
+      webhookDeliveries: 100_000,
+      cachedRepos: 500,
+    })
+    expect(rfc349ExpectedSeedCounts('weekly')).toEqual({
+      tasks: 10_000,
+      nodeRuns: 300_000,
+      events: 1_000_000,
+      webhookDeliveries: 10_000,
+      cachedRepos: 500,
+    })
+    for (const scale of ['full', 'weekly', 'small'] as const) {
+      const { seed } = RFC349_EVIDENCE_TIERS[scale]
+      expect(rfc349ExpectedSeedCounts(scale).nodeRuns).toBe(seed.tasks * seed.runsPerTask)
+    }
+  })
+
+  // weekly 是周跑实际用的档。它的时间预算由「行数 ÷ 实测吞吐」决定：托管 runner 上
+  // 实测过 3874 行/秒（run 33732387691）与 2298 行/秒（run 33743436967 的慢机），
+  // 132 万行在慢机上约 9.6 分钟，连同归档 ~3 分钟、三相位 9 分钟、seed 与固定开销，
+  // 整个 job 落在 30 分钟内。这条锁住行数上限，防止有人把 weekly 又调回大档。
+  test('the weekly tier stays one tenth of full so the hosted job fits its budget', () => {
+    const full = rfc349ExpectedSeedCounts('full')
+    const weekly = rfc349ExpectedSeedCounts('weekly')
+    for (const key of ['tasks', 'events', 'webhookDeliveries'] as const) {
+      expect({ key, ratio: full[key] / weekly[key] }).toEqual({ key, ratio: 10 })
+    }
+    const weeklyRows = weekly.tasks + weekly.nodeRuns + weekly.events + weekly.webhookDeliveries
+    // 最慢一次实测 2298 行/秒 ⇒ 132 万行约 9.6 分钟，留足到 12 分钟的上限。
+    expect(weeklyRows / 2_298 / 60).toBeLessThan(12)
+    // 仍要远大于单元测试的量级，否则证不了「大迁移不冻结主线程」。
+    expect(weeklyRows).toBeGreaterThan(1_000_000)
+  })
+
+  test('rejects an unknown tier instead of silently seeding the default', () => {
+    expect(() => parseRfc349EvidenceArgs(['--scale', 'medium'])).toThrow('--scale must be one of')
+    expect(parseRfc349EvidenceArgs(['--scale', 'weekly']).scale).toBe('weekly')
   })
 })

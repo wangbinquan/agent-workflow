@@ -50,13 +50,81 @@ import {
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const CRASH_WORKER = resolve(import.meta.dir, '..', 'fixtures', 'rfc349-postgresql-crash-worker.ts')
-const FULL_SEED_COUNTS = Object.freeze({
-  tasks: 100_000,
-  nodeRuns: 3_000_000,
-  events: 10_000_000,
-  webhookDeliveries: 100_000,
-  cachedRepos: 500,
+/**
+ * 取证的三个尺度档。
+ *
+ * 为什么要有中间档：full 档一次 86–137 分钟，而其中 **56.8 分钟**是把 1320 万行搬进
+ * PostgreSQL、**14.0 分钟**是 `eventsArchive` 的 1540 个切片（run `33732387691` 实测：
+ * `migration.durationMs` 3409070、`eventsArchive` slices 1540 / `workerSliceMsTotal`
+ * 841826；其余 seed 生成约 4 分钟、三个相位 9 分钟、crash 矩阵 0.5 分钟、固定开销约
+ * 3 分钟）。前两项**只由数据量驱动**，而本套要证的是「迁移零错误、行数逐表一致、
+ * 主线程不冻结、维护作业按有界切片推进并收敛」——不是「必须搬 1320 万行」。
+ *
+ * RFC-349 的**验收**取证已由 `b3883154e` / `adcea41bf` 两轮 full 档 Verdict PASS 钉死
+ * 存档（见该 RFC 的 `verification.md`）。周跑此后承担的是**漂移检测**而非重新验收，
+ * 所以 `weekly` 按 full 的 1/10 取样：184 张表照跑、多切片拷贝与多切片归档照走、
+ * 100 客户端与 180 秒相位一字未改，整个 job 落进 30 分钟。要重新取证就手动 dispatch
+ * `full`——它一个数都没动。
+ *
+ * 三个档的种子计数都**逐项断言**（见 `runLargeSoak`）：档位只改工作量，不改判据，
+ * 少搬一行都要红。
+ */
+export const RFC349_EVIDENCE_TIERS = Object.freeze({
+  full: Object.freeze({
+    seed: Object.freeze({
+      tasks: 100_000,
+      runsPerTask: 30,
+      events: 10_000_000,
+      deliveries: 100_000,
+      repos: 500,
+    }),
+    /** 约 1500 片 × ~0.55s ≈ 14 分钟。 */
+    archiveTargetRows: 1_500_000,
+    readyTimeoutMs: 600_000,
+    migrationDeadlineMs: 7_200_000,
+  }),
+  weekly: Object.freeze({
+    seed: Object.freeze({
+      tasks: 10_000,
+      runsPerTask: 30,
+      events: 1_000_000,
+      deliveries: 10_000,
+      repos: 500,
+    }),
+    /** 约 200 片 × ~0.55s ≈ 2 分钟；仍是多切片，不会退化成一两片。 */
+    archiveTargetRows: 200_000,
+    readyTimeoutMs: 300_000,
+    migrationDeadlineMs: 1_800_000,
+  }),
+  small: Object.freeze({
+    seed: Object.freeze({
+      tasks: 1_000,
+      runsPerTask: 30,
+      events: 100_000,
+      deliveries: 1_000,
+      repos: 5,
+    }),
+    archiveTargetRows: 20_000,
+    readyTimeoutMs: 180_000,
+    migrationDeadlineMs: 900_000,
+  }),
 })
+
+export type Rfc349EvidenceScale = keyof typeof RFC349_EVIDENCE_TIERS
+
+/** 这一档跑完后，源库里每张计数表**必须**恰好是这些行数。 */
+export function rfc349ExpectedSeedCounts(
+  scale: Rfc349EvidenceScale,
+): Readonly<Record<'tasks' | 'nodeRuns' | 'events' | 'webhookDeliveries' | 'cachedRepos', number>> {
+  const { seed } = RFC349_EVIDENCE_TIERS[scale]
+  return Object.freeze({
+    tasks: seed.tasks,
+    nodeRuns: seed.tasks * seed.runsPerTask,
+    events: seed.events,
+    webhookDeliveries: seed.deliveries,
+    cachedRepos: seed.repos,
+  })
+}
 const HARD_FREEZE_MS = 1_000
 /** 记一条停顿样本的门槛：比硬门槛低一档，才能看见「还没到红线但已经在长」的那些。 */
 const STALL_SAMPLE_MS = 400
@@ -345,7 +413,7 @@ export interface Rfc349EvidenceArgs {
   readonly clients: number
   readonly durationMs: number
   readonly clientPauseMs: number
-  readonly scale: 'full' | 'small'
+  readonly scale: Rfc349EvidenceScale
   readonly reportPath: string
   readonly binary: string
   readonly keepHome: boolean
@@ -502,7 +570,7 @@ interface EvidenceReport {
   readonly tier: {
     readonly clients: number
     readonly durationMs: number
-    readonly scale: 'full' | 'small'
+    readonly scale: Rfc349EvidenceScale
   }
   readonly compiledSmoke?: CompiledSmokeReport
   readonly crashMatrix?: readonly CrashScenarioReport[]
@@ -549,13 +617,15 @@ export function parseRfc349EvidenceArgs(
     throw new Error('--mode must be compiled-smoke, crash-matrix, large-soak or crash-and-soak')
   }
   const scale = flag(argv, 'scale') ?? 'full'
-  if (scale !== 'full' && scale !== 'small') throw new Error('--scale must be full or small')
+  if (!Object.hasOwn(RFC349_EVIDENCE_TIERS, scale)) {
+    throw new Error(`--scale must be one of ${Object.keys(RFC349_EVIDENCE_TIERS).join(', ')}`)
+  }
   return {
     mode: mode as Rfc349EvidenceMode,
     clients: integerFlag(argv, 'clients', 100, 1),
     durationMs: integerFlag(argv, 'duration-seconds', 180, 5) * 1_000,
     clientPauseMs: integerFlag(argv, 'client-pause-ms', 100, 0),
-    scale,
+    scale: scale as Rfc349EvidenceScale,
     reportPath: resolve(flag(argv, 'report') ?? 'test-results/rfc349-postgresql-evidence.json'),
     binary: resolve(flag(argv, 'binary') ?? defaultBinaryPath()),
     keepHome: argv.includes('--keep-home'),
@@ -1026,7 +1096,11 @@ function prepareSoakDataset(dbPath: string): void {
   }
 }
 
-async function runSeed(dbPath: string, scale: Rfc349EvidenceArgs['scale']): Promise<void> {
+async function runSeed(dbPath: string, scale: Rfc349EvidenceScale): Promise<void> {
+  // 逐项传显式行数，不用 `--small` 的百分比档：档位表是这里唯一的事实源，
+  // 而 `perf-seed.ts` 的 `num()` 对显式入参**不做**缩放，所以行数是精确的——
+  // `runLargeSoak` 随后逐表断言的正是同一张表算出来的期望值。
+  const { seed } = RFC349_EVIDENCE_TIERS[scale]
   const child = Bun.spawn(
     [
       process.execPath,
@@ -1034,7 +1108,16 @@ async function runSeed(dbPath: string, scale: Rfc349EvidenceArgs['scale']): Prom
       resolve(ROOT, 'scripts', 'perf-seed.ts'),
       '--db',
       dbPath,
-      ...(scale === 'small' ? ['--small'] : []),
+      '--tasks',
+      String(seed.tasks),
+      '--runs-per-task',
+      String(seed.runsPerTask),
+      '--events',
+      String(seed.events),
+      '--deliveries',
+      String(seed.deliveries),
+      '--repos',
+      String(seed.repos),
     ],
     { cwd: ROOT, stdout: 'inherit', stderr: 'inherit' },
   )
@@ -1386,7 +1469,7 @@ async function runLargeMigration(input: {
   let latestPoolWait: ApplicationPoolWaitReport | null = null
   let stopTelemetry = false
   let latest = started
-  const deadline = Date.now() + (input.args.scale === 'full' ? 7_200_000 : 900_000)
+  const deadline = Date.now() + RFC349_EVIDENCE_TIERS[input.args.scale].migrationDeadlineMs
   const startedAt = performance.now()
   const poolWaitPromise = runPoolWaitProbe(input.url, input.args.clients, 30_000)
   const rssTimer = setInterval(() => {
@@ -1520,24 +1603,27 @@ async function runLargeMigration(input: {
  * 900 万行需要接近 3 小时，而 hosted job 的总预算只有 210 分钟。
  *
  * 取证要证的是「PostgreSQL 上维护作业按有界切片推进并收敛」，不是「归档 900 万行」。
- * 因此把目标固定成一个有界行数：full 种子约 1500 片、25~30 分钟，既跑满多切片路径，
- * 也装得进 hosted 预算。改这个数只改本轮取证的工作量，不碰任何产品阈值。
+ * 因此把目标固定成一个有界行数，由档位表给出（`RFC349_EVIDENCE_TIERS[*].archiveTargetRows`）：
+ * full 约 1500 片、weekly 约 200 片，两档都跑满多切片路径，也都装得进各自的时间预算。
+ * 改这个数只改本轮取证的工作量，不碰任何产品阈值。
  */
-const EVIDENCE_ARCHIVE_TARGET_ROWS = 1_500_000
 
 /** 归档阈值 = 保留行数；高于它的才会被归档。 */
-export function evidenceArchiveRetainRows(expectedEvents: number): number {
-  return Math.max(1_000, expectedEvents - EVIDENCE_ARCHIVE_TARGET_ROWS)
+export function evidenceArchiveRetainRows(expectedEvents: number, targetRows: number): number {
+  return Math.max(1_000, expectedEvents - targetRows)
 }
 
-function heavyPayloads(expectedEvents: number): Record<string, Readonly<Record<string, unknown>>> {
+function heavyPayloads(
+  expectedEvents: number,
+  archiveTargetRows: number,
+): Record<string, Readonly<Record<string, unknown>>> {
   return {
     worktreeGc: { worktreeAutoGc: { enabled: false }, activeTaskIds: [] },
     webhookDeliveryGc: { bodyRetentionDays: 1, rowRetentionDays: 1 },
     eventsArchive: {
       eventsArchiveThresholds: {
         perNodeRunRows: 50_000,
-        globalRows: evidenceArchiveRetainRows(expectedEvents),
+        globalRows: evidenceArchiveRetainRows(expectedEvents, archiveTargetRows),
         perNodeRunBytes: 0,
         globalBytes: 0,
       },
@@ -1563,6 +1649,7 @@ async function enqueuePostgresqlMaintenance(input: {
   readonly url: string
   readonly generationId: string
   readonly expectedEvents: number
+  readonly archiveTargetRows: number
 }): Promise<{
   readonly runtime: ReturnType<typeof createPostgresqlDatabaseRuntime>
   readonly store: ReturnType<typeof createPostgresqlMaintenanceRunStore>
@@ -1581,7 +1668,7 @@ async function enqueuePostgresqlMaintenance(input: {
     env: { RFC349_DATABASE_URL: input.url },
   })
   const store = createPostgresqlMaintenanceRunStore(createPostgresqlDatabaseClient(runtime))
-  const payloads = heavyPayloads(input.expectedEvents)
+  const payloads = heavyPayloads(input.expectedEvents, input.archiveTargetRows)
   const runTag = randomUUID()
   const now = Date.now()
   const queued: Array<{ readonly runId: string; readonly job: MaintenanceJobKey }> = []
@@ -1737,10 +1824,12 @@ async function runLargeSoak(
     await runSeed(dbPath, args.scale)
     prepareSoakDataset(dbPath)
     const dataset = datasetCounts(dbPath)
-    if (args.scale === 'full') {
-      for (const [key, expected] of Object.entries(FULL_SEED_COUNTS)) {
-        const actual = dataset[key as keyof typeof FULL_SEED_COUNTS]
-        if (actual !== expected) throw new Error(`full seed ${key}=${actual}, expected ${expected}`)
+    // 每一档都逐表核对（原来只核对 full）：档位只该改工作量，一旦某档少播了一张表
+    // 或播错了量级，这里当场红，而不是让下游的迁移/归档判据在一个悄悄变小的语料上"通过"。
+    for (const [key, expected] of Object.entries(rfc349ExpectedSeedCounts(args.scale))) {
+      const actual = dataset[key as keyof ReturnType<typeof rfc349ExpectedSeedCounts>]
+      if (actual !== expected) {
+        throw new Error(`${args.scale} seed ${key}=${actual}, expected ${expected}`)
       }
     }
     daemon = await startDaemon({
@@ -1748,7 +1837,7 @@ async function runLargeSoak(
       home,
       configOverrides,
       extraEnv: hiddenDaemonEnvironment(url, hiddenPath),
-      readyTimeoutMs: args.scale === 'full' ? 600_000 : 180_000,
+      readyTimeoutMs: RFC349_EVIDENCE_TIERS[args.scale].readyTimeoutMs,
     })
     await waitForBootMaintenance(daemon)
     const taskIds = Array.from(
@@ -1778,6 +1867,7 @@ async function runLargeSoak(
       url,
       generationId: runtime.generationId,
       expectedEvents: dataset.events,
+      archiveTargetRows: RFC349_EVIDENCE_TIERS[args.scale].archiveTargetRows,
     })
     maintenanceRuntime = maintenance.runtime
     const postgresqlMaintenance = await recordPhase(collectedPhases, {
