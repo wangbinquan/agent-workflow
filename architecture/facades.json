@@ -1088,11 +1088,11 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:01972941ca8a35938b14",
         "import:075ee722b7b57cf7f0d9",
         "import:29718a6cccb033557a88",
         "import:581d110146e81aff9940",
         "import:b029f3873fef722951ba",
-        "import:d0047e5e1151e6567194",
         "import:d6168c7b197d58c6e473",
         "import:d6f452864bd29abe2e0c"
       ],
@@ -1787,27 +1787,27 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0bbab9bb56ef096c8101",
         "import:0fb88f3544e800a5e388",
-        "import:2d99741bb1571ecf6678",
+        "import:2fdc82fa2d7038d42546",
         "import:32a7c14ea579504f17e1",
         "import:3b81f60e6dc54cc2965a",
         "import:3f1fe872794501929a62",
         "import:4a67c1e929e15639fb62",
+        "import:671c93b9ef396addaf13",
         "import:6a829e7597089611db6a",
-        "import:74d522b396368678d10e",
         "import:84e9a18dbe3831512ad3",
-        "import:89fb82cf8afa90224b31",
+        "import:87525a2a28d7fe8e7808",
+        "import:8ac235c9ca49c7fb6740",
         "import:8fa0cefd9187c7b74c6c",
         "import:93f4b27cbcf45005a94e",
         "import:9c662fbdd1cde667a744",
-        "import:a16137defe729cd291c6",
         "import:a7fb717c45645aaebc2c",
-        "import:b68f742a2965fc644909",
         "import:bdd930e07461a3c22528",
         "import:be68824a30c5412a865c",
+        "import:cabe6f7a7a5e3921737e",
         "import:d863fa65afbe8ee2bf0f",
         "import:dc14c72c6a4153225141",
-        "import:dfface7316b810ad0268",
         "import:e19e61021ff44889ad66",
         "import:f4da5521fe5af45cecdf"
       ],
@@ -1821,10 +1821,11 @@
         "isNodeRunFresh",
         "isSettledRunStatus",
         "parseConsumedJson",
+        "pickFrameSourceRun",
         "pickFreshestRun",
-        "pickReusableShardRun",
-        "pickUpstreamSourceRun",
-        "pickVisibleUpstreamRun"
+        "pickLatestRunInFrame",
+        "pickLatestSettledRun",
+        "pickReusableShardRun"
       ],
       "file": "packages/backend/src/services/freshness.ts",
       "id": "facade:packages/backend/src/services/freshness.ts",
@@ -4477,7 +4478,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:23d29778fb19b06ecafd"
+      ],
       "exportedSymbols": [
         "LivenessEvidence",
         "LivenessReason",
@@ -7425,5 +7428,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b69292c7068ac9c3e8498f2a6123eff1aba0a245e4ae86431e7f921a5d93aa5a"
+  "sourceDigest": "sha256:2ba46b6c44489de2c002a38842f1a3c7cd9141fbf3ee1fff6668069ce91379c5"
 }

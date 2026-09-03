@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 493,
-    "architectureExceptions": 5271,
+    "architectureExceptions": 5286,
     "backgroundJobs": 367,
-    "crossContextImports": 6341,
+    "crossContextImports": 6366,
     "facades": 346,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25769,
-    "mutationEntrypoints": 1911,
+    "moduleSymbolOwners": 25812,
+    "mutationEntrypoints": 1916,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 996,
-    "transactionExternalEffects": 476
+    "publicSurfaces": 1008,
+    "transactionExternalEffects": 478
   },
   "metrics": {
     "ambientWiringEntries": 493,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1911,
+    "backendProductionFiles": 1920,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -50,7 +50,7 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 77,
-    "inboundBoundaryEdges": 312,
+    "inboundBoundaryEdges": 314,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -119,16 +119,16 @@
       },
       {
         "context": "task-execution",
-        "files": 325
+        "files": 333
       }
     ],
-    "moduleFiles": 1281,
+    "moduleFiles": 1289,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#53",
-        "line": 53,
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#79",
+        "line": 79,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#createPostgresqlNodeRunMintParticipantInTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -137,8 +137,8 @@
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#53",
-        "line": 53,
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#78",
+        "line": 78,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b69292c7068ac9c3e8498f2a6123eff1aba0a245e4ae86431e7f921a5d93aa5a"
+  "sourceDigest": "sha256:2ba46b6c44489de2c002a38842f1a3c7cd9141fbf3ee1fff6668069ce91379c5"
 }

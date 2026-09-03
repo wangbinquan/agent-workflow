@@ -861,11 +861,11 @@
       "removeAfterWave": "RFC-294 W2（新号 implementation RFC：四合同 topology cut）",
       "findingId": "G-02",
       "canonicalImportEdgeIds": [
-        "import:2d99741bb1571ecf6678"
+        "import:cabe6f7a7a5e3921737e"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/freshness.ts#pickUpstreamSourceRun"
+        "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
       ],
       "canonicalFacadeIds": []
     },
@@ -9238,15 +9238,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b69292c7068ac9c3e8498f2a6123eff1aba0a245e4ae86431e7f921a5d93aa5a",
+    "sourceDigest": "sha256:2ba46b6c44489de2c002a38842f1a3c7cd9141fbf3ee1fff6668069ce91379c5",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "8cd32b6efae5c6c96cc54ed2c13fe1a644720335",
-    "contentDigest": "sha256:5c98a81f301a804b797b0363b120184b278a1b2fba69f1f8d5894cbc03e0c8a8",
+    "currentSnapshotSha": "9a1b608f5d9e7422191c4595abb9745f1fefb3e3",
+    "contentDigest": "sha256:600a195fe9c20e59ebe6f8572140ce138a6d042545022f0c3d49efa0ca755191",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
