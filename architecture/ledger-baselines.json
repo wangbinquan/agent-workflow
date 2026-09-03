@@ -349,8 +349,8 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 52,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。"
+      "baseline": 50,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。"
     },
     {
       "id": "rfc349-provider-specific-business-dependencies",
@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6314,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-352 AC-6（RFC-294 W4-E2）：RFC-285 B7（Q4）的候选收窄此前在 `routes/memories.ts` 里被手抄四遍、在 `application/listPage.ts` 里是第五份。收成 `memory/domain/candidateVisibility.ts` 一份判据并经 `memory/public/types` 供路由消费；同批把路由的 `hasResourceAclBypass` 从 legacy `@/services/resourceAcl` 改到 `resource-catalog/public/types`（与 memory 两个 provider 同一出口）。因此新增 1 个 domain 文件与 4 个 public 导出，路由对模块 public 的边 +3——换掉的是 4 份会各自漂移的手抄件。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5246,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-352 AC-6（RFC-294 W4-E2）：RFC-285 B7（Q4）的候选收窄此前在 `routes/memories.ts` 里被手抄四遍、在 `application/listPage.ts` 里是第五份。收成 `memory/domain/candidateVisibility.ts` 一份判据并经 `memory/public/types` 供路由消费；同批把路由的 `hasResourceAclBypass` 从 legacy `@/services/resourceAcl` 改到 `resource-catalog/public/types`（与 memory 两个 provider 同一出口）。因此新增 1 个 domain 文件与 4 个 public 导出，路由对模块 public 的边 +3——换掉的是 4 份会各自漂移的手抄件。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -468,10 +462,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 963,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-352 T9（RFC-294 W4-E2）：把 memory 对 source-control 与 resource-catalog 的**内部**import 改成经各自 public 消费——source-control 的 public 补出唯一 owner 工厂与两个 reads，resource-catalog 的 public 补出 `hasResourceAclBypass`（此前 memory 两个 provider 从不同地方取同一谓词）。公共面因此各多几个符号，换掉的是 5 条跨 context 深入内部的边。 RFC-352 AC-6（RFC-294 W4-E2）：RFC-285 B7（Q4）的候选收窄此前在 `routes/memories.ts` 里被手抄四遍、在 `application/listPage.ts` 里是第五份。收成 `memory/domain/candidateVisibility.ts` 一份判据并经 `memory/public/types` 供路由消费；同批把路由的 `hasResourceAclBypass` 从 legacy `@/services/resourceAcl` 改到 `resource-catalog/public/types`（与 memory 两个 provider 同一出口）。因此新增 1 个 domain 文件与 4 个 public 导出，路由对模块 public 的边 +3——换掉的是 4 份会各自漂移的手抄件。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -492,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25734,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-352 AC-6（RFC-294 W4-E2）：RFC-285 B7（Q4）的候选收窄此前在 `routes/memories.ts` 里被手抄四遍、在 `application/listPage.ts` 里是第五份。收成 `memory/domain/candidateVisibility.ts` 一份判据并经 `memory/public/types` 供路由消费；同批把路由的 `hasResourceAclBypass` 从 legacy `@/services/resourceAcl` 改到 `resource-catalog/public/types`（与 memory 两个 provider 同一出口）。因此新增 1 个 domain 文件与 4 个 public 导出，路由对模块 public 的边 +3——换掉的是 4 份会各自漂移的手抄件。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -512,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1ab271af29e9aa6302647186bb397b02f2a734d6",
-    "contentDigest": "sha256:c136d8f89990bf9d72bd046b2eb6a9da1bd56eba7133b01c5a752642fe24049d",
+    "currentSnapshotSha": "247331ae5a427dce53f7042a6ef0bd85f16755d1",
+    "contentDigest": "sha256:763d44225483284f4db0bf776b71476000e45ad0bf1687e72dfd767184957cea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
