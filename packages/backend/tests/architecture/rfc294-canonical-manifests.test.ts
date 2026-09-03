@@ -367,7 +367,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/skillBootVerify.ts',
       'packages/backend/src/services/skillIdentityMigration.ts',
       'packages/backend/src/services/skillIdentityPaths.ts',
-      'packages/backend/src/services/skillVersion.ts',
       'packages/backend/src/services/taskClarifyDirective.ts',
       'packages/backend/src/services/taskCollab.ts',
       'packages/backend/src/services/taskFeedback.ts',

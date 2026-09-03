@@ -251,7 +251,6 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
   facade('services/skillReferenceGuard.ts'),
   facade('services/skillReserveOp.ts'),
   facade('services/skillToken.ts'),
-  facade('services/skillVersion.ts'),
   facade('services/skillVersionOp.ts'),
   facade('services/workflow.ts'),
   facade('services/workflow.validator.ts'),
@@ -509,13 +508,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['skillFilesRel'],
     'task Skill file projection',
     REMOVE_OWNERS.skillQueries,
-  ),
-  edge(
-    'services/skillVersion.ts',
-    'services/intent/journalArtifacts.ts',
-    ['StagedSkillVersion'],
-    'Intent staged Skill version artifact',
-    REMOVE_OWNERS.skillVersion,
   ),
   edge(
     'services/workflow.ts',

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { StagedSkillVersion } from '@/services/skillVersion'
+import type { StagedSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 /**
  * Persisted Intent apply side effects.  The envelope is versioned because these
