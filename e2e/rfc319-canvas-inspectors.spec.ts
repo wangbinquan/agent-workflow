@@ -266,7 +266,16 @@ async function readSelectOptions(page: Page, trigger: Locator): Promise<string[]
   const labels = await listbox.getByRole('option').allInnerTexts()
   await page.keyboard.press('Escape')
   await expect(listbox).toBeHidden()
-  return labels
+  // `<Select>` marks the CURRENTLY SELECTED option with a `✓` glyph
+  // (Select.tsx:585-589 `select__option-check`), which `allInnerTexts()` returns
+  // as a second line — the selected option reads `"final\n✓"`, every other one
+  // reads just its label. Callers compare against the label, so strip the marker
+  // here rather than making each assertion tolerate it; only the trailing glyph
+  // goes, so an option's real description sub-line (`select__option-sub`)
+  // survives. Without this, any assertion on the option that happens to be
+  // selected fails on an invisible decoration (WF-31 red on the first
+  // e2e-full-nightly after the fixture moved to schema v6).
+  return labels.map((label) => label.replace(/\s*✓\s*$/u, ''))
 }
 
 /** 共享 <MultiSelect>（MultiSelect.tsx:237-381）：字段本身是 role=combobox 的 input。 */
@@ -1054,10 +1063,17 @@ test('WF-32 wrapper-fanout 检查器：参数就是入边、分片源是其中�
     .getByTestId('fanout-parameter-list')
     .locator('.fanout-input-row-wrap')
   await expect(rows, '入边没有逐条列成参数行 ⇒ 作者看不出扇出到底吃几个输入').toHaveCount(2)
+  // 来源那一段渲染的是**显示名**（`nodeTitle`，此处回落到代理名），node id 挂在
+  // `title` 上（WrapperFanoutEdit.tsx:93-101）。两样都要在：显示名是作者一眼看到的，
+  // node id 才是同一代理的两个节点之间唯一能区分的东西。
   await expect(
     rows.nth(0).locator('.fanout-input-wired'),
     '参数行不显示是谁喂的 ⇒ 作者无法确认分片源的数据来源',
-  ).toContainText('feeder')
+  ).toContainText('rfc319-ins-lister')
+  await expect(
+    rows.nth(0).locator('.fanout-input-wired__src code').first(),
+    '来源只有显示名、node id 连 tooltip 都查不到 ⇒ 同一代理的两个节点在参数行里长得一模一样',
+  ).toHaveAttribute('title', 'feeder')
   await expect(
     rows.nth(0),
     '分片源那一行没有标记 ⇒ 两个参数长得一样，作者分不清哪个会被逐项拆开',

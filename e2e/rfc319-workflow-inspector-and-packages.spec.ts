@@ -496,13 +496,22 @@ test('RFC-319 WF-33: call-workflow 检查器——引用不可见时给中性占
   const child = await seedWorkflow(
     {
       inputs: [{ kind: 'text', key: 'brief', label: 'Brief', required: false }],
+      // RFC-354 (schema v6): an output node's ports ARE its inbound edges — the
+      // node-level `ports[]` declaration is gone. A v5 `ports: [{ name }]` with no
+      // `bind` migrates to an output node with NO ports and NO edges
+      // (workflowMigration.ts:213-217 creates one edge per bound port, then drops
+      // the key), so the child would advertise `Outputs: none` and this test's
+      // whole point — the preview comes from the child's REAL definition — would
+      // assert against an empty one. Name the port on the edge instead.
       nodes: [
         { id: 'in_brief', kind: 'input', inputKey: 'brief', position: { x: 0, y: 0 } },
+        { id: 'out_report', kind: 'output', position: { x: 320, y: 0 } },
+      ],
+      edges: [
         {
-          id: 'out_report',
-          kind: 'output',
-          ports: [{ name: 'report' }],
-          position: { x: 320, y: 0 },
+          id: 'e_report',
+          source: { nodeId: 'in_brief', portName: 'brief' },
+          target: { nodeId: 'out_report', portName: 'report' },
         },
       ],
     },
