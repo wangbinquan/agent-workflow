@@ -136,7 +136,13 @@ describe('RFC-334 NodeExecutionGateway ordering', () => {
     expect(executorHits).toBe(0)
   })
 
-  test('clarify family skips branch judgment and resolves its exact executor', async () => {
+  // RFC-354 D7: a clarify gate is a row-backed node whose asker is its structural
+  // upstream, so it goes through the SAME branch judgment as every other kind —
+  // an asker closed by a branch closes the gate too. (Before D7 the family
+  // bypassed the judgment: it "settled without a row" and had no dataflow
+  // inbound to judge.) Active ⇒ its exact executor; inactive ⇒ the skip
+  // outcome, executor never reached.
+  test('clarify family is branch-judged like every kind, then resolves its exact executor', async () => {
     let branchHits = 0
     let clarifyHits = 0
     const executors = {
@@ -156,7 +162,14 @@ describe('RFC-334 NodeExecutionGateway ordering', () => {
       },
     })
     expect(await gateway.executeNode(request('clarify'))).toEqual(OK)
-    expect(branchHits).toBe(0)
+    expect(branchHits).toBe(1)
+    expect(clarifyHits).toBe(1)
+
+    const skipped = { kind: 'ok', summary: '', message: 'branch-skipped' } as const
+    const closed = new NodeExecutionGateway(new ClosedNodeExecutorRegistry(executors), {
+      judge: async () => ({ kind: 'inactive', outcome: skipped }),
+    })
+    expect(await closed.executeNode(request('clarify'))).toEqual(skipped)
     expect(clarifyHits).toBe(1)
   })
 
