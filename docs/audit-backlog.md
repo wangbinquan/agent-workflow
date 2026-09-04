@@ -755,7 +755,6 @@ the option AND advances`（:908）在 **windows-latest shard 3/3** 撞 **20s 用
   > （二进制字节直连，已在 rfc284 spawn allowlist 内）。
   > 结构性的解法是原文最后一句提到的「源码锁」——把 spawn 点清单变成棘轮，
   > 而不是靠下一次审计再来对一次账。
-
 - ❗ **`docs/audit-backlog.md` 上文关于 `--ignore-scripts` 的记载与源码不符**（2026-08-03 实测）：
   `services/pluginInstaller.ts:222` 的实际 argv 是
   `npm install --prefix <dir> --no-audit --no-fund --silent <spec>`，**全仓 grep `ignore-scripts` 零命中**，
@@ -1980,16 +1979,16 @@ audit-backlog 里已登记的 bug#8（Windows VM + 1.18.13，业务节点侧）�
 **现象**：cron（`schedule`，非 push）触发的 webkit e2e nightly 长期间歇失败，且**每次红在
 不同的 spec、不同的分片**：
 
-| 日期                  | 结论    | 失败用例                                                                                       |
-| --------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| 日期                  | 结论    | 失败用例                                                                        |
+| --------------------- | ------- | ------------------------------------------------------------------------------- |
 | 08-19                 | failure | `rfc244-task-operations.spec.ts:162/:267`（click 超时）+ `rfc294-…:491`（exitCode），shard 2/4 |
-| 08-18                 | success | —                                                                                              |
-| 08-17（两次）         | failure | `rfc250-*` / `rfc304-*` 四条 / **`rfc294-…:491`**，分片各不相同                                |
-| 08-14                 | failure | `intent-builder.spec.ts:126` RFC-293 workbench（shard 1/4 + 2/4）                              |
-| 08-13                 | failure | `rfc295-runtime-parameter-picker.spec.ts:132` Webhook Agent picker（1/4 + 3/4）                |
-| 08-12                 | success | —                                                                                              |
-| 08-11 / 08-10         | failure | 分片各不相同                                                                                   |
-| 08-09 / 08-08 / 08-07 | success | —                                                                                              |
+| 08-18                 | success | —                                                                               |
+| 08-17（两次）         | failure | `rfc250-*` / `rfc304-*` 四条 / **`rfc294-…:491`**，分片各不相同                 |
+| 08-14                 | failure | `intent-builder.spec.ts:126` RFC-293 workbench（shard 1/4 + 2/4）               |
+| 08-13                 | failure | `rfc295-runtime-parameter-picker.spec.ts:132` Webhook Agent picker（1/4 + 3/4） |
+| 08-12                 | success | —                                                                               |
+| 08-11 / 08-10         | failure | 分片各不相同                                                                    |
+| 08-09 / 08-08 / 08-07 | success | —                                                                               |
 
 **归属核实**：它出现在某个 commit 上只是因为定时跑取到了当时的 main HEAD，与谁推了什么
 无关（`event=schedule`）。08-13 与 08-14 的失败用例毫无交集，排除「某条改动引入」。
@@ -2080,7 +2079,7 @@ expect(commitRow!.status).toBe('done')` → `failed`，与 2026-08-14 记录的 
   ⇒ 与上面「纯 markdown 提交也红」互为佐证：该失败与代码改动无关。
 - **对上面「待验证方向 1」的直接推进**：既然是负载相关，「n1 被 spawn 两次」更像是超时后
   的重派而非会话重试。下一步建议按 §处置原则 里那条一次性诊断做——失败时 dump `git
-status` 与该节点全部 node_run 行（含 `rerun_cause`），一次就能在方向 1 与方向 2
+  status` 与该节点全部 node_run 行（含 `rerun_cause`），一次就能在方向 1 与方向 2
   （缺同步点）之间分出胜负。
 
 ### 2026-08-20 再补：链上**确实有**「先探后用」的两步式，窗口已定位到 file:line
@@ -2292,7 +2291,7 @@ cwd 直接返回合成的 `exitCode!==0` 而不 spawn」。**它从未落地**�
 
 > **发现者不是该 RFC 的作者**——这两条是排查「`bun dev` 起不来」时顺带量到的，写在这里
 > 供 RFC-310 的 frozen-type-package 修复参考（对方已有 repro：commit `218ae46f0`
-> _"test(dev): reproduce unparseable frozen type package"_）。**未改动任何相关生产代码。**
+> *"test(dev): reproduce unparseable frozen type package"*）。**未改动任何相关生产代码。**
 
 - **症状**：daemon 启动即退出（exit 1），zod 报
   `authoringManifest.workItems[1].humanReview.planningRoleRef / planningSlotRef: Required`。
@@ -2465,7 +2464,7 @@ RFC-060 PR-D 推迟到 PR-D2，至今未落地。
    prompt 是 `… INPUT_JSON` + 普通 workflow-output 端口（`digitalEmployeeExecution.ts:195-215`），
    而 stub 只认 RFC-310 老协议的 `<agent-result nonce="…">` 帧（`mode-development.ts:68-81, :142-158`）。
    实测 `analyze-implement` 每轮都失败重试：`stub-development-agent: prompt is missing the RFC-310
-agent-result identity`。**而 `rfc310-digital-employee-journey.spec.ts` 的
+   agent-result identity`。**而 `rfc310-digital-employee-journey.spec.ts` 的
    `body and repository-bound files enter a stateful employee case and the unified task list` 一直是绿的**
    ——它对时间线只断言「第一步存在」（那是 `prepare-materials` 这个平台节点），从未断言
    `analyze-implement` 轮次成功。属 RFC-319 §1.1① 的「空洞绿」。
@@ -2532,7 +2531,7 @@ agent-result identity`。**而 `rfc310-digital-employee-journey.spec.ts` 的
 12. **真正被自动停用的一类反而不显示该横幅**：`scheduledTaskScheduler.ts:65-77` 在 `schedule_spec` 损坏时
     直接 `enabled=false`，但**不动** `consecutive_failures`（保持 0）。与上一条是同一判据的两面：既误报也漏报。
 13. **总开关与失败阈值在前台完全没有入口**：`grep -rn "scheduledTasksEnabled\|scheduledTasksMaxFailures"
-packages/frontend/src` → **0 命中**。出事时最该点得到的急停闸，界面上没有。
+    packages/frontend/src` → **0 命中**。出事时最该点得到的急停闸，界面上没有。
 14. **自动停用没有任何对外通知**：`onAutoDisable` 回调在 daemon 装配处（`cli/start.ts:1476-1480`）根本没传。
     「排期被系统关掉了」只落在库里。`WHERE enabled=1 RETURNING` 的「只停一次」设计目前是为一个不存在的
     消费者服务的。
@@ -2632,11 +2631,11 @@ errno 表在 Bun 上一条都命中不了，兜住分类的是 `CONNECT_FAILED_M
    这是对的），一摘掉选项就整个从候选里消失**，永远不存在「灰着的选项」这一态。只有
    `SkillsPicker.tsx:80-84` 无条件并入，置灰才可达。
    **更糟的一半**：插件被停用时 `/api/plugins` 仍返回该行（因为它被选中而被 `pass(item) ||
-selected.has(item.id)` 放行），于是 resource-status 那份 actor-safe 的「(disabled or unavailable)」
+   selected.has(item.id)` 放行），于是 resource-status 那份 actor-safe 的「(disabled or unavailable)」
    标签**一次都不会显示**——用户在 Plugins 选择器里看到的是它的原名，没有任何迹象表明这条引用已经死了。
 2. **【P3】`/api/execution-contracts` 里 v1 契约的 `displayName` 装的是「输入材料」的描述，不是这项工作的名字。**
    实测：`development.analyze-implement@1` → `"Requirement context, repository snapshot, and existing
-diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionContractPicker.tsx:63` 直接把它
+   diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionContractPicker.tsx:63` 直接把它
    当选项标题渲染，于是 Ports 页那个下拉里混着一半读不懂的长句。属契约注册表的数据编写问题，不是 UI。
 3. **【P3】转让归属后，前任的编辑面在 WS 断线时会一直停在「可编辑」。** `useResourceAccess` 用独立 key
    `['resource-access', …]`，而 `AclPanel` 的保存只失效 `['agents']` 与 `['acl', …]`；恢复完全依赖
@@ -2964,8 +2963,8 @@ diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionCo
    `OUTPUT_SCHEMA_EXAMPLE_JSON`，于是每一轮都 `fail(...)` 退避重试。这解释了既有的
    `e2e/rfc319-digital-employee-p1.spec.ts:691` 为什么断言完门禁卡就必须 `forceBlockedCase` 收摊。
    B92 没有改 `packages/system-mocks/src/**`，改用自建 Agent 把 `analysis-plan` 声明成 `markdown`
-   - `review-doc` stub 绕开。**建议后续单独授权给 `mode-development.ts` 补一个 artifact-path 分支
-     （写文件 + 回路径）**，否则产品主干的这一段在浏览器层长期没有可执行现场。
+   + `review-doc` stub 绕开。**建议后续单独授权给 `mode-development.ts` 补一个 artifact-path 分支
+   （写文件 + 回路径）**，否则产品主干的这一段在浏览器层长期没有可执行现场。
 3. **【findings 措辞偏差，四处，已按源码实际写】**
    - DE-24：findings 说断言分段控件里没有 `'Input ID'`，而向导里那个选项的实际文案是
      **`Requirement / issue ID`**（`TaskCreationSubjectDescriptorContract.tsx:435-437`）；
@@ -2986,7 +2985,7 @@ diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionCo
    - `/mcps/new` 上用户只能看到页签上一颗 `!` 徽标，**没有任何文字说明哪一项非法**；
    - **详情页连徽标都没有**——`packages/frontend/src/routes/mcps.detail.tsx:193-196` 压根没配徽标，
      用户点保存后是「按钮点了没反应」，与 RES-35 在插件页修好的那类问题同形。
-     B93 未就此写断言（会锁死一个错误形态）；RES-27 只断言了**请求根本没发出去**这条硬事实。
+   B93 未就此写断言（会锁死一个错误形态）；RES-27 只断言了**请求根本没发出去**这条硬事实。
 2. **【真实缺陷，P3 / 数据整洁】导入配置包时跳过可选密钥，会在库里留下一个空的承载对象。**
    `packages/backend/src/services/resourcePackage/secretInputs.ts:113-122` 跳过的密钥走
    `delete slot.parent[slot.key]`，删的是**叶子键**；当该密钥是某个对象下的唯一一项时，父对象
@@ -3041,7 +3040,7 @@ diagnostics"`；同族 v2/v3 则是正常的 `"Implement change"`。`ExecutionCo
    （`shared/schemas/config.ts`）、数值边界（`shared/settingsNumericBounds.ts`）、
    前端草稿白名单与设置页控件（`frontend/src/lib/settings-drafts.ts`、`routes/settings.tsx`）
    与 i18n；**`packages/backend/src` 下 0 命中**（本人复核：`grep -rni largeoutput
-packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置里有值 → 起任何任务、
+   packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置里有值 → 起任何任务、
    产出任意大小输出，行为与默认值毫无区别。建议要么接线、要么从设置页下架。
    B95 **未就此写断言**——断言「它不生效」等于把缺陷固化进判据。
 2. **【账本措辞与实现不符，已按源码实际写】CFG-X1 的六项预算只有三项真被新任务采用。**
@@ -3099,28 +3098,28 @@ packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置�
 
 ## RFC-319 B97 起草期撞到的产品缺陷（2026-08-26，任务详情页签域）
 
-1. \*\*【真实缺陷，严重度高，本人逐处复核过】~~「重试仓库准备」在任何启用了 `secret.key` 的部署里
+1. **【真实缺陷，严重度高，本人逐处复核过】~~「重试仓库准备」在任何启用了 `secret.key` 的部署里
    必然失败，且错误文案把原因指错方向。~~ —— 已于 2026-08-26 的 `3cc81b245` 修复（两处补 `secretBox`
-   - `packages/backend/tests/repo-prep-retry-secretbox.test.ts` 先红后绿上锁）。下文保留原始诊断作为
-     同类 bug 的判例：手搓 deps 就会漏字段，这已是第二次复发。**
-     启动路径构造依赖时带着密钥箱：`packages/backend/src/routes/tasks.ts:321`
-     `...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox)`。
-     而**重试路径手搓 deps、没有 `secretBox`**（`routes/tasks.ts:998-1006` 只给了
-     `db` / `configPath` / `subagentLiveCapture` / `resolveLaunchRuntimeConfig`）。于是
-     `retryRepoPreparation → startTask` 走到 `services/task.ts:1050` 的
-     `unsealRepoUrl(row, deps.secretBox /* undefined */, deps.db)`：
-     `services/repoCredentials.ts:105-111` 对「已封存但没有密钥箱」这一档**直接返回 null**，
-     `task.ts:1051-1057` 随即抛 409 `cached-repo-credential-unavailable`，文案却写着
-     **「sealed with a different secret.key?」**——真实原因是压根没接密钥箱，不是密钥换了。
-     **同一缺口也在 boot 自动恢复的注入点**：`cli/start.ts:1492-1500` 的 `resumeDeps` 同样手搓、
-     同样没有 `secretBox`（对照同文件 `:1097` / `:1128` / `:1282` 三处都老老实实走
-     `buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox)`）。因此
-     `autoResumeOnBoot` 下这类任务每次 boot 白撞一次，直到被熔断隔离。
-     **RFC-287 AC-11 承诺的这条唯一出口在真实部署里 100% 不可用**；它能活到今天，是因为
-     `e2e/rfc319-repo-mirrors-and-launch.spec.ts` 的 REPO-15 只断言按钮**可见**、从没点过它。
-     B97 **刻意不把「必然失败」写进断言**——那会变成一条阻止修复的用例。**修复已落地**（`3cc81b245`）：
-     两处各补一个 `secretBox`，属 CLAUDE.md §RFC workflow 第 6 条的「单行 bug 修复」例外；
-     错误文案的误导性措辞（「sealed with a different secret.key?」）**尚未改\*\*，仍是待办。
+   + `packages/backend/tests/repo-prep-retry-secretbox.test.ts` 先红后绿上锁）。下文保留原始诊断作为
+   同类 bug 的判例：手搓 deps 就会漏字段，这已是第二次复发。**
+   启动路径构造依赖时带着密钥箱：`packages/backend/src/routes/tasks.ts:321`
+   `...buildStartTaskDeps(deps.db, deps.configPath, actor.user.id, deps.secretBox)`。
+   而**重试路径手搓 deps、没有 `secretBox`**（`routes/tasks.ts:998-1006` 只给了
+   `db` / `configPath` / `subagentLiveCapture` / `resolveLaunchRuntimeConfig`）。于是
+   `retryRepoPreparation → startTask` 走到 `services/task.ts:1050` 的
+   `unsealRepoUrl(row, deps.secretBox /* undefined */, deps.db)`：
+   `services/repoCredentials.ts:105-111` 对「已封存但没有密钥箱」这一档**直接返回 null**，
+   `task.ts:1051-1057` 随即抛 409 `cached-repo-credential-unavailable`，文案却写着
+   **「sealed with a different secret.key?」**——真实原因是压根没接密钥箱，不是密钥换了。
+   **同一缺口也在 boot 自动恢复的注入点**：`cli/start.ts:1492-1500` 的 `resumeDeps` 同样手搓、
+   同样没有 `secretBox`（对照同文件 `:1097` / `:1128` / `:1282` 三处都老老实实走
+   `buildStartTaskDeps(db, Paths.config, SYSTEM_USER_ID, secretBox)`）。因此
+   `autoResumeOnBoot` 下这类任务每次 boot 白撞一次，直到被熔断隔离。
+   **RFC-287 AC-11 承诺的这条唯一出口在真实部署里 100% 不可用**；它能活到今天，是因为
+   `e2e/rfc319-repo-mirrors-and-launch.spec.ts` 的 REPO-15 只断言按钮**可见**、从没点过它。
+   B97 **刻意不把「必然失败」写进断言**——那会变成一条阻止修复的用例。**修复已落地**（`3cc81b245`）：
+   两处各补一个 `secretBox`，属 CLAUDE.md §RFC workflow 第 6 条的「单行 bug 修复」例外；
+   错误文案的误导性措辞（「sealed with a different secret.key?」）**尚未改**，仍是待办。
 2. **【真实缺陷，P2 / 可用性】节点抽屉对 `done` 的 run 不给重试入口，后端却是允许的。**
    `components/tasks/NodeDetailDrawer.tsx:675-686` 的 `canRetryNodeRun` 不放行 `done`，而
    `services/task.ts:5526-5536` 的 `retryNode` allowedFrom **含 `done`**。结果「重跑一个已成功的
@@ -3300,7 +3299,7 @@ packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置�
    - **AGENT-X1「设置页给内置 aw-skill-merger 换 runtime 并保存」**——
      `e2e/rfc319-settings-config-sections.spec.ts` 的 CFG-21 / CFG-22 已走完整条界面路径并回读
      `/api/agents/00000000000000000000000001` 断言 `runtime` 落库。
-     B102 因此**没有**写重复用例，改去补它们没碰的写面边界（AGENT-45）。
+   B102 因此**没有**写重复用例，改去补它们没碰的写面边界（AGENT-45）。
 6. **【按源码实际改写的断言】`resolveRefsUsableById` 的 `missing` 回显的是输入 token 而非展示名**
    （`services/resourceRefs.ts:411`，正确行为）：实测形状是 `[{type:'agent', name:'<输入的 id>'}]`。
    顺手把「响应体里不得出现那条私有资源的展示名」锁成断言——这条 D1 隐私性质此前在 e2e 侧无人看守。
@@ -3336,7 +3335,7 @@ packages/backend/src | wc -l` = 0）。复现：改成 65536 保存 → 配置�
      具体那一条」。B103 只补 MEM-44 剩下的半边（失败横幅 + 草稿不丢）。
    - MEM-49 的设置页半边 → `e2e/rfc319-settings-config-sections.spec.ts` 的 CFG-21 已走过
      `Memory distill runtime` 选择器与语言选择，一次保存落库 + 落盘 + 重载回显。
-     与 B98 §8、B102 §5 同类，仍留待一次独立的账本对账。
+   与 B98 §8、B102 §5 同类，仍留待一次独立的账本对账。
 5. **【三层冗余守卫，实测记录】动态工作流组「没有聊天室」由三层保证，只掐前两层不红。**
    `lib/task-detail-tabs.ts:263` 的 capability、`DYNAMIC_WORKGROUP_TAB_ORDER`（不含 chatroom）、
    以及 `routes/tasks.detail.tsx:376` 的硬编码 `chatroom: false`。本人变异实测：前两层同时掐死，
@@ -3525,7 +3524,7 @@ MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-3
    `dialog.getByLabel('Target skill')` 断言字段不出现——而 `getByLabel` **只认可标注的表单控件**，
    该字段在 `from-skill` 下渲染的是 `fusion.noManagedSkills` 的 `<p>`，于是「字段渲染了但里面是空态」
    这一整类回归会被漏掉（变异实测 NO-BITE）。已改成 `getByText('Target skill', {exact:false})`
-   - `toHaveCount(0)`，改后同一变异当场红。
+   + `toHaveCount(0)`，改后同一变异当场红。
 
 ## RFC-319 B107 起草期撞到的账本偏差与产品观察（2026-08-26，工作流入口 + 外壳偏好）
 
@@ -3575,9 +3574,9 @@ MEM-21、MEM-43、MEM-X2、OPS-044b、TASK-03、TASK-38、TASK-44、UX-26、UX-3
 - **RES-25** → `packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts` 的
   `Claude resumes one native session and calls exactly the mounted stateful MCP`：两轮 succeeded、
   `runtimeSessionId` 两轮相同、真 MCP 服务器收到 `initialize/tools/list/tools/call ×2`、transcript 里
-  出现 `counter=1/2`。**账本里已有 5 行以 `packages/backend/tests/**`为证据（EVENT-07 / HUMAN-28 /
-OPS-001 / OPS-002 / OPS-024），且全部 tier=pr**，本行同形处置。
-**保留的边界**：该用例`test.skipIf(process.platform === 'win32')`——Windows 上不跑，是夹具限制。
+  出现 `counter=1/2`。**账本里已有 5 行以 `packages/backend/tests/**` 为证据（EVENT-07 / HUMAN-28 /
+  OPS-001 / OPS-002 / OPS-024），且全部 tier=pr**，本行同形处置。
+  **保留的边界**：该用例 `test.skipIf(process.platform === 'win32')`——Windows 上不跑，是夹具限制。
 - **MEM-X4** → 两条既有用例合起来盖满：`rfc319-memory-distill-jobs.spec.ts` 的 MEM-29 逐字断言
   `/tasks/<id>?tab=feedback#feedback-<id>` 且已删除源那行**没有链接**；`task-feedback-distill.spec.ts` 的
   深链用例带同样的 hash 打开并轮询断言 `document.activeElement.id`，还有「认不出的锚点不许乱扔焦点」的
