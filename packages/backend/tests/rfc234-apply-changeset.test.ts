@@ -38,9 +38,9 @@ import {
   applyIntentChangeset,
   convergeIntentApplyJournal,
   type ApplyIntentDeps,
-} from '../src/services/intent/applyChangeset'
+} from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
-import type { IntentContextManifest } from '../src/services/intent/manifest'
+import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')

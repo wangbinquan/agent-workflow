@@ -39,15 +39,15 @@ import type {
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
-import { resumeQueuedIntentWorkingSets } from '../src/services/intent/dispatcher'
+import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
 import {
   composeIntentResourceCatalogFor,
   intentResourceVisibility,
   type IntentResourceCatalogFor,
-} from '../src/services/intent/resourceCatalog'
-import { createIntentSession, insertUserTurnAndReserve } from '../src/services/intent/session'
-import { cancelIntentTurn } from '../src/services/intent/turnEngine'
-import { submitIntentWorkingSetChange } from '../src/services/intent/workingSet'
+} from '@/modules/intent/application/resourceCatalog'
+import { createIntentSession, insertUserTurnAndReserve } from '@/modules/intent/application/session'
+import { cancelIntentTurn } from '@/modules/intent/application/turnEngine'
+import { submitIntentWorkingSetChange } from '@/modules/intent/application/workingSet'
 import { createAgent } from '../src/services/agent'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'

@@ -49,11 +49,11 @@ import {
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users, workflows } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
-import { createIntentSession } from '../src/services/intent/session'
-import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
+import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
+import { createIntentSession } from '@/modules/intent/application/session'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
-import type { IntentContextManifest } from '../src/services/intent/manifest'
+import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { IntentPersistence } from '../src/modules/intent/public/operations'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
@@ -936,7 +936,7 @@ describe('boundary: how much of a redacted nested field may be sent', () => {
   })
 
   test('the doc resolves the ambiguity explicitly', async () => {
-    const { buildIntentDoc } = await import('../src/services/intent/intentDoc')
+    const { buildIntentDoc } = await import('@/modules/intent/domain/intentDoc')
     const doc = buildIntentDoc({
       sessionTitle: 't',
       turns: [],

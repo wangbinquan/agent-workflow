@@ -535,8 +535,14 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
 
   test('Intent selector and dump share one paged actor-visible catalog owner', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
-    const selector = readFileSync(resolve(sourceRoot, 'services/intent/resourceCatalog.ts'), 'utf8')
-    const dump = readFileSync(resolve(sourceRoot, 'services/intent/dumpBuilder.ts'), 'utf8')
+    const selector = readFileSync(
+      resolve(sourceRoot, 'modules/intent/application/resourceCatalog.ts'),
+      'utf8',
+    )
+    const dump = readFileSync(
+      resolve(sourceRoot, 'modules/intent/application/dumpBuilder.ts'),
+      'utf8',
+    )
     const catalog = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqliteCatalogQuery.ts'),
       'utf8',
@@ -664,7 +670,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const dependencies = readFileSync(
-      resolve(sourceRoot, 'services/intent/legacyIntentApplyResourceDependencies.ts'),
+      resolve(
+        sourceRoot,
+        'modules/resource-catalog/composition/legacyIntentApplyResourceDependencies.ts',
+      ),
       'utf8',
     )
 

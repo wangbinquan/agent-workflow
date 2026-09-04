@@ -46,7 +46,10 @@ import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { pickCallTarget } from '@/services/execution/callRefTarget'
 import { extractWorkflowAgentRefs } from '@/services/resourceRefs'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
-import { renderPlatformInventoryFile, type IntentPlatformInventory } from './platformInventory'
+import {
+  renderPlatformInventoryFile,
+  type IntentPlatformInventory,
+} from '../domain/platformInventory'
 import type { CatalogSelectorKind } from '@/modules/resource-catalog/public/types'
 import type { SystemAgentSeedFile } from '@/services/systemAgentRun'
 import {

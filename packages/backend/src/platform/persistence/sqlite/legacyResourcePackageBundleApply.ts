@@ -1,4 +1,4 @@
-// RFC-271 T9 —— `BundleApply` 引擎本体，从 `services/intent/applyChangeset.ts` 泛化。
+// RFC-271 T9 —— `BundleApply` 引擎本体，从 `modules/intent/composition/apply.ts` 泛化。
 //
 // 外部不变量：一个 bundle 的每个资源**要么全部终态可见、要么零个可见**；同一个
 // `(scope,key)` 至多生效一次。

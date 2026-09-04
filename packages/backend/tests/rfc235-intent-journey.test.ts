@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   projectIntentJourney,
   type IntentJourneyProjectionInput,
-} from '../src/services/intent/journey'
+} from '@/modules/intent/domain/journey'
 
 const base = (
   overrides: Partial<IntentJourneyProjectionInput> = {},

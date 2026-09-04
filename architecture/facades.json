@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 345,
-    "thinFacades": 76
+    "serviceFiles": 327,
+    "thinFacades": 75
   },
   "entries": [
     {
@@ -1197,8 +1197,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:30c979fb8114e7c45873",
         "import:32c80f7bbec8ec08d008",
         "import:3bdd0a3f60f431a57790",
+        "import:5cd2429ca9f560a06c20",
         "import:a70daf0e8300162a804d",
         "import:e49c91328fdbaa749ab7"
       ],
@@ -1297,7 +1299,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:7c926666b4475c5255b3"
+        "import:7c926666b4475c5255b3",
+        "import:da5a7f604a205898a20e"
       ],
       "exportedSymbols": [
         "CallTargetRow",
@@ -2067,558 +2070,6 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:21dd95ed4d23cfbc947e",
-        "import:2fbcec52e324339766bb",
-        "import:4510c89690775f863dae",
-        "import:6829b051036944eb64a0",
-        "import:6a0f9dd6ca4d553d8776",
-        "import:6ac8a8634ecba268b555",
-        "import:780d5ac22d3f59aa95d9",
-        "import:bb7566308558d4102314",
-        "import:e5548efc82d4b4fa3b4b",
-        "import:f7e772fc275693aaddde"
-      ],
-      "exportedSymbols": [
-        "ApplyIntentDeps",
-        "applyIntentChangeset",
-        "convergeIntentApplyJournal"
-      ],
-      "file": "packages/backend/src/services/intent/applyChangeset.ts",
-      "id": "facade:packages/backend/src/services/intent/applyChangeset.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/applyChangeset.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:0f738191b732b61f9df4",
-        "import:484b64d21f6ad5c93304",
-        "import:9479540fba27f6863c05"
-      ],
-      "exportedSymbols": [
-        "IntentDispatchDeps",
-        "dispatchIntentTurn",
-        "listQueuedIntentWorkingSetSessionIds",
-        "resumeQueuedIntentWorkingSets"
-      ],
-      "file": "packages/backend/src/services/intent/dispatcher.ts",
-      "id": "facade:packages/backend/src/services/intent/dispatcher.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:21272ccef069ac39b6fe",
-        "import:56efc01d4cf00e3c2615"
-      ],
-      "exportedSymbols": [
-        "AgentPortNames",
-        "INTENT_INVENTORY_CAP",
-        "IntentDumpInput",
-        "IntentDumpResult",
-        "IntentMountRef",
-        "IntentRuntimeInventory",
-        "RUNTIME_INVENTORY_RULE",
-        "buildIntentDump",
-        "handleBasename"
-      ],
-      "file": "packages/backend/src/services/intent/dumpBuilder.ts",
-      "id": "facade:packages/backend/src/services/intent/dumpBuilder.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/dumpBuilder.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:0cbafa5f986700b3a449",
-        "import:1082a5ea317ee18e524f",
-        "import:29a5299f88fddd45f841",
-        "import:58e6bc603aa51ae2aa3e",
-        "import:9cb0d0f84564cfa30b04",
-        "import:a603c46f8a525209eacb",
-        "import:af62e3ce804d9b24054c",
-        "import:b34097929752947afb99",
-        "import:b5f65e5225d84c165ea3",
-        "import:c3b212a09106908ab5c8",
-        "import:e97fbb88abbdbfffc017",
-        "import:f65398dc886db6d24a6a"
-      ],
-      "exportedSymbols": [
-        "IntentDocInput",
-        "IntentDocTurn",
-        "RECENT_TURNS_VERBATIM",
-        "buildIntentDoc",
-        "privilegesFromLens",
-        "renderHistory"
-      ],
-      "file": "packages/backend/src/services/intent/intentDoc.ts",
-      "id": "facade:packages/backend/src/services/intent/intentDoc.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/intentDoc.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:3105369e733cbd76d6d0",
-        "import:50fb56d2e4c817f5c616",
-        "import:5e0c6d0656decfbe2404"
-      ],
-      "exportedSymbols": [
-        "ReservedIntentGeneration",
-        "reserveExactIntentRetry",
-        "reserveIntentCurrentAction",
-        "reserveIntentIteration"
-      ],
-      "file": "packages/backend/src/services/intent/iteration.ts",
-      "id": "facade:packages/backend/src/services/intent/iteration.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/iteration.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:3538b1abbdbc7f60ae9a",
-        "import:38dab90a57112c0142e2",
-        "import:652105d7426799d664a8",
-        "import:8972277511fe0ebe008d",
-        "import:9a191139daf3a215a44e",
-        "import:bc6fa8ec28d8eecabca6",
-        "import:bd1c0df40e1f75d7af6c",
-        "import:c207385d46fb1f5c8306",
-        "import:f6b8a8a9dccf5d7eda0f"
-      ],
-      "exportedSymbols": [
-        "INTENT_JOURNAL_ARTIFACT_VERSION",
-        "IntentJournalArtifact",
-        "IntentJournalArtifactCodecError",
-        "IntentJournalArtifactV1",
-        "decodeIntentJournalArtifacts",
-        "encodeIntentJournalArtifacts"
-      ],
-      "file": "packages/backend/src/services/intent/journalArtifacts.ts",
-      "id": "facade:packages/backend/src/services/intent/journalArtifacts.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/journalArtifacts.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "IntentJourneyProjectionInput",
-        "projectIntentJourney"
-      ],
-      "file": "packages/backend/src/services/intent/journey.ts",
-      "id": "facade:packages/backend/src/services/intent/journey.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/journey.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:08a1e1ba8799d4ff8911",
-        "import:097a8dd2179b611faf24",
-        "import:0efadf7b98d65e53c4a6",
-        "import:0fe7b9a6c88f83993bde",
-        "import:2038ed857289361add8d",
-        "import:209e9a1d882b9ead6153",
-        "import:262e0156574839775e59",
-        "import:2b3858b06225a83ddd2f",
-        "import:3d132dd8fd4efe4ac590",
-        "import:3f54257783470746aa61",
-        "import:40b84e6b68976ebf99d8",
-        "import:420982e3cf80143dd69a",
-        "import:435eb221dc25870ee704",
-        "import:438e09765d0a013e8aeb",
-        "import:4acefd2d22f623560462",
-        "import:4c3db51ff9ef88e662a8",
-        "import:4eb6ce4581386d14f5ed",
-        "import:54b8a812be1cbc3c44ca",
-        "import:55c20427c02aad87f897",
-        "import:612fa59196e7ee12880d",
-        "import:671c231f2e24f873318b",
-        "import:6d6e2816334456b013e1",
-        "import:79444e84acb13a2d09f3",
-        "import:7a4c3bf54ee2d68a958d",
-        "import:88f590a248856f3c6825",
-        "import:8e9b7a82559b7c4f0249",
-        "import:91c477a75a6be9dd1ffa",
-        "import:931c7cad865588f0b893",
-        "import:945968a872b197695af3",
-        "import:9999992082907db096ac",
-        "import:a225f95d285f90840b59",
-        "import:a26409961d8522645997",
-        "import:a64b49c8b6b04742d496",
-        "import:a6a757872d042270b2e3",
-        "import:afe7c07800acae47c4dc",
-        "import:b04ceaa8c18cb15af7b3",
-        "import:b5542afc3f71ef7b11c6",
-        "import:b68af4b72766df3a2b9e",
-        "import:b9cb6b62478dd84ea72a",
-        "import:c2aa89e5bc69480a47a6",
-        "import:c6b9b583540530fbeedf",
-        "import:c8fac972f1bade701e9a",
-        "import:d1a28b1ff755c41c17a1",
-        "import:d3679917cd211e465726",
-        "import:d4bd34ad6eb2a5c22ea0",
-        "import:e5f7e6f874e0b5a4996f",
-        "import:ed85284ab390e167c537",
-        "import:eefd5ffa4a9479734c49",
-        "import:fc428f1784d80ab9bb13",
-        "import:ff9840d3034bb8806c52"
-      ],
-      "exportedSymbols": [
-        "legacyIntentApplyResourceDependencies"
-      ],
-      "file": "packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "id": "facade:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/legacyIntentApplyResourceDependencies.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:8ebaa98a9c1205dfde12"
-      ],
-      "exportedSymbols": [
-        "listIntentTurnIdsForBootRecovery",
-        "recoverIntentTurnsOnBoot",
-        "sweepIntentScratch"
-      ],
-      "file": "packages/backend/src/services/intent/maintenance.ts",
-      "id": "facade:packages/backend/src/services/intent/maintenance.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/maintenance.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:02c0c6d5ff06c271c3da",
-        "import:0ce0356da80dbbba67ba",
-        "import:0df8fd11e59d24862b52",
-        "import:12b95cf339159cf6b984",
-        "import:14ebfd5dd0c1d33ce798",
-        "import:1cada54585c9a296e6a4",
-        "import:2223f70542582d46c25d",
-        "import:2a7f79c57e1729ee9d4f",
-        "import:2feb01df67ecb3822cf6",
-        "import:35e1a5204df2347f2a3c",
-        "import:43e60a6adca21adb892f",
-        "import:501e44a890259f5efad1",
-        "import:61b0e59b631baa0ff60a",
-        "import:63f85d9093d79aa716ed",
-        "import:748bf939607be4b58a17",
-        "import:890c9ef84c6e7a9947e8",
-        "import:8ef74b602ed4b36e1e15",
-        "import:996f503543a42f276781",
-        "import:9974bddcde99eeac4078",
-        "import:b095db6a7f9b4bb25801",
-        "import:ba9f9f62a29151892f8b",
-        "import:cc4b9d622c93e116ce60",
-        "import:cd73a817b66700a83aed",
-        "import:d660ee6d907938c70558",
-        "import:d9a79193b1e424800613",
-        "import:dec6260e2ed03f10b8d0",
-        "import:edc4d3ea175c4b90ad83",
-        "import:f6b96038e9bdf1b86b2f"
-      ],
-      "exportedSymbols": [
-        "AutoMountInput",
-        "CommitCreatedResource",
-        "HandleAllocator",
-        "IntentContextManifest",
-        "IntentFence",
-        "IntentHandleWatermark",
-        "IntentManifestEntry",
-        "allocateHandle",
-        "applyCommitMounts",
-        "buildAgentFence",
-        "buildMcpFence",
-        "buildPluginFence",
-        "buildSkillFence",
-        "buildWorkflowFence",
-        "buildWorkgroupFence",
-        "createHandleAllocator",
-        "fenceEquals",
-        "handleWatermarkOf",
-        "inheritCopyProvenance",
-        "lineageRootOf",
-        "manifestByHandle",
-        "manifestEntryFor",
-        "mergeHandleWatermarks",
-        "parseHandleWatermark"
-      ],
-      "file": "packages/backend/src/services/intent/manifest.ts",
-      "id": "facade:packages/backend/src/services/intent/manifest.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/manifest.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:8918f6982e8df5f78af2",
-        "import:dcfdb3ed5169b60f2b6a",
-        "import:f8050c38ec2112f1c5d6",
-        "import:f8abbc01fc797e555789"
-      ],
-      "exportedSymbols": [
-        "IntentPlatformInventory",
-        "PLATFORM_INVENTORY_ROW_CAP",
-        "PlatformInventoryRow",
-        "platformInventoryTypes",
-        "renderPlatformInventoryFile"
-      ],
-      "file": "packages/backend/src/services/intent/platformInventory.ts",
-      "id": "facade:packages/backend/src/services/intent/platformInventory.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/platformInventory.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:4da0e6fd1e3a9d2a63fe",
-        "import:5829a6213104c71bca63",
-        "import:599e7387f7b548f4bbb6",
-        "import:5ff398f4fcd2628db31c",
-        "import:79026085b50e36f56b75",
-        "import:e7b6566c183949b8781e"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/intent/postgresqlApplyChangeset.ts",
-      "id": "facade:packages/backend/src/services/intent/postgresqlApplyChangeset.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/postgresqlApplyChangeset.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "thin-facade",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:0077b8dbfffbcf8bfe00",
-        "import:082bc91ad462d4d1e2b7",
-        "import:7b40277deb3d5490bdcc",
-        "import:9affaaf8e4a153c3adb2",
-        "import:cdf7d0f292264b7c3b17"
-      ],
-      "exportedSymbols": [
-        "DraftValidationContext",
-        "DraftValidationReport",
-        "IntentDecision",
-        "IntentSlot",
-        "ResolvedIntentBundle",
-        "ResolvedIntentOp",
-        "collectTypedRefs",
-        "deriveIntentSlots",
-        "findTempRefCycles",
-        "resolveIntentBundle",
-        "validateDraftChangeset"
-      ],
-      "file": "packages/backend/src/services/intent/resolveChangeset.ts",
-      "id": "facade:packages/backend/src/services/intent/resolveChangeset.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/resolveChangeset.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:071f2e361f7be15218d6",
-        "import:0a2650f7a2543183b1ff",
-        "import:0e4fe4c4aa76fbd12a63",
-        "import:293a98e9bbb62a8a70be",
-        "import:381869ccf0ef6ef9ac05",
-        "import:4aeb2816e19ebd5b8e3b",
-        "import:50ebc9717db5fd83eafb",
-        "import:56140c99d30721daf097",
-        "import:58f8db54692c4ca508c5",
-        "import:5e1a3aef6cf4e667142e",
-        "import:669a65cb886a08f6e22e",
-        "import:693da88b188bdef04ccc",
-        "import:69c032f0c504c0b23b21",
-        "import:70a2257db38d31d85ab1",
-        "import:79fdcaf660ececde4eca",
-        "import:8b619e64bdfbef953553",
-        "import:8eb3fb53d8a002a939f1",
-        "import:a114ed608ef02de0a208",
-        "import:a86ccf163d1ca22a00fa",
-        "import:b0fbd58dd7c1e60186bb",
-        "import:c16b03b1af38da7deabf",
-        "import:ca17beadda2d124d0a53",
-        "import:d5b29e4cfdd3cee0ee7f",
-        "import:df0e8b8ce8f4d1110498",
-        "import:e719ab63bf32b000fe38",
-        "import:ebc1835340a3054ff299",
-        "import:fd8fab084b1f75cd975b",
-        "import:ff27506bb094f9b67618"
-      ],
-      "exportedSymbols": [
-        "IntentResourceCatalogBinding",
-        "IntentResourceCatalogDetailQueries",
-        "IntentResourceCatalogFactoryDependencies",
-        "IntentResourceCatalogFor",
-        "IntentVisibleResource",
-        "bindIntentResourceCatalog",
-        "composeIntentResourceCatalogFor",
-        "intentResourceVisibility",
-        "listAllVisibleResourceSummaries",
-        "listVisibleIntentResources"
-      ],
-      "file": "packages/backend/src/services/intent/resourceCatalog.ts",
-      "id": "facade:packages/backend/src/services/intent/resourceCatalog.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/resourceCatalog.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:34e722072b062da50c5c",
-        "import:3552284549240e9eacd1",
-        "import:60e414ec95b672e5f00f",
-        "import:6403b08e2a3f5a14967f",
-        "import:72528d8a683ee9129356",
-        "import:816d8d35d99d90db5a7e",
-        "import:89dfe8e31b016e694899",
-        "import:9de99ca3576a34b12865",
-        "import:d12aa2591e57e47bc54c",
-        "import:d8d286b62746bdbcf5af"
-      ],
-      "exportedSymbols": [
-        "IntentSessionListRow",
-        "IntentSessionRow",
-        "IntentTurnRow",
-        "ReservedIntentTurn",
-        "addIntentMount",
-        "canReadIntentSession",
-        "createIntentSession",
-        "createIntentSessionAndReserveTurn",
-        "decideIntentMountSuggestions",
-        "getIntentSessionForActor",
-        "insertUserTurn",
-        "insertUserTurnAndReserve",
-        "listIntentProvenanceForActor",
-        "listIntentSessionsForActor",
-        "listIntentTurns",
-        "rebaseIntentSession",
-        "removeIntentMount",
-        "reserveIntentRetryTurn",
-        "sessionManifest",
-        "setIntentSessionStatus"
-      ],
-      "file": "packages/backend/src/services/intent/session.ts",
-      "id": "facade:packages/backend/src/services/intent/session.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/session.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:403bdd685989ecee6a2f",
-        "import:b86e263ed8699195298f",
-        "import:bfd66830a30d68651c6c",
-        "import:ca00145aedadf72e4dc6",
-        "import:f43ebd377f7693dc04ba"
-      ],
-      "exportedSymbols": [
-        "INTENT_BUILDER_AGENT_NAME",
-        "INTENT_BUILDER_SYSTEM_PROMPT",
-        "INTENT_SCRATCH_DIRNAME",
-        "IntentTurnConfig",
-        "IntentTurnOutcome",
-        "MissingEnvelopeReason",
-        "RunIntentTurnDeps",
-        "abortIntentTurn",
-        "cancelIntentTurn",
-        "classifyMissingEnvelope",
-        "requestedArtifactTypeOf",
-        "resolveIntentTurnConfig",
-        "runIntentTurn",
-        "settleReservedIntentTurnStartFailure"
-      ],
-      "file": "packages/backend/src/services/intent/turnEngine.ts",
-      "id": "facade:packages/backend/src/services/intent/turnEngine.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/turnEngine.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:8e64305ffa9bf1d4f910",
-        "import:b3c1b5f4b595ff352e2b"
-      ],
-      "exportedSymbols": [
-        "INTENT_TURN_EVENT_BYTE_LIMIT",
-        "INTENT_TURN_EVENT_ROW_LIMIT",
-        "IntentTurnSessionEventSink",
-        "getIntentTurnSession",
-        "projectIntentTurnExecution"
-      ],
-      "file": "packages/backend/src/services/intent/turnSession.ts",
-      "id": "facade:packages/backend/src/services/intent/turnSession.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/turnSession.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:33694295a608a038b1de",
-        "import:8f765555728e85c776f1",
-        "import:91e53bdcb007039de8e4",
-        "import:c082677955d84e194c8b",
-        "import:c08a718d093ba4839707",
-        "import:d268c30a57ab0c2f74eb"
-      ],
-      "exportedSymbols": [
-        "DrainedIntentWorkingSetChange",
-        "IntentWorkingSetChangeRow",
-        "SubmittedIntentWorkingSetChange",
-        "activateIntentWorkingSetChange",
-        "cancelIntentWorkingSetChange",
-        "getLatestIntentWorkingSetChange",
-        "projectIntentWorkingSetChange",
-        "retryIntentWorkingSetChange",
-        "submitIntentWorkingSetChange"
-      ],
-      "file": "packages/backend/src/services/intent/workingSet.ts",
-      "id": "facade:packages/backend/src/services/intent/workingSet.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/intent/workingSet.ts#$file",
-      "removeAfterWave": "W4-E4a",
-      "status": "legacy-implementation",
-      "targetContext": "intent",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
         "import:0ebb5df6156b4409f38c",
         "import:287ac3554b21c34fe3aa",
         "import:3073351bd21a9dfc592c",
@@ -3074,7 +2525,9 @@
       "targetLayer": "inbound"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:db754ee018f051e986cd"
+      ],
       "exportedSymbols": [
         "mcpOperationConfigHashOf",
         "withMcpOperationConfigHash"
@@ -3364,6 +2817,7 @@
         "import:5995ae783ed3b0b9e455",
         "import:59e4b5241b08b45205d9",
         "import:5ae6a1fbb370cc256f7e",
+        "import:5bbfb6e4251b677e3b4e",
         "import:86007ed50499ace8a726",
         "import:871c557d9859d0e1d19e",
         "import:971a25bac6a5e93aeb27",
@@ -3373,6 +2827,7 @@
         "import:a73175bcef53d3c87f9c",
         "import:a91c35e499c872aef8f7",
         "import:b7d3eebe685a3561fc45",
+        "import:ca6046281bee8fcde23a",
         "import:d20a79fb6d290a383a6a",
         "import:d619c4688d13bbf80088",
         "import:db7df63daa492bb50c75",
@@ -3678,9 +3133,11 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0f52e015fa2aeb5be1d1",
         "import:20152e3c3cd4d76c961e",
         "import:6e737b2f4e57899def77",
         "import:88b9cee8fd1da9fe92d1",
+        "import:ab4c1e2e40e738032002",
         "import:b3ad7714d8c4910a2c4f",
         "import:cc633659ca1ea381d3c8"
       ],
@@ -3714,7 +3171,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:234a648b73c309b0d32e"
+      ],
       "exportedSymbols": [
         "pluginOperationConfigHashOf",
         "withPluginOperationConfigHash"
@@ -3791,8 +3250,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:29346df9f63b4eb07931",
         "import:60da3ca19461a06d7cc1",
-        "import:bf6b031b5b5aee955949"
+        "import:bf6b031b5b5aee955949",
+        "import:faac6dadf0ec140299df"
       ],
       "exportedSymbols": [
         "privilegedNodeLensFor"
@@ -4369,7 +3830,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:22fd3e0930e37da53e61"
+        "import:22fd3e0930e37da53e61",
+        "import:fd1db08f367d8cb19485"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/resourceRefs.ts",
@@ -5085,6 +4547,7 @@
         "import:878817dd026ba03d55c6",
         "import:a99307c8c8debf377c51",
         "import:d0954856860ecf571010",
+        "import:f06b8f7e6beb1bea9509",
         "import:fff3516f6ab19099a34d"
       ],
       "exportedSymbols": [
@@ -5510,7 +4973,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:12d3f0f99705bcfcc7d3",
+        "import:44aa22593d2ee03168f2",
+        "import:71ce3d2a59f1295300bb"
+      ],
       "exportedSymbols": [
         "SessionCaptureIncompleteReason",
         "SessionCaptureTerminalState",
@@ -6115,7 +5582,15 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:249d06f167e02a472939",
+        "import:2711368a4665ccb332af",
+        "import:36fa4c83d3ffdf9f5e25",
+        "import:48b3c18a0fdb0377aa32",
+        "import:53e55db700007e9b1478",
+        "import:ab9070ad98812d5f5e5a",
+        "import:b46f36cab99cedaaf41c"
+      ],
       "exportedSymbols": [
         "SystemAgentRunOptions",
         "SystemAgentRunResult",
@@ -7420,5 +6895,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:358459449e6f79a7107f2484b890cd59167871d7dd228dd9cc4598deb64834e7"
+  "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1"
 }

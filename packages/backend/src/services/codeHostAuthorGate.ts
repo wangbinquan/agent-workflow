@@ -4,7 +4,7 @@
 // placement, same principal model) — see that file's header for why the gate
 // lives at the two PERSISTENCE PRIMITIVES rather than on the HTTP handlers: the
 // intent builder writes definitions directly via
-// `services/intent/applyChangeset.ts` and never passes through a route.
+// `modules/intent/composition/apply.ts` and never passes through a route.
 //
 // What makes this node privileged is different from a script's, though: a
 // script runs code on the daemon host, while a code-host call acts on GitLab /

@@ -68,19 +68,19 @@ import {
   parseHandleWatermark,
   type IntentContextManifest,
   type IntentManifestEntry,
-} from '@/services/intent/manifest'
+} from '@/modules/intent/application/manifest'
 import {
   resolveIntentBundle,
   type IntentDecision,
   type ResolvedIntentOp,
-} from '@/services/intent/resolveChangeset'
-import { sessionManifest } from '@/services/intent/session'
+} from '@/modules/intent/application/resolveChangeset'
+import { sessionManifest } from '@/modules/intent/application/session'
 import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifact,
   type IntentJournalArtifactV1,
-} from '@/services/intent/journalArtifacts'
+} from '@/modules/intent/domain/journalArtifacts'
 import type { SqliteIntentApplyArtifactLifecycle } from './sqliteIntentApplyArtifactLifecycle'
 
 export interface IntentApplyReceipt {

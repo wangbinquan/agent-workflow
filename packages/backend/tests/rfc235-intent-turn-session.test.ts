@@ -9,7 +9,7 @@ import {
   IntentTurnSessionEventSink,
   getIntentTurnSession,
   projectIntentTurnExecution,
-} from '../src/services/intent/turnSession'
+} from '@/modules/intent/application/turnSession'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

@@ -19,15 +19,18 @@ import { Paths } from '../../src/util/paths'
 import type {
   IntentResourceCatalogBinding,
   IntentResourceCatalogDetailQueries,
-} from '../../src/services/intent/resourceCatalog'
-import { intentResourceVisibility } from '../../src/services/intent/resourceCatalog'
-import { buildIntentDump, type IntentDumpInput } from '../../src/services/intent/dumpBuilder'
-import { runIntentTurn, type RunIntentTurnDeps } from '../../src/services/intent/turnEngine'
-import { dispatchIntentTurn, type IntentDispatchDeps } from '../../src/services/intent/dispatcher'
+} from '@/modules/intent/application/resourceCatalog'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
+import { buildIntentDump, type IntentDumpInput } from '@/modules/intent/application/dumpBuilder'
+import { runIntentTurn, type RunIntentTurnDeps } from '@/modules/intent/application/turnEngine'
+import {
+  dispatchIntentTurn,
+  type IntentDispatchDeps,
+} from '@/modules/intent/application/dispatcher'
 import {
   createIntentSession,
   createIntentSessionAndReserveTurn,
-} from '../../src/services/intent/session'
+} from '@/modules/intent/application/session'
 import {
   composeSqliteIntentPersistence,
   type IntentPersistence,

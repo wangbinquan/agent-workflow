@@ -188,7 +188,7 @@ import {
 } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
-import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
+import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { composePostgresqlIntentMaintenanceSnapshotQueries } from '@/modules/intent/composition/maintenance'
 import { composePostgresqlTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
@@ -292,7 +292,7 @@ import { assertNotBuiltin } from '@/services/systemResources'
 import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
-} from '@/services/intent/dispatcher'
+} from '@/modules/intent/application/dispatcher'
 
 const log = createLogger('postgresql-daemon-application')
 

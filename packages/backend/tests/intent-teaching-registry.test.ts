@@ -667,7 +667,7 @@ describe('RFC-348 — platform capability map', () => {
 describe('RFC-348 — intentDoc.ts holds no capability literals (assembly only)', () => {
   test('no kind / resource type / payload field / envelope field / inventory file literal survives outside comments', () => {
     const raw = readFileSync(
-      resolve(REPO_ROOT, 'packages/backend/src/services/intent/intentDoc.ts'),
+      resolve(REPO_ROOT, 'packages/backend/src/modules/intent/domain/intentDoc.ts'),
       'utf8',
     )
     // strip comments, then un-escape template-literal backticks so \`summary\` reads as `summary`

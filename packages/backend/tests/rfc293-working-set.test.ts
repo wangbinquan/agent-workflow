@@ -2,8 +2,8 @@
 // batch API and legacy single-mount wrappers.
 
 import { describe, expect, test } from 'bun:test'
-import { applyIntentWorkingSetDelta } from '@/services/intent/workingSet'
-import type { IntentContextManifest } from '@/services/intent/manifest'
+import { applyIntentWorkingSetDelta } from '@/modules/intent/application/workingSet'
+import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 
 const manifest: IntentContextManifest = [
   {

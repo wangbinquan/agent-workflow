@@ -22,7 +22,7 @@ import {
   parseHandleWatermark,
   type IntentContextManifest,
   type IntentManifestEntry,
-} from '../src/services/intent/manifest'
+} from '@/modules/intent/application/manifest'
 
 const entry = (
   over: Partial<IntentManifestEntry> & Pick<IntentManifestEntry, 'handle'>,

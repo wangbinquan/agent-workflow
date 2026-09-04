@@ -332,7 +332,6 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/execution/resolveInjection.ts',
       'packages/backend/src/services/execution/taskEngineRuntimeOptions.ts',
       'packages/backend/src/services/gc.ts',
-      'packages/backend/src/services/intent/postgresqlApplyChangeset.ts',
       'packages/backend/src/services/lifecycle.ts',
       'packages/backend/src/services/lifecycleRepair.ts',
       'packages/backend/src/services/lifecycleRepair/helpers.ts',

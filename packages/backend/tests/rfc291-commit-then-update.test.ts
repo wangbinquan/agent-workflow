@@ -31,17 +31,20 @@ import {
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
+import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
   createIntentSessionForTest as createIntentSession,
 } from './helpers/intentResourceCatalogBinding'
-import { parseHandleWatermark, type IntentContextManifest } from '../src/services/intent/manifest'
+import {
+  parseHandleWatermark,
+  type IntentContextManifest,
+} from '@/modules/intent/application/manifest'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import {
   resolveIntentBundle,
   validateDraftChangeset,
-} from '../src/services/intent/resolveChangeset'
+} from '@/modules/intent/application/resolveChangeset'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291e2e_00000'

@@ -335,8 +335,11 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 148,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。"
+      "baseline": 151,
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。",
+      "allowGrowth": {
+        "why": "RFC-355 T7：intent 的三个 public 符号（IntentDumpAuxiliaryQueries / IntentPlatformInventoryRow / IntentTurnRuntimeResolver）的唯一 consumer 随 services/intent 搬进模块内部，「模块外无人消费」第一次显形——这是归位暴露出的既有事实，不是新增豁免；T9 逐个裁决去留。"
+      }
     },
     {
       "id": "rfc294-review-dead-required-ports",
@@ -356,8 +359,8 @@
       "id": "rfc349-provider-specific-business-dependencies",
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
-      "baseline": 73,
-      "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。"
+      "baseline": 68,
+      "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。"
     },
     {
       "id": "rfc328-cross-context-provider-bridge-debt",
@@ -391,8 +394,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1921,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1922,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-355 T7：`modules/intent/composition/apply.ts` 接手原 services 门面的 applyIntentChangeset / convergeIntentApplyJournal，写入口清单多一个具名入口；同一批里 services/intent 的两个门面文件整体消失。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -426,7 +432,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6390,
+      "baseline": 6326,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,14 +453,14 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5296,
+      "baseline": 5216,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 345,
+      "baseline": 327,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -482,12 +488,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25903,
+      "baseline": 25902,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:358459449e6f79a7107f2484b890cd59167871d7dd228dd9cc4598deb64834e7",
+    "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

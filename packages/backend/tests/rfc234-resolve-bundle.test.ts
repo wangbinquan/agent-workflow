@@ -10,8 +10,11 @@
 
 import { describe, expect, test } from 'bun:test'
 import { parseIntentChangeset, WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
-import type { IntentContextManifest } from '../src/services/intent/manifest'
-import { deriveIntentSlots, resolveIntentBundle } from '../src/services/intent/resolveChangeset'
+import type { IntentContextManifest } from '@/modules/intent/application/manifest'
+import {
+  deriveIntentSlots,
+  resolveIntentBundle,
+} from '@/modules/intent/application/resolveChangeset'
 
 const MANIFEST: IntentContextManifest = [
   {

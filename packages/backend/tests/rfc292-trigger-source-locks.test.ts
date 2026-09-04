@@ -84,7 +84,7 @@ describe('RFC-292 trigger namespace source locks', () => {
     // lock reads the whole intent-doc source set — the derivation must exist
     // somewhere in it, never a hand-written trigger vocabulary.
     const intent = [
-      resolve(BACKEND_SRC, 'services/intent/intentDoc.ts'),
+      resolve(BACKEND_SRC, 'modules/intent/domain/intentDoc.ts'),
       ...sourceFiles(resolve(BACKEND_SRC, 'modules/intent/domain/teaching')),
     ]
       .map((file) => readFileSync(file, 'utf8'))

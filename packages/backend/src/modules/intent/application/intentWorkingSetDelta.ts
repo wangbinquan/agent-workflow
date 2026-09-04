@@ -9,7 +9,7 @@ import {
   mergeHandleWatermarks,
   type IntentContextManifest,
   type IntentHandleWatermark,
-} from '@/services/intent/manifest'
+} from '@/modules/intent/application/manifest'
 
 export interface AppliedIntentWorkingSetDelta {
   readonly manifest: IntentContextManifest

@@ -1074,7 +1074,7 @@ function providerTwinKey(path: string): string | null {
  * RFC-294 记账裁决（用户 2026-09-02，「孪生只计一次」）：RFC-349 之后同一条逻辑依赖会在
  * SQLite / PostgreSQL 两个 adapter 上各出现一次。两条都计会让 wave 分母凭空翻倍，而一刀切「provider
  * adapter 一律不计」又会把真耦合藏起来（实测：扣掉平台原语后，provider adapter 仍有指向
- * `services/task.ts` / `services/intent/manifest.ts` / `services/lifecycle.ts` 的真实边）。
+ * `services/task.ts` / `modules/intent/application/manifest.ts` / `services/lifecycle.ts` 的真实边）。
  * 因此只折叠**精确孪生**——同 target、同符号、同 edgeKind/syntax/role 的那一对：先落地的 SQLite 侧
  * 保留为债，PostgreSQL 侧记 `provider-mirror` 观察边、不计 wave 债。任一侧独有的边不受影响。
  *

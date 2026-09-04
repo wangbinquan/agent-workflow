@@ -24,8 +24,8 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { users, workflows, workgroups } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
-import { resolveIntentBundle } from '../src/services/intent/resolveChangeset'
-import type { IntentContextManifest } from '../src/services/intent/manifest'
+import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
+import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291e_000000'

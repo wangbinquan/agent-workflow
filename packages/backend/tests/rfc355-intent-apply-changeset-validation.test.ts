@@ -26,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
+import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import { createIntentSessionForTest as createIntentSession } from './helpers/intentResourceCatalogBinding'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 

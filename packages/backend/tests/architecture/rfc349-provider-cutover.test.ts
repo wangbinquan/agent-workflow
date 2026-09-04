@@ -54,14 +54,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/execution/taskExecutionResources.ts -> @/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots :: export:createPostgresqlTaskExecutionResourceBinding',
   'packages/backend/src/services/execution/taskExecutionResources.ts -> @/modules/task-execution/infrastructure/sqliteTaskExecutionResourceSnapshots :: export:createSqliteTaskExecutionResourceBinding',
   'packages/backend/src/services/humanGateComposition.ts -> @/modules/collaboration/composition :: SqliteHumanGateOperationStore',
-  // 2026-09-04（RFC-355 T6）：兼容门面不再自己拼 provider——技能补偿原语归
-  // resource-catalog，装配移进 modules/intent/composition。债的形状不变：同一个
-  // 门面仍点名一个 SQLite 装配函数，只是换成 composition 层那一个。
-  'packages/backend/src/services/intent/applyChangeset.ts -> @/modules/intent/composition/apply :: composeSqliteIntentApplyArtifactLifecycle',
-  'packages/backend/src/services/intent/applyChangeset.ts -> @/modules/intent/infrastructure/sqliteIntentApplyOperations :: ApplyIntentDeps,applyIntentChangeset,convergeIntentApplyJournal',
-  'packages/backend/src/services/intent/applyChangeset.ts -> @/modules/intent/infrastructure/sqliteIntentApplyOperations :: export:ApplyIntentFaults,export:IntentApplyReceipt,export:IntentApplyResourceBinding,export:IntentApplyResourceSession',
-  'packages/backend/src/services/intent/applyChangeset.ts -> @/modules/intent/infrastructure/sqliteIntentApplyOperations :: export:__intentApplyLockCountForTests,export:__withSessionApplyLockForTests',
-  'packages/backend/src/services/intent/postgresqlApplyChangeset.ts -> @/modules/intent/infrastructure/postgresqlIntentApplyOperations :: export:PostgresqlIntentApplyArtifactLifecycle,export:PostgresqlIntentApplyDependencies,export:PostgresqlIntentApplyOperations,export:PostgresqlIntentApplyRequest,export:PostgresqlIntentApplyResourceBinding,export:createPostgresqlIntentApplyOperations',
   'packages/backend/src/services/limits.ts -> @/modules/system-operations/composition/resourceLimits :: composeLegacySqliteResourceLimitOperations',
   'packages/backend/src/services/memory.ts -> @/modules/memory/infrastructure/sqliteMemoryCatalog :: export:*',
   'packages/backend/src/services/nodeRollback.ts -> @/modules/task-execution/infrastructure/legacySqliteNodeRollback :: LegacySqliteRollbackDatabase,createLegacySqliteRollbackEffectObserver,loadLegacySqliteRollbackTarget',

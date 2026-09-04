@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import type { StagedSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 /**
  * Persisted Intent apply side effects.  The envelope is versioned because these
@@ -16,7 +15,7 @@ export type IntentJournalArtifactV1 =
       generationDir: string
     }
   | { kind: 'skill-stage'; skillId: string; opId: string; skillDir: string }
-  | { kind: 'skill-version-stage'; staged: StagedSkillVersion }
+  | { kind: 'skill-version-stage'; staged: StagedSkillVersionRecord }
 
 export type IntentJournalArtifact =
   | IntentJournalArtifactV1
@@ -29,6 +28,18 @@ export type IntentJournalArtifact =
 
 const NonEmptyString = z.string().min(1)
 
+/**
+ * 已 stage 未提交的技能版本，**按落库形状**声明。
+ *
+ * RFC-355 T7：这里此前 `import type { StagedSkillVersion }`，直接结构依赖
+ * resource-catalog 的 infrastructure——journal 是 intent 自己的持久化契约（行比进程活得久），
+ * 不该由别的 context 的实现类型来定义它读回来的形状；而且那个 import 只给 TS 用，
+ * 真正的校验一直是下面这份 `.strict()` schema，两份从来不是同一个东西
+ * （`noop` 在 RC 的类型里是 `SkillVersionRow | null`，在 schema 里是任意 record）。
+ * 现在类型直接由 schema 推导，**schema 是唯一事实源**：解析通过的东西就是这个类型。
+ * intent 只把它原样交还给 resource-catalog 的补偿端口（端口签名收 `unknown`），
+ * 自己不解读任何字段。
+ */
 const StagedSkillVersionSchema = z
   .object({
     skillId: NonEmptyString,
@@ -43,6 +54,8 @@ const StagedSkillVersionSchema = z
     noop: z.union([z.null(), z.record(z.string(), z.unknown())]),
   })
   .strict()
+
+export type StagedSkillVersionRecord = z.infer<typeof StagedSkillVersionSchema>
 
 const IntentJournalArtifactSchema = z.discriminatedUnion('kind', [
   z

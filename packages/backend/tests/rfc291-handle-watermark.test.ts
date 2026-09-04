@@ -19,7 +19,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
-import { createHandleAllocator, parseHandleWatermark } from '../src/services/intent/manifest'
+import { createHandleAllocator, parseHandleWatermark } from '@/modules/intent/application/manifest'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291wm_000000'

@@ -1,7 +1,20 @@
 import type { DbClient } from '@/db/client'
 import {
-  applyIntentChangeset,
+  applyIntentChangeset as applyIntentChangesetWithLifecycle,
+  convergeIntentApplyJournal as convergeIntentApplyJournalWithLifecycle,
+  type ApplyIntentDeps as ApplyIntentDepsWithLifecycle,
   type IntentApplyResourceBinding,
+} from '../infrastructure/sqliteIntentApplyOperations'
+
+export type {
+  ApplyIntentFaults,
+  IntentApplyReceipt,
+  IntentApplyResourceBinding,
+  IntentApplyResourceSession,
+} from '../infrastructure/sqliteIntentApplyOperations'
+export {
+  __intentApplyLockCountForTests,
+  __withSessionApplyLockForTests,
 } from '../infrastructure/sqliteIntentApplyOperations'
 import type { SqliteIntentApplyArtifactLifecycle } from '../infrastructure/sqliteIntentApplyArtifactLifecycle'
 
@@ -52,7 +65,7 @@ export function composeSqliteIntentApplyOperations(
       readonly authority: ResourceRequestContext
       readonly command: IntentApplyInput
     }) {
-      return await applyIntentChangeset(
+      return await applyIntentChangesetWithLifecycle(
         {
           db: dependencies.db,
           appHome: dependencies.appHome,
@@ -77,4 +90,41 @@ export function composePostgresqlIntentApplyOperations(
   operations: IntentApplyOperations,
 ): IntentApplyOperations {
   return operations
+}
+
+/**
+ * RFC-355 T7：原 `services/intent/applyChangeset.ts` 兼容门面的正身。历史 SQLite 调用方
+ * 要的是「给我 db + appHome，替我把工件生命周期装配好再跑 apply」——那是 composition
+ * 的活，不是 service 层的活。门面已删除，调用方直接来这里。
+ */
+export type ApplyIntentDeps = Omit<ApplyIntentDepsWithLifecycle, 'artifacts'>
+
+export function applyIntentChangeset(
+  dependencies: ApplyIntentDeps,
+  input: Parameters<typeof applyIntentChangesetWithLifecycle>[1],
+) {
+  return applyIntentChangesetWithLifecycle(
+    {
+      ...dependencies,
+      artifacts: composeSqliteIntentApplyArtifactLifecycle({
+        db: dependencies.db,
+        appHome: dependencies.appHome,
+      }),
+    },
+    input,
+  )
+}
+
+export function convergeIntentApplyJournal(
+  db: ApplyIntentDeps['db'],
+  appHome: string,
+  log?: Parameters<typeof convergeIntentApplyJournalWithLifecycle>[2],
+  options?: Parameters<typeof convergeIntentApplyJournalWithLifecycle>[3],
+) {
+  return convergeIntentApplyJournalWithLifecycle(
+    db,
+    composeSqliteIntentApplyArtifactLifecycle({ db, appHome }),
+    log,
+    options,
+  )
 }

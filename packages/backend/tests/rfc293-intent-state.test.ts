@@ -5,7 +5,7 @@ import { ulid } from 'ulid'
 import { CreateAgentSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { resumeQueuedIntentWorkingSets } from '../src/services/intent/dispatcher'
+import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
 import {
   intentDraftResolutions,
   intentDrafts,
@@ -18,18 +18,21 @@ import {
   reserveExactIntentRetry,
   reserveIntentCurrentAction,
   reserveIntentIteration,
-} from '../src/services/intent/iteration'
+} from '@/modules/intent/application/iteration'
 import {
   createIntentSession,
   insertUserTurnAndReserve,
   sessionManifest,
-} from '../src/services/intent/session'
-import { cancelIntentTurn, INTENT_BUILDER_SYSTEM_PROMPT } from '../src/services/intent/turnEngine'
+} from '@/modules/intent/application/session'
+import {
+  cancelIntentTurn,
+  INTENT_BUILDER_SYSTEM_PROMPT,
+} from '@/modules/intent/application/turnEngine'
 import {
   activateIntentWorkingSetChange,
   retryIntentWorkingSetChange,
   submitIntentWorkingSetChange,
-} from '../src/services/intent/workingSet'
+} from '@/modules/intent/application/workingSet'
 import { createUser } from '../src/services/users'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -46,7 +49,7 @@ import type {
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
-import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

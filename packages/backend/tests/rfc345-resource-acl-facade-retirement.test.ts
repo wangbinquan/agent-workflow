@@ -483,7 +483,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceRefs.ts',
-    'services/intent/dumpBuilder.ts',
+    'modules/intent/application/dumpBuilder.ts',
     ['extractWorkflowAgentRefs'],
     'Intent workflow reference extraction',
     REMOVE_OWNERS.portableImportReferences,

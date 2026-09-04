@@ -15,13 +15,13 @@ import {
   type PlatformOnlyResourceType,
 } from '../src/modules/intent/domain/teaching/platformMap'
 import type { IntentPlatformInventoryParticipant } from '../src/modules/intent/public/operations'
-import type { IntentResourceCatalogBinding } from '../src/services/intent/resourceCatalog'
-import { buildIntentDump } from '../src/services/intent/dumpBuilder'
+import type { IntentResourceCatalogBinding } from '@/modules/intent/application/resourceCatalog'
+import { buildIntentDump } from '@/modules/intent/application/dumpBuilder'
 import {
   PLATFORM_INVENTORY_ROW_CAP,
   platformInventoryTypes,
   renderPlatformInventoryFile,
-} from '../src/services/intent/platformInventory'
+} from '@/modules/intent/domain/platformInventory'
 
 const ACTOR: Actor = {
   user: {

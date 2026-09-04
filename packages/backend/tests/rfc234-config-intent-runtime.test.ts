@@ -13,7 +13,7 @@ import { createInMemoryDb, type DbClient } from '@/db/client'
 import { createApp } from '@/server'
 import { seedBuiltinRuntimes, updateRuntime } from '@/services/runtimeRegistry'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { resolveIntentTurnConfig } from '@/services/intent/turnEngine'
+import { resolveIntentTurnConfig } from '@/modules/intent/application/turnEngine'
 import { intentTurnRuntimeResolverForTest } from './helpers/intentResourceCatalogBinding'
 
 const TOKEN = 'c'.repeat(64)
@@ -109,7 +109,7 @@ describe('RFC-276 natural intentBuilderRuntime admission', () => {
       readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
     for (const path of [
       'routes/config.ts',
-      'services/intent/turnEngine.ts',
+      'modules/intent/application/turnEngine.ts',
       'services/runtime/types.ts',
     ]) {
       const text = src(path)

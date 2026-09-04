@@ -38,8 +38,8 @@ import {
   scriptEnvSuffix,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { buildIntentDoc, INTENT_TURN_GUIDANCE } from '../src/services/intent/intentDoc'
-import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
+import { buildIntentDoc, INTENT_TURN_GUIDANCE } from '@/modules/intent/domain/intentDoc'
+import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
 import { validateWorkflowDef, type ValidatorContext } from '../src/services/workflow.validator'
 import { assertScriptAuthorAllowed } from '../src/services/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '../src/services/codeHostAuthorGate'
@@ -604,7 +604,7 @@ describe('contract: redacted ⇄ rehydrated ⇄ documented are the same field se
 // ---------------------------------------------------------------------------
 describe('contract: the dump masks with the same constant the doc names', () => {
   const dumpSource = readFileSync(
-    join(import.meta.dir, '..', 'src', 'services', 'intent', 'dumpBuilder.ts'),
+    join(import.meta.dir, '..', 'src', 'modules', 'intent', 'application', 'dumpBuilder.ts'),
     'utf8',
   )
 

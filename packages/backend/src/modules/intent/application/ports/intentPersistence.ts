@@ -13,7 +13,7 @@ import type {
   IntentContextResourceReference,
   ResourceRequestContext,
 } from '@/modules/resource-catalog/public/participants'
-import type { IntentContextManifest } from '@/services/intent/manifest'
+import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import type { IntentAuxiliaryPersistence } from './intentAuxiliaryQueries'
 
 export type IntentSessionStatus = 'active' | 'archived'

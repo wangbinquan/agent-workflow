@@ -2346,9 +2346,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1022",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1028",
       "kind": "register-call",
-      "line": 1022,
+      "line": 1028,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2357,9 +2357,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1039",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1045",
       "kind": "register-call",
-      "line": 1039,
+      "line": 1045,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2368,9 +2368,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1059",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:1065",
       "kind": "register-call",
-      "line": 1059,
+      "line": 1065,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2379,9 +2379,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:200",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:206",
       "kind": "register-call",
-      "line": 200,
+      "line": 206,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2390,9 +2390,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:244",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:250",
       "kind": "register-call",
-      "line": 244,
+      "line": 250,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2401,9 +2401,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:312",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:318",
       "kind": "register-call",
-      "line": 312,
+      "line": 318,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2412,9 +2412,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:525",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:531",
       "kind": "register-call",
-      "line": 525,
+      "line": 531,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2423,9 +2423,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:547",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:553",
       "kind": "register-call",
-      "line": 547,
+      "line": 553,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2434,9 +2434,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:581",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:587",
       "kind": "register-call",
-      "line": 581,
+      "line": 587,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2445,9 +2445,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:615",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:621",
       "kind": "register-call",
-      "line": 615,
+      "line": 621,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2456,9 +2456,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:651",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:657",
       "kind": "register-call",
-      "line": 651,
+      "line": 657,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2467,9 +2467,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:688",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:694",
       "kind": "register-call",
-      "line": 688,
+      "line": 694,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2478,9 +2478,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:720",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:726",
       "kind": "register-call",
-      "line": 720,
+      "line": 726,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2489,9 +2489,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:751",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:757",
       "kind": "register-call",
-      "line": 751,
+      "line": 757,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2500,9 +2500,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:773",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:779",
       "kind": "register-call",
-      "line": 773,
+      "line": 779,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2511,9 +2511,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:828",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:834",
       "kind": "register-call",
-      "line": 828,
+      "line": 834,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2522,9 +2522,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:851",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:857",
       "kind": "register-call",
-      "line": 851,
+      "line": 857,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2533,9 +2533,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:880",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:886",
       "kind": "register-call",
-      "line": 880,
+      "line": 886,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2544,9 +2544,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:897",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:903",
       "kind": "register-call",
-      "line": 897,
+      "line": 903,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2555,9 +2555,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:942",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:948",
       "kind": "register-call",
-      "line": 942,
+      "line": 948,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -2566,9 +2566,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/intentSessions.ts",
-      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:981",
+      "id": "ambient:packages/backend/src/routes/intentSessions.ts#registerRoute:987",
       "kind": "register-call",
-      "line": 981,
+      "line": 987,
       "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#mountIntentSessionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountIntentSessionRoutes",
@@ -7044,6 +7044,96 @@
       "phase": "after-ready",
       "symbol": "gcCursor",
       "targetContext": "integration"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/intent/application/dispatcher.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/intent/application/dispatcher.ts#$setTimeout:85",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:85",
+      "targetContext": "intent"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/intent/application/maintenance.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/intent/application/maintenance.ts#listIntentTurnIdsForBootRecovery",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/maintenance.ts#listIntentTurnIdsForBootRecovery",
+      "phase": "before-ready",
+      "symbol": "listIntentTurnIdsForBootRecovery",
+      "targetContext": "intent"
+    },
+    {
+      "dependencies": [
+        "logger"
+      ],
+      "file": "packages/backend/src/modules/intent/application/maintenance.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/intent/application/maintenance.ts#recoverIntentTurnsOnBoot",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/maintenance.ts#recoverIntentTurnsOnBoot",
+      "phase": "before-ready",
+      "symbol": "recoverIntentTurnsOnBoot",
+      "targetContext": "intent"
+    },
+    {
+      "dependencies": [
+        "logger"
+      ],
+      "file": "packages/backend/src/modules/intent/application/maintenance.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/intent/application/maintenance.ts#sweepIntentScratch",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/maintenance.ts#sweepIntentScratch",
+      "phase": "unknown",
+      "symbol": "sweepIntentScratch",
+      "targetContext": "intent"
     },
     {
       "dependencies": [
@@ -12008,96 +12098,6 @@
       "dependencies": [
         "timer"
       ],
-      "file": "packages/backend/src/services/intent/dispatcher.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/intent/dispatcher.ts#$setTimeout:85",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/intent/dispatcher.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setTimeout:85",
-      "targetContext": "intent"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/intent/maintenance.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/intent/maintenance.ts#listIntentTurnIdsForBootRecovery",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/intent/maintenance.ts#listIntentTurnIdsForBootRecovery",
-      "phase": "before-ready",
-      "symbol": "listIntentTurnIdsForBootRecovery",
-      "targetContext": "intent"
-    },
-    {
-      "dependencies": [
-        "logger"
-      ],
-      "file": "packages/backend/src/services/intent/maintenance.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/intent/maintenance.ts#recoverIntentTurnsOnBoot",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/intent/maintenance.ts#recoverIntentTurnsOnBoot",
-      "phase": "before-ready",
-      "symbol": "recoverIntentTurnsOnBoot",
-      "targetContext": "intent"
-    },
-    {
-      "dependencies": [
-        "logger"
-      ],
-      "file": "packages/backend/src/services/intent/maintenance.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/intent/maintenance.ts#sweepIntentScratch",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/intent/maintenance.ts#sweepIntentScratch",
-      "phase": "unknown",
-      "symbol": "sweepIntentScratch",
-      "targetContext": "intent"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
       "file": "packages/backend/src/services/lifecycleInvariants.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/lifecycleInvariants.ts#$setTimeout:632",
@@ -13564,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:358459449e6f79a7107f2484b890cd59167871d7dd228dd9cc4598deb64834e7"
+  "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1"
 }

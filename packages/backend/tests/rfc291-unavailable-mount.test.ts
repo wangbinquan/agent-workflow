@@ -21,7 +21,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, skills, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
-import { buildIntentDoc } from '../src/services/intent/intentDoc'
+import { buildIntentDoc } from '@/modules/intent/domain/intentDoc'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291un_000000'
@@ -284,7 +284,7 @@ describe('上游接线（AC-11 的 turnEngine 面）', () => {
     // 直接驱动完整一轮需要真实 runtime；这里用源码层断言兜住「忘记接线」这个
     // 具体失败模式——它是初版矩阵里最容易 false-green 的一条（设计门 P2-e）。
     const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'intent', 'turnEngine.ts'),
+      join(import.meta.dir, '..', 'src', 'modules', 'intent', 'application', 'turnEngine.ts'),
       'utf8',
     )
     expect(src).toContain('unavailableMountNote:')

@@ -24,9 +24,9 @@ import {
   workgroups,
 } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
-import { handleBasename } from '../src/services/intent/dumpBuilder'
+import { handleBasename } from '@/modules/intent/application/dumpBuilder'
 import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResourceCatalogBinding'
-import { manifestEntryFor } from '../src/services/intent/manifest'
+import { manifestEntryFor } from '@/modules/intent/application/manifest'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')

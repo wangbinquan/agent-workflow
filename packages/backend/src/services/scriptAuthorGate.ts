@@ -5,7 +5,7 @@
 // lives at the two PERSISTENCE PRIMITIVES rather than at the HTTP handlers:
 // `insertWorkflowInTx` and `prepareWorkflowSave` are the only ways a definition
 // reaches the database, and the intent builder reaches the first one DIRECTLY
-// (services/intent/applyChangeset.ts), never passing through a route. A gate on
+// (modules/intent/composition/apply.ts), never passing through a route. A gate on
 // routes alone would be silently bypassed by the next internal caller
 // (design-gate P1).
 //

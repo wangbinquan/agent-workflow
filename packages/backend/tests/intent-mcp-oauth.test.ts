@@ -16,15 +16,18 @@ import { canonicalIntentJson, INTENT_REDACTED, parseIntentChangeset } from '@age
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
+import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
   intentResourceCatalogBinding,
 } from './helpers/intentResourceCatalogBinding'
-import { buildMcpFence, type IntentContextManifest } from '../src/services/intent/manifest'
-import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
-import { deriveIntentSlots, validateDraftChangeset } from '../src/services/intent/resolveChangeset'
-import { createIntentSession } from '../src/services/intent/session'
+import { buildMcpFence, type IntentContextManifest } from '@/modules/intent/application/manifest'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
+import {
+  deriveIntentSlots,
+  validateDraftChangeset,
+} from '@/modules/intent/application/resolveChangeset'
+import { createIntentSession } from '@/modules/intent/application/session'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type {

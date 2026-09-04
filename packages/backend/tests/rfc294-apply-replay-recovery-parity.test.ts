@@ -21,7 +21,7 @@ import {
   applyIntentChangeset,
   convergeIntentApplyJournal,
   type IntentApplyReceipt,
-} from '@/services/intent/applyChangeset'
+} from '@/modules/intent/composition/apply'
 import { applyResourceBundle, convergeResourceBundleApplies } from '@/services/bundle/apply'
 import type { BundleApplyProvider, BundleReceipt } from '@/services/bundle/provider'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'

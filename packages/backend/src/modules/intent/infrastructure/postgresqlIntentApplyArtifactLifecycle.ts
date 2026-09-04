@@ -9,7 +9,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import {
   decodeIntentJournalArtifacts,
   type IntentJournalArtifact,
-} from '@/services/intent/journalArtifacts'
+} from '@/modules/intent/domain/journalArtifacts'
 import { safeJoin } from '@/util/safePath'
 import type { Logger } from '@/util/log'
 import type { PostgresqlIntentApplyArtifactLifecycle } from './postgresqlIntentApplyOperations'

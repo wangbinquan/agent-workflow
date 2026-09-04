@@ -23,7 +23,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, intentTurns, users } from '../src/db/schema'
 import type { Actor } from '../src/auth/actor'
 import { createRuntime, setRuntimeEnabled } from '../src/services/runtimeRegistry'
-import { RUNTIME_INVENTORY_RULE } from '../src/services/intent/dumpBuilder'
+import { RUNTIME_INVENTORY_RULE } from '@/modules/intent/application/dumpBuilder'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunOptions,
@@ -36,15 +36,15 @@ import {
   settleReservedIntentTurnStartFailure,
   type IntentTurnConfig,
   requestedArtifactTypeOf,
-} from '../src/services/intent/turnEngine'
+} from '@/modules/intent/application/turnEngine'
 import {
   listIntentTurnIdsForBootRecovery,
   recoverIntentTurnsOnBoot,
   sweepIntentScratch,
-} from '../src/services/intent/maintenance'
+} from '@/modules/intent/application/maintenance'
 import { sha256Hex } from '../src/util/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '../src/modules/intent/domain/workflowCreateLayout'
-import { insertUserTurn } from '../src/services/intent/session'
+import { insertUserTurn } from '@/modules/intent/application/session'
 import {
   createIntentSessionAndReserveTurnForTest as createIntentSessionAndReserveTurn,
   createIntentSessionForTest as createIntentSession,

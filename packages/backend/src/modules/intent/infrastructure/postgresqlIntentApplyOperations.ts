@@ -35,7 +35,7 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import type { ApplyIntentFaults } from './sqliteIntentApplyOperations'
-import type { IntentJournalArtifact } from '@/services/intent/journalArtifacts'
+import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
 import {
   applyCommitMounts,
   createHandleAllocator,
@@ -45,9 +45,9 @@ import {
   parseHandleWatermark,
   type IntentContextManifest,
   type IntentManifestEntry,
-} from '@/services/intent/manifest'
-import { resolveIntentBundle } from '@/services/intent/resolveChangeset'
-import { sessionManifest } from '@/services/intent/session'
+} from '@/modules/intent/application/manifest'
+import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
+import { sessionManifest } from '@/modules/intent/application/session'
 
 type IntentApplyRecoveryArtifact = PostgresqlIntentApplyArtifact | IntentJournalArtifact
 

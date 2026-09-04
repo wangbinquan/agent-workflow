@@ -28,7 +28,7 @@ import {
   privilegesFromLens,
   renderHistory,
   type IntentDocTurn,
-} from '../src/services/intent/intentDoc'
+} from '@/modules/intent/domain/intentDoc'
 
 const NONCE = 'aabbccdd11223344'
 

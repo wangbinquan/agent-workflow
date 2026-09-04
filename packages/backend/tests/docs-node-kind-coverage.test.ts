@@ -9,7 +9,7 @@
 // the kinds are plain prose, and prose does not typecheck. Two of them are
 // load-bearing:
 //
-//   1. `services/intent/intentDoc.ts` — INTENT.md tells the generating model its
+//   1. `modules/intent/domain/intentDoc.ts` — INTENT.md tells the generating model its
 //      node-form list is EXHAUSTIVE, so a kind missing there is a kind the
 //      intent builder can never author. RFC-243 and RFC-269 both shipped kinds
 //      without returning to it; the builder silently supported 10 of 13 until
@@ -110,7 +110,7 @@ describe('docs/workflow-yaml.md documents every NODE_KIND', () => {
 // for at the node level, one layer up.
 describe('INTENT.md documents every ACL resource type', () => {
   test('each resource type has a payload spec the model can follow', async () => {
-    const { buildIntentDoc } = await import('../src/services/intent/intentDoc')
+    const { buildIntentDoc } = await import('@/modules/intent/domain/intentDoc')
     const doc = buildIntentDoc({
       sessionTitle: 't',
       turns: [],

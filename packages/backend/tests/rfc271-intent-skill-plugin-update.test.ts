@@ -25,7 +25,18 @@ import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-cat
 import { createSqliteResourceCatalogAclIdentityReadPort } from '../src/modules/resource-catalog/infrastructure/sqliteAclReadRepository'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const SRC = resolve(import.meta.dir, '..', 'src', 'services', 'intent', 'applyChangeset.ts')
+// RFC-355 T7：锚点跟着实现走。这条断言当年打在 `services/intent/applyChangeset.ts` 上，
+// RFC-349 把 apply 引擎搬进 infrastructure 后那里只剩装配门面，断言等于空跑；现在直接
+// 钉住引擎本体。
+const SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'intent',
+  'infrastructure',
+  'sqliteIntentApplyOperations.ts',
+)
 const PARTICIPANT_SRC = resolve(
   import.meta.dir,
   '..',
@@ -40,8 +51,9 @@ const ARTIFACT_SRC = resolve(
   import.meta.dir,
   '..',
   'src',
-  'services',
+  'modules',
   'intent',
+  'domain',
   'journalArtifacts.ts',
 )
 const SQLITE_ARTIFACT_LIFECYCLE_SRC = resolve(

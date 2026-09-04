@@ -36,7 +36,7 @@ import type { NodeTeachingOf } from './types'
 
 const VALIDATOR =
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts'
-const RESOLVE_SEAM = 'packages/backend/src/services/intent/resolveChangeset.ts'
+const RESOLVE_SEAM = 'packages/backend/src/modules/intent/application/resolveChangeset.ts'
 
 const LIMITS_TEACHING = {
   maxDurationMs: { form: 'maxDurationMs', required: false },

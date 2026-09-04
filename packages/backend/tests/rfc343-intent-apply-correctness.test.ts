@@ -17,12 +17,12 @@ import {
   __intentApplyLockCountForTests,
   __withSessionApplyLockForTests,
   convergeIntentApplyJournal,
-} from '../src/services/intent/applyChangeset'
+} from '../src/modules/intent/composition/apply'
 import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
-} from '../src/services/intent/journalArtifacts'
+} from '@/modules/intent/domain/journalArtifacts'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   commitSkillVersionInTx,

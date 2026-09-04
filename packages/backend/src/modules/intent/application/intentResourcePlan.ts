@@ -6,18 +6,19 @@
 // 不属于任何 provider。
 //
 // ⚠️ **为什么在 `application/` 而不是 `domain/`**：它的两个入参类型（`ResolvedIntentOp`、
-// `IntentManifestEntry`）目前还住在 legacy 的 `services/intent/{resolveChangeset,manifest}`，
-// 而 RFC-317 R2 不许模块的 `domain/` 反向 import legacy 层（既有账本的口径是「R2 债全部落在
-// application 层」）。**T7 把那两个文件迁进 `modules/intent` 之后，本文件可以再回 domain**
-// ——那时它的依赖就全在模块内了。在此之前放 application 是如实反映当前依赖形态，
-// 不是给 domain 开一个后门。
+// `IntentManifestEntry`）住在 `application/{resolveChangeset,manifest}`。T7 已经把那两个文件
+// 从 legacy 迁进本模块，但它们**落在 application 而不是 domain**——`manifest.ts` 仍要
+// `@/services/{mcp,plugin}OperationRevision` 的配置哈希（那两个 8 行 helper 的正确归属是
+// resource-catalog，不在本 RFC 的刀口内），而 RFC-317 R2 不许 `domain/` 反向 import legacy。
+// domain 不能依赖 application，所以本文件跟着留在 application。等那两个 helper 归位到
+// resource-catalog / util 之后，manifest → resolveChangeset → 本文件可以整串回落 domain。
 //
 // 抄两份的代价是实测过的：本 RFC 的 T1 在同一批文件里发现 apply 层的 changeset 校验已经真的漂了
 // （PostgreSQL 校验、SQLite 裸 `JSON.parse`）。判据只要有两份，迟早会漂——差别只在哪一条先漂。
 
-import type { IntentManifestEntry } from '@/services/intent/manifest'
+import type { IntentManifestEntry } from '@/modules/intent/application/manifest'
 import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
-import type { ResolvedIntentOp } from '@/services/intent/resolveChangeset'
+import type { ResolvedIntentOp } from '@/modules/intent/application/resolveChangeset'
 import { ConflictError } from '@/util/errors'
 
 /**

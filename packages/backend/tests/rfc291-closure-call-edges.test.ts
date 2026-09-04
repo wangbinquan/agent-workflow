@@ -271,7 +271,7 @@ describe('复杂度与收口（AC-16 / 设计门 P2-c）', () => {
 
   test('闭包展开不再手写 agent 节点 walker（AC-16 口径已收窄）', () => {
     const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'intent', 'dumpBuilder.ts'),
+      join(import.meta.dir, '..', 'src', 'modules', 'intent', 'application', 'dumpBuilder.ts'),
       'utf8',
     )
     // 闭包侧必须调权威提取器

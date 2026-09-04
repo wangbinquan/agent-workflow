@@ -160,10 +160,7 @@ describe('RFC-349 Intent transaction-bound context authorization', () => {
       resolve(INTENT_ROOT, 'infrastructure/postgresqlIntentSqlProgramRunner.ts'),
       'utf8',
     )
-    const session = readFileSync(
-      resolve(import.meta.dir, '../src/services/intent/session.ts'),
-      'utf8',
-    )
+    const session = readFileSync(resolve(INTENT_ROOT, 'application/session.ts'), 'utf8')
 
     expect(persistence).toContain('createSessionWithAuthorizedResources')
     expect(persistence).toContain('updateManifestWithAuthorizedResources')

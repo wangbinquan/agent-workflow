@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5296,
+    "architectureExceptions": 5216,
     "backgroundJobs": 367,
-    "crossContextImports": 6390,
-    "facades": 345,
+    "crossContextImports": 6326,
+    "facades": 327,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25903,
-    "mutationEntrypoints": 1921,
+    "moduleSymbolOwners": 25902,
+    "mutationEntrypoints": 1922,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 1003,
     "transactionExternalEffects": 479
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1936,
+    "backendProductionFiles": 1934,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -50,7 +50,7 @@
     ],
     "directNativeIntervals": 23,
     "directNativeTimers": 77,
-    "inboundBoundaryEdges": 312,
+    "inboundBoundaryEdges": 297,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -87,7 +87,7 @@
       },
       {
         "context": "intent",
-        "files": 38
+        "files": 53
       },
       {
         "context": "knowledge-evolution",
@@ -99,7 +99,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 235
+        "files": 236
       },
       {
         "context": "runtime-management",
@@ -122,7 +122,7 @@
         "files": 333
       }
     ],
-    "moduleFiles": 1307,
+    "moduleFiles": 1323,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -145,7 +145,7 @@
         "symbol": "createSqliteNodeRunMintParticipantInTx"
       }
     ],
-    "outboundBoundaryEdges": 25,
+    "outboundBoundaryEdges": 36,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -163,10 +163,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 345,
+    "serviceFiles": 327,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:358459449e6f79a7107f2484b890cd59167871d7dd228dd9cc4598deb64834e7"
+  "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1"
 }

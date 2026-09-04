@@ -194,7 +194,7 @@ import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
 } from '@/routes/intentSessions'
-import { legacyIntentApplyResourceDependencies } from '@/services/intent/legacyIntentApplyResourceDependencies'
+import { legacyIntentApplyResourceDependencies } from '@/modules/resource-catalog/composition/legacyIntentApplyResourceDependencies'
 import {
   composeSqliteIntentApplyArtifactLifecycle,
   composeSqliteIntentApplyOperations,
@@ -207,7 +207,7 @@ import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/comp
 import { composeSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import type { IntentApplyOperations } from '@/modules/intent/public/operations'
-import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
+import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { mountReviewRoutes } from '@/routes/reviews'
 import { mountMaintenanceDiskRoutes } from '@/routes/maintenanceDisk'

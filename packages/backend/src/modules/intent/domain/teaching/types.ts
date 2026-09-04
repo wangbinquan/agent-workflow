@@ -173,7 +173,7 @@ export type IntentPassthroughFieldSource =
   | { readonly readPoint: { readonly file: string; readonly identifier: string } }
   | {
       readonly intentOnly: {
-        readonly resolvedIn: 'packages/backend/src/services/intent/resolveChangeset.ts'
+        readonly resolvedIn: 'packages/backend/src/modules/intent/application/resolveChangeset.ts'
       }
     }
 

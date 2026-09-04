@@ -52,16 +52,22 @@ import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
 import type { IntentApplyOperations, IntentPersistence } from '@/modules/intent/public/operations'
 import { canAuditIntentSessions } from '@/modules/intent/public/operations'
-import { deriveIntentSlots } from '@/services/intent/resolveChangeset'
-import { projectIntentJourney } from '@/services/intent/journey'
+import { deriveIntentSlots } from '@/modules/intent/application/resolveChangeset'
+import { projectIntentJourney } from '@/modules/intent/domain/journey'
 import {
   intentResourceVisibility,
   listVisibleIntentResources,
-} from '@/services/intent/resourceCatalog'
-import type { IntentResourceCatalogBinding } from '@/services/intent/resourceCatalog'
-import { cancelIntentTurn } from '@/services/intent/turnEngine'
-import { dispatchIntentTurn, type IntentDispatchDeps } from '@/services/intent/dispatcher'
-import { getIntentTurnSession, projectIntentTurnExecution } from '@/services/intent/turnSession'
+} from '@/modules/intent/application/resourceCatalog'
+import type { IntentResourceCatalogBinding } from '@/modules/intent/application/resourceCatalog'
+import { cancelIntentTurn } from '@/modules/intent/application/turnEngine'
+import {
+  dispatchIntentTurn,
+  type IntentDispatchDeps,
+} from '@/modules/intent/application/dispatcher'
+import {
+  getIntentTurnSession,
+  projectIntentTurnExecution,
+} from '@/modules/intent/application/turnSession'
 import {
   addIntentMount,
   createIntentSessionAndReserveTurn,
@@ -77,13 +83,13 @@ import {
   setIntentSessionStatus,
   type ReservedIntentTurn,
   type IntentSessionRow,
-} from '@/services/intent/session'
+} from '@/modules/intent/application/session'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 import {
   reserveExactIntentRetry,
   reserveIntentCurrentAction,
   reserveIntentIteration,
-} from '@/services/intent/iteration'
+} from '@/modules/intent/application/iteration'
 import {
   activateIntentWorkingSetChange,
   cancelIntentWorkingSetChange,
@@ -91,7 +97,7 @@ import {
   projectIntentWorkingSetChange,
   retryIntentWorkingSetChange,
   submitIntentWorkingSetChange,
-} from '@/services/intent/workingSet'
+} from '@/modules/intent/application/workingSet'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 

@@ -14,7 +14,7 @@ import type { DigitalEmployeePlatformInventoryParticipant } from '@/modules/digi
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
-import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
+import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 
 const ACTOR: Actor = {
   user: {

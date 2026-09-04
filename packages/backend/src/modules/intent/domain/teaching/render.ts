@@ -1,5 +1,5 @@
 // RFC-348 — pure renderers that assemble INTENT.md sections from the teaching
-// registries. No IO, no DB, no actor: `services/intent/intentDoc.ts` only
+// registries. No IO, no DB, no actor: `modules/intent/domain/intentDoc.ts` only
 // concatenates what these return.
 //
 // Rendering rules (locked by tests/intent-teaching-registry.test.ts):

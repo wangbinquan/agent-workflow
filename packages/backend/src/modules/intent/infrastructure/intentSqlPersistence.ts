@@ -36,7 +36,7 @@ import {
   mergeHandleWatermarks,
   parseHandleWatermark,
   type IntentContextManifest,
-} from '@/services/intent/manifest'
+} from '@/modules/intent/application/manifest'
 import type { IntentContextResourceReference } from '@/modules/resource-catalog/public/participants'
 import { applyIntentWorkingSetDelta } from '../application/intentWorkingSetDelta'
 import type {

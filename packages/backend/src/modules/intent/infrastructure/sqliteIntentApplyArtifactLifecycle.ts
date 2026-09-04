@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import type { IntentJournalArtifact } from '@/services/intent/journalArtifacts'
+import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
 import type { SqliteSkillArtifactCompensation } from '../ports/skillArtifactCompensation'
 import type { Logger } from '@/util/log'
 

@@ -72,7 +72,7 @@ import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-ope
 import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
-} from '@/services/intent/dispatcher'
+} from '@/modules/intent/application/dispatcher'
 import { reapOrphanRuns } from '@/services/orphans'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
@@ -265,7 +265,7 @@ import { triggerRevalidation } from '@/ws/revalidationHook'
 import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
 import type { Actor } from '@/auth/actor'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
-import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
+import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composeSqliteIntentPersistence } from '@/modules/intent/composition/persistence'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import {

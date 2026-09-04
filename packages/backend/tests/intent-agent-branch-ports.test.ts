@@ -20,15 +20,15 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { intentDrafts, intentSessions, users } from '../src/db/schema'
 import { getAgentById } from '../src/services/agent'
-import { applyIntentChangeset, type ApplyIntentDeps } from '../src/services/intent/applyChangeset'
+import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,
   intentResourceCatalogBinding,
 } from './helpers/intentResourceCatalogBinding'
-import { buildAgentFence, type IntentContextManifest } from '../src/services/intent/manifest'
-import { intentResourceVisibility } from '../src/services/intent/resourceCatalog'
-import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
-import { createIntentSession } from '../src/services/intent/session'
+import { buildAgentFence, type IntentContextManifest } from '@/modules/intent/application/manifest'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
+import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
+import { createIntentSession } from '@/modules/intent/application/session'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type {
@@ -321,7 +321,7 @@ describe('RFC-348 — draft validation sees the stored branch ports of a mounted
     // without the context the same draft would pass — the turn engine must supply it
     expect(validateDraftChangeset(dump.manifest, parsed.changeset).errors).toEqual([])
     const engineSource = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'intent', 'turnEngine.ts'),
+      join(import.meta.dir, '..', 'src', 'modules', 'intent', 'application', 'turnEngine.ts'),
       'utf8',
     )
     expect(engineSource).toContain('agentBranchPorts: dump.agentBranchPorts')

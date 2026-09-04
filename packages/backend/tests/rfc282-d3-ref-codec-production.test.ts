@@ -17,7 +17,7 @@ import {
   intentHandleType,
   isIntentTempRef,
 } from '@agent-workflow/shared'
-import { allocateHandle, createHandleAllocator } from '../src/services/intent/manifest'
+import { allocateHandle, createHandleAllocator } from '@/modules/intent/application/manifest'
 import {
   resolveAgentRefsUsable,
   type AgentReferenceResolver,

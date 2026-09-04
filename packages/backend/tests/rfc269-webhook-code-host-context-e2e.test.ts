@@ -37,9 +37,9 @@ import {
   SQLiteRepositoryTransportCredentialRepository,
 } from '../src/modules/source-control/composition'
 import { watchExecutionTerminal } from '../src/services/execution/executor'
-import { applyIntentChangeset } from '../src/services/intent/applyChangeset'
-import { validateDraftChangeset } from '../src/services/intent/resolveChangeset'
-import { createIntentSession } from '../src/services/intent/session'
+import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
+import { validateDraftChangeset } from '@/modules/intent/application/resolveChangeset'
+import { createIntentSession } from '@/modules/intent/application/session'
 import { createSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
 import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '../src/modules/resource-catalog/public/participants'
