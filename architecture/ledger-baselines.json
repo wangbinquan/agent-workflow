@@ -483,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25903,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-355 T6：技能工件的补偿原语从 intent infrastructure 抽成 intent 的 ports 端口 + resource-catalog 的 provider 适配，端口 / 组合函数是新增的具名符号，owner 清单因此从 25892 涨到 25903。这是把跨上下文耦合换成显式合同的净收益，不是新增豁免。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -503,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "67d85da307484f4510e5be99031a47a5e1a46223",
-    "contentDigest": "sha256:8643a9f2d95255189276562f6c3c470bc5fe8468cd76c3fd19afca9d04721f7b",
+    "currentSnapshotSha": "a6bf2193ac5b2977af0c296c03d75ea071bba3d5",
+    "contentDigest": "sha256:ae5782a6121c7e7051e4c89ba6dd5586af82af939533f921c0fd29e42ab99241",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
