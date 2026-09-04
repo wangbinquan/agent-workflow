@@ -37,7 +37,8 @@ describe('RFC-223 PR-5 boot/restore source ordering', () => {
     const dbReady = source.indexOf("log.info('db ready'")
     const barrier = source.indexOf('skillCatalogBoot.runIdentityMigrationBarrier()', dbReady)
     const gate = source.indexOf('skillCatalogBoot.activateAvailabilityGate()', barrier)
-    const orphanReap = source.indexOf('reapOrphanRuns(', barrier)
+    // RFC-359 W3-T4：孤儿收割是 boot 恢复四步（runTaskExecutionBootRecovery）的第二步，两个 daemon 入口共用。
+    const orphanReap = source.indexOf('runTaskExecutionBootRecovery(', barrier)
     const fusionRecovery = source.indexOf('recoverFusionDecisions', barrier)
     const liveReconcile = source.indexOf('skillCatalogBoot.reconcileLiveFiles()', barrier)
     const fusionSeeder = source.indexOf('seedFusionResources', barrier)

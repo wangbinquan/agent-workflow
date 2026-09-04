@@ -53,7 +53,6 @@ import { composeSqliteIntentMaintenanceSnapshotQueries } from '@/modules/intent/
 import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
 import { composeSqliteDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { sha256Hex } from '@/util/hash'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import {
   buildDevelopmentDeliveryDeps,
@@ -74,14 +73,11 @@ import {
   type IntentDispatchDeps,
 } from '@/modules/intent/application/dispatcher'
 import { createIntentSessionWsPublisher } from '@/modules/intent/composition/apply'
-import { reapOrphanRuns } from '@/services/orphans'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
-  createExclusiveDaemonLockProof,
-  finalizeTaskExecutionRecovery,
-  prepareTaskExecutionRecovery,
-} from '@/services/taskExecutionParticipants'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+  createDaemonLockProof,
+  runTaskExecutionBootRecovery,
+} from '@/modules/task-execution/composition/bootRecovery'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import {
@@ -1996,68 +1992,24 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     /* users service may not be available in degraded mode; ignore */
   }
 
-  const taskExecutionLockProof = createExclusiveDaemonLockProof({
+  // 5b. RFC-359 W3-T4：boot 恢复四步（撤销旧 owner → 收割孤儿 run → 修 lease → 清算 effect 并释放 owner）
+  // 是 provider 中立的一份序列（composition/bootRecovery.ts），PostgreSQL daemon 跑的是同一段。
+  const taskExecutionLockProof = createDaemonLockProof({
+    lockPath: lock.path,
+    lockPid: lock.pid,
     daemonGeneration: DAEMON_GENERATION,
-    acquiredAt: Date.now(),
-    lockReceiptDigest: sha256Hex(`${lock.path}\u0000${lock.pid}\u0000${DAEMON_GENERATION}`),
   })
-  const ownershipRecoveryPreparation = prepareTaskExecutionRecovery({
-    db,
-    lockProof: taskExecutionLockProof,
-  })
-  if (ownershipRecoveryPreparation.revokedTaskIds.length > 0) {
-    log.warn('revoked task owners left by a previous daemon', {
-      tasks: ownershipRecoveryPreparation.revokedTaskIds.length,
-    })
-  }
-
-  // 5b. P-4-07: reap orphan runs from the previous (crashed/SIGKILLed) daemon
-  // process. Any task/node_run left in 'running' is flipped to 'interrupted'
-  // with task.error_message = 'daemon-restart' so the UI surfaces what
-  // happened.
-  const reap = await reapOrphanRuns(taskExecutionPersistence.recoveryAdministration)
-  if (reap.tasks > 0 || reap.runs > 0) {
-    log.warn('reaped orphan runs from previous daemon', {
-      tasks: reap.tasks,
-      runs: reap.runs,
-    })
-  }
-  const repairedRuntimeLeases = await repairRuntimeSessionLeasesAfterOrphanReap(
+  await runTaskExecutionBootRecovery({
+    persistence: taskExecutionPersistence,
     runtimeSessionLeases,
-    true,
-  )
-  if (repairedRuntimeLeases > 0) {
-    log.info('released runtime session leases held by terminal orphan runs', {
-      leases: repairedRuntimeLeases,
-    })
-  }
-  const ownershipRecovery = await finalizeTaskExecutionRecovery({
-    db,
     lockProof: taskExecutionLockProof,
-    processEvidence: {
-      orphanReaperCompleted: true,
-      orphanTasks: reap.tasks,
-      orphanRuns: reap.runs,
-      repairedRuntimeLeases,
-    },
     codeHostProbe: (descriptor) =>
       probeCodeHostMutation({
         descriptor,
         resolveConnection: (provider) => repositoryMetadataConnections.resolve(provider),
       }),
+    log,
   })
-  if (
-    ownershipRecovery.releasedTaskIds.length > 0 ||
-    ownershipRecovery.outcomeUnknownTaskIds.length > 0
-  ) {
-    log.info('durable task execution recovery finalized', {
-      released: ownershipRecovery.releasedTaskIds.length,
-      outcomeUnknown: ownershipRecovery.outcomeUnknownTaskIds.length,
-      recoveredProcessEffects: ownershipRecovery.recoveredProcessEffectIds.length,
-      recoveredCodeHostEffects: ownershipRecovery.recoveredCodeHostEffectIds.length,
-      retryAuthorizedCodeHostEffects: ownershipRecovery.retryAuthorizedCodeHostEffectIds.length,
-    })
-  }
 
   // RFC-328 terminal maintenance is durable and outlives task-row deletion.
   // Resume exact delete claims before any automatic continuation is opened.

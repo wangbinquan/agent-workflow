@@ -54,6 +54,8 @@ import { PostgresqlTaskArtifactPathQueries } from '../infrastructure/postgresqlT
 import { createSqliteTaskRecoveryOperations } from '../infrastructure/sqliteTaskRecoveryOperations'
 import { createPostgresqlTaskRecoveryOperations } from '../infrastructure/postgresqlTaskRecoveryOperations'
 import { createSqliteRuntimeSessionLeaseOperations } from '../infrastructure/sqliteRuntimeSessionLeaseOperations'
+import { createPostgresqlRuntimeSessionLeaseOperations } from '../infrastructure/postgresqlRuntimeSessionLeaseOperations'
+import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
 import { terminalizeTaskExecutionIntentsTx } from '../infrastructure/sqliteTerminalizeExecutionIntent'
 import { trySetTaskStatus } from '@/services/lifecycle'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
@@ -193,5 +195,17 @@ export function createTaskExecutionPersistence(
     ? createPostgresqlTaskExecutionPersistence(db as unknown as PostgresqlDatabaseClient)
     : provider === 'sqlite'
       ? createSqliteTaskExecutionPersistence(db as unknown as DbClient)
+      : unhandledDatabaseProvider(provider)
+}
+
+/** RFC-359 W3-T4：runtime session lease 操作按客户端品牌选实现；同上，调用方看不见 provider。 */
+export function createRuntimeSessionLeaseOperations(
+  db: ProviderNeutralDatabase,
+): RuntimeSessionLeaseOperations {
+  const provider = databaseSessionFor(db).engine.provider
+  return provider === 'postgresql'
+    ? createPostgresqlRuntimeSessionLeaseOperations(db as unknown as PostgresqlDatabaseClient)
+    : provider === 'sqlite'
+      ? createSqliteRuntimeSessionLeaseOperations(db as unknown as DbClient)
       : unhandledDatabaseProvider(provider)
 }

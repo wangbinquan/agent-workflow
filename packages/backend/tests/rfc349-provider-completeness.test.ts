@@ -101,7 +101,7 @@ const PROVIDER_FORK_LEDGER = {
   // without its own variant.
   'modules/task-execution/composition/frameBackfill.ts': { forks: 1, fence: 'discriminated-union' },
   'modules/task-execution/composition/taskExecutionPersistence.ts': {
-    forks: 2,
+    forks: 4,
     fence: 'fenced-dispatch',
   },
   'platform/background/maintenanceService.ts': { forks: 2, fence: 'discriminated-union' },

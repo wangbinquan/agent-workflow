@@ -42,7 +42,13 @@
 > `infrastructure/terminalMaintenanceClaim.ts`；清理计划解析 / 磁盘清理随之搬入，`services/taskDelete.ts` 只再导出；
 > PG daemon 在技能可用性闸之后、HTTP 之前续做 delete 认领（其余三步 boot 恢复随 W3 接入）。
 > `rfc359-t7c-task-delete-recovery.test.ts` 六个场景两引擎各绿 + 顺序锁。
-> **下一步**：W3 统一启动序列（T4：PG boot 恢复四步 / servePostgresqlDaemon 永不返回）。
+> **W3-T4（P0-3 / P0-4 boot 恢复四步）已修**：撤销旧 owner → 收割孤儿 run → 修 runtime session lease →
+> 清算 effect 并释放 / 闭合 owner 合一为 `composition/bootRecovery.ts`（`runTaskExecutionBootRecovery` +
+> `createDaemonLockProof`），`cli/start.ts` 与 PG daemon（HTTP 前、delete 认领续做前）都调它；新增中立
+> `createRuntimeSessionLeaseOperations(db)`。P0-4 根因一并修：PG 的 `assertPostgresqlTaskOwnerlessTx` 此前把
+> `!== 'released'` 一律拒绝，撤销后的收割 / 修复全部 409——改为只拒活着的 `claimed`（SQLite 侧这几条路不读 owner）。
+> `rfc359-w3-t4-boot-recovery.test.ts` 两引擎各绿 + 两入口顺序锁。
+> **下一步**：W3-T14（servePostgresqlDaemon 永不返回形态）/ T15（其余 PG 缺的 boot 步骤逐条接上）/ T16。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

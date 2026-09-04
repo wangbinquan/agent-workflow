@@ -14,6 +14,12 @@ import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/pa
 import { composePostgresqlSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import {
+  createDaemonLockProof,
+  runTaskExecutionBootRecovery,
+} from '@/modules/task-execution/composition/bootRecovery'
+import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
+import {
   WORKFLOW_SCHEMA_VERSION,
   parseTriggerContextJson,
   serializeWorkflowDefinitionStorageV1,
@@ -443,24 +449,6 @@ export async function composePostgresqlDaemonApplication(
   }
   // 启动期可用性闸：每个技能先隐藏，逐个 reverify 通过后才放行（bootReverifyActivated）。
   skillCatalogBoot.activateAvailabilityGate()
-
-  // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在
-  // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
-  // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。
-  try {
-    const deleteRecovery = await recoverInterruptedTaskDeletes(input.db)
-    if (
-      deleteRecovery.completed.length > 0 ||
-      deleteRecovery.cleanupPending.length > 0 ||
-      deleteRecovery.recoveryRequired.length > 0
-    ) {
-      log.info('terminal task delete recovery', { ...deleteRecovery })
-    }
-  } catch (err) {
-    log.warn('terminal task delete recovery failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
 
   const identityAccess = core.identityAccess
   // daemon 自用的系统身份也必须由注册表**铸**出来。授权句柄按对象引用从
@@ -1916,6 +1904,42 @@ export async function composePostgresqlDaemonApplication(
     identity: identityRoutes,
     system: systemRoutes,
   })
+  // RFC-359 W3-T4（P0-3 / P0-4）：boot 恢复四步与 SQLite 同一段序列（composition/bootRecovery.ts）——
+  // 撤销旧 daemon 的 owner → 收割孤儿 run → 修 runtime session lease → 清算 effect 并释放 / 闭合 owner。
+  // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。
+  await runTaskExecutionBootRecovery({
+    persistence: taskExecutionPersistence,
+    runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
+    lockProof: createDaemonLockProof({
+      lockPath: input.lockPath,
+      lockPid: process.pid,
+      daemonGeneration: input.provider.runtime.generationId,
+    }),
+    codeHostProbe: (descriptor) =>
+      probeCodeHostMutation({
+        descriptor,
+        resolveConnection: (provider) => codeHostConnections.resolve(provider),
+      }),
+    log,
+  })
+  // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在
+  // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
+  // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。
+  try {
+    const deleteRecovery = await recoverInterruptedTaskDeletes(input.db)
+    if (
+      deleteRecovery.completed.length > 0 ||
+      deleteRecovery.cleanupPending.length > 0 ||
+      deleteRecovery.recoveryRequired.length > 0
+    ) {
+      log.info('terminal task delete recovery', { ...deleteRecovery })
+    }
+  } catch (err) {
+    log.warn('terminal task delete recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // RFC-101 / RFC-359 T7d：HTTP 起来之前把版本快照与 live files 对齐（best-effort）。
   try {
     await skillCatalogBoot.reconcileLiveFiles()

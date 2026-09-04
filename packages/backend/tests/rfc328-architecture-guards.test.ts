@@ -191,7 +191,11 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
     'createClaimAttachPermit',
     new Set(['packages/backend/src/modules/task-execution/application/taskClaimGate.ts']),
   ],
-  ['createExclusiveDaemonLockProof', new Set(['packages/backend/src/cli/start.ts'])],
+  [
+    // RFC-359 W3-T4：锁证明由 provider 中立的 boot 恢复序列铸造，两个 daemon 入口都只传 lock 路径 / pid。
+    'createExclusiveDaemonLockProof',
+    new Set(['packages/backend/src/modules/task-execution/composition/bootRecovery.ts']),
+  ],
   [
     'createVerifiedTakeoverProof',
     new Set([
