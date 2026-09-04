@@ -24,7 +24,13 @@
 > 「先发出者先入队」改由 coordinator 等在途解析保证，两引擎同一规则）；`reviewDecisionCommand.ts` 一份实现，
 > PG daemon 注入 `reviewDecisions`——F-H2-1 三条命令端口至此全部合一。`rfc359-t2c-review-decision.test.ts`
 > 六个场景两引擎各绿。**T16b 新证据**：`tasks.owner_user_id → users` 的 FK 只在 SQLite 迁移里（schema.ts 无 references）。
-> **下一步**：T7b/T7c/T7d/T7e → W3 统一启动序列。
+> **T7d（P0-11 技能启动屏障）已修**：PG daemon 在 restore 之后、任何消费方之前装配 `composePostgresqlSkillCatalogBoot`
+> （fail-closed 屏障 → 可用性闸 → HTTP 前对齐 live files → HTTP 后后台回填 + reverify），顺序锁 + 两引擎各跑一遍。
+> **T7e（P0-12 工作组反问）已修**：协议块渲染器（纯函数）迁到 `application/workgroups/workgroupProtocol.ts` 两 provider 共用，
+> 「能否反问」的判定（预算 / 已问次数 / per-asker stop）归 collaboration 一份实现（`workgroupClarifyAskGate.ts`，公共
+> participant `createWorkgroupClarifyAskGate`），legacy SQLite 路径只转发；中立回合驱动的 stub 删除，fc 指派回合的端口错配
+> （曾对 agent 说 wg_task_results、解析却要 wg_result）随之修正。`rfc359-t7e` / `rfc359-t7d` 两引擎各绿。
+> **下一步**：T7b（PG 驱动释放清算 effect）/ T7c（删除认领恢复中立版）→ W3 统一启动序列。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

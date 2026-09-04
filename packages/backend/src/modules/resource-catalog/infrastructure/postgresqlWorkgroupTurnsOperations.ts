@@ -19,11 +19,13 @@ import type {
   WorkgroupHostLedgerParticipantInTx,
   WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
+import type { WorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS,
   WORKGROUP_TURN_GATE_TRANSITIONS,
   createWorkgroupTurnsOperations,
+  type WorkgroupClarifyAllowedInput,
   type WorkgroupTurnAssignment,
   type WorkgroupTurnGateOperation,
   type WorkgroupTurnLedgerOperation,
@@ -52,6 +54,8 @@ export interface PostgresqlWorkgroupHostLedgerParticipantFactory {
 export interface PostgresqlWorkgroupTurnsDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly hostLedgerFactory: PostgresqlWorkgroupHostLedgerParticipantFactory
+  /** RFC-359 T7e：反问许可判定归 collaboration 所有（RFC-207 §3.7.2 唯一判定点）。 */
+  readonly clarifyAskGate: WorkgroupClarifyAskGate
 }
 
 class WorkgroupLedgerConflict extends Error {
@@ -506,6 +510,8 @@ function createPostgresqlWorkgroupTurnsPersistence(
   dependencies: PostgresqlWorkgroupTurnsDependencies,
 ): WorkgroupTurnsPersistencePort {
   return Object.freeze({
+    clarifyAllowed: (input: WorkgroupClarifyAllowedInput) =>
+      dependencies.clarifyAskGate.allowed(input),
     async load(taskId: string): Promise<WorkgroupTurnsSnapshot | null> {
       return await runPostgresqlResourceCatalogTransaction(
         dependencies.db,

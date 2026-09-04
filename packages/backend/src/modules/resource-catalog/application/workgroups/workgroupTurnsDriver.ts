@@ -45,6 +45,7 @@ import {
   type WorkgroupTurnLogger,
   type WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
+import { renderWgProtocolBlock, wgHostRolePorts } from './workgroupProtocol'
 
 type WorkgroupTurnsDriveOutcome = Awaited<ReturnType<WorkgroupTurnsOperations['drive']>>
 
@@ -258,9 +259,19 @@ export type WorkgroupTurnsLedgerCommitReceipt =
   | Readonly<{ committed: true; mintedRuns: readonly WorkgroupTurnMintedRun[] }>
   | Readonly<{ committed: false; conflictOperationKey: string }>
 
+export interface WorkgroupClarifyAllowedInput {
+  readonly taskId: string
+  readonly nodeId: string
+  readonly shardKey: string | null
+  readonly members: ReadonlyArray<{ readonly memberType: 'agent' | 'human' }>
+  readonly clarifyBudget: number | undefined
+}
+
 export interface WorkgroupTurnsPersistencePort {
   load(taskId: string): Promise<WorkgroupTurnsSnapshot | null>
   commit(input: WorkgroupTurnsLedgerCommit): Promise<WorkgroupTurnsLedgerCommitReceipt>
+  /** RFC-207 §3.7.2 / RFC-359 T7e：这个 asker 此刻能否向人反问——协议块与 clarifyEnabled 共用这一个答案。 */
+  clarifyAllowed(input: WorkgroupClarifyAllowedInput): Promise<boolean>
 }
 
 interface ParsedTurn<T> {
@@ -300,6 +311,8 @@ interface HostTurnSpec<T> {
   readonly adoptedRun?: WorkgroupTurnHostRun
   readonly maxProtocolRetries?: number
   readonly registerMint?: (runId: string) => void
+  /** RFC-215 §6.2：fc 任务批 run 的卡数（wg_task_results 逐卡数组端口）；消息/指派回合不带。 */
+  readonly batchCount?: number
 }
 
 function maxMessageId(messages: readonly WorkgroupMessage[]): string {
@@ -421,23 +434,6 @@ function assignmentDraft(input: {
   })
 }
 
-function protocolPorts(role: HostTurnSpec<unknown>['role']): readonly string[] {
-  if (role === 'leader') return [WG_PORT_ASSIGNMENTS, WG_PORT_MESSAGES, WG_PORT_DECISION]
-  if (role === 'fc-member') {
-    return [WG_PORT_TASK_RESULTS, WG_PORT_MESSAGES, WG_PORT_TASKS_ADD]
-  }
-  return [WG_PORT_RESULT, WG_PORT_MESSAGES, WG_PORT_TASKS_ADD]
-}
-
-function protocolBlock(role: HostTurnSpec<unknown>['role'], envelopeNonce: string): string {
-  return [
-    '## Workgroup output protocol',
-    `This is the ${role} turn.`,
-    `Emit only declared workgroup JSON ports in <workflow-output nonce="${envelopeNonce}">.`,
-    `Allowed ports: ${protocolPorts(role).join(', ')}.`,
-  ].join('\n')
-}
-
 function visibleMessages(
   snapshot: WorkgroupTurnsSnapshot,
   memberId: string,
@@ -550,16 +546,32 @@ async function executeHostTurn<T>(
     }
     adopted = undefined
     lastRunId = run.runId
+    // RFC-207 §3.7.2 — resolve ONCE per attempt and feed BOTH the protocol block (whether to
+    // invite an ask-back) and clarifyEnabled (whether to accept one); split derivations invite
+    // questions the gate then rejects. RFC-359 T7e：判定由 persistence 端口给出，两 provider 同一份。
+    const clarifyAllowed = await persistence.clarifyAllowed({
+      taskId: spec.taskId,
+      nodeId: spec.nodeId,
+      shardKey: spec.shardKey,
+      members: spec.snapshot.config.members,
+      clarifyBudget: spec.snapshot.config.clarifyBudget,
+    })
+    const protocolRole = spec.role === 'fc-member' ? 'fc_member' : spec.role
+    const batch = spec.batchCount === undefined ? null : { count: spec.batchCount }
     const result: WorkgroupTurnHostResult = await spec.host.runHost({
       nodeRunId: run.runId,
       nodeId: spec.nodeId,
       agent: spec.agent,
       promptTemplate: spec.prompt(run.envelopeNonce, errorNotice),
-      workgroupProtocolBlock: protocolBlock(spec.role, run.envelopeNonce),
-      clarifyEnabled:
-        spec.snapshot.config.members.some((member) => member.memberType === 'human') &&
-        (spec.snapshot.config.clarifyBudget ?? 3) > 0,
-      hostOutputPorts: protocolPorts(spec.role),
+      workgroupProtocolBlock: renderWgProtocolBlock(
+        protocolRole,
+        spec.snapshot.config,
+        run.envelopeNonce,
+        clarifyAllowed,
+        batch,
+      ),
+      clarifyEnabled: clarifyAllowed,
+      hostOutputPorts: wgHostRolePorts(protocolRole, batch),
     })
     if (result.status === 'canceled') return { kind: 'canceled', runId: run.runId }
     if (result.status === 'awaiting') return { kind: 'awaiting', runId: run.runId }
@@ -1184,6 +1196,7 @@ async function driveBatchTurn(input: {
     primaryCause: 'wg-assignment',
     adoptedRun: input.adoptedRun,
     registerMint: input.registerMint,
+    batchCount: cards.length,
     firstStartOperations: (runId) => batchStartOperations(cards, input.memberId, runId),
     retryStartOperations: (runId) =>
       cards.map((card) => ({

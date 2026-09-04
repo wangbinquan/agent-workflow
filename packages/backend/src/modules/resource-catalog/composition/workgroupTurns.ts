@@ -1,3 +1,4 @@
+import type { WorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -12,11 +13,13 @@ import {
 export function composePostgresqlWorkgroupTurnsOperations(
   db: PostgresqlDatabaseClient,
   hostLedgerFactory: PostgresqlWorkgroupHostLedgerParticipantFactory,
+  clarifyAskGate: WorkgroupClarifyAskGate,
 ): WorkgroupTurnsOperations {
   return createPostgresqlWorkgroupTurnsOperations({
     db,
     hostLedgerFactory: {
       inTransaction: (transaction) => hostLedgerFactory.inTransaction(transaction),
     },
+    clarifyAskGate,
   })
 }

@@ -8,7 +8,10 @@ import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createReviewDecisionCommand,
+  createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
+import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
+import { composePostgresqlSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
 import {
   WORKFLOW_SCHEMA_VERSION,
   parseTriggerContextJson,
@@ -98,7 +101,6 @@ import {
   composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
   createPostgresqlCollaborationCommandContext,
   createPostgresqlCollaborationRuntimeMechanics,
-  createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition'
 import { composePostgresqlCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import {
@@ -425,6 +427,22 @@ export async function composePostgresqlDaemonApplication(
   // coordinator; bootstrap never drops or aliases the active schema.
   await core.systemOperations.applyPendingRestore()
 
+  // RFC-223 PR-5 / RFC-359 W1-T7d（P0-11）：技能身份屏障是 DB 就绪后的第一件事——恢复遗留结构操作、
+  // 清理崩溃残留的 skill_operation_locks / reserving 行、证明 DB/FS/FK 一致，然后才允许任何消费方
+  // 读技能。fail-closed：不包 try，屏障失败即 daemon 不起。此前 PG daemon 从未装配它。
+  const skillCatalogBoot = composePostgresqlSkillCatalogBoot({
+    db: input.db,
+    appHome: input.appHome,
+  })
+  {
+    const report = await skillCatalogBoot.runIdentityMigrationBarrier()
+    if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
+      log.info('skill identity migration barrier complete', { ...report })
+    }
+  }
+  // 启动期可用性闸：每个技能先隐藏，逐个 reverify 通过后才放行（bootReverifyActivated）。
+  skillCatalogBoot.activateAvailabilityGate()
+
   const identityAccess = core.identityAccess
   // daemon 自用的系统身份也必须由注册表**铸**出来。授权句柄按对象引用从
   // `AuthorityClaimRegistry` 的 WeakMap 里取（只有 `mintDirectAuthority` 会往里写），
@@ -711,6 +729,8 @@ export async function composePostgresqlDaemonApplication(
     composePostgresqlWorkgroupHostLedgerParticipantFactory({
       collaboration: workgroupClarify,
     }),
+    // RFC-359 W1-T7e：反问许可（预算 / 已问次数 / stop 指令）与 SQLite 同一份判定。
+    createWorkgroupClarifyAskGate(input.db),
   )
   // RFC-359 W1-T1（P0-7）：派发管线跑在 DatabaseSession 上，两个 provider 共用同一份投影；
   // 此前这里是一个从未被 bind 的 holder，每个 tick 抛 deferred-question-dispatcher-not-bound。
@@ -1877,7 +1897,31 @@ export async function composePostgresqlDaemonApplication(
     identity: identityRoutes,
     system: systemRoutes,
   })
+  // RFC-101 / RFC-359 T7d：HTTP 起来之前把版本快照与 live files 对齐（best-effort）。
+  try {
+    await skillCatalogBoot.reconcileLiveFiles()
+  } catch (err) {
+    log.warn('skill-version reconcile on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
   const app = createComposedApp(composePostgresqlAppDeps(composition))
+  // RFC-170 T4a / RFC-359 T7d：后台回填遗留 v1 快照并逐技能 reverify，放行可用性闸。
+  void (async () => {
+    try {
+      const bf = await skillCatalogBoot.backfillLegacyVersions()
+      const r = await skillCatalogBoot.reverifySnapshots()
+      log.info('boot snapshot reverify', {
+        ...r,
+        legacyBackfilled: bf.backfilled,
+        husksRemoved: bf.husksRemoved,
+      })
+    } catch (err) {
+      log.warn('boot snapshot reverify failed', {
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })()
   const webSocket = buildWebSocketAdapter({
     daemonToken: input.token,
     realtime: core.realtime,

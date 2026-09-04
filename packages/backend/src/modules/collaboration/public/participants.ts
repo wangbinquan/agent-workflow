@@ -8,6 +8,14 @@ import {
   appendReviewCommentsChangedCommittedEventTx as appendReviewCommentsChangedCommittedEventTxInternal,
   appendReviewSelectionChangedCommittedEventTx as appendReviewSelectionChangedCommittedEventTxInternal,
 } from '../infrastructure/collaborationCommittedEventParticipant'
+import {
+  countWorkgroupClarifyAsks as countWorkgroupClarifyAsksInternal,
+  createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal,
+} from '../infrastructure/workgroupClarifyAskGate'
+export type {
+  WorkgroupClarifyAskGate,
+  WorkgroupClarifyAskInput,
+} from '../infrastructure/workgroupClarifyAskGate'
 
 export type { HumanGateOpenParticipantResult } from '../application/ports/humanGateOpenParticipant'
 export type {
@@ -63,5 +71,8 @@ export const appendHumanGateDecisionCommittedEventTx =
 export const appendQuestionDispatchCommittedEventTx = appendQuestionDispatchCommittedEventTxInternal
 export const appendReviewCommentsChangedCommittedEventTx =
   appendReviewCommentsChangedCommittedEventTxInternal
+// RFC-359 W1-T7e：工作组 asker 的反问许可（RFC-207 §3.7.2 唯一判定点），两个 provider 同一份。
+export const createWorkgroupClarifyAskGate = createWorkgroupClarifyAskGateInternal
+export const countWorkgroupClarifyAsks = countWorkgroupClarifyAsksInternal
 export const appendReviewSelectionChangedCommittedEventTx =
   appendReviewSelectionChangedCommittedEventTxInternal

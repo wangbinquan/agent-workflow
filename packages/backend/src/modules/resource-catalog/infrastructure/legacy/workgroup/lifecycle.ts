@@ -34,6 +34,10 @@ import {
 } from '@/db/schema'
 import { taskBroadcaster, TASK_CHANNEL } from '@/ws/broadcaster'
 import { getNodeClarifyDirective } from '@/services/taskClarifyDirective'
+import {
+  countWorkgroupClarifyAsks,
+  createWorkgroupClarifyAskGate,
+} from '@/modules/collaboration/public/participants'
 import { WG_LEADER_NODE_ID } from './constants'
 import { ulid } from 'ulid'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
@@ -446,12 +450,8 @@ export async function countWgClarifyAsks(
   taskId: string,
   askerKey: string,
 ): Promise<number> {
-  const rows = await db
-    .select({ nodeId: clarifyRounds.askingNodeId, shard: clarifyRounds.askingShardKey })
-    .from(clarifyRounds)
-    .where(and(eq(clarifyRounds.kind, 'self'), eq(clarifyRounds.taskId, taskId)))
-  return rows.filter((r) => wgClarifyAskerKey(r.nodeId, r.shard, WG_LEADER_NODE_ID) === askerKey)
-    .length
+  // RFC-359 W1-T7e：计数只有一份（collaboration 的 workgroupClarifyAskGate），legacy 只是转发。
+  return await countWorkgroupClarifyAsks(db, taskId, askerKey)
 }
 
 /**
@@ -468,14 +468,14 @@ export async function resolveWgClarifyAllowed(
   nodeId: string,
   shardKey: string | null,
 ): Promise<boolean> {
-  if (!workgroupHasHumanMember(members)) return false
-  const budget = resolveClarifyBudget({ clarifyBudget })
-  if (budget <= 0) return false
-  const askerKey = wgClarifyAskerKey(nodeId, shardKey, WG_LEADER_NODE_ID)
-  // A human explicitly told THIS asker to stop — that outranks any leftover budget.
-  if ((await getNodeClarifyDirective(db, taskId, nodeId, askerKey)) === 'stop') return false
-  const asked = await countWgClarifyAsks(db, taskId, askerKey)
-  return asked < budget
+  // RFC-359 W1-T7e：判定只有一份（collaboration 的 workgroupClarifyAskGate），legacy 只是转发。
+  return await createWorkgroupClarifyAskGate(db).allowed({
+    taskId,
+    nodeId,
+    shardKey,
+    members,
+    clarifyBudget,
+  })
 }
 
 // ---------------------------------------------------------------------------

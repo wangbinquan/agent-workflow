@@ -145,6 +145,9 @@ import {
   assertNodeRunSourceTerminationAdmission,
   transitionHumanGateTaskTx,
   transitionNodeRunStatus,
+  // 评审门开启（dispatchReviewNodeUnlocked）仍跑在 SQLite 的同步 withTaskExecutionTransaction 里，
+  // 用同步版；决定事务用下面两引擎共用的 async 内核。
+  transitionNodeRunStatusTx as transitionNodeRunStatusSyncTx,
 } from '@/services/lifecycle'
 // RFC-359 W1-T2c：决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核。
 import {
@@ -984,7 +987,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               .where(eq(nodeRuns.id, reuse.id))
               .run()
           } else if (reuse?.status === 'pending') {
-            transitionNodeRunStatusTx({
+            transitionNodeRunStatusSyncTx({
               tx,
               nodeRunId: reuse.id,
               event: { kind: 'park-review' },
@@ -1028,7 +1031,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               set: { content: meta },
             })
             .run()
-          transitionNodeRunStatusTx({
+          transitionNodeRunStatusSyncTx({
             tx,
             nodeRunId: reviewNodeRunId,
             event: { kind: 'approve-review' },
@@ -1336,7 +1339,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               set: { content: meta },
             })
             .run()
-          transitionNodeRunStatusTx({
+          transitionNodeRunStatusSyncTx({
             tx,
             nodeRunId: reviewNodeRunId,
             event: { kind: 'approve-review' },
