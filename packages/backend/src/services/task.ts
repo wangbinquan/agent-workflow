@@ -95,6 +95,7 @@ import {
   type SQL,
   type LegacySqliteTaskDatabase,
   type LegacySqliteTaskTransaction,
+  type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -6781,8 +6782,14 @@ function parseCommitPushJson(raw: string | null): CommitPushMeta | null {
  * query for any number of tasks; tasks without failedNodeId (scheduler-level
  * failures) resolve to null.
  */
+/**
+ * RFC-357：参数类型放宽到两个 provider 的公共基类型。函数体只有一次 drizzle 批量查询
+ * 加一次纯函数挑选（`pickFreshestRun`），本就与 provider 无关；放宽之后 PostgreSQL 的
+ * 列表页可以直接复用它，不必再像 `postgresqlTaskRouteOperations.failedCode` 那样逐行发
+ * 一次查询（那是本 RFC 要消灭的 N+1 之一）。`DbClient` 仍可赋值给它，既有调用点零改动。
+ */
 export async function loadTaskFailureCodes(
-  db: LegacySqliteTaskDatabase,
+  db: LegacyProviderNeutralDatabase,
   rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
 ): Promise<Map<string, FailureCode | null>> {
   const out = new Map<string, FailureCode | null>()

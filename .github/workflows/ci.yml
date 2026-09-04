@@ -181,6 +181,86 @@ jobs:
           fail_ci_if_error: false
           disable_search: true
 
+  test-backend-postgresql:
+    # RFC-357 —— 唯一一条对着**真 PostgreSQL** 跑的常规门禁。
+    #
+    # 为什么它必须存在：本仓的 PostgreSQL 适配器测试用的是假 pool（记录 SQL 文本再断言），
+    # 而 `docs/dev-gotchas.md` §「SQL 长得一样」证明不了「两个 provider 行为一样」记着
+    # RFC-349 的代价——那一层过了全部门禁，接上真库连着暴出六个只在 PostgreSQL 上成立的
+    # 缺陷（identity 列渲染成 null、LIKE 大小写、NULL 排序、count 回字符串、布尔列、
+    # SERIALIZABLE 粒度）。RFC-357 让任务列表页的**一份** SQL 同时服务两个 provider，
+    # 这条 lane 就是那一刀的执行级安全网。
+    #
+    # 刻意只跑列表页那一组用例：它要证的是「这份查询在真 PostgreSQL 上跑得动且结果与
+    # SQLite 逐条相同」，不是把 740 个文件再跑一遍。整条 lane 分钟级。
+    #
+    # 更重的规模 / 迁移 / 崩溃取证仍在 `postgresql-evidence.yml`（周跑 + 手动 dispatch），
+    # 两者分工不同：那边证「十万级数据搬得动」，这边证「这段 SQL 在真库上是对的」。
+    name: Backend tests (real PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rfc357
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      RFC357_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rfc357
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      # 先证 lane 真的连上了库。没有这一步，URL 拼错会让 realTest 静默 skip，
+      # 整条 lane 绿着却什么都没跑——本仓对「跑没跑」的要求见 rfc317 的 skipIf 账本。
+      - name: Assert the server is reachable
+        shell: bash
+        run: |
+          bun --eval '
+            const sql = new (await import("bun")).SQL(process.env.RFC357_DATABASE_URL);
+            const rows = await sql`select 1 as ok`;
+            if (rows[0]?.ok !== 1) { console.error("postgres did not answer", rows); process.exit(1); }
+            console.log("postgres reachable");
+            await sql.close();
+          '
+
+      - name: Test the task list page against real PostgreSQL
+        shell: bash
+        run: |
+          bun test --isolate \
+            packages/backend/tests/rfc357-postgresql-page.integration.test.ts \
+            packages/backend/tests/rfc357-page-parity.test.ts \
+            packages/backend/tests/rfc357-provider-portability.test.ts \
+            packages/backend/tests/rfc357-task-list-authorization.test.ts 2>&1 | tee rfc357-postgres.log
+          # `realTest` 在缺 URL 时会 skip；skip 也算「通过」，于是一条连不上库的 lane
+          # 会绿着骗人。这里显式要求真库那条用例**跑过**。
+          if grep -q "(skip).*real PostgreSQL" rfc357-postgres.log; then
+            echo "::error::the real-PostgreSQL case was skipped — the lane proved nothing"
+            exit 1
+          fi
+
   test-frontend:
     # The vitest suite (~590 files) is the second-biggest cost center (~298s on
     # macOS). vitest already parallelizes across cores within a runner; sharding
@@ -777,6 +857,7 @@ jobs:
     needs:
       - lint
       - test-backend
+      - test-backend-postgresql
       - test-frontend
       - scans
       - perf
@@ -792,6 +873,7 @@ jobs:
     env:
       LINT_RESULT: ${{ needs['lint'].result }}
       TEST_BACKEND_RESULT: ${{ needs['test-backend'].result }}
+      TEST_BACKEND_POSTGRESQL_RESULT: ${{ needs['test-backend-postgresql'].result }}
       TEST_FRONTEND_RESULT: ${{ needs['test-frontend'].result }}
       SCANS_RESULT: ${{ needs['scans'].result }}
       PERF_RESULT: ${{ needs['perf'].result }}
@@ -819,6 +901,7 @@ jobs:
 
           check lint "$LINT_RESULT"
           check test-backend "$TEST_BACKEND_RESULT"
+          check test-backend-postgresql "$TEST_BACKEND_POSTGRESQL_RESULT"
           check test-frontend "$TEST_FRONTEND_RESULT"
           check scans "$SCANS_RESULT"
           check perf "$PERF_RESULT"

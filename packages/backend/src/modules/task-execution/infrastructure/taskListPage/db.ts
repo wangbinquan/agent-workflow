@@ -32,9 +32,7 @@
 // 同步）与 `PostgresqlDatabaseClient`（remote，异步）都可赋值给 `BaseSQLiteDatabase`，
 // 同一套 query builder 与 `db.all` 在 `await` 之后行为一致。
 
-import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core'
+import type { ProviderNeutralDatabase } from '@/db/query'
 
-import type * as schema from '@/db/schema'
-
-/** 两个 provider 客户端的公共基类型。 */
-export type TaskListPageDb = BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>
+/** 两个 provider 客户端的公共基类型（平台词汇，见 `db/query.ts`）。 */
+export type TaskListPageDb = ProviderNeutralDatabase

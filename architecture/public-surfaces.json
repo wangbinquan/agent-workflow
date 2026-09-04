@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 876,
+    "consumers": 877,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1062,
@@ -44796,7 +44796,8 @@
         "import:3b49e4cc59dba49edde8",
         "import:535987969e269a162412",
         "import:74230d814389db0a96d2",
-        "import:9ec8d7cb92d07a0009d3"
+        "import:9ec8d7cb92d07a0009d3",
+        "import:ad99295d8c9c6ae9a6b8"
       ],
       "context": "identity-access",
       "dataClass": "metadata",
@@ -44869,6 +44870,12 @@
           "edgeId": "import:9ec8d7cb92d07a0009d3",
           "file": "packages/backend/src/services/ownerIdentity.ts",
           "ownerEntryId": "owner:packages/backend/src/services/ownerIdentity.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:ad99295d8c9c6ae9a6b8",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -162447,7 +162454,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4bf89478a49bae5be4928acc6f332c41e9bf958718d5c58c31e2fc9071d21abb",
+  "sourceDigest": "sha256:d61448fa8efa2f8c39626eeb80147b541181bb3378056f2ef57de0344d65667f",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1951,
+    "backendFiles": 1952,
     "frontendFiles": 621,
     "legacyFiles": 610,
-    "moduleFiles": 1341,
-    "productionFiles": 2727,
+    "moduleFiles": 1342,
+    "productionFiles": 2728,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25998
+    "symbolsIncludingFileRoots": 26001
   },
   "entries": [
     {
@@ -6655,6 +6655,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/query.ts",
+      "id": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ProviderNeutralDatabase",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -149001,6 +149013,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskListPageDeps",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts#createPostgresqlTaskListPage",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createPostgresqlTaskListPage",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -312675,5 +312711,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4bf89478a49bae5be4928acc6f332c41e9bf958718d5c58c31e2fc9071d21abb"
+  "sourceDigest": "sha256:d61448fa8efa2f8c39626eeb80147b541181bb3378056f2ef57de0344d65667f"
 }

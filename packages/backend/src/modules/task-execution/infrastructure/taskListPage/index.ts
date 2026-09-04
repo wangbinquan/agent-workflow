@@ -13,5 +13,6 @@ export type {
 } from './filters'
 export { canUseFilteredFastPath, isDefaultView } from './query'
 export { createSqliteTaskListPage } from './sqlite'
+export { createPostgresqlTaskListPage } from './postgresql'
 export { taskListViewerOf, type TaskListViewer } from './authorization'
 export type { TaskListPageDb } from './db'

@@ -462,7 +462,15 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts -> @/modules/identity-access/public/operations',
+      // RFC-357：列表页把 owner 身份收成一个**注入的端口**（`OwnerIdentityQueries`，
+      // identity-access 的 exact public 面），由装配根提供实现。下面四条都是 type-only
+      // 的 public 消费，与 postgresqlTaskRouteOperations 那条同型；模块自己去 compose
+      // 别的 context 的 provider 才是被 RFC-328 判红的形状，这里刻意不那么做。
+      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/postgresql.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/accountRepositoryTransportCredentials.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',

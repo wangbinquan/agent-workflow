@@ -573,6 +573,11 @@ describe('repository test entrypoint', () => {
     const expectedCiDeadlines = new Map<string, number>([
       ['lint', 15],
       ['test-backend', 15],
+      // RFC-357: the only regular gate that runs against a real PostgreSQL
+      // server (a `services:` container). 15 matches test-backend — the lane
+      // runs one small suite, so the budget is dominated by install + migrate,
+      // not by the tests.
+      ['test-backend-postgresql', 15],
       // RFC-254 T31: 20 because the Windows leg is genuinely slower at the same
       // work — measured 373s wall for the full suite on a real Windows host vs
       // ~160s on macOS, and a CI shard carries install + cache on top. Raised

@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1928,
+      "baseline": 1929,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
         "why": "RFC-357 PR-1（任务列表页查询归一）：`services/taskOperations.ts`（1196 行、SQLite 专属裸 SQL）整文件删除，平移进 `modules/task-execution/infrastructure/taskListPage/` 的 7 个文件，并把同模块里重复的一份授权谓词（`legacySqliteTaskAuthorization.ts`）收成对它的委托。 本项 +3，其中我这一笔 +2：`createTaskListPage` / `createSqliteTaskListPage` 两个装配工厂被判据计为 mutation entrypoint（它们本身是纯构造，页查询是只读的）。余下 +1 是并发 session 的 `SettledEffectCoverageProbe`。下一笔不涨即删。"
@@ -429,7 +429,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6328,
+      "baseline": 6333,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
         "why": "RFC-357 PR-1（任务列表页查询归一）：`services/taskOperations.ts`（1196 行、SQLite 专属裸 SQL）整文件删除，平移进 `modules/task-execution/infrastructure/taskListPage/` 的 7 个文件，并把同模块里重复的一份授权谓词（`legacySqliteTaskAuthorization.ts`）收成对它的委托。 本项 +13：符号级观察边随文件数放大（同上，7 个文件各自记自己的边），与 exceptions 同源。下一笔不涨即删。"
@@ -453,7 +453,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5206,
+      "baseline": 5210,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
         "why": "RFC-357 PR-1（任务列表页查询归一）：`services/taskOperations.ts`（1196 行、SQLite 专属裸 SQL）整文件删除，平移进 `modules/task-execution/infrastructure/taskListPage/` 的 7 个文件，并把同模块里重复的一份授权谓词（`legacySqliteTaskAuthorization.ts`）收成对它的委托。 本项净 +2，其中**我这一笔净 +1**：出账 10 条（被删文件的 7 条 legacy-inbound、目录源指向它的 1 条、以及授权谓词改委托后不再直取 `DbClient` / `taskCollaborators` 的 2 条），入账 11 条（7 个模块文件各自到平台原语的 9 条：`db/schema :: tasks`×3、`taskCollaborators`、`*`、`util/errors`×2、`util/hash`、`db/client :: DbClient`；加 `services/task :: loadTaskFailureCodes`；加装配根 `server.ts` 注入 identity-access 的 `OwnerIdentityQueries` 一条——那条是**修**出来的：模块内自己 compose 别的 context 的 provider 被 RFC-328 精确判红，正解就是由装配根注入）。余下 +1 是并发 session 的 `workspaceMaintenance.ts -> util/errors`。 换来的是：这一页不再有第二份实现，且 legacy 面少了一个 1196 行的文件。下一笔不涨即删。"
@@ -491,7 +491,7 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25998,
+      "baseline": 26001,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
         "why": "RFC-357 PR-1（任务列表页查询归一）：`services/taskOperations.ts`（1196 行、SQLite 专属裸 SQL）整文件删除，平移进 `modules/task-execution/infrastructure/taskListPage/` 的 7 个文件，并把同模块里重复的一份授权谓词（`legacySqliteTaskAuthorization.ts`）收成对它的委托。 本项 +28，其中**我这一笔 +24**：7 个文件根（原来 1 个）+ 新增的类型与小判据（`TaskListViewer` / `TaskListRowRef` / `TaskListPageDb` / `TaskListPage` / `TaskListPageDeps` / `TaskListPageEnrichment` / `numeric` / `nullableNumeric` / `facetCount` / `createTaskListPage` / `createSqliteTaskListPage` 等），减去被删文件的 42 个。这是「一个大文件拆成一个模块」的记账代价，不是新耦合——同一批依赖此前由一个 legacy 文件经门面承担。 余下 +4 是并发 session 的 terminal-maintenance 在制品。下一笔不涨即删。"
@@ -499,7 +499,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4bf89478a49bae5be4928acc6f332c41e9bf958718d5c58c31e2fc9071d21abb",
+    "sourceDigest": "sha256:d61448fa8efa2f8c39626eeb80147b541181bb3378056f2ef57de0344d65667f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +512,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9aba311953937defabbbb4170f88a67c584e43db",
-    "contentDigest": "sha256:54fedcedb1f84344c90f3cd2a30b9fd64acfefc2a6cc98b4bbb26e43a4bebdee",
+    "currentSnapshotSha": "57e4a5b6c8a137f89b0e7ebe3b0ef28977180692",
+    "contentDigest": "sha256:2a08e281d25c0bb7948f8fff9fdb49be21d4cb3981176ec3c4163b3feb58cb5d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

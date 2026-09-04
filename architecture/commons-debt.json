@@ -5707,6 +5707,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
+        "import:0a9581d0aef59eb57717",
         "import:11f9a6b4d8215cb0324a",
         "import:716be69ae2cd0c0f70ea",
         "import:a91bbed82d5c693d154c"
@@ -8742,15 +8743,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4bf89478a49bae5be4928acc6f332c41e9bf958718d5c58c31e2fc9071d21abb",
+    "sourceDigest": "sha256:d61448fa8efa2f8c39626eeb80147b541181bb3378056f2ef57de0344d65667f",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "9aba311953937defabbbb4170f88a67c584e43db",
-    "contentDigest": "sha256:6b343d8c5f15611bc9c389e073dee2e35b13e74b7c66b75acdd0088ae3179c41",
+    "currentSnapshotSha": "57e4a5b6c8a137f89b0e7ebe3b0ef28977180692",
+    "contentDigest": "sha256:56941ef2b3b4b3430d8dce3bf691e907ecfb6264f2fbde20d8e6ea913c9e771d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
