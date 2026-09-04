@@ -27,7 +27,7 @@
 3. **实证后果**：本机真 PostgreSQL 17.11 上，**每个任务在铸出任何 node_run 之前直接 failed**
    （`deferred-question-dispatcher-not-bound`）；同一工作流在 SQLite 上正常跑到 `review -> running`。
 
-累计已确证 **9 条 P0 + 约 32 条 P1 + 约 21 条 P2**（含 RFC-357 已修的 6 条）。其中两条 P0 直接
+累计已确证 **10 条 P0 + 约 32 条 P1 + 约 21 条 P2**（含 RFC-357 已修的 6 条）。其中两条 P0 直接
 掐断产品核心路径：PostgreSQL 上**评审无法通过 / 驳回、澄清无法回答**（三条命令端口从未注入且
 PG 侧根本不存在实现，`commandContext.ts:161-186` 必抛），以及**每个任务在铸出 node_run 前必死**
 （§2 第 3 条）。
@@ -103,7 +103,7 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
   `provider === ` 分叉，CI 必红并指向本 RFC。
 - **AC-6**（G6）真 PostgreSQL lane 在 push CI 上执行统一实现的行为面（不只是 SQL 文本断言），
   且 lane 红则合并门红。
-- **AC-7** 前置对账里的 **9 条 P0 全部消失**，每条带回归用例（先红后绿，变异实证）。
+- **AC-7** 前置对账里的 **10 条 P0 全部消失**，每条带回归用例（先红后绿，变异实证）。
 - **AC-8** 用户可见行为逐字不变：`/api/*` 的 wire 输出在两个 provider 上与本 RFC 之前的 SQLite
   输出相同（本 RFC 明确修复的缺陷除外，逐条列出）。
 - **AC-9** exact-SHA CI 全绿（含真 PG lane），取证 sha 与 run id 写回本文件。

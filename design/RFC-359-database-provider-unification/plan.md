@@ -23,8 +23,14 @@
 | T5 | **P0-5** clarify 全量封存在 PG 上 409 并回滚整笔答案 | `postgresqlNodeRunLifecyclePersistence.ts:154-160` |
 | T6 | **P0-6** 定义损坏的工作流在 PG 上永久删不掉、列表整体 422 | `postgresqlWorkflowRepository.ts:258` |
 | T7 | **P0-1/P0-2** 两道 owner 围栏：适配器不读环境上下文 / effect 账本私有 fence 加等值判定 | 真库复现 + `postgresqlTaskLifecycleTransaction.ts:153-157` 的反证注释 |
+| T7b | **P0-10** 驱动释放不清算 effect ⇒ owner 永久卡 `claimed`、重启也救不回。**须连中立端口一起改**——`taskExecutionEffectStore.ts:125-150` 压根没声明这两个成员 | `postgresqlTaskDriverLifecycle.ts:106-157` vs `taskDriverLifecycle.ts:127-212` |
+| T7c | **任务删除认领无恢复方**：`recoverInterruptedTaskDeletes` 形参是 `LegacySqliteTaskDatabase`，**修好启动序列也接不上**，须写 provider-中立版 | 正常并发的 `ConflictError` 分支即可达 |
 
 **每条都要**：先写一条能稳定复现的红用例（PG 侧），再修，修完再跑一次原变异确认转红。
+
+**W1 的实际形状比「接线」重**：T1（clarify 自动派发）、T2（三条决定命令）、T7b（effect 清算）、
+T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口本身没声明该能力**——不是「写好了没人调」，
+是要连端口带实现一起补。规模评估须按这个口径重做，不能按 W3 的接线量类比。
 
 **T7 的次序说明**：P0-1 当前被 P0-7 遮蔽（任务活不到 `runNode`）。T1 落地后 P0-1 是否立刻接棒
 **必须实测确认**，不能假定。
@@ -47,6 +53,9 @@
   终态工作区回收策略注册、数字员工模板播种、demo 播种、融合三步、定时任务载荷治愈、
   终态维护恢复五项。**多数 PG 适配器已写好且已接进 persistence，只是没人调。**
 - **T16** `cli/start.ts` 里 `provider === 'sqlite'` 的执行分支归零（**AC-2**）。
+- **T16b** schema 契约补**触发器**维度：今天投影只覆盖表/列/约束/索引，9 个 SQLite 触发器一个都没到 PG。
+  逐条判定「投影成 PG 触发器」还是「上移为应用层判据」，`node_runs.lineage_slot_path_json` 是唯一
+  当前没有应用层等价物的一条。
 
 ## 4. W4 —— 逐 context 合一适配器
 

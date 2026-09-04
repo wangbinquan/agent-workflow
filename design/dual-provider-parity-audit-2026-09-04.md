@@ -96,7 +96,7 @@ employee-devauto / task-execution / platform）。
 
 判断成立，且比「凑出来的」更重。三层证据：
 
-1. **数量**：153 对适配器中约 **55 条确证功能缺陷**（其中 6 条已由 `87d080300` / RFC-357 PR-3 修复，**约 49 条待处置**），含 **7 条 P0**（PG 上核心功能不工作，全部仍在）——其中 **P0-7 由端到端实证发现**（§0.1），它落在本轮语料**之外**的 PG 组合根里，且它先于 P0-1 生效。
+1. **数量**：153 对适配器中约 **55 条确证功能缺陷**（其中 6 条已由 `87d080300` / RFC-357 PR-3 修复，**约 49 条待处置**），含 **10 条 P0**（PG 上核心功能不工作，全部仍在）——其中 **P0-7 由端到端实证发现**（§0.1），它落在本轮语料**之外**的 PG 组合根里，且它先于 P0-1 生效。
 2. **方向**：**不是单向劣化**。`E-1` 是 SQLite 侧更差；`B-2` / `D-1` 是 PG 侧违反了**写在本仓自己
    源码注释里的设计意图**。这是两条路径各自演进、互不知情，不是一条路径抄劣了另一条。
 3. **分布**：平台底座层（committed events / 逻辑导出 / 事件中心 / 运行时注册表，13 对）**零缺陷**；
@@ -395,9 +395,15 @@ lease-epoch CAS / 退避公式 / dead-letter、投影选取与去重、事件响
 
 ### 5.2 已经守住的两层
 
-- **schema 层单源派生**：`db/providerSchema.ts` 把同一份 `schema.ts` 声明机械投影成 pgTable；PG 基线
-  DDL 由 `scripts/rfc349-postgresql-schema.ts` 从同一契约 `renderPostgresqlBaselineSql()` **生成**，
-  不是手写。列集 / 默认值 / 约束无漂移空间。
+- **schema 层单源派生（**但只覆盖表/列/约束/索引**）**：`db/providerSchema.ts` 把同一份 `schema.ts`
+  声明机械投影成 pgTable；PG 基线 DDL 由 `scripts/rfc349-postgresql-schema.ts` 从同一契约
+  `renderPostgresqlBaselineSql()` **生成**，不是手写。列集 / 默认值 / 约束无漂移空间。
+  **更正（第二轮审计发现）**：投影**不含触发器**——`postgresqlSchema.ts:18-22` 的 statement kind
+  只有 `bootstrap|table|constraint|index|metadata`，`schemaContract.ts` 全文 grep `TRIGGER` 为零。
+  SQLite 侧现有 **9 个触发器，一个都没投影到 PG**。其中 8 条有应用层等价物，唯一没有的是
+  `rfc328_node_runs_lineage_after_insert` ⇒ **PG 上每个 node_run 的 `lineage_slot_path_json`
+  恒为 null**（`buildNodeRunMintRecord.ts:95-98` 默认 null，全仓无 override 调用点）。同 provider
+  内部靠三处兜底自洽，但跨 provider 迁移时 `operationFamilyKey` 的哈希输入随之改变。
 - **方言层逐条实测钉死**：三条 parity 守卫各自来自对真 PostgreSQL 的实测——NULL 排序两边默认相反、
   SQLite `LIKE` 对 ASCII 天生大小写不敏感而 PG 敏感（切库后**静默少召回**）、`0/1` 混进布尔表达式在 PG
   上是 `SQLSTATE 42804`。
@@ -414,6 +420,54 @@ RFC-352 的 memory `canManage` 漂移修法是对的：判据现在统一在 `me
 一份，两侧只取事实；分页是两侧同一份 keyset，PG 没有全表捞回内存过滤。同类正例还有
 `taskExecutionKind`（shared 唯一判据）、`domain/skillVersionCommit.ts`、
 `taskListPage/`（RFC-357 正在落的 dialect 参数化页查询）。
+
+## 5.4 第二轮：163 个无配对 PG 面文件（2026-09-04，6 片全覆盖）
+
+判据换成**装配缺口**（无孪生可 diff）：东西建了没绑、SQLite 装了 PG 没装、有实现零调用方。
+
+**新增 3 条 P0（累计 10 条）**：
+
+- **P0-8 评审决定 / 反问下发 / 快速澄清三条命令端口从未注入**（`cli/postgresqlDaemonApplication.ts:706-710`），
+  且 **PG 侧根本不存在这三个实现**（只有 `legacySqliteReviewDecisionComposition` 等）。
+  ⇒ `commandContext.ts:161-186` 必抛，**PostgreSQL 上评审无法通过 / 驳回、澄清无法回答，前端拿 500**，
+  任务永久卡在人工门。SQLite 侧对应装配在 `cli/start.ts:1842-1852`。
+- **P0-9 development mission 的 `agentLauncher` / `scriptLauncher` 从未注入**
+  （`cli/postgresqlDaemonApplication.ts:1385-1399`，两者是可选依赖、缺失即静默 undefined）
+  ⇒ agent / script 动作恒 `blocked`（`agentActionOrchestrator.ts:274-279`）。
+  **影响面已收窄**：新遗留 Mission 两侧都已不可创建，受害的是切换到 PG 时仍在途（draining）的那批。
+- **P0-10 驱动释放不清算 effect ⇒ owner 永久卡 `claimed`**
+  （`postgresqlTaskDriverLifecycle.ts:106-157` 缺 SQLite 在同位置做的三件事：`child-unkillable` 判定、
+  `resolveQuiescedManagedProcesses`、未结清 effect 的 outcome-unknown 兜底）⇒ `releaseAfterStop`
+  一进来撞 `unresolvedEffects` 必抛。该次驱动**静默失败**（`taskDriveCoordinator.ts:169` 的
+  `void completion.catch()` 吞掉），此后每一次 resume / retry 都被拒，**重启也救不回来**
+  （能释放它的 boot recovery 正是那段死码）。触发源最常见的一条：运行时子进程扛过 SIGTERM→SIGKILL。
+  根因是**中立端口 `taskExecutionEffectStore.ts:125-150` 压根没声明这两个成员**，PG 侧无从调用。
+
+**新增 P1（节选）**：
+
+- PG boot 完全没有孤儿收割与所有权恢复（`cli/start.ts:2007-2037` 四步全部不可达）。
+- PG 从不装配 skill catalog boot 参与者（1,150 行 PG 实现零调用）⇒ 崩溃留下的 `skill_operation_locks`
+  主键行永不清理 ⇒ **该技能之后每次编辑 / 发版 / 删除都主键冲突失败且永不自愈**。
+- `webhookTaskWorkspaceAutoCleanup` 在 PG 上**完全无效**（策略从未注册，注册表是模块级单例，
+  PG 的生命周期写手读同一个它 ⇒ 恒 `{prune:false}`）——设置页显示「已开启」，行为是关。
+- PG 从不播种数字员工内置代理模板 ⇒ 内置工具目录整份缺席，职位模板编辑器无内置代理可绑。
+- **任务删除认领无任何恢复方**（archive / workspace-gc 都有 owner，只有 delete 没有），
+  且残留认领**不需要崩溃**——正常并发下的 `ConflictError` 分支就会把认领留在 `io-complete`
+  ⇒ 该任务**永远删不掉**（每次同一个 409），连带归档与工作区回收一起卡死，只能手工改库。
+  SQLite 侧 `recoverInterruptedTaskDeletes` 的形参类型是 `LegacySqliteTaskDatabase`，
+  **即使修好启动序列也接不上 PG**，是彻底没有 PG 实现。
+- PG 的「定时备份」实际产出 `manual` 备份且强制 `includeWorktrees: true`（绑定时把调度器递来的
+  `kind` 丢掉）⇒ 三个保留旋钮对 PG 定时备份**完全失效**、与用户手动备份抢 protected 名额、
+  每拍都把所有非终态工作树打进 tarball。专门写的 `createPostgresqlScheduledBackupRequester` 零调用方。
+- PG 的取消路径绕开唯一生命周期写点 ⇒ 运行时钟不结算（耗时显示错）、终态工作区回收不认领。
+- PG 的「重试准备仓库」退化成**阻塞式单次克隆**：无 RFC-287 的退避重试窗口、无进行中的
+  `__repo_prep__` 行、不可取消、且阻塞整个 HTTP 请求。
+
+**形状总结**：多数缺陷是同一句话——**PG 适配器写好了、接进 persistence 了，就是没人调**。
+`cli/start.ts` 的 PG 分支只覆盖「装配 + 起服务」，把整段 boot 恢复 / 迁移屏障 / 播种
+（`:1953–2256`）留在了 SQLite 独占路径上。
+
+**处置**：全部并入 [RFC-359](./RFC-359-database-provider-unification/proposal.md) 的 W1。
 
 ## 6. 存疑保留（5 条，未计入确证）
 
