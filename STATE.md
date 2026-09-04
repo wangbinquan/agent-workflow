@@ -82,8 +82,14 @@
 > 本地守卫清单补 `tests/architecture/rfc317-module-boundary.test.ts`。
 > **W3-T14 已修（2026-09-05）**：监听器与关机序列合一为 `serveDaemon`（两个 provider 共用），SQLite 的四步显式收尾改为会话
 > 关闭参与者、与 PG 同一组 id 同一顺序；`rfc359-w3-t14-serve-daemon.test.ts` 源码锁。
-> **下一步**：W3-T16（`cli/start.ts` 的 SQLite 内联装配搬出为 `composeSqliteProviderSession`，provider 执行分支归零，
-> 会话装配按 provider 查表）→ W4 成对删除。
+> **W3-T16 已修（2026-09-05）**：SQLite 内联装配抽成 `composeSqliteProviderSession`，`startCommand` 无 provider 执行分支，
+> 会话装配按 `DatabaseProvider` 查表、运行时收窄在 platform/persistence；T14 锁扩成 T16 守卫。文件拆分留作 W4 的纯搬家。
+> **CI 54e560a1b 红的收尾（2026-09-05）**：RFC-301 startTask 允许表改指 actionExecutionEnvironment.ts；bootstrap
+> 不再 import `services/agent` 门面（Agent 查询走目录查询面 + admitDaemonIdentity）；runtime registry 的 `hasTask`
+> 改为「driver 在跑」（release 后即 false；token 仍在、successor 仍被拒、`awaitReleasedSettled` 供 attach 前等 settle）——
+> 否则终态已落库的任务在 owner 行转移那几毫秒里会被 resume/retry 拒成 task-not-resumable（RFC-287 AC-10 / AC-16）。
+> **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
+> `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

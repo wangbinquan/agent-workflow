@@ -24,8 +24,8 @@ test('监听器只有一份：一个 Bun.serve、一个 serveDaemon 定义、没
   expect(START.split('Bun.serve(').length - 1).toBe(1)
   expect(START.split('async function serveDaemon(').length - 1).toBe(1)
   expect(START).not.toContain('function servePostgresqlDaemon(')
-  // 两个调用点：PG 分支与 SQLite 主路径各一次（T16 之后归一）。
-  expect(START.split('await serveDaemon({').length - 1).toBe(2)
+  // RFC-359 W3-T16：startCommand 是唯一调用点——provider 执行分支归零，会话装配按 provider 查表。
+  expect(START.split('await serveDaemon({').length - 1).toBe(1)
 })
 
 test('serveDaemon 的 shutdown 只做监听器层的事：provider 专属收尾不得再出现在它里面', () => {
@@ -45,12 +45,30 @@ test('serveDaemon 的 shutdown 只做监听器层的事：provider 专属收尾�
   expect(body).toContain('input.lock.release()')
 })
 
+test('startCommand 没有 provider 执行分支：不比较 provider 字面量，会话装配只经 composeDaemonProviderSession 查表', () => {
+  const body = START.slice(
+    START.indexOf('export async function startCommand('),
+    START.indexOf('async function composeSqliteProviderSession('),
+  )
+  expect(body).not.toMatch(/provider\s*[!=]==\s*'(?:sqlite|postgresql)'/u)
+  expect(body).not.toContain("'postgresql' as const")
+  expect(body.split('composeDaemonProviderSession({').length - 1).toBe(2)
+  // 查表按 DatabaseProvider 穷举：少一个 provider 就编译不过，多一个分支这里就红。
+  const table = START.slice(
+    START.indexOf('function composeDaemonProviderSession('),
+    START.indexOf('async function serveDaemon('),
+  )
+  expect(table).toContain('satisfies Record<DatabaseProvider, DaemonProviderSessionComposer>')
+  expect(table).toContain('sqlite: composeSqliteProviderSession')
+  expect(table).toContain('postgresql: composePostgresqlProviderSession')
+})
+
 test('两个 provider 会话声明同一组关闭参与者、同一顺序', () => {
   const pg = START.slice(
     START.indexOf('async function composePostgresqlProviderSession('),
     START.indexOf('async function serveDaemon('),
   )
-  const sqlite = START.slice(START.indexOf('export async function startCommand('))
+  const sqlite = START.slice(START.indexOf('async function composeSqliteProviderSession('))
   const expected = [
     'memory-distill-recover-running',
     'task-execution-graceful-shutdown',

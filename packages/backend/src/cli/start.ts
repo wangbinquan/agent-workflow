@@ -1,7 +1,6 @@
 // `agent-workflow start` — daemon foreground entry.
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
-import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createSecretBox } from '@/auth/secretBox'
@@ -93,7 +92,6 @@ import {
   createSqliteTaskIdleTimeoutPersistence,
   runTaskIdleTimeoutSweep,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
-import { getAgentById } from '@/services/agent'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
@@ -232,7 +230,11 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import { createDeferredDigitalEmployeeWorkStart } from '@/modules/integration/composition'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
-import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import {
+  requireDatabaseProviderRuntime,
+  resolveDatabaseProviderRuntime,
+  type ResolvedDatabaseProviderRuntime,
+} from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
 import { createDaemonRealtimePolicyBinding } from './daemonRealtimePolicy'
@@ -286,7 +288,10 @@ import {
   type DaemonProviderRuntimeAdmission,
   type DaemonProviderRuntimeHandleFactory,
 } from './daemonProviderRuntimeSession'
-import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
+import {
+  describeDaemonProviderSessionFailure,
+  type DaemonProviderSessionLifecycleInput,
+} from './daemonProviderSession'
 import {
   createLazyPausableDaemonRuntimeServiceBindings,
   createManagedWorkerRuntimeHandleFactory,
@@ -521,11 +526,6 @@ async function _createComposedDaemonProviderRuntimeSession(
   })
 }
 
-type PostgresqlProviderRuntime = Extract<
-  ReturnType<typeof resolveDatabaseProviderRuntime>,
-  { readonly provider: 'postgresql' }
->
-
 interface ComposedPostgresqlProviderSession {
   readonly application: PostgresqlDaemonApplication
   readonly session: Awaited<ReturnType<typeof _createComposedDaemonProviderRuntimeSession>>
@@ -545,19 +545,14 @@ function requirePostgresqlConfig(
  * is captured by owner factories once; HTTP, WS, workers and maintenance all
  * use the same aggregate and are stopped before the provider pool closes.
  */
-async function composePostgresqlProviderSession(input: {
-  readonly provider: PostgresqlProviderRuntime
-  readonly config: PostgresqlDaemonApplicationInput['config']
-  readonly token: string
-  readonly secretBox: ReturnType<typeof createSecretBox>
-  readonly dbVersion: number
-  readonly migrationAdmission: DatabaseMigrationAdmission
-  readonly sourceWriteWindow: DatabaseSourceWriteWindow
-  readonly log: ReturnType<typeof createLogger>
-}): Promise<ComposedPostgresqlProviderSession> {
-  if (input.config.database.provider !== 'postgresql') {
-    throw new Error('postgresql-daemon-config-provider-mismatch')
-  }
+async function composePostgresqlProviderSession(
+  composeInput: DaemonProviderSessionComposeInput,
+): Promise<ComposedPostgresqlProviderSession> {
+  const input = Object.freeze({
+    ...composeInput,
+    provider: requireDatabaseProviderRuntime(composeInput.provider, 'postgresql'),
+    config: requirePostgresqlConfig(composeInput.config),
+  })
   const db = input.provider.openClient()
   const databaseMigration = composeDatabaseMigrationModule({
     admission: input.migrationAdmission,
@@ -1059,6 +1054,49 @@ async function composePostgresqlProviderSession(input: {
   return Object.freeze({ application, session })
 }
 
+/** RFC-359 W3-T16：两个 provider 的会话装配器共用的输入——`startCommand` 只准备这一份。 */
+interface DaemonProviderSessionComposeInput {
+  readonly provider: ResolvedDatabaseProviderRuntime
+  readonly lifecycle: DaemonProviderSessionLifecycleInput
+  readonly config: ReturnType<typeof loadConfig>
+  readonly token: string
+  readonly secretBox: ReturnType<typeof createSecretBox>
+  readonly dbVersion: number
+  readonly migrationAdmission: DatabaseMigrationAdmission
+  readonly sourceWriteWindow: DatabaseSourceWriteWindow
+  readonly log: ReturnType<typeof createLogger>
+  readonly lock: Lock
+  readonly migrationsFolder: string
+  readonly digitalEmployeeTypePackageDriftPolicy: 'draft-overlay' | 'reject'
+}
+
+interface ComposedDaemonProviderSession {
+  readonly application: {
+    readonly core: {
+      readonly authRuntime: Pick<
+        PostgresqlDaemonApplication['core']['authRuntime'],
+        'isBootstrapRequired'
+      >
+    }
+  }
+  readonly session: Awaited<ReturnType<typeof _createComposedDaemonProviderRuntimeSession>>
+}
+
+type DaemonProviderSessionComposer = (
+  input: DaemonProviderSessionComposeInput,
+) => Promise<ComposedDaemonProviderSession>
+
+/** 按 provider 查表；表按 `DatabaseProvider` 穷举，少一个 provider 就编译不过。 */
+function composeDaemonProviderSession(
+  input: DaemonProviderSessionComposeInput,
+): Promise<ComposedDaemonProviderSession> {
+  const composers = {
+    sqlite: composeSqliteProviderSession,
+    postgresql: composePostgresqlProviderSession,
+  } satisfies Record<DatabaseProvider, DaemonProviderSessionComposer>
+  return composers[input.provider.provider](input)
+}
+
 /**
  * RFC-359 W3-T14 —— 监听器与关机序列只有一份，两个 provider 共用。
  *
@@ -1324,7 +1362,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     logFile: Paths.daemonLog,
   })
   const log = createLogger('daemon')
-  const digitalEmployeeTypePackageDriftPolicy =
+  const digitalEmployeeTypePackageDriftPolicy: 'draft-overlay' | 'reject' =
     !IS_EMBEDDED &&
     devLockHandoffMs() > 0 &&
     process.env.AGENT_WORKFLOW_DEV_TYPE_PACKAGE_OVERLAY === '1'
@@ -1515,89 +1553,110 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
   // migrations. A pending migration without its rollback generation is fatal;
   // backupOnMigration=false is the operator's explicit opt-out.
-  // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
-  // this and stops compiling instead of taking the SQLite path further down.
-  if (databaseProvider.provider !== 'sqlite' && databaseProvider.provider !== 'postgresql') {
-    return unhandledDatabaseProvider(databaseProvider)
-  }
-  if (databaseProvider.provider === 'postgresql') {
-    const initialLifecycle = Object.freeze({
-      operationId: 'daemon-start',
-      provider: 'postgresql' as const,
-      generationId: databaseProvider.generation.payload.generationId,
-    })
-    const initial = await composePostgresqlProviderSession({
-      provider: databaseProvider,
-      config: requirePostgresqlConfig(config),
-      token,
-      secretBox,
-      dbVersion,
-      migrationAdmission: deferredDatabaseMigrationAdmission.admission,
-      sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
-      log,
-    })
-    const daemonProviderBootstrap = createDaemonProviderBootstrap({
-      initialSession: initial.session,
-      sessionFactory: {
-        async create(lifecycleInput) {
-          const sessionProvider = lifecycleInput.provider
-          if (sessionProvider === 'sqlite') {
-            throw new Error('sqlite-provider-session-source-retired')
-          }
-          // Everything below assumes the PostgreSQL session shape; a third
-          // provider widens this residual and stops compiling.
-          if (sessionProvider !== 'postgresql') {
-            return unhandledDatabaseProvider(sessionProvider)
-          }
-          const nextConfig = loadConfig(Paths.config)
-          const nextProvider = resolveDatabaseProviderRuntime({
-            config: nextConfig.database,
-            sqlitePath: Paths.db,
-            generationPointerPath: Paths.databaseGenerationPointer,
-            operationsRoot: Paths.databaseMigrationsDir,
-            contract: logicalSchemaContract,
+  // RFC-359 W3-T16：这里没有 provider 执行分支——按 provider 查表取会话装配器，
+  // bootstrap / resume / 监听全部走同一条中立序列（design §6 / §7 守卫 4）。
+  const bindHost = opts.host ?? config.bindHost
+  const bindPort = opts.port ?? config.bindPort ?? 0
+  const lifecycle = Object.freeze({
+    operationId: 'daemon-start',
+    provider: databaseProvider.provider,
+    generationId: databaseProvider.generation.payload.generationId,
+  })
+  const sessionInput = Object.freeze({
+    config,
+    token,
+    secretBox,
+    dbVersion,
+    migrationAdmission: deferredDatabaseMigrationAdmission.admission,
+    sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
+    log,
+    lock,
+    migrationsFolder,
+    digitalEmployeeTypePackageDriftPolicy,
+  })
+  const initial = await composeDaemonProviderSession({
+    ...sessionInput,
+    provider: databaseProvider,
+    lifecycle,
+  })
+  const daemonProviderBootstrap = createDaemonProviderBootstrap({
+    initialSession: initial.session,
+    sessionFactory: {
+      async create(lifecycleInput) {
+        // 只有迁移目标才会被重新装配；源 provider（SQLite）在割接后退役，不能再被当作
+        // 新会话的来源——判据取自 provider 特征表，不在这里写 provider 字面量。
+        if (databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target') {
+          throw new Error('provider-session-source-retired')
+        }
+        const nextConfig = loadConfig(Paths.config)
+        const nextProvider = resolveDatabaseProviderRuntime({
+          config: nextConfig.database,
+          sqlitePath: Paths.db,
+          generationPointerPath: Paths.databaseGenerationPointer,
+          operationsRoot: Paths.databaseMigrationsDir,
+          contract: logicalSchemaContract,
+        })
+        if (
+          nextProvider.provider !== lifecycleInput.provider ||
+          nextProvider.generation.payload.generationId !== lifecycleInput.generationId
+        ) {
+          await nextProvider.close()
+          throw new Error('daemon-provider-target-generation-mismatch')
+        }
+        return (
+          await composeDaemonProviderSession({
+            ...sessionInput,
+            config: nextConfig,
+            provider: nextProvider,
+            lifecycle: lifecycleInput,
           })
-          if (
-            nextProvider.provider !== 'postgresql' ||
-            nextProvider.generation.payload.generationId !== lifecycleInput.generationId
-          ) {
-            await nextProvider.close()
-            throw new Error('postgresql-daemon-target-generation-mismatch')
-          }
-          return (
-            await composePostgresqlProviderSession({
-              provider: nextProvider,
-              config: requirePostgresqlConfig(nextConfig),
-              token,
-              secretBox,
-              dbVersion,
-              migrationAdmission: deferredDatabaseMigrationAdmission.admission,
-              sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
-              log,
-            })
-          ).session
-        },
+        ).session
       },
-      createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
-    })
-    deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
-    await initial.session.resume(initialLifecycle)
-    await serveDaemon({
-      bootstrap: daemonProviderBootstrap,
-      authRuntime: initial.application.core.authRuntime,
-      databaseProvider: databaseProvider.provider,
-      token,
-      bindHost: opts.host ?? config.bindHost,
-      bindPort: opts.port ?? config.bindPort ?? 0,
-      lock,
-      log,
-    })
-  }
+    },
+    createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
+    // RFC-349 —— 表投影是**进程级**的：`createPostgresqlDatabaseClient` 一构造就把
+    // 它改指到 PostgreSQL。割接失败时 current 会退回源 session，但投影不会自己退
+    // 回来，于是整个 daemon 的每一条 SQLite 查询都会以
+    // `no such table: agent_workflow.*` 收场。把选择权钉在**真正在服务的**那份
+    // composition 上，成功与失败两条路径都对。
+    onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
+  })
+  deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
+  await initial.session.resume(lifecycle)
+  await serveDaemon({
+    bootstrap: daemonProviderBootstrap,
+    authRuntime: initial.application.core.authRuntime,
+    databaseProvider: databaseProvider.provider,
+    token,
+    bindHost,
+    bindPort,
+    lock,
+    log,
+  })
+}
 
-  if (databaseProvider.provider !== 'sqlite') {
-    throw new Error('sqlite-daemon-provider-narrowing-failed')
-  }
-
+/**
+ * RFC-359 W3-T16 —— SQLite 会话装配（此前是 `startCommand` 里 1700 行的内联段）。
+ * 与 `composePostgresqlProviderSession` 同一份输入 / 输出契约，由 `composeDaemonProviderSession`
+ * 按 provider 查表调用；`startCommand` 本身不再有 provider 执行分支。
+ */
+async function composeSqliteProviderSession(
+  input: DaemonProviderSessionComposeInput,
+): Promise<ComposedDaemonProviderSession> {
+  const databaseProvider = requireDatabaseProviderRuntime(input.provider, 'sqlite')
+  const {
+    config,
+    token,
+    secretBox,
+    dbVersion,
+    migrationAdmission,
+    sourceWriteWindow,
+    log,
+    lock,
+    migrationsFolder,
+    digitalEmployeeTypePackageDriftPolicy,
+    lifecycle,
+  } = input
   await maybePreMigrationBackup({
     appHome: Paths.root,
     dbPath: Paths.db,
@@ -1643,11 +1702,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }),
   )
   log.info('db ready', { path: Paths.db, dbVersion })
-  const providerSessionLifecycle = Object.freeze({
-    operationId: 'daemon-start',
-    provider: databaseProvider.provider,
-    generationId: databaseProvider.generation.payload.generationId,
-  })
 
   // RFC-282 §4.3 — runtime declaration self-check, before any business
   // service: every registered driver must state a stance on every declaration
@@ -1671,7 +1725,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const realtimePolicy = createDaemonRealtimePolicyBinding()
   const providerCore = composeSqliteDaemonProviderCore({
     db,
-    sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
+    sourceWriteWindow: sourceWriteWindow,
     appHome: Paths.root,
     dbPath: Paths.db,
     lockPath: Paths.lock,
@@ -2404,7 +2458,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       db,
-      agents: { get: async (id) => getAgentById(db, id) },
+      agents: {
+        // RFC-345：bootstrap 只从模块的目录查询面取 Agent，不再经 services/agent 门面。
+        get: async (id) => {
+          const identity = await admitDaemonIdentity(identityAccess)
+          if (identity === null) throw new Error('agent-action-authority-not-admitted')
+          return agentCatalog.queries.get(identity.actor, { id })
+        },
+      },
       startDeps: buildStartTaskDeps(
         db,
         taskExecutionRuntime.schedulerDriver,
@@ -2419,7 +2480,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }),
     scriptLauncher: composeScriptActionExecution({
       db,
-      agents: { get: async (id) => getAgentById(db, id) },
+      agents: {
+        // RFC-345：bootstrap 只从模块的目录查询面取 Agent，不再经 services/agent 门面。
+        get: async (id) => {
+          const identity = await admitDaemonIdentity(identityAccess)
+          if (identity === null) throw new Error('agent-action-authority-not-admitted')
+          return agentCatalog.queries.get(identity.actor, { id })
+        },
+      },
       startDeps: buildStartTaskDeps(
         db,
         taskExecutionRuntime.schedulerDriver,
@@ -2679,7 +2747,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   const codeHistoryQueries = composeSqliteCodeHistoryQueries(db)
   const databaseMigration = composeDatabaseMigrationModule({
-    admission: deferredDatabaseMigrationAdmission.admission,
+    admission: migrationAdmission,
     sqlitePath: Paths.db,
     operationsRoot: Paths.databaseMigrationsDir,
     generationPointerPath: Paths.databaseGenerationPointer,
@@ -2744,8 +2812,6 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }),
   )
 
-  const bindHost = opts.host ?? config.bindHost
-  const bindPort = opts.port ?? config.bindPort ?? 0
   const ws = buildWebSocketAdapter({
     daemonToken: token,
     realtime: providerCore.realtime,
@@ -3313,7 +3379,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   ] satisfies readonly DaemonProviderCloseParticipant[])
   const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({
     provider: 'sqlite',
-    generationId: providerSessionLifecycle.generationId,
+    generationId: lifecycle.generationId,
     app,
     webSocket: ws,
     runtimeFactories: providerRuntimeFactories,
@@ -3322,67 +3388,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     shutdownIdentity: () => identityAccess.shutdown(),
     closeProvider: () => databaseProvider.close(),
   })
-  const daemonProviderBootstrap = createDaemonProviderBootstrap({
-    initialSession: initialProviderSession,
-    sessionFactory: {
-      async create(input) {
-        const sessionProvider = input.provider
-        if (sessionProvider === 'sqlite') {
-          throw new Error('sqlite-provider-session-source-retired')
-        }
-        // Everything below assumes the PostgreSQL session shape; a third
-        // provider widens this residual and stops compiling.
-        if (sessionProvider !== 'postgresql') {
-          return unhandledDatabaseProvider(sessionProvider)
-        }
-        const nextConfig = loadConfig(Paths.config)
-        const nextProvider = resolveDatabaseProviderRuntime({
-          config: nextConfig.database,
-          sqlitePath: Paths.db,
-          generationPointerPath: Paths.databaseGenerationPointer,
-          operationsRoot: Paths.databaseMigrationsDir,
-          contract: logicalSchemaContract,
-        })
-        if (
-          nextProvider.provider !== 'postgresql' ||
-          nextProvider.generation.payload.generationId !== input.generationId
-        ) {
-          await nextProvider.close()
-          throw new Error('postgresql-daemon-target-generation-mismatch')
-        }
-        return (
-          await composePostgresqlProviderSession({
-            provider: nextProvider,
-            config: requirePostgresqlConfig(nextConfig),
-            token,
-            secretBox,
-            dbVersion,
-            migrationAdmission: deferredDatabaseMigrationAdmission.admission,
-            sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow,
-            log,
-          })
-        ).session
-      },
-    },
-    createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
-    // RFC-349 —— 表投影是**进程级**的：`createPostgresqlDatabaseClient` 一构造就把
-    // 它改指到 PostgreSQL。割接失败时 current 会退回源 session，但投影不会自己退
-    // 回来，于是整个 daemon 的每一条 SQLite 查询都会以
-    // `no such table: agent_workflow.*` 收场。把选择权钉在**真正在服务的**那份
-    // composition 上，成功与失败两条路径都对。
-    onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
-  })
-  deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
-  await initialProviderSession.resume(providerSessionLifecycle)
-  await serveDaemon({
-    bootstrap: daemonProviderBootstrap,
-    authRuntime: providerCore.authRuntime,
-    databaseProvider: databaseProvider.provider,
-    token,
-    bindHost,
-    bindPort,
-    lock,
-    log,
+  return Object.freeze({
+    application: Object.freeze({ core: providerCore }),
+    session: initialProviderSession,
   })
 }
 

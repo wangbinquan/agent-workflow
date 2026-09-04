@@ -92,7 +92,8 @@ const PROVIDER_FORK_LEDGER = {
   'cli/database.ts': { forks: 1, fence: 'display-text' },
   'cli/doctor.ts': { forks: 1, fence: 'fenced-dispatch' },
   'cli/migrate.ts': { forks: 1, fence: 'fenced-dispatch' },
-  'cli/start.ts': { forks: 1, fence: 'fenced-dispatch' },
+  // cli/start.ts：RFC-359 W3-T16 后没有 provider 执行分支——会话装配按 DatabaseProvider 查表，
+  // 运行时收窄走 platform/persistence 的 requireDatabaseProviderRuntime。
   'db/providerSchema.ts': { forks: 1, fence: 'projection-fenced' },
   'main.ts': { forks: 7, fence: 'fenced-dispatch' },
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },

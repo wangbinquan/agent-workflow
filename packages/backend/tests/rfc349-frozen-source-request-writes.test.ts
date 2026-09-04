@@ -118,19 +118,22 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
 
   test('the daemon binds the live window, not the always-writable default', () => {
     const start = readFileSync(resolve(backendRoot, 'src/cli/start.ts'), 'utf8')
-    // SQLite daemon: the provider core must receive the deferred holder's window.
+    // RFC-359 W3-T16：startCommand 只准备一份 sessionInput，两个 provider 的会话装配器从它拿同一个窗口。
+    const sessionInput = start.indexOf('const sessionInput = Object.freeze({')
+    expect(sessionInput).toBeGreaterThan(-1)
+    expect(
+      start.slice(sessionInput, sessionInput + 400),
+      'startCommand 没把 deferred holder 的真窗口放进 sessionInput ⇒ 两个 provider 都拿到空转窗口',
+    ).toContain('sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow')
+    // SQLite daemon: the provider core must receive that window (destructured from the input).
     const core = start.indexOf('composeSqliteDaemonProviderCore({')
     expect(core).toBeGreaterThan(-1)
     expect(
       start.slice(core, core + 300),
       'SQLite daemon 没把真窗口交给 provider core ⇒ 这层在生产里永远是空转',
-    ).toContain('sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow')
+    ).toMatch(/sourceWriteWindow,|sourceWriteWindow: sourceWriteWindow/u)
     // PostgreSQL daemon: same window, threaded through the session composer.
-    expect(
-      start.split('sourceWriteWindow: deferredDatabaseMigrationAdmission.sourceWriteWindow')
-        .length - 1,
-      '两个 provider 的装配没有都接上同一个窗口',
-    ).toBeGreaterThanOrEqual(4)
+    expect(start, 'PG 装配没接上同一个窗口').toContain('sourceWriteWindow: input.sourceWriteWindow')
     // The window itself must read the bound admission phase, not a constant.
     expect(start).toContain("writable: () => bound === null || bound.live().phase === 'open'")
   })

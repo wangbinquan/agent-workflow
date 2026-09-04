@@ -2,7 +2,7 @@
 // generation. The durable pointer is authoritative; config only supplies the
 // selected provider's mechanism settings and may never silently override it.
 
-import { unhandledDatabaseProvider } from './databaseProviders'
+import { unhandledDatabaseProvider, type DatabaseProvider } from './databaseProviders'
 import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
 import { openDb, type DbClient, type OpenDbOptions } from '@/db/client'
 import {
@@ -83,6 +83,40 @@ export function resolveDatabaseProviderSelection(options: {
     )
   }
   return generation
+}
+
+export type SqliteDatabaseProviderRuntime = Extract<
+  ResolvedDatabaseProviderRuntime,
+  { readonly provider: 'sqlite' }
+>
+export type PostgresqlDatabaseProviderRuntime = Extract<
+  ResolvedDatabaseProviderRuntime,
+  { readonly provider: 'postgresql' }
+>
+
+/**
+ * RFC-359 W3-T16 —— 按 provider 收窄已解析的运行时。provider 字面量比较只许出现在
+ * `platform/persistence/`（design §7 守卫 2）；bootstrap 拿到 union 后用这一处收窄，
+ * 自己不再写 `provider === '…'` 分支。
+ */
+export function requireDatabaseProviderRuntime(
+  runtime: ResolvedDatabaseProviderRuntime,
+  provider: 'sqlite',
+): SqliteDatabaseProviderRuntime
+export function requireDatabaseProviderRuntime(
+  runtime: ResolvedDatabaseProviderRuntime,
+  provider: 'postgresql',
+): PostgresqlDatabaseProviderRuntime
+export function requireDatabaseProviderRuntime(
+  runtime: ResolvedDatabaseProviderRuntime,
+  provider: DatabaseProvider,
+): ResolvedDatabaseProviderRuntime {
+  if (runtime.provider !== provider) {
+    throw new Error(
+      `database-provider-runtime-mismatch: expected ${provider}, resolved ${runtime.provider}`,
+    )
+  }
+  return runtime
 }
 
 export function resolveDatabaseProviderRuntime(

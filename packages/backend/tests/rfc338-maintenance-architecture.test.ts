@@ -51,8 +51,9 @@ describe('RFC-338 maintenance architecture', () => {
     expect(start).toContain('maintenanceStatus: maintenanceService.status')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
     expect(start).toContain('maintenanceRuntimeBindings.runtimeFactory')
+    // RFC-359 W3-T14：监听器与关机序列只有一份（serveDaemon），bootstrap.stop() 只在它里面调一次。
     expect(start).toContain('await input.bootstrap.stop()')
-    expect(start).toContain('await daemonProviderBootstrap.stop()')
+    expect(start.split('.bootstrap.stop()').length - 1).toBe(1)
     expect(start).toContain('startBatchImportGc(')
     expect(start).toMatch(
       /const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory\(\{[\s\S]*?employeeWriterCutover\.refresh\(\)[\s\S]*?onError\(err\) \{[\s\S]*?development writer refresh failed/u,
