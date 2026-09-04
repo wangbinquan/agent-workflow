@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6305,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-355 T7 修红：`services/intent/dispatcher.ts` 里一句既有的 `as unknown as Actor` 随迁位进了能力伪造守卫的扫描面（该守卫只看 modules/），CI 双 OS 红。正解是让收窄回到 Actor 的 owner 侧——`auth/session.ts` 新出 `actorOfDirectAuthority`，`resolveActor` 里同形状的第二份 cast 一并收成一份。账本 +1 是这个具名符号与它那条边，换掉的是一处结构性伪造点。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5194,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-355 T7 修红：`services/intent/dispatcher.ts` 里一句既有的 `as unknown as Actor` 随迁位进了能力伪造守卫的扫描面（该守卫只看 modules/），CI 双 OS 红。正解是让收窄回到 Actor 的 owner 侧——`auth/session.ts` 新出 `actorOfDirectAuthority`，`resolveActor` 里同形状的第二份 cast 一并收成一份。账本 +1 是这个具名符号与它那条边，换掉的是一处结构性伪造点。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -489,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25916,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-355 T7 修红：`services/intent/dispatcher.ts` 里一句既有的 `as unknown as Actor` 随迁位进了能力伪造守卫的扫描面（该守卫只看 modules/），CI 双 OS 红。正解是让收窄回到 Actor 的 owner 侧——`auth/session.ts` 新出 `actorOfDirectAuthority`，`resolveActor` 里同形状的第二份 cast 一并收成一份。账本 +1 是这个具名符号与它那条边，换掉的是一处结构性伪造点。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -509,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9ef861059fc0b92da91429a6805df13c70b114da",
-    "contentDigest": "sha256:0303e76cc658710a098614d4718cc79175d42c1979e779596bccfb91820f9eec",
+    "currentSnapshotSha": "7caf1e91f1e2f234452f0f344f282eb2263c9f5c",
+    "contentDigest": "sha256:faff3bcab7ad227a383fc09ac21ce9b31a91f77563d79855c05483aec6b5845a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
