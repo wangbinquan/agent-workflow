@@ -123,6 +123,20 @@ describe('RFC-357 delta 6 — the SQLite functions the query calls have PostgreS
     expect(readFileSync(RUNTIME, 'utf8')).toContain('search_path=agent_workflow,public')
   })
 
+  // 真库 lane 第一次跑就抓到的那条：shim 转发 `jsonb_typeof`，词汇表与 SQLite 的
+  // `json_type` 几乎不重叠（'string' vs 'text'）。只写 = 'text' 会让 PostgreSQL 上的
+  // 工作组名恒为 NULL。这里两头都钉：shim 确实还是 jsonb_typeof、查询确实两种都收。
+  // 哪天 shim 被修成 SQLite 词汇（要连带一套 schema digest 的迁移故事），上面那条会先红，
+  // 提醒下一个人「查询里的双拼法从此只是保险，不再是必需」。
+  test('json_type speaks a different vocabulary on each side, and the query accepts both', () => {
+    expect(baseline).toContain('RETURN jsonb_typeof(item);')
+    const source = pageSource()
+    expect(source).not.toMatch(/json_type\([^)]*\)\s*=\s*'text'/u)
+    // 四处（filters.ts 的派生列 + query.ts 的三条页形状）都必须收两种拼法。
+    expect((source.match(/json_type\(/gu) ?? []).length).toBe(4)
+    expect((source.match(/IN \('text', 'string'\)/gu) ?? []).length).toBe(4)
+  })
+
   test('the query calls exactly those four and no other SQLite-only function', () => {
     const source = pageSource()
     const called = new Set(

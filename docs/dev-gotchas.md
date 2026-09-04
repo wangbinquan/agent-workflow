@@ -980,6 +980,34 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 `packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts` 与四条
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
+## PostgreSQL 的 SQLite 函数 shim：同名同参，**返回词汇表可以完全不同**（RFC-357 实测，2026-09-04）
+
+RFC-349 给 PostgreSQL 装了一组同名 shim（`json_valid` / `json_type` / `json_extract` /
+`instr` / `hex` / `max` / `unixepoch`，见 `platform/persistence/postgresqlSchema.ts` 的
+bootstrap 段），运行时的 `search_path=agent_workflow,public` 让裸函数名就能解析。于是很容易
+默认「同名 = 同语义」——**不成立**。
+
+`json_type` 的 shim 直接转发 `jsonb_typeof`，而两套返回词汇表几乎不重叠：
+
+| | SQLite `json_type` | `jsonb_typeof` |
+| --- | --- | --- |
+| 字符串 | `text` | `string` |
+| 数字 | `integer` / `real` | `number` |
+| 布尔 | `true` / `false` | `boolean` |
+| 其余 | `null` / `array` / `object` | 同名 |
+
+于是 `WHERE json_type(x, '$.k') = 'text'` 这种判据在 PostgreSQL 上**恒假**，症状是那一列静默
+恒为 NULL——没有报错、没有告警，只是界面上少了一个名字。RFC-357 的真库 lane 第一次跑就抓到
+（任务列表的工作组名），而它在假 pool 那一层（只断言渲染出的 SQL 文本）是看不见的。
+
+**怎么防**：用到 shim 函数时不要只看名字，去 `postgresqlSchema.ts` 读一眼它转发的是什么；
+判据尽量写成对两种返回都成立的形式，并在守卫里把「shim 现在转发的是什么」一并钉住——
+哪天 shim 被改成 SQLite 词汇，先红在那条前提上（`rfc357-provider-portability.test.ts` 是范例）。
+
+**为什么不直接修 shim**：bootstrap 语句进 schema plan digest，`assertSnapshot` 一旦发现
+digest 变了就抛 `postgresql-schema-drift`（`postgresqlMigrator.ts:97`），**存量 PostgreSQL 部署
+会起不来**。改 shim 要连带一套「baseline 之后如何演进」的迁移故事，RFC-349 目前只有 baseline。
+
 ## 授权句柄按**对象引用**取：手捏 actor 编译得过、注册表不认（同一形状实撞两次，2026-09-04）
 
 `AuthorityClaimRegistry` 把「授权句柄 ↔ actor 投影」记在 **WeakMap** 里，只有 `mintDirectAuthority`

@@ -212,8 +212,9 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     expect(
       (catalogColumn.consumers as Array<Record<string, unknown>>).some(
         (consumer) =>
+          // RFC-357：目录源的适配收成两个 provider 共用的一份。
           consumer.ownerEntryId ===
-          'owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts#source',
+          'owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts#source',
       ),
     ).toBe(true)
 

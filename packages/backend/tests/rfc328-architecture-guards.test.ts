@@ -239,8 +239,10 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/postgresqlDynamicWorkflowPersistence.ts',
   'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/sqliteDynamicWorkflowPersistence.ts',
   'resource-catalog/infrastructure/legacy/workflow.validator: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
-  'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts',
+  // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
+  // 各自 import task-catalog 的 required-ports）。
   'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts',
+  'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts',
 ])
 
 function crossContextProviderBridges(units: readonly GuardUnit[]): string[] {

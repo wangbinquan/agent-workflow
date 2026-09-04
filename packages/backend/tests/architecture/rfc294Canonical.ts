@@ -1979,7 +1979,9 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       ],
       consumers: [
         anchor({
-          file: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts',
+          // RFC-357：目录源的适配收成两个 provider 共用的一份，`catalogVisibility: 'public'`
+          // 这条边界随之只在那里出现一次。
+          file: 'packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts',
           symbol: 'source',
           sourceToken: "catalogVisibility: 'public'",
         }),

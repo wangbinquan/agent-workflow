@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 877,
+    "consumers": 878,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1062,
@@ -44795,6 +44795,7 @@
         "import:38ea85cdba0df2947257",
         "import:3b49e4cc59dba49edde8",
         "import:535987969e269a162412",
+        "import:69d7c865c512e5d3105c",
         "import:74230d814389db0a96d2",
         "import:9ec8d7cb92d07a0009d3",
         "import:ad99295d8c9c6ae9a6b8"
@@ -44858,6 +44859,12 @@
           "edgeId": "import:535987969e269a162412",
           "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:69d7c865c512e5d3105c",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#$file"
         },
         {
           "context": "task-execution",
@@ -162244,8 +162251,8 @@
     {
       "consumers": [
         {
-          "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskCatalogSources.ts#source",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts#source",
           "sourceToken": "catalogVisibility: 'public'",
           "symbol": "source"
         },
@@ -162454,7 +162461,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d61448fa8efa2f8c39626eeb80147b541181bb3378056f2ef57de0344d65667f",
+  "sourceDigest": "sha256:c6da29438a7fadd0aacfaf311917cf547973381c855a62003cd2e053c98a67d1",
   "targetContexts": [
     "collaboration",
     "development-automation",

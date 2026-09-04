@@ -1011,7 +1011,12 @@ export async function composePostgresqlDaemonApplication(
     tasks: taskExecutionProvider.fusion,
   })
   const taskExecutionCatalogSources = composeTaskExecutionCatalogSources(
-    createPostgresqlTaskExecutionCatalogSourceFactory(taskExecutionProvider.routes.tasks),
+    // RFC-357：目录源不再经 `routes.tasks.listItems` 把行拉进内存，改用与 SQLite 共用的
+    // 下推页查询；owner 身份由这里注入（模块自己去 compose 别的 context 是被判红的形状）。
+    createPostgresqlTaskExecutionCatalogSourceFactory(
+      input.db,
+      composePostgresqlOwnerIdentityQueries(input.db),
+    ),
   )
   const workgroupTaskRoom = composePostgresqlWorkgroupTaskRoom({
     db: input.db,

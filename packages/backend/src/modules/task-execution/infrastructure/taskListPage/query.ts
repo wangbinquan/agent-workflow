@@ -57,7 +57,7 @@ export function baseCtes(authorizedIds: SQL, nonView: SQL, view: SQL): SQL {
         t.launch_origin,
         t.workgroup_id,
         CASE WHEN json_valid(t.workgroup_config_json) THEN
-          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') = 'text'
+          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') IN ('text', 'string')
             THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
             ELSE NULL
           END
@@ -351,7 +351,7 @@ export function fastDefaultRootQuery(
       t.launch_origin,
       t.workgroup_id,
       CASE WHEN json_valid(t.workgroup_config_json) THEN
-        CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') = 'text'
+        CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') IN ('text', 'string')
           THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
           ELSE NULL
         END
@@ -578,7 +578,7 @@ export function fastFilteredRootQuery(
         t.launch_origin,
         t.workgroup_id,
         CASE WHEN json_valid(t.workgroup_config_json) THEN
-          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') = 'text'
+          CASE WHEN json_type(t.workgroup_config_json, '$.workgroupName') IN ('text', 'string')
             THEN NULLIF(json_extract(t.workgroup_config_json, '$.workgroupName'), '')
             ELSE NULL
           END

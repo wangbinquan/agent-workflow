@@ -460,6 +460,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts -> @/modules/identity-access/public/operations',
       // RFC-357：列表页把 owner 身份收成一个**注入的端口**（`OwnerIdentityQueries`，

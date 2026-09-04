@@ -24,7 +24,6 @@ import {
   TASK_LIST_ORIGINS,
   TASK_LIST_VISIBLE_ORIGINS,
   taskListOriginMatches,
-  type TaskListItem,
   type TaskListOrigin,
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
@@ -33,8 +32,9 @@ import { resolve } from 'node:path'
 import type { Actor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
 import { tasks, users, workflows } from '@/db/schema'
-import { createPostgresqlTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/postgresqlTaskCatalogSources'
-import type { TaskRouteListFilters } from '@/modules/task-execution/public/taskRoutes'
+import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
+import { createSqliteTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { listTaskItems } from '@/services/task'
 import { ValidationError } from '@/util/errors'
 
@@ -187,23 +187,24 @@ function actor(): Actor {
   } as Actor
 }
 
-function catalogSource(seen: TaskRouteListFilters[]) {
-  return createPostgresqlTaskExecutionCatalogSourceFactory({
-    async listItems(filters) {
-      seen.push(filters)
-      return [] as readonly TaskListItem[]
-    },
-  }).create('workflow')
+/** 目录源（用户真正打到的那一层）建在同一个真库上，不再假造 provider。 */
+async function catalogSource(db: Db) {
+  return createTaskExecutionCatalogSourceFactory(
+    createSqliteTaskListPage(db, composeSqliteOwnerIdentityQueries(db)),
+  ).create('workflow')
 }
 
-describe('PostgreSQL catalog source hands origin to the query instead of filtering rows', () => {
+describe('the catalog source pushes origin into the query instead of filtering rows', () => {
   // 单独一条：`event` / `api` 曾经是「不在分支里」⇒ 直接 400。这条要能在
-  // 只有它们坏掉时独立变红，所以不与下面的透传断言混在一个 test 里。
+  // 只有它们坏掉时独立变红，所以不与下面的选中集断言混在一个 test 里。
   test('none of the offered choices is rejected', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seed(db)
+    const source = await catalogSource(db)
     const rejected: string[] = []
     for (const origin of TASK_LIST_VISIBLE_ORIGINS) {
       try {
-        await catalogSource([]).list({ actor: actor(), origin })
+        await source.list({ actor: actor(), origin })
       } catch {
         rejected.push(origin)
       }
@@ -211,26 +212,41 @@ describe('PostgreSQL catalog source hands origin to the query instead of filteri
     expect(rejected).toEqual([])
   })
 
-  test('every choice the UI offers reaches listItems as a query filter', async () => {
-    for (const origin of TASK_LIST_VISIBLE_ORIGINS) {
-      const seen: TaskRouteListFilters[] = []
-      await catalogSource(seen).list({ actor: actor(), origin })
-      expect(seen).toHaveLength(1)
-      // `all` 是「无谓词」，不该往下传一个筛选条件。
-      expect(seen[0]?.origin).toBe(origin === 'all' ? undefined : origin)
-    }
+  test('every choice the UI offers selects exactly its own rows', async () => {
+    const db = createInMemoryDb(MIGRATIONS)
+    await seed(db)
+    const source = await catalogSource(db)
+    const ids = async (origin: string): Promise<string[]> =>
+      (await source.list({ actor: actor(), origin })).items.map((item) => item.id).sort()
+
+    // 目录页只列根行，所以定时那一档在这里是 root-scheduled；继承来源的子执行由上面
+    // 直接打查询层的用例覆盖（它才看得到子行）。
+    expect(await ids('all')).toEqual(
+      ['root-api', 'root-event', 'root-manual', 'root-scheduled', 'root-webhook'].sort(),
+    )
+    expect(await ids('manual')).toEqual(['root-manual'])
+    expect(await ids('scheduled')).toEqual(['root-scheduled'])
+    expect(await ids('event')).toEqual(['root-event', 'root-webhook'].sort())
+    expect(await ids('api')).toEqual(['root-api'])
   })
 
   test('an absent origin is the same as all', async () => {
-    const seen: TaskRouteListFilters[] = []
-    await catalogSource(seen).list({ actor: actor() })
-    expect(seen[0]?.origin).toBeUndefined()
+    const db = createInMemoryDb(MIGRATIONS)
+    await seed(db)
+    const source = await catalogSource(db)
+    const absent = (await source.list({ actor: actor() })).items.map((item) => item.id).sort()
+    const all = (await source.list({ actor: actor(), origin: 'all' })).items
+      .map((item) => item.id)
+      .sort()
+    expect(absent).toEqual(all)
   })
 
   test('an unknown origin is still rejected rather than silently ignored', async () => {
-    const seen: TaskRouteListFilters[] = []
-    const attempt = catalogSource(seen).list({ actor: actor(), origin: 'from-mars' })
-    await expect(attempt).rejects.toThrow(ValidationError)
-    expect(seen).toHaveLength(0)
+    const db = createInMemoryDb(MIGRATIONS)
+    await seed(db)
+    const source = await catalogSource(db)
+    await expect(source.list({ actor: actor(), origin: 'from-mars' })).rejects.toThrow(
+      ValidationError,
+    )
   })
 })

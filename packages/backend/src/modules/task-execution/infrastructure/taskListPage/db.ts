@@ -16,6 +16,13 @@
 //      基线里都建了同名 shim（`db/postgresql-migrations/0000_rfc349_baseline.sql:8-29`），
 //      而运行时的 `search_path=agent_workflow,public`
 //      （`platform/persistence/postgresqlRuntime.ts:204`）让**裸函数名**就能解析到它们。
+//      ⚠️ 一条例外，由真库 lane 第一次跑就抓到：`json_type` 的**返回词汇表**不同——
+//      SQLite 给 JSON 字符串返回 `'text'`，而 shim 转发 `jsonb_typeof`、返回 `'string'`
+//      （SQLite 的整套词汇是 null/true/false/integer/real/text/array/object，
+//      `jsonb_typeof` 的是 object/array/string/number/boolean/null，两套几乎不重叠）。
+//      查询因此同时接受两种拼法。**没有去改 shim**：bootstrap 语句进 schema plan digest，
+//      改动会让存量 PostgreSQL 部署以 `postgresql-schema-drift` 起不来
+//      （`postgresqlMigrator.ts:97`）——那需要一套 RFC-349 还没建的迁移故事，不在本 RFC。
 //   3. `AS MATERIALIZED`、`WITH RECURSIVE`、行值比较 `(a, b) < (c, d)`、`NULLIF`、
 //      `||` 拼接在两个方言里同义。
 //   4. 用户搜索两侧都已 `lower(列) LIKE lower(模式)`——`docs/dev-gotchas.md` 记的

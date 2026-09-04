@@ -241,7 +241,7 @@ export function nonViewCondition(
         return sql`(SELECT w_q.name FROM workflows w_q WHERE w_q.id = ${col('workflow_id')})`
       }
       return sql`CASE WHEN json_valid(${col('workgroup_config_json')}) THEN
-          CASE WHEN json_type(${col('workgroup_config_json')}, '$.workgroupName') = 'text'
+          CASE WHEN json_type(${col('workgroup_config_json')}, '$.workgroupName') IN ('text', 'string')
             THEN NULLIF(json_extract(${col('workgroup_config_json')}, '$.workgroupName'), '')
             ELSE NULL
           END

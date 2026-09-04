@@ -112,6 +112,7 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
+import { loadTaskFailureCodes } from '@/services/task'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { deriveReviewRoundTiming } from '@/services/reviewRoundStart'
@@ -393,7 +394,7 @@ async function requireTaskRow(db: PostgresqlDatabaseClient, taskId: string): Pro
 }
 
 function summaryProjection(
-  row: TaskRow,
+  row: TaskListRow,
   openAlertCount: number,
   failureCode: string | null | undefined,
 ): TaskSummary {
@@ -441,10 +442,49 @@ function visibilityCondition(
   return or(eq(tasks.ownerUserId, visibility.actorUserId), inArray(tasks.id, memberIds))!
 }
 
+/**
+ * RFC-357 —— `/api/tasks` 列表只投这些列。
+ *
+ * 之前是裸 `db.select()`（全列），于是每次列表请求都把 `workflow_snapshot`（整份工作流
+ * 定义 JSON）、`inputs`、`error_message`、`trigger_context_json` 一起搬过来，而
+ * `summaryProjection` 一个都不读。RFC-311 audit L1-8 在 SQLite 侧修掉的是同一个形状，
+ * 注释里记着「每行上百 KB」（`services/task.ts` 的 `listTaskSummaryRows`）；PostgreSQL
+ * 适配器把它原样重新引入了一遍。列清单 = `summaryProjection` 消费的那些，加上函数体自己
+ * 要用的 `failedNodeId` / `ownerUserId`。
+ */
+const TASK_LIST_COLUMNS = {
+  id: tasks.id,
+  name: tasks.name,
+  workflowId: tasks.workflowId,
+  repoPath: tasks.repoPath,
+  repoUrl: tasks.repoUrl,
+  cachedRepoId: tasks.cachedRepoId,
+  status: tasks.status,
+  startedAt: tasks.startedAt,
+  finishedAt: tasks.finishedAt,
+  errorSummary: tasks.errorSummary,
+  repoCount: tasks.repoCount,
+  scheduledTaskId: tasks.scheduledTaskId,
+  workgroupId: tasks.workgroupId,
+  workgroupConfigJson: tasks.workgroupConfigJson,
+  spaceKind: tasks.spaceKind,
+  parentTaskId: tasks.parentTaskId,
+  invocationDepth: tasks.invocationDepth,
+  sourceAgentName: tasks.sourceAgentName,
+  sourceAgentId: tasks.sourceAgentId,
+  codeRoundId: tasks.codeRoundId,
+  failedNodeId: tasks.failedNodeId,
+  ownerUserId: tasks.ownerUserId,
+} as const
+
+type TaskListRow = {
+  [K in keyof typeof TASK_LIST_COLUMNS]: (typeof tasks.$inferSelect)[K]
+}
+
 async function listRows(
   db: PostgresqlDatabaseClient,
   filters: TaskRouteListFilters,
-): Promise<readonly TaskRow[]> {
+): Promise<readonly TaskListRow[]> {
   const predicates: SQL<unknown>[] = []
   if (filters.status !== undefined) predicates.push(eq(tasks.status, filters.status))
   if (filters.workflowId !== undefined) predicates.push(eq(tasks.workflowId, filters.workflowId))
@@ -464,7 +504,7 @@ async function listRows(
     predicates.push(eq(tasks.parentTaskId, filters.parentTaskId))
   if (filters.visibility !== undefined) predicates.push(visibilityCondition(db, filters.visibility))
   return await db
-    .select()
+    .select(TASK_LIST_COLUMNS)
     .from(tasks)
     .where(predicates.length === 0 ? undefined : and(...predicates))
     .orderBy(desc(tasks.startedAt))
@@ -484,12 +524,18 @@ async function listSummaries(
     .where(and(inArray(lifecycleAlerts.taskId, ids), isNull(lifecycleAlerts.resolvedAt)))
     .groupBy(lifecycleAlerts.taskId)
   const alerts = new Map(alertRows.map((row) => [row.taskId, Number(row.value)]))
-  return await Promise.all(
-    rows.map(async (row) => ({
-      summary: summaryProjection(row, alerts.get(row.id) ?? 0, await failedCode(db, row)),
-      ownerUserId: row.ownerUserId ?? null,
-    })),
-  )
+  // RFC-357：一次批量，不是每个失败任务一次。`failedCode` 逐行发 `SELECT … FROM node_runs`
+  // 的形状在 10k 上界的列表上就是 N+1；`loadTaskFailureCodes` 的函数体只有一次批量查询加
+  // 一个纯函数挑选，两个 provider 共用。
+  const failureCodes = await loadTaskFailureCodes(db, rows)
+  return rows.map((row) => ({
+    summary: summaryProjection(
+      row,
+      alerts.get(row.id) ?? 0,
+      failureCodes.has(row.id) ? (failureCodes.get(row.id) ?? null) : undefined,
+    ),
+    ownerUserId: row.ownerUserId ?? null,
+  }))
 }
 
 async function listItems(
