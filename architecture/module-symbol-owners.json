@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1958,
+    "backendFiles": 1960,
     "frontendFiles": 622,
-    "legacyFiles": 610,
+    "legacyFiles": 612,
     "moduleFiles": 1348,
-    "productionFiles": 2735,
+    "productionFiles": 2737,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26029
+    "symbolsIncludingFileRoots": 26044
   },
   "entries": [
     {
@@ -157027,6 +157027,114 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createPostgresqlDatabaseSession",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createSqliteDatabaseSession",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "createSqliteDatabaseSession",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseSession",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DatabaseSession",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DatabaseTransaction",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#frames",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "frames",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#reuseFrame",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "reuseFrame",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#TransactionFrame",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "TransactionFrame",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#withFrame",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "withFrame",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/persistence/generationStore.ts",
       "id": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "removeAfterWave": "W9",
@@ -167196,6 +167304,78 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "transactionScopeBrand",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/writerLease.ts",
+      "id": "owner:packages/backend/src/platform/persistence/writerLease.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/writerLease.ts",
+      "id": "owner:packages/backend/src/platform/persistence/writerLease.ts#acquireWriterLease",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "acquireWriterLease",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/writerLease.ts",
+      "id": "owner:packages/backend/src/platform/persistence/writerLease.ts#chains",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "chains",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/writerLease.ts",
+      "id": "owner:packages/backend/src/platform/persistence/writerLease.ts#hasPendingWriterLease",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "hasPendingWriterLease",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/writerLease.ts",
+      "id": "owner:packages/backend/src/platform/persistence/writerLease.ts#WRITER_LEASE_TIMEOUT_MS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "WRITER_LEASE_TIMEOUT_MS",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/writerLease.ts",
+      "id": "owner:packages/backend/src/platform/persistence/writerLease.ts#WriterLeaseTimeoutError",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "WriterLeaseTimeoutError",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -313051,5 +313231,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5fbf17343992b88bcad2e19f5391c78ca39ca7079cd3028dbe9e8f09f9a7acef"
+  "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57"
 }

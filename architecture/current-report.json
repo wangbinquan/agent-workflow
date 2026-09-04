@@ -3,20 +3,20 @@
   "manifestDenominators": {
     "ambientWiring": 494,
     "architectureExceptions": 5216,
-    "backgroundJobs": 367,
+    "backgroundJobs": 368,
     "crossContextImports": 6350,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26029,
-    "mutationEntrypoints": 1929,
+    "moduleSymbolOwners": 26044,
+    "mutationEntrypoints": 1931,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 986,
-    "transactionExternalEffects": 479
+    "transactionExternalEffects": 480
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1958,
+    "backendProductionFiles": 1960,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 367,
+    "backgroundEntries": 368,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -49,7 +49,7 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 23,
-    "directNativeTimers": 77,
+    "directNativeTimers": 78,
     "inboundBoundaryEdges": 285,
     "knownViolations": 8,
     "moduleContexts": [
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5fbf17343992b88bcad2e19f5391c78ca39ca7079cd3028dbe9e8f09f9a7acef"
+  "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57"
 }

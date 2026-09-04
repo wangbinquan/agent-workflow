@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1929,
+    "entries": 1931,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -34851,6 +34851,54 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
+      "symbol": "createPostgresqlDatabaseSession",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/databaseTransaction.ts#createSqliteDatabaseSession",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createSqliteDatabaseSession",
+      "symbol": "createSqliteDatabaseSession",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
@@ -45979,7 +46027,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5fbf17343992b88bcad2e19f5391c78ca39ca7079cd3028dbe9e8f09f9a7acef",
+  "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

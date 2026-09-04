@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 61,
-    "transactionCallbacks": 479
+    "transactionCallbacks": 480
   },
   "entries": [
     {
@@ -5486,6 +5486,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:111",
+      "line": 111,
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
+      "status": "clear",
+      "symbol": "createPostgresqlDatabaseSession",
+      "targetContext": "platform",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#transaction:284",
@@ -5888,7 +5900,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5fbf17343992b88bcad2e19f5391c78ca39ca7079cd3028dbe9e8f09f9a7acef",
+  "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
