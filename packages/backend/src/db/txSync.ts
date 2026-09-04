@@ -21,6 +21,7 @@
 // `tx.delete(…).run()`. Never `await`.
 
 import { observeDbTransaction, type DbClient } from './client'
+import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
 
 /** The drizzle bun-sqlite transaction handle (sync execution surface). */
 export type DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]
@@ -29,6 +30,11 @@ export type DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]
 export type NotPromise<T> = T extends PromiseLike<unknown> ? never : T
 
 export function dbTxSync<T>(db: DbClient, fn: (tx: DbTxSync) => NotPromise<T>): T {
+  // RFC-359 —— 过渡期共存守卫。统一事务原语（platform/persistence/databaseTransaction.ts）在
+  // 同一条连接上用显式 BEGIN IMMEDIATE 划边界，体内可以 await。若此刻**别的** async 上下文
+  // 持有那样一笔事务，这里的写入会静默落进它、并随它回滚（2026-09-04 实测：不报错，行消失）。
+  // 同上下文的嵌套是合法的（bun:sqlite 走 SAVEPOINT，随外层回滚，语义正确），所以只拦「别人的」。
+  if (foreignExplicitTransactionOpen(db)) throw new CrossContextTransactionError()
   const startedAt = performance.now()
   try {
     return db.transaction(

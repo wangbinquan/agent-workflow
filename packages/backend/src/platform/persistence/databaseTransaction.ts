@@ -33,6 +33,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { runInExplicitTransactionScope } from '@/db/transactionScope'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { acquireWriterLease } from './writerLease'
 
@@ -63,7 +64,9 @@ function reuseFrame(client: object): DatabaseTransaction | undefined {
 
 function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promise<T>): Promise<T> {
   const next: readonly TransactionFrame[] = [...(frames.getStore() ?? []), { client, tx }]
-  return frames.run(next, run)
+  // 同时登记进 `db/transactionScope`：`dbTxSync` 据此判断「有事务开着且我不在它的上下文里」，
+  // 把过渡期最危险的那个形态（旁观者写入被静默卷入并回滚）变成一条明确的错误。
+  return runInExplicitTransactionScope(client, async () => await frames.run(next, run))
 }
 
 /**

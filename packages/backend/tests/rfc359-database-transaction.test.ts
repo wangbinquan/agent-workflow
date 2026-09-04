@@ -12,6 +12,8 @@ import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
+import { CrossContextTransactionError } from '@/db/transactionScope'
+import { dbTxSync } from '@/db/txSync'
 import { createSqliteDatabaseSession } from '@/platform/persistence/databaseTransaction'
 import { acquireWriterLease, WriterLeaseTimeoutError } from '@/platform/persistence/writerLease'
 import { MIGRATIONS } from './migration-freeze'
@@ -150,5 +152,66 @@ describe('RFC-359 —— 写者租约的有界等待', () => {
     const second = await acquireWriterLease(client, 1_000)
     second()
     expect(true).toBe(true)
+  })
+})
+
+// 过渡期里 `dbTxSync` 与统一原语跑在同一条连接上。这一组锁的是它们的共存语义——
+// 尤其是那个**静默**的危险形态：旁观者的写入被卷进别人开着的事务并随它回滚。
+describe('RFC-359 —— 与 dbTxSync 的共存', () => {
+  test('同一上下文里嵌套 dbTxSync 合法，且随外层一起回滚', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    await expect(
+      session.transaction(async () => {
+        insert(db, 'G1')
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        dbTxSync(db, (tx) => {
+          tx.run(sql.raw("insert into rfc359_scratch(v) values ('G2')"))
+          return 1
+        })
+        throw new Error('outer boom')
+      }),
+    ).rejects.toThrow('outer boom')
+    expect(values(db), 'bun:sqlite 对已开事务走 SAVEPOINT——内层必须随外层一起回滚').toEqual([])
+  })
+
+  test('跨上下文的旁观者写入被拦下，而不是被静默卷入并回滚', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    let bystander: unknown = null
+    const outer = session.transaction(async () => {
+      insert(db, 'H1')
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      throw new Error('outer boom')
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    try {
+      // 另一个 async 上下文：它不知道有事务开着，也不持有租约。
+      dbTxSync(db, (tx) => {
+        tx.run(sql.raw("insert into rfc359_scratch(v) values ('H2')"))
+        return 1
+      })
+    } catch (error) {
+      bystander = error
+    }
+    await expect(outer).rejects.toThrow('outer boom')
+    expect(
+      bystander,
+      '旁观者必须拿到明确错误。放它过去的话它会落进别人的事务并随之回滚——不报错、行消失',
+    ).toBeInstanceOf(CrossContextTransactionError)
+    expect(values(db)).toEqual([])
+  })
+
+  test('事务结束后旁观者恢复正常', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    await session.transaction(async () => {
+      insert(db, 'I1')
+    })
+    dbTxSync(db, (tx) => {
+      tx.run(sql.raw("insert into rfc359_scratch(v) values ('I2')"))
+      return 1
+    })
+    expect(values(db)).toEqual(['I1', 'I2'])
   })
 })
