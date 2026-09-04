@@ -34,6 +34,7 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { intentResourcePlanOf } from '../domain/intentResourcePlan'
+import { decodeStoredChangeset } from '../domain/storedChangeset'
 import { createSessionApplyLock } from '../application/sessionApplyLock'
 import {
   intentApplyJournal,
@@ -395,7 +396,7 @@ async function applyInner(
 
     // ── preflight (design §9.2/§9.3) ──
     const manifest = sessionManifest(claim.session)
-    const changeset = JSON.parse(claim.draft.changesetJson)
+    const changeset = decodeStoredChangeset(claim.draft.changesetJson)
     const { occupiedNames, copyOnlyTargets } = await resourceSession.preflight(manifest, changeset)
     const bundle = resolveIntentBundle({
       manifest,

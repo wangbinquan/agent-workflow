@@ -1,5 +1,6 @@
-import { formatChangesetIssues, parseIntentChangeset } from '@agent-workflow/shared'
+import { formatChangesetIssues } from '@agent-workflow/shared'
 import { intentResourcePlanOf } from '../domain/intentResourcePlan'
+import { decodeStoredChangeset } from '../domain/storedChangeset'
 import { createSessionApplyLock } from '../application/sessionApplyLock'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -264,14 +265,7 @@ export function createPostgresqlIntentApplyOperations(
     const resourceSession = dependencies.resources.createSession({ actor, authority })
     try {
       const manifest = sessionManifest(claim.session)
-      const parsedChangeset = parseIntentChangeset(claim.draft.changesetJson)
-      if (!parsedChangeset.ok) {
-        throw new ValidationError(
-          'intent-changeset-invalid',
-          `stored draft changeset is invalid: ${parsedChangeset.errors.join('; ')}`,
-        )
-      }
-      const changeset = parsedChangeset.changeset
+      const changeset = decodeStoredChangeset(claim.draft.changesetJson)
       const { occupiedNames, copyOnlyTargets } = await resourceSession.preflight(
         manifest,
         changeset,
