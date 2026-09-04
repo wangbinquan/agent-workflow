@@ -24,11 +24,79 @@
   `postgresqlTaskExecutionEffectPersistence.ts:93-94` 的等值判定、`cli/start.ts:1160` 的
   `never resolves`、`postgresqlWorkflowRepository.ts:258` 的无条件解析均在）。
 
+## 0.1 端到端实证（2026-09-04，本机真 PostgreSQL 17.11）
+
+**结论先行：PostgreSQL 部署上任务跑不了，已端到端证实；但当前生效的根因不是 §2 的 P0-1。**
+
+### 实验设置
+
+隔离 app home + Docker `postgres:17.11`，走与生产同一条路：SQLite 起库 → 建管理员 →
+`/api/database/migrations` 一键迁移（preflight ok，184 表 / 149 行，到达 `accepting-writes`）→
+`/api/database` 确认 `provider=postgresql` → 在 PG 上起同一个 demo 工作流任务。
+
+### 对照组（SQLite）：正常
+
+```
+node_runs:  in_diff -> done
+            review  -> running        ← 节点进得了 running
+owners:     claimed  revision=18      ← owner 是 claimed，心跳在推进
+```
+
+### 实验组（PostgreSQL）：任务失败，零 node_run
+
+```
+tasks:      status=failed
+            error_summary  = 'scheduler error'
+            error_message  = 'deferred-question-dispatcher-not-bound'
+node_runs:  0 行
+daemon log: ERROR [scheduler] runTask: scope threw — failing task error=deferred-question-dispatcher-not-bound
+```
+
+### 新 P0（本轮 153 对配对审计**完全没覆盖到**）
+
+**P0-7：PostgreSQL 上「延迟提问自动派发」子系统未实现，占位符在运行时抛错，每个任务必死。**
+
+- `cli/postgresqlDaemonApplication.ts:719` 创建 `DeferredTaskQuestionDispatcherBinding`，`:722`
+  作为 `deferredQuestions` 依赖传给 `createPostgresqlTaskDagCollaborationOperations`；
+  **全文件对它的 `.bind(...)` 调用计数 = 0**，`current` 永远是 `null`（`:323-325` 抛）。
+- `taskDagScope.ts:141` 在 `runTask` **开头**的 DAG scope 装配里调
+  `taskDagCollaboration.autoDispatchDeferredQuestions(taskId)` ⇒ 立即抛 ⇒ scope threw ⇒ 任务 failed。
+- **不是漏了一行 bind，是没有可绑的东西**：`dispatchDeferredTaskQuestions` 只存在于
+  `legacySqliteTaskQuestionDispatch.ts:657`（SQLite 专属）；整个 `legacySqliteClarify/` 子系统
+  **3,401 行**是 SQLite 专属；PG 侧 4 个 clarify 适配器没有一个是派发引擎。
+  SQLite 那条路直连实现（`sqliteTaskDagCollaborationOperations.ts:16`），不经 holder。
+- **这个形状defeat 了 RFC-349 唯一的完整性强制手段**：`rfc349-provider-completeness.test.ts`
+  开篇写明「唯一在结构上逼这 216 个适配器保持完整的是**共享 port 接口**——加一个 METHOD 会让
+  两个 provider 的工厂都编译不过」。**晚绑定 holder 在编译期满足接口、在运行期为空**，
+  正好从这个强制手段底下穿过去。
+
+### 对 P0-1 的定性更正
+
+P0-1（PG 适配器不读环境执行上下文 ⇒ node 写入被 ownerless 围栏拒）**在适配器层是真的，
+且已取得真库证据**——在本次的真 PostgreSQL 上造 `owner='claimed'` + 一条 node_run，
+直接调 `PostgresqlNodeExecutionPersistence.patch`（不传 context）：
+
+```
+TaskExecutionError: ownerless task mutation refused durable owner for '01M1P4F8ESPNT37422C7JYV26Z'
+```
+
+**但它在今天的代码上够不着**：任务在铸出任何 node_run 之前就被 P0-7 杀死，`runner.ts` 从未被调用。
+原文「PostgreSQL 部署上节点执行的第一次写就会被自己的围栏拒掉」**应更正为**：该围栏在适配器层
+确实会拒，但当前被 P0-7 遮蔽，是否会在 P0-7 修复后立即接棒**未经验证**。
+
+### 本审计的方法缺口（已在补）
+
+本轮语料定为「153 对**配对**适配器」，于是 **163 个无 SQLite 配对的 PG 面文件（49,748 行，
+与已审面积相当）整体不在语料里**——`cli/postgresqlDaemonApplication.ts`（1,929 行，PG 组合根正身）
+就在其中，P0-7 正藏在那里。**配对 diff 找得到「两侧实现不同」，找不到「PG 这边压根没接线」。**
+补审已另起一轮，按「装配缺口」判据切 6 片（daemon 组合根 / 模块 composition / resource-catalog /
+employee-devauto / task-execution / platform）。
+
 ## 0. 总判定
 
 判断成立，且比「凑出来的」更重。三层证据：
 
-1. **数量**：153 对适配器中约 **55 条确证功能缺陷**（其中 6 条已由 `87d080300` / RFC-357 PR-3 修复，**约 49 条待处置**），含 **6 条 P0**（PG 上核心功能不工作，全部仍在）。
+1. **数量**：153 对适配器中约 **55 条确证功能缺陷**（其中 6 条已由 `87d080300` / RFC-357 PR-3 修复，**约 49 条待处置**），含 **7 条 P0**（PG 上核心功能不工作，全部仍在）——其中 **P0-7 由端到端实证发现**（§0.1），它落在本轮语料**之外**的 PG 组合根里，且它先于 P0-1 生效。
 2. **方向**：**不是单向劣化**。`E-1` 是 SQLite 侧更差；`B-2` / `D-1` 是 PG 侧违反了**写在本仓自己
    源码注释里的设计意图**。这是两条路径各自演进、互不知情，不是一条路径抄劣了另一条。
 3. **分布**：平台底座层（committed events / 逻辑导出 / 事件中心 / 运行时注册表，13 对）**零缺陷**；
