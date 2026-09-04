@@ -31,6 +31,7 @@ import type { DwState } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
   DAEMON_SHUTDOWN_ABORT_REASON,
+  isDaemonInterruptionAbortReason,
   REPO_PREP_NODE_ID,
   assignBranchNames,
   directChildren,
@@ -4621,6 +4622,9 @@ async function resumeKick(
     throw new NotFoundError('task-not-found', `task '${id}' not found`)
   }
   const allowedFrom = allowedFromForTaskEvent(opts.event)
+  // RFC-359 两阶段停机：上一任 driver 的运行时已停但库里 owner 行 / intent 还在转移时，先等它 settle——
+  // 否则准入放行后 continuation intent 会撞上仍是 claimed 的旧 intent（task-continuation-conflict）。
+  await taskDriverRegistry.awaitReleasedSettled(id)
   // RFC-097 (audit S-8): an in-process scheduler loop already owns this task —
   // a second driver would double-write the worktree.
   if (isTaskActive(id)) {
@@ -4928,6 +4932,7 @@ export async function syncTaskWorkflow(
   // report a misleading `workflow-sync-noop` instead of `task-not-syncable`.
   // resumeKick's CAS remains the real ownership gate (this is best-effort TOCTOU
   // fast-fail with the right error code).
+  await taskDriverRegistry.awaitReleasedSettled(id)
   if (isTaskActive(id)) {
     throw new ConflictError(
       'task-not-syncable',
@@ -5700,7 +5705,7 @@ async function runDeferredRepoPreparation(args: {
     // `RETRYABLE_PREP_STATUSES` 只认 failed/interrupted ⇒ 重试撞 `repo-prep-not-retryable`、
     // resume 撞 `task-repo-prep-incomplete`、auto-resume 按设计跳过，只剩删任务重开。
     // 这恰好把下面 AC-16 那扇刚修好的门（认 interrupted）从 canceled 这一侧又打开了。
-    const daemonShutdown = signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+    const daemonShutdown = isDaemonInterruptionAbortReason(signal.reason)
     // RFC-287 AC-14 —— **取消导致的失败不是失败**。
     //
     // 三轮门 AC 对账实测（该 AC 此前一条测试都没有）：在准备窗口内点取消，git 子
@@ -6010,6 +6015,9 @@ export async function retryNode(
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
   // RFC-097 (audit S-8): refuse while an in-process scheduler owns the task.
+  // RFC-359 两阶段停机：上一任 driver 的运行时已停但库里 owner 行 / intent 还在转移时，先等它 settle——
+  // 否则准入放行后 continuation intent 会撞上仍是 claimed 的旧 intent（task-continuation-conflict）。
+  await taskDriverRegistry.awaitReleasedSettled(taskId)
   if (isTaskActive(taskId)) {
     throw new ConflictError(
       'task-still-running',

@@ -71,6 +71,7 @@ export interface PostgresqlRepositoryPreparationRetryDependencies {
   readonly workspace: PostgresqlTaskWorkspaceMaterializer
   readonly coordinator: TaskDriveCoordinator
   readonly isTaskActive: (taskId: string) => boolean
+  readonly awaitTaskSettled: (taskId: string) => Promise<void>
   readonly log: TaskExecutionTopologyLogger
   readonly id?: () => string
   readonly now?: () => number
@@ -275,6 +276,7 @@ async function loadRetrySnapshot(
     .limit(1)
   const task = rows[0]
   if (task === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  await dependencies.awaitTaskSettled(taskId)
   if (dependencies.isTaskActive(taskId)) {
     throw new ConflictError(
       'task-still-running',

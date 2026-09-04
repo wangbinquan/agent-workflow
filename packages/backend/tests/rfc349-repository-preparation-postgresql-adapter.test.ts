@@ -328,6 +328,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
         },
       },
       isTaskActive: () => false,
+      awaitTaskSettled: async () => {},
       log: logger(),
       id() {
         const id = ids.shift()

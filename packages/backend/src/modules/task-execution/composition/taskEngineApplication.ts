@@ -1,6 +1,6 @@
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
-  DAEMON_SHUTDOWN_ABORT_REASON,
+  isDaemonInterruptionAbortReason,
   NODE_KIND_BEHAVIORS,
   WorkflowDefinitionSchema,
   DwStateSchema,
@@ -109,7 +109,7 @@ async function cancelRuntimeTask(
 ): Promise<void> {
   await withTaskReviewMutationLock(opts.taskId, async () => {
     const now = Date.now()
-    if (abortReason === DAEMON_SHUTDOWN_ABORT_REASON) {
+    if (isDaemonInterruptionAbortReason(abortReason)) {
       await opts.persistence.runtimeLifecycle.trySet({
         taskId: opts.taskId,
         to: 'interrupted',

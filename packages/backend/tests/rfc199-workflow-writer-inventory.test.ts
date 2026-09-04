@@ -23,7 +23,7 @@ const EXPECTED_WRITERS = {
     // RFC-310 PR-4: the digital-employee host anchor seed — the fourth host
     // seed, same builtin FK-anchor shape (lazy idempotent, synthesized
     // single-node snapshot, never user-visible).
-    'modules/task-execution/composition/agentActionExecution.ts': 1,
+    'modules/task-execution/composition/actionExecutionRunners.ts': 1,
     'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts': 2,
     'modules/knowledge-evolution/infrastructure/postgresqlFusionRepository.ts': 1,
     'modules/knowledge-evolution/infrastructure/sqliteFusionRepository.ts': 1,
@@ -184,7 +184,7 @@ describe('RFC-199 workflow writer inventory', () => {
         'createWorkflowPersistenceValues(',
       'modules/resource-catalog/infrastructure/sqliteDemoResourceCatalogSeed.ts':
         'createWorkflowPersistenceValues(',
-      'modules/task-execution/composition/agentActionExecution.ts':
+      'modules/task-execution/composition/actionExecutionRunners.ts':
         'serializeWorkflowDefinitionStorageV1(',
       'modules/task-execution/infrastructure/agentLaunchResourceOperations.ts':
         'serializeWorkflowDefinitionStorageV1(',

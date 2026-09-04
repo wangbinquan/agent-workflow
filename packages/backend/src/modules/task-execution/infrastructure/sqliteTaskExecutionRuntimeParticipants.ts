@@ -6,6 +6,7 @@ import type { RepositoryPublicationTransport } from '@/modules/source-control/pu
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
 import { cancelTask, isTaskActive, resumeTask } from '@/services/task'
+import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type { TaskExecutionRuntimeParticipants } from '../application/ports/taskExecutionRuntimeParticipants'
 import type {
@@ -115,6 +116,9 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
   return Object.freeze({
     drive,
     children,
-    activity: Object.freeze({ isActive: isTaskActive }),
+    activity: Object.freeze({
+      isActive: isTaskActive,
+      awaitReleasedSettled: awaitTaskDriverReleasedSettled,
+    }),
   })
 }

@@ -138,7 +138,7 @@ import {
   agentHasClarifyChannel,
   buildPriorOutputBlock,
   DAEMON_RESTART_ERROR_SUMMARY,
-  DAEMON_SHUTDOWN_ABORT_REASON,
+  isDaemonInterruptionAbortReason,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   describeWrapperKind,
   findClarifyNodeForAgent,
@@ -1937,7 +1937,7 @@ async function failCallRow(
 
 function isShutdownAbort(signal: AbortSignal | undefined): boolean {
   if (signal === undefined || !signal.aborted) return false
-  return signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+  return isDaemonInterruptionAbortReason(signal.reason)
 }
 
 /**
@@ -1956,7 +1956,7 @@ async function awaitShutdownAbort(
   timeoutMs: number,
 ): Promise<boolean> {
   if (signal === undefined) return false
-  if (signal.aborted) return signal.reason === DAEMON_SHUTDOWN_ABORT_REASON
+  if (signal.aborted) return isDaemonInterruptionAbortReason(signal.reason)
   return await new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort)
@@ -1964,7 +1964,7 @@ async function awaitShutdownAbort(
     }, timeoutMs)
     const onAbort = (): void => {
       clearTimeout(timer)
-      resolve(signal.reason === DAEMON_SHUTDOWN_ABORT_REASON)
+      resolve(isDaemonInterruptionAbortReason(signal.reason))
     }
     signal.addEventListener('abort', onAbort, { once: true })
   })
@@ -3112,7 +3112,7 @@ async function runOneScriptAttempt(
   })
 
   if (outcome.result.outcome === 'aborted') {
-    const daemonShutdown = opts.signal?.reason === DAEMON_SHUTDOWN_ABORT_REASON
+    const daemonShutdown = isDaemonInterruptionAbortReason(opts.signal?.reason)
     await setRunStatus(state, {
       nodeRunId: a.nodeRunId,
       to: daemonShutdown ? 'interrupted' : 'canceled',

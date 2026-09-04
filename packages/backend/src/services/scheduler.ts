@@ -9,7 +9,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {
   buildWorkflowScopeParentMap,
   DAEMON_RESTART_ERROR_SUMMARY,
-  DAEMON_SHUTDOWN_ABORT_REASON,
+  isDaemonInterruptionAbortReason,
 } from '@agent-workflow/shared'
 // RFC-253 — script node execution.
 import { loadConfig } from '@/config'
@@ -425,7 +425,7 @@ async function cancelTaskRowUnlocked(
   // leaves that path byte-identical. Shutdown-interrupted tasks land
   // interrupted + DAEMON_RESTART_ERROR_SUMMARY so both the Resume button and
   // boot auto-resume (autoResume.ts matches exactly that summary) cover them.
-  if (abortReason === DAEMON_SHUTDOWN_ABORT_REASON) {
+  if (isDaemonInterruptionAbortReason(abortReason)) {
     const now = Date.now()
     await lifecycle.trySet({
       taskId,

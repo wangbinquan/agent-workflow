@@ -246,6 +246,28 @@ export const DAEMON_RESTART_ERROR_SUMMARY = 'daemon-restart'
  *  untouched by this constant. */
 export const DAEMON_SHUTDOWN_ABORT_REASON = 'daemon-shutdown'
 
+/**
+ * RFC-359 W3-T14 —— provider 会话暂停（迁移冻结）/ 关闭时对 driver 的 abort 原因。与 daemon 关机
+ * 同属「daemon 层中断」：任务落 interrupted（可恢复），绝不冒充用户取消落 canceled。
+ * 2026-09-05 e2e 实撞：serve 序列合一后 bootstrap.stop() 先停会话句柄，driver 收到的是会话暂停
+ * 原因而不是关机原因，整任务被记成 canceled。
+ */
+export const PROVIDER_SESSION_PAUSE_ABORT_REASON = 'provider-session-paused'
+export const PROVIDER_SESSION_CLOSE_ABORT_REASON = 'task-execution-provider-session-closed'
+export const DAEMON_INTERRUPTION_ABORT_REASONS = [
+  DAEMON_SHUTDOWN_ABORT_REASON,
+  PROVIDER_SESSION_PAUSE_ABORT_REASON,
+  PROVIDER_SESSION_CLOSE_ABORT_REASON,
+] as const
+
+/** abort 原因是否属于 daemon 层中断（关机 / 会话暂停 / 会话关闭）。 */
+export function isDaemonInterruptionAbortReason(reason: unknown): boolean {
+  return (
+    typeof reason === 'string' &&
+    (DAEMON_INTERRUPTION_ABORT_REASONS as readonly string[]).includes(reason)
+  )
+}
+
 /** Task-level transition events (business transitions). Mirrors the node_run
  *  ADT. Targets are fixed per event (independent of the source within the
  *  event's allowed-from set), so `targetForTaskEvent` is total. */

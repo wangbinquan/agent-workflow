@@ -145,6 +145,8 @@ export function createPostgresqlTaskExecutionRuntimeParticipants(
     children,
     activity: Object.freeze({
       isActive: (taskId: string) => executionModule.runtimeRegistry.hasTask(taskId),
+      awaitReleasedSettled: (taskId: string) =>
+        executionModule.runtimeRegistry.awaitReleasedSettled(taskId),
     }),
     persistence,
     executionModule,

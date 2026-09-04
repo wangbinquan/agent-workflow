@@ -350,6 +350,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     workspace: createPostgresqlTaskWorkspaceMaterializer(workspaceDependencies),
     coordinator: dependencies.routeLaunch.coordinator,
     isTaskActive: participants.activity.isActive,
+    awaitTaskSettled: participants.activity.awaitReleasedSettled,
     log: dependencies.runtime.log,
   })
   const routeDependencies = dependencies.routes({

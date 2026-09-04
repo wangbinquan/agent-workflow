@@ -141,6 +141,11 @@ export function isTaskDriverActive(taskId: string): boolean {
   return taskExecutionModule.runtimeRegistry.hasTask(taskId)
 }
 
+/** 两阶段停机：driver 已停但库里 owner 行 / intent 还在转移时等它 settle（准入前调用）。 */
+export async function awaitTaskDriverReleasedSettled(taskId: string): Promise<void> {
+  await taskExecutionModule.runtimeRegistry.awaitReleasedSettled(taskId)
+}
+
 /** Wait for the current process-local owner to release without requesting a stop. */
 export async function awaitTaskDriverIdle(taskId: string): Promise<void> {
   const registry = taskExecutionModule.runtimeRegistry

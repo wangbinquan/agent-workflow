@@ -1,4 +1,8 @@
 import type { Config } from '@agent-workflow/shared'
+import {
+  PROVIDER_SESSION_CLOSE_ABORT_REASON,
+  PROVIDER_SESSION_PAUSE_ABORT_REASON,
+} from '@agent-workflow/shared'
 
 import { loadConfig } from '@/config'
 import { findStalledRunningChildren, runHeartbeatKillOnce } from '@/services/autoKill'
@@ -315,7 +319,7 @@ export function composeTaskExecutionProviderBackground(
       await queue(async () => {
         await Promise.all(loops.map((loop) => loop.pause()))
         if (startupRun !== null) await startupRun
-        await drainTickets(await runtime.module.pause('provider-session-paused'))
+        await drainTickets(await runtime.module.pause(PROVIDER_SESSION_PAUSE_ABORT_REASON))
       })
     },
     async resume() {
@@ -331,7 +335,7 @@ export function composeTaskExecutionProviderBackground(
         stopped = true
         await Promise.all(loops.map((loop) => loop.stop()))
         if (startupRun !== null) await startupRun
-        await drainTickets(await runtime.module.dispose('task-execution-provider-session-closed'))
+        await drainTickets(await runtime.module.dispose(PROVIDER_SESSION_CLOSE_ABORT_REASON))
       })
     },
     async close(reason: string) {

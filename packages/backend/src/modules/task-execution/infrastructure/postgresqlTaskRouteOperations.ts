@@ -1287,6 +1287,7 @@ async function workflowSyncPreview(
   if (taskExecutionKind(task) !== 'workflow') {
     return notSyncable(task, 'workflow-deleted')
   }
+  await dependencies.activity.awaitReleasedSettled(taskId)
   if (dependencies.activity.isActive(taskId)) return notSyncable(task, 'task-active')
   let loaded: Awaited<ReturnType<typeof loadVisibleWorkflow>>
   try {
@@ -1361,6 +1362,7 @@ async function syncWorkflow(
       'agent/workgroup host tasks run a synthesized snapshot and cannot be synced',
     )
   }
+  await dependencies.activity.awaitReleasedSettled(input.taskId)
   if (dependencies.activity.isActive(input.taskId)) {
     throw new ConflictError('task-not-syncable', `task '${input.taskId}' is actively running`)
   }
@@ -1509,6 +1511,7 @@ async function retryNode(
   input: Parameters<TaskRouteOperations['retry']>[0],
 ): Promise<Task> {
   const task = await requireTaskRow(dependencies.db, input.taskId)
+  await dependencies.activity.awaitReleasedSettled(input.taskId)
   if (dependencies.activity.isActive(input.taskId)) {
     throw new ConflictError(
       'task-still-running',
