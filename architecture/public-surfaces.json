@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 894,
+    "consumers": 895,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
@@ -147479,7 +147479,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:699df452edcac2266438"
+        "import:699df452edcac2266438",
+        "import:ab79ae9ba6a535a0623d"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -147523,7 +147524,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:699df452edcac2266438"
+            "import:699df452edcac2266438",
+            "import:ab79ae9ba6a535a0623d"
           ],
           "fieldPath": "$call.$return.$variant:0.token.taskId",
           "type": "string"
@@ -147551,6 +147553,12 @@
           "edgeId": "import:699df452edcac2266438",
           "file": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file"
+        },
+        {
+          "context": "collaboration",
+          "edgeId": "import:ab79ae9ba6a535a0623d",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlCollaborationRuntimeMechanics.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -163794,7 +163802,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:44fd76e2d3dc1bd1f84cae672cc8e27dd008dfdaa801dad4d40ed938ac3ba568",
+  "sourceDigest": "sha256:0af25359fe1ce9eebd179fe351e01821e0bb190e111d997572f8ec50b948a511",
   "targetContexts": [
     "collaboration",
     "development-automation",
