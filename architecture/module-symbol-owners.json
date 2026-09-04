@@ -6,7 +6,7 @@
     "moduleFiles": 1350,
     "productionFiles": 2743,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26089
+    "symbolsIncludingFileRoots": 26090
   },
   "entries": [
     {
@@ -20781,6 +20781,42 @@
       "currentContext": "collaboration",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts#createClarifyDecisionCommand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createClarifyDecisionCommand",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts#createClarifyDecisionCommandContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createClarifyDecisionCommandContext",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/collaborationClarifyDraftEventPublisher.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationClarifyDraftEventPublisher.ts#$file",
       "removeAfterWave": null,
@@ -22706,42 +22742,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "replayCommittedClarifyDecision",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts#createClarifyDecisionCommandContext",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createClarifyDecisionCommandContext",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts#createSqliteClarifyDecisionCommand",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteClarifyDecisionCommand",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -140125,6 +140125,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "loadLegacySqliteRollbackTarget",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#rollbackEffectPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "rollbackEffectPersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -313771,5 +313783,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43"
+  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018"
 }

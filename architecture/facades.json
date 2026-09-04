@@ -447,8 +447,7 @@
     {
       "boundaryEdgeIds": [
         "import:36f1b9cf8b4af5a660ea",
-        "import:384c37b2d0db0ec5b6b0",
-        "import:b15bb64fe691d00f2894"
+        "import:384c37b2d0db0ec5b6b0"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarify/autoDispatch.ts",
@@ -558,7 +557,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:fb628515a095465b097d"
+        "import:1d34fd9405d994fe5f91"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/clarifyDecisionComposition.ts",
@@ -6875,5 +6874,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43"
+  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018"
 }

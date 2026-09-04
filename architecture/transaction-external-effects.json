@@ -412,13 +412,13 @@
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#dbTxSync:195",
-      "line": 195,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#transaction:202",
+      "line": 202,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#sealRoundQuestions",
       "status": "co-located-risk",
       "symbol": "sealRoundQuestions",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
@@ -499,13 +499,13 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#dbTxSync:104",
-      "line": 104,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#transaction:107",
+      "line": 107,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts#setNodeClarifyDirective",
       "status": "clear",
       "symbol": "setNodeClarifyDirective",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [
@@ -539,8 +539,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:1027",
-      "line": 1027,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:1038",
+      "line": 1038,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
       "status": "clear",
       "symbol": "reassignTaskQuestion",
@@ -551,8 +551,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:1065",
-      "line": 1065,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:1076",
+      "line": 1076,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
       "status": "clear",
       "symbol": "reassignTaskQuestion",
@@ -563,25 +563,25 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:183",
-      "line": 183,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:983",
+      "line": 983,
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
+      "status": "clear",
+      "symbol": "reassignTaskQuestion",
+      "targetContext": "collaboration",
+      "transactionCallee": "dbTxSync"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#transaction:194",
+      "line": 194,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reconcileTaskQuestionsForRound",
       "status": "clear",
       "symbol": "reconcileTaskQuestionsForRound",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#dbTxSync:972",
-      "line": 972,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts#reassignTaskQuestion",
-      "status": "clear",
-      "symbol": "reassignTaskQuestion",
-      "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
@@ -5900,7 +5900,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43",
+  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -6905,9 +6905,9 @@
         "effectKind": "workspace-rollback",
         "file": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#42:workspace-rollback",
+        "id": "task-effect:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#61:workspace-rollback",
         "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 42,
+        "line": 61,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRollback.ts#createLegacySqliteRollbackEffectObserver",
         "recoveryClass": "local-probe-or-actor",

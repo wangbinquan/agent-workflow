@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 886,
+    "consumers": 884,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
@@ -75266,8 +75266,8 @@
       "consumerEdgeIds": [
         "import:1305b058d0978399e0e8",
         "import:3c82747f51b70331ec56",
+        "import:40ecd9ddf2322c0c523f",
         "import:519c37546cf4d1f5cb2f",
-        "import:714b273593bfd1cca446",
         "import:9ef226b911cd4c382b5c",
         "import:bbb79d2718cda8147626",
         "import:eba390715fb17d94b243"
@@ -75302,16 +75302,16 @@
           "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts#$file"
         },
         {
+          "context": "collaboration",
+          "edgeId": "import:40ecd9ddf2322c0c523f",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts#$file"
+        },
+        {
           "context": "legacy",
           "edgeId": "import:519c37546cf4d1f5cb2f",
           "file": "packages/backend/src/services/task.ts",
           "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:714b273593bfd1cca446",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts#$file"
         },
         {
           "context": "collaboration",
@@ -147555,7 +147555,6 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:57ade73167bf34ba73a1",
         "import:c32ee23b798ff59d41f3"
       ],
       "context": "task-execution",
@@ -147574,12 +147573,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:57ade73167bf34ba73a1",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#$file"
         },
         {
           "context": "collaboration",
@@ -147758,8 +147751,7 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:cec3edcdb48a1c4c4030",
-        "import:dd0ec9a3c8718a836549"
+        "import:cec3edcdb48a1c4c4030"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -147783,12 +147775,6 @@
           "edgeId": "import:cec3edcdb48a1c4c4030",
           "file": "packages/backend/src/services/humanGateComposition.ts",
           "ownerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:dd0ec9a3c8718a836549",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarifyDecision.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -163166,7 +163152,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43",
+  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
   "targetContexts": [
     "collaboration",
     "development-automation",

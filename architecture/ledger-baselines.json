@@ -188,8 +188,11 @@
       "id": "tasks-status-blind-writes",
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "STATUS_WRITE_ALLOWLIST",
-      "baseline": 10,
-      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "baseline": 11,
+      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T1：human-gate 任务跃迁合成一份中立实现 `humanGateTaskTransition.ts`（CAS on lifecycleEventRevision），两 provider 的旧写点在 W4 pair-deletion 前仍在，10 → 11；W4 删孪生后回落。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T1/T2b：human-gate 任务跃迁合成一份中立实现 humanGateTaskTransition.ts，两 provider 旧写点在 W4 pair-deletion 前仍在，10 → 11。下一笔不涨即删。"
+      }
     },
     {
       "id": "shared-schema-any-allowlist",
@@ -426,7 +429,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6376,
+      "baseline": 6382,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
         "why": "RFC-359 W1-T2b：clarifyDecisionCommand.ts 一份实现替代 SQLite 专属组合，seal / clarifyDecision 参与者改用 task-execution 的中立原子（两条 cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 clarifyDecisions。下一笔不涨即删。"
@@ -450,7 +453,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5243,
+      "baseline": 5251,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
         "why": "RFC-359 W1-T2b：clarifyDecisionCommand.ts 一份实现替代 SQLite 专属组合，seal / clarifyDecision 参与者改用 task-execution 的中立原子（两条 cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 clarifyDecisions。下一笔不涨即删。"
@@ -488,12 +491,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26089,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26090,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T2b：新增 clarifyDecisionCommand.ts 的 owner 条目（替代已删的 legacySqliteClarifyDecisionComposition.ts），净 +1。下一笔不涨即删。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43",
+    "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -506,8 +512,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ed99c55855085a58b51af0ba6f495016fdb99c12",
-    "contentDigest": "sha256:dda9bae46642f8f80f738f39c3a6e1d3ee9fca1b4b68215c9f61c308b6a3624c",
+    "currentSnapshotSha": "d8070b5c5b5056039afa38bafe49cce3033c115d",
+    "contentDigest": "sha256:cf6ee7b34fb963f19678f444979803114bb285587db0bf02a0703b2cf25618c7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

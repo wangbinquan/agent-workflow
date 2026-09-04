@@ -2561,7 +2561,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:fb628515a095465b097d"
+        "import:1d34fd9405d994fe5f91"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecisionComposition.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -8743,15 +8743,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43",
+    "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "ed99c55855085a58b51af0ba6f495016fdb99c12",
-    "contentDigest": "sha256:5f7d63ecf96bb0fdfb73846d3d207ab71fd0ddb54427d2f9114ac30fb6bb534c",
+    "currentSnapshotSha": "d8070b5c5b5056039afa38bafe49cce3033c115d",
+    "contentDigest": "sha256:aaab2a86d228df2f0c0a41d5d10dc003895a1354780394e203baaed7c2a23ab2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

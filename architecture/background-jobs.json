@@ -3,9 +3,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2611",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2608",
       "kind": "register-call",
-      "line": 2611,
+      "line": 2608,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2617",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2614",
       "kind": "register-call",
-      "line": 2617,
+      "line": 2614,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3434",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3431",
       "kind": "register-call",
-      "line": 3434,
+      "line": 3431,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2918",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:2915",
       "kind": "register-call",
-      "line": 2918,
+      "line": 2915,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillLangProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2958",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:2955",
       "kind": "global-setter",
-      "line": 2958,
+      "line": 2955,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
       "removeAfterWave": "W6/W9",
       "symbol": "startCommand",
@@ -9012,7 +9012,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$setTimeout:651",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$setTimeout:654",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9026,7 +9026,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:651",
+      "symbol": "$setTimeout:654",
       "targetContext": "task-execution"
     },
     {
@@ -9035,7 +9035,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$setTimeout:295",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$setTimeout:298",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9049,7 +9049,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:295",
+      "symbol": "$setTimeout:298",
       "targetContext": "task-execution"
     },
     {
@@ -13564,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43"
+  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018"
 }
