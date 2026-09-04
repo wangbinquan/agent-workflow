@@ -165,6 +165,23 @@ export function taskMatchesListView(
 }
 
 /**
+ * RFC-301 的 `origin=` 选择 → 它选中的 `tasks.launch_origin` 存储值；`null` 是
+ * 「无谓词」（`all`）。与上面的 `taskMatchesListView` 同类：**列表筛选的判据只写
+ * 一份**，两个 provider 的查询和前端都按它取值。
+ *
+ * 唯一的非恒等项是 `event`：RFC-310 把 Webhook 折进事件中心，存量行保留不可变的
+ * `webhook` 事实，但归属界面上唯一的「事件」筛选（`TASK_LIST_VISIBLE_ORIGINS` 因此
+ * 不含 `webhook`）。这条规则原本只活在 SQLite 列表管线的裸 SQL 里
+ * （`launch_origin IN ('event','webhook')`），而 PostgreSQL 目录源另写了一份按
+ * `scheduled_task_id` 猜的实现——`event` / `api` 根本不在它的分支里，选中即 400。
+ */
+export function taskListOriginMatches(origin: TaskListOrigin): readonly TaskLaunchOrigin[] | null {
+  if (origin === 'all') return null
+  if (origin === 'event') return ['event', 'webhook']
+  return [origin]
+}
+
+/**
  * RFC-311：数字员工 mission 状态 → 任务状态的映射。**从前端搬到 shared**，因为
  * `/api/code/missions` 的服务端过滤要按同一张表把 view/statuses 翻译成 mission
  * 状态集合——两边各写一份必然漂移，而漂移的症状是「列表少了几条」这种没人会当成

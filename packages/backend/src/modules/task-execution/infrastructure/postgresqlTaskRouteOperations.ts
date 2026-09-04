@@ -24,6 +24,7 @@ import {
   rejectRetiredStartTaskKeys,
   selectCurrentReviewRound,
   taskExecutionKind,
+  taskListOriginMatches,
   webhookTaskSourceLinkOf,
   type AssignableTaskMemberRole,
   type NodeRun,
@@ -453,6 +454,10 @@ async function listRows(
   }
   if (filters.scheduledTaskId !== undefined) {
     predicates.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
+  }
+  if (filters.origin !== undefined) {
+    const origins = taskListOriginMatches(filters.origin)
+    if (origins !== null) predicates.push(inArray(tasks.launchOrigin, origins))
   }
   if (filters.topLevelOnly === true) predicates.push(isNull(tasks.parentTaskId))
   if (filters.parentTaskId !== undefined)

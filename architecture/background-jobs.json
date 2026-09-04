@@ -12974,7 +12974,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:394",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:396",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12988,7 +12988,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:394",
+      "symbol": "$setTimeout:396",
       "targetContext": "task-execution"
     },
     {
@@ -12997,7 +12997,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5684",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:5686",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -13011,7 +13011,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:5684",
+      "symbol": "$setTimeout:5686",
       "targetContext": "task-execution"
     },
     {
@@ -13564,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8e2de0c7f5d7ed7c9481250d1e5f0aece85928f37709d93f46719884fe3ed8f8"
+  "sourceDigest": "sha256:c6b083e4358a94b348e8f941de64b504012a78ca03e1df186d9299a775483b04"
 }

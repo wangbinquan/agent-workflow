@@ -1,10 +1,12 @@
 import {
+  TaskListOriginSchema,
   TaskListViewSchema,
   isWorkgroupTask,
   parseTaskStatusList,
   taskMatchesListView,
   type TaskCatalogListItem,
   type TaskListItem,
+  type TaskListOrigin,
   type TaskListView,
   type TaskOperationsFacets,
   type TaskStatus,
@@ -156,6 +158,21 @@ function explicitStatuses(input: TaskCatalogSourceListInput): ReadonlySet<TaskSt
   return new Set(parsed)
 }
 
+/** The `origin=` choice, validated against the closed RFC-301 set before it
+ *  reaches SQL. It used to be decided HERE, in memory, off `scheduledTaskId`:
+ *  that guess knows nothing about `event` / `api` (both were rejected outright
+ *  as "unknown origin"), and it reads a manual re-run of a scheduled definition
+ *  as `scheduled`. The stored `launch_origin` column is the fact; the provider
+ *  query filters on it. */
+function listOrigin(input: TaskCatalogSourceListInput): TaskListOrigin {
+  if (input.origin === undefined) return 'all'
+  const parsed = TaskListOriginSchema.safeParse(input.origin)
+  if (!parsed.success) {
+    throw new ValidationError('task-page-filter-invalid', `unknown origin: ${input.origin}`)
+  }
+  return parsed.data
+}
+
 function listView(input: TaskCatalogSourceListInput): TaskListView {
   if (input.view === undefined) return 'all'
   const parsed = TaskListViewSchema.safeParse(input.view)
@@ -198,12 +215,14 @@ function source(
       if (scope !== 'all' && scope !== 'mine' && scope !== 'shared') {
         throw new ValidationError('task-page-filter-invalid', `unknown scope: ${scope}`)
       }
+      const origin = listOrigin(input)
       const rows = await operations.listItems({
         catalogVisibility: 'public',
         ...(input.parentItemId === undefined
           ? { topLevelOnly: true }
           : { parentTaskId: input.parentItemId }),
         ...(scope === 'all' ? {} : { visibility: { actorUserId: input.actor.user.id, scope } }),
+        ...(origin === 'all' ? {} : { origin }),
         // The provider route query remains bounded even if an installation has
         // years of history; the catalog applies its own public page after all
         // source/view filters below.
@@ -222,12 +241,6 @@ function source(
       const nonViewMatches = rows
         .filter((item) => sourceOf(item) === sourceId)
         .filter((item) => statuses === null || statuses.has(item.status))
-        .filter((item) => {
-          if (input.origin === undefined || input.origin === 'all') return true
-          if (input.origin === 'scheduled') return item.scheduledTaskId != null
-          if (input.origin === 'manual') return item.scheduledTaskId == null
-          throw new ValidationError('task-page-filter-invalid', `unknown origin: ${input.origin}`)
-        })
         .filter((item) => {
           if (q === undefined || q === '') return true
           return [

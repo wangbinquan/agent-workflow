@@ -10,6 +10,7 @@ import type {
   TaskCatalogVisibility,
   TaskDiff,
   TaskListItem,
+  TaskListOrigin,
   TaskMembers,
   TaskNodeRuns,
   TaskStatus,
@@ -27,6 +28,13 @@ export interface TaskRouteListFilters {
   readonly repoPath?: string
   readonly catalogVisibility?: TaskCatalogVisibility
   readonly scheduledTaskId?: string
+  /**
+   * RFC-301 launch-origin filter. Applied in SQL against `tasks.launch_origin`
+   * through `taskListOriginMatches`, NOT re-derived from `scheduledTaskId` —
+   * that guess cannot see `event` / `api` at all and misreads a manual re-run
+   * of a scheduled definition as `scheduled`.
+   */
+  readonly origin?: TaskListOrigin
   readonly topLevelOnly?: boolean
   readonly parentTaskId?: string
   readonly limit?: number

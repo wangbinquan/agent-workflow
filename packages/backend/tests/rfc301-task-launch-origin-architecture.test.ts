@@ -166,7 +166,12 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     const operations = readFileSync(resolve(BACKEND_SRC, 'services', 'taskOperations.ts'), 'utf8')
     const sharedTaskSchema = readFileSync(SHARED_TASK_SCHEMA, 'utf8')
 
-    expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(7)
+    // 7 → 8（2026-09-04）：列表查询新增一处**读**谓词
+    // `inArray(tasks.launchOrigin, taskListOriginMatches(filters.origin))`。与下面
+    // `services/taskOperations.ts` 的两条同型——棘轮锁的是「写只有一个 owner」
+    // （紧随其后的 `.update(tasks) … launchOrigin` 否定断言）与「不进请求/响应
+    // schema 和 routes/」，过滤谓词发生在查询层本就是它认可的形态。
+    expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(8)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
     expect(schema).toContain("launchOrigin: text('launch_origin'")
     // RFC-311 G1:过滤谓词改成**可换别名**的形式(`col('launch_origin')`),因为

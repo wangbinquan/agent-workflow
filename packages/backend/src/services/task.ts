@@ -19,12 +19,14 @@ import type {
   TaskListItem,
   TaskCatalogVisibility,
   TaskLaunchOrigin,
+  TaskListOrigin,
   TaskNodeRuns,
   TaskRepo,
   TaskSummary,
   TriggerContext,
   WebhookTaskSourceLink,
 } from '@agent-workflow/shared'
+import { taskListOriginMatches } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
@@ -6516,6 +6518,12 @@ export interface ListTasksFilters {
   /** RFC-159: filter to tasks launched by a given `scheduled_tasks` id (run history). */
   scheduledTaskId?: string
   /**
+   * RFC-301 launch-origin filter, applied in SQL against `tasks.launch_origin`
+   * via `taskListOriginMatches` — the same mapping the catalog page pipeline
+   * uses, so both list surfaces select identical rows.
+   */
+  origin?: TaskListOrigin
+  /**
    * RFC-243 §8: parent/child list filters (PR-2 lands the query surface only —
    * the DEFAULT stays "everything flat" until PR-5 flips it together with the
    * nesting UI, so awaiting child executions never become invisible in a
@@ -6600,6 +6608,10 @@ async function listTaskSummaryRows(
     conditions.push(eq(tasks.catalogVisibility, filters.catalogVisibility))
   if (filters.scheduledTaskId !== undefined)
     conditions.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
+  if (filters.origin !== undefined) {
+    const origins = taskListOriginMatches(filters.origin)
+    if (origins !== null) conditions.push(inArray(tasks.launchOrigin, origins))
+  }
   if (filters.topLevelOnly === true) conditions.push(isNull(tasks.parentTaskId))
   if (filters.parentTaskId !== undefined)
     conditions.push(eq(tasks.parentTaskId, filters.parentTaskId))

@@ -6,7 +6,7 @@
     "moduleFiles": 1333,
     "productionFiles": 2720,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25968
+    "symbolsIncludingFileRoots": 25970
   },
   "entries": [
     {
@@ -141585,6 +141585,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "limitOf",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#listOrigin",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "listOrigin",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -307744,6 +307756,18 @@
       "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/taskOperations.ts",
+      "id": "owner:packages/shared/src/taskOperations.ts#taskListOriginMatches",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "taskListOriginMatches",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/taskOperations.ts",
       "id": "owner:packages/shared/src/taskOperations.ts#TaskListOriginSchema",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -312315,5 +312339,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8e2de0c7f5d7ed7c9481250d1e5f0aece85928f37709d93f46719884fe3ed8f8"
+  "sourceDigest": "sha256:c6b083e4358a94b348e8f941de64b504012a78ca03e1df186d9299a775483b04"
 }
