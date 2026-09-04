@@ -141,6 +141,6 @@ trigger_context_json（每行**上百 KB**）」。PostgreSQL 适配器把它原
   理由见 `plan.md §6.4`，那是刻意的偏离，不是漏做。
 - **AC-9**：wire 形状（items / cursor / facets）由 `rfc244-task-operations` /
   `rfc310-task-catalog*` / `rfc349-task-catalog-facets-ignore-view` 覆盖，断言一条未放宽。
-- **AC-10 待取证**：需要一次含四笔的 exact-SHA 全绿；`architecture/` 的 canonical 重采也还
-  欠一笔（工作树当时装着并发 session 的 RFC-358 在制品，重采出来的账本大半是他们的符号，
-  在干净 checkout 上必然对不上——见 `plan.md §6.5`）。
+- **AC-10 待取证**：`architecture/` 的 canonical 重采已在 `ca158aa7b` 补完（改用「在 HEAD 的
+  只读导出上重采」的姿势，副本上 446 个架构用例全绿，见 `plan.md §6.5`）；还差一次含全部提交的
+  exact-SHA CI 全绿作为终局证据。

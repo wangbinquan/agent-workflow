@@ -38,8 +38,10 @@
 > 而「页签数字乱跳」正是用户报的第一个问题）——改为 patch 只做确定正确的两件事、重取窗口 1s → 10s。
 > **我推红过三次**，逐条记在 `plan.md §6.3`（RFC-305 已审消费者账本、shellcheck SC2016、skip 账本、
 > 以及漏跑前端契约文件），全部已收。**AC 状态逐条如实标注在 `proposal.md §6`**：AC-3（十万级规模档）**未做**、
-> AC-4 / AC-8 部分、AC-10 待取证；**还欠一笔 `architecture/` canonical 重采**（落地时工作树装着并发 session 的
-> RFC-358 在制品，重采出来大半是他们的符号，见 `plan.md §6.5`）。
+> AC-4 / AC-8 部分、AC-10 待取证。canonical 重采已在 `ca158aa7b` 补完——顺带换掉了本仓一直以来
+> 的重采姿势：**在 HEAD 的只读导出上采**（`git archive` 出干净副本，不是 worktree），产物因此只描述已提交的代码，
+> 并清掉了我在 PR-1 / PR-3 里误带进去的 5 条别人的符号。本仓 2026-09-04 一天内四笔互相收红的
+> `chore(architecture)` 根因都是在共享工作树上重采，这条姿势已沉淀进 `docs/dev-gotchas.md`。
 
 > 🔧 **单笔修复（2026-09-04，非 RFC）：启动来源筛选按 `launch_origin` 下推**（`d7b2fab72`）。
 > 同一次对账里发现的功能缺陷：PostgreSQL 目录源按 `item.scheduledTaskId` 是否为空**猜**启动来源，于是

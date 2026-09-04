@@ -990,6 +990,44 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 `packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts` 与四条
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
+## 重采 `architecture/` 别在共享工作树上跑——在 HEAD 的只读导出上跑（RFC-357 实践，2026-09-04）
+
+`census.ts` 走 `readdirSync` 读**工作树**，这是刻意的（`git ls-files` 看不见未跟踪的新文件，
+会让新模块整个逃出账本）。但本仓多个 session 共用一棵树，于是这条设计有个直接后果：
+
+> **谁重采，谁就把别人当时的在制品一并记进账本。**
+
+那样的产物在干净 checkout 上必然对不上——CI 重算一遍得到的是另一份，N1b 判红，而红看起来还
+像是重采者造成的。2026-09-04 一天之内主干上出现了四笔互相收红的 `chore(architecture)`，
+根因都是这一条；我自己也误带过两次（一次 4 个符号、一次 1 条边）。
+
+**正确姿势**：把 HEAD 导出成一份只读副本，在副本上跑生成器与守卫。
+
+```
+git archive HEAD | tar -x -C <scratch>/headtree
+ln -sfn "$PWD/node_modules" <scratch>/headtree/node_modules          # workspace 解析要它
+for p in backend frontend shared system-mocks; do
+  ln -sfn "$PWD/packages/$p/node_modules" <scratch>/headtree/packages/$p/node_modules
+done
+cd <scratch>/headtree
+GIT_DIR=$PWD/../../.git bun run scripts/architecture-census.ts --write --snapshot-sha HEAD
+GIT_DIR=… bun test packages/backend/tests/architecture/ …             # 在副本上验证
+cp <scratch>/headtree/architecture/*.json  <repo>/architecture/       # 只把产物拷回来
+```
+
+三个要点：
+
+- **这不是 worktree**，`git archive` 出来的是一堆普通文件——没有 `.git`、不建分支、不动索引，
+  与本仓「不建分支 / 不用 worktree / 不用 stash」的硬规则不冲突。它做的事等价于「CI 拿到的
+  那份代码」，只是本地算一遍。
+- **`GIT_DIR` 指回真仓库**：`--snapshot-sha` 与 provenance 要跑 `git rev-parse`，副本里没有
+  `.git`，靠环境变量借用真仓库的即可。
+- **守卫也要在副本上跑**：它们同样读文件系统，在共享树上跑会看见别人的在制品，结论不可归因。
+  跑完 446 个架构用例全绿，才是「CI 会绿」的有效证据。
+
+**顺带**：这样重采还会**清掉上一次误带进去的别人符号**，所以它是自愈的——下一个人按这个姿势
+再采一次，前一次的污染就没了。
+
 ## PostgreSQL 的 SQLite 函数 shim：同名同参，**返回词汇表可以完全不同**（RFC-357 实测，2026-09-04）
 
 RFC-349 给 PostgreSQL 装了一组同名 shim（`json_valid` / `json_type` / `json_extract` /
