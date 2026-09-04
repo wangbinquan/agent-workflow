@@ -3,5 +3,5 @@
 // services they bridge from forming a value cycle back through that barrel.
 
 export { createSqliteReviewDecisionCommand } from '../infrastructure/legacySqliteReviewDecisionComposition'
-export { createSqliteQuestionDispatchCommand } from '../infrastructure/legacySqliteQuestionDispatchComposition'
+export { createQuestionDispatchCommand } from '../infrastructure/questionDispatchCommand'
 export { createSqliteClarifyDecisionCommand } from '../infrastructure/legacySqliteClarifyDecisionComposition'

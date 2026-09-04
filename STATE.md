@@ -11,7 +11,8 @@
 > 共用，PG daemon 的 `*-not-bound` holder 删除，`rfc359-t1-deferred-question-dispatch.test.ts` 在两个引擎上各绿。
 > 同批合一的原子（每个都是一份实现 + PG 副本退役）：committed-event append、node_runs 铸造、human-gate
 > 任务跃迁 / continuation 准入 / 决定接受、human-gate 操作日志（journal）与持久化、collaboration 事件形状。
-> **下一步**：T2（评审 / 澄清决定三条命令端口，同一批原子已备好）→ T7b/T7c/T7d/T7e → W3 统一启动序列。
+> **T2a（反问下发命令端口）已修**：`questionDispatchCommand.ts` 一份实现，PG daemon 注入 `questionDispatches`。
+> **下一步**：T2b 快速澄清 / T2c 评审决定（各自的 dbTxSync 事务体按 T1 同法迁到 DatabaseSession）→ T7b/T7c/T7d/T7e → W3 统一启动序列。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

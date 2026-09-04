@@ -61,7 +61,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/oidcProviders.ts -> @/modules/identity-access/public/operations :: SqliteOidcProviderRepository',
   'packages/backend/src/services/ownerIdentity.ts -> @/modules/identity-access/composition/providerOperations :: composeSqliteOwnerIdentityQueries',
   'packages/backend/src/services/pendingRestore.ts -> @/platform/persistence/sqlite/systemProviderRestore :: SqlitePostRestoreRecovery',
-  'packages/backend/src/services/questionDispatchComposition.ts -> @/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition :: export:*',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: export:getAclResourceAccessRow,export:getAclResourceAccessRowInTx,export:getAclResourceIdentityRowInTx,export:getAclResourceOwner,export:getAclResourceOwnerInTx,export:listAclResourceIdentityRowsByIds,export:listAclResourceIdentityRowsByIdsInTx,export:listAclResourceIdentityRowsByNames,export:listAclResourceIdentityRowsByNamesInTx,export:listOwnedAclResourceNames,export:loadAclResourceNamesByIds',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository :: export:AclColumnRef,export:grantsOfResourceWhere,export:listGrantedResourceIds,export:listGrantedResourceIdsInTx,export:listResourceGrantUserIdsInTx,export:listResourceGrants,export:listWritableGrantedResourceIds,export:loadGrantLevel,export:visibleRowsCondition',
   'packages/backend/src/services/review.ts -> @/modules/collaboration/infrastructure/legacySqliteReview :: export:*',
@@ -137,10 +136,7 @@ function databaseMechanismDependencies(source: SourceUnit): string[] {
   if (!isBusinessOrTransport(source)) return []
   return importEdges(source)
     .filter((edge) => isDatabaseMechanism(edge.specifier))
-    .map(
-      (edge) =>
-        `${source.path} -> ${edge.specifier} :: ${edge.syntax}:${edge.kind}`,
-    )
+    .map((edge) => `${source.path} -> ${edge.specifier} :: ${edge.syntax}:${edge.kind}`)
     .sort()
 }
 

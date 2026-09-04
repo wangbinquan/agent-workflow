@@ -253,7 +253,7 @@ import {
 } from '@/modules/collaboration/composition'
 import {
   createSqliteClarifyDecisionCommand,
-  createSqliteQuestionDispatchCommand,
+  createQuestionDispatchCommand,
   createSqliteReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
@@ -1844,7 +1844,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           appHome: Paths.root,
           taskExecutionReadModels: readModels,
           reviewDecisions: createSqliteReviewDecisionCommand({ db, appHome: Paths.root }),
-          questionDispatches: createSqliteQuestionDispatchCommand(db),
+          questionDispatches: createQuestionDispatchCommand(db),
           clarifyDecisions: createSqliteClarifyDecisionCommand(
             db,
             memoryOperations.distillCommands,

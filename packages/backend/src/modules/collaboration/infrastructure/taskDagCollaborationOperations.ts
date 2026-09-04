@@ -13,7 +13,6 @@ import type {
   TaskDagCollaborationOperations,
   TaskDagOpenClarifyEvidence,
 } from '../application/ports/taskDagCollaborationOperations'
-import { autoDispatchDeferredQuestions } from './legacySqliteClarify/autoDispatch'
 import { partitionTaskDagParkTargets, type TaskDagParkEntry } from './taskDagCollaborationReads'
 
 async function loadOpenClarifyEvidence(
@@ -136,7 +135,12 @@ export function createTaskDagCollaborationOperations(
   db: ProviderNeutralDatabase,
 ): TaskDagCollaborationOperations {
   return Object.freeze({
-    autoDispatchDeferredQuestions: (taskId: string) => autoDispatchDeferredQuestions(db, taskId),
+    // 动态 import：本文件从 collaboration 的 composition barrel 导出，而派发管线经
+    // services/humanGateComposition 绕回同一个 barrel——静态 import 会形成值环（TDZ）。
+    autoDispatchDeferredQuestions: async (taskId: string) => {
+      const { autoDispatchDeferredQuestions } = await import('./legacySqliteClarify/autoDispatch')
+      await autoDispatchDeferredQuestions(db, taskId)
+    },
     loadOpenClarifyEvidence: (taskId: string) => loadOpenClarifyEvidence(db, taskId),
     loadUndispatchedParkTargets: (taskId: string) => loadUndispatchedParkTargets(db, taskId),
   })

@@ -4,6 +4,7 @@
 // are captured while owner modules are built and never cross into HTTP, WS or
 // public route contracts.
 
+import { createQuestionDispatchCommand } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import {
   WORKFLOW_SCHEMA_VERSION,
   parseTriggerContextJson,
@@ -692,6 +693,8 @@ export async function composePostgresqlDaemonApplication(
     db: input.db,
     appHome: input.appHome,
     taskExecutionReadModels: taskExecutionPersistence.reads,
+    // RFC-359 W1-T2a：问题派发命令端口与 SQLite 是同一份实现；此前这里从未注入，路由必 500。
+    questionDispatches: createQuestionDispatchCommand(input.db),
   })
   collaborationContext = boundCollaborationContext
   const workgroupClarify = composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory()

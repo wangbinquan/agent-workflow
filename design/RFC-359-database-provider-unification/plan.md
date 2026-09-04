@@ -20,7 +20,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 | 任务 | 内容 | 证据 |
 | --- | --- | --- |
 | T1 ✅ | **P0-7** 延迟提问自动派发：PG 无实现。**已按做法①落地（2026-09-05）**：派发管线 `legacySqliteTaskQuestionDispatch.ts` 改跑 `DatabaseSession`（事务体开头 `lockAggregateRoot(tasks)`），事务体里的六类参与者各合成一份中立实现（committed-event append / node_runs 铸造 / human-gate 跃迁 / continuation 准入 / 决定接受 / gate 操作日志），`createTaskDagCollaborationOperations` 两 provider 共用，PG daemon 的 `DeferredTaskQuestionDispatcherBinding` 删除。`rfc359-t1-deferred-question-dispatch.test.ts` + 三个原子测试在两个引擎上各绿 | 真机实证，`node_runs` 0 行 → 两引擎各铸出 cross-clarify-answer rerun |
-| T2 | **F-H2-1** 评审决定 / 反问下发 / 快速澄清三条命令端口：PG 无实现，路由必 500 | `commandContext.ts:161-186` |
+| T2 | **F-H2-1** 评审决定 / 反问下发 / 快速澄清三条命令端口：PG 无实现，路由必 500。**T2a ✅（2026-09-05）反问下发**：`questionDispatchCommand.ts` 一份实现（派发管线已跑在 DatabaseSession 上），PG daemon 注入 `questionDispatches`，`rfc359-t2-question-dispatch-command.test.ts` 两引擎各绿。**T2b 快速澄清 / T2c 评审决定待做**：各自的事务体（`legacySqliteClarify/seal.ts`、`legacySqliteReview.ts#submitReviewDecisionUnlocked`）仍是 dbTxSync，须按 T1 同法迁到 DatabaseSession 并复用已合一的原子 | `commandContext.ts:161-186` |
 | T3 | **F-H2-2** development mission 的 `agentLauncher` / `scriptLauncher` 未注入 + 终态观察者零调用 | `agentActionOrchestrator.ts:274-279` |
 | T4 | **P0-3/P0-4** boot 恢复四步在 PG 不可达；`servePostgresqlDaemon` 永不返回 | `cli/start.ts:1160-1162,1570,2007-2037` |
 | T5 | **P0-5** clarify 全量封存在 PG 上 409 并回滚整笔答案 | `postgresqlNodeRunLifecyclePersistence.ts:154-160` |
@@ -67,6 +67,10 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   终态维护恢复五项。**多数 PG 适配器已写好且已接进 persistence，只是没人调。**
 - **T16** `cli/start.ts` 里 `provider === 'sqlite'` 的执行分支归零（**AC-2**）。
 - **T16b** schema 契约补**触发器**维度：今天投影只覆盖表/列/约束/索引，9 个 SQLite 触发器一个都没到 PG。
+  首个实锤（2026-09-05，T2a 真库用例）：`rfc328_tasks_lineage_after_insert` / `rfc328_node_runs_lineage_after_insert` 在 SQLite 上回填
+  `execution_lineage_id` / `lineage_slot_path_json` / `continuation_slot_key`，PG 上没有——靠它们的插入在 PG 上落成 NULL，
+  continuation 准入直接判 `lineage changed`。生产启动路径显式写 `executionLineageId`（`postgresqlTaskRouteLaunchOperations.ts:820`）才没炸；
+  任何不走启动路径的插入（测试夹具、修复脚本、node_runs 直插）都会踩到。
   逐条判定「投影成 PG 触发器」还是「上移为应用层判据」，`node_runs.lineage_slot_path_json` 是唯一
   当前没有应用层等价物的一条。
 
