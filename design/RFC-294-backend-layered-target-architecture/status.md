@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ff5e5dd91d01763a2bb8ab2e6abf4c9aa68c34f0687b50bd753a72fd72171967`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -17,7 +17,7 @@
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 494 |
+| production ambient wiring seam | 495 |
 | background work entries | 369 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
@@ -29,10 +29,10 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 494 |
-| `architectureExceptions` | 5312 |
+| `ambientWiring` | 495 |
+| `architectureExceptions` | 5316 |
 | `backgroundJobs` | 369 |
-| `crossContextImports` | 6444 |
+| `crossContextImports` | 6448 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
 | `moduleSymbolOwners` | 26142 |
@@ -201,7 +201,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3671 |
-| legacy-inbound | 1437 |
+| legacy-inbound | 1441 |
 | provider-mirror | 444 |
 | infrastructure-external | 414 |
 | offered-consumption | 188 |
@@ -216,7 +216,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3671 |
-| legacy-inbound | 1437 |
+| legacy-inbound | 1441 |
 | temporary-internal-debt | 97 |
 | off-dag-offered | 94 |
 | no-circular | 6 |
@@ -228,13 +228,13 @@
 | removeAfterWave | 数量 |
 | --- | --- |
 | W9 | 2847 |
-| W4-E1 | 874 |
-| W4-C | 409 |
+| W4-E1 | 875 |
+| W4-C | 410 |
 | W4-E0 | 238 |
 | W4 | 215 |
-| W4-B | 186 |
+| W4-B | 187 |
 | W5 | 148 |
-| W4-E8 | 113 |
+| W4-E8 | 114 |
 | W4-E9 | 61 |
 | W4-E2 | 44 |
 | W4-E4a | 44 |

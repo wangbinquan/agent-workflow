@@ -1,6 +1,17 @@
 {
   "ambientWiringEntries": [
     {
+      "callee": "registerTerminalWorkspacePrunePolicy",
+      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:449",
+      "kind": "register-call",
+      "line": 449,
+      "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlDaemonApplication",
+      "removeAfterWave": "W6/W9",
+      "symbol": "composePostgresqlDaemonApplication",
+      "targetContext": "task-execution"
+    },
+    {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
       "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2560",
@@ -5452,7 +5463,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 494,
+    "ambientWiring": 495,
     "disabled": 11,
     "entries": 369,
     "executionLocal": 53,
@@ -13610,5 +13621,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ff5e5dd91d01763a2bb8ab2e6abf4c9aa68c34f0687b50bd753a72fd72171967"
+  "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f"
 }

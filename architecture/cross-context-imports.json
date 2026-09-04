@@ -8059,6 +8059,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:178a8e86648549f87ac9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composePostgresqlDemoResourceCatalogSeedParticipant",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts",
+      "toSymbol": "composePostgresqlDemoResourceCatalogSeedParticipant",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/agents.ts#$file",
@@ -9995,6 +10012,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "agents",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1d08c653067d92a94052",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/code-capability/composition/demoSeed.ts#composePostgresqlCodeCapabilityDemoSeedParticipant",
+      "toPath": "packages/backend/src/modules/code-capability/composition/demoSeed.ts",
+      "toSymbol": "composePostgresqlCodeCapabilityDemoSeedParticipant",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -56953,6 +56987,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a1a49dee8c1f4b59cfc7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/operations.ts#$file",
+      "toPath": "packages/backend/src/modules/knowledge-evolution/public/operations.ts",
+      "toSymbol": "*",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#$file",
       "fromPath": "packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts",
       "fromSymbol": "$file",
@@ -81929,6 +81980,23 @@
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
+      "id": "exception:import:e8d873a1243fbd8d0796",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composePostgresqlWebhookTerminalWorkspacePrunePolicy",
+      "toPath": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
+      "toSymbol": "composePostgresqlWebhookTerminalWorkspacePrunePolicy",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
       "id": "exception:import:e8e1ddcbdb8080a935a7",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
@@ -90306,9 +90374,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5312,
+    "architectureExceptions": 5316,
     "implementationSccs": 0,
-    "observedEdges": 6444,
+    "observedEdges": 6448,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -99325,6 +99393,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:178a8e86648549f87ac9",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/demoResourceCatalogSeed",
+      "syntax": "static-import",
+      "targetSymbol": "composePostgresqlDemoResourceCatalogSeedParticipant",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composePostgresqlDemoResourceCatalogSeedParticipant"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/agents.ts",
@@ -101563,6 +101647,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:1d08c653067d92a94052",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/code-capability/composition/demoSeed",
+      "syntax": "static-import",
+      "targetSymbol": "composePostgresqlCodeCapabilityDemoSeedParticipant",
+      "toContext": "code-capability",
+      "toFile": "packages/backend/src/modules/code-capability/composition/demoSeed.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/code-capability/composition/demoSeed.ts#composePostgresqlCodeCapabilityDemoSeedParticipant"
     },
     {
       "edgeKind": "type",
@@ -155534,6 +155634,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:a1a49dee8c1f4b59cfc7",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/knowledge-evolution/public/operations",
+      "syntax": "dynamic-import",
+      "targetSymbol": "*",
+      "toContext": "knowledge-evolution",
+      "toFile": "packages/backend/src/modules/knowledge-evolution/public/operations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#$file",
@@ -184065,6 +184181,22 @@
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:e8d873a1243fbd8d0796",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/terminalWorkspaceCleanup",
+      "syntax": "static-import",
+      "targetSymbol": "composePostgresqlWebhookTerminalWorkspacePrunePolicy",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/terminalWorkspaceCleanup.ts#composePostgresqlWebhookTerminalWorkspacePrunePolicy"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "id": "import:e8e1ddcbdb8080a935a7",
       "owner": "task-execution",
       "removeAfterWave": "W4-E9",
@@ -193958,7 +194090,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ff5e5dd91d01763a2bb8ab2e6abf4c9aa68c34f0687b50bd753a72fd72171967",
+  "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
