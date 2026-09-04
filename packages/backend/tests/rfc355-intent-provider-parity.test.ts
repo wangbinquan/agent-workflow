@@ -33,10 +33,18 @@ function diagnosticTokens(source: string): Set<string> {
   return new Set([...source.matchAll(/'(intent-[a-z0-9-]+)'/g)].map((m) => m[1]!))
 }
 
-/** 用户可见的错误码 = 真正被 `throw new XxxError(...)` 抛出的那些。 */
+/**
+ * 用户可见的错误码 = 真正被 `throw new XxxError(...)` 抛出的那些。
+ *
+ * 三种引号都认（实现门 r2 实测：原来只认单引号，反引号模板串
+ * `` new ConflictError(`intent-x`, …) `` 即使写在清单内的文件里也完全抓不到，
+ * 于是「精确清单」对**新增**的隐形码毫无预言力）。
+ */
 function thrownCodes(source: string): Set<string> {
   return new Set(
-    [...source.matchAll(/new\s+\w*Error\(\s*\n?\s*'(intent-[a-z0-9-]+)'/g)].map((m) => m[1]!),
+    [...source.matchAll(/new\s+\w*Error\(\s*\n?\s*['"`](intent-[a-z0-9-]+)['"`]/g)].map(
+      (m) => m[1]!,
+    ),
   )
 }
 
@@ -59,42 +67,71 @@ describe('RFC-355 T1 —— 双 provider 的诊断词汇必须一致', () => {
     expect([...thrownCodes(shared)].length).toBeGreaterThanOrEqual(6)
   })
 
-  // RFC-355 T10：apply 面**用户可见错误码的精确清单**。
+  // RFC-355 T10 / 实现门 r2：apply 面**用户可见错误码的精确清单**。
   //
-  // 立项时 proposal §2 写的「共有 15 条」把 `log.warn` 标签和抛出的错误码混在一起数了；
-  // 实测在 current-source pin `c7c6fb81b` 上，两个 provider 真正 `throw` 出去的错误码是
-  // 下面这 11 条，改造后**集合逐字相同**——判据从两个 provider 搬进 domain / application
-  // 之后，抛点换了文件，但用户拿到的码一条没变。
+  // 立项时 proposal §2 写的「共有 15 条」把 `log.warn` 标签和抛出的错误码混在一起数了。
+  // 第一版清单又只手挑了 7 个文件——实现门第二路实测：在 `application/resolveChangeset.ts`
+  // 里新增一个全新错误码**照样全绿**，而那个文件明明在 apply 路径上（把存下来的 changeset
+  // 解成 ops），它自己就带着 9 个 `intent-*` 码。所以那一版的标题写的是「apply 面」，
+  // 实际锁的是「这 7 个文件面」。
   //
-  // 这条断言比「两侧相等」强：两侧一起改也会红。新增一条用户可见错误码是产品决定，
-  // 必须显式改这张表；删一条更是 breaking change。
+  // 现在的 `APPLY_SURFACE` 是真正的 apply 路径：两个 provider 编排 + SQL 持久化 +
+  // 共享判据 + changeset 解析。实测在 current-source pin `c7c6fb81b` 与收工时都是
+  // **同样的 36 条，零增删**——判据从两个 provider 搬进 domain / application 之后
+  // 抛点换了文件，用户拿到的码一条没变。
+  //
+  // 这条断言比「两侧集合相等」强：两侧一起改也会红。新增一条是产品决定，必须显式改这张表。
   const APPLY_SURFACE_ERROR_CODES = [
     'intent-apply-failed-replay',
+    'intent-apply-in-flight',
     'intent-apply-unsettled',
     'intent-baseline-stale',
+    'intent-budget-exhausted',
     'intent-changeset-invalid',
+    'intent-checkpoint-stale',
+    'intent-current-action-invalid',
+    'intent-current-action-stale',
     'intent-draft-hash-mismatch',
+    'intent-draft-invalid',
     'intent-draft-not-found',
     'intent-draft-superseded',
+    'intent-foreign-modify-forbidden',
+    'intent-iteration-stale',
+    'intent-mutation-conflict',
+    'intent-name-conflict',
     'intent-op-canonical-invalid',
+    'intent-ref-unknown',
+    'intent-reservation-invalid',
     // 不是产品面的码：编排自身的不变量（plan 与 op 必须同序），迁位前后都以裸 `Error` 抛出。
-    // 收在同一张表里是因为它和上面那些走同一个抓取口径——把它排除掉需要第二套正则，
-    // 而两套口径迟早对不上。
     'intent-resource-plan-order-mismatch',
+    'intent-retry-stale',
+    'intent-secret-required',
+    'intent-secret-value-forbidden',
     'intent-session-archived',
     'intent-session-not-found',
+    'intent-slot-unknown',
+    'intent-slot-value-invalid',
+    'intent-target-not-mounted',
     'intent-turn-in-flight',
+    'intent-turn-not-found',
+    'intent-working-set-applying',
+    'intent-working-set-not-failed',
+    'intent-working-set-not-found',
+    'intent-working-set-pending',
+    'intent-working-set-stale',
   ] as const
 
   test('apply 面的用户可见错误码与精确清单逐条相等（增删都红）', () => {
     const surface = [
       sqlite,
       postgresql,
+      read('modules', 'intent', 'infrastructure', 'intentSqlPersistence.ts'),
       read('modules', 'intent', 'domain', 'applyClaim.ts'),
       read('modules', 'intent', 'domain', 'storedChangeset.ts'),
       read('modules', 'intent', 'application', 'intentResourcePlan.ts'),
       read('modules', 'intent', 'application', 'applyCommitPlan.ts'),
       read('modules', 'intent', 'application', 'applyReplay.ts'),
+      read('modules', 'intent', 'application', 'resolveChangeset.ts'),
     ].join('\n')
     expect(
       [...thrownCodes(surface)].sort(),
