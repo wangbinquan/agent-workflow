@@ -3957,3 +3957,25 @@ webkit shard 3/4 上首跑红、retry 绿。**不是用例竞态，是产品的�
 签名时不要再去追产品侧：判据是错误文本里出现 `WebKit encountered an internal error`，且同 SHA
 的 chromium 腿（`e2e-full-nightly` run `33818672472`）全绿。若同一签名开始高频出现，再考虑升级
 Playwright / 固定 webkit 版本。
+
+## 被杀掉的 `git worktree add` 留下的 stale ref lock 没人清（2026-09-04 记，RFC-355 T8 期间撞到）
+
+CI run `33832413648` 的 ubuntu shard 2/4 上 `tests/rfc303-worktree-abort-cleanup.test.ts` 红一条：
+
+```
+fatal: cannot lock ref 'refs/heads/agent-workflow/terminal-race':
+Unable to create '…/repo/.git/refs/heads/agent-workflow/terminal-race.lock': File exists.
+```
+
+同一用例在上一轮 run（`33830810631`，同一份 worktree 代码）是绿的，本次改动（intent 归位、
+路由迁位、`auth/session.ts` 加一个收窄函数）与 worktree 无关——**是间歇，不是回归**。
+
+已做的处置**只在用例侧**：`addWorktreeToleratingStaleRefLock` 让用例复现步骤对残锁鲁棒
+（等锁消失，超时删锁重试一次），因为它撞上的锁与该用例要验的东西无关。
+
+**未决的是产品侧问题**：`createWorktree` 被 abort 掐掉后，那个半路死掉的 `git worktree add`
+子进程可能把 `refs/heads/<branch>.lock` 留在仓里，而平台的回收路径目前**没有任何一步**会清它。
+后果与 issue #13 同形——下一次在同一分支名上 `worktree add` 会一直 `cannot lock ref`。
+这正落在 **RFC-356（残留工作树回收 + 进程树归属）** 的刀口上：那份 RFC 的回收阶梯
+（`reclaimWorktreePath`：remove → 退避 rm → prune）需要把 **stale ref lock** 也算进要回收的
+残留物，否则「必然链」少堵一个口。判据：本条的错误签名 `cannot lock ref … .lock: File exists`。

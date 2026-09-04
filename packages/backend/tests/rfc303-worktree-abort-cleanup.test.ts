@@ -37,6 +37,38 @@ function worktreeRegistry(repoPath: string): string {
   })
 }
 
+/**
+ * 被 abort 掐掉的 `git worktree add` 可能把 `refs/heads/<branch>.lock` 留在仓里
+ * （2026-09-04 实测：CI 的 ubuntu shard 2/4 上本用例因此红过一次，同一轮之前是绿的）。
+ * 用例接下来要在**同一个分支名**上重新 `worktree add` 来复现「crash 后的残留形态」，
+ * 撞上那把残锁就会拿到 `cannot lock ref … File exists`，而那与本用例要验的东西无关。
+ *
+ * 这里只让**用例的复现步骤**对残锁鲁棒：等锁自然消失，超时就删掉它再重试一次。
+ * ⚠️ 产品侧的问题是另一回事——「被杀掉的 git 子进程留下的 stale lock 该由谁清」目前
+ * 平台没有任何路径处理，那属于 RFC-356（残留工作树回收）的刀口，不在本文件里补。
+ */
+function addWorktreeToleratingStaleRefLock(
+  repoPath: string,
+  branch: string,
+  branchRef: string,
+  worktreePath: string,
+): void {
+  const lockPath = join(repoPath, '.git', `${branchRef}.lock`)
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      execFileSync('git', ['worktree', 'add', '-q', '-b', branch, worktreePath, 'HEAD'], {
+        cwd: repoPath,
+      })
+      return
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!message.includes('cannot lock ref') || attempt >= 20) throw error
+      if (attempt === 19) rmSync(lockPath, { force: true })
+      else Bun.sleepSync(25)
+    }
+  }
+}
+
 function branchExists(repoPath: string, branchRef: string): boolean {
   try {
     execFileSync('git', ['rev-parse', '--verify', '--quiet', branchRef], {
@@ -83,10 +115,11 @@ describe('RFC-303 aborted worktree materialization cleanup', () => {
             execFileSync('git', ['update-ref', '-d', event.branchRef], { cwd: repoPath })
           }
           rmSync(event.worktreePath, { recursive: true, force: true })
-          execFileSync(
-            'git',
-            ['worktree', 'add', '-q', '-b', event.branch, event.worktreePath, 'HEAD'],
-            { cwd: repoPath },
+          addWorktreeToleratingStaleRefLock(
+            repoPath,
+            event.branch,
+            event.branchRef,
+            event.worktreePath,
           )
         },
       })
