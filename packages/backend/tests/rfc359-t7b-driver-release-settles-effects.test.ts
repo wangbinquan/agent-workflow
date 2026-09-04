@@ -179,6 +179,34 @@ async function seedOwnedProcessEffect(
   return { taskId, intentId, runId, effect, persistence, module, controller, token: claimed.token }
 }
 
+/** 把 ownership.read 卡在一个 gate 上，其余方法原样转发；顶层只换 ownership。 */
+function withGatedOwnerRead<P extends { readonly ownership: object }>(
+  persistence: P,
+  gate: Promise<void>,
+): P {
+  const ownership = persistence.ownership as Record<string, unknown>
+  const proto = Object.getPrototypeOf(ownership) as object | null
+  const names = new Set<string>([
+    ...Object.getOwnPropertyNames(ownership),
+    ...(proto !== null && proto !== Object.prototype ? Object.getOwnPropertyNames(proto) : []),
+  ])
+  const gated: Record<string, unknown> = {}
+  for (const name of names) {
+    if (name === 'constructor') continue
+    const value = ownership[name]
+    gated[name] =
+      typeof value === 'function'
+        ? (...args: unknown[]) => (value as (...a: unknown[]) => unknown).apply(ownership, args)
+        : value
+  }
+  const read = ownership['read'] as (taskId: string) => Promise<unknown>
+  gated['read'] = async (taskId: string) => {
+    await gate
+    return await read.call(ownership, taskId)
+  }
+  return { ...persistence, ownership: gated }
+}
+
 async function readEffect(db: ProviderNeutralDatabase, effectId: string) {
   const effect = (
     await db.select().from(taskExecutionEffects).where(eq(taskExecutionEffects.id, effectId))
@@ -336,10 +364,17 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       return result
     })
     let finalizeStarted = false
+    // 把库里 owner 行的转移卡在第一步（读 owner 行）上，好确定地观察「运行时已停、库里还没转移完」这段窗口。
+    let openGate!: () => void
+    const gate = new Promise<void>((resolve) => {
+      openGate = resolve
+    })
+    // 端口对象是冻结的、方法可能在原型上：逐个方法转发，只替换 read（Proxy 会撞冻结对象的不变量）。
+    const gatedPersistence = withGatedOwnerRead(seeded.persistence, gate)
     const releasing = releaseTaskDriverAndFinalize(
       {
         registry,
-        persistence: seeded.persistence,
+        persistence: gatedPersistence,
         stopHeartbeat: () => {},
         finalizeWorkspace: async () => {
           finalizeStarted = true
@@ -347,13 +382,22 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
       },
       { taskId: seeded.taskId, controller: seeded.controller },
     )
-    // 运行时一停，任务在 settle 之前仍算在本进程手里：successor 不能插队认领。
-    await Promise.resolve()
-    expect(registry.hasTask(seeded.taskId)).toBe(true)
+    // 运行时一停（release 已记下停机结果），driver 不再算「在跑」——准入不该再拒；
+    // 但 token 仍归本进程：successor 的 tryAttach 在 settle 之前被拒，等待者要等 settle。
+    while (registry.hasTask(seeded.taskId)) await new Promise((resolve) => setTimeout(resolve, 1))
+    expect(registry.tokenForTask(seeded.taskId)).toEqual(seeded.token)
+    let settled = false
+    void waiter.then(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(settled).toBe(false)
+    expect((await readOwner(db, seeded.taskId)).state).toBe('claimed')
+    openGate()
     expect(await waiter).toMatchObject({ kind: 'released' })
     // 被唤醒时库里已经不是 'claimed'（此前是 'claimed'：等待者一认领就撞 already has owner state）。
     expect(ownerStateWhenWoken).toEqual(['released'])
-    expect(registry.hasTask(seeded.taskId)).toBe(false)
+    expect(registry.tokenForTask(seeded.taskId)).toBeNull()
     await releasing
     expect(finalizeStarted).toBe(true)
     // successor：同一任务的新 intent 立刻能认领到新 epoch。

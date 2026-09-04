@@ -79,16 +79,24 @@ describe('RFC-303 task driver ownership', () => {
     expect(
       h.registry.release({ token: h.token, controller, result: { kind: 'released' } }),
     ).toMatchObject({ kind: 'released' })
-    expect(h.registry.hasTask('task-1')).toBe(true)
+    // driver 不再算在跑，但 token 仍归本进程；awaitReleasedSettled 要等到 settle。
+    expect(h.registry.hasTask('task-1')).toBe(false)
     expect(h.registry.tokenForTask('task-1')).toEqual(h.token)
+    let releasedSettled = false
+    void h.registry.awaitReleasedSettled('task-1').then(() => {
+      releasedSettled = true
+    })
     await Promise.resolve()
     expect(settled).toBe(false)
+    expect(releasedSettled).toBe(false)
     // 重复的 release（同一 controller 的第二个 finally）不再生效。
     expect(h.registry.release({ token: h.token, controller })).toBeNull()
     h.registry.settle(h.token)
     expect(await h.registry.awaitStopped(ticket)).toMatchObject({ kind: 'released' })
     expect(settled).toBe(true)
-    expect(h.registry.hasTask('task-1')).toBe(false)
+    await Promise.resolve()
+    expect(releasedSettled).toBe(true)
+    expect(h.registry.tokenForTask('task-1')).toBeNull()
     // settle 幂等。
     h.registry.settle(h.token)
   })

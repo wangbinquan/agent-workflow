@@ -77,6 +77,9 @@ export function createPostgresqlTaskDriverLifecyclePort(
       return { kind: 'not-attached' }
     }
 
+    // 两阶段停机（RFC-359 T7b 修订）：上一任 driver 已停但库里 owner 行还在转移时，等它 settle
+    // 再认领——否则这里的 claim 会撞上仍是 'claimed' 的 owner 行。
+    await options.module.runtimeRegistry.awaitReleasedSettled(input.taskId)
     const claimed = await options.module.claimPersisted({ intentId: input.intentId })
     let attached: ReturnType<typeof options.module.runtimeRegistry.tryAttach>
     try {

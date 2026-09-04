@@ -349,7 +349,6 @@ import { composeSqliteCollaborationRouteOperations } from '@/modules/collaborati
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/sqliteTaskCatalogSources'
-import { getAgentById } from '@/services/agent'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { createSqliteResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
@@ -1710,6 +1709,8 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
 function composeFallbackDevelopmentAutomation(
   deps: RuntimeComposedAppDeps & RepositoryBootstrap,
   appHome: string,
+  // RFC-345：Agent 查询由 bootstrap 从模块的目录查询面提供，本文件不再经 services/agent 门面。
+  agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
 ): DevelopmentAutomationModule {
   const automationRef: { current: DevelopmentAutomationModule | null } = { current: null }
   const terminalObserver = createSqliteDevelopmentMissionExecutionTerminalObserver({
@@ -1737,7 +1738,7 @@ function composeFallbackDevelopmentAutomation(
     ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       db: deps.db,
-      agents: { get: async (id) => getAgentById(deps.db, id) },
+      agents,
       startDeps: buildStartTaskDeps(
         deps.db,
         deps.schedulerDriver,
@@ -1750,7 +1751,7 @@ function composeFallbackDevelopmentAutomation(
     }),
     scriptLauncher: composeScriptActionExecution({
       db: deps.db,
-      agents: { get: async (id) => getAgentById(deps.db, id) },
+      agents,
       startDeps: buildStartTaskDeps(
         deps.db,
         deps.schedulerDriver,
@@ -1913,9 +1914,17 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     composeSqliteDevelopmentConfigResourceAccess(runtimeDeps.db),
   )
   const developmentActivityWorker = createDevelopmentActivityWorkerBinding()
+  let agentCatalogRef: AgentCatalogModule | null = null
   const developmentAutomation =
     runtimeDeps.developmentAutomation ??
-    composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome)
+    composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome, {
+      get: async (id) => {
+        if (agentCatalogRef === null) throw new Error('agent-catalog-not-composed')
+        const identity = await admitDaemonIdentity(identityAccess)
+        if (identity === null) throw new Error('agent-action-authority-not-admitted')
+        return agentCatalogRef.queries.get(identity.actor, { id })
+      },
+    })
   const developmentMissionOperations = composeDevelopmentMissionOperations({
     db: runtimeDeps.db,
     deliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
@@ -1973,6 +1982,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     importQueries: composeSqliteAgentImportQueries(effectiveDeps.db),
     resourceIntegrityQueries: agentResourceIntegrityQueries,
   })
+  agentCatalogRef = agentCatalog
   const mcpProbeStore = composeSqliteMcpProbeStore(effectiveDeps.db)
   const mcpCatalog = composeMcpCatalog({
     db: effectiveDeps.db,

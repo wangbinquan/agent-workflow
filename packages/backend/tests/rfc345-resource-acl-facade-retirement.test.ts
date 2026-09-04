@@ -335,13 +335,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/agent.ts',
-    'modules/task-execution/composition/agentActionExecution.ts',
-    ['getAgentById'],
-    'task action Agent snapshot',
-    REMOVE_OWNERS.taskExecutionResources,
-  ),
-  edge(
-    'services/agent.ts',
     'modules/task-execution/composition/digitalEmployeeExecution.ts',
     ['getAgentById'],
     'digital-employee Agent execution lookup',
@@ -406,7 +399,8 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/resourceAcl.ts',
-    'modules/task-execution/composition/agentActionExecution.ts',
+    // RFC-359 W1-T3：agent / script 动作执行器合一到 actionExecutionRunners.ts。
+    'modules/task-execution/composition/actionExecutionRunners.ts',
     ['initialBuiltinResourceAcl'],
     'built-in Agent execution ACL seed',
     REMOVE_OWNERS.taskExecution,

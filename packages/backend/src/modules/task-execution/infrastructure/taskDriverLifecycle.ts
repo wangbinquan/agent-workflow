@@ -53,6 +53,9 @@ export async function attachTaskDriver(input: {
       return { kind: 'not-attached' }
     }
 
+    // 两阶段停机（RFC-359 T7b 修订）：上一任 driver 已停但库里 owner 行还在转移时，等它 settle
+    // 再认领——否则这里的 claim 会撞上仍是 'claimed' 的 owner 行。
+    await taskExecutionModule.runtimeRegistry.awaitReleasedSettled(input.taskId)
     const claimed = taskExecutionModule.claim({ db: input.db, intentId: input.intentId })
     let attached: ReturnType<typeof taskExecutionModule.runtimeRegistry.tryAttach>
     try {

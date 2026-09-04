@@ -151,9 +151,24 @@ export class InMemoryTaskRuntimeRegistry {
     entry.resolveStopped(entry.stopResult)
   }
 
+  /**
+   * 仍归本进程的 token——包括已 `release()`、还没 `settle()` 的那段窗口（等待者据此排队，
+   * successor 据此被拒）。「有没有 driver 在跑」看 `hasTask`。
+   */
   tokenForTask(taskId: string): OwnershipToken | null {
     const key = this.taskIndex.get(taskId)
     return key === undefined ? null : (this.entries.get(key)?.token ?? null)
+  }
+
+  /**
+   * 两阶段停机的等待面：任务的 driver 已停但库里 owner 行还没转移完时，等它 settle。
+   * 没有条目或 driver 仍在跑都立即返回——后者由 `hasTask` 挡在准入处，这里不替它等。
+   */
+  async awaitReleasedSettled(taskId: string): Promise<void> {
+    const key = this.taskIndex.get(taskId)
+    const entry = key === undefined ? undefined : this.entries.get(key)
+    if (entry === undefined || entry.stopResult === null) return
+    await entry.stopped
   }
 
   tokenForOwner(owner: OwnershipTuple): OwnershipToken | null {
@@ -171,8 +186,17 @@ export class InMemoryTaskRuntimeRegistry {
     return this.entries.get(ownershipTokenKey(token))?.intentId ?? null
   }
 
+  /**
+   * 「有 driver 在跑」：运行时一 `release()` 就为 false——准入（resume / retry / cancel）看的是
+   * 这个；库里 owner 行转移那几笔事务期间任务不再算「在跑」，否则终态已落库的任务会在
+   * 这几毫秒里被拒成 task-not-resumable（RFC-287 AC-10 / AC-16，2026-09-05 CI 实撞）。
+   * successor 的认领由 `tryAttach` 按条目存在与否拒绝，等待由 `awaitReleasedSettled` 承担。
+   */
   hasTask(taskId: string): boolean {
-    return this.taskIndex.has(taskId)
+    const key = this.taskIndex.get(taskId)
+    if (key === undefined) return false
+    const entry = this.entries.get(key)
+    return entry !== undefined && entry.stopResult === null
   }
 
   activeTokens(): readonly OwnershipToken[] {
