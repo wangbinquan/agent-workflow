@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 878,
+    "consumers": 884,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1062,
+    "methods": 1064,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20624,
-    "symbols": 982
+    "recursiveFields": 20706,
+    "symbols": 986
   },
   "entries": [
     {
@@ -93717,10 +93717,10 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 6,
+        "maxMethods": 7,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 231,
-        "maxUnionVariants": 46
+        "maxTransitiveLeafFields": 258,
+        "maxUnionVariants": 53
       },
       "consumerEdgeIds": [
         "import:f2ddc345cf1eb7ee8a76"
@@ -94822,6 +94822,165 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.currentWorkflow.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.currentWorkflow.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.definition",
+          "type": "z.infer<typeof WorkflowDefinitionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.overlays.agents",
+          "type": "readonly WorkflowValidationAgentOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.overlays.callWorkflows",
+          "type": "readonly WorkflowValidationWorkflowOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.overlays.mcps",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.overlays.plugins",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$parameter:input.overlays.skills",
+          "type": "readonly { readonly id: string; readonly name: string }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$return.issues",
+          "type": "readonly WorkflowValidationIssue[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f2ddc345cf1eb7ee8a76"
+          ],
+          "fieldPath": "validationQueries.$method:validateCandidate.$return.ok",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "validationQueries.$method:validateCandidate.$return.validationContextHash",
+          "type": "z.infer<typeof WorkflowValidationContextHashSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "validationQueries.$method:validateDraft.$parameter:authority.authorityRevision",
           "type": "number"
         },
@@ -95093,6 +95252,11 @@
           "consumerEdgeIds": [],
           "name": "parse",
           "signatureDigest": "sha256:d2f6ac512f50ac378f0b12eee1e8c3bf973621295ae45ff92ea33a6b44da0104"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "validateCandidate",
+          "signatureDigest": "sha256:fe580fe4d95f9319bbbb9f216968fcf5eabe6379949717c8f24a41baf9174ed4"
         },
         {
           "consumerEdgeIds": [],
@@ -105115,6 +105279,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:285a062b2835ebb116b3",
         "import:84a18fb3ec04980df881"
       ],
       "context": "resource-catalog",
@@ -105211,6 +105376,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkflowOperationContext",
       "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:285a062b2835ebb116b3",
+          "file": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:84a18fb3ec04980df881",
@@ -109503,10 +109674,11 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 43,
-        "maxUnionVariants": 14
+        "maxTransitiveLeafFields": 70,
+        "maxUnionVariants": 21
       },
       "consumerEdgeIds": [
+        "import:41f8d4c9d1178ec8cd86",
         "import:b7dbeb997b14a046eea1"
       ],
       "context": "resource-catalog",
@@ -109514,6 +109686,155 @@
       "direction": "offered",
       "entrypoint": "queries",
       "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b7dbeb997b14a046eea1"
+          ],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b7dbeb997b14a046eea1"
+          ],
+          "fieldPath": "$method:validateCandidate.$parameter:input.currentWorkflow.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b7dbeb997b14a046eea1"
+          ],
+          "fieldPath": "$method:validateCandidate.$parameter:input.currentWorkflow.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
+            "import:b7dbeb997b14a046eea1"
+          ],
+          "fieldPath": "$method:validateCandidate.$parameter:input.definition",
+          "type": "z.infer<typeof WorkflowDefinitionSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:input.overlays.agents",
+          "type": "readonly WorkflowValidationAgentOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:input.overlays.callWorkflows",
+          "type": "readonly WorkflowValidationWorkflowOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:input.overlays.mcps",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:input.overlays.plugins",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$parameter:input.overlays.skills",
+          "type": "readonly { readonly id: string; readonly name: string }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
+            "import:b7dbeb997b14a046eea1"
+          ],
+          "fieldPath": "$method:validateCandidate.$return.issues",
+          "type": "readonly WorkflowValidationIssue[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86"
+          ],
+          "fieldPath": "$method:validateCandidate.$return.ok",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:validateCandidate.$return.validationContextHash",
+          "type": "z.infer<typeof WorkflowValidationContextHashSchema>"
+        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:validateDraft.$parameter:authority.authorityRevision",
@@ -109605,6 +109926,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateDraft.$parameter:input.definition",
@@ -109624,13 +109946,16 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateDraft.$return.issues",
           "type": "readonly WorkflowValidationIssue[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86"
+          ],
           "fieldPath": "$method:validateDraft.$return.ok",
           "type": "boolean"
         },
@@ -109730,13 +110055,16 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateStored.$return.issues",
           "type": "readonly WorkflowValidationIssue[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86"
+          ],
           "fieldPath": "$method:validateStored.$return.ok",
           "type": "boolean"
         },
@@ -109749,10 +110077,18 @@
       "file": "packages/backend/src/modules/resource-catalog/public/queries.ts",
       "id": "public:resource-catalog:queries:WorkflowValidationQueries",
       "members": [
+        "validateCandidate",
         "validateDraft",
         "validateStored"
       ],
       "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86"
+          ],
+          "name": "validateCandidate",
+          "signatureDigest": "sha256:fe580fe4d95f9319bbbb9f216968fcf5eabe6379949717c8f24a41baf9174ed4"
+        },
         {
           "consumerEdgeIds": [
             "import:b7dbeb997b14a046eea1"
@@ -109771,6 +110107,12 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#WorkflowValidationQueries",
       "productionConsumers": [
         {
+          "context": "intent",
+          "edgeId": "import:41f8d4c9d1178ec8cd86",
+          "file": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file"
+        },
+        {
           "context": "legacy",
           "edgeId": "import:b7dbeb997b14a046eea1",
           "file": "packages/backend/src/routes/workflows.ts",
@@ -109782,7 +110124,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:9266f3ebbf1f7ad2b7c3e416c82d9113a85361ab31ae0530f26e7d7006fa7b84",
+      "signatureDigest": "sha256:4c393b4432d5d4336bfd922eccbc1641739a781601e1b44b5675968d46dde31f",
       "status": "target-context-current-surface",
       "symbol": "WorkflowValidationQueries",
       "transaction": "none",
@@ -119034,6 +119376,86 @@
       "fields": [
         {
           "consumerEdgeIds": [],
+          "fieldPath": "currentWorkflow.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "currentWorkflow.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "definition",
+          "type": "z.infer<typeof WorkflowDefinitionSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "overlays.agents",
+          "type": "readonly WorkflowValidationAgentOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "overlays.callWorkflows",
+          "type": "readonly WorkflowValidationWorkflowOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "overlays.mcps",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "overlays.plugins",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "overlays.skills",
+          "type": "readonly { readonly id: string; readonly name: string }[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:ValidateWorkflowCandidateCatalogInput",
+      "members": [
+        "currentWorkflow",
+        "definition",
+        "overlays"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#ValidateWorkflowCandidateCatalogInput",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:operations:WorkflowCatalogModule",
+        "public:resource-catalog:queries:WorkflowValidationQueries"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b09548948cb868da8fc7e3b994394b259a030d90551153d06270908bf42cb718",
+      "status": "target-context-current-surface",
+      "symbol": "ValidateWorkflowCandidateCatalogInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "claimedCandidateHash",
           "type": "z.infer<typeof WorkflowCandidateHashSchema>"
         },
@@ -119337,6 +119759,295 @@
       "transaction": "none",
       "unresolvedTypeRefs": [
         "Extract"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:7c1af09177a8e5eaee5b"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "agentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.branchPorts",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.dependsOn",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.mcp",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.outputKinds",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.outputs",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.outputWrapperPortNames",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.plugins",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.role",
+          "type": "Agent['role']"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "fields.skills",
+          "type": "Agent['skills']"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7c1af09177a8e5eaee5b"
+          ],
+          "fieldPath": "isNew",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:WorkflowValidationAgentOverlay",
+      "members": [
+        "agentId",
+        "fields",
+        "isNew"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationAgentOverlay",
+      "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:7c1af09177a8e5eaee5b",
+          "file": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:c50dc22d26967af781ebcb5c3f0191121c01c5c175c34aa4548cb6eb55c118f0",
+      "status": "target-context-current-surface",
+      "symbol": "WorkflowValidationAgentOverlay",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3c7b1b4c5df5f7dab849",
+        "import:4d5bab35c96af5ce303f"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:4d5bab35c96af5ce303f"
+          ],
+          "fieldPath": "agents",
+          "type": "readonly WorkflowValidationAgentOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4d5bab35c96af5ce303f"
+          ],
+          "fieldPath": "callWorkflows",
+          "type": "readonly WorkflowValidationWorkflowOverlay[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4d5bab35c96af5ce303f"
+          ],
+          "fieldPath": "mcps",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4d5bab35c96af5ce303f"
+          ],
+          "fieldPath": "plugins",
+          "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4d5bab35c96af5ce303f"
+          ],
+          "fieldPath": "skills",
+          "type": "readonly { readonly id: string; readonly name: string }[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:WorkflowValidationCandidateOverlays",
+      "members": [
+        "agents",
+        "callWorkflows",
+        "mcps",
+        "plugins",
+        "skills"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationCandidateOverlays",
+      "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:3c7b1b4c5df5f7dab849",
+          "file": "packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:4d5bab35c96af5ce303f",
+          "file": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:operations:WorkflowCatalogModule",
+        "public:resource-catalog:queries:WorkflowValidationQueries",
+        "public:resource-catalog:types:ValidateWorkflowCandidateCatalogInput"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:fec7d0ac3ef4303d0a0d71d59ce479b8d565881a68b1b9085983273351da164e",
+      "status": "target-context-current-surface",
+      "symbol": "WorkflowValidationCandidateOverlays",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:df981f30e233249854d3"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:df981f30e233249854d3"
+          ],
+          "fieldPath": "definition",
+          "type": "z.infer<typeof WorkflowDefinitionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:df981f30e233249854d3"
+          ],
+          "fieldPath": "id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:df981f30e233249854d3"
+          ],
+          "fieldPath": "name",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:WorkflowValidationWorkflowOverlay",
+      "members": [
+        "definition",
+        "id",
+        "name"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationWorkflowOverlay",
+      "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:df981f30e233249854d3",
+          "file": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:f0066163085df7d99282d3163d75bb1027be33224c7905bf49b2081976471cd1",
+      "status": "target-context-current-surface",
+      "symbol": "WorkflowValidationWorkflowOverlay",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
       ],
       "version": 1
     },
@@ -162461,7 +163172,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c6da29438a7fadd0aacfaf311917cf547973381c855a62003cd2e053c98a67d1",
+  "sourceDigest": "sha256:61efa1e7421619daa83ff8d6a099f2f2b617056ecab6d76a672d7e27a1d5d332",
   "targetContexts": [
     "collaboration",
     "development-automation",

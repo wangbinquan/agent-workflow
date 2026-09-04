@@ -408,6 +408,13 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
     why: 'Fusion task input 是由 workflow / agent 声明生成的开放命名映射；键来自资源合同，不能由 Memory 模块预先穷尽。',
   },
   {
+    // RFC-358（`877c80e09`）新增的两处：`outputKinds`（review 的 markdown 判据按端口名读）
+    // 与 `outputWrapperPortNames`（wrapper-fanout 的 outlet 重命名）。理由取自那一笔自己的
+    // 类型注释，不是我的设计判断——由 RFC-357 的 canonical 重采顺带补账（守卫红在主干上）。
+    site: 'modules/resource-catalog/public/types.ts: Record<string, string>',
+    why: '工作流校验叠加里的 outputKinds / outputWrapperPortNames，键是工作流作者定义的端口名，按定义就是开放的；校验器只按端口名查表，不可能预先穷尽。',
+  },
+  {
     site: 'modules/source-control/public/types.ts: Record<string, string | undefined>',
     why: 'Git 子进程环境由运行器、凭据租约与调用方共同扩展，变量名属于开放的进程协议，无法伪装成仓内穷尽键联合。',
   },

@@ -5256,6 +5256,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0f3dc5df572617d0096a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "fromPath": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "fromSymbol": "$file",
@@ -13752,6 +13769,23 @@
       "toPath": "packages/backend/src/modules/development-automation/composition.ts",
       "toSymbol": "composeDevelopmentAutomation",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:274197bba9d40b2f95a0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E0",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "Actor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -23357,6 +23391,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskQuestions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:431830a131c1e295d7bd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#composeIntentWorkflowGraphValidation",
+      "toPath": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "toSymbol": "composeIntentWorkflowGraphValidation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -38180,6 +38231,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#VersionedExactCodec",
       "toPath": "packages/backend/src/platform/operations/contracts.ts",
       "toSymbol": "VersionedExactCodec",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6da5eb8f77da4764ef0c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E0",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "Actor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -53432,23 +53500,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/workspaceMaintenance.ts#$file",
-      "fromPath": "packages/backend/src/modules/source-control/application/workspaceMaintenance.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9ae16d29a69e725e5628",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "source-control",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "DomainError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/workgroupTasks.ts#$file",
@@ -65040,6 +65091,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bd83e9d96fa57d5f93cb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W4-E0",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "Actor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -77013,6 +77081,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:de64a2e9be26790f19be",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#composeIntentWorkflowGraphValidation",
+      "toPath": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "toSymbol": "composeIntentWorkflowGraphValidation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -83660,6 +83745,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f24ccccc398a620d6d5d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E4a",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#composeIntentWorkflowGraphValidation",
+      "toPath": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "toSymbol": "composeIntentWorkflowGraphValidation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/triggerExecution.ts",
       "fromSymbol": "$file",
@@ -88572,9 +88674,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5210,
+    "architectureExceptions": 5216,
     "implementationSccs": 0,
-    "observedEdges": 6334,
+    "observedEdges": 6346,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -94293,6 +94395,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "id": "import:0f3dc5df572617d0096a",
+      "owner": "intent",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "createLogger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
     },
     {
       "edgeKind": "value",
@@ -104087,6 +104205,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomation"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file",
+      "id": "import:274197bba9d40b2f95a0",
+      "owner": "intent",
+      "removeAfterWave": "W4-E0",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "Actor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionReadModels.ts",
@@ -104661,6 +104795,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries.ts#SqliteChildTaskBudgetQueries"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file",
+      "id": "import:285a062b2835ebb116b3",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowOperationContext",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#WorkflowOperationContext"
     },
     {
       "edgeKind": "value",
@@ -112952,6 +113102,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts#$file",
+      "id": "import:3c7b1b4c5df5f7dab849",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationCandidateOverlays",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationCandidateOverlays"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
@@ -114855,6 +115021,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlSkillArtifactCompensation"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file",
+      "id": "import:41f8d4c9d1178ec8cd86",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationQueries",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#WorkflowValidationQueries"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionReadModels.ts",
@@ -115189,6 +115371,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskQuestions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:431830a131c1e295d7bd",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/composition/graphValidation",
+      "syntax": "static-import",
+      "targetSymbol": "composeIntentWorkflowGraphValidation",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#composeIntentWorkflowGraphValidation"
     },
     {
       "edgeKind": "value",
@@ -119509,6 +119707,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/scheduledTasks.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduledTasks.ts#assertScheduledTargetUsable"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file",
+      "id": "import:4d5bab35c96af5ce303f",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationCandidateOverlays",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationCandidateOverlays"
     },
     {
       "edgeKind": "type",
@@ -132551,6 +132765,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/operations/contracts.ts#VersionedExactCodec"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentWorkflowGraphValidation.ts#$file",
+      "id": "import:6da5eb8f77da4764ef0c",
+      "owner": "intent",
+      "removeAfterWave": "W4-E0",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "Actor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
@@ -138245,6 +138475,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffects"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file",
+      "id": "import:7c1af09177a8e5eaee5b",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationAgentOverlay",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationAgentOverlay"
     },
     {
       "edgeKind": "type",
@@ -149989,22 +150235,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionIntents"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "source-control",
-      "fromFile": "packages/backend/src/modules/source-control/application/workspaceMaintenance.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/workspaceMaintenance.ts#$file",
-      "id": "import:9ae16d29a69e725e5628",
-      "owner": "source-control",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "DomainError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
     },
     {
       "edgeKind": "type",
@@ -163480,6 +163710,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "id": "import:bd83e9d96fa57d5f93cb",
+      "owner": "intent",
+      "removeAfterWave": "W4-E0",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "Actor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/composition/webhookDispatch.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDispatch.ts#$file",
@@ -176937,6 +177183,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:de64a2e9be26790f19be",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/composition/graphValidation",
+      "syntax": "static-import",
+      "targetSymbol": "composeIntentWorkflowGraphValidation",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#composeIntentWorkflowGraphValidation"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "id": "import:de83ae02a14900cb32ed",
@@ -177317,6 +177579,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/platformExec.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#platformSpawnOptionsForHost"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file",
+      "id": "import:df981f30e233249854d3",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationWorkflowOverlay",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationWorkflowOverlay"
     },
     {
       "edgeKind": "type",
@@ -184312,6 +184590,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:f24ccccc398a620d6d5d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E4a",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/composition/graphValidation",
+      "syntax": "static-import",
+      "targetSymbol": "composeIntentWorkflowGraphValidation",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#composeIntentWorkflowGraphValidation"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/sqliteCapabilityMatrix.ts#$file",
@@ -190464,7 +190758,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c6da29438a7fadd0aacfaf311917cf547973381c855a62003cd2e053c98a67d1",
+  "sourceDigest": "sha256:61efa1e7421619daa83ff8d6a099f2f2b617056ecab6d76a672d7e27a1d5d332",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
