@@ -131,6 +131,21 @@ function countNonCommentMatches(content: string, re: RegExp): number {
 }
 
 /**
+ * RFC-359 W2 —— `databaseSessionFor(db).transaction(async (tx) => …)` 是仓内唯一被认可的
+ * **provider-中立**事务原语（`platform/persistence/databaseTransaction.ts`）：SQLite 侧它不走
+ * bun:sqlite 的同步包装器，而是显式 `BEGIN IMMEDIATE` + async 体 + 显式 COMMIT/ROLLBACK
+ * （半提交与 BUSY_SNAPSHOT 两类危害都在原语内关闭，锁在 rfc359-engine-capabilities /
+ * rfc359-each-provider-harness）。它不是这两条守卫要抓的「裸 drizzle db.transaction」，
+ * 计数前先剔掉这一形态；`session.transaction(` 之类的别名不豁免——原语的调用形态只有这一种。
+ */
+function withoutNeutralSessionTransactions(content: string): string {
+  return content.replace(
+    /databaseSessionFor\([^()]*\)\s*\.transaction\s*\(/g,
+    'databaseSessionFor(…)(',
+  )
+}
+
+/**
  * This guard is intentionally about Bun's synchronous SQLite transaction
  * wrapper. PostgreSQL transactions are asynchronous by contract, so counting
  * their `.transaction(async ...)` calls here would turn the SQLite safety lock
@@ -170,7 +185,10 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
       const content = readFileSync(file, 'utf8')
       const sqliteSource = sqliteTransactionSource(rel, content)
       if (sqliteSource === null) continue
-      const count = countNonCommentMatches(sqliteSource, /\.transaction\s*\(\s*async\b/g)
+      const count = countNonCommentMatches(
+        withoutNeutralSessionTransactions(sqliteSource),
+        /\.transaction\s*\(\s*async\b/g,
+      )
       if (count > 0) {
         actual[rel] = count
       }
@@ -236,7 +254,10 @@ describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必�
       const content = readFileSync(file, 'utf8')
       const sqliteSource = sqliteTransactionSource(rel, content)
       if (sqliteSource === null) continue
-      const count = countNonCommentMatches(sqliteSource, /\.transaction\s*\(/g)
+      const count = countNonCommentMatches(
+        withoutNeutralSessionTransactions(sqliteSource),
+        /\.transaction\s*\(/g,
+      )
       if (count > 0) actual[rel] = count
     }
     return actual

@@ -1,32 +1,16 @@
 // RFC-349 — PostgreSQL continuation admission. Task lineage, retained replay
 // decisions, maintenance fencing and the new intent commit atomically.
 
-import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import {
-  taskExecutionIntents,
-  taskExecutionLineageOperationRecords,
-  taskExecutionMaintenanceMembers,
-  tasks,
-} from '@/db/schema'
+import { taskExecutionIntents } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   SubmittedTaskExecutionIntent,
   SubmitTaskExecutionIntentInput,
   TaskExecutionIntentPersistence,
 } from '../application/ports/taskExecutionIntentPersistence'
-import { TaskExecutionError } from '../application/taskExecutionError'
-import { sha256Hex } from '../domain/digest'
-import {
-  canonicalJson,
-  continuationRequestHash,
-  decodeLineageSlotPath,
-  encodeLineageSlotPath,
-  lineagePathHasPrefix,
-  mayAuthorizeReplay,
-  type CanonicalContinuationRequest,
-} from '../domain/executionIntent'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 import {
   submitCanonicalTaskExecutionIntent,
