@@ -47,6 +47,10 @@ export interface WorkspaceMaintenanceStore {
   releaseIsoClaim(taskId: string, expectedAt?: number): Promise<boolean>
   healMissingWorkspace(taskId: string, now: number): Promise<boolean>
   listStaleWebhookClaims(staleBefore: number): Promise<readonly WebhookWorkspaceClaimRecord[]>
+  /** 终态、无 tombstone、也没有在途认领、却仍记着 worktree 路径的任务（RFC-165 之前被 GC 删掉目录的历史行）。 */
+  listUnstampedTerminalWorkspaces(): Promise<
+    readonly { readonly id: string; readonly worktreePath: string }[]
+  >
 }
 
 export interface WorkspaceTerminalMaintenance {

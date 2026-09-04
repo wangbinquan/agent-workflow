@@ -40,7 +40,7 @@ import { MIGRATIONS } from './migration-freeze'
 const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/application-home') => ({
   workspace: {
     runGcPhase: async () => ({ scanned: 0, removed: 0, skipped: 0 }),
-    recover: async () => ({ completed: 0, failed: 0, skipped: 0 }),
+    recover: async () => ({ completed: 0, failed: 0, skipped: 0, healed: 0 }),
   },
   developmentAutomation: {
     sweepExpiredUploads: async () => 0,

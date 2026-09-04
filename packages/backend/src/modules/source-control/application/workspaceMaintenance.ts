@@ -482,7 +482,12 @@ export function createWorkspaceMaintenanceCommand(input: {
       }
     }
 
-    const webhookClaims = await store.listStaleWebhookClaims(now - WORKSPACE_PRUNING_LEASE_MS)
+    // boot（单实例锁 + 孤儿已收割）接管全部 webhook-terminal 认领；周期 ticker 只接管过期租约。
+    const webhookClaims = await store.listStaleWebhookClaims(
+      recoveryInput.webhookClaims === 'all'
+        ? Number.MAX_SAFE_INTEGER
+        : now - WORKSPACE_PRUNING_LEASE_MS,
+    )
     for (const row of webhookClaims) {
       if (active.has(row.id) || inFlight.has(row.id)) {
         skipped += 1
@@ -497,7 +502,17 @@ export function createWorkspaceMaintenanceCommand(input: {
       else if (outcome === 'failed') failed += 1
       else skipped += 1
     }
-    return { completed, failed, skipped }
+
+    // RFC-165 R3-2-r4 / RFC-359 W3-T15-B：tombstone 列出现之前就被 GC 删掉目录的终态任务补上
+    // workspace_pruned_at，复活路径据此确定性 410 而不是复活幽灵。此前只有 SQLite boot 的
+    // reconcileLegacyPrunedWorkspaces 做这件事。
+    let healed = 0
+    for (const row of await store.listUnstampedTerminalWorkspaces()) {
+      if (filesystem.exists(row.worktreePath)) continue
+      if (await store.healMissingWorkspace(row.id, now)) healed += 1
+    }
+    if (healed > 0) log.info('reconciled legacy pruned workspaces', { healed })
+    return { completed, failed, skipped, healed }
   }
 
   return Object.freeze({

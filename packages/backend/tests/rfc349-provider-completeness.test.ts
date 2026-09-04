@@ -96,10 +96,15 @@ const PROVIDER_FORK_LEDGER = {
   'db/providerSchema.ts': { forks: 1, fence: 'projection-fenced' },
   'main.ts': { forks: 7, fence: 'fenced-dispatch' },
   'modules/system-operations/composition.ts': { forks: 1, fence: 'discriminated-union' },
+  'modules/source-control/composition/workspaceMaintenance.ts': {
+    forks: 2,
+    fence: 'fenced-dispatch',
+  },
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in
   // without its own variant.
   'modules/task-execution/composition/frameBackfill.ts': { forks: 1, fence: 'discriminated-union' },
+  'modules/task-execution/composition/providerRuntime.ts': { forks: 2, fence: 'fenced-dispatch' },
   'modules/task-execution/composition/taskExecutionPersistence.ts': {
     forks: 4,
     fence: 'fenced-dispatch',

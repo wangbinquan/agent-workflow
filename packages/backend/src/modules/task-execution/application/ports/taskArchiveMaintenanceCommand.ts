@@ -29,6 +29,11 @@ export interface TaskArchivePreviewTree {
   readonly lastFinishedAt: number
 }
 
+export interface TaskArchiveRecoveryReceipt {
+  readonly promoted: readonly string[]
+  readonly discarded: readonly string[]
+}
+
 export interface TaskArchiveManualRequest {
   readonly retentionDays: number
   readonly maxTrees: number
@@ -51,4 +56,6 @@ export interface TaskArchiveMaintenanceCommand {
     input: TaskArchiveManualRequest,
     options: TaskArchiveMaintenanceOptions,
   ): Promise<TaskArchiveSweepReceipt>
+  /** RFC-359 W3-T15-B：boot 时续做崩溃留下的 archive / retention 认领，并收尾 `.tmp-*` 残留。 */
+  recover(options: TaskArchiveMaintenanceOptions): Promise<TaskArchiveRecoveryReceipt>
 }

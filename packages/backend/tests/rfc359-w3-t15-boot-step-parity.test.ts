@@ -21,6 +21,8 @@ const ORDERED_BOOT_MARKERS = [
   'repairFusionProvenance(',
   'await runTaskExecutionBootRecovery({',
   'await recoverInterruptedTaskDeletes(',
+  'archive.recover({',
+  'Maintenance.recover({',
   'healScheduledLaunchPayloads(',
   'recoverFusionDecisions(',
   'seedFusionResources(',

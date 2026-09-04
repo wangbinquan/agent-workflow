@@ -253,6 +253,22 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
     return rows.length === 1
   }
 
+  async listUnstampedTerminalWorkspaces(): Promise<
+    readonly { readonly id: string; readonly worktreePath: string }[]
+  > {
+    const rows = await this.executor.all<
+      { readonly id: string; readonly worktree_path: string } & Record<string, unknown>
+    >(sql`
+      SELECT ${tasks.id} AS id, ${tasks.worktreePath} AS worktree_path
+      FROM ${tasks}
+      WHERE ${tasks.status} IN (${terminalStatuses})
+        AND ${tasks.workspacePrunedAt} IS NULL
+        AND ${tasks.workspacePruningAt} IS NULL
+        AND ${tasks.worktreePath} <> ''
+    `)
+    return rows.map((row) => ({ id: row.id, worktreePath: row.worktree_path }))
+  }
+
   async listStaleWebhookClaims(
     staleBefore: number,
   ): Promise<readonly WebhookWorkspaceClaimRecord[]> {

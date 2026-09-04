@@ -40,12 +40,19 @@ interface WorkspaceGcReceipt {
 interface WorkspaceRecoveryInput {
   readonly activeTaskIds: readonly string[]
   readonly now?: number
+  /**
+   * RFC-300 webhook-terminal 认领的接管范围：周期 ticker 只接管过期租约（'stale'，默认）；boot 持有
+   * 单实例锁且孤儿已收割，接管全部（'all'）。
+   */
+  readonly webhookClaims?: 'stale' | 'all'
 }
 
 interface WorkspaceRecoveryReceipt {
   readonly completed: number
   readonly failed: number
   readonly skipped: number
+  /** RFC-165 R3-2-r4：目录已消失但没有 tombstone 的终态任务补上 workspace_pruned_at 的条数。 */
+  readonly healed: number
 }
 
 /** Provider-selected Source Control cleanup command consumed by RFC-338. */

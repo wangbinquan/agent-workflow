@@ -1,4 +1,7 @@
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
 import {
   createPostgresqlClarifyRepairParticipant,
@@ -447,4 +450,20 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     }),
     background,
   })
+}
+
+/**
+ * RFC-359 W3-T15-B：归档维护命令按客户端品牌选实现（boot 恢复 / 测试用）。落在这里而不是
+ * taskExecutionPersistence.ts：归档命令经 services/taskArchive → taskExecutionParticipants 绕回
+ * persistence 组合，放那边会成环。
+ */
+export function createTaskArchiveMaintenanceCommand(
+  db: ProviderNeutralDatabase,
+): TaskArchiveMaintenanceCommand {
+  const provider = databaseSessionFor(db).engine.provider
+  return provider === 'postgresql'
+    ? createPostgresqlTaskArchiveMaintenanceCommand(db as unknown as PostgresqlDatabaseClient)
+    : provider === 'sqlite'
+      ? createSqliteTaskArchiveMaintenanceCommand(db as unknown as DbClient)
+      : unhandledDatabaseProvider(provider)
 }

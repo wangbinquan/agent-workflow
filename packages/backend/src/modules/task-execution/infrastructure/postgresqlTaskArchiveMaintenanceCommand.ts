@@ -49,8 +49,10 @@ import type {
   TaskArchiveManualRequest,
   TaskArchivePreviewTree,
   TaskArchiveSweepReceipt,
+  TaskArchiveRecoveryReceipt,
 } from '../application/ports/taskArchiveMaintenanceCommand'
 import { PostgresqlTerminalMaintenancePersistence } from './postgresqlTerminalMaintenancePersistence'
+import { sweepArchiveTempDirectories } from './archiveTempDirectorySweep'
 import { createTerminalMaintenanceClaim, type TerminalMaintenanceClaim } from '../domain/ownership'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
@@ -538,14 +540,18 @@ async function recoverCompletedIo(
   db: PostgresqlDatabaseClient,
   maintenance: PostgresqlTerminalMaintenancePersistence,
   options: ArchiveOptions,
-): Promise<void> {
+): Promise<{ readonly promoted: readonly string[]; readonly claimedRoots: ReadonlySet<string> }> {
+  const promoted: string[] = []
+  const claimedRoots = new Set<string>()
   const recoverable = [
     ...(await maintenance.listRecoverable({ operation: 'archive' })),
     ...(await maintenance.listRecoverable({ operation: 'retention' })),
   ]
   for (const item of recoverable) {
+    claimedRoots.add(item.rootTaskId)
     let claim = item.claim
     let state = item.state
+    const tmpDir = join(options.archiveDir, `.tmp-${item.rootTaskId}`)
     const finalDir = join(options.archiveDir, item.rootTaskId)
     const rootRows = await db
       .select({ id: tasks.id })
@@ -568,21 +574,26 @@ async function recoverCompletedIo(
     if (state === 'claimed' && !existsSync(finalDir)) {
       if (!rootExists) continue
       await archiveClaimed(db, maintenance, item.rootTaskId, members, claim, options)
+      promoted.push(item.rootTaskId)
       continue
     }
     if (state === 'claimed' && existsSync(finalDir)) {
       claim = await maintenance.transition({ claim, to: 'io-complete' })
       state = 'io-complete'
     }
-    if (state === 'io-complete' && !existsSync(finalDir)) {
-      await maintenance.transition({ claim, to: 'recovery-required' })
-      continue
-    }
-    if (state === 'io-complete' && rootExists) {
-      claim = await finalizeDatabase(db, item.rootTaskId, members, claim, Date.now())
-      state = 'db-finalized'
-    } else if (state === 'io-complete' && !rootExists) {
-      claim = await maintenance.transition({ claim, to: 'db-finalized' })
+    if (state === 'io-complete') {
+      // 与 SQLite 同规则：崩在 rename 与删库之间时 tmp 里已有完整 manifest，提升为正式目录。
+      if (!existsSync(finalDir) && existsSync(join(tmpDir, 'manifest.json'))) {
+        renameSync(tmpDir, finalDir)
+        promoted.push(item.rootTaskId)
+      }
+      if (!existsSync(finalDir)) {
+        await maintenance.transition({ claim, to: 'recovery-required' })
+        continue
+      }
+      claim = rootExists
+        ? await finalizeDatabase(db, item.rootTaskId, members, claim, Date.now())
+        : await maintenance.transition({ claim, to: 'db-finalized' })
       state = 'db-finalized'
     }
     if (state === 'db-finalized' || state === 'cleanup-pending') {
@@ -593,6 +604,7 @@ async function recoverCompletedIo(
       await maintenance.complete({ claim })
     }
   }
+  return { promoted, claimedRoots }
 }
 
 export function createPostgresqlTaskArchiveMaintenanceCommand(
@@ -663,6 +675,26 @@ export function createPostgresqlTaskArchiveMaintenanceCommand(
         taskCount: candidate.taskIds.length,
         lastFinishedAt: candidate.lastFinishedAt,
       }))
+    },
+    // RFC-359 W3-T15-B：boot 归档恢复与 SQLite 同形——先续做 RFC-328 认领，再按同一份规则收尾 `.tmp-*`。
+    async recover(options: TaskArchiveMaintenanceOptions): Promise<TaskArchiveRecoveryReceipt> {
+      const io = await recoverCompletedIo(db, maintenance, options)
+      const swept = await sweepArchiveTempDirectories({
+        archiveRoot: options.archiveDir,
+        runsDir: options.runsDir,
+        logsDir: options.logsDir,
+        claimedRoots: io.claimedRoots,
+        taskExists: async (taskId) =>
+          (
+            await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+          )[0] !== undefined,
+      })
+      const promoted = [...io.promoted, ...swept.promoted]
+      const discarded = [...swept.discarded]
+      if (promoted.length > 0 || discarded.length > 0) {
+        log.info('recovered interrupted archives', { promoted, discarded })
+      }
+      return { promoted, discarded }
     },
     async runManual(
       input: TaskArchiveManualRequest,

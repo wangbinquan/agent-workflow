@@ -88,7 +88,6 @@ import {
   shutdownActiveTaskExecutions,
 } from '@/services/task'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
-import { recoverInterruptedArchives } from '@/services/taskArchive'
 import {
   composeTaskIdleTimeoutOperations,
   createSqliteTaskIdleTimeoutPersistence,
@@ -96,11 +95,9 @@ import {
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
-import {
-  finishClaimedWebhookWorkspacePrune,
-  recoverInterruptedWorkspaceGc,
-  runClaimedWebhookWorkspacePrunes,
-} from '@/services/gc'
+import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
+import { composeSqliteWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
+import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
 import { composeSqlitePostRestoreRecovery } from '@/modules/system-operations/composition'
@@ -2027,10 +2024,16 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       error: err instanceof Error ? err.message : String(err),
     })
   }
+  // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步
+  // 走 provider 中立的命令面（归档命令 recover + 工作区维护 recover），PostgreSQL daemon 跑的是同一段。
   try {
-    const archiveRecovery = await recoverInterruptedArchives(db)
+    const archiveRecovery = await taskExecutionProvider.archive.recover({
+      archiveDir: Paths.taskArchiveDir,
+      runsDir: Paths.runsDir,
+      logsDir: Paths.logsDir,
+    })
     if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
-      log.info('terminal task archive recovery', archiveRecovery)
+      log.info('terminal task archive recovery', { ...archiveRecovery })
     }
   } catch (err) {
     log.warn('terminal task archive recovery failed', {
@@ -2038,9 +2041,25 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
+  // RFC-300：单实例锁 + 孤儿收割证明上一代 daemon 不再持有这些工作区，boot 接管全部 webhook-terminal
+  // 认领（周期 ticker 只接管过期租约）；RFC-165 R3-2-r4 的 legacy pruned tombstone 回填同在其中。
+  const bootWorkspaceMaintenance = composeSqliteWorkspaceMaintenanceCommand({
+    db,
+    appHome: Paths.root,
+    terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
+    isMaterializingTask: () => false,
+    invalidateWorkspacePath: invalidateCallGraphIndex,
+  })
   try {
-    const workspaceRecovery = await recoverInterruptedWorkspaceGc(db)
-    if (workspaceRecovery.completed.length > 0 || workspaceRecovery.failed.length > 0) {
+    const workspaceRecovery = await bootWorkspaceMaintenance.recover({
+      activeTaskIds: [],
+      webhookClaims: 'all',
+    })
+    if (
+      workspaceRecovery.completed > 0 ||
+      workspaceRecovery.failed > 0 ||
+      workspaceRecovery.healed > 0
+    ) {
       log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
     }
   } catch (err) {
@@ -2049,38 +2068,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
   }
 
-  // RFC-300: singleton lock + orphan reap prove the previous daemon no longer
-  // owns these workspaces. Resume every durable claim before HTTP/auto-resume;
-  // this does not discover historical unclaimed terminal tasks.
-  try {
-    const resumed = await runClaimedWebhookWorkspacePrunes(db, { isTaskActive })
-    if (resumed.removed.length > 0 || resumed.failed.length > 0) {
-      log.info('webhook terminal workspace prune recovery', { ...resumed })
-    }
-  } catch (err) {
-    log.warn('webhook terminal workspace prune recovery failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
-
   // 5b2/5b3（已退役）—— RFC-132 的两个 boot 垫片（legacy immediate rounds /
   // legacy cross stop）由 RFC-217 T8 收编为一次性 migration 0107（垫片模块
   // 随之删除）；migration 恰好一次的语义取代 boot-once 幂等重放。
-
-  // 5b4. RFC-165 (R3-2-r4): backfill workspace tombstones for terminal tasks
-  // whose directory vanished before the tombstone columns existed (pre-165 GC
-  // deleted dirs without stamping anything). Revive paths (resume / retry /
-  // sync / repair / auto-resume) then 410 deterministically instead of
-  // resurrecting a ghost. Must run BEFORE the HTTP server serves revive
-  // routes and before auto-resume (step 8+) — 幂等 + best-effort.
-  try {
-    const { reconcileLegacyPrunedWorkspaces } = await import('@/services/gc')
-    await reconcileLegacyPrunedWorkspaces(db)
-  } catch (err) {
-    log.warn('legacy pruned-workspace reconcile on boot failed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-  }
 
   // 5b4b. RFC-354 T4: one-shot frame backfill for node_runs rows minted before
   // frames existed (migration 0223 adds the columns, only the daemon can fill

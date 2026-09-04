@@ -234,6 +234,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       completed: 1,
       failed: 0,
       skipped: 0,
+      healed: 0,
     })
     expect(existsSync(workspace)).toBeFalse()
     const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!

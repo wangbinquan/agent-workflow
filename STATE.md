@@ -52,7 +52,13 @@
 > 融合三步（provenance 修复 fail-closed / 决定恢复 / 资源播种）、定时载荷治愈、数字员工模板、demo 播种、webhook 投递恢复
 > 全部按 `cli/start.ts` 同序接进 `postgresqlDaemonApplication.ts`（runtime 注册表 boot 在 PG 路径由 provider 会话建立时
 > 跑过一次，不重复）。`rfc359-w3-t15-boot-step-parity.test.ts` 锁两个入口同组标记、同相对顺序。
-> **下一步**：T15-B（archive / workspace-gc / webhook prune / legacy pruned 四步的中立版）→ T14 / T16。
+> **W3-T15-B（终态维护恢复其余四步）已修**：归档恢复上 `TaskArchiveMaintenanceCommand.recover`（`.tmp-*` 提升 / 丢弃 /
+> 放回规则合一为 `infrastructure/archiveTempDirectorySweep.ts`，PG 侧补齐 io-complete 的 tmp→final 提升）；工作区四步走
+> 既有中立 `WorkspaceMaintenanceCommand.recover`（新增 `webhookClaims: 'all'` 让 boot 接管全部 webhook-terminal 认领、
+> `healed` 回填 RFC-165 前被删目录的幽灵工作区）；两个 daemon 入口同序调用，SQLite boot 不再调 `recoverInterruptedArchives`
+> / `recoverInterruptedWorkspaceGc` / `runClaimedWebhookWorkspacePrunes` / `reconcileLegacyPrunedWorkspaces`。
+> `rfc359-w3-t15b-terminal-maintenance-recovery.test.ts` 五个场景两引擎各绿。
+> **下一步**：W3-T14（servePostgresqlDaemon 永不返回形态）/ T16（start.ts 的 provider 分支归零）。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

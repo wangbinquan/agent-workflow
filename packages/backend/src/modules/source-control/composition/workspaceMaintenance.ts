@@ -1,4 +1,7 @@
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createWorkspaceMaintenanceCommand } from '../application/workspaceMaintenance'
 import type { WorkspaceTerminalMaintenance } from '../application/ports/workspaceMaintenance'
@@ -27,7 +30,7 @@ function filesystem(input: WorkspaceMaintenanceCompositionInput) {
 
 export function composeSqliteWorkspaceMaintenanceCommand(
   input: WorkspaceMaintenanceCompositionInput & { readonly db: DbClient },
-): WorkspaceMaintenanceCommand {
+): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
   return createWorkspaceMaintenanceCommand({
     store: new SqliteWorkspaceMaintenanceStore(input.db),
     terminalMaintenance: input.terminalMaintenance,
@@ -43,4 +46,19 @@ export function composePostgresqlWorkspaceMaintenanceCommand(
     terminalMaintenance: input.terminalMaintenance,
     filesystem: filesystem(input),
   })
+}
+
+/** RFC-359 W3-T15-B：按客户端品牌选 store；调用方（boot / 测试）看不见 provider。 */
+export function composeWorkspaceMaintenanceCommand(
+  input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
+): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
+  const provider = databaseSessionFor(input.db).engine.provider
+  return provider === 'postgresql'
+    ? composePostgresqlWorkspaceMaintenanceCommand({
+        ...input,
+        db: input.db as unknown as PostgresqlDatabaseClient,
+      })
+    : provider === 'sqlite'
+      ? composeSqliteWorkspaceMaintenanceCommand({ ...input, db: input.db as unknown as DbClient })
+      : unhandledDatabaseProvider(provider)
 }

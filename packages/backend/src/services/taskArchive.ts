@@ -60,15 +60,7 @@ import {
   workgroupTaskState,
   type LegacySqliteTaskDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
-import {
-  appendFileSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
@@ -85,6 +77,7 @@ import {
 } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
+import { sweepArchiveTempDirectories } from '@/modules/task-execution/infrastructure/archiveTempDirectorySweep'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
@@ -740,23 +733,6 @@ function parseArchiveCleanupPlan(value: string): ArchiveCleanupPlanV2 | null {
   }
 }
 
-function restoreLegacyMovedDirectories(
-  tmpDir: string,
-  kind: 'runs' | 'logs',
-  root: string,
-): boolean {
-  const movedRoot = join(tmpDir, kind)
-  if (!existsSync(movedRoot)) return true
-  mkdirSync(root, { recursive: true })
-  for (const entry of readdirSync(movedRoot)) {
-    const from = join(movedRoot, entry)
-    const to = join(root, entry)
-    if (existsSync(to)) return false
-    renameSync(from, to)
-  }
-  return true
-}
-
 /**
  * Boot recovery first resumes RFC-328 durable archive claims, then handles
  * pre-RFC-328 `.tmp-*` directories.  A partial move is never discarded until
@@ -877,43 +853,18 @@ export async function recoverInterruptedArchives(
     }
   }
 
-  if (!existsSync(archiveRoot)) return { promoted, discarded }
-  for (const entry of readdirSync(archiveRoot)) {
-    if (!entry.startsWith('.tmp-')) continue
-    const rootTaskId = entry.slice('.tmp-'.length)
-    if (claimedRoots.has(rootTaskId)) continue
-    const tmpDir = join(archiveRoot, entry)
-    const stillInDb = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(eq(tasks.id, rootTaskId))
-      .get()
-    if (stillInDb !== undefined) {
-      const runsRestored = restoreLegacyMovedDirectories(
-        tmpDir,
-        'runs',
-        opts.runsDir ?? Paths.runsDir,
-      )
-      const logsRestored = restoreLegacyMovedDirectories(
-        tmpDir,
-        'logs',
-        opts.logsDir ?? Paths.logsDir,
-      )
-      if (runsRestored && logsRestored) {
-        rmSync(tmpDir, { recursive: true, force: true })
-        discarded.push(rootTaskId)
-      }
-      continue
-    }
-    const finalDir = join(archiveRoot, rootTaskId)
-    if (existsSync(finalDir)) {
-      rmSync(tmpDir, { recursive: true, force: true })
-      discarded.push(rootTaskId)
-      continue
-    }
-    renameSync(tmpDir, finalDir)
-    promoted.push(rootTaskId)
-  }
+  // RFC-359 W3-T15-B：`.tmp-*` 残留的提升 / 丢弃 / 放回规则与 PostgreSQL 归档恢复共用一份实现。
+  const swept = await sweepArchiveTempDirectories({
+    archiveRoot,
+    runsDir: opts.runsDir ?? Paths.runsDir,
+    logsDir: opts.logsDir ?? Paths.logsDir,
+    claimedRoots,
+    taskExists: async (taskId) =>
+      (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).get()) !==
+      undefined,
+  })
+  promoted.push(...swept.promoted)
+  discarded.push(...swept.discarded)
   if (promoted.length > 0 || discarded.length > 0) {
     log.info('recovered interrupted archives', { promoted, discarded })
   }

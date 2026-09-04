@@ -254,6 +254,7 @@ import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composePostgresqlWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
+import { Paths } from '@/util/paths'
 import { composePostgresqlDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composePostgresqlCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
@@ -1975,6 +1976,40 @@ export async function composePostgresqlDaemonApplication(
     }
   } catch (err) {
     log.warn('terminal task delete recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // RFC-359 W3-T15-B：终态维护恢复的 archive / workspace-gc / webhook prune / legacy pruned 四步，
+  // 与 cli/start.ts 同一段命令面。
+  try {
+    const archiveRecovery = await taskExecutionProvider.archive.recover({
+      archiveDir: Paths.taskArchiveDir,
+      runsDir: Paths.runsDir,
+      logsDir: Paths.logsDir,
+    })
+    if (archiveRecovery.promoted.length > 0 || archiveRecovery.discarded.length > 0) {
+      log.info('terminal task archive recovery', { ...archiveRecovery })
+    }
+  } catch (err) {
+    log.warn('terminal task archive recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+  try {
+    const workspaceRecovery = await workspaceMaintenance.recover({
+      activeTaskIds: [],
+      webhookClaims: 'all',
+    })
+    if (
+      workspaceRecovery.completed > 0 ||
+      workspaceRecovery.failed > 0 ||
+      workspaceRecovery.healed > 0
+    ) {
+      log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
+    }
+  } catch (err) {
+    log.warn('terminal workspace maintenance recovery failed', {
       error: err instanceof Error ? err.message : String(err),
     })
   }

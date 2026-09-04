@@ -1,6 +1,7 @@
 import type { DbClient } from '@/db/client'
 import {
   previewArchivableTrees,
+  recoverInterruptedArchives,
   runManualTaskArchive,
   runTaskArchiveSweep,
 } from '@/services/taskArchive'
@@ -33,6 +34,9 @@ export function createSqliteTaskArchiveMaintenanceCommand(
         },
         { ...options, ...(input.now === undefined ? {} : { now: input.now }) },
       )
+    },
+    async recover(options: TaskArchiveMaintenanceOptions) {
+      return await recoverInterruptedArchives(db, options)
     },
   })
 }
