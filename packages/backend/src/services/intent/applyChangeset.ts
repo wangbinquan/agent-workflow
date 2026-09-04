@@ -1,13 +1,14 @@
 // Compatibility facade for historical SQLite callers. Production composition
 // injects the artifact lifecycle explicitly through modules/intent/composition;
-// this facade assembles the same concrete SQLite lifecycle for old tests and
-// service consumers without putting a legacy dependency back in the engine.
+// this facade asks that same composition for the concrete SQLite lifecycle so
+// old tests and service consumers keep working without putting a legacy
+// dependency back in the engine — and without assembling a provider here.
 import {
   applyIntentChangeset as applyIntentChangesetWithLifecycle,
   convergeIntentApplyJournal as convergeIntentApplyJournalWithLifecycle,
   type ApplyIntentDeps as ApplyIntentDepsWithLifecycle,
 } from '@/modules/intent/infrastructure/sqliteIntentApplyOperations'
-import { createSqliteIntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle'
+import { composeSqliteIntentApplyArtifactLifecycle } from '@/modules/intent/composition/apply'
 
 export type {
   ApplyIntentFaults,
@@ -29,7 +30,7 @@ export function applyIntentChangeset(
   return applyIntentChangesetWithLifecycle(
     {
       ...dependencies,
-      artifacts: createSqliteIntentApplyArtifactLifecycle({
+      artifacts: composeSqliteIntentApplyArtifactLifecycle({
         db: dependencies.db,
         appHome: dependencies.appHome,
       }),
@@ -46,7 +47,10 @@ export function convergeIntentApplyJournal(
 ) {
   return convergeIntentApplyJournalWithLifecycle(
     db,
-    createSqliteIntentApplyArtifactLifecycle({ db, appHome }),
+    composeSqliteIntentApplyArtifactLifecycle({
+      db,
+      appHome,
+    }),
     log,
     options,
   )

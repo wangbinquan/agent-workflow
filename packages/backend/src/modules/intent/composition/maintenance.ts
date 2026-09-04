@@ -7,7 +7,7 @@ import {
   type IntentScratchFilesystem,
 } from '../infrastructure/intentScratchFilesystem'
 import { createPostgresqlIntentPersistence } from '../infrastructure/postgresqlIntentPersistence'
-import { createSqliteIntentApplyArtifactLifecycle } from '../infrastructure/sqliteIntentApplyArtifactLifecycle'
+import { composeSqliteIntentApplyArtifactLifecycle } from './apply'
 import {
   activeIntentApplyJournalIds,
   convergeIntentApplyJournal,
@@ -175,7 +175,7 @@ export function composeSqliteIntentMaintenanceCommandsForAppHome(
   input: ProviderIntentMaintenanceCompositionInput & { readonly db: DbClient },
 ): IntentMaintenanceCommands {
   const log = input.log ?? createLogger('intentMaintenance')
-  const artifacts = createSqliteIntentApplyArtifactLifecycle({
+  const artifacts = composeSqliteIntentApplyArtifactLifecycle({
     db: input.db,
     appHome: input.appHome,
   })

@@ -2,15 +2,8 @@ import { rmSync } from 'node:fs'
 
 import type { DbClient } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
-import { compensateManagedSkillStage } from '@/modules/resource-catalog/infrastructure/legacy/skill'
-import { unmarkSkillBootVerified } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
-import { finishOperation } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import {
-  abortStagedSkillVersion,
-  publishStagedSkillVersion,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { loadLegacyIntentSkillOperationState } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants'
 import type { IntentJournalArtifact } from '@/services/intent/journalArtifacts'
+import type { SqliteSkillArtifactCompensation } from '../ports/skillArtifactCompensation'
 import type { Logger } from '@/util/log'
 
 /** Closed artifact lifecycle consumed by the SQLite apply engine and recovery. */
@@ -20,7 +13,11 @@ export interface SqliteIntentApplyArtifactLifecycle {
   rollForward(artifacts: readonly IntentJournalArtifact[], log: Logger): Promise<boolean>
 }
 
-function compensate(db: DbClient, artifact: IntentJournalArtifact): void {
+function compensate(
+  rc: SqliteSkillArtifactCompensation,
+  db: DbClient,
+  artifact: IntentJournalArtifact,
+): void {
   switch (artifact.kind) {
     case 'legacy-plugin-install-untracked':
       // Historical rows did not record a generation path. Installer GC owns
@@ -30,12 +27,12 @@ function compensate(db: DbClient, artifact: IntentJournalArtifact): void {
       rmSync(artifact.generationDir, { recursive: true, force: true })
       return
     case 'skill-stage':
-      compensateManagedSkillStage(db, artifact)
+      rc.compensateManagedSkillStage(db, artifact)
       return
     case 'skill-version-stage': {
-      abortStagedSkillVersion(db, artifact.staged)
+      rc.abortStagedSkillVersion(db, artifact.staged)
       if (artifact.staged.opId === null) return
-      const operation = loadLegacyIntentSkillOperationState(db, artifact.staged.opId)
+      const operation = rc.loadSkillOperationState(db, artifact.staged.opId)
       if (operation === undefined || operation.active === 1) {
         throw new Error(
           `skill version compensation remains active for operation ${artifact.staged.opId}`,
@@ -46,6 +43,7 @@ function compensate(db: DbClient, artifact: IntentJournalArtifact): void {
 }
 
 function rollForward(
+  rc: SqliteSkillArtifactCompensation,
   db: DbClient,
   appHome: string,
   artifacts: readonly IntentJournalArtifact[],
@@ -66,7 +64,7 @@ function rollForward(
       pendingSkillVersions.push(staged)
       continue
     }
-    const operation = loadLegacyIntentSkillOperationState(db, staged.opId)
+    const operation = rc.loadSkillOperationState(db, staged.opId)
     if (
       operation?.active === 1 &&
       (operation.phase === 'db-committed' || operation.phase === 'fs-published')
@@ -84,10 +82,10 @@ function rollForward(
     }
   }
 
-  for (const staged of pendingSkillVersions) unmarkSkillBootVerified(staged.skillId)
+  for (const staged of pendingSkillVersions) rc.unmarkSkillBootVerified(staged.skillId)
   for (const staged of pendingSkillVersions) {
     try {
-      publishStagedSkillVersion(db, { appHome }, staged)
+      rc.publishStagedSkillVersion(db, { appHome }, staged)
     } catch (error) {
       complete = false
       log.warn('intent-skill-publish-replayed-or-failed', {
@@ -97,7 +95,7 @@ function rollForward(
     }
   }
   for (const stage of skillStages) {
-    const operation = loadLegacyIntentSkillOperationState(db, stage.opId)
+    const operation = rc.loadSkillOperationState(db, stage.opId)
     if (operation?.active === 0 && operation.phase === 'done') continue
     if (operation?.active !== 1 || operation.phase !== 'db-committed') {
       complete = false
@@ -109,7 +107,7 @@ function rollForward(
       continue
     }
     try {
-      dbTxSync(db, (transaction) => finishOperation(transaction, stage.opId))
+      dbTxSync(db, (transaction) => rc.finishOperation(transaction, stage.opId))
     } catch (error) {
       complete = false
       log.warn('intent-skill-finish-replayed-or-failed', {
@@ -124,13 +122,15 @@ function rollForward(
 export function createSqliteIntentApplyArtifactLifecycle(input: {
   readonly db: DbClient
   readonly appHome: string
+  /** RFC-355 T6：技能工件的补偿原语由 resource-catalog 提供、bootstrap 注入。 */
+  readonly skillArtifacts: SqliteSkillArtifactCompensation
 }): SqliteIntentApplyArtifactLifecycle {
   return Object.freeze({
     async compensate(artifact: IntentJournalArtifact) {
-      compensate(input.db, artifact)
+      compensate(input.skillArtifacts, input.db, artifact)
     },
     async rollForward(artifacts: readonly IntentJournalArtifact[], log: Logger) {
-      return rollForward(input.db, input.appHome, artifacts, log)
+      return rollForward(input.skillArtifacts, input.db, input.appHome, artifacts, log)
     },
   })
 }

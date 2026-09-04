@@ -185,7 +185,7 @@ import { createPostgresqlIntentApplyArtifactLifecycle } from '@/modules/intent/i
 import {
   createPostgresqlIntentPluginArtifactLifecycle,
   createPostgresqlIntentSkillArtifactLifecycle,
-} from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners'
+} from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentResourceCatalogFor } from '@/services/intent/resourceCatalog'
@@ -258,6 +258,7 @@ import { createPostgresqlDevelopmentDeliveryProvider } from '@/modules/developme
 import { composePostgresqlPipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
+import { composePostgresqlSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import {
   mcpOperationCoordinator,
@@ -1498,6 +1499,7 @@ export async function composePostgresqlDaemonApplication(
     contextAuthorization: composePostgresqlIntentContextResourceAuthorizationFactory(),
   })
   const intentArtifactRecovery = createPostgresqlIntentApplyArtifactLifecycle({
+    skillArtifacts: composePostgresqlSkillArtifactCompensation(),
     db: input.db,
     appHome: input.appHome,
     pluginsDir: join(input.appHome, 'plugins'),

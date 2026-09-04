@@ -5,6 +5,7 @@ import {
   createPostgresqlIntentApplyJournalConvergence,
   type PostgresqlIntentApplyJournalConvergence,
 } from '../infrastructure/postgresqlIntentApplyArtifactLifecycle'
+import { composePostgresqlSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
 
 /** Recovery-only PostgreSQL composition; it never constructs apply resources. */
 export function composePostgresqlIntentApplyConvergence(input: {
@@ -18,6 +19,7 @@ export function composePostgresqlIntentApplyConvergence(input: {
   return createPostgresqlIntentApplyJournalConvergence({
     db: input.db,
     artifacts: createPostgresqlIntentApplyArtifactLifecycle({
+      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
       db: input.db,
       appHome: input.appHome,
       pluginsDir: input.pluginsDir,

@@ -127,30 +127,22 @@ describe('RFC-355 T6 —— intent 深取 resource-catalog 内部实现的账本
   // T6 的做法是让 RC 出一个技能工件 participant，两个 provider 的 intent 都从那里取
   // ——形态复用 RFC-353 已验证过的 participant + bootstrap 装配。
   const DEEP_IMPORT_DEBT: Readonly<Record<string, readonly string[]>> = {
-    // T0 查清：这个文件整份是「RC 的能力被 intent 重写了一遍」，T6 直接删除。
-    'postgresqlIntentApplyArtifactOwners.ts': [
-      '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts',
-      '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish',
-      '@/modules/resource-catalog/infrastructure/legacy/skillHash',
-      '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths',
-    ],
+    // T6 已销账：`postgresqlIntentApplyArtifactOwners.ts` 整份迁进 resource-catalog
+    // （它实现的是 RC 的端口、用的是 RC 自己的机制，见 T0 结论），文件在 intent 下已不存在；
+    // 两个 ArtifactLifecycle 的运行时深取改为经 `ports/skillArtifactCompensation` 注入。
+    //
+    // **剩下这 2 条是纯类型 import**：`PostgresqlIntentApplyArtifact` /
+    // `PostgresqlIntentApplyResourceSession` 是 RC 定义的工件与会话形状，intent 的 PostgreSQL
+    // 适配器按它们标注参数。把它们搬进 public 会让 `Postgresql*` 命名的 provider 类型出现在
+    // 公共面上（RFC-349 的 provider-cutover 账本「只能缩不能涨」正是防这件事），
+    // 所以按既有口径作为**已入账的纯类型边**留着，随 RC 自己的下一波收口。
     'postgresqlIntentApplyArtifactLifecycle.ts': [
       '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants',
-      '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify',
-      '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish',
-      '@/modules/resource-catalog/infrastructure/legacy/skillHash',
-      '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths',
-    ],
-    'sqliteIntentApplyArtifactLifecycle.ts': [
-      '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants',
-      '@/modules/resource-catalog/infrastructure/legacy/skill',
-      '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify',
-      '@/modules/resource-catalog/infrastructure/legacy/skillOperations',
-      '@/modules/resource-catalog/infrastructure/legacy/skillVersion',
     ],
     'postgresqlIntentApplyOperations.ts': [
       '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants',
     ],
+    'sqliteIntentApplyArtifactLifecycle.ts': [],
     'sqliteIntentApplyOperations.ts': [],
   }
 

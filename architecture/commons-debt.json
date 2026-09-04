@@ -3,10 +3,10 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 313,
+    "inboundEdges": 312,
     "outboundEdges": 25,
     "registeredFindings": 79,
-    "recordedAtShaNote": "RFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
+    "recordedAtShaNote": "RFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
   },
   "entries": [
     {
@@ -113,29 +113,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle.ts#createPostgresqlIntentApplyArtifactLifecycle"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "to": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners",
-      "specifier": "@/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:06dfdaa35541f4447cca",
-        "import:71003724f461dc92845b"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
-        "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle"
       ],
       "canonicalFacadeIds": []
     },
@@ -3628,21 +3605,21 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/intent/applyChangeset.ts",
-      "to": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle",
-      "specifier": "@/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle",
+      "to": "packages/backend/src/modules/intent/composition/apply",
+      "specifier": "@/modules/intent/composition/apply",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "intent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "why": "RFC-355 T6：兼容门面不再自己拼 provider（技能补偿原语已归 resource-catalog），改向 owner 自己的 composition 要已装配好的 SQLite 工件生命周期。边仍从 legacy service 指向模块内部，随 T7 删除该门面一并消失。",
       "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "removeAfterWave": "RFC-355 T7（services/intent/ 归位并删除兼容门面）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:8592439e2c027613eb71"
+        "import:e5548efc82d4b4fa3b4b"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/intent/applyChangeset.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyArtifactLifecycle.ts#createSqliteIntentApplyArtifactLifecycle"
+        "owner:packages/backend/src/modules/intent/composition/apply.ts#composeSqliteIntentApplyArtifactLifecycle"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/intent/applyChangeset.ts"
@@ -9303,7 +9280,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:8aca6d18478094ca50a8c85895400521d395a13f4068366c857cf35bc470db46",
+    "sourceDigest": "sha256:358459449e6f79a7107f2484b890cd59167871d7dd228dd9cc4598deb64834e7",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

@@ -4,18 +4,7 @@ import { and, eq } from 'drizzle-orm'
 
 import { intentApplyJournal, plugins, skills, skillVersions } from '@/db/schema'
 import type { PostgresqlIntentApplyArtifact } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
-import {
-  cleanupOpDirs,
-  opCandidateDir,
-  opStagedDir,
-  swapInStaged,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
-import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
-import {
-  skillFilesAbs,
-  skillVersionAbs,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
-import { markSkillBootVerified } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import type { PostgresqlSkillArtifactCompensation } from '../ports/skillArtifactCompensation'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   decodeIntentJournalArtifacts,
@@ -135,6 +124,7 @@ async function assertPluginPublished(input: {
 }
 
 async function rollForwardPostgresqlSkill(input: {
+  readonly rc: PostgresqlSkillArtifactCompensation
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
   readonly artifact: Extract<
@@ -168,10 +158,14 @@ async function rollForwardPostgresqlSkill(input: {
   }
 
   const liveDirectory = safeJoin(input.appHome, skill.managedPath)
-  const expectedLiveDirectory = skillFilesAbs(input.appHome, input.artifact.skillId)
+  const expectedLiveDirectory = input.rc.skillFilesAbs(input.appHome, input.artifact.skillId)
   const versionDirectory = safeJoin(input.appHome, snapshot.filesPath)
-  const expectedVersionDirectory = skillVersionAbs(input.appHome, input.artifact.skillId, version)
-  const expectedStagingDirectory = opStagedDir(liveDirectory, input.artifact.operationId)
+  const expectedVersionDirectory = input.rc.skillVersionAbs(
+    input.appHome,
+    input.artifact.skillId,
+    version,
+  )
+  const expectedStagingDirectory = input.rc.opStagedDir(liveDirectory, input.artifact.operationId)
   if (
     resolve(liveDirectory) !== resolve(expectedLiveDirectory) ||
     resolve(versionDirectory) !== resolve(expectedVersionDirectory) ||
@@ -182,15 +176,15 @@ async function rollForwardPostgresqlSkill(input: {
     throw new Error('intent-apply-skill-artifact-path-mismatch')
   }
 
-  const candidateDirectory = opCandidateDir(versionDirectory, input.artifact.operationId)
+  const candidateDirectory = input.rc.opCandidateDir(versionDirectory, input.artifact.operationId)
   assertManagedPath(input.appHome, candidateDirectory)
   if (skill.contentVersion > version) {
-    cleanupOpDirs(liveDirectory, input.artifact.operationId)
+    input.rc.cleanupOpDirs(liveDirectory, input.artifact.operationId)
     rmSync(candidateDirectory, { recursive: true, force: true })
     return
   }
   if (existsSync(versionDirectory)) {
-    if (hashRegularFileTree(versionDirectory) !== snapshot.contentHash) {
+    if (input.rc.hashRegularFileTree(versionDirectory) !== snapshot.contentHash) {
       throw new Error('intent-apply-skill-version-hash-mismatch')
     }
     rmSync(candidateDirectory, { recursive: true, force: true })
@@ -203,16 +197,20 @@ async function rollForwardPostgresqlSkill(input: {
   }
 
   if (existsSync(input.artifact.stagingDirectory)) {
-    swapInStaged(liveDirectory, input.artifact.operationId)
+    input.rc.swapInStaged(liveDirectory, input.artifact.operationId)
   }
-  if (!existsSync(liveDirectory) || hashRegularFileTree(liveDirectory) !== snapshot.contentHash) {
+  if (
+    !existsSync(liveDirectory) ||
+    input.rc.hashRegularFileTree(liveDirectory) !== snapshot.contentHash
+  ) {
     throw new Error('intent-apply-skill-live-hash-mismatch')
   }
-  cleanupOpDirs(liveDirectory, input.artifact.operationId)
-  markSkillBootVerified(input.artifact.skillId)
+  input.rc.cleanupOpDirs(liveDirectory, input.artifact.operationId)
+  input.rc.markSkillBootVerified(input.artifact.skillId)
 }
 
 function compensatePostgresqlSkill(input: {
+  readonly rc: PostgresqlSkillArtifactCompensation
   readonly appHome: string
   readonly artifact: Extract<
     PostgresqlIntentApplyArtifact,
@@ -220,24 +218,25 @@ function compensatePostgresqlSkill(input: {
   >
 }): void {
   const version = versionOf(input.artifact)
-  const liveDirectory = skillFilesAbs(input.appHome, input.artifact.skillId)
-  const versionDirectory = skillVersionAbs(input.appHome, input.artifact.skillId, version)
+  const liveDirectory = input.rc.skillFilesAbs(input.appHome, input.artifact.skillId)
+  const versionDirectory = input.rc.skillVersionAbs(input.appHome, input.artifact.skillId, version)
   if (
     resolve(input.artifact.stagingDirectory) !==
-      resolve(opStagedDir(liveDirectory, input.artifact.operationId)) ||
+      resolve(input.rc.opStagedDir(liveDirectory, input.artifact.operationId)) ||
     (input.artifact.kind === 'skill-version-stage' &&
       resolve(input.artifact.versionDirectory) !== resolve(versionDirectory))
   ) {
     throw new Error('intent-apply-skill-artifact-path-mismatch')
   }
-  cleanupOpDirs(liveDirectory, input.artifact.operationId)
-  rmSync(opCandidateDir(versionDirectory, input.artifact.operationId), {
+  input.rc.cleanupOpDirs(liveDirectory, input.artifact.operationId)
+  rmSync(input.rc.opCandidateDir(versionDirectory, input.artifact.operationId), {
     recursive: true,
     force: true,
   })
 }
 
 function compensateLegacyArtifact(input: {
+  readonly rc: PostgresqlSkillArtifactCompensation
   readonly appHome: string
   readonly pluginsDir: string
   readonly artifact: IntentJournalArtifact
@@ -257,7 +256,7 @@ function compensateLegacyArtifact(input: {
       const staged = input.artifact.staged
       assertManagedPath(input.appHome, staged.filesDir)
       assertManagedPath(input.appHome, staged.versionDir)
-      cleanupOpDirs(staged.filesDir, staged.publishId)
+      input.rc.cleanupOpDirs(staged.filesDir, staged.publishId)
       rmSync(staged.versionDir, { recursive: true, force: true })
     }
   }
@@ -268,7 +267,10 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
   readonly db: PostgresqlDatabaseClient
   readonly appHome: string
   readonly pluginsDir: string
+  /** RFC-355 T6：技能工件原语由 resource-catalog 提供、bootstrap 注入。 */
+  readonly skillArtifacts: PostgresqlSkillArtifactCompensation
 }): PostgresqlIntentApplyArtifactLifecycle {
+  const rc = input.skillArtifacts
   return Object.freeze({
     async compensate(
       artifact: Parameters<PostgresqlIntentApplyArtifactLifecycle['compensate']>[0],
@@ -280,10 +282,11 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
         return
       }
       if (postgresql?.kind === 'skill-stage' || postgresql?.kind === 'skill-version-stage') {
-        compensatePostgresqlSkill({ appHome: input.appHome, artifact: postgresql })
+        compensatePostgresqlSkill({ rc, appHome: input.appHome, artifact: postgresql })
         return
       }
       compensateLegacyArtifact({
+        rc,
         appHome: input.appHome,
         pluginsDir: input.pluginsDir,
         artifact: artifact as IntentJournalArtifact,
@@ -303,6 +306,7 @@ export function createPostgresqlIntentApplyArtifactLifecycle(input: {
           }
           if (postgresql?.kind === 'skill-stage' || postgresql?.kind === 'skill-version-stage') {
             await rollForwardPostgresqlSkill({
+              rc,
               db: input.db,
               appHome: input.appHome,
               artifact: postgresql,

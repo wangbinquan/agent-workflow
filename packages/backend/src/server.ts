@@ -196,8 +196,8 @@ import {
 } from '@/routes/intentSessions'
 import { legacyIntentApplyResourceDependencies } from '@/services/intent/legacyIntentApplyResourceDependencies'
 import {
+  composeSqliteIntentApplyArtifactLifecycle,
   composeSqliteIntentApplyOperations,
-  createSqliteIntentApplyArtifactLifecycle,
 } from '@/modules/intent/composition/apply'
 import {
   composeIntentDumpAuxiliaryQueries,
@@ -2037,7 +2037,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       legacyIntentApplyResourceDependencies,
       providerResourceCatalog.persistence.identities,
     ),
-    artifacts: createSqliteIntentApplyArtifactLifecycle({
+    artifacts: composeSqliteIntentApplyArtifactLifecycle({
       db: effectiveDeps.db,
       appHome,
     }),

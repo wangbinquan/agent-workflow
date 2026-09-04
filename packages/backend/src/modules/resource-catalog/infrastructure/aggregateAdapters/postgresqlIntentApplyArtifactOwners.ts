@@ -1,3 +1,16 @@
+// RFC-355 T6（RFC-294 W4-E4a）—— 本文件自 `modules/intent/infrastructure/` 迁来。
+//
+// **它实现的是 resource-catalog 的端口（`postgresqlIntentApplyResourcePorts`），
+// 用的是 resource-catalog 自己的技能文件机制**（`skillFsPublish` / `skillHash` /
+// `skillIdentityPaths`）与插件安装器——从头到尾是 RC 的能力，只是此前住在 intent 里。
+//
+// 对照 SQLite 路径就一目了然：同一件事（建/改技能版本的暂存与发布、插件生成目录与安装）
+// 在 SQLite 上由 RC 自己的 `legacyIntentApplyResourceParticipants` 提供并注入，
+// 只有 PostgreSQL 路径把它在 intent 里重写了一遍，并因此深取 RC 的内部实现
+// ——RFC-317 R2 禁止的跨 context 内部 import，30 条里有 13 条出自这一个文件。
+//
+// 迁位后这些 import 变成 RC 的**同 context 内部引用**，合法且不再需要任何豁免。
+
 import {
   existsSync,
   lstatSync,
@@ -17,20 +30,15 @@ import type {
   PostgresqlIntentPluginInstallResult,
   PostgresqlIntentSkillArtifactLifecycle,
   PostgresqlIntentSkillStageResult,
-} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts'
-import {
-  cleanupOpDirs,
-  opCandidateDir,
-  opStagedDir,
-  swapInStaged,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
-import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
+} from './postgresqlIntentApplyResourcePorts'
+import { cleanupOpDirs, opCandidateDir, opStagedDir, swapInStaged } from '../legacy/skillFsPublish'
+import { hashRegularFileTree } from '../legacy/skillHash'
 import {
   skillFilesAbs,
   skillFilesRel,
   skillVersionAbs,
   skillVersionRelPath,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
+} from '../legacy/skillIdentityPaths'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
 import { safeJoin } from '@/util/safePath'
 

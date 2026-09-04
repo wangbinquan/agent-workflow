@@ -5,7 +5,8 @@ import {
 } from '../infrastructure/sqliteIntentApplyOperations'
 import type { SqliteIntentApplyArtifactLifecycle } from '../infrastructure/sqliteIntentApplyArtifactLifecycle'
 
-export { createSqliteIntentApplyArtifactLifecycle } from '../infrastructure/sqliteIntentApplyArtifactLifecycle'
+import { createSqliteIntentApplyArtifactLifecycle } from '../infrastructure/sqliteIntentApplyArtifactLifecycle'
+import { composeSqliteSkillArtifactCompensation } from '@/modules/resource-catalog/composition/intentApply'
 
 import type {
   IntentApplyOperations,
@@ -13,6 +14,21 @@ import type {
 } from '../application/ports/intentApplyOperations'
 import type { Actor } from '@/auth/actor'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
+
+/**
+ * RFC-355 T6：技能工件的补偿原语归 resource-catalog 所有，intent 只消费端口。
+ * 装配发生在 composition 层——engine / application / 兼容门面都不再自己拼 provider。
+ */
+export function composeSqliteIntentApplyArtifactLifecycle(input: {
+  readonly db: DbClient
+  readonly appHome: string
+}): SqliteIntentApplyArtifactLifecycle {
+  return createSqliteIntentApplyArtifactLifecycle({
+    skillArtifacts: composeSqliteSkillArtifactCompensation(),
+    db: input.db,
+    appHome: input.appHome,
+  })
+}
 
 export interface SqliteIntentApplyCompositionDependencies {
   readonly db: DbClient

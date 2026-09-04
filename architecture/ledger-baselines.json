@@ -62,8 +62,8 @@
       "id": "rfc349-dual-provider-predicate-forks",
       "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
       "symbol": "ALLOWED_DIVERGENCE",
-      "baseline": 18,
-      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。"
+      "baseline": 17,
+      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。"
     },
     {
       "id": "rfc294-cross-context-pilot-debt",
@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6412,
+      "baseline": 6390,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5318,
+      "baseline": 5296,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25892,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25903,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-355 T6：技能工件的补偿原语从 intent infrastructure 抽成 intent 的 ports 端口 + resource-catalog 的 provider 适配，端口 / 组合函数是新增的具名符号，owner 清单因此从 25892 涨到 25903。这是把跨上下文耦合换成显式合同的净收益，不是新增豁免。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:8aca6d18478094ca50a8c85895400521d395a13f4068366c857cf35bc470db46",
+    "sourceDigest": "sha256:358459449e6f79a7107f2484b890cd59167871d7dd228dd9cc4598deb64834e7",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
