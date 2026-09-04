@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1930,
+    "backendFiles": 1934,
     "frontendFiles": 621,
     "legacyFiles": 629,
-    "moduleFiles": 1301,
-    "productionFiles": 2706,
+    "moduleFiles": 1305,
+    "productionFiles": 2710,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25880
+    "symbolsIncludingFileRoots": 25892
   },
   "entries": [
     {
@@ -68023,6 +68023,30 @@
       "currentContext": "intent",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/intent/application/intentResourcePlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/intentResourcePlan.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/intentResourcePlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/intentResourcePlan.ts#intentResourcePlanOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "intentResourcePlanOf",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts",
       "id": "owner:packages/backend/src/modules/intent/application/intentWorkingSetDelta.ts#$file",
       "removeAfterWave": null,
@@ -68501,6 +68525,42 @@
     },
     {
       "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/intent/application/sessionApplyLock.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/sessionApplyLock.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/sessionApplyLock.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/sessionApplyLock.ts#createSessionApplyLock",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createSessionApplyLock",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/sessionApplyLock.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/sessionApplyLock.ts#SessionApplyLock",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SessionApplyLock",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
       "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/intent/composition/apply.ts",
@@ -68918,6 +68978,114 @@
       "symbol": "composePostgresqlIntentApplyConvergence",
       "targetContext": "intent",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#assertIntentDraftUnresolved",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertIntentDraftUnresolved",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#assertIntentSessionClaimable",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertIntentSessionClaimable",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#assertIntentSessionReady",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertIntentSessionReady",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#IntentApplyClaimDraft",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyClaimDraft",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#IntentApplyClaimSession",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyClaimSession",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/applyClaim.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/applyClaim.ts#requireCommittableDraft",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "requireCommittableDraft",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/intent/domain/storedChangeset.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/storedChangeset.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/storedChangeset.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/storedChangeset.ts#decodeStoredChangeset",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "decodeStoredChangeset",
+      "targetContext": "intent",
+      "targetLayer": "domain"
     },
     {
       "currentContext": "intent",
@@ -72198,18 +72366,6 @@
     {
       "currentContext": "intent",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "id": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#intentResourcePlanOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "intentResourcePlanOf",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "intent",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
       "id": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#PostgresqlIntentApplyArtifactLifecycle",
@@ -72486,6 +72642,18 @@
     {
       "currentContext": "intent",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
+      "id": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#__withSessionApplyLockForTests",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "__withSessionApplyLockForTests",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
       "id": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#$file",
@@ -72584,10 +72752,10 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "id": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLocks",
+      "id": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLock",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "applyLocks",
+      "symbol": "applyLock",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -72648,30 +72816,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "IntentApplyResourceSession",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "intent",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "id": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#intentResourcePlanOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "intentResourcePlanOf",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "intent",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
-      "id": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#withSessionApplyLock",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "withSessionApplyLock",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -311259,5 +311403,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f25b174510f7a2b199568de537f85ceee88f8a1e00f57710b258051fdff2b9ec"
+  "sourceDigest": "sha256:8aca6d18478094ca50a8c85895400521d395a13f4068366c857cf35bc470db46"
 }

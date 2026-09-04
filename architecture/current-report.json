@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5313,
+    "architectureExceptions": 5318,
     "backgroundJobs": 367,
-    "crossContextImports": 6409,
+    "crossContextImports": 6412,
     "facades": 345,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25880,
-    "mutationEntrypoints": 1920,
+    "moduleSymbolOwners": 25892,
+    "mutationEntrypoints": 1921,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 1003,
     "transactionExternalEffects": 479
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1930,
+    "backendProductionFiles": 1934,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -87,7 +87,7 @@
       },
       {
         "context": "intent",
-        "files": 33
+        "files": 37
       },
       {
         "context": "knowledge-evolution",
@@ -122,7 +122,7 @@
         "files": 333
       }
     ],
-    "moduleFiles": 1301,
+    "moduleFiles": 1305,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
@@ -145,7 +145,7 @@
         "symbol": "createSqliteNodeRunMintParticipantInTx"
       }
     ],
-    "outboundBoundaryEdges": 23,
+    "outboundBoundaryEdges": 25,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f25b174510f7a2b199568de537f85ceee88f8a1e00f57710b258051fdff2b9ec"
+  "sourceDigest": "sha256:8aca6d18478094ca50a8c85895400521d395a13f4068366c857cf35bc470db46"
 }

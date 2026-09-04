@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1920,
+    "entries": 1921,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -15051,6 +15051,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/application/sessionApplyLock.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/application/sessionApplyLock.ts#createSessionApplyLock",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/sessionApplyLock.ts#createSessionApplyLock",
+      "symbol": "createSessionApplyLock",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": true,
         "transaction": false
@@ -15508,7 +15533,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "internal-family",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -15519,7 +15544,6 @@
       "id": "mutation:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
       "missingControls": [
         "audit",
-        "authority",
         "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyInner",
@@ -15635,7 +15659,7 @@
       },
       "file": "packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLocks",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLock",
       "missingControls": [
         "audit",
         "authority",
@@ -15644,8 +15668,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLocks",
-      "symbol": "applyLocks",
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/sqliteIntentApplyOperations.ts#applyLock",
+      "symbol": "applyLock",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -45761,7 +45785,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f25b174510f7a2b199568de537f85ceee88f8a1e00f57710b258051fdff2b9ec",
+  "sourceDigest": "sha256:8aca6d18478094ca50a8c85895400521d395a13f4068366c857cf35bc470db46",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

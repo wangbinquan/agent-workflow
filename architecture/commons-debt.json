@@ -7670,7 +7670,15 @@
       "why": "RFC-355 T2：`intentResourcePlanOf` 是 44 行纯判据，此前在两个 provider 的 apply 文件里各一份、逐字节相同（只差形参名）。收成一份之后它的两个入参类型（`ResolvedIntentOp` / `IntentManifestEntry`）仍住在 legacy 的 `services/intent/*`，于是出现这条 R2 边。**纯类型边**，且是迁移的中间态：本 RFC 的 T7 会把 `resolveChangeset` / `manifest` 一并迁进 `modules/intent`，届时本条自动消失、判据也可以从 application 回到 domain。登记它是为了让「中途多出来的边」有账可查，而不是等 T7 之后再补。",
       "introducedByRFC": "RFC-355",
       "removeAfterWave": "RFC-294 W4-E4a（本 RFC 的 T7）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:2a7f79c57e1729ee9d4f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/intentResourcePlan.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/intent/manifest.ts#IntentManifestEntry"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -7683,7 +7691,15 @@
       "why": "RFC-355 T2：`intentResourcePlanOf` 是 44 行纯判据，此前在两个 provider 的 apply 文件里各一份、逐字节相同（只差形参名）。收成一份之后它的两个入参类型（`ResolvedIntentOp` / `IntentManifestEntry`）仍住在 legacy 的 `services/intent/*`，于是出现这条 R2 边。**纯类型边**，且是迁移的中间态：本 RFC 的 T7 会把 `resolveChangeset` / `manifest` 一并迁进 `modules/intent`，届时本条自动消失、判据也可以从 application 回到 domain。登记它是为了让「中途多出来的边」有账可查，而不是等 T7 之后再补。",
       "introducedByRFC": "RFC-355",
       "removeAfterWave": "RFC-294 W4-E4a（本 RFC 的 T7）",
-      "findingId": "G-02"
+      "findingId": "G-02",
+      "canonicalImportEdgeIds": [
+        "import:082bc91ad462d4d1e2b7"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/intentResourcePlan.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/intent/resolveChangeset.ts#ResolvedIntentOp"
+      ],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R2-outbound-module-to-legacy",
@@ -9287,15 +9303,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:564dd7e8ca8b83a5847829571c37e8e8487e45bcbc9cdac5b91d4b3376932395",
+    "sourceDigest": "sha256:8aca6d18478094ca50a8c85895400521d395a13f4068366c857cf35bc470db46",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "b0a3e3d12f5ec7af87aabd6e8730058015bd0d57",
-    "contentDigest": "sha256:01a6419cbfc46ef68ece90ad3569c935da43c80aa0ce63c3672ba6543b778004",
+    "currentSnapshotSha": "55390b5a86113ab769ac8006b45168f8f53ab1ac",
+    "contentDigest": "sha256:ea63c460f0e3d67abb6db6b036cb0639cc6c58370f7d6103fc07ed43d1c5a780",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
