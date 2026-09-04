@@ -87,6 +87,22 @@ jobs:
     # Healthy shards finish in a few minutes; fail closed well before Actions'
     # six-hour default while retaining ample slow-runner headroom.
     timeout-minutes: 15
+    # RFC-359 §11.1 —— 双引擎是缺省：`describeEachProvider` 写的用例在 ubuntu 分片上对着真
+    # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS runner 起不了服务容器，是唯一一条显式
+    # `AW_TEST_PROVIDERS=sqlite` 的 lane；image 为空字符串时 Actions 跳过该服务容器。
+    services:
+      postgres:
+        image: ${{ matrix.os == 'ubuntu-latest' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: awtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -143,6 +159,27 @@ jobs:
       # files; --randomize exposes any remaining within-file order dependency and
       # prints a seed that reproduces the failure; --shard=N/4 selects this
       # runner's quarter of the files. Coverage is instrumented only on ubuntu.
+      # 先证分片真的连上了库：URL 拼错会让 harness 的 PostgreSQL 半边整体红，但红得要可归因。
+      - name: Assert the PostgreSQL service is reachable (ubuntu shards)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          cat > pg-probe.mjs <<'PROBE'
+          import { SQL } from 'bun'
+          const sql = new SQL(process.env.AW_TEST_POSTGRESQL_URL)
+          const rows = await sql`select 1 as ok`
+          if (rows[0]?.ok !== 1) {
+            console.error('postgres did not answer', rows)
+            process.exit(1)
+          }
+          console.log('postgres reachable')
+          await sql.close()
+          PROBE
+          bun pg-probe.mjs
+          rm -f pg-probe.mjs
+        env:
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
+
       - name: Test backend (ubuntu shard — with coverage)
         if: matrix.os == 'ubuntu-latest'
         # Codecov consumes lcov. The redundant text table is large enough to
@@ -151,6 +188,9 @@ jobs:
         shell: bash
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4 --coverage --coverage-reporter=lcov
         env:
+          # RFC-359 §11.1：双引擎用例的 PostgreSQL 半边。每个测试文件自己 drop + 迁移 schema，
+          # 分片内文件串行（--isolate），一个库够用。
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
           # Real-git-clone (file:// + recursive submodules) and external MCP-spawn
           # integration suites are gated behind RUN_GIT_NETWORK so local `bun test`
           # stays deterministic. CI has the environment to run them.
@@ -166,6 +206,8 @@ jobs:
         run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/4
         env:
           RUN_GIT_NETWORK: '1'
+          # RFC-359 §11.1：macOS runner 没有服务容器，显式声明只跑 SQLite——这是全 CI 唯一一处。
+          AW_TEST_PROVIDERS: sqlite
 
       - name: Upload backend coverage to Codecov (ubuntu shards)
         # Each ubuntu shard emits an lcov covering its quarter of the files;

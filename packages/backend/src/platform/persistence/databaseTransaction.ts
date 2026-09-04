@@ -31,17 +31,27 @@
 import { sql } from 'drizzle-orm'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-import type { DbClient } from '@/db/client'
+import { observeDbTransaction, type DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 import { runInExplicitTransactionScope } from '@/db/transactionScope'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  createPostgresqlCapabilities,
+  createSqliteCapabilities,
+  type EngineCapabilities,
+} from './capabilities'
 import { acquireWriterLease } from './writerLease'
 
 /** 事务句柄。两个 provider 上都是 drizzle 的同一套 query builder。 */
 export type DatabaseTransaction = ProviderNeutralDatabase
 
 export interface DatabaseSession {
+  /**
+   * 引擎能力矩阵（RFC-359 §5）：一份实现按能力提需求（行锁 / 认领锁子句 / advisory lock / NULL 排序 /
+   * 大小写不敏感 LIKE / 错误分类……），由边界按引擎渲染最优 SQL。实现里永远不出现 provider 名。
+   */
+  readonly engine: EngineCapabilities
   /**
    * 写事务。两个 provider 上语义相同：体内抛错 ⇒ 整笔回滚；正常返回 ⇒ 提交；
    * 体内跨事件循环 tick 仍在同一事务内。
@@ -92,6 +102,7 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
     if (reused !== undefined) return await body(reused)
     const release = await acquireWriterLease(client)
     const tx = db as unknown as DatabaseTransaction
+    const startedAt = performance.now()
     try {
       db.run(sql.raw('BEGIN IMMEDIATE'))
       let result: T
@@ -107,18 +118,25 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
       return result
     } finally {
       release()
+      // 与 dbTxSync 同一个观测点（RFC-311 的事务时长守卫读它），迁过来的事务不能从指标里消失。
+      observeDbTransaction(db, performance.now() - startedAt)
     }
   }
   // BEGIN IMMEDIATE 下整个库独占，已是最强隔离；serializable 与 transaction 是同一条路。
   // （写成同一个局部函数而不是 `this.transaction(...)` 自调：S-10 / RFC-317 T37 守卫按词法扫
   // `.transaction(`，自调会被误记成一处绕过 dbTxSync 的裸 drizzle 事务。）
-  return Object.freeze({ transaction, serializable: transaction })
+  return Object.freeze({
+    engine: createSqliteCapabilities(),
+    transaction,
+    serializable: transaction,
+  })
 }
 
 /** PostgreSQL 会话。驱动自带异步事务，不需要应用层单写者（每笔事务一条独立连接）。 */
 export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): DatabaseSession {
   const client: object = db
   return Object.freeze({
+    engine: createPostgresqlCapabilities(),
     async transaction<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
@@ -146,4 +164,28 @@ export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): D
       }
     },
   })
+}
+
+const sessions = new WeakMap<object, DatabaseSession>()
+
+function isPostgresqlDatabaseClient(client: object): client is PostgresqlDatabaseClient {
+  return (client as { readonly $provider?: unknown }).$provider === 'postgresql'
+}
+
+/**
+ * 按客户端句柄取会话（按客户端记忆化）。这是全仓**唯一**看 provider 的地方之一：PostgreSQL 客户端
+ * 以 `$provider` 品牌自述，其余一律当 SQLite。业务代码拿到的是 DatabaseSession，看不见 provider。
+ *
+ * 传**客户端**，不要传事务句柄——重入靠 AsyncLocalStorage 帧按客户端识别，事务句柄不是帧的 key，
+ * 拿它开会话会在一笔开着的事务里再发一次 BEGIN。
+ */
+export function databaseSessionFor(db: ProviderNeutralDatabase): DatabaseSession {
+  const client = db as object
+  const cached = sessions.get(client)
+  if (cached !== undefined) return cached
+  const session = isPostgresqlDatabaseClient(client)
+    ? createPostgresqlDatabaseSession(client)
+    : createSqliteDatabaseSession(db as unknown as DbClient)
+  sessions.set(client, session)
+  return session
 }

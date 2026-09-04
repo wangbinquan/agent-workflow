@@ -3954,3 +3954,24 @@ instead of importing another SQLite/PostgreSQL factory.」
 `architecture:write` 的普查输入面是 `packages/{backend,shared,frontend,system-mocks}/src`。
 只改了一个前端组件 + 加一条前端测试，同样要重采，否则 `rfc294-canonical-manifests` 当场红。
 「架构账本只跟后端有关」是错觉——**任何落在那四个 `src` 下的改动都要重采**。
+
+## 双引擎测试是缺省：`describeEachProvider` 的用例本地怎么跑（RFC-359 §11.1，2026-09-04）
+
+`packages/backend/tests/helpers/eachProvider.ts` 的 `describeEachProvider(name, body)` 把同一段
+断言在 SQLite（内存库）和 PostgreSQL（真库）上各跑一遍，body 拿到的是 `DatabaseSession` +
+`EngineCapabilities` + provider-中立客户端，**拿不到 provider 名**。PostgreSQL 半边**缺库即红、
+不是 skip**——「无库则跳过」正是 12 条只在 PostgreSQL 上成立的 P0 穿过全部验收的机制
+（`design/dual-provider-parity-audit-2026-09-04.md`）。
+
+- **CI**：ubuntu 四个分片各带一个 `postgres:17` 服务容器（`AW_TEST_POSTGRESQL_URL`）；macOS
+  runner 起不了服务容器，是全 CI **唯一**一条显式 `AW_TEST_PROVIDERS=sqlite` 的 lane。
+- **本地只想跑 SQLite**：`AW_TEST_PROVIDERS=sqlite bun test <file>`。不设它就是双引擎缺省，
+  没库会红——这是设计，不是环境坏了。
+- **本地跑真 PostgreSQL**：随便一个可以被**整个清空**的库即可（harness 每个文件
+  `drop schema … cascade` 再迁移，每个用例前 TRUNCATE 全部业务表并把迁移种下的行种回）：
+  `docker run -d --name aw-pg -e POSTGRES_PASSWORD=postgres -p 55432:5432 postgres:17`，然后
+  `AW_TEST_POSTGRESQL_URL=postgresql://postgres:postgres@127.0.0.1:55432/postgres bun test <file>`。
+  **不要**指向任何有数据的库。
+- 进程级 schema 投影（`db/providerSchema.ts` 的 `activeProvider`）是全局的，harness 在每个用例
+  前显式选引擎、用完还原；自己手写 PostgreSQL 用例时同样要 `selectDatabaseSchemaProvider`
+  成对使用，否则会渗进同进程后面的文件（本仓有前科）。
