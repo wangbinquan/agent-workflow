@@ -23,7 +23,6 @@ import type {
   PostgresqlIntentApplyResourceSession,
 } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
@@ -39,7 +38,7 @@ import {
   type IntentContextManifest,
   type IntentManifestEntry,
 } from '@/services/intent/manifest'
-import { resolveIntentBundle, type ResolvedIntentOp } from '@/services/intent/resolveChangeset'
+import { resolveIntentBundle } from '@/services/intent/resolveChangeset'
 import { sessionManifest } from '@/services/intent/session'
 
 type IntentApplyRecoveryArtifact = PostgresqlIntentApplyArtifact | IntentJournalArtifact
