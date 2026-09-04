@@ -17,15 +17,29 @@
 > 四条会让 r1 直接做不出来（覆盖层漏 `outputKinds`、合成 agent 行缺 `skills`/`dependsOn` 致 validator 抛、loose
 > 定义直喂会崩、`graphWarnings` 撞 `.strict()` 致详情 500）。**批准前不动任何生产代码**。
 
-> 🚧 **进行中 RFC（Draft，待批，2026-09-04）：[RFC-357 任务列表页查询归一（一份查询，两个 provider）](design/RFC-357-task-list-page-query-unification/proposal.md)。**
-> 起于用户「切了 PostgreSQL，任务列表还是卡」。对账结论不是「PostgreSQL 慢」，而是**这一页在两个 provider 上是两份实现，
-> PostgreSQL 那份从来没有过 RFC-311 的任何一项优化**：目录页对 task-execution 的三个源各发一次
-> `listItems({limit: 10_000})`（条件字节相同、结果三选一），那条查询是裸 `db.select().from(tasks)`、把
-> `workflow_snapshot` 等大列一起搬过来（RFC-311 audit L1-8 在 SQLite 上修掉的正是同一形状，注释记着「每行上百 KB」），
-> 失败任务再逐行 N+1，然后过滤 / 搜索 / 排序 / 分页 / facets 全在 JS 里做；而 `branch_started_at` / `root_task_id`
-> 与索引在 PostgreSQL 上都在、只是没人用（**零迁移**）。用户裁决选「抽一份 dialect 参数化的页查询给两个 provider 共用」，
-> `services/taskOperations.ts`（1196 行、仅一个生产消费者）整文件删除归位进 `modules/task-execution`；同批裁决
-> 加一条**真 PostgreSQL** 的窄 CI lane，并把前端 WS 失效改成按帧增量。四个 PR，**批准前不动任何生产代码**。
+> ✅ **已完成 RFC（Done，2026-09-04，四个 PR + 一笔修红全部推上 main）：[RFC-357 任务列表页查询归一（一份查询，两个 provider）](design/RFC-357-task-list-page-query-unification/proposal.md)。**
+> 起于用户「切了 PostgreSQL，任务列表还是卡」。慢的不是数据库：目录页对 task-execution 的三个源**各发一次**
+> `listItems({limit: 10_000})`（三次条件字节相同、结果三选一），那条查询是裸 `db.select().from(tasks)`——把
+> `workflow_snapshot` 等大列一起搬回来而列表项一个都不读，失败任务再逐行发一次 `node_runs` 查询；然后过滤 /
+> 搜索 / 排序 / 分页 / facets 全在 JS 里做。而 `branch_started_at` / `root_task_id` 与索引在 PostgreSQL 上一直
+> 都在、只是没人用（**零迁移**）。
+> **提交链**：`05851f4ec`（PR-1 骨架 + SQLite 平移，`services/taskOperations.ts` 1196 行整文件删除）→
+> `2aa60750d`（PR-2 真 PostgreSQL CI lane + 一份场景两个 provider 各跑一遍）→ `87d080300`（PR-3 PostgreSQL 目录源
+> 切过去，`postgresqlTaskCatalogSources.ts` 276 → 22 行；`/api/tasks` 投影收窄 + 批量失败码）→ `dfbfb3a91`
+> （PR-4 收 lane 抓到的第二个 PG-only 缺陷 + 前端按帧就地更新）→ `38d07f129`（收 PR-4 推红的前端契约测试）。
+> **真库 lane 的价值当场兑现——它抓到两个只在 PostgreSQL 上成立、且都是静默错值的缺陷**：
+> ① `json_type` 的返回词汇表不同（shim 转发 `jsonb_typeof`，字符串返回 `'string'` 而 SQLite 返回 `'text'`）⇒
+> `= 'text'` 恒假 ⇒ **工作组名恒为 NULL**；② 分页游标从裸行取 `branch_started_at` 直接编码，PG 上是字符串 ⇒
+> **翻第二页解不开自己刚发的游标**（422）。两条在假 pool（只断言 SQL 文本）那层完全看不见，②那处正是静态守卫
+> 逐字列举字段时漏掉的一处——守卫因此改成从 `OperationsSqlRow` 的**类型声明**推导。通用教训进
+> `docs/dev-gotchas.md` §「PostgreSQL 的 SQLite 函数 shim：同名同参，返回词汇表可以完全不同」。
+> **两处与设计不符、如实修订**：没有引入 `dialect.ts`（逐条核对下来每个方法都退化成恒等，依据写在
+> `taskListPage/db.ts` 头注释）；前端**不**就地算 facets（分母含当前页看不见的行与子行，据此加减必然算错，
+> 而「页签数字乱跳」正是用户报的第一个问题）——改为 patch 只做确定正确的两件事、重取窗口 1s → 10s。
+> **我推红过三次**，逐条记在 `plan.md §6.3`（RFC-305 已审消费者账本、shellcheck SC2016、skip 账本、
+> 以及漏跑前端契约文件），全部已收。**AC 状态逐条如实标注在 `proposal.md §6`**：AC-3（十万级规模档）**未做**、
+> AC-4 / AC-8 部分、AC-10 待取证；**还欠一笔 `architecture/` canonical 重采**（落地时工作树装着并发 session 的
+> RFC-358 在制品，重采出来大半是他们的符号，见 `plan.md §6.5`）。
 
 > 🔧 **单笔修复（2026-09-04，非 RFC）：启动来源筛选按 `launch_origin` 下推**（`d7b2fab72`）。
 > 同一次对账里发现的功能缺陷：PostgreSQL 目录源按 `item.scheduledTaskId` 是否为空**猜**启动来源，于是
