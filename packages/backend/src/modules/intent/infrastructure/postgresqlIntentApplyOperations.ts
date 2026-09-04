@@ -1,4 +1,6 @@
 import { formatChangesetIssues, parseIntentChangeset } from '@agent-workflow/shared'
+import { intentResourcePlanOf } from '../domain/intentResourcePlan'
+import { createSessionApplyLock } from '../application/sessionApplyLock'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { ZodError } from 'zod'
@@ -82,49 +84,6 @@ export interface PostgresqlIntentApplyDependencies {
 
 const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
 
-function intentResourcePlanOf(
-  operation: ResolvedIntentOp,
-  manifestByHandle: ReadonlyMap<string, IntentManifestEntry>,
-): VersionedIntentResourceChangesetPlan {
-  const payload =
-    operation.resourceType === 'plugin' && 'options' in operation.payload
-      ? (() => {
-          const { options, ...rest } = operation.payload
-          return { ...rest, optionsJson: options }
-        })()
-      : operation.payload
-  if (operation.action === 'update') {
-    const expectedRevision = operation.manifestEntry?.fence
-    if (expectedRevision === undefined || expectedRevision.kind !== operation.resourceType) {
-      throw new ConflictError(
-        'intent-baseline-stale',
-        `${operation.resourceType} fence missing for intent update`,
-      )
-    }
-    return {
-      kind: operation.resourceType,
-      operationId: operation.opId,
-      action: 'update',
-      resourceId: operation.resourceId,
-      expectedRevision,
-      payload,
-    } as VersionedIntentResourceChangesetPlan
-  }
-  const copiedFromResourceId =
-    operation.copiedFromHandle === undefined
-      ? undefined
-      : manifestByHandle.get(operation.copiedFromHandle)?.resourceId
-  return {
-    kind: operation.resourceType,
-    operationId: operation.opId,
-    action: 'create',
-    resourceId: operation.resourceId,
-    fromCopy: operation.fromCopy,
-    ...(copiedFromResourceId === undefined ? {} : { copiedFromResourceId }),
-    payload,
-  } as VersionedIntentResourceChangesetPlan
-}
-
 function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
   const parsed: unknown = JSON.parse(json)
   if (!Array.isArray(parsed)) throw new Error('intent journal artifacts must be an array')
@@ -169,24 +128,8 @@ export function createPostgresqlIntentApplyOperations(
   const nextId = dependencies.id ?? ulid
   const now = dependencies.now ?? Date.now
   const active = new Set<string>()
-  const locks = new Map<string, Promise<unknown>>()
-
-  async function withSessionLock<T>(sessionId: string, run: () => Promise<T>): Promise<T> {
-    const prior = locks.get(sessionId) ?? Promise.resolve()
-    let release: () => void = () => {}
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const chain = prior.then(() => gate)
-    locks.set(sessionId, chain)
-    await prior.catch(() => {})
-    try {
-      return await run()
-    } finally {
-      release()
-      if (locks.get(sessionId) === chain) locks.delete(sessionId)
-    }
-  }
+  // RFC-355 T3：与 SQLite 侧共用同一个算法（`application/sessionApplyLock`）。
+  const applyLock = createSessionApplyLock()
 
   async function applyUnlocked(request: PostgresqlIntentApplyRequest): Promise<IntentApplyReceipt> {
     const { actor, authority, command: input } = request
@@ -676,7 +619,7 @@ export function createPostgresqlIntentApplyOperations(
 
   return Object.freeze({
     apply(request: PostgresqlIntentApplyRequest) {
-      return withSessionLock(request.command.sessionId, () => applyUnlocked(request))
+      return applyLock.run(request.command.sessionId, () => applyUnlocked(request))
     },
     converge,
     activeJournalIds: () => [...active],

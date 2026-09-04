@@ -33,6 +33,8 @@ import { formatChangesetIssues } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import { intentResourcePlanOf } from '../domain/intentResourcePlan'
+import { createSessionApplyLock } from '../application/sessionApplyLock'
 import {
   intentApplyJournal,
   intentDraftResolutions,
@@ -176,81 +178,29 @@ export interface ApplyIntentInput {
   decisions: IntentDecision[]
 }
 
-/** Per-session in-process serialization (single-daemon platform). */
-const applyLocks = new Map<string, Promise<unknown>>()
-
-async function withSessionApplyLock<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
-  const prior = applyLocks.get(sessionId) ?? Promise.resolve()
-  let release: () => void = () => {}
-  const gate = new Promise<void>((r) => {
-    release = r
-  })
-  const chain = prior.then(() => gate)
-  applyLocks.set(sessionId, chain)
-  await prior.catch(() => {})
-  try {
-    return await fn()
-  } finally {
-    release()
-    if (applyLocks.get(sessionId) === chain) applyLocks.delete(sessionId)
-  }
-}
+/**
+ * Per-session in-process serialization (single-daemon platform).
+ * RFC-355 T3：算法搬进 `application/sessionApplyLock`，这里只持有本 provider 的那个实例
+ * ——两个 provider 本来就是两个独立的 Map，合并的是算法不是状态。
+ */
+const applyLock = createSessionApplyLock()
 
 export function __intentApplyLockCountForTests(): number {
-  return applyLocks.size
+  return applyLock.size()
 }
 
-export { withSessionApplyLock as __withSessionApplyLockForTests }
-
-function intentResourcePlanOf(
-  op: ResolvedIntentOp,
-  manifestByHandle: ReadonlyMap<string, IntentManifestEntry>,
-): VersionedIntentResourceChangesetPlan {
-  const payload =
-    op.resourceType === 'plugin' && 'options' in op.payload
-      ? (() => {
-          const { options, ...rest } = op.payload
-          return { ...rest, optionsJson: options }
-        })()
-      : op.payload
-  if (op.action === 'update') {
-    const expectedRevision = op.manifestEntry?.fence
-    if (expectedRevision === undefined || expectedRevision.kind !== op.resourceType) {
-      throw new ConflictError(
-        'intent-baseline-stale',
-        `${op.resourceType} fence missing for intent update`,
-      )
-    }
-    return {
-      kind: op.resourceType,
-      operationId: op.opId,
-      action: 'update',
-      resourceId: op.resourceId,
-      expectedRevision,
-      payload,
-    } as VersionedIntentResourceChangesetPlan
-  }
-
-  const copiedFromResourceId =
-    op.copiedFromHandle === undefined
-      ? undefined
-      : manifestByHandle.get(op.copiedFromHandle)?.resourceId
-  return {
-    kind: op.resourceType,
-    operationId: op.opId,
-    action: 'create',
-    resourceId: op.resourceId,
-    fromCopy: op.fromCopy,
-    ...(copiedFromResourceId === undefined ? {} : { copiedFromResourceId }),
-    payload,
-  } as VersionedIntentResourceChangesetPlan
+export async function __withSessionApplyLockForTests<T>(
+  sessionId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return applyLock.run(sessionId, fn)
 }
 
 export async function applyIntentChangeset(
   deps: ApplyIntentDeps,
   input: ApplyIntentInput,
 ): Promise<IntentApplyReceipt> {
-  return withSessionApplyLock(input.sessionId, () => applyInner(deps, input))
+  return applyLock.run(input.sessionId, () => applyInner(deps, input))
 }
 
 async function applyInner(
