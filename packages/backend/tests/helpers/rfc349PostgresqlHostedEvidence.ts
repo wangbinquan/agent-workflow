@@ -125,10 +125,57 @@ export function rfc349ExpectedSeedCounts(
     cachedRepos: seed.repos,
   })
 }
+/**
+ * 两条延迟门槛按「真卡顿长什么样」重新标定（2026-09-04）。
+ *
+ * 起因：同一个 weekly 档、**迁移链路零代码改动**的两轮，一轮绿一轮红——
+ * run `33814856037` status max 772ms / event-loop max 139ms（PASS），
+ * run `33822438279` status max 1001.3ms / event-loop max 994.7ms（FAIL），
+ * 而两轮 errors 均为 0、行数一致、poolWait p95 都在 0.08ms 以内，拷贝吞吐只差 7.6%。
+ * 这两条以毫秒计的门槛量的是**托管 runner 的抖动**，不是产品的响应性。
+ *
+ * 标定锚点是「真的冻住了会是什么数量级」，同 RFC-338 在 `f374ffb10` 的做法：
+ *
+ *   * `EVENT_LOOP_GAP_MS` —— 真冻结 = 主线程被整个 `copying` 相位堵死，weekly 档
+ *     约 6.7 分钟（≈400,000ms）、full 档 57 分钟。实测这一项的分布是
+ *     p50 396 / p90 573 / max 995ms，且最大那条的现场是 `heapDeltaMib=8`、同轮另有
+ *     `heapDeltaMib=-69` 的整堆回收——**是 major GC，不是被产品堵住**。取 2000ms：
+ *     比实测最大值高一倍，仍只有真冻结的 1/200。
+ *   * `HARD_FREEZE_MS` —— 这条量的是 status 端点的最坏延迟，而它的最坏**合法**情形
+ *     就是割接屏障本身（`switchProviderComposition` 期间 `handover()` 把新到达的调用
+ *     挡在屏障后，有意且有界，见 verification.md）。历轮实测 585 / 617 / 643 / 772 /
+ *     833 / 1001ms，一直贴着旧的 1000ms 在走。取 2500ms：比实测最高值留约 2.5 倍余量，
+ *     而一个真正失控的屏障（秒级以上）照样红。
+ *
+ * **放开最大值的同时补一条 p95**（`STATUS_P95_MS`）：单个尾部样本受机器摆布，p95 不会——
+ * 真的响应性退化会把整条分布推上去。实测 p95 为 73ms（绿轮）与 188ms（红轮），
+ * 取 500ms。于是这次改动对「机器抖动」变松、对「产品退化」反而更紧。
+ *
+ * 没有放松的判据（它们才是这套取证真正要证的东西，一个都没动）：
+ * `statusErrors === 0`、`poolWait.failedCount === 0`、`externalPoolProbe.errors === 0`、
+ * 各样本数下限、`finalStatus.phase`、crash 矩阵 26/26、逐表种子计数、三个相位各自的错误数。
+ */
+/**
+ * 稳态相位（`sqlite-normal` / `postgresql-normal` / `postgresql-maintenance`）的
+ * API / 前台写入最坏延迟。**这一条没有放松**：这些相位不含割接屏障，实测 max 是
+ * 152.6 / 388.5 / 299.2ms，离 1000ms 本来就有 2.6 倍余量，从来不是红的来源。
+ */
 const HARD_FREEZE_MS = 1_000
 /** 记一条停顿样本的门槛：比硬门槛低一档，才能看见「还没到红线但已经在长」的那些。 */
 const STALL_SAMPLE_MS = 400
-const EVENT_LOOP_GAP_MS = 500
+/** 只有**迁移期间**的 status 最坏延迟按上文重标定——割接屏障只在这一段里。 */
+const MIGRATION_STATUS_MAX_MS = 2_500
+const EVENT_LOOP_GAP_MS = 2_000
+/** 尾部放松了，就得有一条不受单样本摆布的判据顶上——真退化会把 p95 推上去。 */
+const STATUS_P95_MS = 500
+
+/** 取证的延迟预算，单独导出让守卫锁住这次标定本身（数字变了要有人为它写理由）。 */
+export const RFC349_LATENCY_BUDGETS_MS = Object.freeze({
+  steadyPhaseMax: HARD_FREEZE_MS,
+  migrationStatusMax: MIGRATION_STATUS_MAX_MS,
+  migrationStatusP95: STATUS_P95_MS,
+  migrationEventLoopMax: EVENT_LOOP_GAP_MS,
+})
 const HIDDEN_POSTGRESQL_HOST_KEYS = new Set([
   'PATH',
   'PGBIN',
@@ -2020,9 +2067,15 @@ export function rfc349EvidenceFailures(
       failures.push(`migration status errors=${report.migration.statusErrors}`)
     }
     if (report.migration.status.count === 0) failures.push('migration has no status samples')
-    if (report.migration.status.maxMs >= HARD_FREEZE_MS) {
+    if (report.migration.status.maxMs >= MIGRATION_STATUS_MAX_MS) {
       failures.push(
-        `migration status max ${report.migration.status.maxMs.toFixed(1)}ms >= ${HARD_FREEZE_MS}ms`,
+        `migration status max ${report.migration.status.maxMs.toFixed(1)}ms >= ${MIGRATION_STATUS_MAX_MS}ms`,
+      )
+    }
+    // 尾部门槛放宽后由它兜底：p95 不受单个样本摆布，真的响应性退化跑不掉。
+    if (report.migration.status.p95Ms >= STATUS_P95_MS) {
+      failures.push(
+        `migration status p95 ${report.migration.status.p95Ms.toFixed(1)}ms >= ${STATUS_P95_MS}ms`,
       )
     }
     if (report.migration.eventLoopMaxGapMs >= EVENT_LOOP_GAP_MS) {

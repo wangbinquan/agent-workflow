@@ -14,6 +14,7 @@ import {
   parseRfc349EvidenceArgs,
   RFC349_CRASH_POINTS,
   RFC349_DATABASE_MIGRATION_PHASES,
+  RFC349_LATENCY_BUDGETS_MS,
   RFC349_T10_REGRESSION_COVERAGE_OWNERS,
   RFC349_T10_EXECUTABLE_EVIDENCE,
   RFC349_T10_WORKFLOW_TEST_FILES,
@@ -237,6 +238,107 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(() => parseRfc349EvidenceArgs(['--crash-points', 'after:not-a-real-phase'])).toThrow(
       'unknown crash point',
     )
+  })
+
+  // Why this test exists: these two millisecond budgets used to measure the hosted
+  // runner's jitter rather than the product's responsiveness. Two runs of the SAME
+  // weekly tier with ZERO changes to the migration path split on them —
+  // `33814856037` PASS (status max 772ms / event-loop max 139ms) vs `33822438279`
+  // FAIL (1001.3ms / 994.7ms) — while both reported errors=0, identical row counts,
+  // pool-wait p95 under 0.08ms, and only 7.6% apart on copy throughput. The daemon's
+  // own stall diagnostics named the cause: the worst gap carried `heapDeltaMib=8`
+  // and the same run logged a `heapDeltaMib=-69` whole-heap reclaim — major GC, not
+  // the product blocking the loop.
+  //
+  // Recalibrated 2026-09-04 against "what a real freeze looks like" (same method
+  // RFC-338 used in f374ffb10), and the numbers below ARE the decision — locking
+  // them so changing one requires writing a new reason.
+  test('latency budgets are calibrated against a real freeze, not runner jitter', () => {
+    expect(RFC349_LATENCY_BUDGETS_MS).toEqual({
+      // 稳态相位不含割接屏障，实测 152.6 / 388.5 / 299.2ms —— 没有放松。
+      steadyPhaseMax: 1_000,
+      // 割接屏障是这一段最坏的**合法**情形：历轮 585/617/643/772/833/1001ms。
+      migrationStatusMax: 2_500,
+      // 尾部放宽了就得有不受单样本摆布的判据顶上（实测 p95 73ms / 188ms）。
+      migrationStatusP95: 500,
+      // 真冻结 = 整个 copying 相位（weekly 档 ≈400,000ms）；实测 max 995ms。
+      migrationEventLoopMax: 2_000,
+    })
+    // 放开的两条都必须仍远小于「真冻结」的量级，否则就不是放宽而是取消判据。
+    const weeklyCopyPhaseMs = 6.7 * 60 * 1_000
+    expect(RFC349_LATENCY_BUDGETS_MS.migrationEventLoopMax).toBeLessThan(weeklyCopyPhaseMs / 100)
+    expect(RFC349_LATENCY_BUDGETS_MS.migrationStatusMax).toBeLessThan(weeklyCopyPhaseMs / 100)
+  })
+
+  // Why this test exists: the point of widening the tail budgets was to stop failing
+  // on machine jitter WITHOUT losing the ability to catch a real regression. These
+  // two fixtures are the exact numbers from the two runs above, so the recalibration
+  // is judged against the evidence that motivated it rather than against invented
+  // values — and the third fixture proves the new p95 rail actually bites.
+  test('the recalibrated budgets pass both real runs but still fail a genuine regression', () => {
+    const migration = (over: Partial<{ p95: number; max: number; loop: number }>) => ({
+      migration: {
+        statusErrors: 0,
+        status: { count: 900, p50Ms: 40, p95Ms: over.p95 ?? 73, maxMs: over.max ?? 772 },
+        eventLoopMaxGapMs: over.loop ?? 139,
+        poolWait: { sampleCount: 120, failedCount: 0 },
+        externalPoolProbe: { count: 120, errors: 0 },
+        finalStatus: { phase: 'accepting-writes' as const },
+      },
+    })
+
+    // run 33814856037（当时 PASS）与 33822438279（当时 FAIL，纯机器抖动）现在都放行。
+    expect(rfc349EvidenceFailures(migration({}) as never)).toEqual([])
+    expect(
+      rfc349EvidenceFailures(migration({ p95: 188, max: 1001.3, loop: 994.7 }) as never),
+    ).toEqual([])
+
+    // 真退化：整条分布被推上去（p95 越线），必须仍然红——这正是尾部放宽后顶上的那条。
+    expect(rfc349EvidenceFailures(migration({ p95: 620 }) as never)).toEqual([
+      'migration status p95 620.0ms >= 500ms',
+    ])
+    // 尾部也不是没有天花板：秒级以上的失控屏障照样红。
+    expect(rfc349EvidenceFailures(migration({ max: 3_000 }) as never)).toEqual([
+      'migration status max 3000.0ms >= 2500ms',
+    ])
+    expect(rfc349EvidenceFailures(migration({ loop: 2_500 }) as never)).toEqual([
+      'migration event-loop max 2500.0ms >= 2000ms',
+    ])
+  })
+
+  // Why this test exists: widening a budget is only safe if the criteria that
+  // actually carry the claim were left alone. A regression that swapped one of these
+  // for a latency threshold would otherwise look like "we loosened the flaky bits".
+  test('the non-latency criteria still fail closed after the recalibration', () => {
+    const base = {
+      statusErrors: 0,
+      status: { count: 900, p50Ms: 40, p95Ms: 73, maxMs: 772 },
+      eventLoopMaxGapMs: 139,
+      poolWait: { sampleCount: 120, failedCount: 0 },
+      externalPoolProbe: { count: 120, errors: 0 },
+      finalStatus: { phase: 'accepting-writes' as const },
+    }
+    const cases: [string, Record<string, unknown>, string][] = [
+      ['status errors', { statusErrors: 3 }, 'migration status errors=3'],
+      ['no samples', { status: { ...base.status, count: 0 } }, 'migration has no status samples'],
+      [
+        'pool acquisition',
+        { poolWait: { sampleCount: 120, failedCount: 2 } },
+        'migration PostgreSQL pool acquisition failures=2',
+      ],
+      [
+        'probe errors',
+        { externalPoolProbe: { count: 120, errors: 1 } },
+        'migration external pool probe errors=1',
+      ],
+      ['phase', { finalStatus: { phase: 'copying' } }, 'migration phase=copying'],
+    ]
+    for (const [name, patch, expected] of cases) {
+      expect({
+        name,
+        failures: rfc349EvidenceFailures({ migration: { ...base, ...patch } } as never),
+      }).toEqual({ name, failures: [expected] })
+    }
   })
 
   test('fails closed when a requested real-process crash checkpoint is absent', () => {

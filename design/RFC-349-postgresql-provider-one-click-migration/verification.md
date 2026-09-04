@@ -308,3 +308,46 @@ D3 本来就写明 V1 是维护窗口、不承诺零停机。托管那 11 条 ~6
 三档的种子计数此后**逐表断言**（原先只核对 full）：档位只改工作量、不改判据，少播一行当场红。
 守卫见 `rfc349-evidence-latency-stats.test.ts` §`evidence tiers keep the same oracles at a
 smaller workload` 与 `rfc349-postgresql-hosted-evidence.test.ts`。
+
+### 两条毫秒级延迟门槛于 2026-09-04 重新标定（用户裁决「因为有环境影响，放开一些」）
+
+**触发**：同一个 weekly 档、**迁移链路零代码改动**的两轮分裂——
+
+| | run `33814856037` | run `33822438279` |
+| --- | ---: | ---: |
+| 判定 | PASS | FAIL |
+| 拷贝吞吐 | 3523 行/s | 3256 行/s（−7.6%）|
+| 迁移 errors | 0 | 0 |
+| poolWait p95 | 0.06 ms | 0.08 ms |
+| status p95 | 73 ms | 188 ms |
+| status max | 772 ms | **1001.3 ms** |
+| event-loop max | 139 ms | **994.7 ms** |
+| 停顿 | `accepting-writes`×12 | `accepting-writes`×11 + `copying`×1 |
+
+daemon 自己的现场记录点名了原因：最大那条 `gapMs=995 heapMib=104 heapDeltaMib=8`，同轮另有
+`gapMs=733 heapDeltaMib=-69` 的整堆回收——**major GC，不是产品堵住主线程**；该轮 64 条停顿
+的分布是 p50 396 / p90 573 / max 995ms，是连续分布的尾巴。
+
+**标定方法**同 RFC-338 在 `f374ffb10` 的做法：问「真卡顿长什么样」。真冻结 = 主线程被整个
+`copying` 相位堵死（weekly 档 ≈400,000ms、full 档 57 分钟）。
+
+| 预算 | 旧 | 新 | 依据 |
+| --- | ---: | ---: | --- |
+| 稳态相位 API / 写入 max | 1000 | **1000（未动）** | 这些相位不含割接屏障，实测 152.6 / 388.5 / 299.2ms |
+| 迁移 status max | 1000 | **2500** | 最坏**合法**情形是割接屏障本身，历轮 585/617/643/772/833/1001ms |
+| 迁移 status p95 | —— | **500（新增）** | 尾部放宽后顶上的判据，实测 73 / 188ms |
+| 迁移 event-loop max | 500 | **2000** | 实测 max 995ms 且为 GC；2000 仍只有真冻结的 1/200 |
+
+**这次是一松一紧**：受机器摆布的「最大值」放开，同时新增不受单样本影响的 **p95** 判据——真的
+响应性退化会把整条分布推上去，而不只是碰一下尾巴。**未放松任何非延迟判据**：`statusErrors=0`、
+`poolWait.failedCount=0`、`externalPoolProbe.errors=0`、各样本数下限、`finalStatus.phase`、
+crash 矩阵 26/26、逐表种子计数、三相位各自的错误数，一个都没动。守卫见
+`RFC349_LATENCY_BUDGETS_MS` 与 `rfc349-postgresql-hosted-evidence.test.ts` 的三条用例（拿上面
+两轮的真实数字当夹具：两轮都放行，而 p95 越线 / 秒级失控屏障 / 秒级 GC 仍然红）。
+
+**一并更正一处历史记载**：本文件与 `11aa1f246` 用
+`git diff b3883154e..1e5a47893 -- 'packages/*/src'` 论证「产品代码已冻结」，但该 pathspec 恒返回空、
+**结论不成立**——换成明确路径（`packages/backend/src` 等）查，同一区间有 10 个文件 / 492 行改动
+（含 `services/fusion.ts` 减 203 行）。此后写这类「未改动产品代码」的断言一律逐个列出目录，
+不要用 `packages/*/src`。
+
