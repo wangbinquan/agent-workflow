@@ -88676,7 +88676,7 @@
   "denominator": {
     "architectureExceptions": 5216,
     "implementationSccs": 0,
-    "observedEdges": 6346,
+    "observedEdges": 6350,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -97147,6 +97147,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "id": "import:161dfb3010114acf84ad",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationAgentOverlay",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationAgentOverlay"
     },
     {
       "edgeKind": "value",
@@ -111086,6 +111102,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "id": "import:376b97b111c3368c0292",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationWorkflowOverlay",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationWorkflowOverlay"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlWrapperRunPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlWrapperRunPersistence.ts#$file",
@@ -119915,6 +119947,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file",
+      "id": "import:4ddf89c70dbcc2660fc0",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowValidationCandidateOverlays",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationCandidateOverlays"
     },
     {
       "edgeKind": "value",
@@ -167181,6 +167229,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#rebuildIsoHandle"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file",
+      "id": "import:c61194c415c8c76c4937",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "WorkflowQueries",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#WorkflowQueries"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/domain/clarifyGateOpen.ts",
@@ -190758,7 +190822,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:61efa1e7421619daa83ff8d6a099f2f2b617056ecab6d76a672d7e27a1d5d332",
+  "sourceDigest": "sha256:0e4b6350d29685b70829c547cd4b02ff3495b13f307ba57bcf6a8598de77b744",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

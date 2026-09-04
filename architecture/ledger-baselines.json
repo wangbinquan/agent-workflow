@@ -203,10 +203,7 @@
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
       "baseline": 42,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。",
-      "allowGrowth": {
-        "why": "RFC-357 PR-4：真库那条用例（`rfc357-postgresql-page.integration.test.ts`）在没有 PostgreSQL URL 的普通跑批上按环境门控 skip，41 → 42。这一条与其他环境门控 skip 有个关键差别——**它在该跑的地方必跑**：CI 的 `test-backend-postgresql` lane 起完服务容器后会 grep 日志，那条用例一旦 skip 就直接报错退出。skip 也算通过、于是一条连不上库的 lane 绿着骗人，是这类门控最容易掉进去的坑。下一笔不涨即删。"
-      }
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。"
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -429,10 +426,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6346,
+      "baseline": 6350,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "本笔是一次**跨两个 session 的 canonical 重采**：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），因此产物只描述**已提交**的代码——工作树里的在制品不会渗进来。增量按归属拆开： 本项 +12：符号级观察边随上面两项同步移位，主体同样是 RFC-358。下一笔不涨即删。"
+        "why": "本笔是 RFC-358 T6/T9/T10 的增量重采，做法与上一笔相同：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），所以产物只描述**已提交**的代码，工作树里并发 session 的在制品（terminal-maintenance 那批）不会渗进来。本项 +4：全部是 RFC-358——图修复轮的持久化端口（`settleTurn` 的预约材料与回执）、copy 的 sidecar 回填判据（`resource-catalog/domain/agentSidecarBackfill`，两个 provider 共用一份），以及下游知情提示所需的 `workflowsUsingAgents` 端口与三个装配根的 `workflowQueries` 注入。下一笔不涨即删。"
       }
     },
     {
@@ -454,10 +451,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5216,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "本笔是一次**跨两个 session 的 canonical 重采**：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），因此产物只描述**已提交**的代码——工作树里的在制品不会渗进来。增量按归属拆开： 本项入 7 出 1：**7 条全部是 RFC-358**（intent 图校验到 `util/log` / `auth/actor` 的平台原语边，加三个装配根注入 `composeIntentWorkflowGraphValidation`）。出账那 1 条是 RFC-357 PR-3 的重采里误带进去的并发在制品符号，本次一并清掉。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -471,10 +465,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 986,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "本笔是一次**跨两个 session 的 canonical 重采**：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），因此产物只描述**已提交**的代码——工作树里的在制品不会渗进来。增量按归属拆开： 本项 +4：**全部是 RFC-358** 在 resource-catalog 的 public 面新增的工作流校验叠加类型。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -494,15 +485,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26024,
+      "baseline": 26029,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "本笔是一次**跨两个 session 的 canonical 重采**：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），因此产物只描述**已提交**的代码——工作树里的在制品不会渗进来。增量按归属拆开： 本项入 41 出 5：**33 条是 RFC-358**（intent 图校验的 domain/application/composition 与 resource-catalog 的校验叠加面），**8 条是 RFC-357 PR-4**（前端 `taskListFrames.ts` 的纯函数与 `useTaskOperationsSync` 的两个导出，加 `numericOrZero`）。出账 5 条：`facetCount` 被合并掉，另 4 条是 RFC-357 PR-1 的重采里误带进去的并发在制品符号。下一笔不涨即删。"
+        "why": "本笔是 RFC-358 T6/T9/T10 的增量重采，做法与上一笔相同：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），所以产物只描述**已提交**的代码，工作树里并发 session 的在制品（terminal-maintenance 那批）不会渗进来。本项 +5：全部是 RFC-358——图修复轮的持久化端口（`settleTurn` 的预约材料与回执）、copy 的 sidecar 回填判据（`resource-catalog/domain/agentSidecarBackfill`，两个 provider 共用一份），以及下游知情提示所需的 `workflowsUsingAgents` 端口与三个装配根的 `workflowQueries` 注入。下一笔不涨即删。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:61efa1e7421619daa83ff8d6a099f2f2b617056ecab6d76a672d7e27a1d5d332",
+    "sourceDigest": "sha256:0e4b6350d29685b70829c547cd4b02ff3495b13f307ba57bcf6a8598de77b744",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -515,8 +506,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "11cc7af6df663a6adcb589970e205afad2d5d526",
-    "contentDigest": "sha256:8809a5fd9d8275aaf54ee7c0e5489a750411fc00ac60c83093a2683e516f043c",
+    "currentSnapshotSha": "1a8e24d23b8424403bffa6991ddcf1f08d982574",
+    "contentDigest": "sha256:5f66cdafc275d998ce122a9d4a0186e2c7fa44cfb9b7a749154d96fc1677f42d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 884,
+    "consumers": 888,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1064,
@@ -105319,6 +105319,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:285a062b2835ebb116b3",
             "import:84a18fb3ec04980df881"
           ],
           "fieldPath": "user.id",
@@ -109418,7 +109419,8 @@
       },
       "consumerEdgeIds": [
         "import:8dc05ce2cfd4e5d32627",
-        "import:9ab686870c227a686b91"
+        "import:9ab686870c227a686b91",
+        "import:c61194c415c8c76c4937"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -109458,7 +109460,8 @@
         {
           "consumerEdgeIds": [
             "import:8dc05ce2cfd4e5d32627",
-            "import:9ab686870c227a686b91"
+            "import:9ab686870c227a686b91",
+            "import:c61194c415c8c76c4937"
           ],
           "fieldPath": "$method:get.$parameter:authority.user.id",
           "type": "string"
@@ -109511,7 +109514,8 @@
         {
           "consumerEdgeIds": [
             "import:8dc05ce2cfd4e5d32627",
-            "import:9ab686870c227a686b91"
+            "import:9ab686870c227a686b91",
+            "import:c61194c415c8c76c4937"
           ],
           "fieldPath": "$method:get.$parameter:input.id",
           "type": "string"
@@ -109559,7 +109563,8 @@
         {
           "consumerEdgeIds": [
             "import:8dc05ce2cfd4e5d32627",
-            "import:9ab686870c227a686b91"
+            "import:9ab686870c227a686b91",
+            "import:c61194c415c8c76c4937"
           ],
           "fieldPath": "$method:list.$parameter:authority.user.id",
           "type": "string"
@@ -109625,7 +109630,8 @@
         {
           "consumerEdgeIds": [
             "import:8dc05ce2cfd4e5d32627",
-            "import:9ab686870c227a686b91"
+            "import:9ab686870c227a686b91",
+            "import:c61194c415c8c76c4937"
           ],
           "name": "get",
           "signatureDigest": "sha256:efefe7a22ad630ab3f4bba7cb183cf12c9fc83477c833b290226fc5cbe8023a1"
@@ -109633,7 +109639,8 @@
         {
           "consumerEdgeIds": [
             "import:8dc05ce2cfd4e5d32627",
-            "import:9ab686870c227a686b91"
+            "import:9ab686870c227a686b91",
+            "import:c61194c415c8c76c4937"
           ],
           "name": "list",
           "signatureDigest": "sha256:072cf1a665b6473fe7ada52962c973c63f70f47d091a6bd92a2bb72e6ffc8ac6"
@@ -109652,6 +109659,12 @@
           "edgeId": "import:9ab686870c227a686b91",
           "file": "packages/backend/src/modules/intent/application/resourceCatalog.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:c61194c415c8c76c4937",
+          "file": "packages/backend/src/modules/intent/composition/graphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/graphValidation.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -109718,6 +109731,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateCandidate.$parameter:authority.user.id",
@@ -109770,6 +109784,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateCandidate.$parameter:input.currentWorkflow.id",
@@ -109777,6 +109792,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateCandidate.$parameter:input.currentWorkflow.name",
@@ -109867,6 +109883,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateDraft.$parameter:authority.user.id",
@@ -109996,6 +110013,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:41f8d4c9d1178ec8cd86",
             "import:b7dbeb997b14a046eea1"
           ],
           "fieldPath": "$method:validateStored.$parameter:authority.user.id",
@@ -119771,6 +119789,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:161dfb3010114acf84ad",
         "import:7c1af09177a8e5eaee5b"
       ],
       "context": "resource-catalog",
@@ -119780,6 +119799,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "agentId",
@@ -119787,6 +119807,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.branchPorts",
@@ -119794,6 +119815,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.dependsOn",
@@ -119801,6 +119823,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.mcp",
@@ -119808,6 +119831,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.name",
@@ -119815,6 +119839,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.outputKinds",
@@ -119822,6 +119847,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.outputs",
@@ -119829,6 +119855,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.outputWrapperPortNames",
@@ -119836,6 +119863,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.plugins",
@@ -119843,6 +119871,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.role",
@@ -119850,6 +119879,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "fields.skills",
@@ -119857,6 +119887,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:161dfb3010114acf84ad",
             "import:7c1af09177a8e5eaee5b"
           ],
           "fieldPath": "isNew",
@@ -119873,6 +119904,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationAgentOverlay",
       "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:161dfb3010114acf84ad",
+          "file": "packages/backend/src/modules/intent/application/graphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file"
+        },
         {
           "context": "intent",
           "edgeId": "import:7c1af09177a8e5eaee5b",
@@ -119902,7 +119939,8 @@
       },
       "consumerEdgeIds": [
         "import:3c7b1b4c5df5f7dab849",
-        "import:4d5bab35c96af5ce303f"
+        "import:4d5bab35c96af5ce303f",
+        "import:4ddf89c70dbcc2660fc0"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -119911,35 +119949,40 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:4d5bab35c96af5ce303f"
+            "import:4d5bab35c96af5ce303f",
+            "import:4ddf89c70dbcc2660fc0"
           ],
           "fieldPath": "agents",
           "type": "readonly WorkflowValidationAgentOverlay[]"
         },
         {
           "consumerEdgeIds": [
-            "import:4d5bab35c96af5ce303f"
+            "import:4d5bab35c96af5ce303f",
+            "import:4ddf89c70dbcc2660fc0"
           ],
           "fieldPath": "callWorkflows",
           "type": "readonly WorkflowValidationWorkflowOverlay[]"
         },
         {
           "consumerEdgeIds": [
-            "import:4d5bab35c96af5ce303f"
+            "import:4d5bab35c96af5ce303f",
+            "import:4ddf89c70dbcc2660fc0"
           ],
           "fieldPath": "mcps",
           "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
         },
         {
           "consumerEdgeIds": [
-            "import:4d5bab35c96af5ce303f"
+            "import:4d5bab35c96af5ce303f",
+            "import:4ddf89c70dbcc2660fc0"
           ],
           "fieldPath": "plugins",
           "type": "readonly {\n    readonly id: string\n    readonly name: string\n    readonly enabled: boolean\n  }[]"
         },
         {
           "consumerEdgeIds": [
-            "import:4d5bab35c96af5ce303f"
+            "import:4d5bab35c96af5ce303f",
+            "import:4ddf89c70dbcc2660fc0"
           ],
           "fieldPath": "skills",
           "type": "readonly { readonly id: string; readonly name: string }[]"
@@ -119968,6 +120011,12 @@
           "edgeId": "import:4d5bab35c96af5ce303f",
           "file": "packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/intent/domain/workflowGraphCandidate.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:4ddf89c70dbcc2660fc0",
+          "file": "packages/backend/src/modules/intent/application/graphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -119993,6 +120042,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:376b97b111c3368c0292",
         "import:df981f30e233249854d3"
       ],
       "context": "resource-catalog",
@@ -120002,6 +120052,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
+            "import:376b97b111c3368c0292",
             "import:df981f30e233249854d3"
           ],
           "fieldPath": "definition",
@@ -120009,6 +120060,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:376b97b111c3368c0292",
             "import:df981f30e233249854d3"
           ],
           "fieldPath": "id",
@@ -120016,6 +120068,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:376b97b111c3368c0292",
             "import:df981f30e233249854d3"
           ],
           "fieldPath": "name",
@@ -120032,6 +120085,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationWorkflowOverlay",
       "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:376b97b111c3368c0292",
+          "file": "packages/backend/src/modules/intent/application/graphValidation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#$file"
+        },
         {
           "context": "intent",
           "edgeId": "import:df981f30e233249854d3",
@@ -163172,7 +163231,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:61efa1e7421619daa83ff8d6a099f2f2b617056ecab6d76a672d7e27a1d5d332",
+  "sourceDigest": "sha256:0e4b6350d29685b70829c547cd4b02ff3495b13f307ba57bcf6a8598de77b744",
   "targetContexts": [
     "collaboration",
     "development-automation",

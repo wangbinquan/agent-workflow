@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1957,
+    "backendFiles": 1958,
     "frontendFiles": 622,
     "legacyFiles": 610,
-    "moduleFiles": 1347,
-    "productionFiles": 2734,
+    "moduleFiles": 1348,
+    "productionFiles": 2735,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26024
+    "symbolsIncludingFileRoots": 26029
   },
   "entries": [
     {
@@ -68670,6 +68670,18 @@
     {
       "currentContext": "intent",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#intentWorkflowInvalidMessage",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "intentWorkflowInvalidMessage",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/intent/application/graphValidation.ts",
       "id": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#log",
@@ -68688,6 +68700,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "validateChangesetWorkflowGraphs",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/graphValidation.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/graphValidation.ts#validateResolvedBundleWorkflowGraphs",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "validateResolvedBundleWorkflowGraphs",
       "targetContext": "intent",
       "targetLayer": "application"
     },
@@ -92282,6 +92306,42 @@
       "symbol": "composePostgresqlWorkgroupTurnsOperations",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/domain/agentSidecarBackfill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/domain/agentSidecarBackfill.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/domain/agentSidecarBackfill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/domain/agentSidecarBackfill.ts#AGENT_SIDECAR_KEYS",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AGENT_SIDECAR_KEYS",
+      "targetContext": "resource-catalog",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/domain/agentSidecarBackfill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/domain/agentSidecarBackfill.ts#withAgentSidecarsFrom",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withAgentSidecarsFrom",
+      "targetContext": "resource-catalog",
+      "targetLayer": "domain"
     },
     {
       "currentContext": "resource-catalog",
@@ -312991,5 +313051,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:61efa1e7421619daa83ff8d6a099f2f2b617056ecab6d76a672d7e27a1d5d332"
+  "sourceDigest": "sha256:0e4b6350d29685b70829c547cd4b02ff3495b13f307ba57bcf6a8598de77b744"
 }
