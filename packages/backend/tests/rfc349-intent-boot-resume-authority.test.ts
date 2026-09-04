@@ -230,9 +230,13 @@ async function seedQueuedSuccessor(): Promise<{ sessionId: string; changeId: str
 describe('RFC-349 intent boot resume authority', () => {
   test('boot recovery finishes the queued successor through the production catalog seam', async () => {
     const { sessionId, changeId } = await seedQueuedSuccessor()
+    // RFC-355 T4b（实现门 r2）：恢复路径上的广播此前零覆盖——把 dispatcher 的
+    // `emitSessionUpdated` 删成空操作，1122 条测试无一变红。恢复了却不通知前端，
+    // 用户看到的还是「生成中」转圈，与恢复失败在界面上完全一样。
+    const published: { type: string; sessionId?: string }[] = []
     const resumed = await resumeQueuedIntentWorkingSets({
       persistence,
-      events: { publish: () => {} },
+      events: { publish: (event) => published.push(event) },
       identityAccess,
       appHome: '/tmp',
       configSnapshot: DEFAULT_CONFIG,
@@ -260,6 +264,11 @@ describe('RFC-349 intent boot resume authority', () => {
         .get()?.state,
     ).toBe('applied')
     expect(sessionId).not.toBe('')
+    expect(
+      published.map((event) => event.type),
+      '恢复了但一条广播都没播：前端不会刷新，用户看到的仍是「生成中」',
+    ).toContain('intent.session.updated')
+    expect(published.every((event) => event.sessionId === sessionId)).toBe(true)
   })
 
   test('the plain SQLite runner cannot authorize a context mutation — the daemon must not dispatch with it', async () => {
