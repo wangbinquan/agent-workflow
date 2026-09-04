@@ -509,9 +509,9 @@
     {
       "callee": "registerMint",
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:548",
+      "id": "ambient:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#registerMint:549",
       "kind": "register-call",
-      "line": 548,
+      "line": 549,
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#executeHostTurn",
       "removeAfterWave": "W6/W9",
       "symbol": "executeHostTurn",
@@ -7484,6 +7484,27 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#renderWgClarifyBlock",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#renderWgClarifyBlock",
+      "phase": "unknown",
+      "symbol": "renderWgClarifyBlock",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#reconcileRunningAssignments",
@@ -7890,27 +7911,6 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#renderWgClarifyBlock",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#renderWgClarifyBlock",
-      "phase": "unknown",
-      "symbol": "renderWgClarifyBlock",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/engine.ts#decideAssignmentReconcile",
@@ -7991,7 +7991,7 @@
         "run": false,
         "start": false,
         "state": false,
-        "stop": true
+        "stop": false
       },
       "lifetime": "daemon",
       "managed": false,
@@ -13564,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062"
+  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f"
 }

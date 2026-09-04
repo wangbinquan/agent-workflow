@@ -2,35 +2,22 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5261,
+    "architectureExceptions": 5268,
     "backgroundJobs": 367,
-    "crossContextImports": 6388,
+    "crossContextImports": 6397,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26097,
-    "mutationEntrypoints": 1939,
+    "moduleSymbolOwners": 26106,
+    "mutationEntrypoints": 1941,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 985,
+    "publicSurfaces": 987,
     "transactionExternalEffects": 480
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1966,
+    "backendProductionFiles": 1968,
     "backendValueSccs": [
-      [
-        "packages/backend/src/modules/collaboration/composition.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
-        "packages/backend/src/services/clarify/service.ts",
-        "packages/backend/src/services/humanGateComposition.ts",
-        "packages/backend/src/services/taskQuestionDispatch.ts",
-        "packages/backend/src/services/taskQuestions.ts"
-      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -72,7 +59,7 @@
       },
       {
         "context": "collaboration",
-        "files": 127
+        "files": 128
       },
       {
         "context": "development-automation",
@@ -112,7 +99,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 237
+        "files": 238
       },
       {
         "context": "runtime-management",
@@ -135,7 +122,7 @@
         "files": 347
       }
     ],
-    "moduleFiles": 1350,
+    "moduleFiles": 1352,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,19 +148,6 @@
     "outboundBoundaryEdges": 35,
     "repoValueSccs": [
       [
-        "packages/backend/src/modules/collaboration/composition.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
-        "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
-        "packages/backend/src/services/clarify/service.ts",
-        "packages/backend/src/services/humanGateComposition.ts",
-        "packages/backend/src/services/taskQuestionDispatch.ts",
-        "packages/backend/src/services/taskQuestions.ts"
-      ],
-      [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
@@ -194,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062"
+  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f"
 }

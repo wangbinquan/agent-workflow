@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 884,
+    "consumers": 888,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1063,
     "opaqueTypeRefs": 14,
     "recursiveFields": 20704,
-    "symbols": 985
+    "symbols": 987
   },
   "entries": [
     {
@@ -10302,6 +10302,91 @@
       "signatureDigest": "sha256:b3147b04ff211ac5655edf7169cec34f5022919d162442d335d14b9dcc676fb2",
       "status": "target-context-current-surface",
       "symbol": "CollaborationTaskRuntimeOperations",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:6690635fd712c5ecae62"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "public:collaboration:participants:countWorkgroupClarifyAsks",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#countWorkgroupClarifyAsks",
+      "productionConsumers": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:6690635fd712c5ecae62",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:d01f7de4e40210d3e5095abaf2adac30dbb78ed987d828d74a0c72f35db02542",
+      "status": "target-context-current-surface",
+      "symbol": "countWorkgroupClarifyAsks",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:203c772b8492e45e188a",
+        "import:931ad944c16546e45a1d"
+      ],
+      "context": "collaboration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "public:collaboration:participants:createWorkgroupClarifyAskGate",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate",
+      "productionConsumers": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:203c772b8492e45e188a",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:931ad944c16546e45a1d",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2c670f9c2f9924480dc610182b6d4669834cf3bd69d29369579610690f812b53",
+      "status": "target-context-current-surface",
+      "symbol": "createWorkgroupClarifyAskGate",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -142049,6 +142134,7 @@
       },
       "consumerEdgeIds": [
         "import:07a46b079e1353a906fa",
+        "import:54247be85c5fff37434b",
         "import:fa03a4f866a941a9707c"
       ],
       "context": "task-execution",
@@ -142067,6 +142153,12 @@
           "edgeId": "import:07a46b079e1353a906fa",
           "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file"
+        },
+        {
+          "context": "collaboration",
+          "edgeId": "import:54247be85c5fff37434b",
+          "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file"
         },
         {
           "context": "resource-catalog",
@@ -163152,7 +163244,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062",
+  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f",
   "targetContexts": [
     "collaboration",
     "development-automation",

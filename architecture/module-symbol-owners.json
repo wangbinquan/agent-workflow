@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1966,
+    "backendFiles": 1968,
     "frontendFiles": 622,
     "legacyFiles": 616,
-    "moduleFiles": 1350,
-    "productionFiles": 2743,
+    "moduleFiles": 1352,
+    "productionFiles": 2745,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26097
+    "symbolsIncludingFileRoots": 26106
   },
   "entries": [
     {
@@ -28951,6 +28951,78 @@
     },
     {
       "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#countWorkgroupClarifyAsks",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "countWorkgroupClarifyAsks",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#createWorkgroupClarifyAskGate",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createWorkgroupClarifyAskGate",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#resolveWorkgroupClarifyAllowed",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "resolveWorkgroupClarifyAllowed",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#WorkgroupClarifyAskGate",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkgroupClarifyAskGate",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#WorkgroupClarifyAskInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkgroupClarifyAskInput",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
       "currentLayer": "public",
       "exported": false,
       "file": "packages/backend/src/modules/collaboration/public/commands.ts",
@@ -29242,6 +29314,32 @@
       "signatureDigest": "sha256:cf8f878e6a9e266690b82871b4e3991fb1ce27ea390c5f40b2bf83d5fab5af15",
       "status": "current-module",
       "symbol": "appendReviewSelectionChangedCommittedEventTx",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#countWorkgroupClarifyAsks",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:d01f7de4e40210d3e5095abaf2adac30dbb78ed987d828d74a0c72f35db02542",
+      "status": "current-module",
+      "symbol": "countWorkgroupClarifyAsks",
+      "targetContext": "collaboration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:2c670f9c2f9924480dc610182b6d4669834cf3bd69d29369579610690f812b53",
+      "status": "current-module",
+      "symbol": "createWorkgroupClarifyAskGate",
       "targetContext": "collaboration",
       "targetLayer": "public"
     },
@@ -87295,6 +87393,78 @@
       "currentContext": "resource-catalog",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#renderEnvelopeRules",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "renderEnvelopeRules",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#renderWgClarifyBlock",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "renderWgClarifyBlock",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#renderWgProtocolBlock",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "renderWgProtocolBlock",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#wgHostRolePorts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "wgHostRolePorts",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts#WorkgroupProtocolRole",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkgroupProtocolRole",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts#$file",
       "removeAfterWave": null,
@@ -88232,30 +88402,6 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#protocolBlock",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "protocolBlock",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#protocolPorts",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "protocolPorts",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#reconcileRunningAssignments",
       "removeAfterWave": null,
       "status": "current-module",
@@ -88440,6 +88586,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "WORKGROUP_TURN_GATE_TRANSITIONS",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WorkgroupClarifyAllowedInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkgroupClarifyAllowedInput",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#WorkgroupClarifyAllowedPort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WorkgroupClarifyAllowedPort",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -102210,18 +102380,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#renderEnvelopeRules",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "renderEnvelopeRules",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#renderGoalBlock",
@@ -102264,30 +102422,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "renderRosterBlock",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#renderWgClarifyBlock",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "renderWgClarifyBlock",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#renderWgProtocolBlock",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "renderWgProtocolBlock",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -102372,30 +102506,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "WG_PEER_RESULTS_CHAR_BUDGET",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#wgHostRolePorts",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "wgHostRolePorts",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/context.ts#WorkgroupProtocolRole",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "WorkgroupProtocolRole",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -313867,5 +313977,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062"
+  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f"
 }

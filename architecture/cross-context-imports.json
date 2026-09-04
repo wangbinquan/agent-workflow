@@ -11155,6 +11155,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:203c772b8492e45e188a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4",
+      "rule": "off-dag-offered",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate",
+      "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "toSymbol": "createWorkgroupClarifyAskGate",
+      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/developmentAdapterConfigOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/composition/developmentAdapterConfigOperations.ts",
       "fromSymbol": "$file",
@@ -19463,6 +19480,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#DurableCommittedEventConsumer",
       "toPath": "packages/backend/src/platform/events/committed/types.ts",
       "toSymbol": "DurableCommittedEventConsumer",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:363cb0c539a622dd8c52",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file",
+      "toPath": "packages/backend/src/services/lifecycle.ts",
+      "toSymbol": "transitionNodeRunStatusTx",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -35941,6 +35975,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6690635fd712c5ecae62",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4",
+      "rule": "off-dag-offered",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#countWorkgroupClarifyAsks",
+      "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "toSymbol": "countWorkgroupClarifyAsks",
+      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts",
       "fromSymbol": "$file",
@@ -39426,6 +39477,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6fb33149f0addbe8ea45",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition/legacySqliteDecisionCommands.ts#$file",
+      "toPath": "packages/backend/src/modules/collaboration/composition/legacySqliteDecisionCommands.ts",
+      "toSymbol": "createTaskDagCollaborationOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts",
       "fromSymbol": "$file",
@@ -41971,6 +42039,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "plugins",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:775b0a0cddf5e33ed833",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "clarifyRounds",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -51088,6 +51173,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:931ad944c16546e45a1d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate",
+      "toPath": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "toSymbol": "createWorkgroupClarifyAskGate",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
       "fromPath": "packages/backend/src/main.ts",
       "fromSymbol": "$file",
@@ -57662,6 +57764,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#CreatePluginCatalogInput",
       "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toSymbol": "CreatePluginCatalogInput",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a6006211aef536c66ab5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts#composePostgresqlSkillCatalogBoot",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts",
+      "toSymbol": "composePostgresqlSkillCatalogBoot",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -87959,6 +88078,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "fromPath": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fc6333ec934952d39e87",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts#$file",
@@ -89353,23 +89489,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ffd6b5ad33f89afaf16a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file",
-      "toPath": "packages/backend/src/modules/collaboration/composition.ts",
-      "toSymbol": "createTaskDagCollaborationOperations",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts#$file",
@@ -89439,9 +89558,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5261,
+    "architectureExceptions": 5268,
     "implementationSccs": 0,
-    "observedEdges": 6388,
+    "observedEdges": 6397,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -101979,6 +102098,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file",
+      "id": "import:203c772b8492e45e188a",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4",
+      "role": "off-dag-offered",
+      "specifier": "@/modules/collaboration/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "createWorkgroupClarifyAskGate",
+      "toContext": "collaboration",
+      "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/composition/developmentAdapterConfigOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/developmentAdapterConfigOperations.ts#$file",
@@ -111416,6 +111551,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#maintenanceState"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file",
+      "id": "import:363cb0c539a622dd8c52",
+      "owner": "collaboration",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/lifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "transitionNodeRunStatusTx",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/lifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/lifecycle.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -123451,6 +123602,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "id": "import:54247be85c5fff37434b",
+      "owner": "collaboration",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/task-execution/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "WORKGROUP_TURN_LEADER_NODE_ID",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#WORKGROUP_TURN_LEADER_NODE_ID"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookEndpointAdministration.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookEndpointAdministration.ts#$file",
@@ -130763,6 +130930,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/lifecycle.ts#$file",
+      "id": "import:6690635fd712c5ecae62",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4",
+      "role": "off-dag-offered",
+      "specifier": "@/modules/collaboration/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "countWorkgroupClarifyAsks",
+      "toContext": "collaboration",
+      "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#countWorkgroupClarifyAsks"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookRepositoryResolver.ts#$file",
@@ -134811,6 +134994,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:6fb33149f0addbe8ea45",
+      "owner": "task-execution",
+      "removeAfterWave": "W4",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/collaboration/composition/legacySqliteDecisionCommands",
+      "syntax": "static-import",
+      "targetSymbol": "createTaskDagCollaborationOperations",
+      "toContext": "collaboration",
+      "toFile": "packages/backend/src/modules/collaboration/composition/legacySqliteDecisionCommands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition/legacySqliteDecisionCommands.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels.ts#$file",
@@ -137720,6 +137919,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "id": "import:775b0a0cddf5e33ed833",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "clarifyRounds",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds"
     },
     {
       "edgeKind": "value",
@@ -148060,6 +148275,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:931ad944c16546e45a1d",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/collaboration/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "createWorkgroupClarifyAskGate",
+      "toContext": "collaboration",
+      "toFile": "packages/backend/src/modules/collaboration/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#createWorkgroupClarifyAskGate"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/main.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
       "id": "import:931b527334772014784f",
@@ -155544,6 +155775,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeToolRegistrations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:a6006211aef536c66ab5",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillCatalogBoot",
+      "syntax": "static-import",
+      "targetSymbol": "composePostgresqlSkillCatalogBoot",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillCatalogBoot.ts#composePostgresqlSkillCatalogBoot"
     },
     {
       "edgeKind": "value",
@@ -178267,6 +178514,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "id": "import:de0796ad423e5ec185f3",
+      "owner": "collaboration",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts#$file",
@@ -189978,6 +190241,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/codeHostAuthorGate.ts#assertCodeHostAuthorAllowed"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "collaboration",
+      "fromFile": "packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts#$file",
+      "id": "import:fc6333ec934952d39e87",
+      "owner": "collaboration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteFrameBackfillStore.ts",
@@ -191562,22 +191841,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#StartExecutionDeps"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:ffd6b5ad33f89afaf16a",
-      "owner": "task-execution",
-      "removeAfterWave": "W4",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/collaboration/composition",
-      "syntax": "static-import",
-      "targetSymbol": "createTaskDagCollaborationOperations",
-      "toContext": "collaboration",
-      "toFile": "packages/backend/src/modules/collaboration/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts",
@@ -192195,7 +192458,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062",
+  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
