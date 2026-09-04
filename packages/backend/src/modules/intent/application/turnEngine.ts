@@ -739,6 +739,11 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         summary,
         opCount: normalized.changeset.ops.length,
         blockingErrors: report.errors.length,
+        // RFC-358 T6 —— 图修复轮的触发判据**只看图校验自己产出的条数**，不看
+        // blockingErrors 总数。第一层的错误（未挂载的 update 目标、未知句柄、
+        // tempRef 环……）要用户去做动作，模型再跑一轮也修不掉；拿总数当判据会
+        // 白烧一轮，还会把 draft revision 序列整体后移、打乱依赖版本号的流程。
+        graphErrors: graph.unavailable ? 0 : graph.errors.length,
         credentialFindings: report.credentialFindings.length,
         graphWarnings: report.graphWarnings?.length ?? 0,
         ...(report.graphValidationUnavailable === true ? { graphValidationUnavailable: true } : {}),

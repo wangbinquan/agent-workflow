@@ -549,7 +549,7 @@ describe('RFC-358 — graph repair turn', () => {
     const settled = await settleWith(
       created.reservation.turnId,
       created.session.contextRevision,
-      { summary: 's', opCount: 1, blockingErrors: 2 },
+      { summary: 's', opCount: 1, blockingErrors: 2, graphErrors: 2 },
       { turnId: repairTurnId, envelopeNonce: 'nonce-repair', maxGenerateRounds: 50 },
       created.session.id,
     )
@@ -566,13 +566,33 @@ describe('RFC-358 — graph repair turn', () => {
     expect(settled.graphRepair?.launchSession.currentDraftId).not.toBeNull()
   })
 
+  test('first-layer errors alone must NOT mint a repair turn', async () => {
+    // 这条锁的是一个真实回归：判据一度用的是 blockingErrors 总数，于是第一层的错误
+    // （未挂载的 update 目标之类，要用户去做动作、模型改不掉）也会自动接一轮，白烧
+    // 预算，还把 draft revision 序列整体后移——e2e `rfc319-intent-draft-and-commit`
+    // 依赖版本号对账，当场变红。
+    const created = await seedRunningTurn()
+    const settled = await settleWith(
+      created.reservation.turnId,
+      created.session.contextRevision,
+      // 第一层报了 2 条，图校验一条没报。
+      { summary: 's', blockingErrors: 2, graphErrors: 0 },
+      { turnId: ulid(), envelopeNonce: 'n', maxGenerateRounds: 50 },
+      created.session.id,
+    )
+    expect(settled.blockingErrors).toBe(2)
+    expect(settled.graphRepair).toBeUndefined()
+    const after = await persistence.findSession(created.session.id)
+    expect(after?.inFlightTurnId).toBeNull()
+  })
+
   test('a repair turn that stays red does NOT mint a third turn', async () => {
     const created = await seedRunningTurn()
     const repairTurnId = ulid()
     await settleWith(
       created.reservation.turnId,
       created.session.contextRevision,
-      { summary: 's', blockingErrors: 1 },
+      { summary: 's', blockingErrors: 1, graphErrors: 1 },
       { turnId: repairTurnId, envelopeNonce: 'n1', maxGenerateRounds: 50 },
       created.session.id,
     )
@@ -581,7 +601,7 @@ describe('RFC-358 — graph repair turn', () => {
     const settled = await settleWith(
       repairTurnId,
       mid?.contextRevision ?? 0,
-      { summary: 's', blockingErrors: 1 },
+      { summary: 's', blockingErrors: 1, graphErrors: 1 },
       { turnId: ulid(), envelopeNonce: 'n2', maxGenerateRounds: 50 },
       created.session.id,
     )
@@ -596,7 +616,7 @@ describe('RFC-358 — graph repair turn', () => {
     const settled = await settleWith(
       created.reservation.turnId,
       created.session.contextRevision,
-      { summary: 's', blockingErrors: 0 },
+      { summary: 's', blockingErrors: 0, graphErrors: 0 },
       { turnId: ulid(), envelopeNonce: 'n', maxGenerateRounds: 50 },
       created.session.id,
     )
@@ -612,7 +632,7 @@ describe('RFC-358 — graph repair turn', () => {
     const settled = await settleWith(
       created.reservation.turnId,
       created.session.contextRevision,
-      { summary: 's', blockingErrors: 3 },
+      { summary: 's', blockingErrors: 3, graphErrors: 3 },
       { turnId: ulid(), envelopeNonce: 'n', maxGenerateRounds: 1 },
       created.session.id,
     )

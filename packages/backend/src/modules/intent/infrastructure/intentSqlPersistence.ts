@@ -1206,12 +1206,16 @@ export class IntentSqlPersistence implements IntentPersistence {
       const blockingErrors = numberOf(
         (finalContent as { blockingErrors?: unknown }).blockingErrors ?? 0,
       )
+      // 触发判据是**图校验自己**报的条数，不是 blockingErrors 总数：第一层的错误
+      // （未挂载的 update 目标、未知句柄、tempRef 环……）要用户去做动作，模型再跑
+      // 一轮也修不掉——拿总数当判据会白烧一轮，并把 draft revision 序列整体后移。
+      const graphErrors = numberOf((finalContent as { graphErrors?: unknown }).graphErrors ?? 0)
       const mintRepair =
         !superseded &&
         !isGraphRepairTurn &&
         input.graphRepair !== undefined &&
         finalKind === 'changeset' &&
-        blockingErrors > 0 &&
+        graphErrors > 0 &&
         nextBudget.generateRounds + nextBudget.questionRounds < input.graphRepair.maxGenerateRounds
       const repairSeq = session.turnSeq + 1
       let repairReservation: ReservedIntentTurnRecord | undefined
