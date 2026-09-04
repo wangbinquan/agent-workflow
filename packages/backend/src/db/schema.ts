@@ -1196,7 +1196,7 @@ export const tasks = sqliteTable(
     // RFC-311 G1 — 该任务所属**树根**的 id（顶层任务 = 自身）。parent_task_id
     // 铸行后不可变，所以这一列一次写定。它让过滤视图的 root 选取从「两条递归
     // CTE 走全森林」塌缩成一次 `GROUP BY root_task_id`（见 migration 0183 与
-    // services/taskOperations.ts 的 fastFilteredRootQuery）。
+    // taskListPage/query.ts 的 fastFilteredRootQuery）。
     rootTaskId: text('root_task_id'),
     /**
      * RFC-328: stable causal identity for execution effects.  It is internal

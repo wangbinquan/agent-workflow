@@ -141,7 +141,10 @@ import { SYSTEM_OPERATION_ALIASES } from '@/modules/system-operations/public/ope
 import type { HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
 import { createPostgresqlHealthDatabaseReadModel } from '@/modules/system-operations/composition'
 import { createSqliteHealthDatabaseReadModel } from '@/platform/persistence/sqlite/systemHealthReadModel'
-import { composeSqliteOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
+import {
+  composeSqliteOidcIdentityOperations,
+  composeSqliteOwnerIdentityQueries,
+} from '@/modules/identity-access/composition/providerOperations'
 import type { IdentityUserOperations } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { createOidcProvidersService } from '@/services/oidcProviders'
@@ -2454,7 +2457,9 @@ function composeSqliteApiRouteMounts(
   deps.developmentActivityWorker.bind(digitalEmployee.runtime.worker)
   const taskCatalog = composeTaskCatalog({
     sources: [
-      ...composeTaskExecutionCatalogSources(deps.db),
+      // RFC-357：owner 身份是 identity-access 的能力，由装配根注入；
+      // task-execution 只声明端口，不去 compose 别的 context 的 provider。
+      ...composeTaskExecutionCatalogSources(deps.db, composeSqliteOwnerIdentityQueries(deps.db)),
       composeDigitalEmployeeTaskCatalogSource(digitalEmployee.runtime),
     ],
   })

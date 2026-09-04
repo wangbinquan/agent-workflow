@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1925,
+    "entries": 1928,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -29878,6 +29878,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/domain/terminalMaintenance.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/domain/terminalMaintenance.ts#SettledEffectCoverageProbe",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/domain/terminalMaintenance.ts#SettledEffectCoverageProbe",
+      "symbol": "SettledEffectCoverageProbe",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/domain/wrapperExecution.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/domain/wrapperExecution.ts#OpenWrapperGeneration",
@@ -32798,6 +32823,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjector.ts#createTaskLifecycleWsProjector",
       "symbol": "createTaskLifecycleWsProjector",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/page.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/page.ts#createTaskListPage",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/page.ts#createTaskListPage",
+      "symbol": "createTaskListPage",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#createSqliteTaskListPage",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#createSqliteTaskListPage",
+      "symbol": "createSqliteTaskListPage",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -45879,7 +45954,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6d29fdec0794d43a269d69308185f86b3667858170a5c51fba56192d6fda7a6",
+  "sourceDigest": "sha256:4bf89478a49bae5be4928acc6f332c41e9bf958718d5c58c31e2fc9071d21abb",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -48355,8 +48430,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceClaims",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#372:taskExecutionMaintenanceClaims",
-        "line": 372,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#368:taskExecutionMaintenanceClaims",
+        "line": 368,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#PostgresqlTerminalMaintenancePersistence",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -48371,8 +48446,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceMembers",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#387:taskExecutionMaintenanceMembers",
-        "line": 387,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#383:taskExecutionMaintenanceMembers",
+        "line": 383,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#PostgresqlTerminalMaintenancePersistence",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -48387,8 +48462,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceClaims",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#443:taskExecutionMaintenanceClaims",
-        "line": 443,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#439:taskExecutionMaintenanceClaims",
+        "line": 439,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#PostgresqlTerminalMaintenancePersistence",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -48403,8 +48478,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceMembers",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#466:taskExecutionMaintenanceMembers",
-        "line": 466,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#462:taskExecutionMaintenanceMembers",
+        "line": 462,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTerminalMaintenancePersistence.ts#PostgresqlTerminalMaintenancePersistence",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -49843,8 +49918,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceClaims",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#377:taskExecutionMaintenanceClaims",
-        "line": 377,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#373:taskExecutionMaintenanceClaims",
+        "line": 373,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#SqliteTerminalMaintenanceStore",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -49859,8 +49934,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceMembers",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#391:taskExecutionMaintenanceMembers",
-        "line": 391,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#387:taskExecutionMaintenanceMembers",
+        "line": 387,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#SqliteTerminalMaintenanceStore",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -49875,8 +49950,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceClaims",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#477:taskExecutionMaintenanceClaims",
-        "line": 477,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#473:taskExecutionMaintenanceClaims",
+        "line": 473,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#SqliteTerminalMaintenanceStore",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -49891,8 +49966,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceMembers",
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#501:taskExecutionMaintenanceMembers",
-        "line": 501,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#497:taskExecutionMaintenanceMembers",
+        "line": 497,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalMaintenance.ts#SqliteTerminalMaintenanceStore",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

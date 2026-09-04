@@ -1984,7 +1984,7 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
           sourceToken: "catalogVisibility: 'public'",
         }),
         anchor({
-          file: 'packages/backend/src/services/taskOperations.ts',
+          file: 'packages/backend/src/modules/task-execution/infrastructure/taskListPage/filters.ts',
           symbol: '$file',
           sourceToken: "col('catalog_visibility')",
         }),

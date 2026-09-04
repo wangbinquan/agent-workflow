@@ -1,9 +1,10 @@
-import type { TaskCatalogListItem } from '@agent-workflow/shared'
+import type { TaskCatalogListItem, TaskOperationsListItem } from '@agent-workflow/shared'
 
 // RFC-349 SQLite compatibility source factory.
 import type { DbClient } from '@/db/client'
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
-import { listTaskOperationsPage } from '@/services/taskOperations'
+import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
+import { createSqliteTaskListPage, taskListViewerOf, type TaskListPage } from './taskListPage'
 
 const EXECUTION_SOURCE_IDS = ['agent', 'workflow', 'workgroup'] as const
 
@@ -26,7 +27,7 @@ function targetLabel(item: { repoUrl: string | null; repoPath: string }): string
 
 function normalizeItem(
   sourceId: (typeof EXECUTION_SOURCE_IDS)[number],
-  item: Awaited<ReturnType<typeof listTaskOperationsPage>>['items'][number],
+  item: TaskOperationsListItem,
 ): TaskCatalogListItem {
   const subjectName =
     sourceId === 'agent'
@@ -69,14 +70,17 @@ function normalizeItem(
   }
 }
 
-function source(db: DbClient, sourceId: (typeof EXECUTION_SOURCE_IDS)[number]): TaskCatalogSource {
+function source(
+  page: TaskListPage,
+  sourceId: (typeof EXECUTION_SOURCE_IDS)[number],
+): TaskCatalogSource {
   return {
     sourceId,
     supportsHierarchy: true,
     async list(input) {
-      const page = await listTaskOperationsPage(
-        db,
-        input.actor,
+      const listed = await page.list(
+        // Actor 在模块边界上收成闭合投影（RFC-294 §629：目录合同禁止 full Actor）。
+        taskListViewerOf(input.actor),
         {
           ...(input.view === undefined ? {} : { view: input.view }),
           ...(input.q === undefined ? {} : { q: input.q }),
@@ -93,15 +97,19 @@ function source(db: DbClient, sourceId: (typeof EXECUTION_SOURCE_IDS)[number]): 
         },
       )
       return {
-        items: page.items.map((item) => normalizeItem(sourceId, item)),
-        nextCursor: page.nextCursor,
+        items: listed.items.map((item) => normalizeItem(sourceId, item)),
+        nextCursor: listed.nextCursor,
         facets:
-          page.kind === 'root' ? page.facets : { all: 0, active: 0, attention: 0, finished: 0 },
+          listed.kind === 'root' ? listed.facets : { all: 0, active: 0, attention: 0, finished: 0 },
       }
     },
   }
 }
 
-export function composeTaskExecutionCatalogSources(db: DbClient): TaskCatalogSource[] {
-  return EXECUTION_SOURCE_IDS.map((sourceId) => source(db, sourceId))
+export function composeTaskExecutionCatalogSources(
+  db: DbClient,
+  owners: OwnerIdentityQueries,
+): TaskCatalogSource[] {
+  const page = createSqliteTaskListPage(db, owners)
+  return EXECUTION_SOURCE_IDS.map((sourceId) => source(page, sourceId))
 }

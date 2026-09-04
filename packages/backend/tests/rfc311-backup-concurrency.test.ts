@@ -24,7 +24,7 @@ import { openDb } from '../src/db/client'
 import { tasks, users, workflows } from '../src/db/schema'
 import { isDbSnapshotInProgress, vacuumIntoOffThread } from '../src/services/backup'
 import { runWalCheckpointTick } from '../src/services/backupScheduler'
-import { listTaskOperationsPage } from '../src/services/taskOperations'
+import { listTaskOperationsPage } from './helpers/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

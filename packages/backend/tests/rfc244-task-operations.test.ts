@@ -8,8 +8,10 @@ import { createSession } from '../src/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
 import { createApp } from '../src/server'
-import { listTaskOperationsPage, parseTaskOperationsQuery } from '../src/services/taskOperations'
+import { parseTaskOperationsQuery } from '../src/modules/task-execution/infrastructure/taskListPage'
+import { listTaskOperationsPage } from './helpers/taskListPage'
 import { createUser } from '../src/services/users'
+import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -223,7 +225,7 @@ describe('RFC-244 task operations query', () => {
   })
 
   test('query canonicalization is strict and corrupt frozen JSON degrades to null', async () => {
-    const parsed = parseTaskOperationsQuery(actor('alice'), {
+    const parsed = parseTaskOperationsQuery(taskListViewerOf(actor('alice')), {
       statuses: 'running,pending,running',
       scope: 'all',
       q: '  hello  ',
@@ -231,8 +233,12 @@ describe('RFC-244 task operations query', () => {
     expect(parsed.filters.statuses).toEqual(['pending', 'running'])
     expect(parsed.filters.scope).toBe('mine')
     expect(parsed.filters.q).toBe('hello')
-    expect(() => parseTaskOperationsQuery(actor('alice'), { limit: '101' })).toThrow()
-    expect(() => parseTaskOperationsQuery(actor('alice'), { statuses: 'running,' })).toThrow()
+    expect(() =>
+      parseTaskOperationsQuery(taskListViewerOf(actor('alice')), { limit: '101' }),
+    ).toThrow()
+    expect(() =>
+      parseTaskOperationsQuery(taskListViewerOf(actor('alice')), { statuses: 'running,' }),
+    ).toThrow()
 
     const db = createInMemoryDb(MIGRATIONS)
     await seedBase(db)

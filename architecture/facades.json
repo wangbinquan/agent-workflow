@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 327,
+    "serviceFiles": 326,
     "thinFacades": 75
   },
   "entries": [
@@ -5745,6 +5745,7 @@
         "import:d0fe58770dbe785de5b4",
         "import:d3878ef3405d8ba0d432",
         "import:d40458411935c8508bf4",
+        "import:dd2a8ea3e1a509ea7cb5",
         "import:de17d18a53431aaefb1a",
         "import:e2108a9d295860cd209c",
         "import:f167f8f5ce5b1006318a",
@@ -6096,35 +6097,6 @@
       "file": "packages/backend/src/services/taskLaunchGate.ts",
       "id": "facade:packages/backend/src/services/taskLaunchGate.ts",
       "ownerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#$file",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:1b05468876a834280577",
-        "import:397db2877678de831850",
-        "import:6a1ffe3c94c9e562787d",
-        "import:77796ac74c0aba0e4876",
-        "import:adde05b3f00ebb629846",
-        "import:b73b42a7c738416e29f5",
-        "import:ba7cc88d1d1aaed9f185",
-        "import:d17be8aa2e64bbfb6379"
-      ],
-      "exportedSymbols": [
-        "ParsedTaskOperationsQuery",
-        "TaskOperationsPageOptions",
-        "TaskOperationsRawQuery",
-        "canUseFilteredFastPath",
-        "hasUnrootedTasks",
-        "isDefaultView",
-        "listTaskOperationsPage",
-        "parseTaskOperationsQuery"
-      ],
-      "file": "packages/backend/src/services/taskOperations.ts",
-      "id": "facade:packages/backend/src/services/taskOperations.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/taskOperations.ts#$file",
       "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
       "targetContext": "task-execution",
@@ -6904,5 +6876,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6d29fdec0794d43a269d69308185f86b3667858170a5c51fba56192d6fda7a6"
+  "sourceDigest": "sha256:4bf89478a49bae5be4928acc6f332c41e9bf958718d5c58c31e2fc9071d21abb"
 }

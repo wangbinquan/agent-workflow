@@ -3,7 +3,7 @@
 // pagination, hierarchy or facets.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { TaskCatalogVisibility } from '@agent-workflow/shared'
 
@@ -12,6 +12,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { tasks, users, workflows } from '../src/db/schema'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/sqliteTaskCatalogSources'
 import { listTaskItems, listTasks } from '../src/services/task'
+import { composeSqliteOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -93,9 +94,10 @@ describe('task catalog internal execution boundary', () => {
       },
       source: 'session',
     })
-    const workflowSource = composeTaskExecutionCatalogSources(db).find(
-      (source) => source.sourceId === 'workflow',
-    )
+    const workflowSource = composeTaskExecutionCatalogSources(
+      db,
+      composeSqliteOwnerIdentityQueries(db),
+    ).find((source) => source.sourceId === 'workflow')
     if (workflowSource === undefined) throw new Error('workflow source is missing')
 
     const first = await workflowSource.list({ actor: requestActor, limit: '1' })
@@ -140,10 +142,21 @@ describe('task catalog internal execution boundary', () => {
   })
 
   test('public task components contain no digital-employee source branch', () => {
-    const commonService = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskOperations.ts'),
-      'utf8',
+    // RFC-357：这份查询平移进 `taskListPage/`，判据跟着覆盖整个目录——按单个文件名
+    // 钉死会在下一次拆分时静默漏掉新文件。
+    const pageDir = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'infrastructure',
+      'taskListPage',
     )
+    const commonService = readdirSync(pageDir)
+      .filter((entry) => entry.endsWith('.ts'))
+      .map((entry) => readFileSync(resolve(pageDir, entry), 'utf8'))
+      .join('\n')
     const catalogAdapter = readFileSync(
       resolve(
         import.meta.dir,

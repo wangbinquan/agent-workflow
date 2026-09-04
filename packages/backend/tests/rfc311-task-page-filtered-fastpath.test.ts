@@ -28,8 +28,9 @@ import {
   canUseFilteredFastPath,
   hasUnrootedTasks,
   isDefaultView,
-  listTaskOperationsPage,
-} from '../src/services/taskOperations'
+} from '../src/modules/task-execution/infrastructure/taskListPage'
+import { listTaskOperationsPage } from './helpers/taskListPage'
+import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 type Db = ReturnType<typeof createInMemoryDb>
@@ -369,8 +370,8 @@ describe('RFC-311 G1 — filtered fast path === exhaustive pipeline', () => {
       q: undefined,
     }
     // 有过滤 ⇒ 默认快路径不接；admin 走过滤快路径，受限 actor 仍回旧管线。
-    expect(isDefaultView(admin, filters)).toBe(false)
-    expect(canUseFilteredFastPath(admin)).toBe(true)
-    expect(canUseFilteredFastPath(user)).toBe(false)
+    expect(isDefaultView(taskListViewerOf(admin), filters)).toBe(false)
+    expect(canUseFilteredFastPath(taskListViewerOf(admin))).toBe(true)
+    expect(canUseFilteredFastPath(taskListViewerOf(user))).toBe(false)
   })
 })

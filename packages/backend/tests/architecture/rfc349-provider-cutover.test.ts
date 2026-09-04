@@ -86,7 +86,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/taskCollab.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskCollab :: export:*',
   'packages/backend/src/services/taskDelete.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacySqliteTaskDatabase,dbTxSync,eq,inArray,sql,taskCollaborators,taskFeedback,taskRepos,tasks',
   'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskDatabase :: LegacySqliteTaskDatabase',
-  'packages/backend/src/services/taskOperations.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacySqliteTaskDatabase,SQL,and,eq,inArray,sql,tasks',
   'packages/backend/src/services/taskQuestionDispatch.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch :: export:*',
   'packages/backend/src/services/taskQuestions.ts -> @/modules/collaboration/infrastructure/legacySqliteTaskQuestions :: export:*',
   'packages/backend/src/services/tokenAudit.ts -> @/auth/composition :: legacySqliteTokenCallAudit',

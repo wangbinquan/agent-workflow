@@ -163,14 +163,24 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
   test('the persisted fact has one application INSERT owner and no response/request schema seam', () => {
     const taskService = readFileSync(resolve(BACKEND_SRC, 'services', 'task.ts'), 'utf8')
     const schema = readFileSync(resolve(BACKEND_SRC, 'db', 'schema.ts'), 'utf8')
-    const operations = readFileSync(resolve(BACKEND_SRC, 'services', 'taskOperations.ts'), 'utf8')
+    const operations = readFileSync(
+      resolve(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'taskListPage',
+        'filters.ts',
+      ),
+      'utf8',
+    )
     const sharedTaskSchema = readFileSync(SHARED_TASK_SCHEMA, 'utf8')
 
     // 7 → 8（2026-09-04）：列表查询新增一处**读**谓词
     // `inArray(tasks.launchOrigin, taskListOriginMatches(filters.origin))`。与下面
-    // `services/taskOperations.ts` 的两条同型——棘轮锁的是「写只有一个 owner」
-    // （紧随其后的 `.update(tasks) … launchOrigin` 否定断言）与「不进请求/响应
-    // schema 和 routes/」，过滤谓词发生在查询层本就是它认可的形态。
+    // 列表页过滤器的那条同型——棘轮锁的是「写只有一个 owner」（紧随其后的
+    // `.update(tasks) … launchOrigin` 否定断言）与「不进请求/响应 schema 和
+    // routes/」，过滤谓词发生在查询层本就是它认可的形态。
     expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(8)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
     expect(schema).toContain("launchOrigin: text('launch_origin'")
@@ -178,8 +188,18 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 旧穷举管线在已物化的 `base b` 上求值、新快路径直接打 `tasks t`,两条路径
     // 必须共用同一份过滤定义——写死 `b.` 前缀就做不到。棘轮跟着挪到新形态:
     // 它锁的仍是同一件事「launch_origin 的过滤发生在查询层」。
-    expect(operations).toContain("${col('launch_origin')} IN ('event', 'webhook')")
-    expect(operations).toContain("${col('launch_origin')} = ${filters.origin}")
+    //
+    // RFC-357 又挪了一次形态：来源→存储值的映射不再在这里手写
+    // （PostgreSQL 目录源曾另写一份按 `scheduled_task_id` 猜的实现，「事件」/「API」
+    // 筛选直接 400），改走 shared 的 `taskListOriginMatches` 单一判据；查询层只负责
+    // 把它交给 SQL。棘轮锁的仍是同一件事，只是判据从「手写这两条谓词」变成
+    // 「过滤走单一映射 + 落在 launch_origin 上」。
+    expect(operations).toContain('taskListOriginMatches(filters.origin)')
+    expect(operations).toContain("${col('launch_origin')} IN (${list(originMatches)})")
+    // 这里**不**加一条「文件里不许出现 scheduled_task_id」的否定断言：源码文本判据
+    // 分不清代码与散文，第一版就被解释这个 bug 的注释自己命中了。「不按
+    // scheduled_task_id 猜来源」由行为测试守
+    // （`task-catalog-launch-origin-filter.test.ts`，两条变异各自致红），比数字符串靠谱。
     expect(sharedTaskSchema).not.toMatch(/\blaunchOrigin\b|\blaunch_origin\b/)
 
     for (const file of sourceFiles(resolve(BACKEND_SRC, 'routes'))) {

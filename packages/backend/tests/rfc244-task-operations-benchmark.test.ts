@@ -9,7 +9,7 @@ import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
 import { tasks, users, workflows } from '../src/db/schema'
-import { listTaskOperationsPage } from '../src/services/taskOperations'
+import { listTaskOperationsPage } from './helpers/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ROOT_COUNT = 20

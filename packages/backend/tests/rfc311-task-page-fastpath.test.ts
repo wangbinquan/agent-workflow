@@ -22,7 +22,9 @@ import { sql } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import { taskCollaborators, tasks, users, workflows } from '../src/db/schema'
-import { isDefaultView, listTaskOperationsPage } from '../src/services/taskOperations'
+import { isDefaultView } from '../src/modules/task-execution/infrastructure/taskListPage'
+import { listTaskOperationsPage } from './helpers/taskListPage'
+import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -225,8 +227,19 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
     expect(plan).toContain('idx_tasks_branch_started_id')
     expect(plan).not.toContain('TEMP B-TREE')
     // 源码层守卫:两处断点都必须是行值形式,任何一处退回 OR 展开都在这里红。
+    // RFC-357 把这份查询从 `services/taskOperations.ts` 平移进
+    // `modules/task-execution/infrastructure/taskListPage/`，两处断点一起落在 query.ts。
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'taskOperations.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'taskListPage',
+        'query.ts',
+      ),
       'utf8',
     )
     // 注:插值变量是 camelCase(`${parsed.cursor.branchStartedAt}`),此前这条正则
@@ -246,16 +259,29 @@ describe('RFC-311 — default-view fast path === exhaustive pipeline', () => {
       scope: 'all' as const,
       origin: 'all' as const,
     }
-    expect(isDefaultView(actor('admin', 'admin'), defaults)).toBe(true)
+    expect(isDefaultView(taskListViewerOf(actor('admin', 'admin')), defaults)).toBe(true)
     // 受限 actor:分支聚合按可见性裁剪树算,共享物化列答不了它的排序。
-    expect(isDefaultView(actor('alice', 'user'), { ...defaults, scope: 'mine' })).toBe(false)
+    expect(
+      isDefaultView(taskListViewerOf(actor('alice', 'user')), { ...defaults, scope: 'mine' }),
+    ).toBe(false)
     // 任一过滤位被动过就必须回旧管线。
-    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, view: 'active' })).toBe(false)
-    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, statuses: ['running'] })).toBe(
+    expect(
+      isDefaultView(taskListViewerOf(actor('admin', 'admin')), { ...defaults, view: 'active' }),
+    ).toBe(false)
+    expect(
+      isDefaultView(taskListViewerOf(actor('admin', 'admin')), {
+        ...defaults,
+        statuses: ['running'],
+      }),
+    ).toBe(false)
+    expect(
+      isDefaultView(taskListViewerOf(actor('admin', 'admin')), { ...defaults, origin: 'webhook' }),
+    ).toBe(false)
+    expect(
+      isDefaultView(taskListViewerOf(actor('admin', 'admin')), { ...defaults, subject: 'agent' }),
+    ).toBe(false)
+    expect(isDefaultView(taskListViewerOf(actor('admin', 'admin')), { ...defaults, q: 'x' })).toBe(
       false,
     )
-    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, origin: 'webhook' })).toBe(false)
-    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, subject: 'agent' })).toBe(false)
-    expect(isDefaultView(actor('admin', 'admin'), { ...defaults, q: 'x' })).toBe(false)
   })
 })

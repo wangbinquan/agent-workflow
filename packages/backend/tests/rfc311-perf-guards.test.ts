@@ -71,7 +71,7 @@ import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { buildOverview } from '../src/services/overview'
 import { resourceScopeAuthority } from './helpers/resourceScopeAuthority'
-import { listTaskOperationsPage } from '../src/services/taskOperations'
+import { listTaskOperationsPage } from './helpers/taskListPage'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
