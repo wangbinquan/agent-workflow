@@ -42,8 +42,7 @@ import { createPostgresqlTaskLifecycleAutoRepairCommand } from '../infrastructur
 import { createSqliteTaskLifecycleAutoRepairCommand } from '../infrastructure/sqliteTaskLifecycleAutoRepairCommand'
 import { createPostgresqlTaskLifecycleWsProjector } from '../infrastructure/postgresqlTaskLifecycleWsProjection'
 import { createSqliteTaskLifecycleWsProjector } from '../infrastructure/sqliteTaskLifecycleWsProjection'
-import { createPostgresqlTaskOverviewQuery } from '../infrastructure/postgresqlTaskOverviewQuery'
-import { createSqliteTaskOverviewQuery } from '../infrastructure/sqliteTaskOverviewQuery'
+import { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
 import { createPostgresqlFusionEngineTaskOperations } from '../infrastructure/postgresqlFusionEngineTaskOperations'
 import { createSqliteFusionEngineTaskOperations } from '../infrastructure/fusionEngineTaskOperations'
 import {
@@ -267,7 +266,7 @@ export function composeSqliteTaskExecutionProviderRuntime(
     repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
     lifecycleRepair,
     lifecycleProjector: createSqliteTaskLifecycleWsProjector(db),
-    overview: createSqliteTaskOverviewQuery(db),
+    overview: createTaskOverviewQuery(db),
     fusion: createSqliteFusionEngineTaskOperations({
       db,
       schedulerDriver: runtime.schedulerDriver,
@@ -422,7 +421,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     repositoryPreparationRetry,
     lifecycleRepair,
     lifecycleProjector: createPostgresqlTaskLifecycleWsProjector(db),
-    overview: createPostgresqlTaskOverviewQuery(db),
+    overview: createTaskOverviewQuery(db),
     fusion: createPostgresqlFusionEngineTaskOperations({
       db,
       appHome: dependencies.fusion.appHome,

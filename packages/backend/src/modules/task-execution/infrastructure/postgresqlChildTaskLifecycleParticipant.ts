@@ -47,7 +47,7 @@ import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecu
 import type { TaskExecutionModule } from '../composition'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { taskStopProjection } from '../domain/sourceTermination'
-import { PostgresqlTaskRollbackQueries } from './postgresqlTaskRollbackQueries'
+import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
@@ -236,7 +236,7 @@ async function assertResumeAdmission(
       410,
     )
   }
-  const rollbackTarget = await new PostgresqlTaskRollbackQueries(dependencies.db).load(task.id)
+  const rollbackTarget = await new DrizzleTaskRollbackQueries(dependencies.db).load(task.id)
   if (
     rollbackTarget !== null &&
     rollbackTarget.repoCount > 1 &&
@@ -422,7 +422,7 @@ async function rollbackForResume(
   },
 ): Promise<void> {
   const rollbackTarget = await loadRollbackTargetFrom(
-    new PostgresqlTaskRollbackQueries(dependencies.db),
+    new DrizzleTaskRollbackQueries(dependencies.db),
     input.taskId,
   )
   if (rollbackTarget === null) {

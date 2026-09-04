@@ -1,3 +1,2 @@
-export { createSqliteTaskOverviewQuery } from '../infrastructure/sqliteTaskOverviewQuery'
-export { createPostgresqlTaskOverviewQuery } from '../infrastructure/postgresqlTaskOverviewQuery'
+export { createTaskOverviewQuery } from '../infrastructure/taskOverviewQuery'
 export type { TaskOverviewQuery } from '../public/queries'

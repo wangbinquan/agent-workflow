@@ -1,12 +1,14 @@
+// RFC-359 W4-B1 —— 任务总览计数：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
+
 import { and, count, eq, gte, inArray, isNull, or, type SQL } from 'drizzle-orm'
 
 import type { OverviewTasks } from '@agent-workflow/shared'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskCollaborators, tasks } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskOverviewQuery } from '../public/queries'
 
 async function loadOverview(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   input: Parameters<TaskOverviewQuery['load']>[0],
 ): Promise<OverviewTasks> {
   const canReadAll = input.actor.permissions.has('tasks:read:all')
@@ -40,7 +42,7 @@ async function loadOverview(
   return { running, awaiting, done7d, failed7d }
 }
 
-export function createPostgresqlTaskOverviewQuery(db: PostgresqlDatabaseClient): TaskOverviewQuery {
+export function createTaskOverviewQuery(db: ProviderNeutralDatabase): TaskOverviewQuery {
   return Object.freeze({
     load: async (input: Parameters<TaskOverviewQuery['load']>[0]) => await loadOverview(db, input),
   })

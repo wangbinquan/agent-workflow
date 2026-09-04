@@ -56,7 +56,7 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
-  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader',
+  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/branchTraceSnapshotReader',
 ])
 
 function legacyDeepImports(units: readonly SourceUnit[]): string[] {

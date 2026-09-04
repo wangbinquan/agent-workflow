@@ -5721,22 +5721,18 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader",
-      "specifier": "@/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/branchTraceSnapshotReader",
+      "specifier": "@/modules/task-execution/infrastructure/branchTraceSnapshotReader",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。 RFC-359 W4-B1 起改指一份中立实现（branchTraceSnapshotReader）。",
       "introducedByRFC": "RFC-349（provider cutover current-source census）",
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2db53ae0991ed2d01ccf"
-      ],
+      "canonicalImportEdgeIds": [],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader.ts#SqliteBranchTraceSnapshotReader"
-      ],
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
       ]

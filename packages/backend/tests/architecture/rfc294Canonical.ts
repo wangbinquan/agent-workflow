@@ -1997,13 +1997,9 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
           sourceToken: "catalogVisibility: 'public'",
         }),
         anchor({
-          file: 'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskOverviewQuery.ts',
-          symbol: 'createSqliteTaskOverviewQuery',
-          sourceToken: "eq(tasks.catalogVisibility, 'public')",
-        }),
-        anchor({
-          file: 'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOverviewQuery.ts',
-          symbol: 'createPostgresqlTaskOverviewQuery',
+          // RFC-359 W4-B1：总览计数一份实现，两个 provider 共用。
+          file: 'packages/backend/src/modules/task-execution/infrastructure/taskOverviewQuery.ts',
+          symbol: 'createTaskOverviewQuery',
           sourceToken: "eq(tasks.catalogVisibility, 'public')",
         }),
       ],

@@ -223,7 +223,7 @@ import {
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
-import { SqliteBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/sqliteBranchTraceSnapshotReader'
+import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
 type WorkspacePreparationRepositoryProjection = Parameters<
@@ -7063,7 +7063,7 @@ export async function getTaskNodeRuns(
   // RFC-306: the run trace rides this response — the task detail already fetches
   // it and already invalidates it on every node-status WS event. Absent when the
   // task took no branch decisions at all.
-  const branchTrace = await branchTraceForTask(new SqliteBranchTraceSnapshotReader(db), taskId)
+  const branchTrace = await branchTraceForTask(new DrizzleBranchTraceSnapshotReader(db), taskId)
   return { runs, outputs, ...(branchTrace !== undefined ? { branchTrace } : {}) }
 }
 

@@ -1,10 +1,12 @@
+// RFC-359 W4-B1 —— 分支追踪快照读取：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
+
 import { eq } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRunOutputs, nodeRuns, tasks } from '@/db/schema'
 import type { BranchTraceSnapshotReader } from '../application/ports/branchTraceSnapshotReader'
 
-export class SqliteBranchTraceSnapshotReader implements BranchTraceSnapshotReader {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleBranchTraceSnapshotReader implements BranchTraceSnapshotReader {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async read(taskId: string) {
     const taskRows = await this.db

@@ -85,7 +85,7 @@ import type {
 import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskRouteListFilters, TaskRouteOperations } from '../public/taskRoutes'
-import { PostgresqlBranchTraceSnapshotReader } from './postgresqlBranchTraceSnapshotReader'
+import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
@@ -987,7 +987,7 @@ async function taskNodeRuns(
             ),
           )
   const branchTrace = await branchTraceForTask(
-    new PostgresqlBranchTraceSnapshotReader(dependencies.db),
+    new DrizzleBranchTraceSnapshotReader(dependencies.db),
     taskId,
   )
   return {

@@ -88,6 +88,9 @@
 > 不再 import `services/agent` 门面（Agent 查询走目录查询面 + admitDaemonIdentity）；runtime registry 的 `hasTask`
 > 改为「driver 在跑」（release 后即 false；token 仍在、successor 仍被拒、`awaitReleasedSettled` 供 attach 前等 settle）——
 > 否则终态已落库的任务在 owner 行转移那几毫秒里会被 resume/retry 拒成 task-not-resumable（RFC-287 AC-10 / AC-16）。
+> **W4-B1 批 1 已落（2026-09-05）**：task-execution 三对逐字相同的适配器合一（taskOverviewQuery / branchTraceSnapshotReader /
+> taskRollbackQueries），六个 provider 文件删除；`rfc359-w4-b1-identical-adapters.test.ts` 两引擎各跑。剩 39 对，
+> 按相似度从高到低推进（read models 0.99 / gate continuation effect 0.95 / activation snapshot 0.93 / ws projection 0.89 …）。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
