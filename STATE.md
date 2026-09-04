@@ -2,6 +2,21 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft r2，待批，2026-09-04）：[RFC-358 意图构建看得见工作流图校验](design/RFC-358-intent-graph-validation-feedback/proposal.md)。**
+> 起于用户实证「意图创建的东西过不了校验」。对账结论：意图链路**只跑第一层**（`validateDraftChangeset`），它闭环
+> 完整——前端红牌 + 禁提交 + 下一轮进 INTENT.md 让 agent 自修；而真正的工作流图校验 `validateWorkflowDef`
+> （3339 行 / 108 个错误码）**从生成到落库一次都不跑**，只挂在编辑器面板与 `taskLaunchGate`。于是意图侧全绿落库、
+> 坏在编辑器 / 启动，agent 全程看不见也无法自愈。**这是实现缺口不是设计取舍**：RFC-234 §9.2/§9.3 承诺的三项静态
+> 校验里，canonical schema 与 `validateGroupShape` 都已落地并真的在跑，**只有 workflow validator 这一项没有**。
+> 本机生产库快照实证：43 个工作流中 7 个由意图创建、1 个带 error（`review-input-source-not-markdown`）；19 个
+> draft 只有 1 个报过 blocking error——第一层「几乎总是绿」使绿失去信息量。做法：domain 纯判据做 schema 前置 +
+> 假想解析 + **四类覆盖层**（agent 变更后形态、同批新建的 skill/MCP/plugin、同批新建的被调工作流、
+> `currentWorkflow`），经 resource-catalog 新增的 `validateCandidate` 合同跑图校验，error 以 `<opId>:` 前缀汇入
+> 既有 blocking 列表。七条裁决：warning 只在 UI、自动重修 1 轮、apply 二次硬拦、存量不管、补 copy sidecar 回填、
+> 改 agent 只知情提示、查库失败不丢产出。**设计门两路评审（只审功能）报出 12 P0 / 13 P1，全部折入 r2**——其中
+> 四条会让 r1 直接做不出来（覆盖层漏 `outputKinds`、合成 agent 行缺 `skills`/`dependsOn` 致 validator 抛、loose
+> 定义直喂会崩、`graphWarnings` 撞 `.strict()` 致详情 500）。**批准前不动任何生产代码**。
+
 > 🚧 **进行中 RFC（Draft，待批，2026-09-04）：[RFC-357 任务列表页查询归一（一份查询，两个 provider）](design/RFC-357-task-list-page-query-unification/proposal.md)。**
 > 起于用户「切了 PostgreSQL，任务列表还是卡」。对账结论不是「PostgreSQL 慢」，而是**这一页在两个 provider 上是两份实现，
 > PostgreSQL 那份从来没有过 RFC-311 的任何一项优化**：目录页对 task-execution 的三个源各发一次
