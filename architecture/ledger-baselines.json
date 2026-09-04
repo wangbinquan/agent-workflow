@@ -336,10 +336,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
       "baseline": 152,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。",
-      "allowGrowth": {
-        "why": "RFC-355 T8：`IntentPersistence` 的模块外唯一 consumer 是 routes/intentSessions.ts，随路由迁进 intent 自己的 inbound 后「模块外无人消费」显形。归位暴露的既有事实，T9 逐个裁决去留。"
-      }
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。"
     },
     {
       "id": "rfc294-review-dead-required-ports",
@@ -486,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25915,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-355 T8：详情投影从路由收进 application（sessionDetail / sessionSummary）+ 两条纯判据进 domain（draftLifecycle / mountSuggestions），四个新文件的具名符号入清单；同一批里路由文件从 1094 行缩到 836 行。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -506,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "2f54a8be82bc24d7dbede3919ae2d4d981ad2426",
-    "contentDigest": "sha256:6c2e66e984bd10b61bee1592c5231f6eb5ba5f737a0b844276a51075b8000fd7",
+    "currentSnapshotSha": "9ef861059fc0b92da91429a6805df13c70b114da",
+    "contentDigest": "sha256:0303e76cc658710a098614d4718cc79175d42c1979e779596bccfb91820f9eec",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
