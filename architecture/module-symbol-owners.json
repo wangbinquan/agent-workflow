@@ -6,7 +6,7 @@
     "moduleFiles": 1333,
     "productionFiles": 2720,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25966
+    "symbolsIncludingFileRoots": 25967
   },
   "entries": [
     {
@@ -210568,6 +210568,18 @@
       "currentLayer": "util",
       "exported": true,
       "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#STALE_RUN_QUIESCE_BUDGET_MS",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "STALE_RUN_QUIESCE_BUDGET_MS",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/process.ts",
       "id": "owner:packages/backend/src/util/process.ts#StaleRunKillOpts",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -312291,5 +312303,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57399119a89d44021e5ccb3d3ed0f1199d90ce9a182c78869b61877830bb59a1"
+  "sourceDigest": "sha256:aaf4300bb4b6e4d718f612111633c211f2bcc954a35c7a3422829929abe0f516"
 }

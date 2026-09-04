@@ -13451,7 +13451,7 @@
       ],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/process.ts#$setTimeout:443",
+      "id": "background:packages/backend/src/util/process.ts#$setTimeout:460",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -13465,7 +13465,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:443",
+      "symbol": "$setTimeout:460",
       "targetContext": "task-execution"
     },
     {
@@ -13474,7 +13474,7 @@
       ],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/process.ts#$setTimeout:584",
+      "id": "background:packages/backend/src/util/process.ts#$setTimeout:601",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -13488,7 +13488,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:584",
+      "symbol": "$setTimeout:601",
       "targetContext": "task-execution"
     },
     {
@@ -13497,7 +13497,7 @@
       ],
       "file": "packages/backend/src/util/process.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/util/process.ts#$setTimeout:604",
+      "id": "background:packages/backend/src/util/process.ts#$setTimeout:621",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -13511,7 +13511,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:604",
+      "symbol": "$setTimeout:621",
       "targetContext": "task-execution"
     },
     {
@@ -13564,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:57399119a89d44021e5ccb3d3ed0f1199d90ce9a182c78869b61877830bb59a1"
+  "sourceDigest": "sha256:aaf4300bb4b6e4d718f612111633c211f2bcc954a35c7a3422829929abe0f516"
 }
