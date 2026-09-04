@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 888,
+    "consumers": 886,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1064,
+    "methods": 1063,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20706,
-    "symbols": 986
+    "recursiveFields": 20704,
+    "symbols": 985
   },
   "entries": [
     {
@@ -10302,64 +10302,6 @@
       "signatureDigest": "sha256:b3147b04ff211ac5655edf7169cec34f5022919d162442d335d14b9dcc676fb2",
       "status": "target-context-current-surface",
       "symbol": "CollaborationTaskRuntimeOperations",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [
-        "import:c291d6407d298c62201e"
-      ],
-      "context": "collaboration",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:autoDispatchDeferredQuestions.$parameter:taskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:autoDispatchDeferredQuestions.$return",
-          "type": "void"
-        }
-      ],
-      "file": "packages/backend/src/modules/collaboration/public/participants.ts",
-      "id": "public:collaboration:participants:DeferredTaskQuestionDispatcher",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:c291d6407d298c62201e"
-          ],
-          "name": "autoDispatchDeferredQuestions",
-          "signatureDigest": "sha256:9a92451495039de23836048b6cee537f48ec09773e4c41b7669e7cfed68e19a5"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:c291d6407d298c62201e",
-          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:3ad97b78c3df77abf20e1f0a0c8394f1f38848527f9026daa4638bd926e03c61",
-      "status": "target-context-current-surface",
-      "symbol": "DeferredTaskQuestionDispatcher",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -147613,7 +147555,6 @@
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24",
-        "import:5677651931255f854826",
         "import:57ade73167bf34ba73a1",
         "import:c32ee23b798ff59d41f3"
       ],
@@ -147633,12 +147574,6 @@
           "edgeId": "import:075f63d0c44a4eb0cc24",
           "file": "packages/backend/src/services/taskExecutionParticipants.ts",
           "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
-        },
-        {
-          "context": "collaboration",
-          "edgeId": "import:5677651931255f854826",
-          "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#$file"
         },
         {
           "context": "collaboration",
@@ -163231,7 +163166,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68",
+  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d",
   "targetContexts": [
     "collaboration",
     "development-automation",

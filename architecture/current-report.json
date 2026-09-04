@@ -2,22 +2,35 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5241,
-    "backgroundJobs": 368,
-    "crossContextImports": 6377,
+    "architectureExceptions": 5242,
+    "backgroundJobs": 367,
+    "crossContextImports": 6375,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26094,
-    "mutationEntrypoints": 1936,
+    "moduleSymbolOwners": 26089,
+    "mutationEntrypoints": 1935,
     "nodeRunInsertSites": 2,
-    "publicSurfaces": 986,
+    "publicSurfaces": 985,
     "transactionExternalEffects": 480
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1967,
+    "backendProductionFiles": 1966,
     "backendValueSccs": [
+      [
+        "packages/backend/src/modules/collaboration/composition.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+        "packages/backend/src/services/clarify/service.ts",
+        "packages/backend/src/services/humanGateComposition.ts",
+        "packages/backend/src/services/taskQuestionDispatch.ts",
+        "packages/backend/src/services/taskQuestions.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -25,7 +38,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 368,
+    "backgroundEntries": 367,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -59,7 +72,7 @@
       },
       {
         "context": "collaboration",
-        "files": 129
+        "files": 128
       },
       {
         "context": "development-automation",
@@ -122,7 +135,7 @@
         "files": 346
       }
     ],
-    "moduleFiles": 1351,
+    "moduleFiles": 1350,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -148,6 +161,19 @@
     "outboundBoundaryEdges": 35,
     "repoValueSccs": [
       [
+        "packages/backend/src/modules/collaboration/composition.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/autoDispatch.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/service.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestions.ts",
+        "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+        "packages/backend/src/services/clarify/service.ts",
+        "packages/backend/src/services/humanGateComposition.ts",
+        "packages/backend/src/services/taskQuestionDispatch.ts",
+        "packages/backend/src/services/taskQuestions.ts"
+      ],
+      [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
         "packages/backend/src/services/gitVersion.ts",
@@ -168,5 +194,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68"
+  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d"
 }

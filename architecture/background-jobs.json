@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 368,
+    "entries": 367,
     "executionLocal": 52,
     "longRunning": 82,
     "managed": 11,
-    "periodic": 223
+    "periodic": 222
   },
   "entries": [
     {
@@ -6085,29 +6085,6 @@
       "dependencies": [
         "db"
       ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#createPostgresqlTaskDagCollaborationOperations",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#createPostgresqlTaskDagCollaborationOperations",
-      "phase": "unknown",
-      "symbol": "createPostgresqlTaskDagCollaborationOperations",
-      "targetContext": "collaboration"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/modules/collaboration/infrastructure/sqliteHumanGateContinuationRecovery.ts#createSqliteHumanGateContinuationRecoveryQueries",
@@ -6154,23 +6131,23 @@
       "dependencies": [
         "db"
       ],
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts",
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts#createSqliteTaskDagCollaborationOperations",
+      "id": "background:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
         "readiness": false,
         "run": false,
         "start": false,
-        "state": true,
+        "state": false,
         "stop": false
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts#createSqliteTaskDagCollaborationOperations",
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
       "phase": "unknown",
-      "symbol": "createSqliteTaskDagCollaborationOperations",
+      "symbol": "createTaskDagCollaborationOperations",
       "targetContext": "collaboration"
     },
     {
@@ -13587,5 +13564,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68"
+  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d"
 }

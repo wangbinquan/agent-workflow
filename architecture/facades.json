@@ -448,7 +448,6 @@
       "boundaryEdgeIds": [
         "import:36f1b9cf8b4af5a660ea",
         "import:384c37b2d0db0ec5b6b0",
-        "import:a4a45484f07ebf226c11",
         "import:b15bb64fe691d00f2894"
       ],
       "exportedSymbols": [],
@@ -1966,7 +1965,6 @@
         "import:68be674a077204e3e011",
         "import:6bc0d96a18cff27716d2",
         "import:7ece29e98a8ee290d6d5",
-        "import:7fa9292d275e33981f9b",
         "import:825b4b88080cd39aef0f",
         "import:92195b19fe7bee30e397",
         "import:97fc18515661bad39480",
@@ -6168,8 +6166,7 @@
         "import:49abe3206860aa9dc70b",
         "import:56c5a2f3226f4f87e8c1",
         "import:c1a4f5042e1a69f3f5e5",
-        "import:e29a353f54b54a9b8788",
-        "import:e422c6932f93f7d18c73"
+        "import:e29a353f54b54a9b8788"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/taskQuestions.ts",
@@ -6879,5 +6876,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68"
+  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d"
 }

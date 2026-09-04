@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1936,
+    "entries": 1935,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -6147,31 +6147,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#createPostgresqlTaskDagCollaborationOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#createPostgresqlTaskDagCollaborationOperations",
-      "symbol": "createPostgresqlTaskDagCollaborationOperations",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": false,
@@ -6434,31 +6409,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts#createSqliteTaskDagCollaborationOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts#createSqliteTaskDagCollaborationOperations",
-      "symbol": "createSqliteTaskDagCollaborationOperations",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -6475,6 +6425,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteWorkgroupTaskRoomClarifyParticipant.ts#createSqliteWorkgroupTaskRoomClarifyParticipantInTx",
       "symbol": "createSqliteWorkgroupTaskRoomClarifyParticipantInTx",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
+      "symbol": "createTaskDagCollaborationOperations",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -46145,7 +46120,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68",
+  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

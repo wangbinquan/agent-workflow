@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1967,
+    "backendFiles": 1966,
     "frontendFiles": 622,
     "legacyFiles": 616,
-    "moduleFiles": 1351,
-    "productionFiles": 2744,
+    "moduleFiles": 1350,
+    "productionFiles": 2743,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26094
+    "symbolsIncludingFileRoots": 26089
   },
   "entries": [
     {
@@ -5060,18 +5060,6 @@
       "status": "legacy-target",
       "symbol": "composePostgresqlDaemonApplication",
       "targetContext": "task-execution",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#DeferredTaskQuestionDispatcherBinding",
-      "removeAfterWave": "W4",
-      "status": "legacy-target",
-      "symbol": "DeferredTaskQuestionDispatcherBinding",
-      "targetContext": "collaboration",
       "targetLayer": "inbound"
     },
     {
@@ -17182,18 +17170,6 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/collaboration/application/ports/taskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/application/ports/taskDagCollaborationOperations.ts#DeferredTaskQuestionDispatcher",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "DeferredTaskQuestionDispatcher",
-      "targetContext": "collaboration",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/application/ports/taskDagCollaborationOperations.ts",
       "id": "owner:packages/backend/src/modules/collaboration/application/ports/taskDagCollaborationOperations.ts#TaskDagCollaborationOperations",
       "removeAfterWave": null,
       "status": "current-module",
@@ -25390,18 +25366,6 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#resolveEntryShardKeysSync",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "resolveEntryShardKeysSync",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskQuestionDispatch.ts#resolveNodeAgentId",
       "removeAfterWave": null,
       "status": "current-module",
@@ -27933,66 +27897,6 @@
       "currentContext": "collaboration",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#createPostgresqlTaskDagCollaborationOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlTaskDagCollaborationOperations",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#loadOpenClarifyEvidence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "loadOpenClarifyEvidence",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#loadParkEntries",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "loadParkEntries",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskDagCollaborationOperations.ts#loadUndispatchedParkTargets",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "loadUndispatchedParkTargets",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskFeedbackStore.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlTaskFeedbackStore.ts#$file",
       "removeAfterWave": null,
@@ -28905,30 +28809,6 @@
       "currentContext": "collaboration",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations.ts#createSqliteTaskDagCollaborationOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteTaskDagCollaborationOperations",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/sqliteTaskFeedbackStore.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteTaskFeedbackStore.ts#$file",
       "removeAfterWave": null,
@@ -28994,6 +28874,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createSqliteWorkgroupTaskRoomClarifyParticipantInTx",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createTaskDagCollaborationOperations",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#loadOpenClarifyEvidence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "loadOpenClarifyEvidence",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#loadParkEntries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "loadParkEntries",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#loadUndispatchedParkTargets",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "loadUndispatchedParkTargets",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -313831,5 +313771,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68"
+  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d"
 }
