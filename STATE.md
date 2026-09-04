@@ -2,6 +2,27 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，待批，2026-09-04）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
+> 起于用户明令「数据库统一抽象，以后不允许再出现两种数据库一个好一个不好的分支」。前置是覆盖全部
+> 153 对配对适配器 **+ 163 个无配对 PG 面文件**（49,748 行，与已审面积相当）的对账
+> （`design/dual-provider-parity-audit-2026-09-04.md`），确证 **9 条 P0 + 约 32 条 P1 + 约 21 条 P2**。
+> 其中两条 P0 已由**本机真 PostgreSQL 17.11 端到端实证**：①每个任务在铸出任何 node_run 之前必 failed
+> （`deferred-question-dispatcher-not-bound`；SQLite 对照组同一工作流正常跑到 `review -> running`）；
+> ②评审无法通过 / 驳回、澄清无法回答（`reviewDecisions`/`questionDispatches`/`clarifyDecisions`
+> 三条命令端口从未注入，且 PG 侧根本不存在实现 ⇒ `commandContext.ts:161-186` 必抛 500）。
+> **根因是 provider 今天是一个 `if` 而不是一个抽象**：`cli/start.ts:1581` 字面上是
+> `if (provider !== 'sqlite') throw`，PG 在 `:1570` 进入永不返回的 `servePostgresqlDaemon`
+> （`:1160-1162` `await new Promise(() => {})`）⇒ `:1953–2256` 整段 boot 恢复 / 迁移屏障 / 播种
+> 在 PG 上按构造不可达。多数缺陷呈同一形状——**PG 适配器写好了、接进 persistence 了，就是没人调**。
+> **至今无法统一的唯一真障碍是事务**：`bun:sqlite` 的 `transaction` 是同步包装器（async 回调在第一个
+> `await` 处被当作已返回并 COMMIT），PG 客户端是 async，于是一个事务体没法同时跑在两侧——216 份
+> 适配器由此而来。**本 RFC 的技术核心是证明这条约束只对包装器成立**：实测「显式 `BEGIN IMMEDIATE`
+> + async 体 + 显式 COMMIT/ROLLBACK」在 bun:sqlite 上给出真回滚（现状机制同一场景残留两行、零原子性），
+> 且仓内 `sqliteLogicalTarget.ts:222` 已在这么做。五波推进（先修 P0 让 PG 可用 → 统一事务原语 →
+> 统一启动序列 → 逐 context 合一 153 对 → 防复辟守卫 + 真库进 push CI），每波自身可发布。
+> 两项能力影响呈确认（`dbTxSync` 退役、SQLite 写入改异步 + 进程内单写者串行）。
+> **批准前不动任何生产代码。**
+
 > ✅ **RFC 已完成（Done，2026-09-04）：[RFC-358 意图构建看得见工作流图校验](design/RFC-358-intent-graph-validation-feedback/proposal.md)。**
 > 起于用户实证「意图创建的东西过不了校验」。对账结论：意图链路**只跑第一层**
 > （`validateDraftChangeset`），而真正的工作流图校验 `validateWorkflowDef`（3339 行 / 108 个错误码）
