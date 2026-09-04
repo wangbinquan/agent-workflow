@@ -134,6 +134,39 @@ describe('RFC-349 PostgreSQL schema migrator', () => {
     expect(fake.releases).toBe(1)
   })
 
+  // 2026-09-04 单笔修复：迁移会话不该按在线请求的尺子量。这里的 DDL 只对空库跑
+  // （PostgreSQL 只有一份 baseline，`assertSnapshot` 不收中间态），所以 statement_timeout
+  // 是保险；真能打中的是 idle 那条——它量的是「服务端等我们」，几百条来回里只要客户端卡一次
+  // 就会被掐掉会话、启动失败。`lock_timeout` 量的是别人挡我们，保持配置值不动。
+  test('the boot DDL session drops the online statement/idle budgets, and never touches lock_timeout', async () => {
+    const fake = fixture({})
+    await migratePostgresqlSchema({ runtime: fake.runtime, plan, now: () => 123 })
+
+    const configure = fake.sql[0] ?? ''
+    expect(configure).toContain("set_config('statement_timeout', '0', false)")
+    expect(configure).toContain("set_config('idle_in_transaction_session_timeout', '0', false)")
+    // Before the advisory lock and the DDL transaction, so no statement on this
+    // session ever runs under the online budget.
+    expect(fake.sql.findIndex((query) => query.includes('pg_try_advisory_lock'))).toBe(1)
+    expect(fake.sql.indexOf('BEGIN')).toBeGreaterThan(0)
+    expect(fake.sql.some((query) => query.includes('lock_timeout'))).toBeFalse()
+  })
+
+  test('a session that cannot be configured releases its connection', async () => {
+    const configure =
+      "SELECT set_config('statement_timeout', '0', false), " +
+      "set_config('idle_in_transaction_session_timeout', '0', false)"
+    const fake = fixture({ failSql: configure })
+
+    await expect(migratePostgresqlSchema({ runtime: fake.runtime, plan })).rejects.toMatchObject({
+      code: 'postgresql-schema-prepare-failed',
+    })
+    // Configured inside the guarded block: no lock was taken, no transaction was
+    // opened, and the reserved connection still goes back to the pool.
+    expect(fake.sql).not.toContain('BEGIN')
+    expect(fake.releases).toBe(1)
+  })
+
   test('accepts only an exact already-applied baseline', async () => {
     const fake = fixture({ initial: 'ready' })
     expect(await migratePostgresqlSchema({ runtime: fake.runtime, plan })).toMatchObject({

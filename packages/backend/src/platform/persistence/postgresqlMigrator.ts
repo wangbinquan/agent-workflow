@@ -122,6 +122,25 @@ export async function migratePostgresqlSchema(input: {
   let locked = false
   let transaction = false
   try {
+    // Same ruler problem as `openPostgresqlLogicalTarget`: this session holds ONE
+    // transaction across the entire baseline plan, while the pool's server-side
+    // budgets (`urlWithServerTimeouts`) are sized for one online request.
+    //
+    // `statement_timeout` is insurance here rather than a live wall — PostgreSQL
+    // has a single baseline and `assertSnapshot` admits nothing between 'empty'
+    // and 'ready', so this DDL only ever runs against an empty target and no
+    // single statement comes near 60s. The idle guard is the one that can
+    // actually fire: it measures how long the SERVER waits for US, so a plan of
+    // hundreds of round-trips only has to stall once (a GC pause, a throttled
+    // host) for the backend to be terminated mid-DDL and boot to fail.
+    //
+    // `lock_timeout` deliberately stays at the configured budget: contention on
+    // a target that should be exclusively ours is a real fault, worth failing
+    // fast on.
+    await connection.unsafe(
+      "SELECT set_config('statement_timeout', '0', false), " +
+        "set_config('idle_in_transaction_session_timeout', '0', false)",
+    )
     const lockRows = await connection.unsafe(
       'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
       [lockKey],
