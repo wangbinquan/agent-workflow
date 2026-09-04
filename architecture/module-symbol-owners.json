@@ -6,7 +6,7 @@
     "moduleFiles": 1358,
     "productionFiles": 2751,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26149
+    "symbolsIncludingFileRoots": 26152
   },
   "entries": [
     {
@@ -108898,6 +108898,30 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#assertNoNonTerminalTaskReferences",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertNoNonTerminalTaskReferences",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#assertNoScheduledReferences",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertNoScheduledReferences",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#assertNotCalledByWorkflow",
       "removeAfterWave": null,
       "status": "current-module",
@@ -109094,6 +109118,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "stale",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowRepository.ts#staleRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "staleRow",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -314493,5 +314529,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0af25359fe1ce9eebd179fe351e01821e0bb190e111d997572f8ec50b948a511"
+  "sourceDigest": "sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082"
 }

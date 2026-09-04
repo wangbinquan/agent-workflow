@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0af25359fe1ce9eebd179fe351e01821e0bb190e111d997572f8ec50b948a511`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 495 |
-| `architectureExceptions` | 5325 |
+| `architectureExceptions` | 5328 |
 | `backgroundJobs` | 370 |
-| `crossContextImports` | 6458 |
+| `crossContextImports` | 6461 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26149 |
+| `moduleSymbolOwners` | 26152 |
 | `mutationEntrypoints` | 1952 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 987 |
@@ -200,7 +200,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3678 |
+| legacy-outbound | 3681 |
 | legacy-inbound | 1443 |
 | provider-mirror | 444 |
 | infrastructure-external | 414 |
@@ -215,7 +215,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3678 |
+| legacy-outbound | 3681 |
 | legacy-inbound | 1443 |
 | temporary-internal-debt | 97 |
 | off-dag-offered | 94 |
@@ -227,12 +227,12 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2853 |
+| W9 | 2855 |
 | W4-E1 | 877 |
 | W4-C | 410 |
 | W4-E0 | 238 |
 | W4 | 215 |
-| W4-B | 187 |
+| W4-B | 188 |
 | W5 | 149 |
 | W4-E8 | 114 |
 | W4-E9 | 61 |

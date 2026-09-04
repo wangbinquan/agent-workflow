@@ -426,10 +426,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6458,
+      "baseline": 6461,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7：PG 八处 owner 围栏改读环境上下文，effect 账本围栏去等值判定。下一笔不涨即删。"
+        "why": "RFC-359 W1-T6：PG 工作流删除不解析 definition，补齐非终态任务 / 定时任务引用两道删除守卫。下一笔不涨即删。"
       }
     },
     {
@@ -450,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5325,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5328,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T6：PG 工作流删除不解析 definition，补齐非终态任务 / 定时任务引用两道删除守卫。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -485,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26149,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26152,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T6：PG 工作流删除不解析 definition，补齐非终态任务 / 定时任务引用两道删除守卫。下一笔不涨即删。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0af25359fe1ce9eebd179fe351e01821e0bb190e111d997572f8ec50b948a511",
+    "sourceDigest": "sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -503,8 +509,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1a86fdfb43888dd4814c77f7a62f63921e3da6ee",
-    "contentDigest": "sha256:f3f534ec6b9699a5a563ae1949ba66dc81c88229b50e6858d684ac7d865b325d",
+    "currentSnapshotSha": "370aba4b282028bd82dfa71713b6d4d6b33cacbe",
+    "contentDigest": "sha256:e2694c856459ffeadfb5e49fbf2ca0dc220faf6eac7ca672943c7867a02dd8b5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

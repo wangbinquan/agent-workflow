@@ -5171,6 +5171,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0eb7f9053ac7141ce4ed",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -31572,6 +31589,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:58f677b04e3a41206f69",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scheduledTaskRefs.ts#scheduledRowsReferencing",
+      "toPath": "packages/backend/src/services/scheduledTaskRefs.ts",
+      "toSymbol": "scheduledRowsReferencing",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts",
       "fromSymbol": "$file",
@@ -41223,6 +41257,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskSpaceNodes",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskSpaceNodes",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:730070f85b1d50276ac7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#scheduledTasks",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "scheduledTasks",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -90527,9 +90578,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5325,
+    "architectureExceptions": 5328,
     "implementationSccs": 0,
-    "observedEdges": 6458,
+    "observedEdges": 6461,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -96072,6 +96123,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/triggerPreflight.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/triggerPreflight.ts#assertTriggerPreflight"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#$file",
+      "id": "import:0eb7f9053ac7141ce4ed",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "tasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
     },
     {
       "edgeKind": "value",
@@ -126635,6 +126702,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#$file",
+      "id": "import:58f677b04e3a41206f69",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-outbound",
+      "specifier": "@/services/scheduledTaskRefs",
+      "syntax": "static-import",
+      "targetSymbol": "scheduledRowsReferencing",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/scheduledTaskRefs.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scheduledTaskRefs.ts#scheduledRowsReferencing"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTerminalizeExecutionIntent.ts#$file",
@@ -137800,6 +137883,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskSpaceNodes"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkflowPersistenceSemantics.ts#$file",
+      "id": "import:730070f85b1d50276ac7",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "scheduledTasks",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#scheduledTasks"
     },
     {
       "edgeKind": "value",
@@ -194403,7 +194502,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0af25359fe1ce9eebd179fe351e01821e0bb190e111d997572f8ec50b948a511",
+  "sourceDigest": "sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
