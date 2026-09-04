@@ -657,6 +657,30 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
 4. markdown 表格单元格里出现 `|`（例如把三个路径缩写成 `a|b|c`），prettier 会把它当列分隔符、把那一行撑成
    多列并顺手改坏整张表的分隔行。表格里写路径就分开写，别用 `|` 缩写。
 
+## 数据库驱动错误的分类器必须沿 `cause` 链、按结构化字段判——Bun.SQL 的 SQLSTATE 在 `errno`（2026-09-04 两次实撞）
+
+同一根因在一天里咬了两次，形态不同：
+
+- **PostgreSQL（Bun.SQL）**：错误对象是 `PostgresError{ code:'ERR_POSTGRES_SERVER_ERROR', errno:'23505',
+  constraint:'…', detail, table, … }`——**SQLSTATE 在 `errno`，`code` 恒为那个 ERR\_ 常量**（真库实测
+  逐字如此，经 drizzle 的 `db.run` 不再多包一层）。本仓在 `db/postgresqlSerializationRetry.ts` 早已按
+  errno 修好 40001，而 `resource-catalog/infrastructure/postgresql/repositorySupport.ts` 的
+  `isPostgresqlUniqueViolation` 仍只看 `code === '23505'` ⇒ **在真 PostgreSQL 上恒 false**，11 个 PG
+  资源目录适配器经它判 409 的路径全部退化成 500 `internal-error`（对账 F-I-13，`b11723e42` 修）。
+  **同一类陷阱修过一次仍漏一处**——因为判据散在两个文件里，没有收成一份。
+- **SQLite（bun:sqlite 经 drizzle）**：外层是 `DrizzleError{ message:'Failed to run the query …' }`，
+  真正的 `SQLiteError{ code:'SQLITE_CONSTRAINT_UNIQUE', errno:2067, message:'UNIQUE constraint failed: t.name' }`
+  在 **`cause`** 里。一个只读第一层 message 的正则分类器（`/UNIQUE constraint failed/`）**永远看不到
+  它**——RFC-359 能力矩阵第一版就是这么写的，变异验证时才暴露。
+
+**判据**：
+1. 错误分类器**沿 `cause` 链逐层看**（drizzle / 调用方各会包一层），不要只读顶层；
+2. **按结构化字段判**（PG 看 `errno` 的 SQLSTATE，SQLite 看 `code` 的 `SQLITE_*`），message 正则只作兜底；
+3. 同一判据**只写一份**——现在收在 `platform/persistence/capabilities.ts` 的 `classifyError` /
+   `postgresqlUniqueViolationConstraint`，新代码不要再各自 `error.code === …`；
+4. 写或审任何错误分类器，先在**真引擎**上把错误 `console.log` 出形状再写判据——这条和上面 Bun `fetch`
+   那条是同一课（脚本化 runtime 给不出真实错误对象，它只会返回你预设的行）。
+
 ## Bun `rmSync` 在只读目录上给的 errno 因平台而异，按码白名单分流必漏（2026-09-02 实测）
 
 `rmSync(dir, { recursive: true, force: true })` 删不动一棵含 `0o500`（`dr-x------`）目录的树
