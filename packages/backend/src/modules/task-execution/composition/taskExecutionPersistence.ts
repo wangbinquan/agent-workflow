@@ -1,5 +1,7 @@
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -176,4 +178,20 @@ export function createPostgresqlTaskExecutionPersistence(
     shutdown: new PostgresqlTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createPostgresqlRuntimeSessionCapturePersistence(db),
   })
+}
+
+/**
+ * RFC-359 T7b：按客户端句柄选 persistence 聚合。这是 task-execution 里看 provider 的唯一入口之一；
+ * 调用方拿到的是一份 `TaskExecutionPersistence`，看不见 provider。第三个 provider 在这里得到自己的
+ * 分支，残余分支是 `unhandledDatabaseProvider` 的 never 汇。
+ */
+export function createTaskExecutionPersistence(
+  db: ProviderNeutralDatabase,
+): TaskExecutionPersistence {
+  const provider = databaseSessionFor(db).engine.provider
+  return provider === 'postgresql'
+    ? createPostgresqlTaskExecutionPersistence(db as unknown as PostgresqlDatabaseClient)
+    : provider === 'sqlite'
+      ? createSqliteTaskExecutionPersistence(db as unknown as DbClient)
+      : unhandledDatabaseProvider(provider)
 }

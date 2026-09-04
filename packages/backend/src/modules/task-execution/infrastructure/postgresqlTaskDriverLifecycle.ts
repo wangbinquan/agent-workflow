@@ -10,11 +10,11 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { TaskExecutionModule } from '../composition'
 import { createTaskExecutionContext } from '../application/taskExecutionContext'
+import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
 import {
-  createVerifiedStopProof,
-  ownershipTokenKey,
-  type OwnershipToken,
-} from '../domain/ownership'
+  releaseTaskDriverAndFinalize,
+  type TaskDriverReleaseDependencies,
+} from './taskDriverRelease'
 
 const OWNER_LEASE_MS = 60_000
 const OWNER_HEARTBEAT_MS = 15_000
@@ -103,57 +103,23 @@ export function createPostgresqlTaskDriverLifecyclePort(
     }
   }
 
+  // RFC-359 T7b：释放序列是一份实现（taskDriverRelease.ts），PG 只装配依赖。
+  const releaseDependencies: TaskDriverReleaseDependencies = {
+    registry: options.module.runtimeRegistry,
+    persistence: options.persistence,
+    stopHeartbeat: (tokenKey) => {
+      const timer = heartbeatTimers.get(tokenKey)
+      if (timer !== undefined) clearInterval(timer)
+      heartbeatTimers.delete(tokenKey)
+    },
+    finalizeWorkspace: options.finalizeWorkspace,
+  }
+
   const releaseAndFinalize = async (input: {
     readonly taskId: string
     readonly controller: AbortController
   }): Promise<void> => {
-    const registry = options.module.runtimeRegistry
-    const token = registry.tokenForTask(input.taskId)
-    if (token === null || registry.controllerFor(token) !== input.controller) return
-    const intentId = registry.intentFor(token)
-    if (intentId === null) return
-    if (
-      !registry.release({
-        token,
-        controller: input.controller,
-        result: { kind: 'released' },
-      })
-    ) {
-      return
-    }
-
-    const key = ownershipTokenKey(token)
-    const timer = heartbeatTimers.get(key)
-    if (timer !== undefined) clearInterval(timer)
-    heartbeatTimers.delete(key)
-    const stopped = await registry.awaitStopped({ token, tokenKey: key })
-    const owner = await options.persistence.ownership.read(input.taskId)
-    if (owner !== null && owner.epoch === token.epoch) {
-      if (stopped.kind === 'released') {
-        const now = Date.now()
-        await options.persistence.ownership.releaseAfterStop({
-          token,
-          intentId,
-          proof: createVerifiedStopProof({
-            taskId: input.taskId,
-            ownerRevision: owner.revision,
-            epoch: token.epoch,
-            evidenceDigest: stopped.evidenceDigest,
-            verifiedAt: now,
-          }),
-          now,
-        })
-      } else {
-        await options.persistence.ownership.markRecoveryRequired({
-          token,
-          expectedRevision: owner.revision,
-          code: stopped.code,
-          evidenceDigest: stopped.evidenceDigest,
-          now: Date.now(),
-        })
-      }
-    }
-    await options.finalizeWorkspace(input.taskId)
+    await releaseTaskDriverAndFinalize(releaseDependencies, input)
   }
 
   return Object.freeze({ attach, releaseAndFinalize })

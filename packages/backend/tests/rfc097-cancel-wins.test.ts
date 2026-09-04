@@ -281,16 +281,18 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
         'modules',
         'task-execution',
         'infrastructure',
-        'taskDriverLifecycle.ts',
+        // RFC-359 T7b：释放序列合一到 taskDriverRelease.ts，两个 provider 的 lifecycle 都委托它。
+        'taskDriverRelease.ts',
       ),
       'utf8',
     )
     const start = source.indexOf('export async function releaseTaskDriverAndFinalize(')
-    const body = source.slice(start, source.indexOf('function unreapedProcessCode', start))
+    expect(start).toBeGreaterThan(-1)
+    const body = source.slice(start)
     expect(body.indexOf('registry.tokenForTask(input.taskId)')).toBeGreaterThan(-1)
     expect(body.indexOf('registry.controllerFor(token)')).toBeGreaterThan(-1)
     expect(body.indexOf('registry.controllerFor(token)')).toBeLessThan(
-      body.indexOf('unreapedProcessCode'),
+      body.indexOf('persistence.effects.unreapedProcessCode('),
     )
   })
 })

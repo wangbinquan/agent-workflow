@@ -32,6 +32,12 @@ import {
   type AttemptEvidence,
 } from '../domain/executionEffect'
 import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
+import {
+  closeOutcomeUnknownAndRelease,
+  readUnreapedProcessCode,
+  readUnresolvedEffectIds,
+  resolveQuiescedManagedProcesses,
+} from './effectQuiescence'
 import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
@@ -976,5 +982,26 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
         )
       }
     })
+  }
+
+  // RFC-359 T7b：静默清算是一份实现（effectQuiescence.ts），两个 provider 的适配器都只是委托。
+  async unresolvedEffectIds(taskId: string): Promise<readonly string[]> {
+    return await readUnresolvedEffectIds(this.db, taskId)
+  }
+
+  async unreapedProcessCode(taskId: string): Promise<string | null> {
+    return await readUnreapedProcessCode(this.db, taskId)
+  }
+
+  async resolveQuiescedManagedProcesses(
+    input: Parameters<TaskExecutionEffectPersistence['resolveQuiescedManagedProcesses']>[0],
+  ) {
+    return await resolveQuiescedManagedProcesses(this.db, input)
+  }
+
+  async closeOutcomeUnknownAndRelease(
+    input: Parameters<TaskExecutionEffectPersistence['closeOutcomeUnknownAndRelease']>[0],
+  ) {
+    return await closeOutcomeUnknownAndRelease(this.db, input)
   }
 }

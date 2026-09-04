@@ -1,4 +1,8 @@
 // RFC-349 — PostgreSQL successor-daemon effect/owner recovery.
+//
+// RFC-359 T7b：managed-process 清算与 outcome-unknown 闭合已收进 provider 中立的
+// `effectQuiescence.ts`（两个引擎一份实现）；这里只剩 code-host 探针解析仍是 PG 私有形状
+// （SQLite 侧对应 sqliteTaskExecutionEffect.ts 的同步版本，W4 pair-deletion 时合一）。
 
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -34,20 +38,21 @@ import {
 import { canonicalJson } from '../domain/executionIntent'
 import {
   assertExclusiveDaemonLockProof,
-  assertVerifiedOutcomeUnknownClosure,
   createVerifiedOutcomeUnknownClosure,
   createVerifiedTakeoverProof,
   type OwnershipTuple,
-  type VerifiedOutcomeUnknownClosure,
 } from '../domain/ownership'
+import {
+  closeRecoveredOutcomeUnknownAndRelease,
+  readUnresolvedEffectIds,
+  resolveQuiescedManagedProcesses,
+} from './effectQuiescence'
 import { PostgresqlTaskOwnershipPersistence } from './postgresqlTaskOwnershipPersistence'
-import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
 type OwnerRow = typeof taskExecutionOwners.$inferSelect
 
-const MANAGED_PROCESS_RECOVERY_CLASS = 'managed-process-preactivation'
 const MAX_RECEIPT_BYTES = 64 * 1024
 
 function tuple(row: OwnerRow): OwnershipTuple {
@@ -82,53 +87,6 @@ function boundedReceipt(value: string): string {
   }
   JSON.parse(value)
   return value
-}
-
-function parseJsonRecord(value: string | null): Readonly<Record<string, unknown>> | null {
-  if (value === null) return null
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? (parsed as Readonly<Record<string, unknown>>)
-      : null
-  } catch {
-    return null
-  }
-}
-
-function recoveredManagedProcessEvidence(input: {
-  attemptState: typeof taskExecutionEffectAttempts.$inferSelect.state
-  receiptJson: string | null
-  run: typeof nodeRuns.$inferSelect
-}): 'applied' | 'definitely-not-applied' | null {
-  if (input.run.status === 'pending' || input.run.status === 'running') return null
-  if (input.receiptJson === null) {
-    return input.attemptState === 'prepared' || input.attemptState === 'acting'
-      ? 'definitely-not-applied'
-      : null
-  }
-  if (input.attemptState === 'prepared') return null
-  const receipt = parseJsonRecord(input.receiptJson)
-  if (receipt === null || receipt.v !== 1) return null
-  if (receipt.phase !== 'spawn-receipt' && receipt.phase !== 'reaped') return null
-  if (
-    typeof receipt.pid !== 'number' ||
-    receipt.pid !== input.run.pid ||
-    typeof receipt.launchNonce !== 'string' ||
-    receipt.launchNonce.length === 0 ||
-    receipt.launchNonce !== input.run.spawnLaunchNonce
-  ) {
-    return null
-  }
-  if (
-    receipt.phase === 'spawn-receipt' &&
-    (typeof receipt.spawnBinaryPath !== 'string' ||
-      receipt.spawnBinaryPath.length === 0 ||
-      receipt.spawnBinaryPath !== input.run.spawnBinaryPath)
-  ) {
-    return null
-  }
-  return 'applied'
 }
 
 async function assertRecoveryOwner(
@@ -233,180 +191,6 @@ async function upsertWatermark(
   if (updated[0] === undefined) {
     throw new TaskExecutionError('task-execution-stale-owner', 'recovery watermark CAS lost')
   }
-}
-
-async function resolveManagedProcesses(input: {
-  db: PostgresqlDatabaseClient
-  owner: OwnershipTuple
-  expectedRevision: number
-  quiescenceEvidenceDigest: string
-  now: number
-}): Promise<
-  Readonly<{ resolvedEffectIds: readonly string[]; unresolvedEffectIds: readonly string[] }>
-> {
-  return await serializable(input.db, async (tx) => {
-    await assertRecoveryOwner(tx, input.owner, input.expectedRevision)
-    const rows = await tx
-      .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
-      .from(taskExecutionEffectAttempts)
-      .innerJoin(
-        taskExecutionEffects,
-        eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-      )
-      .where(
-        and(
-          eq(taskExecutionEffects.taskId, input.owner.taskId),
-          eq(taskExecutionEffects.kind, 'process'),
-          eq(taskExecutionEffects.state, 'open'),
-          inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-        ),
-      )
-      .orderBy(
-        asc(taskExecutionEffects.operationGeneration),
-        asc(taskExecutionEffectAttempts.attemptNo),
-      )
-    const countByEffect = new Map<string, number>()
-    for (const row of rows) {
-      countByEffect.set(row.effect.id, (countByEffect.get(row.effect.id) ?? 0) + 1)
-    }
-    const resolved = new Set<string>()
-    const unresolved = new Set<string>()
-    for (const { attempt, effect } of rows) {
-      if (
-        countByEffect.get(effect.id) !== 1 ||
-        attempt.epoch !== input.owner.epoch ||
-        attempt.recoveryClass !== MANAGED_PROCESS_RECOVERY_CLASS
-      ) {
-        unresolved.add(effect.id)
-        continue
-      }
-      const candidate = /^(agent|script):(.+)$/.exec(attempt.candidateId)
-      if (candidate === null) {
-        unresolved.add(effect.id)
-        continue
-      }
-      const runRows = await tx
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.id, candidate[2]!), eq(nodeRuns.taskId, input.owner.taskId)))
-        .limit(1)
-      const run = runRows[0]
-      if (run === undefined) {
-        unresolved.add(effect.id)
-        continue
-      }
-      const applicationEvidence = recoveredManagedProcessEvidence({
-        attemptState: attempt.state,
-        receiptJson: attempt.receiptJson,
-        run,
-      })
-      if (applicationEvidence === null) {
-        unresolved.add(effect.id)
-        continue
-      }
-      const attemptState = applicationEvidence === 'applied' ? 'succeeded' : 'failed-not-applied'
-      assertAttemptTransition(attempt.state, attemptState)
-      const attemptRows = await tx
-        .select({
-          attemptNo: taskExecutionEffectAttempts.attemptNo,
-          state: taskExecutionEffectAttempts.state,
-          applicationEvidence: taskExecutionEffectAttempts.applicationEvidence,
-        })
-        .from(taskExecutionEffectAttempts)
-        .where(eq(taskExecutionEffectAttempts.effectId, effect.id))
-        .orderBy(asc(taskExecutionEffectAttempts.attemptNo))
-      const projected: AttemptEvidence[] = attemptRows.map((row) =>
-        row.attemptNo === attempt.attemptNo
-          ? { attemptNo: row.attemptNo, state: attemptState, applicationEvidence }
-          : {
-              attemptNo: row.attemptNo,
-              state: row.state,
-              applicationEvidence: row.applicationEvidence ?? 'ambiguous',
-            },
-      )
-      let outcome: ReturnType<typeof aggregateEffectOutcome>
-      try {
-        outcome = aggregateEffectOutcome(projected)
-      } catch {
-        unresolved.add(effect.id)
-        continue
-      }
-      if (outcome.state === 'outcome-unknown') {
-        unresolved.add(effect.id)
-        continue
-      }
-      const failureCode =
-        applicationEvidence === 'definitely-not-applied'
-          ? 'daemon-restart-before-process-activation'
-          : null
-      const attemptUpdated = await tx
-        .update(taskExecutionEffectAttempts)
-        .set({
-          state: attemptState,
-          applicationEvidence,
-          retryAuthority: 'none',
-          failureCode,
-          settledAt: input.now,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionEffectAttempts.id, attempt.id),
-            eq(taskExecutionEffectAttempts.epoch, input.owner.epoch),
-            eq(taskExecutionEffectAttempts.state, attempt.state),
-          ),
-        )
-        .returning({ id: taskExecutionEffectAttempts.id })
-      if (attemptUpdated[0] === undefined) {
-        throw new TaskExecutionError('task-execution-stale-owner', 'process recovery CAS lost')
-      }
-      await tx
-        .update(taskExecutionEffectFences)
-        .set({ releasedAt: input.now })
-        .where(
-          and(
-            eq(taskExecutionEffectFences.effectAttemptId, attempt.id),
-            isNull(taskExecutionEffectFences.releasedAt),
-            eq(taskExecutionEffectFences.acquiredEpoch, input.owner.epoch),
-          ),
-        )
-        .run()
-      const effectUpdated = await tx
-        .update(taskExecutionEffects)
-        .set({
-          state: outcome.state,
-          failureCode,
-          receiptJson: JSON.stringify({
-            v: 1,
-            recovery: 'daemon-restart-process-barrier',
-            quiescenceEvidenceDigest: input.quiescenceEvidenceDigest,
-            nodeRunId: run.id,
-            nodeRunStatus: run.status,
-            appliedAttemptNo: outcome.appliedAttemptNo,
-            priorAmbiguityCount: outcome.priorAmbiguityCount,
-            priorReceipt:
-              attempt.receiptJson === null ? null : parseJsonRecord(attempt.receiptJson),
-          }),
-          settledAt: input.now,
-          updatedAt: input.now,
-        })
-        .where(and(eq(taskExecutionEffects.id, effect.id), eq(taskExecutionEffects.state, 'open')))
-        .returning({ id: taskExecutionEffects.id })
-      if (effectUpdated[0] === undefined) {
-        throw new TaskExecutionError(
-          'task-execution-stale-owner',
-          'process effect recovery CAS lost',
-        )
-      }
-      await upsertWatermark(tx, effect, outcome.state, input.now)
-      resolved.add(effect.id)
-      unresolved.delete(effect.id)
-    }
-    return {
-      resolvedEffectIds: [...resolved].sort(),
-      unresolvedEffectIds: [...unresolved].sort(),
-    }
-  })
 }
 
 interface KnownCodeHostResolution {
@@ -661,184 +445,6 @@ async function resolveCodeHostMutations(input: {
   })
 }
 
-async function closeOutcomeUnknown(input: {
-  db: PostgresqlDatabaseClient
-  owner: OwnershipTuple
-  expectedRevision: number
-  proof: VerifiedOutcomeUnknownClosure
-  now: number
-}): Promise<void> {
-  assertVerifiedOutcomeUnknownClosure(input.proof)
-  if (
-    input.proof.taskId !== input.owner.taskId ||
-    input.proof.epoch !== input.owner.epoch ||
-    input.proof.ownerRevision !== input.expectedRevision
-  ) {
-    throw new Error('recovered outcome closure does not match old daemon owner')
-  }
-  await serializable(input.db, async (tx) => {
-    const owner = await assertRecoveryOwner(tx, input.owner, input.expectedRevision)
-    const unresolved = await tx
-      .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
-      .from(taskExecutionEffectAttempts)
-      .innerJoin(
-        taskExecutionEffects,
-        eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-      )
-      .where(
-        and(
-          eq(taskExecutionEffects.taskId, input.owner.taskId),
-          eq(taskExecutionEffects.state, 'open'),
-          inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-        ),
-      )
-    const actualEffectIds = [...new Set(unresolved.map((row) => row.effect.id))].sort()
-    const provenEffectIds = [...new Set(input.proof.unresolvedEffectIds)].sort()
-    if (
-      actualEffectIds.length === 0 ||
-      actualEffectIds.length !== provenEffectIds.length ||
-      actualEffectIds.some((id, index) => id !== provenEffectIds[index])
-    ) {
-      throw new TaskExecutionError(
-        'task-execution-recovery-required',
-        'task-wide quiescence proof does not cover the exact unresolved effect set',
-      )
-    }
-    for (const { attempt, effect } of unresolved) {
-      const failureCode = attempt.failureCode ?? 'outcome-unknown-after-quiescence'
-      const attemptUpdated = await tx
-        .update(taskExecutionEffectAttempts)
-        .set({
-          state: 'outcome-unknown',
-          applicationEvidence: 'ambiguous',
-          retryAuthority: 'none',
-          failureCode,
-          settledAt: input.now,
-          updatedAt: input.now,
-        })
-        .where(
-          and(
-            eq(taskExecutionEffectAttempts.id, attempt.id),
-            eq(taskExecutionEffectAttempts.epoch, input.owner.epoch),
-            inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-          ),
-        )
-        .returning({ id: taskExecutionEffectAttempts.id })
-      if (attemptUpdated[0] === undefined) {
-        throw new TaskExecutionError(
-          'task-execution-stale-owner',
-          'outcome closure attempt CAS lost',
-        )
-      }
-      await tx
-        .update(taskExecutionEffectFences)
-        .set({ releasedAt: input.now })
-        .where(
-          and(
-            eq(taskExecutionEffectFences.effectAttemptId, attempt.id),
-            isNull(taskExecutionEffectFences.releasedAt),
-            eq(taskExecutionEffectFences.acquiredEpoch, input.owner.epoch),
-          ),
-        )
-        .run()
-      const effectUpdated = await tx
-        .update(taskExecutionEffects)
-        .set({
-          state: 'outcome-unknown',
-          failureCode,
-          receiptJson: JSON.stringify({
-            v: 1,
-            closureDigest: input.proof.quiescenceDigest,
-            attemptId: attempt.id,
-            attemptNo: attempt.attemptNo,
-          }),
-          settledAt: input.now,
-          updatedAt: input.now,
-        })
-        .where(and(eq(taskExecutionEffects.id, effect.id), eq(taskExecutionEffects.state, 'open')))
-        .returning({ id: taskExecutionEffects.id })
-      if (effectUpdated[0] === undefined) {
-        throw new TaskExecutionError(
-          'task-execution-stale-owner',
-          'outcome closure effect CAS lost',
-        )
-      }
-      await upsertWatermark(tx, effect, 'outcome-unknown', input.now)
-      const decisions = await tx
-        .select({ id: taskExecutionLineageOperationRecords.id })
-        .from(taskExecutionLineageOperationRecords)
-        .where(
-          and(
-            eq(taskExecutionLineageOperationRecords.recordKind, 'replay-decision'),
-            eq(taskExecutionLineageOperationRecords.executionLineageId, effect.executionLineageId),
-            eq(taskExecutionLineageOperationRecords.operationFamilyKey, effect.operationFamilyKey),
-            eq(
-              taskExecutionLineageOperationRecords.operationGeneration,
-              effect.operationGeneration,
-            ),
-          ),
-        )
-        .limit(1)
-      if (decisions[0] === undefined) {
-        await tx
-          .insert(taskExecutionLineageOperationRecords)
-          .values({
-            id: ulid(),
-            recordKind: 'replay-decision',
-            executionLineageId: effect.executionLineageId,
-            operationFamilyKey: effect.operationFamilyKey,
-            operationGeneration: effect.operationGeneration,
-            highestSettledGeneration: null,
-            lastOutcome: 'outcome-unknown',
-            requestHash: effect.requestHash,
-            slotPathJson: effect.slotPathJson,
-            slotPathDigest: effect.slotPathDigest,
-            rootAnchorTaskId: effect.taskId,
-            currentAnchorTaskId: effect.taskId,
-            sourceTaskId: effect.taskId,
-            sourceEffectId: effect.id,
-            sourceAttemptId: attempt.id,
-            failureCode,
-            decisionState: 'requires-actor',
-            recordRevision: 1,
-            createdAt: input.now,
-            updatedAt: input.now,
-          })
-          .run()
-      }
-    }
-    await terminalizePostgresqlTaskExecutionIntentsTx(tx, {
-      taskId: input.owner.taskId,
-      state: 'failed',
-      failureCode: 'task-execution-outcome-unknown',
-      now: input.now,
-    })
-    const released = await tx
-      .update(taskExecutionOwners)
-      .set({
-        state: 'released',
-        revision: owner.revision + 1,
-        recoveryCode: 'task-execution-outcome-unknown',
-        recoveryProofDigest: input.proof.quiescenceDigest,
-        updatedAt: input.now,
-      })
-      .where(
-        and(
-          eq(taskExecutionOwners.taskId, input.owner.taskId),
-          eq(taskExecutionOwners.ownerId, input.owner.ownerId),
-          eq(taskExecutionOwners.daemonGeneration, input.owner.daemonGeneration),
-          eq(taskExecutionOwners.epoch, input.owner.epoch),
-          eq(taskExecutionOwners.revision, owner.revision),
-          inArray(taskExecutionOwners.state, ['revoked', 'recovery-required']),
-        ),
-      )
-      .returning({ id: taskExecutionOwners.taskId })
-    if (released[0] === undefined) {
-      throw new TaskExecutionError('task-execution-stale-owner', 'outcome closure release lost')
-    }
-  })
-}
-
 export class PostgresqlTaskExecutionRecoveryPersistence implements TaskExecutionRecoveryPersistence {
   private readonly ownership: PostgresqlTaskOwnershipPersistence
 
@@ -895,7 +501,7 @@ export class PostgresqlTaskExecutionRecoveryPersistence implements TaskExecution
     const retryAuthorizedCodeHostEffectIds: string[] = []
     for (const owner of candidates) {
       const oldOwner = tuple(owner)
-      const preResolution = await this.unresolvedEffectIds(owner.taskId)
+      const preResolution = await readUnresolvedEffectIds(this.db, owner.taskId)
       const processEvidenceDigest = sha256Hex(
         canonicalJson({
           v: 1,
@@ -907,10 +513,11 @@ export class PostgresqlTaskExecutionRecoveryPersistence implements TaskExecution
           preResolutionEffectIds: preResolution,
         }),
       )
-      const process = await resolveManagedProcesses({
-        db: this.db,
+      const process = await resolveQuiescedManagedProcesses(this.db, {
+        authority: 'successor-daemon',
         owner: oldOwner,
         expectedRevision: owner.revision,
+        lockProof: input.lockProof,
         quiescenceEvidenceDigest: processEvidenceDigest,
         now,
       })
@@ -946,7 +553,7 @@ export class PostgresqlTaskExecutionRecoveryPersistence implements TaskExecution
       recoveredCodeHostEffectIds.push(...codeHost.appliedEffectIds)
       retryAuthorizedCodeHostEffectIds.push(...codeHost.retryAuthorizedEffectIds)
 
-      const unresolvedEffectIds = await this.unresolvedEffectIds(owner.taskId)
+      const unresolvedEffectIds = await readUnresolvedEffectIds(this.db, owner.taskId)
       const evidenceDigest = sha256Hex(
         canonicalJson({
           v: 2,
@@ -963,10 +570,10 @@ export class PostgresqlTaskExecutionRecoveryPersistence implements TaskExecution
         }),
       )
       if (unresolvedEffectIds.length > 0) {
-        await closeOutcomeUnknown({
-          db: this.db,
+        await closeRecoveredOutcomeUnknownAndRelease(this.db, {
           owner: oldOwner,
           expectedRevision: owner.revision,
+          lockProof: input.lockProof,
           proof: createVerifiedOutcomeUnknownClosure({
             taskId: owner.taskId,
             ownerRevision: owner.revision,
@@ -1001,24 +608,6 @@ export class PostgresqlTaskExecutionRecoveryPersistence implements TaskExecution
       recoveredCodeHostEffectIds: [...new Set(recoveredCodeHostEffectIds)].sort(),
       retryAuthorizedCodeHostEffectIds: [...new Set(retryAuthorizedCodeHostEffectIds)].sort(),
     }
-  }
-
-  private async unresolvedEffectIds(taskId: string): Promise<readonly string[]> {
-    const rows = await this.db
-      .select({ effectId: taskExecutionEffects.id })
-      .from(taskExecutionEffectAttempts)
-      .innerJoin(
-        taskExecutionEffects,
-        eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-      )
-      .where(
-        and(
-          eq(taskExecutionEffects.taskId, taskId),
-          eq(taskExecutionEffects.state, 'open'),
-          inArray(taskExecutionEffectAttempts.state, ['prepared', 'acting', 'recovery-required']),
-        ),
-      )
-    return [...new Set(rows.map((row) => row.effectId))].sort()
   }
 
   private async probeCodeHostCandidates(

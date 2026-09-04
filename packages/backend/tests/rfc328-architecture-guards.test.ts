@@ -201,11 +201,9 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
     ]),
   ],
   [
+    // RFC-359 T7b：释放序列合一到 taskDriverRelease.ts，两个 provider 的 lifecycle 都不再自铸停机证明。
     'createVerifiedStopProof',
-    new Set([
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
-    ]),
+    new Set(['packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts']),
   ],
   [
     'createVerifiedOutcomeUnknownClosure',
@@ -213,7 +211,7 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
       'packages/backend/src/modules/task-execution/application/recoverTaskExecutions.ts',
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
       'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRecovery.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts',
     ]),
   ],
 ])

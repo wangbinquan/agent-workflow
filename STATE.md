@@ -30,7 +30,14 @@
 > 「能否反问」的判定（预算 / 已问次数 / per-asker stop）归 collaboration 一份实现（`workgroupClarifyAskGate.ts`，公共
 > participant `createWorkgroupClarifyAskGate`），legacy SQLite 路径只转发；中立回合驱动的 stub 删除，fc 指派回合的端口错配
 > （曾对 agent 说 wg_task_results、解析却要 wg_result）随之修正。`rfc359-t7e` / `rfc359-t7d` 两引擎各绿。
-> **下一步**：T7b（PG 驱动释放清算 effect）/ T7c（删除认领恢复中立版）→ W3 统一启动序列。
+> **T7b（P0-10 驱动释放清算 effect）已修**：静默清算合一为 `infrastructure/effectQuiescence.ts`（managed-process 判定 /
+> outcome-unknown 闭合 / 意图终结，exact-stop 与 successor-daemon 两种权威共用一份；READ COMMITTED + owner 行锁，不用
+> SERIALIZABLE），释放序列合一为 `infrastructure/taskDriverRelease.ts`（unreaped 证据 → registry.release → 停心跳 →
+> awaitStopped → 清算 → 未决则闭合、否则 releaseAfterStop），两个 driver lifecycle 都只装配依赖；中立端口
+> `TaskExecutionEffectPersistence` 补齐 `unresolvedEffectIds / unreapedProcessCode / resolveQuiescedManagedProcesses /
+> closeOutcomeUnknownAndRelease`，两个适配器都只委托；PG successor 恢复也改调同一份（本地副本删除）；新增按客户端品牌分派的
+> `createTaskExecutionPersistence(db)`。`rfc359-t7b-driver-release-settles-effects.test.ts` 七个场景两引擎各绿。
+> **下一步**：T7c（删除认领恢复中立版）→ W3 统一启动序列。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

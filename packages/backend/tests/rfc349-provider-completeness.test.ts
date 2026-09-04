@@ -100,6 +100,10 @@ const PROVIDER_FORK_LEDGER = {
   // `FrameBackfillDatabase` union — a third provider cannot be passed in
   // without its own variant.
   'modules/task-execution/composition/frameBackfill.ts': { forks: 1, fence: 'discriminated-union' },
+  'modules/task-execution/composition/taskExecutionPersistence.ts': {
+    forks: 2,
+    fence: 'fenced-dispatch',
+  },
   'platform/background/maintenanceService.ts': { forks: 2, fence: 'discriminated-union' },
   'platform/background/maintenanceWorkerSupervisor.ts': { forks: 1, fence: 'discriminated-union' },
   'platform/persistence/databaseProviderRuntime.ts': { forks: 1, fence: 'fenced-dispatch' },

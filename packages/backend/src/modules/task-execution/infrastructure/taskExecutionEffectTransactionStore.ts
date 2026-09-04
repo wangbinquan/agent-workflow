@@ -1,5 +1,6 @@
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
+import type { RecoveredManagedProcessResolution } from '../application/ports/taskExecutionEffectStore'
 import type {
   ApplicationEvidence,
   RetryAuthority,
@@ -14,6 +15,9 @@ import type {
   VerifiedOutcomeUnknownClosure,
   VerifiedStopProof,
 } from '../domain/ownership'
+
+// RFC-359 T7b：判定结果类型归端口所有；这里只为同步 store 的既有 import 路径再导出。
+export type { RecoveredManagedProcessResolution }
 
 export interface PrepareEffectAttemptInput {
   readonly db: DbClient
@@ -47,11 +51,6 @@ export interface PreparedEffectAttempt {
 export interface LinkedWorkspaceRollbackEffect {
   readonly effectId: string
   readonly idempotent: boolean
-}
-
-export interface RecoveredManagedProcessResolution {
-  readonly resolvedEffectIds: readonly string[]
-  readonly unresolvedEffectIds: readonly string[]
 }
 
 export interface RecoveredCodeHostMutationInput {

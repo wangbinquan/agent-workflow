@@ -2674,7 +2674,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)TaskExecutionRecovery/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)TaskExecutionRecovery|effectQuiescence)/.test(
       value,
     )
   ) {

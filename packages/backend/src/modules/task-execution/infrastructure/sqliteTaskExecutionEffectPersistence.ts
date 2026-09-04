@@ -16,6 +16,12 @@ import { setNodeRunStatusTx } from '@/services/lifecycle'
 import type { TaskExecutionEffectPersistence } from '../application/ports/taskExecutionEffectStore'
 import type { GateContinuationEffectPersistence } from '../application/drive/gateContinuationEffectStep'
 import { TaskExecutionError } from '../application/taskExecutionError'
+import {
+  closeOutcomeUnknownAndRelease,
+  readUnreapedProcessCode,
+  readUnresolvedEffectIds,
+  resolveQuiescedManagedProcesses,
+} from './effectQuiescence'
 import { SqliteTaskExecutionEffectStore } from './sqliteTaskExecutionEffect'
 import { SqliteTaskOwnershipStore } from './sqliteTaskOwnership'
 
@@ -338,5 +344,26 @@ export class SqliteTaskExecutionEffectPersistence implements TaskExecutionEffect
           .run()
       },
     })
+  }
+
+  // RFC-359 T7b：静默清算是一份实现（effectQuiescence.ts），两个 provider 的适配器都只是委托。
+  async unresolvedEffectIds(taskId: string): Promise<readonly string[]> {
+    return await readUnresolvedEffectIds(this.db, taskId)
+  }
+
+  async unreapedProcessCode(taskId: string): Promise<string | null> {
+    return await readUnreapedProcessCode(this.db, taskId)
+  }
+
+  async resolveQuiescedManagedProcesses(
+    input: Parameters<TaskExecutionEffectPersistence['resolveQuiescedManagedProcesses']>[0],
+  ) {
+    return await resolveQuiescedManagedProcesses(this.db, input)
+  }
+
+  async closeOutcomeUnknownAndRelease(
+    input: Parameters<TaskExecutionEffectPersistence['closeOutcomeUnknownAndRelease']>[0],
+  ) {
+    return await closeOutcomeUnknownAndRelease(this.db, input)
   }
 }

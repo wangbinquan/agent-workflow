@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@agent-workflow/shared'
-import { and, eq, inArray, like } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import { nodeRuns, taskExecutionEffectAttempts, taskExecutionEffects, tasks } from '@/db/schema'
+import { tasks } from '@/db/schema'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type {
@@ -9,20 +9,18 @@ import type {
   TaskDriverLifecyclePort,
 } from '../application/drive/taskDriveCoordinator'
 import { createTaskExecutionContext } from '../composition/sqliteTaskExecutionContext'
+import { createSqliteTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
   taskExecutionModule,
 } from '../composition'
-import { canonicalJson } from '../domain/executionIntent'
-import {
-  createVerifiedOutcomeUnknownClosure,
-  createVerifiedStopProof,
-  ownershipTokenKey,
-  type OwnershipToken,
-} from '../domain/ownership'
-import { sha256Hex } from '../domain/digest'
+import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
 import { TaskExecutionError } from '../application/taskExecutionError'
+import {
+  releaseTaskDriverAndFinalize,
+  type TaskDriverReleaseDependencies,
+} from './taskDriverRelease'
 
 const DRIVER_ATTACHABLE_STATUSES: ReadonlySet<TaskStatus> = new Set(['pending', 'running'])
 const ownerHeartbeatTimers = new Map<string, ReturnType<typeof setInterval>>()
@@ -113,132 +111,21 @@ function startOwnerHeartbeat(
   ownerHeartbeatTimers.set(key, timer)
 }
 
-export async function releaseTaskDriverAndFinalize(input: {
-  readonly db: DbClient
-  readonly taskId: string
-  readonly controller: AbortController
-  readonly finalizeWorkspace: (taskId: string) => Promise<void>
-}): Promise<void> {
-  const registry = taskExecutionModule.runtimeRegistry
-  const token = registry.tokenForTask(input.taskId)
-  if (token === null || registry.controllerFor(token) !== input.controller) return
-  const intentId = registry.intentFor(token)
-  if (intentId === null) return
-  const unreaped = unreapedProcessCode(input.db, input.taskId)
-  if (
-    !registry.release({
-      token,
-      controller: input.controller,
-      result: unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
-    })
-  ) {
-    return
+/** RFC-359 T7b：释放序列是一份实现（taskDriverRelease.ts）；这里只提供 SQLite 的依赖装配。 */
+function releaseDependencies(
+  db: DbClient,
+  finalizeWorkspace: (taskId: string) => Promise<void>,
+): TaskDriverReleaseDependencies {
+  return {
+    registry: taskExecutionModule.runtimeRegistry,
+    persistence: createSqliteTaskExecutionPersistence(db),
+    stopHeartbeat: (tokenKey) => {
+      const timer = ownerHeartbeatTimers.get(tokenKey)
+      if (timer !== undefined) clearInterval(timer)
+      ownerHeartbeatTimers.delete(tokenKey)
+    },
+    finalizeWorkspace,
   }
-
-  const tokenKey = ownershipTokenKey(token)
-  const timer = ownerHeartbeatTimers.get(tokenKey)
-  if (timer !== undefined) clearInterval(timer)
-  ownerHeartbeatTimers.delete(tokenKey)
-  const stopResult = await registry.awaitStopped({ token, tokenKey })
-  const owner = taskExecutionModule.ownership.read(input.db, input.taskId)
-  if (owner !== null && owner.epoch === token.epoch) {
-    if (stopResult.kind === 'released') {
-      const verifiedAt = Date.now()
-      const stopProof = createVerifiedStopProof({
-        taskId: input.taskId,
-        ownerRevision: owner.revision,
-        epoch: token.epoch,
-        evidenceDigest: stopResult.evidenceDigest,
-        verifiedAt,
-      })
-      taskExecutionModule.effects.resolveQuiescedManagedProcesses({
-        db: input.db,
-        authority: 'exact-stop',
-        token,
-        expectedRevision: owner.revision,
-        proof: stopProof,
-        quiescenceEvidenceDigest: stopResult.evidenceDigest,
-        now: verifiedAt,
-      })
-      const unresolvedEffectIds = [
-        ...new Set(
-          input.db
-            .select({ effectId: taskExecutionEffects.id })
-            .from(taskExecutionEffectAttempts)
-            .innerJoin(
-              taskExecutionEffects,
-              eq(taskExecutionEffects.id, taskExecutionEffectAttempts.effectId),
-            )
-            .where(
-              and(
-                eq(taskExecutionEffects.taskId, input.taskId),
-                eq(taskExecutionEffects.state, 'open'),
-                inArray(taskExecutionEffectAttempts.state, [
-                  'prepared',
-                  'acting',
-                  'recovery-required',
-                ]),
-              ),
-            )
-            .all()
-            .map((row) => row.effectId),
-        ),
-      ].sort()
-      if (unresolvedEffectIds.length > 0) {
-        const quiescenceDigest = sha256Hex(
-          canonicalJson({
-            v: 1,
-            taskId: input.taskId,
-            epoch: token.epoch,
-            runtimeStopEvidence: stopResult.evidenceDigest,
-            unresolvedEffectIds,
-          }),
-        )
-        taskExecutionModule.effects.closeOutcomeUnknownAndRelease({
-          db: input.db,
-          token,
-          intentId,
-          proof: createVerifiedOutcomeUnknownClosure({
-            taskId: input.taskId,
-            ownerRevision: owner.revision,
-            epoch: token.epoch,
-            quiescenceDigest,
-            unresolvedEffectIds,
-            verifiedAt,
-          }),
-          now: verifiedAt,
-        })
-      } else {
-        taskExecutionModule.ownership.releaseAfterStop({
-          db: input.db,
-          token,
-          intentId,
-          proof: stopProof,
-          now: verifiedAt,
-        })
-      }
-    } else {
-      taskExecutionModule.ownership.markRecoveryRequired({
-        db: input.db,
-        token,
-        expectedRevision: owner.revision,
-        code: stopResult.code,
-        evidenceDigest: stopResult.evidenceDigest,
-        now: Date.now(),
-      })
-    }
-  }
-  await input.finalizeWorkspace(input.taskId)
-}
-
-function unreapedProcessCode(db: DbClient, taskId: string): string | null {
-  const row = db
-    .select({ errorMessage: nodeRuns.errorMessage })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), like(nodeRuns.errorMessage, '%child-unkillable%')))
-    .limit(1)
-    .all()[0]
-  return row === undefined ? null : 'child-unkillable'
 }
 
 export function activeTaskDriverController(taskId: string): AbortController | undefined {
@@ -285,11 +172,9 @@ export function createTaskDriverLifecyclePort(
         log: options.log,
       }),
     releaseAndFinalize: async (input) =>
-      await releaseTaskDriverAndFinalize({
-        db: options.db,
-        taskId: input.taskId,
-        controller: input.controller,
-        finalizeWorkspace: options.finalizeWorkspace,
-      }),
+      await releaseTaskDriverAndFinalize(
+        releaseDependencies(options.db, options.finalizeWorkspace),
+        { taskId: input.taskId, controller: input.controller },
+      ),
   }
 }

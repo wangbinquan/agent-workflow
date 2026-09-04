@@ -4,7 +4,14 @@ import type {
   TaskExecutionAttemptState,
   TaskExecutionEffectKind,
 } from '../../domain/executionEffect'
-import type { OwnershipToken } from '../../domain/ownership'
+import type {
+  ExclusiveDaemonLockProof,
+  OwnerSnapshot,
+  OwnershipToken,
+  OwnershipTuple,
+  VerifiedOutcomeUnknownClosure,
+  VerifiedStopProof,
+} from '../../domain/ownership'
 
 export interface TaskEffectLineageSnapshot {
   readonly executionLineageId: string
@@ -43,6 +50,33 @@ export interface TaskEffectAttemptPreparation {
   readonly retryAuthority: RetryAuthority
   readonly resourceKeys: readonly string[]
   readonly now?: number
+}
+
+/** Who declares that a task's runtime has gone quiet (RFC-359 T7b): the exact
+ * process-local owner with its stop proof, or a successor daemon holding the
+ * exclusive lock for a newer generation. Same resolution either way. */
+export type ManagedProcessQuiescenceAuthority =
+  | {
+      readonly authority: 'successor-daemon'
+      readonly owner: OwnershipTuple
+      readonly expectedRevision: number
+      readonly lockProof: ExclusiveDaemonLockProof
+    }
+  | {
+      readonly authority: 'exact-stop'
+      readonly token: OwnershipToken
+      readonly expectedRevision: number
+      readonly proof: VerifiedStopProof
+    }
+
+export type ManagedProcessQuiescenceInput = ManagedProcessQuiescenceAuthority & {
+  readonly quiescenceEvidenceDigest: string
+  readonly now?: number
+}
+
+export interface RecoveredManagedProcessResolution {
+  readonly resolvedEffectIds: readonly string[]
+  readonly unresolvedEffectIds: readonly string[]
 }
 
 export interface TaskEffectAttemptSettlement {
@@ -157,6 +191,31 @@ export interface TaskExecutionEffectPersistence {
     readonly runtimeParamsJson?: string
     readonly now?: number
   }): Promise<void>
+  /** Effect ids still holding a prepared / acting / recovery-required attempt. */
+  unresolvedEffectIds(taskId: string): Promise<readonly string[]>
+  /** Runtime evidence the exact owner cannot hand back as a clean stop (`child-unkillable`). */
+  unreapedProcessCode(taskId: string): Promise<string | null>
+  /**
+   * Resolve only RFC-328 pre-activated managed-process attempts after the task's
+   * runtime went quiet. A durable spawn receipt means the launch happened; its
+   * absence means the gated launcher could not activate the target. Every other
+   * shape stays unresolved for the outcome-unknown closure.
+   */
+  resolveQuiescedManagedProcesses(
+    input: ManagedProcessQuiescenceInput,
+  ): Promise<RecoveredManagedProcessResolution>
+  /**
+   * Terminalize an ambiguous generation only under a task-wide quiescence proof:
+   * open attempts become outcome-unknown, fences release, active intents fail and
+   * the exact owner is released. A response-loss path may mark recovery-required
+   * by itself but can never release holds or the owner.
+   */
+  closeOutcomeUnknownAndRelease(input: {
+    readonly token: OwnershipToken
+    readonly intentId: string
+    readonly proof: VerifiedOutcomeUnknownClosure
+    readonly now?: number
+  }): Promise<OwnerSnapshot>
 }
 
 /** @deprecated source-compatibility name; the shape is Promise/provider-neutral. */
