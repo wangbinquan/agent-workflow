@@ -2,6 +2,25 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🚧 **进行中 RFC（Draft，待批，2026-09-04）：[RFC-357 任务列表页查询归一（一份查询，两个 provider）](design/RFC-357-task-list-page-query-unification/proposal.md)。**
+> 起于用户「切了 PostgreSQL，任务列表还是卡」。对账结论不是「PostgreSQL 慢」，而是**这一页在两个 provider 上是两份实现，
+> PostgreSQL 那份从来没有过 RFC-311 的任何一项优化**：目录页对 task-execution 的三个源各发一次
+> `listItems({limit: 10_000})`（条件字节相同、结果三选一），那条查询是裸 `db.select().from(tasks)`、把
+> `workflow_snapshot` 等大列一起搬过来（RFC-311 audit L1-8 在 SQLite 上修掉的正是同一形状，注释记着「每行上百 KB」），
+> 失败任务再逐行 N+1，然后过滤 / 搜索 / 排序 / 分页 / facets 全在 JS 里做；而 `branch_started_at` / `root_task_id`
+> 与索引在 PostgreSQL 上都在、只是没人用（**零迁移**）。用户裁决选「抽一份 dialect 参数化的页查询给两个 provider 共用」，
+> `services/taskOperations.ts`（1196 行、仅一个生产消费者）整文件删除归位进 `modules/task-execution`；同批裁决
+> 加一条**真 PostgreSQL** 的窄 CI lane，并把前端 WS 失效改成按帧增量。四个 PR，**批准前不动任何生产代码**。
+
+> 🔧 **单笔修复（2026-09-04，非 RFC）：启动来源筛选按 `launch_origin` 下推**（`d7b2fab72`）。
+> 同一次对账里发现的功能缺陷：PostgreSQL 目录源按 `item.scheduledTaskId` 是否为空**猜**启动来源，于是
+> ①界面上的「事件」/「API」两个选项不在它的分支里，直接 `throw ValidationError` ⇒ **400，整页打不开**；
+> ②选「手动」连 event / webhook / api 的任务一起返回（它们的 `scheduled_task_id` 同样是 NULL）；
+> ③选「定时」漏掉定时任务的**子执行**（子任务继承 `launch_origin='scheduled'` 但不带 `scheduled_task_id`）。
+> SQLite 侧一直读 `launch_origin`，所以只有 PostgreSQL 部署中招。修法：映射收成一份放进 shared
+> `taskListOriginMatches`（与 `taskMatchesListView` 同列），`TaskRouteListFilters` 加 `origin`，两个 provider 各自下推成
+> `launch_origin IN (…)`。回归防护 `task-catalog-launch-origin-filter.test.ts`（真库 + 目录源两层，两条变异各自致红）。
+
 > 🔧 **单笔修复（2026-09-04，非 RFC）：PostgreSQL daemon 的系统身份改为正式 admit**。
 > `cli/postgresqlDaemonApplication.ts` 在模块作用域用 `buildActor(…)` 手捏了一个 `systemActor`，而授权句柄是按
 > **对象引用**从 `AuthorityClaimRegistry` 的 WeakMap 里取的（只有 `mintDirectAuthority` 会往里写），于是选了
