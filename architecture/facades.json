@@ -2727,6 +2727,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:015a57568dc03430be5d",
         "import:2126787881e17e784ce8",
         "import:28fa120b47a47ac913c4",
         "import:33c872d98a30c6d54efc",
@@ -2736,12 +2737,14 @@
         "import:565ffb8735e0987d1d86",
         "import:6d0bc01056bf144b0e6e",
         "import:878a1ab7b52f271f7f6e",
+        "import:a002f594de8bd04927da",
         "import:b310eac7455e6a398ccd",
         "import:bc9c83d4447de5b4cd7f",
         "import:c60f083cae677598aa75",
         "import:cbefb72a6c305a93b27d",
         "import:d32f91a08e32ffc87ac6",
         "import:d99812d7a0c0f90e0ed1",
+        "import:ed7dfa7c029ca1077bb8",
         "import:fc4c03f688f30d553f96"
       ],
       "exportedSymbols": [
@@ -2762,6 +2765,7 @@
         "completeHumanResolvedConflict",
         "createNodeIso",
         "discardNodeIso",
+        "isoKeyOf",
         "isoWorktreePathFor",
         "mergeBackNodeIso",
         "rebuildIsoHandle",
@@ -6900,5 +6904,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993"
+  "sourceDigest": "sha256:57399119a89d44021e5ccb3d3ed0f1199d90ce9a182c78869b61877830bb59a1"
 }

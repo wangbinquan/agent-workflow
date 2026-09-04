@@ -202,8 +202,11 @@
       "id": "test-suite-allowed-skips",
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
-      "baseline": 38,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。"
+      "baseline": 41,
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。",
+      "allowGrowth": {
+        "why": "RFC-356：三个新测试文件的平台能力门控入账，条目数 38 → 41。"
+      }
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -426,8 +429,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6313,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6315,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-356 PR-1～PR-3 新增了 `util/fsReclaim.ts`（退避删除原语）并让 `util/git.ts` / `services/nodeIsolation.ts` / `services/task.ts` / GC filesystem 消费它，因此多出两条 symbol-level observed edge。同一笔里 RFC-355 的 `8f87e5a07` 也新增了两个 intent 侧测试与端口注释改动，其增量一并落在本次重采里（那笔没动 architecture，账本到本次才跟上）。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +453,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5202,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5204,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-356 同上：新原语的跨文件引用按 exact exception schema 逐条具名入账。注意本 RFC **没有**新增任何 R1 越界边——`isoKeyOf` 被从 `modules/task-execution/composition/nodeMechanics.ts` 搬回 `services/nodeIsolation.ts`，legacy → 模块内部的那条边是**消掉**而不是记债的。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +491,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25957,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25966,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-356 新增文件 `packages/backend/src/util/fsReclaim.ts` 及其导出符号进入 owner 账本；同一次重采还吸收了 RFC-355 的 `8f87e5a07` / `2784c7d9b` / `95ace20a8`（新增两个 intent 测试、抽出 `modules/intent/domain/sessionComposer.ts` 等），那三笔都没动 architecture，账本到本次才跟上。25957 → 25966 里属于 RFC-356 的只有 fsReclaim 那一部分，其余归 RFC-355。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993",
+    "sourceDigest": "sha256:57399119a89d44021e5ccb3d3ed0f1199d90ce9a182c78869b61877830bb59a1",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +512,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bff1e395a4754767fa3b31bddccf4c9093dd1fd0",
-    "contentDigest": "sha256:e6e37cac387acb18e11cd9ecb49550a43c94f295f6903ad3ad762de78b788b18",
+    "currentSnapshotSha": "bc4d0aebb989e26067d025441c87af25b0d79c1f",
+    "contentDigest": "sha256:13ba28f6ecc0a4066ad3ec184ba6fa7046e1a373a977187311052fd0ea5c8065",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

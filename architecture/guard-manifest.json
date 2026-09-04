@@ -1707,6 +1707,18 @@
       "lines": 160
     },
     {
+      "id": "rfc355-intent-session-event-callsites",
+      "file": "packages/backend/tests/rfc355-intent-session-event-callsites.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": false,
+      "classified": true,
+      "lines": 167
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -2104,14 +2116,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993",
+    "sourceDigest": "sha256:57399119a89d44021e5ccb3d3ed0f1199d90ce9a182c78869b61877830bb59a1",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "bff1e395a4754767fa3b31bddccf4c9093dd1fd0",
-    "contentDigest": "sha256:a4bf40d0d14399169498a504ba10488bf362cae174cbf8f474c6d2304756e3f1",
+    "currentSnapshotSha": "bc4d0aebb989e26067d025441c87af25b0d79c1f",
+    "contentDigest": "sha256:dc34e9614bc143ca0731f1144b7a44dcc5c39fd534e09670841840bb71014191",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

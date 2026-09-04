@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1943,
+    "backendFiles": 1944,
     "frontendFiles": 621,
     "legacyFiles": 611,
-    "moduleFiles": 1332,
-    "productionFiles": 2719,
+    "moduleFiles": 1333,
+    "productionFiles": 2720,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25957
+    "symbolsIncludingFileRoots": 25966
   },
   "entries": [
     {
@@ -71863,6 +71863,102 @@
       "currentContext": "intent",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#hasApprovalAfterLatestAgentTurn",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "hasApprovalAfterLatestAgentTurn",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#IntentComposerSource",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentComposerSource",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#intentComposerSourceOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "intentComposerSourceOf",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#IntentRetrySource",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentRetrySource",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#intentRetrySourceOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "intentRetrySourceOf",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#IntentTurnRef",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentTurnRef",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/domain/sessionComposer.ts",
+      "id": "owner:packages/backend/src/modules/intent/domain/sessionComposer.ts#latestIntentAgentTurnOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "latestIntentAgentTurnOf",
+      "targetContext": "intent",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/intent/domain/storedChangeset.ts",
       "id": "owner:packages/backend/src/modules/intent/domain/storedChangeset.ts#$file",
       "removeAfterWave": null,
@@ -131825,18 +131921,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#isoKeyOf",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "isoKeyOf",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#isolatedRunBinding",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
@@ -183506,6 +183590,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#containerStillBlocks",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "containerStillBlocks",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/nodeIsolation.ts",
       "id": "owner:packages/backend/src/services/nodeIsolation.ts#createNodeIso",
@@ -183644,6 +183740,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "isoKeyForGeneration",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#isoKeyOf",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isoKeyOf",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -312183,5 +312291,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993"
+  "sourceDigest": "sha256:57399119a89d44021e5ccb3d3ed0f1199d90ce9a182c78869b61877830bb59a1"
 }
