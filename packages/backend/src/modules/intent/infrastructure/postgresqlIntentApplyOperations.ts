@@ -1,6 +1,12 @@
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import { intentResourcePlanOf } from '../domain/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
+import {
+  assertIntentDraftUnresolved,
+  assertIntentSessionClaimable,
+  assertIntentSessionReady,
+  requireCommittableDraft,
+} from '../domain/applyClaim'
 import { createSessionApplyLock } from '../application/sessionApplyLock'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -25,7 +31,7 @@ import type {
 } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import type { ApplyIntentFaults } from './sqliteIntentApplyOperations'
 import type { IntentJournalArtifact } from '@/services/intent/journalArtifacts'
@@ -141,9 +147,7 @@ export function createPostgresqlIntentApplyOperations(
         .from(intentSessions)
         .where(eq(intentSessions.id, input.sessionId))
         .get()
-      if (session === undefined || session.ownerUserId !== actor.user.id) {
-        throw new NotFoundError('intent-session-not-found', 'intent session not found')
-      }
+      assertIntentSessionClaimable(session, actor.user.id)
       const existing = await transaction
         .select()
         .from(intentApplyJournal)
@@ -155,12 +159,7 @@ export function createPostgresqlIntentApplyOperations(
         )
         .get()
       if (existing !== undefined) return { kind: 'replay' as const, existing, session }
-      if (session.status !== 'active') {
-        throw new ConflictError('intent-session-archived', 'session is archived')
-      }
-      if (session.inFlightTurnId !== null) {
-        throw new ConflictError('intent-turn-in-flight', 'a generation turn is running')
-      }
+      assertIntentSessionReady(session)
       const draft = await transaction
         .select()
         .from(intentDrafts)
@@ -171,53 +170,30 @@ export function createPostgresqlIntentApplyOperations(
           ),
         )
         .get()
-      if (draft === undefined) {
-        throw new NotFoundError('intent-draft-not-found', 'draft revision not found')
-      }
-      if (draft.draftHash !== input.draftHash) {
-        throw new ConflictError(
-          'intent-draft-hash-mismatch',
-          'confirmed draft hash does not match',
-          { expected: draft.draftHash },
-        )
-      }
-      if (draft.contextRevision !== session.contextRevision) {
-        throw new ConflictError(
-          'intent-baseline-stale',
-          'the session context moved since this draft was generated; rebase and regenerate',
-        )
-      }
-      if (session.currentDraftId !== draft.id) {
-        throw new ConflictError(
-          'intent-draft-superseded',
-          'a newer draft revision exists in this session; review and commit the latest draft',
-          { confirmedRevision: draft.revision },
-        )
-      }
+      const committable = requireCommittableDraft({
+        draft,
+        session,
+        confirmedDraftHash: input.draftHash,
+      })
       const resolution = await transaction
         .select({ reason: intentDraftResolutions.reason })
         .from(intentDraftResolutions)
-        .where(eq(intentDraftResolutions.draftId, draft.id))
+        .where(eq(intentDraftResolutions.draftId, committable.id))
         .get()
-      if (resolution !== undefined) {
-        throw new ConflictError(
-          'intent-draft-superseded',
-          `this draft is ${resolution.reason} and can no longer be committed`,
-        )
-      }
+      assertIntentDraftUnresolved(resolution?.reason)
       const recordedAt = now()
       await transaction.insert(intentApplyJournal).values({
         id: journalId,
         sessionId: input.sessionId,
         clientMutationId: input.clientMutationId,
-        draftId: draft.id,
-        draftHash: draft.draftHash,
+        draftId: committable.id,
+        draftHash: committable.draftHash,
         state: 'prepared',
         preparedArtifactsJson: '[]',
         createdAt: recordedAt,
         updatedAt: recordedAt,
       })
-      return { kind: 'claimed' as const, session, draft }
+      return { kind: 'claimed' as const, session, draft: committable }
     })
 
     if (claim.kind === 'replay') return replayIntentApplyOutcome(claim.existing)
