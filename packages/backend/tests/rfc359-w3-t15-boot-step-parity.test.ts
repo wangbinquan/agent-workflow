@@ -80,7 +80,7 @@ test('runtime 注册表 boot 每条 provider 路径恰好一次：SQLite 在 sta
   // start.ts 里两处：composePostgresqlProviderSession（PG 路径）与 SQLite 主路径各一次。
   expect(sqliteEntryCalls).toBe(2)
   const providerSession = SQLITE_ENTRY.indexOf('async function composePostgresqlProviderSession(')
-  const serve = SQLITE_ENTRY.indexOf('async function servePostgresqlDaemon(')
+  const serve = SQLITE_ENTRY.indexOf('async function serveDaemon(')
   const first = SQLITE_ENTRY.indexOf(marker)
   expect(first).toBeGreaterThan(providerSession)
   expect(first).toBeLessThan(serve)

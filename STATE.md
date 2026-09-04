@@ -80,7 +80,10 @@
 > （`release` / `settle`），driver 释放序列在库里 owner 行转移后再唤醒等待者。**教训**：2026-09-04 13:24 `902a5def5`
 > 之后没有一个 CI run 真正跑完（全被 supersede 取消），四条驱动释放竞速红从 T7b 起潜伏到深夜——连推之间要等一次完整 CI；
 > 本地守卫清单补 `tests/architecture/rfc317-module-boundary.test.ts`。
-> **下一步**：W3-T14（`servePostgresqlDaemon` 永不返回形态）/ T16（`cli/start.ts` provider 分支归零）→ W4 成对删除。
+> **W3-T14 已修（2026-09-05）**：监听器与关机序列合一为 `serveDaemon`（两个 provider 共用），SQLite 的四步显式收尾改为会话
+> 关闭参与者、与 PG 同一组 id 同一顺序；`rfc359-w3-t14-serve-daemon.test.ts` 源码锁。
+> **下一步**：W3-T16（`cli/start.ts` 的 SQLite 内联装配搬出为 `composeSqliteProviderSession`，provider 执行分支归零，
+> 会话装配按 provider 查表）→ W4 成对删除。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

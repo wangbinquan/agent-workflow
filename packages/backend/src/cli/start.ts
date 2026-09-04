@@ -974,6 +974,11 @@ async function composePostgresqlProviderSession(input: {
     },
   })
 
+  // RFC-359 W3-T14：与 SQLite 会话同一组关闭参与者、同一顺序（SQLite 此前在监听器 shutdown 里显式做）。
+  const memoryDistillRecoverOnClose: DaemonProviderCloseParticipant = Object.freeze({
+    id: 'memory-distill-recover-running',
+    close: () => runtime.memory.distillWorker.recoverRunning().then(() => undefined),
+  })
   const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
     id: 'task-execution-graceful-shutdown',
     async close() {
@@ -1041,6 +1046,7 @@ async function composePostgresqlProviderSession(input: {
       batchImportRuntimeFactory,
     ],
     providerCloseParticipants: [
+      memoryDistillRecoverOnClose,
       taskExecutionBindings.closeParticipant,
       maintenanceBindings.closeParticipant,
       mcpRuntimeBindings.closeParticipant,
@@ -1053,12 +1059,23 @@ async function composePostgresqlProviderSession(input: {
   return Object.freeze({ application, session })
 }
 
-async function servePostgresqlDaemon(input: {
+/**
+ * RFC-359 W3-T14 —— 监听器与关机序列只有一份，两个 provider 共用。
+ *
+ * 此前 PostgreSQL 走这里的前身 `servePostgresqlDaemon`，SQLite 在 `startCommand` 尾部另有一段
+ * 手写的 `Bun.serve` + `shutdown()`——后者在 `bootstrap.stop()` 之前显式做蒸馏 worker 回收、
+ * after-commit 泵注销、webhook 终态控制停机与任务优雅关停，而 PG 把同样几步放在会话的关闭
+ * 参与者里。合一后只剩会话那一种放法：`shutdown()` 只做「摘 daemon info → 停监听 →
+ * `bootstrap.stop()` → 收控制口与锁 → exit」，provider 专属的收尾全部在各自会话的
+ * `providerCloseParticipants` 里、两侧同一组 id。
+ */
+async function serveDaemon(input: {
   readonly bootstrap: DaemonProviderBootstrap
   readonly authRuntime: Pick<
     PostgresqlDaemonApplication['core']['authRuntime'],
     'isBootstrapRequired'
   >
+  readonly databaseProvider: DatabaseProvider
   readonly token: string
   readonly bindHost: string
   readonly bindPort: number
@@ -1080,7 +1097,7 @@ async function servePostgresqlDaemon(input: {
     websocket: input.bootstrap.websocketHandlers,
   })
   const baseUrl = `http://${server.hostname}:${server.port}/`
-  input.log.info('listening', { url: baseUrl, databaseProvider: 'postgresql' })
+  input.log.info('listening', { url: baseUrl, databaseProvider: input.databaseProvider })
 
   const removeDaemonInfo = (): void => {
     try {
@@ -1093,13 +1110,17 @@ async function servePostgresqlDaemon(input: {
   const shutdown = async (signal: string): Promise<void> => {
     if (shuttingDown) return
     shuttingDown = true
-    input.log.info('shutting down', { signal, databaseProvider: 'postgresql' })
+    input.log.info('shutting down', { signal, databaseProvider: input.databaseProvider })
     removeDaemonInfo()
     server.stop(true)
     try {
       await input.bootstrap.stop()
     } catch (error) {
-      input.log.warn('PostgreSQL daemon shutdown error', {
+      // 关机请求已经封住 HTTP/WS 准入、停了监听、排空了任务执行；provider 收尾失败只是
+      // 这个正在退场的进程的诊断，不能把一次成功的 dev 代际交接变成 exit 1、让接班进程
+      // 卡在仍被持有的 PID 锁后面。
+      input.log.warn('daemon shutdown error', {
+        databaseProvider: input.databaseProvider,
         error: describeDaemonProviderSessionFailure(error),
       })
     }
@@ -1154,7 +1175,7 @@ async function servePostgresqlDaemon(input: {
   await new Promise<void>(() => {
     /* never resolves */
   })
-  throw new Error('postgresql-daemon-listener-returned')
+  throw new Error('daemon-listener-returned')
 }
 
 const MAX_DEV_LOCK_HANDOFF_MS = 60_000
@@ -1561,9 +1582,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
     deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
     await initial.session.resume(initialLifecycle)
-    await servePostgresqlDaemon({
+    await serveDaemon({
       bootstrap: daemonProviderBootstrap,
       authRuntime: initial.application.core.authRuntime,
+      databaseProvider: databaseProvider.provider,
       token,
       bindHost: opts.host ?? config.bindHost,
       bindPort: opts.port ?? config.bindPort ?? 0,
@@ -3257,10 +3279,37 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     eventCenterRuntimeFactory,
     fusionReconcileRuntimeFactory,
   ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
+  // RFC-359 W3-T14：与 PostgreSQL 会话同一组关闭参与者、同一顺序。此前这几步写在监听器的
+  // `shutdown()` 里（先于 `bootstrap.stop()`），两条 serve 序列合一为 `serveDaemon` 后只剩会话这一种放法。
+  const memoryDistillRecoverOnClose: DaemonProviderCloseParticipant = Object.freeze({
+    id: 'memory-distill-recover-running',
+    close: () => memoryOperations.distillWorker.recoverRunning().then(() => undefined),
+  })
+  const gracefulTaskShutdown: DaemonProviderCloseParticipant = Object.freeze({
+    id: 'task-execution-graceful-shutdown',
+    async close() {
+      const { gracefulShutdown } = await import('@/services/shutdown')
+      await gracefulShutdown(
+        {
+          controller: { shutdownActive: shutdownActiveTaskExecutions },
+          operations: taskExecutionPersistence.shutdown,
+          recovery: taskExecutionPersistence.recoveryAdministration,
+        },
+        30_000,
+      )
+    },
+  })
+  const webhookTerminalClose: DaemonProviderCloseParticipant = Object.freeze({
+    id: 'webhook-terminal-control',
+    close: () => webhookTerminalControl.stop(),
+  })
   const providerCloseParticipants = Object.freeze([
+    memoryDistillRecoverOnClose,
     taskExecutionBackgroundBindings.closeParticipant,
     maintenanceRuntimeBindings.closeParticipant,
     mcpRuntimeTestBindings.closeParticipant,
+    gracefulTaskShutdown,
+    webhookTerminalClose,
   ] satisfies readonly DaemonProviderCloseParticipant[])
   const initialProviderSession = await _createComposedDaemonProviderRuntimeSession({
     provider: 'sqlite',
@@ -3325,165 +3374,15 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   deferredDatabaseMigrationAdmission.bind(daemonProviderBootstrap)
   await initialProviderSession.resume(providerSessionLifecycle)
-
-  const server = Bun.serve({
-    port: bindPort,
-    hostname: bindHost,
-    // Bun's default idle timeout is too short for bounded package installs.
-    idleTimeout: 255,
-    async fetch(req: Request, srv): Promise<Response> {
-      return await daemonProviderBootstrap.runBusinessRequest(req, async () => {
-        const upgraded = await daemonProviderBootstrap.tryUpgrade(req, srv)
-        if (upgraded === true) return undefined as unknown as Response
-        if (upgraded === false) return await daemonProviderBootstrap.fetch(req)
-        return upgraded
-      })
-    },
-    websocket: daemonProviderBootstrap.websocketHandlers,
-  })
-  const baseUrl = `http://${server.hostname}:${server.port}/`
-  log.info('listening', { url: baseUrl })
-
-  // 9. Graceful shutdown (P-4-06).
-  //
-  // SIGTERM/SIGINT:
-  //   - stop accepting new HTTP requests
-  //   - abort all running tasks (their AbortControllers SIGTERM their child
-  //     opencode processes via runner.ts; the scheduler then marks rows
-  //     canceled/interrupted)
-  //   - poll for ~30s; any task still in 'running' after the budget is
-  //     flipped to 'interrupted' so the next daemon start surfaces it as
-  //     daemon-restart instead of leaving stale rows.
-  //
-  // CRITICAL: signal handlers must be installed BEFORE the "ready" line is
-  // printed to stdout. The test/launcher races: it reads the URL from stdout
-  // and immediately sends SIGTERM — if the handler hasn't been registered
-  // yet, Node's default terminate runs and `.daemon.info` outlives us.
-  const removeDaemonInfo = (): void => {
-    try {
-      unlinkSync(Paths.daemonInfo)
-    } catch {
-      // already removed or never written
-    }
-  }
-
-  let shuttingDown = false
-  const shutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return
-    shuttingDown = true
-    log.info('shutting down', { signal })
-    await memoryOperations.distillWorker.recoverRunning()
-    registerAfterCommitEventPump(null)
-    await webhookTerminalControl.stop()
-    removeDaemonInfo()
-    server.stop(true)
-    try {
-      const { gracefulShutdown } = await import('@/services/shutdown')
-      await gracefulShutdown(
-        {
-          controller: { shutdownActive: shutdownActiveTaskExecutions },
-          operations: taskExecutionPersistence.shutdown,
-          recovery: taskExecutionPersistence.recoveryAdministration,
-        },
-        30_000,
-      )
-    } catch (err) {
-      log.warn('graceful shutdown error', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    }
-    // Every provider-bound task mutation/recovery path above must settle while
-    // the selected client and authority runtime are still live. Identity owns
-    // no database close; the provider is deliberately the last session
-    // resource released after HTTP admission and all writers have drained.
-    try {
-      await daemonProviderBootstrap.stop()
-    } catch (error) {
-      // A shutdown request has already fenced HTTP/WS admission, stopped the
-      // listener, and drained task execution above. Provider close failures are
-      // diagnostics for this retiring process; they must not turn a successful
-      // dev-generation handoff into exit 1 and strand the replacement behind
-      // the still-owned PID lock. PostgreSQL follows the same best-effort
-      // terminal-close contract in servePostgresqlDaemon.
-      log.warn('SQLite daemon shutdown error', {
-        error: describeDaemonProviderSessionFailure(error),
-      })
-    }
-    // `stop` treats lock disappearance as the terminal acknowledgement. Retract
-    // the loopback control endpoint first, otherwise the caller can observe a
-    // successful stop while the previous process's control file still exists.
-    controlListener.close()
-    lock.release()
-    process.exit(0)
-  }
-  // RFC-254 T7 — the same graceful request over a transport Windows has.
-  //
-  // Node accepts the NAME `SIGTERM` on Windows without throwing, but delivers
-  // `TerminateProcess`: a hard kill, mid-write, with no drain. So `stop` there
-  // asks over loopback instead, and this is what answers. POSIX keeps the
-  // signal path byte-for-byte; the listener is simply a second door to the
-  // SAME `shutdown()`.
-  const controlListener = startControlListener({
-    controlFilePath: Paths.controlFile,
-    devWatch: devLockHandoffMs() > 0,
-    onShutdown: () => {
-      removeDaemonInfo()
-      void shutdown('control-shutdown')
-    },
-  })
-  process.on('SIGTERM', () => {
-    // unlink synchronously the instant the signal fires; the async shutdown
-    // continues in the background.
-    removeDaemonInfo()
-    void shutdown('SIGTERM')
-  })
-  process.on('SIGINT', () => {
-    removeDaemonInfo()
-    void shutdown('SIGINT')
-  })
-  // Belt-and-suspenders for paths the signal handlers can't reach (uncaught
-  // exception, explicit process.exit elsewhere). on('exit') is synchronous
-  // and runs on every normal termination path.
-  process.on('exit', () => {
-    removeDaemonInfo()
-    // The nonce must not outlive the process that minted it: a stale control
-    // file is a secret on disk that authorizes nothing, and the next start
-    // would have to reason about which of two files is current.
-    controlListener.close()
-    lock.release()
-  })
-
-  // Write runtime info file for `status` / `stop` subcommands to discover us.
-  // Must be AFTER signal handlers so a racing SIGTERM never leaves the file
-  // behind.
-  writeFileSync(
-    Paths.daemonInfo,
-    JSON.stringify(
-      {
-        pid: lock.pid,
-        host: server.hostname,
-        port: server.port,
-        url: baseUrl,
-        startedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  )
-
-  // RFC-221 — the daemon token is only a first-admin bootstrap credential.
-  // Once handoff commits, never print it as a browser login URL again.
-  const browserUrl = readyBrowserUrl(
-    baseUrl,
+  await serveDaemon({
+    bootstrap: daemonProviderBootstrap,
+    authRuntime: providerCore.authRuntime,
+    databaseProvider: databaseProvider.provider,
     token,
-    await providerCore.authRuntime.isBootstrapRequired(),
-  )
-  process.stdout.write(
-    `\nagent-workflow ready — open this URL in your browser:\n  ${browserUrl}\n\n`,
-  )
-
-  await new Promise<void>(() => {
-    /* never resolves */
+    bindHost,
+    bindPort,
+    lock,
+    log,
   })
 }
 

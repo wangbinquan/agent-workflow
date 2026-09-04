@@ -65,7 +65,12 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 
 ## 3. W3 —— 统一启动序列
 
-- **T14** 删除 `servePostgresqlDaemon` 的永不返回形态；PG 与 SQLite 汇入同一条 boot 序列。
+- **T14 ✅（2026-09-05）** 监听器与关机序列合一为 `serveDaemon`（`cli/start.ts`），PG 分支与 SQLite 主路径
+  都调它；`servePostgresqlDaemon` 删除。SQLite 此前写在监听器 `shutdown()` 里的四步（蒸馏 worker 回收 /
+  after-commit 泵注销 / webhook 终态控制停机 / 任务优雅关停）改为会话的关闭参与者，与 PG 同一组 id、同一顺序
+  （PG 补 `memory-distill-recover-running`）。`rfc359-w3-t14-serve-daemon.test.ts` 锁：一个 `Bun.serve`、一个
+  `serveDaemon`、监听器里不得出现 provider 专属收尾、两会话关闭参与者集合相等。PG 与 SQLite 汇入同一条 boot
+  序列的另一半（provider 执行分支归零）是 T16。
 - **T15** 逐条接上 PG 缺的 boot 步骤（补审已列全）：boot 恢复四步、skill catalog boot 五项、
   终态工作区回收策略注册、数字员工模板播种、demo 播种、融合三步、定时任务载荷治愈、
   终态维护恢复五项。**多数 PG 适配器已写好且已接进 persistence，只是没人调。**
