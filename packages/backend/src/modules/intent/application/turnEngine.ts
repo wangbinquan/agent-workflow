@@ -700,6 +700,39 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       report.errors.push(...graph.errors)
       if (graph.warnings.length > 0) report.graphWarnings = [...graph.warnings]
     }
+    // RFC-358 §12（决策 D6）—— 改 agent 的输出端口会让引用它的**既有**工作流不再
+    // 可启动，而平台只在删 agent 时有下游守卫、改没有。本 RFC 不拦（「先改 agent、
+    // 再改工作流」是合法节奏），但把影响面摆到确认页上。
+    try {
+      const updatedAgents = normalized.changeset.ops.filter(
+        (op) => op.resourceType === 'agent' && op.action === 'update',
+      )
+      if (updatedAgents.length > 0) {
+        const byHandle = new Map(dump.manifest.map((entry) => [entry.handle, entry.resourceId]))
+        const idToName = new Map<string, string>()
+        for (const op of updatedAgents) {
+          const id = op.action === 'update' ? byHandle.get(op.target) : undefined
+          if (id !== undefined) idToName.set(id, op.payload.name)
+        }
+        const downstream = await deps.graphValidation.workflowsUsingAgents({
+          actor: input.actor,
+          agentIds: [...idToName.keys()],
+        })
+        const rows = [...downstream.entries()]
+          .filter(([, workflows]) => workflows.length > 0)
+          .map(([agentId, workflows]) => ({
+            agentName: idToName.get(agentId) ?? agentId,
+            workflows: workflows.map((each) => ({ id: each.id, name: each.name })),
+          }))
+        if (rows.length > 0) report.agentDownstreamWorkflows = rows
+      }
+    } catch (err) {
+      // 纯知情信息，取不到就不显示——绝不因此把一轮判成失败。
+      log.warn('intent-agent-downstream-scan-failed', {
+        sessionId: input.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
     return settle(
       'changeset',
       {

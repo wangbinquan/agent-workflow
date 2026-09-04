@@ -161,6 +161,7 @@ export interface Resources {
     blockingErrors: string
     blockingErrorsTruncated: string
     graphRepairTurn: string
+    agentDownstreamNotice: string
     graphWarnings: string
     graphValidationUnavailable: string
     commitDisabledStale: string
@@ -6925,6 +6926,8 @@ export const zhCN: Resources = {
     blockingErrors: '{{count}} 个阻断性校验错误，需 AI 修复后才能提交。',
     blockingErrorsTruncated: '还有 {{count}} 条未列出。',
     graphRepairTurn: '自动修复',
+    agentDownstreamNotice:
+      '以下既有工作流引用了本次改动的代理，本次未对它们做校验——如果改了输出端口，记得回去检查它们的连线。',
     graphWarnings: '{{count}} 条工作流校验提醒（不阻断提交）。',
     graphValidationUnavailable:
       '工作流图校验暂时不可用，无法确认这份草稿能否启动，提交已暂停。稍后重试或重新生成一轮。',

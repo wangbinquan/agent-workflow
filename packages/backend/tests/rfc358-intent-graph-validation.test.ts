@@ -34,6 +34,7 @@ import {
   rewriteIntentWorkflowRefs,
 } from '@/modules/intent/domain/workflowGraphCandidate'
 import { validateChangesetWorkflowGraphs } from '@/modules/intent/application/graphValidation'
+import { buildIntentDoc } from '@/modules/intent/domain/intentDoc'
 import {
   intentGraphValidationForTest,
   intentResourceCatalogBinding,
@@ -391,6 +392,9 @@ describe('RFC-358 — draft-time workflow graph validation', () => {
           async validate() {
             throw new Error('db down')
           },
+          async workflowsUsingAgents() {
+            return new Map()
+          },
         },
       },
       { actor, changeset, resolution: draftGraphResolution([], changeset), mode: 'draft' },
@@ -694,5 +698,85 @@ describe('RFC-358 — apply-time gate and copy backfill', () => {
     // 显式给出的空值是「清空」，不能被存值盖回去。
     const cleared = withAgentSidecarsFrom({ branchPorts: [] }, source)
     expect(cleared.branchPorts).toEqual([])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-358 D1 / §12 —— 「哪些东西给人、哪些东西给模型」的分界。
+
+describe('RFC-358 — what reaches the model vs. what reaches the human', () => {
+  const docBase = {
+    sessionTitle: 't',
+    turns: [],
+    currentDraftJson: null,
+    pendingQuestions: [],
+    hiddenDependencyNote: null,
+    unavailableMountNote: null,
+    envelopeNonce: 'nonce',
+    langDirective: 'mirror',
+    privileges: { mayAuthorScriptNodes: false, mayAuthorCodeHostNodes: false },
+  } as unknown as Parameters<typeof buildIntentDoc>[0]
+
+  test('D1: blocking errors reach INTENT.md; graph warnings never do', () => {
+    const doc = buildIntentDoc({
+      ...docBase,
+      validationErrors: ['op-2: edge-source-port-missing @n_agent — no such port'],
+    })
+    expect(doc).toContain('BLOCKING validation errors')
+    expect(doc).toContain('edge-source-port-missing')
+    // warning 只在确认页。`buildIntentDoc` 连这个字段都不接——决策 D1 的结构性锁点。
+    expect(doc).not.toContain('clarify-no-iteration-cap')
+  })
+
+  test('AC-13: the downstream-workflow notice is human-only, never part of the prompt', async () => {
+    const stored = await createAgent(
+      db,
+      {
+        name: 'shared-agent',
+        description: 'd',
+        outputs: ['report'],
+        outputKinds: { report: 'markdown' },
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: 'b',
+        syncOutputsOnIterate: true,
+      },
+      { ownerUserId: OWNER, actor },
+    )
+    db.insert(workflowsTable)
+      .values({
+        id: ulid(),
+        name: 'downstream-pipeline',
+        description: '',
+        definition: JSON.stringify({
+          $schema_version: 6,
+          inputs: [],
+          nodes: [{ id: 'n', kind: 'agent-single', agentId: stored.id }],
+          edges: [],
+        }),
+        version: 1,
+        schemaVersion: 6,
+        ownerUserId: OWNER,
+        visibility: 'private',
+        builtin: false,
+        aclRevision: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      })
+      .run()
+
+    const downstream = await intentGraphValidationForTest(db).workflowsUsingAgents({
+      actor,
+      agentIds: [stored.id],
+    })
+    expect(downstream.get(stored.id)?.map((each) => each.name)).toEqual(['downstream-pipeline'])
+
+    // 它不进 prompt：INTENT.md 里不该出现那个工作流的名字。
+    const doc = buildIntentDoc({ ...docBase, validationErrors: [] })
+    expect(doc).not.toContain('downstream-pipeline')
   })
 })

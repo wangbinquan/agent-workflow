@@ -3194,6 +3194,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     // RFC-358: boot 恢复起的轮次与 HTTP 轮次走同一条图校验。
     graphValidation: composeIntentWorkflowGraphValidation({
       validationQueries: workflowCatalog.validationQueries,
+      workflowQueries: workflowCatalog.queries,
       authorityFor: intentAuthorityFor,
     }),
     resourceCatalogFor: intentResourceCatalogFor,

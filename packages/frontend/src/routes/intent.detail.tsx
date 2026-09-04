@@ -684,6 +684,20 @@ function IntentSessionDetailPage() {
                   </p>
                 </NoticeBanner>
               ) : null}
+              {(draft.validation.agentDownstreamWorkflows ?? []).length > 0 ? (
+                // RFC-358 §12（D6）：改 agent 的输出端口会让引用它的既有工作流不再可
+                // 启动。这里只知情、不阻断——「先改 agent、再改工作流」是合法节奏。
+                <NoticeBanner tone="info">
+                  <p>{t('intent.agentDownstreamNotice')}</p>
+                  <ul data-testid="intent-agent-downstream">
+                    {(draft.validation.agentDownstreamWorkflows ?? []).map((row) => (
+                      <li key={row.agentName}>
+                        {`${row.agentName} → ${row.workflows.map((each) => each.name).join(', ')}`}
+                      </li>
+                    ))}
+                  </ul>
+                </NoticeBanner>
+              ) : null}
               {(draft.validation.graphWarnings ?? []).length > 0 ? (
                 <NoticeBanner tone="warning">
                   <p>

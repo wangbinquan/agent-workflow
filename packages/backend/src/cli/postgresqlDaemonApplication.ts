@@ -1517,6 +1517,7 @@ export async function composePostgresqlDaemonApplication(
     // RFC-358 §7（AC-6）—— 与 SQLite provider 同一道门、同一份判据。
     graphValidation: composeIntentWorkflowGraphValidation({
       validationQueries: classicCatalogs.workflow.validationQueries,
+      workflowQueries: classicCatalogs.workflow.queries,
       authorityFor,
     }),
     resources: composePostgresqlIntentApplyResourceBinding({
@@ -1558,6 +1559,7 @@ export async function composePostgresqlDaemonApplication(
     // RFC-358: 两个 provider 的意图链路跑同一份图校验合同。
     graphValidation: composeIntentWorkflowGraphValidation({
       validationQueries: classicCatalogs.workflow.validationQueries,
+      workflowQueries: classicCatalogs.workflow.queries,
       authorityFor,
     }),
     resourceCatalogFor: intentResourceCatalogFor,
@@ -1578,6 +1580,7 @@ export async function composePostgresqlDaemonApplication(
       dumpAuxiliary: intentDumpAuxiliary,
       graphValidation: composeIntentWorkflowGraphValidation({
         validationQueries: classicCatalogs.workflow.validationQueries,
+        workflowQueries: classicCatalogs.workflow.queries,
         authorityFor,
       }),
     }),

@@ -48,6 +48,14 @@ export interface DraftValidationReport {
   graphWarnings?: IntentGraphWarning[]
   /** RFC-358 D7 —— 图校验不可用（查库失败）。绿不能给，但模型的产出也不丢。 */
   graphValidationUnavailable?: boolean
+  /**
+   * RFC-358 §12（决策 D6）—— 被本次 update 改动的 agent，各自被哪些**既有**工作流引用。
+   * 纯知情：不阻断提交、不进 INTENT.md（那是给人的信息）。
+   */
+  agentDownstreamWorkflows?: Array<{
+    agentName: string
+    workflows: Array<{ id: string; name: string }>
+  }>
 }
 
 interface TypedRef {

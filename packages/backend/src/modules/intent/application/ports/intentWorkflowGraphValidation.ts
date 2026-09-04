@@ -15,4 +15,15 @@ export interface IntentWorkflowGraphValidationPort {
     readonly currentWorkflow: { readonly id: string; readonly name: string }
     readonly overlays?: WorkflowValidationCandidateOverlays
   }): Promise<Readonly<{ ok: boolean; issues: readonly WorkflowValidationIssue[] }>>
+  /**
+   * RFC-358 §12（决策 D6）—— 「谁在引用这些 agent」。
+   *
+   * 改 agent 的 outputs 会让引用它的**既有**工作流不再可启动，而平台目前只在**删**
+   * agent 时有下游守卫（`agent-in-use`），改没有。本 RFC 不拦截——「先改 agent、
+   * 再改工作流」是合法的迭代节奏——但用户有权在确认页看到影响面。
+   */
+  workflowsUsingAgents(input: {
+    readonly actor: Actor
+    readonly agentIds: readonly string[]
+  }): Promise<ReadonlyMap<string, readonly { readonly id: string; readonly name: string }[]>>
 }

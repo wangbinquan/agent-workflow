@@ -2042,6 +2042,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     // draft 与 apply 之间的漂移（别人改了被引用 agent 的端口、上线前的存量草稿）。
     graphValidation: composeIntentWorkflowGraphValidation({
       validationQueries: workflowCatalog.validationQueries,
+      workflowQueries: workflowCatalog.queries,
       authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
     }),
     resources: composeIntentApplyResourceBinding(
@@ -2654,6 +2655,7 @@ function composeSqliteApiRouteMounts(
       // RFC-358: 图校验由 resource-catalog 提供，经它的 exact public 合同注入意图链路。
       graphValidation: composeIntentWorkflowGraphValidation({
         validationQueries: workflowCatalog.validationQueries,
+        workflowQueries: workflowCatalog.queries,
         authorityFor: intentAuthorityFor,
       }),
     }),

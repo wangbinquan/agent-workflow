@@ -502,6 +502,17 @@ export const IntentDraftDtoSchema = z
           .optional(),
         /** RFC-358 D7 —— 图校验没能跑起来。提交按 error 同效禁用，但 draft 照常保留。 */
         graphValidationUnavailable: z.boolean().optional(),
+        /** RFC-358 §12（D6）—— 被本次 update 改动的 agent 各自的下游既有工作流。纯知情。 */
+        agentDownstreamWorkflows: z
+          .array(
+            z
+              .object({
+                agentName: z.string(),
+                workflows: z.array(z.object({ id: z.string(), name: z.string() }).strict()),
+              })
+              .strict(),
+          )
+          .optional(),
       })
       .strict(),
     slots: z.array(IntentSlotDtoSchema),

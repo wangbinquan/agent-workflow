@@ -1,3 +1,4 @@
+import { workflows as workflowsTable } from '../../src/db/schema'
 import { createSqliteWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/sqliteWorkflowValidation'
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { Actor } from '../../src/auth/actor'
@@ -246,6 +247,27 @@ export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphV
         ...(input.overlays === undefined ? {} : { overlays: input.overlays }),
       })
       return Object.freeze({ ok: validated.result.ok, issues: validated.result.issues })
+    },
+    async workflowsUsingAgents(input) {
+      const wanted = new Set(input.agentIds)
+      const byAgent = new Map<string, { readonly id: string; readonly name: string }[]>()
+      if (wanted.size === 0) return byAgent
+      for (const row of db.select().from(workflowsTable).all()) {
+        let nodes: Array<{ agentId?: unknown }> = []
+        try {
+          nodes =
+            (JSON.parse(row.definition) as { nodes?: Array<{ agentId?: unknown }> }).nodes ?? []
+        } catch {
+          continue
+        }
+        for (const node of nodes) {
+          if (typeof node.agentId !== 'string' || !wanted.has(node.agentId)) continue
+          const list = byAgent.get(node.agentId) ?? []
+          if (!list.some((each) => each.id === row.id)) list.push({ id: row.id, name: row.name })
+          byAgent.set(node.agentId, list)
+        }
+      }
+      return byAgent
     },
   }
   return Object.freeze(graph)

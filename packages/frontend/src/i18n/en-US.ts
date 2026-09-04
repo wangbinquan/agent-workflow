@@ -184,6 +184,8 @@ export const enUS: Resources = {
     blockingErrors: '{{count}} blocking validation errors; the AI must fix them before commit.',
     blockingErrorsTruncated: '{{count}} more not listed.',
     graphRepairTurn: 'auto-repair',
+    agentDownstreamNotice:
+      'These existing workflows reference an agent this change edits. They were NOT validated here — if you changed its output ports, check their wiring.',
     graphWarnings: '{{count}} workflow validation warning(s) — these do not block committing.',
     graphValidationUnavailable:
       'Workflow graph validation is temporarily unavailable, so this draft cannot be confirmed launchable. Committing is paused — retry later or regenerate.',
