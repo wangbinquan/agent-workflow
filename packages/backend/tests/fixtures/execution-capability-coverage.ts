@@ -400,10 +400,10 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
       ],
     },
     {
-      // RFC-354 — the failure side of the lexical rule: reading INTO a nested
-      // scope is refused before any row is minted, an inner loop's exhaustion
-      // travels out through the frames, and the one shape that today crosses a
-      // sibling wall is pinned as current behavior rather than left to drift.
+      // RFC-354 — the wall and the failure side of it: reading INTO a nested
+      // scope is refused before any row is minted, a wrapper exposes only what
+      // its `wrapper-output` edges declare (loop included), and the v5→v6
+      // upgrader's compatibility rewrite for pre-v6 crossings is pinned.
       id: 'wrapper-nesting-scope-failures',
       evidence: [
         fast(

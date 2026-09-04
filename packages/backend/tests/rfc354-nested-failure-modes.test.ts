@@ -20,31 +20,39 @@
 //     failure has to travel out through the frames, and every row along the way
 //     has to settle.
 //
-//   ③ the three wrapper WALLS, compared. Reading a node that lives inside
-//     another wrapper (a sibling scope — neither nested nor enclosing) is the
-//     same authoring action in all three cases, and today it gets two different
-//     answers:
+//   ③ the wrapper WALL, from both sides. A wrapper exposes exactly what its
+//     `wrapper-output` edges declare; an edge that reads a node inside another
+//     wrapper is resolved by promoting the source through every wall it leaves
+//     (`resolveWorkflowSourceRef` → `WRAPPER_BOUNDARY_PROMOTERS`,
+//     packages/shared/src/workflowScope.ts:274-307), and a wall with nothing
+//     declared refuses. Three tests pin the whole rule:
 //
-//       wrapper-git    → refused, `wrapper-output-boundary-missing`, task failed
-//       wrapper-fanout → refused, `wrapper-output-boundary-missing`, task failed
-//       wrapper-loop   → ALLOWED; the value crosses and the task completes
+//       • hand-written v6, nothing exposes the source ⇒ the authoring gate says
+//         `wrapper-output-boundary-missing` — for a loop exactly as for the
+//         others, so the walls are consistent;
+//       • the same crossing out of a `wrapper-git` / `wrapper-fanout` reaches
+//         the runtime (older schema, no upgrade path) and fails closed there,
+//         because those two kinds expose only `git_diff` / their aggregator
+//         outlets and can never promote an inner port;
+//       • a pre-v6 document whose crossing edge IS legal under the old schema is
+//         kept working by the v5→v6 upgrader, which mints the missing return
+//         port for the loop it leaves (source port name reused) and rewrites the
+//         read into "declare a return port, then read it".
 //
-//     The loop case is a CURRENT-BEHAVIOR LOCK (⚠️ not an endorsement). It reads
-//     the loop's LAST round and it resolves in the right frame — an outer loop's
-//     second generation reads that generation's value, not the first one's, so
-//     this is not a frame leak — but it does bypass the wrapper's declared
-//     return contract, and it is inconsistent with the other two walls. Pinned
-//     here so neither side can drift silently. If the product closes the hole,
-//     flip the loop test: it becomes `failed` with
-//     `wrapper-output-boundary-missing` like its siblings, and note that doing
-//     so is a capability contraction for any stored workflow already wired this
-//     way (CLAUDE.md §RFC workflow 第 7 条).
+//     That last one is the compatibility contract worth pinning: it is the only
+//     reason such a definition still runs, it is invisible in the stored
+//     document until you diff the upgrade, and nothing else in the suite
+//     covered it.
 //
 // Deterministic: in-memory SQLite, serial dispatch, real subprocesses driven by
 // a per-call plan (fixtures/scenario-opencode.ts); no sleeps, no network; temp
 // dirs cleaned in afterEach.
 
-import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
+import {
+  migrateWorkflowDefinitionToLatest,
+  type Agent,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -170,6 +178,30 @@ function drive(h: Harness, taskId: string): Promise<unknown> {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', SCENARIO_OPENCODE],
     }),
+  )
+}
+
+/** The two agents the validator assertions in this file need. */
+function validationAgents(): Agent[] {
+  return ['workerA', 'workerB'].map(
+    (name) =>
+      ({
+        id: `agent-${name}`,
+        name,
+        description: '',
+        outputs: name === 'workerA' ? ['findings', 'other'] : ['verdict'],
+        syncOutputsOnIterate: true,
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: '',
+        schemaVersion: 1,
+        createdAt: 0,
+        updatedAt: 0,
+      }) as Agent,
   )
 }
 
@@ -437,10 +469,68 @@ describe('RFC-354 — nested failure modes', () => {
     expect(readTrace(h).filter((line) => line.agent === 'workerB').length).toBe(0)
   }, 30000)
 
-  // ⚠️ CURRENT-BEHAVIOR LOCK — see ③ in the head note. The two tests above show
-  // git and fan-out refusing this exact authoring action; the loop does not.
-  // Flip this test (and the one after it) if the product closes the hole.
-  test('CURRENT BEHAVIOR: a wrapper-loop wall does NOT refuse it — the value crosses, in the right frame', async () => {
+  // The wall is consistent — a loop refuses too, when nothing declares the port.
+  test('a hand-written v6 crossing that nothing exposes is refused on the loop wall as well', () => {
+    const bare = {
+      $schema_version: 6,
+      inputs: [],
+      nodes: [
+        { id: 'workerA', kind: 'agent-single', agentId: 'agent-workerA', agentName: 'workerA' },
+        { id: 'workerB', kind: 'agent-single', agentId: 'agent-workerB', agentName: 'workerB' },
+        {
+          id: 'loopA',
+          kind: 'wrapper-loop',
+          nodeIds: ['workerA'],
+          maxIterations: 1,
+          exitCondition: { kind: 'port-equals', portName: 'a_other', value: 'X' },
+        },
+        {
+          id: 'loopB',
+          kind: 'wrapper-loop',
+          nodeIds: ['workerB'],
+          maxIterations: 1,
+          exitCondition: { kind: 'port-equals', portName: 'b_out', value: 'X' },
+        },
+      ],
+      edges: [
+        {
+          id: 'ret_a',
+          boundary: 'wrapper-output',
+          source: { nodeId: 'workerA', portName: 'other' },
+          target: { nodeId: 'loopA', portName: 'a_other' },
+        },
+        {
+          id: 'ret_b',
+          boundary: 'wrapper-output',
+          source: { nodeId: 'workerB', portName: 'verdict' },
+          target: { nodeId: 'loopB', portName: 'b_out' },
+        },
+        // `loopA` declares `a_other`, never `findings` — so this read has no
+        // outlet to be promoted through.
+        {
+          id: 'e-bare',
+          source: { nodeId: 'workerA', portName: 'findings' },
+          target: { nodeId: 'workerB', portName: 'in' },
+        },
+      ],
+    } as unknown as WorkflowDefinition
+
+    const receipt = validateWorkflowDef(bare, { agents: validationAgents(), skills: [] } as never)
+    expect(receipt.ok).toBe(false)
+    expect(receipt.issues.map((issue) => issue.code)).toContain('wrapper-output-boundary-missing')
+    // And it stays refused: re-running the upgrader on an already-v6 document
+    // mints nothing (the compatibility rewrite below is a v5→v6 step only).
+    expect(
+      migrateWorkflowDefinitionToLatest(bare)
+        .edges.map((edge) => edge.id)
+        .sort(),
+    ).toEqual(['e-bare', 'ret_a', 'ret_b'])
+  })
+
+  // COMPATIBILITY CONTRACT — see ③ in the head note. A pre-v6 document may read
+  // a node inside a loop directly; the upgrader keeps it working by declaring
+  // the return port it was implicitly relying on.
+  test('the v5→v6 upgrader mints the missing loop return port for a pre-v6 crossing, and the read then resolves through it', async () => {
     await seedAgent(h.db, 'workerA', ['findings'])
     await seedAgent(h.db, 'workerB', ['verdict'])
     const siblingLoop = (id: string, member: string, port: string): Record<string, unknown> => ({
@@ -467,40 +557,55 @@ describe('RFC-354 — nested failure modes', () => {
     ]
     const def = { $schema_version: 1, inputs: [], nodes, edges } as unknown as WorkflowDefinition
 
-    // (a) The authoring gate raises nothing at all on this shape.
-    const validationAgents = ['workerA', 'workerB'].map(
-      (name) =>
-        ({
-          id: `agent-${name}`,
-          name,
-          description: '',
-          outputs: name === 'workerA' ? ['findings'] : ['verdict'],
-          syncOutputsOnIterate: true,
-          permission: {},
-          skills: [],
-          dependsOn: [],
-          mcp: [],
-          plugins: [],
-          frontmatterExtra: {},
-          bodyMd: '',
-          schemaVersion: 1,
-          createdAt: 0,
-          updatedAt: 0,
-        }) as Agent,
+    // (a) The upgrade mints the return port the old document relied on: a
+    // `wrapper-output` edge from the source node to a loop port named after the
+    // source PORT, plus the same read now promoted through it. Without this the
+    // stored workflow would stop validating the day it was upgraded.
+    const upgraded = migrateWorkflowDefinitionToLatest({
+      ...def,
+      nodes: nodes.map((node) =>
+        node.kind === 'agent-single' ? { ...node, agentId: `agent-${String(node.id)}` } : node,
+      ),
+    } as unknown as WorkflowDefinition)
+    const minted = upgraded.edges.find(
+      (edge) =>
+        edge.boundary === 'wrapper-output' &&
+        edge.source.nodeId === 'workerA' &&
+        edge.source.portName === 'findings' &&
+        edge.target.nodeId === 'loopA',
     )
-    const receipt = validateWorkflowDef(
-      {
-        ...def,
-        nodes: nodes.map((node) =>
-          node.kind === 'agent-single' ? { ...node, agentId: `agent-${String(node.id)}` } : node,
-        ),
-      } as unknown as WorkflowDefinition,
-      { agents: validationAgents, skills: [] } as never,
+    expect(minted, '升级器没有为跨墙读补上返回口').toBeDefined()
+    // Here the loop already bound that very port (`loopA_out`), so the upgrade
+    // reuses it. When nothing binds it, the upgrader mints a NEW port named
+    // after the source port — the case that actually needs inventing a name:
+    const mintedFresh = migrateWorkflowDefinitionToLatest({
+      ...def,
+      nodes: nodes.map((node) =>
+        node.id === 'loopA'
+          ? {
+              ...node,
+              // binds a DIFFERENT port, so `findings` has no outlet of its own
+              outputBindings: [{ name: 'a_other', bind: { nodeId: 'workerA', portName: 'other' } }],
+            }
+          : node.kind === 'agent-single'
+            ? { ...node, agentId: `agent-${String(node.id)}` }
+            : node,
+      ),
+    } as unknown as WorkflowDefinition).edges.find(
+      (edge) =>
+        edge.boundary === 'wrapper-output' &&
+        edge.source.nodeId === 'workerA' &&
+        edge.source.portName === 'findings' &&
+        edge.target.nodeId === 'loopA',
     )
+    expect(mintedFresh?.target.portName).toBe('findings')
+    const receipt = validateWorkflowDef(upgraded, {
+      agents: validationAgents(),
+      skills: [],
+    } as never)
     expect(receipt.ok).toBe(true)
-    expect(receipt.issues.map((issue) => issue.code)).not.toContain('closure-binding-unresolved')
 
-    // (b) And the task completes, with the neighbour's value in the prompt.
+    // (b) And the task completes, reading through that minted port.
     const { taskId } = await seedWorkflowAndTask(h, def)
     writeFileSync(
       h.planFile,
@@ -540,15 +645,13 @@ describe('RFC-354 — nested failure modes', () => {
     expect(Object.keys(consumed)).toEqual(['loopA'])
   }, 30000)
 
-  // ⚠️ CURRENT-BEHAVIOR LOCK (companion to the one above).
-  //
-  // What the crossing is NOT: a frame leak. Put both sibling loops inside an
-  // outer loop and run two generations — each generation's consumer reads ITS
-  // OWN generation's producer, never the previous one's. So the hole is about
-  // the wrapper's declared return CONTRACT being bypassed, not about the
-  // scheduler losing track of which round it is in; a fix should keep this
-  // property (a "read the freshest row" repair would break it and go red here).
-  test('CURRENT BEHAVIOR: the sibling crossing still resolves per frame across outer generations', async () => {
+  // Companion to the upgrader contract: the rewritten read is frame-correct.
+  // Put both loops inside an outer loop and run two generations — each
+  // generation's consumer reads ITS OWN generation's producer, never the
+  // previous one's. Worth pinning because the promoted read walks two walls and
+  // a "just take the freshest row" shortcut would pass every other assertion in
+  // this file while quietly breaking here.
+  test('a promoted cross-wrapper read resolves per frame across outer generations', async () => {
     await seedAgent(h.db, 'workerA', ['findings'])
     await seedAgent(h.db, 'workerB', ['verdict'])
     const innerLoop = (id: string, member: string, port: string): Record<string, unknown> => ({
