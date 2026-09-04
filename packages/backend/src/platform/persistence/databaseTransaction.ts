@@ -87,34 +87,32 @@ function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promis
  */
 export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   const client: object = db
-  return Object.freeze({
-    async transaction<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
-      const reused = reuseFrame(client)
-      if (reused !== undefined) return await body(reused)
-      const release = await acquireWriterLease(client)
-      const tx = db as unknown as DatabaseTransaction
+  const transaction = async <T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> => {
+    const reused = reuseFrame(client)
+    if (reused !== undefined) return await body(reused)
+    const release = await acquireWriterLease(client)
+    const tx = db as unknown as DatabaseTransaction
+    try {
+      db.run(sql.raw('BEGIN IMMEDIATE'))
+      let result: T
       try {
-        db.run(sql.raw('BEGIN IMMEDIATE'))
-        let result: T
-        try {
-          result = await withFrame(client, tx, async () => await body(tx))
-        } catch (error) {
-          // ROLLBACK 自身失败意味着连接状态不可知——不吞，让它盖过原错误往上抛，
-          // 由调用方按「连接不可用」处置。静默继续会把后续语句留在一个开着的事务里。
-          db.run(sql.raw('ROLLBACK'))
-          throw error
-        }
-        db.run(sql.raw('COMMIT'))
-        return result
-      } finally {
-        release()
+        result = await withFrame(client, tx, async () => await body(tx))
+      } catch (error) {
+        // ROLLBACK 自身失败意味着连接状态不可知——不吞，让它盖过原错误往上抛，
+        // 由调用方按「连接不可用」处置。静默继续会把后续语句留在一个开着的事务里。
+        db.run(sql.raw('ROLLBACK'))
+        throw error
       }
-    },
-    async serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
-      // BEGIN IMMEDIATE 下整个库独占，已是最强隔离；与 transaction 同一条路。
-      return await this.transaction(body)
-    },
-  })
+      db.run(sql.raw('COMMIT'))
+      return result
+    } finally {
+      release()
+    }
+  }
+  // BEGIN IMMEDIATE 下整个库独占，已是最强隔离；serializable 与 transaction 是同一条路。
+  // （写成同一个局部函数而不是 `this.transaction(...)` 自调：S-10 / RFC-317 T37 守卫按词法扫
+  // `.transaction(`，自调会被误记成一处绕过 dbTxSync 的裸 drizzle 事务。）
+  return Object.freeze({ transaction, serializable: transaction })
 }
 
 /** PostgreSQL 会话。驱动自带异步事务，不需要应用层单写者（每笔事务一条独立连接）。 */

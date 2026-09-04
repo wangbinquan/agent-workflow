@@ -406,10 +406,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 482,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-359 W2-T11c：DatabaseSession.serializable() 在 SQLite / PostgreSQL 两个会话实现上各加一个事务回调（480 → 482）。PG 侧是 SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001 退避重试的显式 opt-in，默认路径仍是 READ COMMITTED + 聚合根行锁（dev-gotchas 第 6 条）。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -430,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6352,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "两笔合记：① 30103f667（fix(gc)）新增 source-control/application/workspaceMaintenance.ts → @/util/errors 一条 legacy-outbound 边，推上主干时未重采，由 RFC-359 W2-T11b 顺带收齐；② RFC-359 W2-T11c/F-I-13 新增 resource-catalog/infrastructure/postgresql/repositorySupport.ts → @/platform/persistence/capabilities 一条边——唯一冲突判据收进能力矩阵一份、11 个 PG 适配器经它判 409，方向是 module → platform（RFC-294 允许的地基依赖），census 按位置记为 legacy-outbound。两条各自点名，不冒领不漏收。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -454,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5218,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "两笔合记：① 30103f667（fix(gc)）新增 source-control/application/workspaceMaintenance.ts → @/util/errors 一条 legacy-outbound 边，推上主干时未重采，由 RFC-359 W2-T11b 顺带收齐；② RFC-359 W2-T11c/F-I-13 新增 resource-catalog/infrastructure/postgresql/repositorySupport.ts → @/platform/persistence/capabilities 一条边——唯一冲突判据收进能力矩阵一份、11 个 PG 适配器经它判 409，方向是 module → platform（RFC-294 允许的地基依赖），census 按位置记为 legacy-outbound。两条各自点名，不冒领不漏收。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
