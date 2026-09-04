@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5218,
+    "architectureExceptions": 5241,
     "backgroundJobs": 368,
-    "crossContextImports": 6352,
+    "crossContextImports": 6377,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26071,
+    "moduleSymbolOwners": 26094,
     "mutationEntrypoints": 1936,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 986,
-    "transactionExternalEffects": 481
+    "transactionExternalEffects": 480
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1962,
+    "backendProductionFiles": 1967,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -119,20 +119,20 @@
       },
       {
         "context": "task-execution",
-        "files": 343
+        "files": 346
       }
     ],
-    "moduleFiles": 1348,
+    "moduleFiles": 1351,
     "nodeRunInsertSites": [
       {
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#79",
-        "line": 79,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts#createPostgresqlNodeRunMintParticipantInTx",
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#84",
+        "line": 84,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
         "removeAfterWave": null,
         "status": "canonical-writer",
-        "symbol": "createPostgresqlNodeRunMintParticipantInTx"
+        "symbol": "createNodeRunMintParticipantInTx"
       },
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2908f370f1d36e2ba16daefd62cd5f6a910918ce99dc77733611403a684486ad"
+  "sourceDigest": "sha256:22bcf3d1a812e398509395ecfb9052819229894074325345f5061b88613f1c68"
 }
