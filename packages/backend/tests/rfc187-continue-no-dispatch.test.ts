@@ -130,6 +130,7 @@ describe('RFC-187 §3-2 — continue-no-dispatch recovery (locked, must not regr
 })
 
 describe('RFC-187 §3-2 — the leader must say WHAT is blocking (AC-12)', () => {
+  // RFC-359 T7e：协议块渲染器迁到 application/workgroups/workgroupProtocol.ts（两 provider 共用），锁跟着搬。
   const CTX = readFileSync(
     resolve(
       import.meta.dir,
@@ -137,10 +138,9 @@ describe('RFC-187 §3-2 — the leader must say WHAT is blocking (AC-12)', () =>
       'src',
       'modules',
       'resource-catalog',
-      'infrastructure',
-      'legacy',
-      'workgroup',
-      'context.ts',
+      'application',
+      'workgroups',
+      'workgroupProtocol.ts',
     ),
     'utf8',
   )

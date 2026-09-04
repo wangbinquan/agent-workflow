@@ -53,6 +53,7 @@ describe('RFC-187 §4 — source locks', () => {
   })
 
   test('the leader protocol tells briefs to use relative, not absolute, paths', () => {
+    // RFC-359 T7e：协议块渲染器迁到 application/workgroups/workgroupProtocol.ts（两 provider 共用），锁跟着搬。
     const ctx = readFileSync(
       resolve(
         import.meta.dir,
@@ -60,10 +61,9 @@ describe('RFC-187 §4 — source locks', () => {
         'src',
         'modules',
         'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workgroup',
-        'context.ts',
+        'application',
+        'workgroups',
+        'workgroupProtocol.ts',
       ),
       'utf8',
     )

@@ -95,7 +95,23 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
       ),
       'utf8',
     )
-    expect(ctx).toContain('the leading @ shown in the')
+    // RFC-359 T7e：协议块渲染器迁到 application/workgroups/workgroupProtocol.ts（两 provider 共用）；
+    // roster 渲染仍在 legacy context.ts。
+    const protocol = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'application',
+        'workgroups',
+        'workgroupProtocol.ts',
+      ),
+      'utf8',
+    )
+    expect(protocol).toContain('the leading @ shown in the')
+    expect(protocol).not.toContain('not "@writer"')
     expect(ctx).not.toContain('not "@writer"')
     // the roster itself still uses the @ display form (unchanged).
     expect(ctx).toContain('const head = `- @${m.displayName}')
