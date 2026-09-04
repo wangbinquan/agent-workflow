@@ -66,8 +66,8 @@ const EDGE_MODEL_CODES = new Set([
 const files = listYaml(EXAMPLES_ROOT)
 
 describe('RFC-354 — example workflows are v6 upgrader goldens', () => {
-  test('the catalog is the 32-file example set', () => {
-    expect(files.length).toBe(32)
+  test('the catalog is the 33-file example set', () => {
+    expect(files.length).toBe(33)
   })
 
   for (const file of files) {

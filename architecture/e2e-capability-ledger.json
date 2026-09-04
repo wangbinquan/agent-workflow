@@ -8044,6 +8044,42 @@
       ]
     },
     {
+      "id": "TASK-X8",
+      "domain": "任务启动、执行与生命周期操作",
+      "title": "wrapper 任意深度嵌套：每次进入容器开一个帧，外层每一轮都重跑内层作用域（loop∘loop 与 loop⊃git⊃loop 都真跑）",
+      "risk": "P1",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "loop-in-loop: every outer round opens a fresh inner generation, and the agent really runs four times"
+        },
+        {
+          "file": "e2e/workflow-matrix.spec.ts",
+          "test": "depth-3 nesting: each outer round opens its own git generation, inner generation and change set"
+        }
+      ]
+    },
+    {
+      "id": "TASK-X9",
+      "domain": "任务启动、执行与生命周期操作",
+      "title": "任务详情按帧展示嵌套运行：轮次列的帧面包屑、抽屉的帧统计与按帧分组的运行历史",
+      "risk": "P2",
+      "tier": "pr",
+      "status": "covered",
+      "evidence": [
+        {
+          "file": "e2e/rfc354-nested-frames-ui.spec.ts",
+          "test": "运行列表的轮次列：内层每一次运行显示自己的帧面包屑，顶层作用域仍是裸计数"
+        },
+        {
+          "file": "e2e/rfc354-nested-frames-ui.spec.ts",
+          "test": "节点抽屉：Stats 显示这次运行所在的帧，运行历史按帧分组成四组"
+        }
+      ]
+    },
+    {
       "id": "UX-02",
       "domain": "前端横切：导航、可访问性、键盘、实时同步",
       "title": "页脚设置齿轮 → /settings 并高亮",

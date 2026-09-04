@@ -7,7 +7,8 @@
 // workflow carries a `MATRIX_*` marker in its prompt that selects one branch.
 //
 // Two things here are contracts rather than conveniences:
-//   * the distinct EXIT CODES (4 / 9 / 10 / 11 / 12 / 13 / 14 / 15). They are
+//   * the distinct EXIT CODES (4 / 9 / 10 / 11 / 12 / 13 / 14 / 15 / 16 / 17).
+//     They are
 //     how a spec tells "the workflow drove the wrong prompt here" apart from
 //     "this branch failed on purpose", so they are reproduced exactly;
 //   * the `require*` assertions. They fire INSIDE the stub, which is the only
@@ -15,6 +16,7 @@
 //     on the final ports would pass a prompt that silently lost its context.
 
 import {
+  bumpCounter,
   emitPromptForContractTest,
   emitTextEvent,
   ensureStateDir,
@@ -209,6 +211,46 @@ export async function run(argv: readonly string[]): Promise<void> {
   }
   if (prompt.includes('MATRIX_LOOP_EXHAUST')) {
     ports('<port name="status">continue</port><port name="items">still-pending</port>')
+  }
+
+  // RFC-354 loop-in-loop. `{{__iteration__}}` is the round inside the CURRENT
+  // frame, so it cannot tell outer round 1's inner round 0 from outer round 2's
+  // — both render `iteration=0`. The cadence therefore keys on a per-task
+  // invocation counter instead: calls 1..4 are (outer 0, inner 0), (outer 0,
+  // inner 1), (outer 1, inner 0), (outer 1, inner 1).
+  //
+  //   status       ends the INNER loop on every even call (its round 1);
+  //   outer_status ends the OUTER loop only on call 4.
+  //
+  // So a correct daemon spawns exactly 4 times. A regression that replays the
+  // first generation's rows instead of re-entering the inner scope stops at 2
+  // (the spec counts rows), and one that loses the exit values entirely runs
+  // past 4 — which exits 16 rather than silently looping to the ceiling.
+  if (prompt.includes('MATRIX_NESTED_LOOP')) {
+    const stateDir = ensureStateDir(process.env.MATRIX_STATE_DIR, '.')
+    const call = bumpCounter(join(stateDir, `nested-loop-${taskOf(prompt) || 'unknown'}`))
+    if (call > 4) {
+      die(16, `nested loop drove call ${call}; outer 2 × inner 2 promises exactly 4`)
+    }
+    ports(
+      `<port name="status">${call % 2 === 0 ? 'done' : 'continue'}</port>` +
+        `<port name="outer_status">${call === 4 ? 'done' : 'continue'}</port>`,
+    )
+  }
+
+  // RFC-354 depth 3 (`loop ⊃ git ⊃ loop ⊃ agent`). Same 4-call cadence as
+  // MATRIX_NESTED_LOOP — the outer loop here runs both rounds by policy
+  // (`continueOnMaxIterations`) rather than by an exit value — plus one
+  // uncommitted worktree file per call, so each git generation has its own
+  // change set and the per-round subtraction is observable from the outside.
+  if (prompt.includes('MATRIX_DEPTH3')) {
+    const stateDir = ensureStateDir(process.env.MATRIX_STATE_DIR, '.')
+    const call = bumpCounter(join(stateDir, `depth3-${taskOf(prompt) || 'unknown'}`))
+    if (call > 4) {
+      die(17, `depth-3 nesting drove call ${call}; outer 2 × inner 2 promises exactly 4`)
+    }
+    writeFile(`matrix-generated/depth3/call-${call}.txt`, `depth3 call ${call}\n`)
+    ports(`<port name="status">${call % 2 === 0 ? 'done' : 'continue'}</port>`)
   }
 
   if (prompt.includes('MATRIX_NESTED_MUTATE')) {

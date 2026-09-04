@@ -45,6 +45,7 @@ const CATALOG_FILES = [
   'wrapper-loop-exhausted.yaml',
   'wrapper-fanout-unsupported-inner.yaml',
   'wrapper-loop-nested.yaml',
+  'wrapper-nested-depth3.yaml',
   'runtime-lifecycle.yaml',
 ] as const
 
@@ -74,6 +75,17 @@ interface NodeRunRow {
   errorMessage: string | null
   failureCode?: string | null
   promptText: string | null
+  /**
+   * RFC-354 — the execution FRAME as the daemon projects it on the wire:
+   * `containerRunId` is the wrapper GENERATION row this run hangs off and
+   * `iteration` the round inside that frame, `scopePath` the derived
+   * root→here breadcrumb (`outer_loop:1/inner_loop:0`). Nested wrappers make
+   * the bare counter ambiguous — outer round 1's inner round 0 and outer
+   * round 2's inner round 0 are both `iteration: 0` — so every nesting
+   * assertion below reads the frame, not the counter.
+   */
+  containerRunId: string | null
+  scopePath: string
 }
 
 interface NodeRunsResponse {
@@ -148,6 +160,18 @@ const AGENT_FIXTURES = [
     name: 'matrix-loop-worker',
     outputs: ['status', 'items'],
     outputKinds: { status: 'string', items: 'list<string>' },
+    readonly: false,
+  },
+  {
+    name: 'matrix-nested-worker',
+    outputs: ['status', 'outer_status'],
+    outputKinds: { status: 'string', outer_status: 'string' },
+    readonly: true,
+  },
+  {
+    name: 'matrix-depth3-worker',
+    outputs: ['status'],
+    outputKinds: { status: 'string' },
     readonly: false,
   },
   {
@@ -531,6 +555,23 @@ function outputValue(data: NodeRunsResponse, runId: string, port: string): strin
   return data.outputs.find((output) => output.nodeRunId === runId && output.port === port)?.value
 }
 
+/** A path-list port (`git_diff` and friends) as a sorted array. */
+function pathsOf(data: NodeRunsResponse, runId: string, port: string): string[] {
+  return (outputValue(data, runId, port) ?? '')
+    .split('\n')
+    .filter((path) => path.length > 0)
+    .sort()
+}
+
+/** RFC-354 — a run's frame: the generation row it hangs off plus its round. */
+function frameKey(run: NodeRunRow): string {
+  return `${run.containerRunId ?? 'top'}#${run.iteration}`
+}
+
+function sorted(values: readonly (string | null)[]): (string | null)[] {
+  return [...values].sort()
+}
+
 test('catalog: every YAML imports; runnable definitions validate; a wrapper inside a fan-out is rejected statically', async () => {
   // RFC-354: loop-in-loop validates like any other nesting (the RFC-094
   // `wrapper-loop-nested` ban is retired), while the fan-out body rule moved
@@ -905,6 +946,21 @@ test('nested wrappers: git around fanout merges every shard change before comput
   const changed = outputValue(data, git.id, 'git_diff')
   expect(changed).toContain('matrix-generated/fanout/a.txt')
   expect(changed).toContain('matrix-generated/fanout/b.txt')
+
+  // RFC-354 frames: the git wrapper is a top-scope row, the fan-out hangs off
+  // it, and the shards hang off the fan-out — a two-level containment chain
+  // read root→here. The two shards share ONE frame (same generation, same
+  // round) and are told apart by `shardKey`, never by the frame.
+  expect(git.containerRunId).toBeNull()
+  expect(git.scopePath).toBe('')
+  expect(fanout.containerRunId).toBe(git.id)
+  expect(fanout.scopePath).toBe('git_wrap:0')
+  const aggregator = onlyRun(data, 'fan_aggregator')
+  for (const run of [...workers, aggregator]) {
+    expect(run.containerRunId).toBe(fanout.id)
+    expect(run.scopePath).toBe('git_wrap:0/fan_wrap:0')
+  }
+  expect(new Set(workers.map(frameKey)).size).toBe(1)
 })
 
 test('nested wrappers: loop around fanout uses only the current generation for exit and output promotion', async () => {
@@ -922,6 +978,28 @@ test('nested wrappers: loop around fanout uses only the current generation for e
   expect(runsFor(data, 'fan_aggregator').map((run) => run.iteration)).toEqual([0, 1])
   expect(outputValue(data, loop.id, 'final_status')).toBe('done')
   expect(outputValue(data, loop.id, 'final_report')).toBe('fanout-generation-1')
+
+  // RFC-354 frames: each loop round opens its OWN fan-out generation, and a
+  // round's shards hang off that round's generation row. Without the frame the
+  // two rounds' shard rows collide on (nodeId, iteration, shardKey).
+  const fanoutGenerations = runsFor(data, 'fan_wrap')
+  expect(fanoutGenerations.every((run) => run.containerRunId === loop.id)).toBe(true)
+  expect(sorted(fanoutGenerations.map((run) => run.scopePath))).toEqual([
+    'loop_wrap:0',
+    'loop_wrap:1',
+  ])
+  const shards = runsFor(data, 'fan_worker')
+  for (const generation of fanoutGenerations) {
+    const inGeneration = shards.filter((run) => run.containerRunId === generation.id)
+    expect(sorted(inGeneration.map((run) => run.shardKey))).toEqual(['docs/a.md', 'docs/b.md'])
+    expect(
+      inGeneration.every(
+        (run) =>
+          run.scopePath === `loop_wrap:${generation.iteration}/fan_wrap:${generation.iteration}`,
+      ),
+    ).toBe(true)
+  }
+  expect(new Set(shards.map(frameKey)).size).toBe(2)
 })
 
 test('nested wrappers: git inside loop exposes only the last iteration diff', async () => {
@@ -937,6 +1015,23 @@ test('nested wrappers: git inside loop exposes only the last iteration diff', as
   expect(lastChanged).toContain('matrix-generated/nested/iter-1.txt')
   expect(lastChanged).not.toContain('matrix-generated/nested/iter-0.txt')
   expect(outputValue(data, loop.id, 'final_status')).toBe('done')
+
+  // RFC-354 frames: every round opens a fresh git generation, and that round's
+  // mutator hangs off ITS generation — which is what makes the diff above a
+  // per-round change set rather than a running union. The checker is a direct
+  // loop member, so it stays in the loop's own frame one level up.
+  const gitGenerations = runsFor(data, 'git_wrap')
+  expect(gitGenerations.every((run) => run.containerRunId === loop.id)).toBe(true)
+  expect(sorted(gitGenerations.map((run) => run.scopePath))).toEqual(['loop_wrap:0', 'loop_wrap:1'])
+  const mutators = runsFor(data, 'mutator')
+  expect(sorted(mutators.map((run) => run.containerRunId))).toEqual(
+    sorted(gitGenerations.map((run) => run.id)),
+  )
+  expect(sorted(mutators.map((run) => run.scopePath))).toEqual([
+    'loop_wrap:0/git_wrap:0',
+    'loop_wrap:1/git_wrap:1',
+  ])
+  expect(runsFor(data, 'checker').every((run) => run.containerRunId === loop.id)).toBe(true)
 })
 
 test('nested wrappers: loop inside git produces one cumulative full-loop diff', async () => {
@@ -951,6 +1046,20 @@ test('nested wrappers: loop inside git produces one cumulative full-loop diff', 
   const allChanged = outputValue(data, git.id, 'git_diff')
   expect(allChanged).toContain('matrix-generated/nested/iter-0.txt')
   expect(allChanged).toContain('matrix-generated/nested/iter-1.txt')
+
+  // RFC-354 frames: the mirror image of git-in-loop — ONE loop generation for
+  // the whole git scope, with both rounds inside it. Same node ids, same
+  // counters, opposite containment; only the frame tells the two shapes apart.
+  const loop = onlyRun(data, 'loop_wrap')
+  expect(git.containerRunId).toBeNull()
+  expect(loop.containerRunId).toBe(git.id)
+  expect(loop.scopePath).toBe('git_wrap:0')
+  const bodyRuns = [...runsFor(data, 'mutator'), ...runsFor(data, 'checker')]
+  expect(bodyRuns.every((run) => run.containerRunId === loop.id)).toBe(true)
+  expect(sorted(runsFor(data, 'mutator').map((run) => run.scopePath))).toEqual([
+    'git_wrap:0/loop_wrap:0',
+    'git_wrap:0/loop_wrap:1',
+  ])
 })
 
 test('nested wrappers: git inside git preserves the complete mutation at both boundaries', async () => {
@@ -967,6 +1076,15 @@ test('nested wrappers: git inside git preserves the complete mutation at both bo
     expect(changed).toContain('matrix-generated/source.txt')
     expect(changed).toContain('matrix-generated/docs/report.md')
   }
+
+  // RFC-354 frames: two git wrappers with no loop anywhere still form a
+  // containment chain, and the breadcrumb records it.
+  expect(outer.containerRunId).toBeNull()
+  expect(inner.containerRunId).toBe(outer.id)
+  expect(inner.scopePath).toBe('outer_git:0')
+  const mutator = onlyRun(data, 'mutator')
+  expect(mutator.containerRunId).toBe(inner.id)
+  expect(mutator.scopePath).toBe('outer_git:0/inner_git:0')
 })
 
 test('mixed wrappers + humans: clarified decision survives review rejection before fanout and final approval', async () => {
@@ -1294,8 +1412,127 @@ test('runtime lifecycle: cancel interrupts a running subprocess and prevents out
   expect(runsFor(data, 'final_output')).toEqual([])
 })
 
-test('loop-in-loop launches: the RFC-094 nesting ban is retired (RFC-354)', async () => {
-  const result = await launch('wrapper-loop-nested.yaml')
-  await expectHttp(result.response, 201, 'launch wrapper-loop-nested.yaml')
-  expect(result.task).toBeDefined()
+// RFC-354 —— loop-in-loop, through the whole daemon.
+//
+// The RFC-094 static ban (`wrapper-loop-nested`) is retired, but "it launches"
+// is not the claim: the claim is that EVERY outer round re-enters the inner
+// scope in a fresh generation. Before frames, `node_runs` carried only a flat
+// `iteration`, so the outer loop's second round found round 1's done rows under
+// the same (nodeId, iteration) key and dispatched nothing — the inner agent ran
+// twice where the topology promises four, silently (audit S-6, now flipped in
+// packages/backend/tests/rfc354-nested-loop-frames.test.ts).
+//
+// Here the same claim is asserted against the compiled daemon, its SQLite rows
+// and the public node-runs projection — with the stub itself as a second oracle:
+// `MATRIX_NESTED_LOOP` ends the inner loop on every even call and the outer loop
+// only on call 4, and exits 16 if a fifth call ever arrives.
+test('loop-in-loop: every outer round opens a fresh inner generation, and the agent really runs four times', async () => {
+  const task = await launchOk('wrapper-loop-nested.yaml')
+  const final = await waitForTerminal(task.id)
+  expect(final.status).toBe('done')
+
+  const data = await nodeRuns(task.id)
+  const outer = onlyRun(data, 'outer_loop')
+  expect(outer.status).toBe('done')
+  expect(outer.containerRunId).toBeNull()
+  expect(outer.scopePath).toBe('')
+
+  // One inner GENERATION per outer round, both hanging off the outer row.
+  const inner = runsFor(data, 'inner_loop')
+  expect(inner).toHaveLength(2)
+  expect(inner.every((run) => run.status === 'done')).toBe(true)
+  expect(inner.every((run) => run.containerRunId === outer.id)).toBe(true)
+  expect(sorted(inner.map((run) => String(run.iteration)))).toEqual(['0', '1'])
+  expect(sorted(inner.map((run) => run.scopePath))).toEqual(['outer_loop:0', 'outer_loop:1'])
+
+  // outer 2 × inner 2 = 4 agent runs, two rounds inside EACH inner generation.
+  const workers = runsFor(data, 'loop_worker')
+  expect(workers).toHaveLength(4)
+  expect(workers.every((run) => run.status === 'done')).toBe(true)
+  for (const generation of inner) {
+    const inGeneration = workers.filter((run) => run.containerRunId === generation.id)
+    expect(sorted(inGeneration.map((run) => String(run.iteration)))).toEqual(['0', '1'])
+  }
+  expect(sorted(workers.map((run) => run.scopePath))).toEqual([
+    'outer_loop:0/inner_loop:0',
+    'outer_loop:0/inner_loop:1',
+    'outer_loop:1/inner_loop:0',
+    'outer_loop:1/inner_loop:1',
+  ])
+  // The four frames are all distinct — the bare counter alone is not (each
+  // value appears twice), which is exactly why the frame exists.
+  expect(new Set(workers.map(frameKey)).size).toBe(4)
+
+  // `{{__iteration__}}` renders the FRAME-LOCAL round: the second generation
+  // starts again at 0 instead of continuing to 2.
+  for (const run of workers) {
+    expect(run.promptText).toContain(`iteration=${run.iteration}`)
+  }
+
+  // The loop's return values are promoted from the generation that just ran:
+  // the last one, whose worker answered `done` on both ports.
+  expect(outputValue(data, outer.id, 'final_status')).toBe('done')
+  expect(outputValue(data, outer.id, 'outer_signal')).toBe('done')
+})
+
+// RFC-354 —— depth 3 (`loop ⊃ git ⊃ loop ⊃ agent`), authored directly in the v6
+// edge model (this fixture is also the catalog's only hand-written v6 document,
+// so the import path is exercised without the upgrader in front of it).
+//
+// Two levels of nesting were already covered in five combinations; three is
+// where "nests to any depth" stops being a rewording of "nests". It is also
+// where a shortcut that walks to the nearest enclosing loop, or that keys the
+// git wrapper's change set on the node id alone, stops working.
+test('depth-3 nesting: each outer round opens its own git generation, inner generation and change set', async () => {
+  const task = await launchOk('wrapper-nested-depth3.yaml')
+  const final = await waitForTerminal(task.id)
+  expect(final.status).toBe('done')
+
+  const data = await nodeRuns(task.id)
+  const outer = onlyRun(data, 'd3_outer')
+  expect(outer.containerRunId).toBeNull()
+
+  // Level 1 — one git generation per outer round.
+  const gits = runsFor(data, 'd3_git')
+  expect(gits).toHaveLength(2)
+  expect(gits.every((run) => run.status === 'done')).toBe(true)
+  expect(gits.every((run) => run.containerRunId === outer.id)).toBe(true)
+  expect(sorted(gits.map((run) => run.scopePath))).toEqual(['d3_outer:0', 'd3_outer:1'])
+
+  // Level 2 — one inner-loop generation per git generation.
+  const inners = runsFor(data, 'd3_inner')
+  expect(inners).toHaveLength(2)
+  expect(sorted(inners.map((run) => run.containerRunId))).toEqual(sorted(gits.map((run) => run.id)))
+
+  // Level 3 — the agent, breadcrumbed root→here through all three wrappers.
+  const workers = runsFor(data, 'd3_worker')
+  expect(workers).toHaveLength(4)
+  expect(workers.every((run) => run.status === 'done')).toBe(true)
+  expect(sorted(workers.map((run) => run.scopePath))).toEqual([
+    'd3_outer:0/d3_git:0/d3_inner:0',
+    'd3_outer:0/d3_git:0/d3_inner:1',
+    'd3_outer:1/d3_git:1/d3_inner:0',
+    'd3_outer:1/d3_git:1/d3_inner:1',
+  ])
+  expect(new Set(workers.map(frameKey)).size).toBe(4)
+
+  // Each git generation reports only ITS round's files, even though round 0's
+  // two files are still uncommitted when round 1 captures its baseline
+  // (per-round subtraction, RFC-098 B3 / audit S-4 — at depth 3).
+  const round0 = gits.find((run) => run.iteration === 0)!
+  const round1 = gits.find((run) => run.iteration === 1)!
+  expect(pathsOf(data, round0.id, 'git_diff')).toEqual([
+    'matrix-generated/depth3/call-1.txt',
+    'matrix-generated/depth3/call-2.txt',
+  ])
+  expect(pathsOf(data, round1.id, 'git_diff')).toEqual([
+    'matrix-generated/depth3/call-3.txt',
+    'matrix-generated/depth3/call-4.txt',
+  ])
+
+  // The outer loop promotes the last round's return value.
+  expect(pathsOf(data, outer.id, 'last_round_changed')).toEqual([
+    'matrix-generated/depth3/call-3.txt',
+    'matrix-generated/depth3/call-4.txt',
+  ])
 })

@@ -74,6 +74,7 @@ named checked-in evidence fails the fast suite.
 | Runtime × state/fault   | 2 × 7: success, process-crash retry, envelope follow-up, inline clarify resume, missing-session fallback, timeout and cancel                                |
 | Runtime × memory prompt | 2 × 1: candidate exclusion, approval boundary, snapshot, and native persona/system-prompt injection                                                         |
 | Wrapper parent × child  | 3 × 3: every git/loop/fanout pair is classified as supported, static-rejected or runtime-rejected and has executable evidence                               |
+| Wrapper nesting depth   | Depth 2 in all nine pairs, plus depth 3 (`loop ⊃ git ⊃ loop`) executed end to end; every nesting assertion reads the RFC-354 frame, not the bare counter    |
 
 ## Named orchestration spines
 

@@ -1,7 +1,7 @@
 {
   "generatedAt": "2026-08-24",
   "note": "逐条依据/证据/补测建议见同目录 findings.md；本文件只是它的机器索引",
-  "total": 840,
+  "total": 842,
   "rows": [
     {
       "id": "AGENT-01",
@@ -4700,6 +4700,24 @@
       "gapKind": "no-e2e-but-unit",
       "risk": "P2",
       "verdict": "confirmed-gap"
+    },
+    {
+      "id": "TASK-X8",
+      "domain": "任务启动、执行与生命周期操作",
+      "title": "wrapper 任意深度嵌套：每次进入容器开一个帧，外层每一轮都重跑内层作用域（loop∘loop 与 loop⊃git⊃loop 都真跑）",
+      "coverage": "backend-system-mock-e2e",
+      "gapKind": "covered",
+      "risk": "P1",
+      "verdict": "confirmed-covered"
+    },
+    {
+      "id": "TASK-X9",
+      "domain": "任务启动、执行与生命周期操作",
+      "title": "任务详情按帧展示嵌套运行：轮次列的帧面包屑、抽屉的帧统计与按帧分组的运行历史",
+      "coverage": "browser-e2e",
+      "gapKind": "covered",
+      "risk": "P2",
+      "verdict": "confirmed-covered"
     },
     {
       "id": "UX-02",

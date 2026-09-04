@@ -1,8 +1,9 @@
 # Workflow end-to-end catalog
 
 这组 YAML 不是伪造的调度器对象，而是通过公开
-`POST /api/workflows/import` 导入、通过精确 revision 校验、再由真实 daemon、
-SQLite、scheduler 和 OpenCode 测试桩执行的工作流。
+`POST /api/workflows` 建立（裸 YAML 导入端点已随 RFC-271 批次 I 下线，装载走
+[`e2e/workflow-fixtures.ts`](../../../e2e/workflow-fixtures.ts)）、通过精确 revision
+校验、再由真实 daemon、SQLite、scheduler 和 OpenCode 测试桩执行的工作流。
 
 配套测试是 [`e2e/workflow-matrix.spec.ts`](../../../e2e/workflow-matrix.spec.ts)。
 测试启动时会创建这些 YAML 引用的 `matrix-*` agent，因此文件可以保持可移植的
@@ -10,30 +11,31 @@ SQLite、scheduler 和 OpenCode 测试桩执行的工作流。
 
 ## 覆盖矩阵
 
-| 文件                                    | 预期结果                       | 主要覆盖                                                                                    |
-| --------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------- |
-| `prompt-input-kinds.yaml`               | done                           | text/files/enum/git、显式替换、未引用输入自动附加、内建变量、字面量 token 不递归展开        |
-| `upload-input-roundtrip.yaml`           | done                           | multipart upload、落盘后路径打包、必填/数量约束、prompt 注入                                |
-| `output-kinds-roundtrip.yaml`           | done                           | string、markdown、path、三类 list、signal 的 envelope 解析、归一化和 output 投影            |
-| `linear-fan-in.yaml`                    | done                           | 并行根节点、同端口 fan-in、确定性拼接、下游调度与最终 output                                |
-| `wrapper-git-change-set.yaml`           | done                           | 外部输入到 wrapper 内节点、tracked/untracked 变更、`git_diff` 路径列表、下游消费            |
-| `wrapper-git-noop.yaml`                 | done                           | 内部成功但无文件变化时，wrapper 以空 diff 正常结束                                          |
-| `wrapper-loop-port-empty.yaml`          | done / 2 轮                    | `port-empty`、迭代行、loop 返回边（`wrapper-output`）                                       |
-| `wrapper-loop-port-equals.yaml`         | done / 2 轮                    | `port-equals`                                                                               |
-| `wrapper-loop-port-count-lt.yaml`       | done / 2 轮                    | `port-count-lt` 与自定义阈值                                                                |
-| `wrapper-fanout-aggregate.yaml`         | done、empty done 或 fail-all   | list 分片、broadcast、重复值稳定 shard key、join、失败汇合、aggregator、output rename       |
-| `wrapper-git-around-fanout.yaml`        | done                           | Git → Fanout；全部 shard 文件变更先合并，再由外层 Git 计算一次 diff                         |
-| `wrapper-loop-around-fanout.yaml`       | done / 2 轮                    | Loop → Fanout；每轮新 generation、broadcast 输入、只用当前 generation 判定退出并提升输出    |
-| `wrapper-loop-around-git.yaml`          | done / 2 轮                    | Loop → Git；每轮独立 diff，loop 只提升最后一轮                                              |
-| `wrapper-git-around-loop.yaml`          | done / 2 轮                    | Git → Loop；git 捕获整个循环的累计 diff                                                     |
-| `mixed-wrapper-human-roundtrip.yaml`    | human → review → review → done | Git → Loop 内 clarify+驳回重审；已澄清决定折叠进 prior output，再 fanout 审计并最终人工批准 |
-| `wrapper-loop-review.yaml`              | awaiting_review → done         | 人工态上浮、approve resume、reject reason + prior output 注入、重跑后再次 approve           |
-| `clarify-self-roundtrip.yaml`           | awaiting_human → done          | `clarify`、问题封存、stop ask-back、提问 agent 带 Q&A 重跑                                  |
-| `clarify-cross-agent-roundtrip.yaml`    | awaiting_human → done          | `clarify-cross-agent`、默认仅 asker 重跑、designer 不被隐式重跑                             |
-| `runtime-lifecycle.yaml`                | done / failed / cancelled      | fresh-session retry、永久失败耗尽、全局节点 timeout、运行中 cancel、禁止失败输出投影        |
-| `wrapper-loop-exhausted.yaml`           | failed                         | maxIterations 用尽、wrapper `exhausted` 终态                                                |
-| `wrapper-fanout-unsupported-inner.yaml` | importable / launch rejected   | fanout 体内放 wrapper 在校验期即拒（RFC-354 `wrapper-fanout-unsupported-inner-kind`）       |
-| `wrapper-loop-nested.yaml`              | done                           | loop-in-loop（RFC-354：嵌套即递归，帧 `container_run_id` 隔离每一轮）                       |
+| 文件                                    | 预期结果                       | 主要覆盖                                                                                     |
+| --------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------- |
+| `prompt-input-kinds.yaml`               | done                           | text/files/enum/git、显式替换、未引用输入自动附加、内建变量、字面量 token 不递归展开         |
+| `upload-input-roundtrip.yaml`           | done                           | multipart upload、落盘后路径打包、必填/数量约束、prompt 注入                                 |
+| `output-kinds-roundtrip.yaml`           | done                           | string、markdown、path、三类 list、signal 的 envelope 解析、归一化和 output 投影             |
+| `linear-fan-in.yaml`                    | done                           | 并行根节点、同端口 fan-in、确定性拼接、下游调度与最终 output                                 |
+| `wrapper-git-change-set.yaml`           | done                           | 外部输入到 wrapper 内节点、tracked/untracked 变更、`git_diff` 路径列表、下游消费             |
+| `wrapper-git-noop.yaml`                 | done                           | 内部成功但无文件变化时，wrapper 以空 diff 正常结束                                           |
+| `wrapper-loop-port-empty.yaml`          | done / 2 轮                    | `port-empty`、迭代行、loop 返回边（`wrapper-output`）                                        |
+| `wrapper-loop-port-equals.yaml`         | done / 2 轮                    | `port-equals`                                                                                |
+| `wrapper-loop-port-count-lt.yaml`       | done / 2 轮                    | `port-count-lt` 与自定义阈值                                                                 |
+| `wrapper-fanout-aggregate.yaml`         | done、empty done 或 fail-all   | list 分片、broadcast、重复值稳定 shard key、join、失败汇合、aggregator、output rename        |
+| `wrapper-git-around-fanout.yaml`        | done                           | Git → Fanout；全部 shard 文件变更先合并，再由外层 Git 计算一次 diff                          |
+| `wrapper-loop-around-fanout.yaml`       | done / 2 轮                    | Loop → Fanout；每轮新 generation、broadcast 输入、只用当前 generation 判定退出并提升输出     |
+| `wrapper-loop-around-git.yaml`          | done / 2 轮                    | Loop → Git；每轮独立 diff，loop 只提升最后一轮                                               |
+| `wrapper-git-around-loop.yaml`          | done / 2 轮                    | Git → Loop；git 捕获整个循环的累计 diff                                                      |
+| `mixed-wrapper-human-roundtrip.yaml`    | human → review → review → done | Git → Loop 内 clarify+驳回重审；已澄清决定折叠进 prior output，再 fanout 审计并最终人工批准  |
+| `wrapper-loop-review.yaml`              | awaiting_review → done         | 人工态上浮、approve resume、reject reason + prior output 注入、重跑后再次 approve            |
+| `clarify-self-roundtrip.yaml`           | awaiting_human → done          | `clarify`、问题封存、stop ask-back、提问 agent 带 Q&A 重跑                                   |
+| `clarify-cross-agent-roundtrip.yaml`    | awaiting_human → done          | `clarify-cross-agent`、默认仅 asker 重跑、designer 不被隐式重跑                              |
+| `runtime-lifecycle.yaml`                | done / failed / cancelled      | fresh-session retry、永久失败耗尽、全局节点 timeout、运行中 cancel、禁止失败输出投影         |
+| `wrapper-loop-exhausted.yaml`           | failed                         | maxIterations 用尽、wrapper `exhausted` 终态                                                 |
+| `wrapper-fanout-unsupported-inner.yaml` | importable / launch rejected   | fanout 体内放 wrapper 在校验期即拒（RFC-354 `wrapper-fanout-unsupported-inner-kind`）        |
+| `wrapper-loop-nested.yaml`              | done / 外 2 × 内 2             | loop-in-loop：外层每一轮开一个新的内层 generation，agent 真调起 4 次、4 个互不相同的帧       |
+| `wrapper-nested-depth3.yaml`            | done / 外 2 × 内 2             | 深度 3（Loop ⊃ Git ⊃ Loop）：三段 `scope_path` 面包屑、每轮独立 git 变更集；直接写 v6 边模型 |
 
 ## 状态空间
 
@@ -89,8 +91,9 @@ generation/shard、review/clarify 恢复、retry/timeout/cancel 和输出投影�
   `port-count-lt`；跨轮状态通过工作树文件传递，不存在反馈端口。
 - `wrapper-fanout` 当前运行时只调度内部 `agent-single`，其中至多一个
   `role: aggregator`。其他内部节点类型会 fail closed。
-- wrapper containment 必须是一棵树。一个节点不能属于两个父包装器，且
-  loop-in-loop 当前被静态校验拒绝。
+- wrapper containment 必须是一棵树。一个节点不能属于两个父包装器；嵌套深度不设
+  上限（RFC-354：每次进入容器开一个帧 `(container_run_id, iteration)`），唯一被
+  静态拒绝的形状是 `wrapper-fanout` 体内再放 wrapper。
 
 | 父 → 子               | 当前结果 | 对应定义                                |
 | --------------------- | -------- | --------------------------------------- |
@@ -100,3 +103,4 @@ generation/shard、review/clarify 恢复、retry/timeout/cancel 和输出投影�
 | Loop → Fanout         | 支持     | `wrapper-loop-around-fanout.yaml`       |
 | Fanout → 任意 wrapper | 静态拒绝 | `wrapper-fanout-unsupported-inner.yaml` |
 | Loop → Loop           | 支持     | `wrapper-loop-nested.yaml`              |
+| Loop → Git → Loop     | 支持     | `wrapper-nested-depth3.yaml`            |

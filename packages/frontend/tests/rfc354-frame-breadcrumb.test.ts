@@ -86,6 +86,21 @@ describe('parseScopePath / formatFrameBreadcrumb', () => {
     expect(formatFrameBreadcrumb({ scopePath: 'outer:1/inner:0' })).toBe('outer#1 › inner#0')
   })
 
+  // RFC-354 —— 任意深度：三层（`loop ⊃ git ⊃ loop`）是 e2e 与调度器两层都真跑过的
+  // 形状（`e2e/workflow-matrix.spec.ts` 的 depth-3 用例、
+  // `packages/backend/tests/rfc354-nested-depth3-frames.test.ts`），面包屑必须一路
+  // 拼到底：把渲染写成「取最后一段」或「只认两段」在两层嵌套下都看不出来。
+  test('three levels read root → here, one segment per wrapper generation', () => {
+    expect(parseScopePath('d3_outer:1/d3_git:1/d3_inner:0')).toEqual([
+      { nodeId: 'd3_outer', iteration: 1 },
+      { nodeId: 'd3_git', iteration: 1 },
+      { nodeId: 'd3_inner', iteration: 0 },
+    ])
+    expect(formatFrameBreadcrumb({ scopePath: 'd3_outer:1/d3_git:1/d3_inner:0' })).toBe(
+      'd3_outer#1 › d3_git#1 › d3_inner#0',
+    )
+  })
+
   test('a node id may itself contain ":" — the LAST colon is the round separator', () => {
     expect(parseScopePath('ns:loop:2')).toEqual([{ nodeId: 'ns:loop', iteration: 2 }])
   })
@@ -144,6 +159,37 @@ describe('frames', () => {
       'outer#2 › inner#0',
     ])
     expect(groups[2]!.runs.map((r) => r.id)).toEqual(['01E'])
+  })
+
+  // RFC-354 —— 深度 3 的分组：`loop ⊃ git ⊃ loop ⊃ agent` 跑外 2 × 内 2 之后，
+  // 同一个 agent 有四次运行、四个帧，而它们的裸 `iteration` 只有 0 / 1 两个值
+  // （各出现两次）。这正是「按 iteration 分组」会把四组压成两组的地方。
+  test('groupHistoryByFrame: depth 3 keeps all four generations apart', () => {
+    const rows = [
+      ['01A', 'GEN-R0', 0, 'd3_outer:0/d3_git:0/d3_inner:0'],
+      ['01B', 'GEN-R0', 1, 'd3_outer:0/d3_git:0/d3_inner:1'],
+      ['01C', 'GEN-R1', 0, 'd3_outer:1/d3_git:1/d3_inner:0'],
+      ['01D', 'GEN-R1', 1, 'd3_outer:1/d3_git:1/d3_inner:1'],
+    ] as const
+    const runs = rows.map(([id, containerRunId, iteration, scopePath]) =>
+      makeRun({ id, containerRunId, iteration, scopePath }),
+    )
+    const groups = groupHistoryByFrame(nodeRunHistory(runs[3]!, [...runs].reverse()))
+    expect(groups.map((group) => group.key)).toEqual([
+      'GEN-R0#0',
+      'GEN-R0#1',
+      'GEN-R1#0',
+      'GEN-R1#1',
+    ])
+    expect(groups.map((group) => formatFrameBreadcrumb(group))).toEqual([
+      'd3_outer#0 › d3_git#0 › d3_inner#0',
+      'd3_outer#0 › d3_git#0 › d3_inner#1',
+      'd3_outer#1 › d3_git#1 › d3_inner#0',
+      'd3_outer#1 › d3_git#1 › d3_inner#1',
+    ])
+    expect(groups.every((group) => group.runs.length === 1)).toBe(true)
+    // 反证：如果按裸计数分组，四组会塌成两组。
+    expect(new Set(runs.map((run) => run.iteration)).size).toBe(2)
   })
 })
 

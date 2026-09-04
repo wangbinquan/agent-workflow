@@ -1,0 +1,55 @@
+name: e2e-wrapper-nested-depth3
+description: 'Depth-3 nesting (RFC-354): loop wraps git wraps loop, written directly in the v6 edge model.'
+definition:
+  $schema_version: 6
+  inputs: []
+  nodes:
+    - id: d3_outer
+      kind: wrapper-loop
+      title: Outer loop
+      nodeIds: [d3_git]
+      maxIterations: 2
+      continueOnMaxIterations: true
+      exitCondition:
+        kind: port-equals
+        portName: last_round_changed
+        value: __NEVER__
+      position: { x: 80, y: 40 }
+      size: { width: 940, height: 460 }
+    - id: d3_git
+      kind: wrapper-git
+      title: Per-round diff
+      nodeIds: [d3_inner]
+      position: { x: 180, y: 120 }
+      size: { width: 680, height: 320 }
+    - id: d3_inner
+      kind: wrapper-loop
+      title: Inner loop
+      nodeIds: [d3_worker]
+      maxIterations: 2
+      exitCondition:
+        kind: port-equals
+        portName: verdict
+        value: done
+      position: { x: 270, y: 190 }
+      size: { width: 460, height: 200 }
+    - id: d3_worker
+      kind: agent-single
+      agentName: matrix-depth3-worker
+      promptTemplate: 'MATRIX_DEPTH3 iteration={{__iteration__}}'
+      position: { x: 360, y: 250 }
+    - id: d3_output
+      kind: output
+      position: { x: 1100, y: 250 }
+  edges:
+    - id: worker_status_to_inner_loop
+      boundary: wrapper-output
+      source: { nodeId: d3_worker, portName: status }
+      target: { nodeId: d3_inner, portName: verdict }
+    - id: git_diff_to_outer_loop
+      boundary: wrapper-output
+      source: { nodeId: d3_git, portName: git_diff }
+      target: { nodeId: d3_outer, portName: last_round_changed }
+    - id: outer_loop_to_output
+      source: { nodeId: d3_outer, portName: last_round_changed }
+      target: { nodeId: d3_output, portName: last_round_changed }

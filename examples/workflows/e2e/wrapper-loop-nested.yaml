@@ -1,5 +1,5 @@
 name: e2e-wrapper-loop-nested
-description: 'Loop-in-loop definition (RFC-354): nesting validates and runs like any other wrapper nesting.'
+description: 'Loop-in-loop (RFC-354): every outer round opens a fresh inner generation.'
 definition:
   $schema_version: 4
   inputs: []
@@ -12,9 +12,11 @@ definition:
       exitCondition:
         kind: port-equals
         nodeId: inner_loop
-        portName: inner_status
+        portName: outer_signal
         value: done
       outputBindings:
+        - name: outer_signal
+          bind: { nodeId: inner_loop, portName: outer_signal }
         - name: final_status
           bind: { nodeId: inner_loop, portName: inner_status }
       position: { x: 100, y: 40 }
@@ -32,20 +34,27 @@ definition:
       outputBindings:
         - name: inner_status
           bind: { nodeId: loop_worker, portName: status }
+        - name: outer_signal
+          bind: { nodeId: loop_worker, portName: outer_status }
       position: { x: 200, y: 110 }
       size: { width: 500, height: 280 }
     - id: loop_worker
       kind: agent-single
-      agentName: matrix-loop-worker
-      promptTemplate: 'MATRIX_LOOP_EQUALS iteration={{__iteration__}}'
+      agentName: matrix-nested-worker
+      promptTemplate: 'MATRIX_NESTED_LOOP iteration={{__iteration__}}'
       position: { x: 310, y: 190 }
     - id: final_output
       kind: output
       ports:
         - name: final_status
           bind: { nodeId: outer_loop, portName: final_status }
+        - name: outer_signal
+          bind: { nodeId: outer_loop, portName: outer_signal }
       position: { x: 980, y: 180 }
   edges:
     - id: outer_to_output
       source: { nodeId: outer_loop, portName: final_status }
       target: { nodeId: final_output, portName: final_status }
+    - id: signal_to_output
+      source: { nodeId: outer_loop, portName: outer_signal }
+      target: { nodeId: final_output, portName: outer_signal }

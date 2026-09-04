@@ -192,13 +192,13 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
       evidence: [workflowMatrix('git inside loop exposes')],
     },
     {
-      // RFC-354: loop-in-loop is supported at any depth (frames); the catalog
-      // test validates `wrapper-loop-nested.yaml` statically and the nested
-      // runtime is locked by tests/rfc354-nested-loop-frames.test.ts.
+      // RFC-354: loop-in-loop is supported at any depth (frames). The daemon
+      // matrix runs it for real — outer 2 × inner 2 = 4 agent runs, one frame
+      // each — and the scheduler-level lock counts real spawns.
       id: 'wrapper-loop::wrapper-loop',
       classification: 'supported',
       evidence: [
-        workflowMatrix('loop-in-loop launches'),
+        workflowMatrix('loop-in-loop: every outer round opens a fresh inner generation'),
         fast('packages/backend/tests/rfc354-nested-loop-frames.test.ts', 'loop-in-loop'),
       ],
     },
@@ -381,6 +381,41 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
 
   crossCuttingCapabilities: [
     { id: 'linear-and-fan-in', evidence: [workflowMatrix('linear DAG: parallel branches')] },
+    {
+      // RFC-354 — nesting is recursive: wrappers compose to ANY depth, every
+      // entry opens a frame `(container_run_id, iteration)`, and the pairwise
+      // matrix above only ever exercises depth 2. Evidence spans all three
+      // layers because each one can hide a different failure: the scheduler
+      // lock counts real spawns, the daemon matrix reads the wire projection
+      // (including the per-round git change set at depth 3), and the browser
+      // spec is the only place the breadcrumb is actually rendered.
+      id: 'wrapper-nesting-any-depth-frames',
+      evidence: [
+        fast(
+          'packages/backend/tests/rfc354-nested-depth3-frames.test.ts',
+          'depth 3: loop ⊃ git ⊃ loop ⊃ agent',
+        ),
+        workflowMatrix('depth-3 nesting: each outer round opens its own git generation'),
+        e2e('e2e/rfc354-nested-frames-ui.spec.ts', '运行历史按帧分组成四组'),
+      ],
+    },
+    {
+      // RFC-354 — the failure side of the lexical rule: reading INTO a nested
+      // scope is refused before any row is minted, an inner loop's exhaustion
+      // travels out through the frames, and the one shape that today crosses a
+      // sibling wall is pinned as current behavior rather than left to drift.
+      id: 'wrapper-nesting-scope-failures',
+      evidence: [
+        fast(
+          'packages/backend/tests/rfc354-nested-failure-modes.test.ts',
+          'fails closed with a scope diagnosis',
+        ),
+        fast(
+          'packages/backend/tests/rfc354-nested-failure-modes.test.ts',
+          'an inner loop that exhausts its ceiling',
+        ),
+      ],
+    },
     { id: 'input-rejection', evidence: [workflowMatrix('rejects missing, unknown')] },
     { id: 'file-artifacts', evidence: [workflowMatrix('output kinds: scalar')] },
     { id: 'human-review-reject-approve', evidence: [workflowMatrix('review rejection')] },
