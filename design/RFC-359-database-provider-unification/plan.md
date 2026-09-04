@@ -6,7 +6,7 @@
 
 | 波 | 内容 | 为什么是这个顺序 |
 | --- | --- | --- |
-| **W1** | 修 9 条 P0，让 PG 真的能跑任务 | 不修的话后面每一波都在一个跑不起来的 provider 上验证 |
+| **W1** | 修 12 条 P0，让 PG 真的能跑任务 | 不修的话后面每一波都在一个跑不起来的 provider 上验证 |
 | **W2** | 统一事务原语 + `dbTxSync` 改为兼容层 | 它是「一份实现」的唯一技术前提 |
 | **W3** | 统一启动序列（消灭 `cli/start.ts` 的 provider 分支） | 结构性缺陷的正身；W1 修的多数缺口在这里被永久关闭 |
 | **W4** | 逐 context 合一适配器（153 对 → 0） | 体量最大，但 W2 之后是机械工作 |
@@ -24,6 +24,8 @@
 | T6 | **P0-6** 定义损坏的工作流在 PG 上永久删不掉、列表整体 422 | `postgresqlWorkflowRepository.ts:258` |
 | T7 | **P0-1/P0-2** 两道 owner 围栏：适配器不读环境上下文 / effect 账本私有 fence 加等值判定 | 真库复现 + `postgresqlTaskLifecycleTransaction.ts:153-157` 的反证注释 |
 | T7b | **P0-10** 驱动释放不清算 effect ⇒ owner 永久卡 `claimed`、重启也救不回。**须连中立端口一起改**——`taskExecutionEffectStore.ts:125-150` 压根没声明这两个成员 | `postgresqlTaskDriverLifecycle.ts:106-157` vs `taskDriverLifecycle.ts:127-212` |
+| T7d | **P0-11** 技能启动屏障从不装配 ⇒ 崩溃后该技能永久保存不了 / 同名永远建不了；损坏快照照常注入任务 | `composePostgresqlSkillCatalogBoot` 零调用方 |
+| T7e | **P0-12** 工作组反问在 PG 上等于不存在（`protocolBlock` 是 stub，agent 永不发起反问） | `workgroupTurnsDriver.ts:432-439,551-562` |
 | T7c | **任务删除认领无恢复方**：`recoverInterruptedTaskDeletes` 形参是 `LegacySqliteTaskDatabase`，**修好启动序列也接不上**，须写 provider-中立版 | 正常并发的 `ConflictError` 分支即可达 |
 
 **每条都要**：先写一条能稳定复现的红用例（PG 侧），再修，修完再跑一次原变异确认转红。

@@ -96,7 +96,7 @@ employee-devauto / task-execution / platform）。
 
 判断成立，且比「凑出来的」更重。三层证据：
 
-1. **数量**：153 对适配器中约 **55 条确证功能缺陷**（其中 6 条已由 `87d080300` / RFC-357 PR-3 修复，**约 49 条待处置**），含 **10 条 P0**（PG 上核心功能不工作，全部仍在）——其中 **P0-7 由端到端实证发现**（§0.1），它落在本轮语料**之外**的 PG 组合根里，且它先于 P0-1 生效。
+1. **数量**：153 对适配器中约 **55 条确证功能缺陷**（其中 6 条已由 `87d080300` / RFC-357 PR-3 修复，**约 49 条待处置**），含 **12 条 P0**（PG 上核心功能不工作，全部仍在）——其中 **P0-7 由端到端实证发现**（§0.1），它落在本轮语料**之外**的 PG 组合根里，且它先于 P0-1 生效。
 2. **方向**：**不是单向劣化**。`E-1` 是 SQLite 侧更差；`B-2` / `D-1` 是 PG 侧违反了**写在本仓自己
    源码注释里的设计意图**。这是两条路径各自演进、互不知情，不是一条路径抄劣了另一条。
 3. **分布**：平台底座层（committed events / 逻辑导出 / 事件中心 / 运行时注册表，13 对）**零缺陷**；
@@ -421,7 +421,7 @@ RFC-352 的 memory `canManage` 漂移修法是对的：判据现在统一在 `me
 `taskExecutionKind`（shared 唯一判据）、`domain/skillVersionCommit.ts`、
 `taskListPage/`（RFC-357 正在落的 dialect 参数化页查询）。
 
-## 5.4 第二轮：163 个无配对 PG 面文件（2026-09-04，6 片全覆盖）
+## 5.4 第二轮：163 个无配对 PG 面文件（2026-09-04，6 片全覆盖，新增 6 条 P0）
 
 判据换成**装配缺口**（无孪生可 diff）：东西建了没绑、SQLite 装了 PG 没装、有实现零调用方。
 
@@ -462,6 +462,52 @@ RFC-352 的 memory `canManage` 漂移修法是对的：判据现在统一在 `me
 - PG 的取消路径绕开唯一生命周期写点 ⇒ 运行时钟不结算（耗时显示错）、终态工作区回收不认领。
 - PG 的「重试准备仓库」退化成**阻塞式单次克隆**：无 RFC-287 的退避重试窗口、无进行中的
   `__repo_prep__` 行、不可取消、且阻塞整个 HTTP 请求。
+
+### resource-catalog 片（17 个 PG 独有文件，最后回来、收获最大）
+
+**新增 2 条 P0（累计 12 条）**：
+
+- **P0-11 技能启动屏障从不装配**（`composePostgresqlSkillCatalogBoot` 零生产调用方，
+  `postgresqlSkillCatalogBoot.ts` 1,418 行是生产死代码）。两条独立损害：
+  ①崩在保存中途 ⇒ `skill_operation_locks` 主键行永不清理（PG 上唯一会清遗留锁的代码就在那个
+  从不运行的屏障里）⇒ **该技能永久保存不了**，每次都 `skill-operation-busy`；崩在创建阶段 ⇒ 行以
+  `reservationState:'reserving'` 留库，列表看不见（只取 `ready`）却占着 `skills_owner_name_unique`
+  ⇒ **重建同名永远 `skill-name-in-use`，死结**。SQLite 上重启一次即由 `recoveryDirection` 回滚/前滚。
+  ②`bootReverifyActivated` 恒 false ⇒ `isSkillAvailableThisBoot` 无条件 true ⇒ 磁盘快照损坏的技能
+  照常出现在 `/skills` 并被注入任务；`postgresqlTaskExecutionResourceSnapshots.ts:394` 的
+  `SkillQuarantinedError` fail-closed 分支在 PG 生产上**不可达**。
+- **P0-12 工作组反问在 PostgreSQL 上等于不存在**：`workgroupTurnsDriver.ts:432-439` 的
+  `protocolBlock` 是 4 行 stub，不接 `clarifyAllowed`、从不拼 `<workflow-clarify>` 格式块；
+  `:551-562` 又把 `clarifyEnabled` 简化成 `hasHumanMember && budget>0`（不查 per-asker 已问次数、
+  不查 `stop` 指令）。host run 走 `delegated` 通道时 `prompt.ts:773` 让 `workgroupProtocolBlock`
+  **替换**整个尾部协议块 ⇒ 格式块只能来自这个 stub ⇒ **agent 全程不知道可以向人提问，永不发起反问**：
+  任务不进 `awaiting_human`、房间无问题卡、反问收件箱恒空，`clarifyBudget` 与「停止反问」成为空设置。
+
+**新增 P1（节选，均确证）**：
+
+- **PG 工作组回合引擎不发任何 `wg.*` WS 帧**（依赖接口根本没有 broadcast 字段）⇒ leader 派卡、成员
+  `wg_result` 与聊天消息不推送，要等下一次 `node.status` 帧被动失效（落后整整一轮）或 15s 轮询。
+- **意图 apply 与配置包 apply 都不广播 `workflow.created` / `workgroup.created`**（两处 `committed` /
+  `afterCommitted` 回调在唯一装配点都没传）——而同一 PG 部署里普通 `/workflows` 路由**是**广播的，
+  同库两条路径行为不一致。
+- **PG 把 `call-workflow` 悬空目标当硬错误**（SQLite 的 name 域明确「dangling until launch」）
+  ⇒ 分两轮增量搭嵌套工作流在 PG 上第一次 apply 就 400。
+- **PG 工作流更新对全量引用做可见性校验，丢了「只查新增」的 grandfathering** ⇒ 图里某个早已存在的
+  agent 被它 owner 改成 private，用户改这个工作流的**无关部分**也 400，且他既没碰也修不了。
+- **PG 工作流更新缺 `rehydratePrivilegedNodes`** ⇒ 没有 `scripts:author` 的普通用户，在 intent 里
+  编辑含 script 节点的工作流的**任何**部分（挪个节点都算）必定 403——intent dump 必然把这些字段
+  打成 `‹redacted›`、模型原样回抄。SQLite 的「允许」半边有测试逐条锁死，而那个测试只跑 SQLite。
+- **PG 技能保存缺「空写短路」** ⇒ 编辑器 autosave 让版本历史凭空多出 v2/v3/v4…（diff 全空），
+  且 `contentVersion` 推进使 precondition token 失效 ⇒ 另一个标签页什么都没改却吃 409。
+- **`isPostgresqlUniqueViolation` 在真 PG 上恒返回 false**：Bun.SQL 把 SQLSTATE 放在 `errno`、
+  `code` 恒为 `ERR_POSTGRES_SERVER_ERROR`。**本仓自己在 `postgresqlSerializationRetry.ts:34-46`
+  已按 `errno` 修好 `40001`，这一处漏改** ⇒ 并发同名新建/重命名拿 **500** 而非 409。
+  （这是「同一类陷阱修过一次仍漏一处」的样本，见 §5.2 的开集论点。）
+- 经典六类 ACL 写不触发 WS revalidation、`workflow.deleted` 广播不带 audience 快照、
+  移除最后一个 human 成员时丢被取消反问的 `node.status` 帧——三条都是「回调建了没接上」。
+
+**severity 分歧一处（如实记录）**：该片把「PG 删除工作流 / 代理缺引用守卫」评为 P0，本文件
+沿用第一轮的 **P1**（需用户主动执行删除才触发）。两种评法都合理，处置优先级以 RFC-359 W1 为准。
 
 **形状总结**：多数缺陷是同一句话——**PG 适配器写好了、接进 persistence 了，就是没人调**。
 `cli/start.ts` 的 PG 分支只覆盖「装配 + 起服务」，把整段 boot 恢复 / 迁移屏障 / 播种
