@@ -141,6 +141,14 @@ trigger_context_json（每行**上百 KB**）」。PostgreSQL 适配器把它原
   理由见 `plan.md §6.4`，那是刻意的偏离，不是漏做。
 - **AC-9**：wire 形状（items / cursor / facets）由 `rfc244-task-operations` /
   `rfc310-task-catalog*` / `rfc349-task-catalog-facets-ignore-view` 覆盖，断言一条未放宽。
-- **AC-10 待取证**：`architecture/` 的 canonical 重采已在 `ca158aa7b` 补完（改用「在 HEAD 的
-  只读导出上重采」的姿势，副本上 446 个架构用例全绿，见 `plan.md §6.5`）；还差一次含全部提交的
-  exact-SHA CI 全绿作为终局证据。
+- **AC-10 部分取证**。逐条列已观察到的，不写成「全绿」：
+  - **真 PostgreSQL lane 三次 success**：run `33862158693`（`dfbfb3a91`）、`33862556678`
+    （`38d07f129`）、`33868363552`（`1541c5e54`——该 sha 含 RFC-357 全部提交为祖先）。
+    这是本 RFC 最关键的一条执行级证据：共用查询在真库上跑通且与 SQLite 逐条同结果。
+  - **架构守卫 + 全部 RFC-357 用例 484 pass / 0 fail**，在 `01e4b1b7b`（含 RFC-357 全部提交）
+    的只读导出上跑（`git archive` 出干净副本，算法与 CI 相同）。
+  - **没有观察到一次「含本 RFC 全部提交且 run 级 terminal success」的 CI**：这段时间主干上有
+    另一条 RFC-358 的提交流在连续推送，共享 `main` 的并发 push 会取消在飞的 run，含我提交的几个
+    superseding sha 上的红逐条归因后都属于那条流（`1541c5e54` 的 N1b 是他们改了源码未重采、
+    已由 `3b4bb659d` 收掉；shard 2 的 `RFC-355 T1 双 provider 诊断词汇` 是 intent apply 的错误码）。
+    按仓规这属于「按失败测试的 owning commit 归属」，但**终局的 run 级绿仍未拿到**，如实记在这里。
