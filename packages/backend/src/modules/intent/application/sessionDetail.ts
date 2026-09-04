@@ -25,6 +25,12 @@ import type { Actor } from '@/auth/actor'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import { intentDraftLifecycleOf } from '../domain/draftLifecycle'
 import { intentMountSuggestionsOf } from '../domain/mountSuggestions'
+import {
+  hasApprovalAfterLatestAgentTurn,
+  intentComposerSourceOf,
+  intentRetrySourceOf,
+  latestIntentAgentTurnOf,
+} from '../domain/sessionComposer'
 import { projectIntentJourney } from '../domain/journey'
 import { deriveIntentSlots } from './resolveChangeset'
 import { getIntentSessionForActor, listIntentTurns, sessionManifest } from './session'
@@ -131,11 +137,8 @@ export async function projectIntentSessionDetail(
       displayName: visibleByKey.get(`${entry.resourceType}:${entry.resourceId}`)?.name ?? null,
       detail: entry.detail,
     }))
-  const latestAgentTurn = [...turnDtos].reverse().find((turn) => turn.role === 'agent')
-  const hasLaterApproval =
-    latestAgentTurn === undefined
-      ? false
-      : turnDtos.some((turn) => turn.kind === 'mount-approval' && turn.seq > latestAgentTurn.seq)
+  const latestAgentTurn = latestIntentAgentTurnOf(turnDtos)
+  const hasLaterApproval = hasApprovalAfterLatestAgentTurn(turnDtos, latestAgentTurn)
   const parsedMountRequests =
     latestAgentTurn === undefined
       ? null
@@ -192,16 +195,11 @@ export async function projectIntentSessionDetail(
     turns: turnDtos,
     currentDraft,
     drafts,
-    composerSource:
-      currentDraft !== null
-        ? { kind: 'current-draft', draftId: currentDraft.id, revision: currentDraft.revision }
-        : session.commitSeq > 0
-          ? { kind: 'latest-checkpoint', commitSeq: session.commitSeq }
-          : { kind: 'conversation' },
-    retrySource:
-      latestAgentTurn?.kind === 'error' && session.inFlightTurnId === null
-        ? { turnId: latestAgentTurn.id, turnSeq: latestAgentTurn.seq }
-        : null,
+    composerSource: intentComposerSourceOf({ currentDraft, commitSeq: session.commitSeq }),
+    retrySource: intentRetrySourceOf({
+      latestAgentTurn,
+      inFlightTurnId: session.inFlightTurnId,
+    }),
     commits,
   }
   return detail
