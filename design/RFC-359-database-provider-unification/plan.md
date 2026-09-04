@@ -2,15 +2,18 @@
 
 ## 0. 波次总览
 
-**原则（D2/D3）**：每一波自身可发布；先让 PG 可用，再动结构，最后落防复辟。
+**原则（D2/D3，修订）**：每一波自身可发布。实际顺序按硬依赖：**W2（原语+矩阵）→ W1 实现类条目 →
+W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理由对接线类条目成立，对实现类条目不成立
+（它们在 PG 侧根本没有实现，在 W2 之前修只能抄第二份——正是本 RFC 要消灭的东西）。
 
 | 波 | 内容 | 为什么是这个顺序 |
 | --- | --- | --- |
 | **W1** | 修 12 条 P0，让 PG 真的能跑任务 | 不修的话后面每一波都在一个跑不起来的 provider 上验证 |
-| **W2** | 统一事务原语 + `dbTxSync` 改为兼容层 | 它是「一份实现」的唯一技术前提 |
+| **W2** | 统一事务原语 ✅ + 能力矩阵 `EngineCapabilities` | 它是「一份实现」的唯一技术前提；矩阵是「PG 最高性能」的唯一表达处 |
 | **W3** | 统一启动序列（消灭 `cli/start.ts` 的 provider 分支） | 结构性缺陷的正身；W1 修的多数缺口在这里被永久关闭 |
 | **W4** | 逐 context 合一适配器（153 对 → 0） | 体量最大，但 W2 之后是机械工作 |
-| **W5** | 防复辟守卫 + 真库 lane 进 push CI | 放最后，因为守卫的棘轮值要等 W4 收敛完才能钉死 |
+| **W5** | 防复辟：七条结构性守卫 + harness 按 provider 参数化 + **全量套件在真 PG 上进 push CI** | 守卫的棘轮值要等 W4 收敛完才能钉死；覆盖率对等棘轮可提前到 W1 后立即上 |
+| **W6** | PostgreSQL 性能：JSONB + GIN 投影、`EXPLAIN (ANALYZE)` 热查询审计、双引擎性能基线 | 放 W4 之后——合一前给 PG 调优就是在给一份即将删除的实现调优 |
 
 ## 1. W1 —— 修 P0（让 PostgreSQL 可用）
 
@@ -44,7 +47,15 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 - **T9** `platform/persistence/writerLease.ts`：SQLite 进程内单写者异步租约 + 重入检出
   （`AsyncLocalStorage`）。
 - **T10** 原子性对拍用例：proposal §3 的三组实测固化，两个 provider 各跑一遍（**AC-3**）。
-- **T11** `dbTxSync` 改为兼容层（内部转调新原语），114 个调用点零改动。
+- **T11（修订）** ~~`dbTxSync` 改为兼容层~~ **做不到**（同步返回 `T`，转调异步必改签名）。改为：
+  逐 context 迁移调用点，与 W4 各批同批；`dbTxSync` 调用点归零时删除。过渡期共存危险形态已由
+  `db/transactionScope.ts` 堵死（`88b9a5940`）。
+- **T11b** `platform/persistence/capabilities.ts`：`EngineCapabilities` 接口 + 两个 provider 实现
+  （design §5）。把散落的既有资产收进来：`postgresqlNullOrdering.ts`、三条 parity 守卫的判据、
+  `postgresqlSerializationRetry.ts` 的 `errno` 判据、RFC-357 的 `numeric*` 归一、标量函数 shim 清单。
+  每项双引擎实测断言。
+- **T11c** PG 会话默认 READ COMMITTED，`serializable(…)` 作 opt-in；`lockAggregateRoot` / `claimRows` /
+  `advisoryLock` 三个并发原语落地并双引擎实测。
 - **T12** 事务体软超时 + 结构化诊断；lint 规则禁止事务体内 import 进程/网络/fs（design §3.4）。
 - **T13** RFC-311 基准库上实测吞吐前后对比，结果写回 proposal §6 的 **C-2**。
 
@@ -76,12 +87,28 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 
 ## 5. W5 —— 防复辟
 
-- **T17** 成对文件计数守卫（棘轮到 0）。
-- **T18** 裸 `db.transaction(` 守卫。
-- **T19** `provider === ` 分叉 exact 账本。
+- **T17** provider 命名文件只允许在 `platform/persistence/`（棘轮到 0）。
+- **T18** 裸 `db.transaction(` 只允许在事务原语文件。
+- **T19** `provider === ` 只允许在 `platform/persistence/`，其余全仓 exact 账本为空。
+- **T19b** 组合根全量：`cli/` 与 `*/composition*` 下禁 `*-not-bound` 与晚绑定 holder。
+- **T19c** 启动序列恰有一个调用方，`cli/start.ts` 无 provider 执行分支。
+- **T19d** 覆盖率对等棘轮（过渡期，可在 W1 后立即上）：同一 port 两侧行覆盖率差超阈值即红。
+- **T19e** `tests/helpers/eachProvider.ts`：`describeEachProvider` harness；存量测试逐 context 迁入。
 - **T20** 方言表完备性守卫（语料按类型可达派生，沿用 `tests/architecture/postgresqlSurface.ts`）。
-- **T21** 真 PG lane 从 `rfc357-*` 扩到统一实现的行为面，进 push CI 合并门（**AC-6**）。
+- **T21** **全量 backend 套件**在真 PG 上进 push CI 合并门（**AC-6**），不是窄 lane。
+  CI 时间约翻倍，按 D5 不打折。
 - **T22** 退役 `rfc349-dual-provider-predicate-drift`（对象已消失），退役 `dbTxSync`（**C-1**）。
+
+## 5b. W6 —— PostgreSQL 最高性能（design §10）
+
+- **T23** DDL 投影：JSON 列在 PG 上渲染为 JSONB；热查询列建 GIN（D6，存量 PG 部署一次迁移）。
+- **T24** 矩阵的 `jsonExtract` / `jsonContains` 渲染成 `->>` / `@>`；替换 `json_extract` shim 的热路径调用。
+- **T25** 批量写：矩阵给出 `batchInsertMax`，逐行 INSERT 的热路径改按批。
+- **T26** RFC-311 基准库在 PG 上跑 `EXPLAIN (ANALYZE, BUFFERS)`，逐热查询审执行计划，补 PG 独有索引
+  （partial / expression / GIN）并经矩阵声明。
+- **T27** 5 个性能守卫改 `describeEachProvider`；两个引擎各取 P95 基线；**PG 不劣于 SQLite**（AC-11）。
+- **T28** 写法纪律审计：全仓「读—改—写中间不锁」的形状清单，逐条改成 `lockAggregateRoot`（design §10.1）。
+  这类代码在 SQLite 上碰巧正确、在 PG 上是竞态——合一时必须改形状，不能原样搬。
 
 ## 6. 债与不做的事
 

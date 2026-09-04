@@ -9,10 +9,18 @@
 
 ## 1. 摘要
 
-用户要求（2026-09-04）：**「数据库统一抽象，以后不允许再出现两种数据库一个好一个不好的分支。」**
+用户要求（2026-09-04，两条硬要求）：
+1. **「数据库统一抽象，以后不允许再出现两种数据库一个好一个不好的分支。」**
+2. **「PostgreSQL 要做到最高性能表现。」**
+
+两条会互相拉扯——「一份实现」若写成最小公分母，PG 拿不到最高性能；「PG 最高性能」若靠 PG 专属
+路径，就回到分叉。**唯一同时满足两者的形状是：一份实现 + 能力矩阵 + 边界渲染**（design §5 / §10）。
+实现只说「锁这行」「认领 N 行跳过已锁的」「取这个 JSON 路径」，边界为每个引擎渲染最优 SQL；
+实现里永远不出现 provider 名。
 
 本 RFC 把 provider 从**分支**降级为**客户端实现细节**：业务代码只有一份，provider 差异被压进
-`DatabaseClient` 与一张闭合的方言表；`sqliteX.ts` / `postgresqlX.ts` 成对适配器整体退役。
+七样东西——客户端、事务原语、能力矩阵、DDL 渲染、错误映射、迁移引擎、备份引擎；
+`sqliteX.ts` / `postgresqlX.ts` 成对适配器整体退役。
 
 ## 2. 现状：provider 今天是一个 `if`，不是一个抽象
 
@@ -69,7 +77,10 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
 - **G4 方言闭集化**：provider 差异只允许存在于 `DatabaseClient` 实现与一张**具名、可枚举、带测试**
   的方言表（NULL 排序 / `LIKE` 大小写与转义符 / 布尔 / 裸行数值归一 / 错误码 / 锁语法）。
 - **G5 结构性防复辟**：新增第二份 provider 实现在 CI 上必红；不是靠人自觉。
-- **G6 真库是默认证据**：统一后的实现由**真 PostgreSQL** 在 push CI 上执行，不再靠脚本化 SQL runtime。
+- **G6 真库是默认证据**：**全量 backend 行为套件**由**真 PostgreSQL** 在 push CI 上执行（不是窄 lane、
+  不是每周 cron），不再靠脚本化 SQL runtime。
+- **G7 PostgreSQL 最高性能**：一份实现按「并发优先」写（READ COMMITTED + 行锁、`SKIP LOCKED` 认领、
+  JSONB + GIN、批量写），PG 拿到它独有的最优路径；性能守卫双引擎各跑，PG 基线不得劣于 SQLite。
 
 ## 5. 非目标
 
@@ -101,12 +112,18 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
   清单外不允许出现 `provider === '<literal>'` 分叉（既有豁免逐条登记并给理由）。
 - **AC-5**（G5）新增任何 `sqlite*.ts`/`postgresql*.ts` 成对实现、或裸 `db.transaction(`、或新的
   `provider === ` 分叉，CI 必红并指向本 RFC。
-- **AC-6**（G6）真 PostgreSQL lane 在 push CI 上执行统一实现的行为面（不只是 SQL 文本断言），
-  且 lane 红则合并门红。
+- **AC-6**（G6）**全量 backend 行为套件**在真 PostgreSQL 上、在 push CI 上执行（测试 harness 按
+  provider 参数化），PG 侧红则合并门红。代价是 backend CI 时间约翻倍——这是「以后不再出现」的价格。
 - **AC-7** 前置对账里的 **12 条 P0 全部消失**，每条带回归用例（先红后绿，变异实证）。
 - **AC-8** 用户可见行为逐字不变：`/api/*` 的 wire 输出在两个 provider 上与本 RFC 之前的 SQLite
   输出相同（本 RFC 明确修复的缺陷除外，逐条列出）。
-- **AC-9** exact-SHA CI 全绿（含真 PG lane），取证 sha 与 run id 写回本文件。
+- **AC-9** exact-SHA CI 全绿（含真 PG 全量套件），取证 sha 与 run id 写回本文件。
+- **AC-10**（G7）业务代码里 `provider === '<literal>'` 为零；所有引擎差异经 `EngineCapabilities`
+  表达，矩阵每项在两个真引擎上各有一次执行断言。
+- **AC-11**（G7）RFC-311 基准库在两个引擎上各取一套 P95 基线；**PostgreSQL 各端点 P95 不劣于
+  SQLite**；5 个性能守卫改为双引擎，一侧变慢即红。
+- **AC-12**（G5）组合根全量：`cli/` 与 `*/composition*` 下 `*-not-bound` 形状为零；启动序列恰有
+  一个调用方；provider 命名文件在 `platform/persistence/` 之外为零。
 
 ## 8. 用户裁决点（呈确认）
 
@@ -116,3 +133,7 @@ RFC-350 的 `taskIdleTimeoutPersistence.ts` 已经是「一份实现两个 provi
 - **D3 波次顺序**：先修 7 条 P0（让 PG 可用），再做事务原语，再逐 context 收敛适配器。
   理由：P0 不修的话，后面每一波都在一个跑不起来的 provider 上验证。
 - **D4 C-1 / C-2 两项能力影响**（§6）接受与否。
+- **D5 全量套件在真 PG 上进 push CI**（AC-6）：backend CI 时间约翻倍。我的判断是**不打折**——
+  这是用户第一条硬要求的价格；窄 lane 与每周 cron 正是今天 12 条 P0 能穿过验收的原因。
+- **D6 JSON 列在 PG 上投影为 JSONB**（design §10.2）：这是 schema 投影的行为变更，存量 PG 部署
+  需一次迁移；换来的是 `->>` / `@>` 走 GIN 索引而不是 `json_extract` shim 的函数调用。
