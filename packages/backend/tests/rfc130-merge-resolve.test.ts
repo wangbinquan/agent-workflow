@@ -183,6 +183,7 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
     const handle: IsoHandle = {
       taskId: 't',
       nodeRunId: 'n',
+      dbNodeRunId: 'n', // RFC-356：物理 iso 键 / DB 行 id 双身份，此处两者同值
       containerPath: container,
       passthrough: false,
       repos: [

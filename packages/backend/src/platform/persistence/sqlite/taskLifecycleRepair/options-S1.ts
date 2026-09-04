@@ -18,7 +18,9 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import { setTaskStatus } from '@/services/lifecycle'
+import { isoKeyOf } from '@/modules/task-execution/composition/nodeMechanics'
 import { isoWorktreePathFor } from '@/services/nodeIsolation'
+import { isGitWorkTree } from '@/util/git'
 import { dispatchReviewNode } from '@/services/review'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import { buildContainerMap } from '@/services/scheduler'
@@ -69,15 +71,25 @@ async function deriveScopeRoot(
   const wrapperId = buildContainerMap(definition).get(reviewNodeId)
   if (wrapperId === undefined) return taskWorktreePath
   const rows = await rc.db
-    .select({ id: nodeRuns.id })
+    .select({ id: nodeRuns.id, isoWorktreePath: nodeRuns.isoWorktreePath })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, rc.task.id), eq(nodeRuns.nodeId, wrapperId)))
     .orderBy(desc(nodeRuns.id))
     .limit(1)
   const wrapperRun = rows[0]
   if (wrapperRun === undefined) return taskWorktreePath
-  const isoRoot = isoWorktreePathFor(rc.appHome, rc.task.id, wrapperRun.id, '')
-  return existsSync(isoRoot) ? isoRoot : taskWorktreePath
+  // RFC-356 T15：iso 键不一定等于行 id（RFC-210 的跨重试复用、以及 RFC-356 的代际
+  // 自愈），所以从持久化路径回读物理键，而不是按行 id 裸派生。
+  const isoRoot = isoWorktreePathFor(
+    rc.appHome,
+    rc.task.id,
+    isoKeyOf(wrapperRun.isoWorktreePath ?? null, wrapperRun.id),
+    '',
+  )
+  // 兜底判据从「目录存在」收紧为「**是活的工作树**」：legacy / passthrough 行没有
+  // 持久化路径，会退回按行 id 派生——那恰好可能是代际自愈已经放弃的那个阻塞残留，
+  // 它作为目录**存在**但不再是工作树。拿它当 scopeRoot 会让修复动作落在废墟上。
+  return existsSync(isoRoot) && (await isGitWorkTree(isoRoot)) ? isoRoot : taskWorktreePath
 }
 
 async function prepareDispatch(rc: RepairContext): Promise<PreparedDispatch | string> {

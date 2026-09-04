@@ -231,6 +231,12 @@ export async function runAssembly<TCtx, TOutcome, TResult>(
           if (!keepTree) {
             // 换新树：先丢弃旧的，再物化一棵——顺序不可颠倒（否则两棵树同时在盘上，
             // 且旧树里的残留写入会被下一次合并带进主干）。
+            //
+            // ⚠️ RFC-356 之后「两棵树同时在盘上」**可能成立**：丢弃被残留句柄挡住时，
+            // 选键会换一代（`{原键}-2`）另建一棵，旧树留到任务终态由 GC 收。
+            // 合并仍然正确，因为 merge-back 走的是 `handle.repos[].isoWorktreePath`
+            // ——也就是**新**树；旧树既不在 handle 里，也没有任何路径会去读它。
+            // 写在这里是为了防止后来的人照着上面那句把 L4 「修」回去。
             await spec.discardIso(handle)
             try {
               handle = await spec.iso.create()

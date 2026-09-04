@@ -40022,7 +40022,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/services/nodeIsolation.ts",
@@ -40032,7 +40032,6 @@
         "audit",
         "authority",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#createNodeIso",
@@ -45880,7 +45879,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:76f84511a50903767dbf46617c42475e80053d725093f8e8d915f6d8d69b5441",
+  "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

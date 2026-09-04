@@ -71,7 +71,15 @@ function repoEntry(dir: string, worktreeDirName: string, base: string, baseHead:
 }
 
 function handleFor(container: string, repos: IsoRepo[]): IsoHandle {
-  return { taskId: 't1', nodeRunId: 'r1', containerPath: container, repos, passthrough: false }
+  // RFC-356：物理 iso 键 / DB 行 id 双身份，此处两者同值。
+  return {
+    taskId: 't1',
+    nodeRunId: 'r1',
+    dbNodeRunId: 'r1',
+    containerPath: container,
+    repos,
+    passthrough: false,
+  }
 }
 
 describe('RFC-187 §4-2 buildSalvageTree', () => {

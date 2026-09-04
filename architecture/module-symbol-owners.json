@@ -6,7 +6,7 @@
     "moduleFiles": 1332,
     "productionFiles": 2719,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25951
+    "symbolsIncludingFileRoots": 25957
   },
   "entries": [
     {
@@ -131741,6 +131741,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#describeIsoFailure",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "describeIsoFailure",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#EnvelopeFollowupDecision",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
@@ -183472,6 +183484,18 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#chooseIsoWorkspaceKey",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "chooseIsoWorkspaceKey",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
       "id": "owner:packages/backend/src/services/nodeIsolation.ts#completeHumanResolvedConflict",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -183614,6 +183638,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#isoKeyForGeneration",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isoKeyForGeneration",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/nodeIsolation.ts",
       "id": "owner:packages/backend/src/services/nodeIsolation.ts#IsoRepo",
@@ -183628,10 +183664,46 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#IsoWorkspaceBlockedError",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "IsoWorkspaceBlockedError",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#IsoWorkspaceKeyChoice",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "IsoWorkspaceKeyChoice",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
       "id": "owner:packages/backend/src/services/nodeIsolation.ts#isoWorktreePathFor",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "isoWorktreePathFor",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/nodeIsolation.ts",
+      "id": "owner:packages/backend/src/services/nodeIsolation.ts#MAX_ISO_KEY_GENERATIONS",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "MAX_ISO_KEY_GENERATIONS",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -312111,5 +312183,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:76f84511a50903767dbf46617c42475e80053d725093f8e8d915f6d8d69b5441"
+  "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993"
 }

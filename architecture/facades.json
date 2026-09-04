@@ -2737,6 +2737,7 @@
         "import:6d0bc01056bf144b0e6e",
         "import:878a1ab7b52f271f7f6e",
         "import:b310eac7455e6a398ccd",
+        "import:bc9c83d4447de5b4cd7f",
         "import:c60f083cae677598aa75",
         "import:cbefb72a6c305a93b27d",
         "import:d32f91a08e32ffc87ac6",
@@ -2750,10 +2751,14 @@
         "ISO_DISCARD_GIT_TIMEOUT_MS",
         "IsoHandle",
         "IsoRepo",
+        "IsoWorkspaceBlockedError",
+        "IsoWorkspaceKeyChoice",
+        "MAX_ISO_KEY_GENERATIONS",
         "MergeAgentChildUnreapedError",
         "MergeBackConflict",
         "MergeBackResult",
         "ResolveConflictOutcome",
+        "chooseIsoWorkspaceKey",
         "completeHumanResolvedConflict",
         "createNodeIso",
         "discardNodeIso",
@@ -6895,5 +6900,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:76f84511a50903767dbf46617c42475e80053d725093f8e8d915f6d8d69b5441"
+  "sourceDigest": "sha256:b6c1699e96bfe9bcedeacae4daa494b19f87c355fffd55b8ea54cc1af5eb5993"
 }

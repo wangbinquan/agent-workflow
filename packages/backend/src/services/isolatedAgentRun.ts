@@ -26,6 +26,7 @@
 
 import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
 import {
+  chooseIsoWorkspaceKey,
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
@@ -90,6 +91,7 @@ export async function createIsoUnderLock(args: {
     candidateId: 'node-isolation-create',
     request: {
       v: 1,
+      // 基键。物理键可能在选键阶段换代，最终落在 succeed 的 `isoGeneration` 上。
       isoKeyRunId: args.isoKeyRunId,
       repos: args.canonRepos.map((repo) => ({
         worktreeDirName: repo.worktreeDirName,
@@ -108,12 +110,25 @@ export async function createIsoUnderLock(args: {
   // Preparing the effect before `writeSem.run` turned ordinary fan-out into a
   // resource conflict while the first sibling was merely using its lock turn.
   return args.writeSem.run(async () => {
+    // RFC-356 L4 —— 选键在 durable effect fence **之前**（design §10 偏离项 1）。
+    // 它是对「本任务自己那条路径」的幂等清理：同一 iso 键不可能有并发创建者（同一
+    // node run），整段又在 writeSem 内；崩在回收中途没有 receipt 也无妨，下一次尝试
+    // 会重新派生。把每一代都各起一个 effect 反而会让一次逻辑创建落多条账。
+    const chosen = await chooseIsoWorkspaceKey({
+      appHome: args.appHome,
+      taskId: args.taskId,
+      baseKey: args.isoKeyRunId,
+      canonRepos: args.canonRepos,
+      ...(args.log !== undefined ? { log: args.log } : {}),
+    })
     await effect?.beforeAct()
     try {
       const handle = await createNodeIso({
         appHome: args.appHome,
         taskId: args.taskId,
-        nodeRunId: args.isoKeyRunId,
+        // 物理键可能已经换代；DB 身份始终是真实行 id（RFC-356 P0-1）。
+        nodeRunId: chosen.key,
+        dbNodeRunId: args.isoKeyRunId,
         canonRepos: args.canonRepos,
         forcedContainerPaths: [...forcedContainerPaths],
         ...(args.log !== undefined ? { log: args.log } : {}),
@@ -122,6 +137,7 @@ export async function createIsoUnderLock(args: {
         passthrough: handle.passthrough,
         containerPathDigest: sha256Hex(handle.containerPath),
         repoCount: handle.repos.length,
+        isoGeneration: chosen.generation,
       })
       return handle
     } catch (error) {

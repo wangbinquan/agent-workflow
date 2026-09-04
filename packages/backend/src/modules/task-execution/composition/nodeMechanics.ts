@@ -68,6 +68,7 @@ import {
 } from '@/services/mergeAgent'
 import {
   discardNodeIso,
+  IsoWorkspaceBlockedError,
   MergeAgentChildUnreapedError,
   rebuildIsoHandle,
   resolveConflictWithAgent,
@@ -164,6 +165,7 @@ import {
 } from '@agent-workflow/shared'
 import { mkdirSync } from 'node:fs'
 import { basename } from 'node:path'
+import { processTreeOwnershipStatus } from '@/util/process'
 import { ulid } from 'ulid'
 
 /**
@@ -970,6 +972,32 @@ export function parseIsoJsonMap(s: string | null): Record<string, string> {
  *  ref namespaces), recovered from the persisted container path. A
  *  process-retry keeps the original row's iso (D17) while its DB row is the
  *  retry mint; falling back to the row id preserves pre-column-era rows. */
+/**
+ * RFC-356 G3 —— 把 iso 建树/重建失败渲染成能自证的一段话。
+ *
+ * 改动前这两条路只给一个 `iso-setup-failed` / `iso-recreate-failed`，排障的人看不出
+ * 「是哪个目录清不掉、谁可能锁着、本机有没有 Job Object」。**失败分类字符串不变**
+ * （后端内部串，不在 FAILURE_CODES 里、前端也无分支消费），只是消息更详细。
+ */
+export function describeIsoFailure(code: string, error: unknown): string {
+  const lines = [code]
+  if (error instanceof IsoWorkspaceBlockedError) {
+    const d = error.detail
+    lines.push(`  无法回收残留的隔离工作树（已尝试 ${d.generationsTried} 代）`)
+    lines.push(`  残留: ${d.residualPath}`)
+    lines.push(`  最后错误: ${d.lastError}`)
+  } else {
+    lines.push(`  ${error instanceof Error ? error.message : String(error)}`)
+  }
+  const ownership = processTreeOwnershipStatus()
+  lines.push(
+    ownership.available
+      ? '  进程树归属: 可用（杀树走 Job Object 原子终止）'
+      : `  进程树归属: 不可用（${ownership.reason}）—— 杀树降级为 taskkill 枚举，后代可能逃逸并继续持有工作树句柄`,
+  )
+  return lines.join('\n')
+}
+
 export function isoKeyOf(isoWorktreePath: string | null, rowId: string): string {
   if (isoWorktreePath === null || isoWorktreePath === '') return rowId
   const base = basename(isoWorktreePath)
@@ -2718,9 +2746,10 @@ export async function runScriptNode(
         })
         return {
           kind: 'failed',
-          // 文案与 failure code 逐字保持迁移前——它是**对外**的失败分类，改名等于
-          // 让既有按 `iso-setup-failed` 归类的消费方静默失配（T14 实现门抓到的漂移）。
-          summary: 'isolated worktree setup failed',
+          // failure code 逐字保持——它是**对外**的失败分类，改名等于让既有按
+          // `iso-setup-failed` 归类的消费方静默失配（T14 实现门抓到的漂移）。
+          // RFC-356 G3 只把 summary 换成能自证的结构化诊断。
+          summary: describeIsoFailure('isolated worktree setup failed', err),
           message: 'iso-setup-failed',
         }
       },
@@ -2777,7 +2806,7 @@ export async function runScriptNode(
         onIsoRecreateFailure: (err) => {
           lastFailure = {
             code: 'iso-recreate-failed',
-            message: err instanceof Error ? err.message : String(err),
+            message: describeIsoFailure('iso-recreate-failed', err),
           }
           return {
             kind: 'failed',
@@ -4698,8 +4727,9 @@ export async function runAgentSingleNode(
         return {
           kind: 'settled',
           out: {
+            // RFC-356 G3：分类字符串不变，summary 换成能自证的结构化诊断。
             kind: 'failed',
-            summary: 'isolated worktree setup failed',
+            summary: describeIsoFailure('isolated worktree setup failed', err),
             message: 'iso-setup-failed',
           },
         }
@@ -4731,7 +4761,9 @@ export async function runAgentSingleNode(
             outputs: {},
             tokenUsage: { input: 0, output: 0, cacheCreate: 0, cacheRead: 0, total: 0 },
             prompt: '',
-            errorMessage: 'iso-recreate-failed',
+            // RFC-356 G3：分类前缀不变，后面接结构化诊断（残留路径 / 最后错误 /
+            // 本机进程树归属可用性）。
+            errorMessage: describeIsoFailure('iso-recreate-failed', err),
           }
           // 迁移前这里是 `break` 落到窗口外收尾；判别式回 'ran' 等价。
           return { kind: 'ran', result: lastResult }

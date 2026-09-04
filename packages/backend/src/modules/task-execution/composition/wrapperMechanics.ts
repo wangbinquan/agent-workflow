@@ -62,6 +62,7 @@ import {
   broadcastNodeStatus,
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
+  isoKeyOf,
   isolatedRunBinding,
   parseIsoJsonMap,
   parseIsoSubmodules,
@@ -1599,6 +1600,15 @@ export async function createOrRebuildWrapperIso(
   // isolating (mid-run revival, the common case) and NULL (fresh row /
   // passthrough) rows never emit this.
   const cur = await state.opts.persistence.nodeExecution.read(wrapperRunId)
+  // RFC-356 T15 —— 这棵 wrapper iso 的**物理键**。
+  //
+  // 它不一定等于 `wrapperRunId`：RFC-356 的代际自愈会在残留清不掉时把键推进成
+  // `{原键}-2`，而路径的 basename 就是键（`isoKeyOf`，RFC-210 round 6 P2）。
+  //
+  // ⚠️ **顺序约束**：必须用 CAS **之前**读到的 `cur`。下面 `merged` 再入分支的
+  // reenter CAS 会显式把 `isoWorktreePath` 写成 null，之后再读就只剩 wrapperRunId
+  // 可派生——那恰好是代际自愈已经放弃的那个阻塞目录。挪动这个读取点会静默失效。
+  const wrapperIsoKey = isoKeyOf(cur?.isoWorktreePath ?? null, wrapperRunId)
   let effectiveExisting = existing
   if (cur !== null && (cur.mergeState === 'merged' || cur.mergeState === 'conflict-human')) {
     if (cur.mergeState === 'merged') {
@@ -1662,7 +1672,10 @@ export async function createOrRebuildWrapperIso(
       return rebuildIsoHandle({
         appHome: state.opts.appHome,
         taskId,
-        nodeRunId: wrapperRunId,
+        // 这个 handle **要拿去 merge-back**：指错路径不是少清一个目录，
+        // 而是把不存在的树当成节点产物去合并，属硬故障。
+        nodeRunId: wrapperIsoKey,
+        dbNodeRunId: wrapperRunId,
         canonRepos: state.repos,
         baseSnapshots,
         taskBaseHeads,
@@ -1694,7 +1707,9 @@ export async function createOrRebuildWrapperIso(
       rebuildIsoHandle({
         appHome: state.opts.appHome,
         taskId,
-        nodeRunId: wrapperRunId,
+        // 只做 discard，路径缺失可容忍（比 :1662 那处低一档风险）。
+        nodeRunId: wrapperIsoKey,
+        dbNodeRunId: wrapperRunId,
         canonRepos: state.repos,
         baseSnapshots: {},
         taskBaseHeads: {},

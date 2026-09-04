@@ -11,8 +11,9 @@
 // merge-back are per-repo and independent (a conflict in one repo does not touch
 // another — design.md §9).
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import {
   alignWorktreeGitlinks,
   AW_INTERNAL_GIT_IDENTITY,
@@ -130,7 +131,27 @@ export interface IsoRepo {
 
 export interface IsoHandle {
   taskId: string
+  /**
+   * **物理 iso 键**——路径（`isoWorktreePathFor`）、pin ref（`isoRefName`）、池 ref
+   * （`poolRefName`）与 effect 的 `resourceKeys` 都按它派生。
+   *
+   * ⚠️ 它**不一定等于 node_runs 的行 id**：RFC-210 round 6 P2 起，同一棵 iso 会跨
+   * 重试复用原始行的键（D17），而 RFC-356 的代际自愈会在残留清不掉时把它推进成
+   * `{原键}-2`。要 DB 身份请用 `dbNodeRunId`。
+   */
   nodeRunId: string
+  /**
+   * **DB 身份**——真实存在的 `node_runs` 行 id。
+   *
+   * RFC-356 P0-1：凡是要落 effect 账本的地方（`createLocalEffectAttemptObserver`）
+   * 必须用它。observer 的 `beforeAct()` 会 `readLineage({taskId, intentId, nodeRunId})`，
+   * 而 sqlite / postgresql 两个实现都在查不到行时返回 null ⇒ 抛
+   * `task-continuation-stale`；而 `discardNodeIso` 的 `beforeAct()` 在 `try` **之外**，
+   * 调用点 `schedulerAssembly.ts` 的 `await spec.discardIso(handle)` 又是**裸 await**
+   * ——喂给它一个合成键，异常会直接穿出 `runAssembly`，把节点打成
+   * `scheduler-node-threw`。那会是一个比 issue #13 更早触发的 wedge。
+   */
+  dbNodeRunId: string
   /** `{appHome}/iso/{taskId}/{nodeRunId}` — the GC/resume cleanup root (D14). */
   containerPath: string
   repos: IsoRepo[]
@@ -189,6 +210,137 @@ async function treeOf(repoPath: string, commit: string): Promise<string> {
 }
 
 /**
+ * RFC-356 L4 —— iso 键的代际上限（即最多 `-2` / `-3` / `-4`）。
+ *
+ * ⚠️ 这**不是**一根够不到的保险丝：脚本线 `isoOnRetry: 'always-recreate'` 每次重试都
+ * 换树，而 `defaultNodeRetries` 上限是 50。在本 RFC 瞄准的病态场景里（每次被杀都留下
+ * 一棵清不掉的树）第 5 次尝试就会耗尽代际，此后以 §6 的结构化诊断失败收场。
+ */
+export const MAX_ISO_KEY_GENERATIONS = 3
+
+/** 一次成功的选键结果。 */
+export interface IsoWorkspaceKeyChoice {
+  /** 物理 iso 键：第 0 代就是基键，之后是 `{基键}-2`、`-3`…… */
+  key: string
+  generation: number
+  /** 本次真的回收掉了几处残留（0 = 常态，路径本来就干净）。 */
+  reclaimed: number
+}
+
+/** 全部代际都被残留挡住——带上够排障的现场。 */
+export class IsoWorkspaceBlockedError extends Error {
+  readonly code = 'iso-workspace-blocked' as const
+  constructor(
+    readonly detail: {
+      baseKey: string
+      generationsTried: number
+      residualPath: string
+      lastError: string
+    },
+  ) {
+    super(
+      `无法回收残留的隔离工作树（已尝试 ${detail.generationsTried} 代）\n` +
+        `  残留: ${detail.residualPath}\n` +
+        `  最后错误: ${detail.lastError}`,
+    )
+    this.name = 'IsoWorkspaceBlockedError'
+  }
+}
+
+function isoKeyForGeneration(baseKey: string, generation: number): string {
+  // `-` 而不是 `~`：键会被拼进 git ref（`isoRefName` / `poolRefName`），而
+  // `git check-ref-format` 收 `-2`、**拒** `~2`（`~` 是保留字符，实测）。
+  // ULID 是 Crockford base32，不含 `-`，所以 `basename` 回读无歧义；与 repo-group
+  // 隔离分支的去重后缀（`agent-workflow/{taskId}-2`）也是同一套约定。
+  return generation === 0 ? baseKey : `${baseKey}-${generation + 1}`
+}
+
+/**
+ * RFC-356 L4 —— 为一次建树挑一个**可用**的物理 iso 键。
+ *
+ * 起于 issue #13：重试在同一条路径上裸 `git worktree add`，而上一次的残留目录清不掉
+ * （Windows 句柄），于是逐次撞 `fatal: '<path>' already exists`、任务永久停摆。
+ *
+ * 逐代推进，每代三步：
+ *
+ * 1. **`existsSync(容器)` 短路**——这是压倒性的常态，**零 git 进程、零 registry 锁**，
+ *    与改动前逐字等价。选键不该给正常创建路径加任何成本。
+ * 2. 有残留 ⇒ **逐仓**走回收阶梯（各用自己的 `repoPath`）。
+ * 3. 多仓时容器只是装着 N 棵树的普通父目录，**只能整体退避删除**——对它走阶梯会先撞
+ *    `is not a working tree`，随后的 `rm -rf` 会绕过 git 把 N 棵树一起删掉。
+ *
+ * 任一步 `blocked` ⇒ 进下一代；全部代际都被挡 ⇒ 抛 `IsoWorkspaceBlockedError`。
+ * `git worktree add` 接受**空目录**（实测），所以「删空了但目录还在」也算通过。
+ */
+export async function chooseIsoWorkspaceKey(opts: {
+  appHome: string
+  taskId: string
+  /** 基键——通常是 D17 那条贯穿全部 attempt 的原始行 id。 */
+  baseKey: string
+  canonRepos: CanonRepo[]
+  log?: Logger
+}): Promise<IsoWorkspaceKeyChoice> {
+  let lastBlocked: { residualPath: string; lastError: string } | null = null
+  for (let generation = 0; generation <= MAX_ISO_KEY_GENERATIONS; generation += 1) {
+    const key = isoKeyForGeneration(opts.baseKey, generation)
+    const containerPath = isoWorktreePathFor(opts.appHome, opts.taskId, key, '')
+    if (!existsSync(containerPath)) return { key, generation, reclaimed: 0 }
+
+    let reclaimed = 0
+    let blocked: { residualPath: string; lastError: string } | null = null
+    for (const repo of opts.canonRepos) {
+      const isoPath = isoWorktreePathFor(opts.appHome, opts.taskId, key, repo.worktreeDirName)
+      const outcome = await reclaimWorktreePath({
+        repoPath: repo.worktreePath,
+        worktreePath: isoPath,
+        ...(opts.log === undefined ? {} : { log: opts.log }),
+      })
+      if (outcome.kind === 'removed') reclaimed += 1
+      else if (outcome.kind === 'blocked') {
+        blocked = { residualPath: outcome.residualPath, lastError: outcome.lastError }
+        break
+      }
+    }
+    if (blocked === null && existsSync(containerPath)) {
+      // 多仓的容器（或逐仓回收后剩下的空壳）。空目录 git 是接受的，所以删不掉也
+      // 只在**非空**时才算挡路。
+      const removedContainer = await removeDirectoryWithRetry(containerPath, {
+        ...(opts.log === undefined ? {} : { log: opts.log }),
+      })
+      if (!removedContainer.removed && readdirSync(containerPath).length > 0) {
+        blocked = {
+          residualPath: containerPath,
+          lastError: removedContainer.lastError ?? 'iso container is not empty',
+        }
+      } else if (removedContainer.removed) reclaimed += 1
+    }
+    if (blocked === null) {
+      opts.log?.info('reclaimed a stale iso workspace before recreating it', {
+        taskId: opts.taskId,
+        isoKey: key,
+        generation,
+        reclaimed,
+      })
+      return { key, generation, reclaimed }
+    }
+    lastBlocked = blocked
+    opts.log?.warn('iso workspace generation is blocked; advancing to the next one', {
+      taskId: opts.taskId,
+      isoKey: key,
+      generation,
+      residualPath: blocked.residualPath,
+      error: blocked.lastError,
+    })
+  }
+  throw new IsoWorkspaceBlockedError({
+    baseKey: opts.baseKey,
+    generationsTried: MAX_ISO_KEY_GENERATIONS + 1,
+    residualPath: lastBlocked?.residualPath ?? '(unknown)',
+    lastError: lastBlocked?.lastError ?? '(unknown)',
+  })
+}
+
+/**
  * Create the isolated worktree(s) for a node run (all repos). Snapshots each
  * canonical worktree's FULL state (incl. untracked), pins it as the base ref
  * (D26), and checks out an iso worktree with the accumulated changes UNSTAGED
@@ -198,7 +350,13 @@ async function treeOf(repoPath: string, commit: string): Promise<string> {
 export async function createNodeIso(opts: {
   appHome: string
   taskId: string
+  /** 物理 iso 键（见 `IsoHandle.nodeRunId`）。 */
   nodeRunId: string
+  /**
+   * 真实的 `node_runs` 行 id。缺省 = 与物理键相同（今天所有调用点都如此）。
+   * RFC-356 代际自愈把物理键推进成 `{原键}-N` 时**必须**显式传它。
+   */
+  dbNodeRunId?: string
   canonRepos: CanonRepo[]
   /**
    * RFC-193 K1：container-relative force-include roster (forcedPortPathsForTask
@@ -220,6 +378,17 @@ export async function createNodeIso(opts: {
   for (const repo of opts.canonRepos) {
     if (!existsSync(repo.worktreePath)) throw new CanonicalWorktreeMissingError(repo.worktreePath)
   }
+  const dbNodeRunId = opts.dbNodeRunId ?? opts.nodeRunId
+  // RFC-356 P0-1 的结构性防线：带代际后缀的**合成**物理键必须显式带上 DB 身份。
+  // 缺省回落只对「两者本来就相同」的既有调用点成立；一个合成键配着回落的 DB 身份
+  // 会让后续的 discard 在 effect observer 里抛 `task-continuation-stale`，而那条
+  // 调用链上没有 catch。宁可在这里响亮地拒绝。
+  if (dbNodeRunId === opts.nodeRunId && /-\d+$/.test(opts.nodeRunId)) {
+    throw new Error(
+      `createNodeIso: iso key '${opts.nodeRunId}' looks generational but no dbNodeRunId was given ` +
+        '(RFC-356: effect observers need the real node_runs row id)',
+    )
+  }
   // Passthrough fallback: if the canonical worktree EXISTS but isn't a git repo
   // (only ever true in mock test harnesses), skip isolation and run in place —
   // the node's writes go straight to the canonical worktree as they did
@@ -232,6 +401,7 @@ export async function createNodeIso(opts: {
     return {
       taskId: opts.taskId,
       nodeRunId: opts.nodeRunId,
+      dbNodeRunId,
       containerPath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, ''),
       passthrough: true,
       repos: opts.canonRepos.map((r) => ({
@@ -325,6 +495,7 @@ export async function createNodeIso(opts: {
   return {
     taskId: opts.taskId,
     nodeRunId: opts.nodeRunId,
+    dbNodeRunId,
     containerPath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, ''),
     passthrough: false,
     repos,
@@ -399,7 +570,10 @@ async function captureSubmoduleTopology(
 export function rebuildIsoHandle(opts: {
   appHome: string
   taskId: string
+  /** 物理 iso 键——resume 路径通常传 `isoKeyOf(持久化路径, 行 id)`。 */
   nodeRunId: string
+  /** 真实的 `node_runs` 行 id；缺省 = 与物理键相同（RFC-356 P0-1）。 */
+  dbNodeRunId?: string
   canonRepos: CanonRepo[]
   baseSnapshots: Record<string, string>
   taskBaseHeads: Record<string, string>
@@ -444,6 +618,7 @@ export function rebuildIsoHandle(opts: {
   return {
     taskId: opts.taskId,
     nodeRunId: opts.nodeRunId,
+    dbNodeRunId: opts.dbNodeRunId ?? opts.nodeRunId,
     containerPath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, ''),
     passthrough: false,
     repos,
@@ -786,8 +961,14 @@ async function tryAgentResolveSubmodule(
  * widening the struct for one caller.
  */
 function handleTaskIdOf(r: IsoRepo): string {
-  // `{appHome}/iso/{taskId}/{nodeRunId}[/{dir}]` — walk up from the iso worktree.
-  const parts = r.isoWorktreePath.split('/')
+  // `{appHome}/iso/{taskId}/{isoKey}[/{dir}]` — walk up from the iso worktree.
+  //
+  // RFC-356 T18：**两种分隔符都要认**。路径由 `join()` 生成，Windows 上是 `\`，
+  // 而原来只按 `/` 拆 ⇒ `lastIndexOf('iso')` 恒为 -1 ⇒ 函数恒返回 `'unknown'`。
+  // 后果是 RFC-210 的 worktree-scoped 池锚点在 Windows 上全部落成 `wt/unknown/{slug}`：
+  // 不同任务的锚点互相串台，按 taskId 的清理也永远匹配不上。
+  // 不用 `path.sep`：`appHome` 与 git 回读的路径在 Windows 上都可能带 `/`。
+  const parts = r.isoWorktreePath.split(/[\\/]/)
   const isoAt = parts.lastIndexOf('iso')
   return isoAt >= 0 && parts[isoAt + 1] !== undefined ? (parts[isoAt + 1] as string) : 'unknown'
 }
@@ -1293,13 +1474,17 @@ export async function discardNodeIso(
       : createLocalEffectAttemptObserver({
           persistence: context.persistence.effects,
           taskId: handle.taskId,
-          nodeRunId: handle.nodeRunId,
+          // RFC-356 P0-1：effect 账本要的是**真实行 id**，不是物理 iso 键。
+          // 喂合成键 ⇒ readLineage 返 null ⇒ beforeAct 抛 task-continuation-stale，
+          // 而这一句在 try 之外、调用点又是裸 await，异常会穿出 runAssembly。
+          nodeRunId: handle.dbNodeRunId,
           kind: 'workspace-cleanup',
           stableActionOrdinal: 'isolation-cleanup',
           candidateId: 'node-isolation-discard',
           request: {
             v: 1,
-            nodeRunId: handle.nodeRunId,
+            dbNodeRunId: handle.dbNodeRunId,
+            isoKey: handle.nodeRunId,
             repos: handle.repos.map((repo) => ({
               worktreeDirName: repo.worktreeDirName,
               isoWorktreePathDigest: sha256Hex(repo.isoWorktreePath),
