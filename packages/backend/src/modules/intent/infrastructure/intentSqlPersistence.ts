@@ -1102,12 +1102,32 @@ export class IntentSqlPersistence implements IntentPersistence {
       if (session === null) {
         throw new NotFoundError('intent-session-not-found', 'session vanished')
       }
+      // RFC-358 T6 —— 「本轮是不是图修复轮」的判据**持久在 turn 行里**：铸修复轮时
+      // 它的 content 就带上标记。不靠内存状态，因此进程重启、boot 恢复之后读到的仍是
+      // 同一判断；也不需要让 11 个 settle 调用点各自注入。
+      const ownRow = yield* firstRow<{ readonly contentJson: string }>(sql`
+        SELECT ${intentTurns.contentJson} AS "contentJson"
+        FROM ${intentTurns} WHERE ${intentTurns.id} = ${input.turnId} LIMIT 1
+      `)
+      const isGraphRepairTurn = ((): boolean => {
+        if (ownRow === null) return false
+        try {
+          return (
+            (JSON.parse(ownRow.contentJson) as { graphRepairTurn?: unknown }).graphRepairTurn ===
+            true
+          )
+        } catch {
+          return false
+        }
+      })()
       const superseded =
         session.inFlightTurnId !== input.turnId || session.contextRevision !== input.launchRevision
       const finalKind = superseded ? ('error' as const) : input.kind
       const finalContent: Record<string, unknown> = superseded
         ? { code: 'intent-context-superseded', supersededResult: input.kind }
-        : { ...input.content }
+        : // 标记跟着轮次走完整个生命周期：UI 据它标出「自动修复」，
+          // 下一次 settle 据它判定不再连环重修。
+          { ...input.content, ...(isGraphRepairTurn ? { graphRepairTurn: true } : {}) }
       let draftRevision: number | undefined
       if (
         !superseded &&
@@ -1175,9 +1195,75 @@ export class IntentSqlPersistence implements IntentPersistence {
           ${columnIdentifier(intentTurns.scratchRetained)} = ${input.scratchRetained}
         WHERE ${intentTurns.id} = ${input.turnId}
       `)
+      // RFC-358 T6 —— 要不要在同一个事务里接一轮图修复。
+      //
+      // 判据全部来自本事务已经读到 / 算出的值，一个都不来自内存：
+      //  · 本轮不是修复轮（否则就是连环重修——决策 D2 只给一轮）；
+      //  · 本轮以 changeset 收场且**确实有** blocking error；
+      //  · 预算还够（判据与 assertBudget 同源，但这里**不抛**——`finally` 里抛出会
+      //    冒泡成未捕获拒绝，既有正解就在旁边：activateWorkingSetChange 遇到
+      //    in-flight 是返回 null 而不是抛）。
+      const blockingErrors = numberOf(
+        (finalContent as { blockingErrors?: unknown }).blockingErrors ?? 0,
+      )
+      const mintRepair =
+        !superseded &&
+        !isGraphRepairTurn &&
+        input.graphRepair !== undefined &&
+        finalKind === 'changeset' &&
+        blockingErrors > 0 &&
+        nextBudget.generateRounds + nextBudget.questionRounds < input.graphRepair.maxGenerateRounds
+      const repairSeq = session.turnSeq + 1
+      let repairReservation: ReservedIntentTurnRecord | undefined
+      if (mintRepair && input.graphRepair !== undefined) {
+        yield* mutation(
+          turnInsert({
+            id: input.graphRepair.turnId,
+            sessionId: input.sessionId,
+            seq: repairSeq,
+            role: 'agent',
+            kind: 'running',
+            // 标记就写在这里——它是下一次 settle 的唯一判据来源。
+            contentJson: JSON.stringify({ graphRepairTurn: true }),
+            contextRevision: session.contextRevision,
+            envelopeNonce: input.graphRepair.envelopeNonce,
+            runMetaJson: null,
+            clientMutationId: null,
+            captureState: 'live',
+            captureLastEventSeq: 0,
+            captureEventBytes: 0,
+            captureRootSessionId: null,
+            captureIncompleteReason: null,
+            scratchRetained: false,
+            createdAt: input.now,
+          }),
+        )
+        repairReservation = {
+          turnId: input.graphRepair.turnId,
+          envelopeNonce: input.graphRepair.envelopeNonce,
+          // launchSession 必须反映**刚刚落下的这份草稿**——修复轮的 INTENT.md 正是
+          // 靠 currentDraftId 找到那份带 blocking error 的 draft 并渲染出来的。
+          // 用事务前的快照，修复轮就看不见要它修的东西。
+          launchSession: {
+            ...session,
+            ...(draftId === null ? {} : { currentDraftId: draftId }),
+            turnSeq: repairSeq,
+            budgetJson: JSON.stringify(nextBudget),
+            updatedAt: input.now,
+          },
+          budget: nextBudget,
+        }
+      }
       yield* mutation(sql`
         UPDATE ${intentSessions}
-        SET ${columnIdentifier(intentSessions.inFlightTurnId)} = ${session.inFlightTurnId === input.turnId ? null : session.inFlightTurnId},
+        SET ${columnIdentifier(intentSessions.inFlightTurnId)} = ${
+          mintRepair && input.graphRepair !== undefined
+            ? input.graphRepair.turnId
+            : session.inFlightTurnId === input.turnId
+              ? null
+              : session.inFlightTurnId
+        },
+          ${columnIdentifier(intentSessions.turnSeq)} = ${mintRepair ? repairSeq : session.turnSeq},
           ${columnIdentifier(intentSessions.budgetJson)} = ${JSON.stringify(nextBudget)},
           ${columnIdentifier(intentSessions.updatedAt)} = ${input.now}
         WHERE ${intentSessions.id} = ${session.id}
@@ -1189,6 +1275,9 @@ export class IntentSqlPersistence implements IntentPersistence {
           ? { errorCode: String((finalContent as { code?: unknown }).code ?? 'unknown') }
           : {}),
         ...(draftRevision === undefined ? {} : { draftRevision }),
+        blockingErrors,
+        ...(isGraphRepairTurn ? { graphRepairTurn: true } : {}),
+        ...(repairReservation === undefined ? {} : { graphRepair: repairReservation }),
       }
     })
   }

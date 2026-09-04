@@ -115,6 +115,12 @@ export interface IntentTurnOutcome {
   kind: 'questions' | 'changeset' | 'error'
   errorCode?: string
   draftRevision?: number
+  /** RFC-358 —— 本轮的 blocking error 条数（第一层 + 图校验）。 */
+  blockingErrors?: number
+  /** RFC-358 —— 本轮自己就是图修复轮。 */
+  graphRepairTurn?: boolean
+  /** RFC-358 —— settle 事务里顺手铸好的图修复轮预约（无空窗）。 */
+  graphRepair?: ReservedIntentTurn
 }
 
 const intentSem = new Semaphore(2)
@@ -324,6 +330,18 @@ export async function runIntentTurn(
               draftHash: `sha256:${sha256Hex(opts.draft.canonicalJson)}`,
             },
           }),
+      // RFC-358 T6（决策 D2）—— 只递材料，铸不铸由 settle 事务判定：本轮不是修复轮、
+      // 以 changeset 收场、确实有 blocking error、预算还够，四条全中才铸。放在同一个
+      // 事务里是为了让 in-flight 从旧轮直接过渡到新轮，中间不留可被误操作的空窗。
+      ...(kind === 'changeset'
+        ? {
+            graphRepair: {
+              turnId: ulid(),
+              envelopeNonce: generateEnvelopeNonce(),
+              maxGenerateRounds: deps.config.maxGenerateRounds,
+            },
+          }
+        : {}),
       now: Date.now(),
     })
     liveTurnAborts.delete(input.sessionId)

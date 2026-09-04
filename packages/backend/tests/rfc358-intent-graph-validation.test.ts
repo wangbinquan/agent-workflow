@@ -24,7 +24,19 @@ import {
   rewriteIntentWorkflowRefs,
 } from '@/modules/intent/domain/workflowGraphCandidate'
 import { validateChangesetWorkflowGraphs } from '@/modules/intent/application/graphValidation'
-import { intentGraphValidationForTest } from './helpers/intentResourceCatalogBinding'
+import {
+  intentGraphValidationForTest,
+  intentResourceCatalogBinding,
+} from './helpers/intentResourceCatalogBinding'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
+import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
+import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
+import { createIntentSessionAndReserveTurn } from '@/modules/intent/application/session'
+import type {
+  IntentContextResourceAuthorization,
+  IntentPersistence,
+} from '../src/modules/intent/application/ports/intentPersistence'
+import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
@@ -375,5 +387,153 @@ describe('RFC-358 — draft-time workflow graph validation', () => {
     )
     expect(outcome.unavailable).toBe(true)
     expect(outcome.errors).toEqual([])
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-358 T6（决策 D2）—— 图修复轮。
+//
+// 锁两件事：①「恰好一轮」的判据持久在 turn 行里，进程重启也成立；②预约与 settle
+// 在**同一个事务**里，`inFlightTurnId` 从旧轮直接过渡到新轮、中间不落地——否则用户
+// 在那个空窗里点「取消」会静默失效，紧接着一轮他没发起过的模型轮照常起飞。
+
+describe('RFC-358 — graph repair turn', () => {
+  let persistence: IntentPersistence
+
+  let authorization: IntentContextResourceAuthorization
+
+  beforeEach(() => {
+    persistence = composeSqliteIntentPersistence({
+      db,
+      contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    })
+    authorization = intentResourceVisibility(
+      intentResourceCatalogBinding(db, actor),
+    ) as IntentContextResourceAuthorization
+  })
+
+  async function seedRunningTurn() {
+    const created = await createIntentSessionAndReserveTurn(persistence, authorization, actor, {
+      message: 'build me a pipeline',
+    })
+    return created
+  }
+
+  function settleWith(
+    turnId: string,
+    launchRevision: number,
+    content: Record<string, unknown>,
+    graphRepair: { turnId: string; envelopeNonce: string; maxGenerateRounds: number } | undefined,
+    sessionId: string,
+  ) {
+    return persistence.settleTurn({
+      sessionId,
+      turnId,
+      launchRevision,
+      kind: 'changeset',
+      content,
+      scratchRetained: false,
+      budgetDelta: { generateRounds: 1 },
+      draft: {
+        changesetJson: '{"$schema_version":1,"ops":[]}',
+        validationJson: '{"errors":["op-1: edge-source-port-missing"],"credentialFindings":[]}',
+        draftHash: 'sha256:deadbeef',
+      },
+      ...(graphRepair === undefined ? {} : { graphRepair }),
+      now: Date.now(),
+    })
+  }
+
+  test('blocking errors mint exactly one repair turn, and in-flight never goes empty', async () => {
+    const created = await seedRunningTurn()
+    const repairTurnId = ulid()
+    const settled = await settleWith(
+      created.reservation.turnId,
+      created.session.contextRevision,
+      { summary: 's', opCount: 1, blockingErrors: 2 },
+      { turnId: repairTurnId, envelopeNonce: 'nonce-repair', maxGenerateRounds: 50 },
+      created.session.id,
+    )
+    expect(settled.graphRepair?.turnId).toBe(repairTurnId)
+    expect(settled.blockingErrors).toBe(2)
+
+    // 空窗锁：settle 之后会话立刻由修复轮占位，而不是先落到 null。
+    const after = await persistence.findSession(created.session.id)
+    expect(after?.inFlightTurnId).toBe(repairTurnId)
+
+    // 修复轮的 launchSession 必须指向**刚落的那份草稿**，否则它的 INTENT.md 里
+    // 根本没有要它修的 blocking 段。
+    expect(settled.graphRepair?.launchSession.currentDraftId).toBe(after?.currentDraftId ?? null)
+    expect(settled.graphRepair?.launchSession.currentDraftId).not.toBeNull()
+  })
+
+  test('a repair turn that stays red does NOT mint a third turn', async () => {
+    const created = await seedRunningTurn()
+    const repairTurnId = ulid()
+    await settleWith(
+      created.reservation.turnId,
+      created.session.contextRevision,
+      { summary: 's', blockingErrors: 1 },
+      { turnId: repairTurnId, envelopeNonce: 'n1', maxGenerateRounds: 50 },
+      created.session.id,
+    )
+    const mid = await persistence.findSession(created.session.id)
+    // 修复轮自己再红一次 —— 判据来自它 turn 行里的标记，与内存无关。
+    const settled = await settleWith(
+      repairTurnId,
+      mid?.contextRevision ?? 0,
+      { summary: 's', blockingErrors: 1 },
+      { turnId: ulid(), envelopeNonce: 'n2', maxGenerateRounds: 50 },
+      created.session.id,
+    )
+    expect(settled.graphRepairTurn).toBe(true)
+    expect(settled.graphRepair).toBeUndefined()
+    const after = await persistence.findSession(created.session.id)
+    expect(after?.inFlightTurnId).toBeNull()
+  })
+
+  test('a clean changeset mints nothing', async () => {
+    const created = await seedRunningTurn()
+    const settled = await settleWith(
+      created.reservation.turnId,
+      created.session.contextRevision,
+      { summary: 's', blockingErrors: 0 },
+      { turnId: ulid(), envelopeNonce: 'n', maxGenerateRounds: 50 },
+      created.session.id,
+    )
+    expect(settled.graphRepair).toBeUndefined()
+    const after = await persistence.findSession(created.session.id)
+    expect(after?.inFlightTurnId).toBeNull()
+  })
+
+  test('an exhausted budget declines silently instead of throwing', async () => {
+    const created = await seedRunningTurn()
+    // maxGenerateRounds=1：这一轮扣掉之后预算就满了。预约必须**返回空**而不是抛——
+    // 它跑在 dispatcher 的 finally 里，抛出会冒泡成未捕获拒绝。
+    const settled = await settleWith(
+      created.reservation.turnId,
+      created.session.contextRevision,
+      { summary: 's', blockingErrors: 3 },
+      { turnId: ulid(), envelopeNonce: 'n', maxGenerateRounds: 1 },
+      created.session.id,
+    )
+    expect(settled.graphRepair).toBeUndefined()
+    const after = await persistence.findSession(created.session.id)
+    expect(after?.inFlightTurnId).toBeNull()
+  })
+
+  test('no repair material (non-changeset settle) mints nothing', async () => {
+    const created = await seedRunningTurn()
+    const settled = await persistence.settleTurn({
+      sessionId: created.session.id,
+      turnId: created.reservation.turnId,
+      launchRevision: created.session.contextRevision,
+      kind: 'error',
+      content: { code: 'intent-changeset-invalid' },
+      scratchRetained: false,
+      now: Date.now(),
+    })
+    expect(settled.graphRepair).toBeUndefined()
+    expect(settled.kind).toBe('error')
   })
 })

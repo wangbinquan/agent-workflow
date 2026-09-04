@@ -479,6 +479,13 @@ function IntentSessionDetailPage() {
                     {turn.role === 'user' ? t('intent.roleUser') : t('intent.roleAgent')} ·{' '}
                     {t(`intent.turnKind.${turn.kind}`)}
                   </span>
+                  {/* RFC-358 B-4：这一轮不是用户发起的（图校验红了自动接的一轮）。
+                      不标出来，用户会看到时间线上凭空多了一轮。 */}
+                  {turn.content.graphRepairTurn === true ? (
+                    <StatusChip kind="info" size="sm" data-testid="intent-turn-graph-repair">
+                      {t('intent.graphRepairTurn')}
+                    </StatusChip>
+                  ) : null}
                   <RelativeTime ts={turn.createdAt} />
                 </div>
                 {turn.kind === 'message' ? <p>{String(turn.content.message ?? '')}</p> : null}

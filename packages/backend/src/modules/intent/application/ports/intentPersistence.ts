@@ -331,12 +331,33 @@ export interface IntentTurnLifecyclePersistence {
       readonly validationJson: string
       readonly draftHash: string
     }
+    /**
+     * RFC-358 T6 —— 图修复轮的预约材料。给了就表示「若这一轮以带图校验 error 的
+     * changeset 收场，就在**同一个事务里**顺手铸下一轮」。
+     *
+     * 为什么必须同事务：settle 会把 `inFlightTurnId` 清空，而修复轮要到 `beginTurn`
+     * 才重新占位。那个空窗里前端按 `inFlight===false` 解禁输入框与「重新生成」，用户
+     * 点「取消」会**静默失效**（取不到 abort 控制器、`cancelReservedTurn` 也因
+     * `inFlightTurnId===null` 返回 false），紧接着自动轮照常起飞。这是一轮用户没发起
+     * 过的模型轮，那种观感不可接受。同事务预约让 in-flight 从旧轮直接过渡到新轮。
+     */
+    readonly graphRepair?: {
+      readonly turnId: string
+      readonly envelopeNonce: string
+      readonly maxGenerateRounds: number
+    }
     readonly now: number
   }): Promise<{
     readonly turnId: string
     readonly kind: 'questions' | 'changeset' | 'error'
     readonly errorCode?: string
     readonly draftRevision?: number
+    /** RFC-358 —— 本轮产出的 blocking error 条数（含图校验）。 */
+    readonly blockingErrors?: number
+    /** RFC-358 —— 本轮**自己**就是图修复轮（判据持久在 turn 行里，不靠内存状态）。 */
+    readonly graphRepairTurn?: boolean
+    /** RFC-358 —— 同事务铸好的图修复轮；调用方直接 dispatch 它。 */
+    readonly graphRepair?: ReservedIntentTurnRecord
   }>
 }
 

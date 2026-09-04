@@ -183,6 +183,7 @@ export const enUS: Resources = {
       'The session context moved; this draft cannot commit — send a new message to regenerate.',
     blockingErrors: '{{count}} blocking validation errors; the AI must fix them before commit.',
     blockingErrorsTruncated: '{{count}} more not listed.',
+    graphRepairTurn: 'auto-repair',
     graphWarnings: '{{count}} workflow validation warning(s) — these do not block committing.',
     graphValidationUnavailable:
       'Workflow graph validation is temporarily unavailable, so this draft cannot be confirmed launchable. Committing is paused — retry later or regenerate.',
