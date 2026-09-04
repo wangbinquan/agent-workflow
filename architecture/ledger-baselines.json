@@ -405,7 +405,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 482,
+      "baseline": 481,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -487,7 +487,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0cd8ccf434c44b4cb752bd6e2be767296bfc50c5de22fb4469e5f287f1be018d",
+    "sourceDigest": "sha256:dcca3311d2b5b0480705175a083dae2353d1f50686f9dadbf1eb3bec77d60208",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b11723e42b4f358f81806a9dedc44cd2f832206c",
-    "contentDigest": "sha256:89a1e7d3fe6bb9ac5b7f45687ed80dd8e25a65115ea4f5bdf0f29f0c8998ad0f",
+    "currentSnapshotSha": "e1c655d146d150ea2b43e5c4cf00d508fc7a89b1",
+    "contentDigest": "sha256:c3d76bd99559b74da92ed446068cba7e85bee744cb4e25766b224868164d4912",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

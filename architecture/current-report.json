@@ -11,7 +11,7 @@
     "mutationEntrypoints": 1936,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 986,
-    "transactionExternalEffects": 482
+    "transactionExternalEffects": 481
   },
   "metrics": {
     "ambientWiringEntries": 494,
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0cd8ccf434c44b4cb752bd6e2be767296bfc50c5de22fb4469e5f287f1be018d"
+  "sourceDigest": "sha256:dcca3311d2b5b0480705175a083dae2353d1f50686f9dadbf1eb3bec77d60208"
 }
