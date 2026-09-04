@@ -12,6 +12,7 @@ import {
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composePostgresqlSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
+import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import {
   WORKFLOW_SCHEMA_VERSION,
   parseTriggerContextJson,
@@ -442,6 +443,24 @@ export async function composePostgresqlDaemonApplication(
   }
   // 启动期可用性闸：每个技能先隐藏，逐个 reverify 通过后才放行（bootReverifyActivated）。
   skillCatalogBoot.activateAvailabilityGate()
+
+  // RFC-328 / RFC-359 W1-T7c：终态维护认领是持久的、比任务行活得久——崩溃留下的 delete 认领要在
+  // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
+  // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。
+  try {
+    const deleteRecovery = await recoverInterruptedTaskDeletes(input.db)
+    if (
+      deleteRecovery.completed.length > 0 ||
+      deleteRecovery.cleanupPending.length > 0 ||
+      deleteRecovery.recoveryRequired.length > 0
+    ) {
+      log.info('terminal task delete recovery', { ...deleteRecovery })
+    }
+  } catch (err) {
+    log.warn('terminal task delete recovery failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 
   const identityAccess = core.identityAccess
   // daemon 自用的系统身份也必须由注册表**铸**出来。授权句柄按对象引用从

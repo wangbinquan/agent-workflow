@@ -75,6 +75,8 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 1,
   'modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts': 4,
   'modules/task-execution/infrastructure/sqliteTaskExecutionEffectPersistence.ts': 1,
+  // RFC-359 T7c：删除恢复的 branch_started_at 沿父链重算搬进中立实现（services/taskDelete.ts 2 → 1）。
+  'modules/task-execution/infrastructure/taskDeleteRecovery.ts': 1,
   'modules/task-execution/infrastructure/sqliteTaskRecoveryOperations.ts': 2,
   // RFC-350：不活跃超时收割在**已经落进 canceled** 的行上覆盖终态原因文案
   // （`error_summary` / `error_message`），不翻状态——写入门本身要求
@@ -84,7 +86,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'platform/persistence/sqlite/systemWorkspaceGc.ts': 8,
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
   'services/task.ts': 3,
-  'services/taskDelete.ts': 2,
+  'services/taskDelete.ts': 1,
 }
 
 function walkTsFiles(dir: string): string[] {

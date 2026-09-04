@@ -2439,7 +2439,7 @@ function classifyTaskExecutionAuthority(input: {
 > | null {
   const value = `${input.file}#${input.callable}`
   if (
-    /sqliteTerminalMaintenance|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
+    /sqliteTerminalMaintenance|terminalMaintenanceClaim|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
       value,
     )
   ) {

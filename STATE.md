@@ -37,7 +37,12 @@
 > `TaskExecutionEffectPersistence` 补齐 `unresolvedEffectIds / unreapedProcessCode / resolveQuiescedManagedProcesses /
 > closeOutcomeUnknownAndRelease`，两个适配器都只委托；PG successor 恢复也改调同一份（本地副本删除）；新增按客户端品牌分派的
 > `createTaskExecutionPersistence(db)`。`rfc359-t7b-driver-release-settles-effects.test.ts` 七个场景两引擎各绿。
-> **下一步**：T7c（删除认领恢复中立版）→ W3 统一启动序列。
+> **T7c（删除认领崩溃恢复）已修**：`infrastructure/taskDeleteRecovery.ts` 一份实现（`ProviderNeutralDatabase` +
+> `TerminalMaintenanceStore` 端口；级联树按 parent_task_id BFS，事务开头锁认领行），认领的事务内 CAS 合一为
+> `infrastructure/terminalMaintenanceClaim.ts`；清理计划解析 / 磁盘清理随之搬入，`services/taskDelete.ts` 只再导出；
+> PG daemon 在技能可用性闸之后、HTTP 之前续做 delete 认领（其余三步 boot 恢复随 W3 接入）。
+> `rfc359-t7c-task-delete-recovery.test.ts` 六个场景两引擎各绿 + 顺序锁。
+> **下一步**：W3 统一启动序列（T4：PG boot 恢复四步 / servePostgresqlDaemon 永不返回）。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。
