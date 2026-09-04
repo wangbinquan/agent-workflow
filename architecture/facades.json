@@ -5986,22 +5986,25 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:02dc177a81a7bc54553b",
         "import:265ff6504f2a62bcbec3",
         "import:327ee7c47da391c2edde",
+        "import:3cfa0568a7d13c577db5",
+        "import:42cbd3cad275e56ef388",
         "import:4f8b966273adad08c895",
         "import:507f5317dc722e19491f",
         "import:6c2762584c9ec2290a1f",
         "import:7a227aa3d1e4db08c1fa",
         "import:7de3d23ccfd1d0ce78c7",
+        "import:8712a4c1021fb5749a0d",
+        "import:949aa3b39b251a52904a",
         "import:9d6e175357b93312fe02",
         "import:db4cd236b2f67cab4105",
         "import:e3b3ed144860eaf28518"
       ],
       "exportedSymbols": [
-        "DeleteRecoveryResult",
         "DeleteTaskResult",
-        "deleteTask",
-        "recoverInterruptedTaskDeletes"
+        "deleteTask"
       ],
       "file": "packages/backend/src/services/taskDelete.ts",
       "id": "facade:packages/backend/src/services/taskDelete.ts",
@@ -6197,6 +6200,7 @@
         "import:4ff12450da8a9c16aeec",
         "import:511af838198ce69d4b85",
         "import:6a9e803375844b33bec1",
+        "import:788e1b53c25af15910cd",
         "import:ac21d51c81c4efcc1855",
         "import:bdf5fb046d0e484eabd6"
       ],
@@ -6874,5 +6878,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944"
+  "sourceDigest": "sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39"
 }

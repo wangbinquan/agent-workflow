@@ -9390,6 +9390,29 @@
     },
     {
       "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes",
+      "phase": "after-ready",
+      "symbol": "recoverInterruptedTaskDeletes",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
         "timer"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
@@ -13127,29 +13150,6 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
-      "phase": "after-ready",
-      "symbol": "recoverInterruptedTaskDeletes",
-      "targetContext": "task-execution"
-    },
-    {
       "dependencies": [],
       "file": "packages/backend/src/services/taskFanoutPools.ts",
       "finalCriterion": "W9-B registry",
@@ -13587,5 +13587,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944"
+  "sourceDigest": "sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39"
 }

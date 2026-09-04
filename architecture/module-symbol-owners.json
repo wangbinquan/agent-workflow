@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1970,
+    "backendFiles": 1972,
     "frontendFiles": 622,
     "legacyFiles": 616,
-    "moduleFiles": 1354,
-    "productionFiles": 2747,
+    "moduleFiles": 1356,
+    "productionFiles": 2749,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26129
+    "symbolsIncludingFileRoots": 26135
   },
   "entries": [
     {
@@ -148810,6 +148810,126 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#cleanupDeletedTaskResources",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "cleanupDeletedTaskResources",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteCleanupPlanV2",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DeleteCleanupPlanV2",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeletedAudience",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DeletedAudience",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteRecoveryResult",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DeleteRecoveryResult",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteWorktreeTarget",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DeleteWorktreeTarget",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "finalizeDeleteRowsTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#log",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "log",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#parseDeleteCleanupPlan",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "parseDeleteCleanupPlan",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "recoverInterruptedTaskDeletes",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
       "removeAfterWave": null,
@@ -150387,6 +150507,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskOwnershipStore",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#assertTerminalMaintenanceClaimTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertTerminalMaintenanceClaimTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "transitionTerminalMaintenanceClaimTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -204884,42 +205040,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#cleanupDeletedTaskResources",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "cleanupDeletedTaskResources",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#DeleteCleanupPlanV2",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "DeleteCleanupPlanV2",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#DeleteRecoveryResult",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "DeleteRecoveryResult",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/taskDelete.ts",
       "id": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
@@ -204951,54 +205071,6 @@
       "status": "legacy-target",
       "symbol": "findNonTerminalDescendant",
       "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#log",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "log",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#parseDeleteCleanupPlan",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "parseDeleteCleanupPlan",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "recoverInterruptedTaskDeletes",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "id": "owner:packages/backend/src/services/taskDelete.ts#WorktreeTarget",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "WorktreeTarget",
-      "targetContext": "source-control",
       "targetLayer": "application"
     },
     {
@@ -314253,5 +314325,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944"
+  "sourceDigest": "sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39"
 }

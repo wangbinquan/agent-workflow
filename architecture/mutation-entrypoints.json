@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1943,
+    "entries": 1946,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -32908,6 +32908,103 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteCleanupPlanV2",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteCleanupPlanV2",
+      "symbol": "DeleteCleanupPlanV2",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeletedAudience",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeletedAudience",
+      "symbol": "DeletedAudience",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteRecoveryResult",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteRecoveryResult",
+      "symbol": "DeleteRecoveryResult",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteWorktreeTarget",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteWorktreeTarget",
+      "symbol": "DeleteWorktreeTarget",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": true,
         "transaction": false
       },
@@ -33160,6 +33257,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/sqlite.ts#createSqliteTaskListPage",
       "symbol": "createSqliteTaskListPage",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
+      "symbol": "transitionTerminalMaintenanceClaimTx",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -44233,54 +44352,6 @@
     },
     {
       "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/taskDelete.ts#DeleteCleanupPlanV2",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#DeleteCleanupPlanV2",
-      "symbol": "DeleteCleanupPlanV2",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/taskDelete.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/taskDelete.ts#DeleteRecoveryResult",
-      "missingControls": [
-        "audit",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#DeleteRecoveryResult",
-      "symbol": "DeleteRecoveryResult",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
         "audit": true,
         "authority": "system",
         "authorization": true,
@@ -46312,7 +46383,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944",
+  "sourceDigest": "sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46422,7 +46493,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 281,
+      "durableWriterSites": 283,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -50399,6 +50470,38 @@
         "allowedTables": [
           "tasks"
         ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "finalizeDeleteRowsTx",
+        "controlSubtype": null,
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#233:tasks",
+        "line": 233,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
+        "requiredBrandedProof": "TerminalMaintenanceClaim",
+        "revisionPredicate": "exact-claim-revision-and-member-set-digest",
+        "symbol": "finalizeDeleteRowsTx"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "finalizeDeleteRowsTx",
+        "controlSubtype": null,
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#251:tasks",
+        "line": 251,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
+        "requiredBrandedProof": "TerminalMaintenanceClaim",
+        "revisionPredicate": "exact-claim-revision-and-member-set-digest",
+        "symbol": "finalizeDeleteRowsTx"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
         "authorityKind": "control-revision",
         "consumer": "writeIdleTimeoutReason",
         "controlSubtype": "terminal-control",
@@ -50410,6 +50513,38 @@
         "requiredBrandedProof": "IdleTimeoutReapDecision",
         "revisionPredicate": "idle-observation-and-own-terminal-copy-cas",
         "symbol": "createTaskIdleTimeoutPersistence"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionMaintenanceMembers"
+        ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "transitionTerminalMaintenanceClaimTx",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionMaintenanceMembers",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#102:taskExecutionMaintenanceMembers",
+        "line": 102,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
+        "requiredBrandedProof": "TerminalMaintenanceClaim",
+        "revisionPredicate": "exact-claim-revision-and-member-set-digest",
+        "symbol": "transitionTerminalMaintenanceClaimTx"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionMaintenanceClaims"
+        ],
+        "authorityKind": "terminal-maintenance",
+        "consumer": "transitionTerminalMaintenanceClaimTx",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionMaintenanceClaims",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#79:taskExecutionMaintenanceClaims",
+        "line": 79,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceClaim.ts#transitionTerminalMaintenanceClaimTx",
+        "requiredBrandedProof": "TerminalMaintenanceClaim",
+        "revisionPredicate": "exact-claim-revision-and-member-set-digest",
+        "symbol": "transitionTerminalMaintenanceClaimTx"
       },
       {
         "allowedTables": [
@@ -50868,8 +51003,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#398:tasks",
-        "line": 398,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#296:tasks",
+        "line": 296,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -50884,44 +51019,12 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#423:tasks",
-        "line": 423,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#321:tasks",
+        "line": 321,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
         "symbol": "deleteTask"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "recoverInterruptedTaskDeletes",
-        "controlSubtype": null,
-        "dataClass": "tasks",
-        "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#572:tasks",
-        "line": 572,
-        "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
-        "requiredBrandedProof": "TerminalMaintenanceClaim",
-        "revisionPredicate": "exact-claim-revision-and-member-set-digest",
-        "symbol": "recoverInterruptedTaskDeletes"
-      },
-      {
-        "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "terminal-maintenance",
-        "consumer": "recoverInterruptedTaskDeletes",
-        "controlSubtype": null,
-        "dataClass": "tasks",
-        "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#591:tasks",
-        "line": 591,
-        "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#recoverInterruptedTaskDeletes",
-        "requiredBrandedProof": "TerminalMaintenanceClaim",
-        "revisionPredicate": "exact-claim-revision-and-member-set-digest",
-        "symbol": "recoverInterruptedTaskDeletes"
       }
     ],
     "finalCriterion": "Every durable task-execution writer uses exactly one of worker-epoch/control-revision/recovery-proof/terminal-maintenance, and all six control subtypes retain explicit write and proof bounds.",

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1970 |
+| backend production TS 文件 | 1972 |
 | `services/` 文件 | 326 |
-| `modules/**` 文件 / 非空 context | 1354 / 17 |
+| `modules/**` 文件 / 非空 context | 1356 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 368 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 285 / 35 |
+| RFC-317 boundary census（inbound / outbound） | 288 / 35 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5278 |
+| `architectureExceptions` | 5303 |
 | `backgroundJobs` | 368 |
-| `crossContextImports` | 6408 |
+| `crossContextImports` | 6435 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26129 |
-| `mutationEntrypoints` | 1943 |
+| `moduleSymbolOwners` | 26135 |
+| `mutationEntrypoints` | 1946 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 987 |
 | `transactionExternalEffects` | 483 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 150 |
+| task-execution / infrastructure | 152 |
 | resource-catalog / infrastructure | 139 |
 | task-execution / application | 87 |
 | collaboration / infrastructure | 64 |
@@ -200,10 +200,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3648 |
-| legacy-inbound | 1426 |
+| legacy-outbound | 3667 |
+| legacy-inbound | 1432 |
 | provider-mirror | 444 |
-| infrastructure-external | 412 |
+| infrastructure-external | 414 |
 | offered-consumption | 188 |
 | temporary-internal-debt | 97 |
 | off-dag-offered | 94 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3648 |
-| legacy-inbound | 1426 |
+| legacy-outbound | 3667 |
+| legacy-inbound | 1432 |
 | temporary-internal-debt | 97 |
 | off-dag-offered | 94 |
 | no-circular | 6 |
@@ -227,13 +227,13 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2833 |
-| W4-E1 | 857 |
+| W9 | 2846 |
+| W4-E1 | 867 |
 | W4-C | 409 |
 | W4-E0 | 238 |
 | W4 | 215 |
 | W4-B | 186 |
-| W5 | 146 |
+| W5 | 148 |
 | W4-E8 | 113 |
 | W4-E9 | 61 |
 | W4-E2 | 44 |
