@@ -14,7 +14,7 @@ import {
   parseRfc349EvidenceArgs,
   RFC349_CRASH_POINTS,
   RFC349_DATABASE_MIGRATION_PHASES,
-  RFC349_T10_FULL_REGRESSION_TOPOLOGY,
+  RFC349_T10_REGRESSION_COVERAGE_OWNERS,
   RFC349_T10_EXECUTABLE_EVIDENCE,
   RFC349_T10_WORKFLOW_TEST_FILES,
   rfc349EvidenceFailures,
@@ -90,7 +90,7 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     ])
   })
 
-  test('executes real target faults before the honestly labeled full regression topology', () => {
+  test('executes real target faults, and carries no provider-neutral regression lanes', () => {
     const workflow = readFileSync(WORKFLOW_PATH, 'utf8')
     const realFaultTest = readFileSync(
       resolve(ROOT, 'packages/backend/tests/rfc349-postgresql-target-faults.integration.test.ts'),
@@ -114,100 +114,82 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(realFaultTest).toContain("ERRCODE = '53100'")
     expect(realFaultTest).toContain('expect(await copyState(runtime, chunk)).toEqual({')
 
-    expect(regressionJob).toBeDefined()
-    // The lanes stay gated on real PostgreSQL evidence, but on the ~2-minute
-    // three-platform compiled smoke rather than the crash/soak job: gating on the
-    // long job made the workflow's wall clock the SUM of the two (~2 hours for
-    // ~25 minutes of work). What keeps these lanes from being read as provider
-    // evidence is the `evidenceRole` naming and the RFC349_* absence asserted
-    // below, not which job they queue behind.
-    expect(regressionJob).toContain('needs: [compiled-external-postgresql]')
-    expect(regressionJob).not.toContain('needs: [crash-large-and-soak')
-    for (const lane of RFC349_T10_FULL_REGRESSION_TOPOLOGY) {
-      expect(regressionJob).toContain(lane.command)
-    }
-    expect(RFC349_T10_FULL_REGRESSION_TOPOLOGY.map((lane) => lane.evidenceRole)).toEqual([
+    // 这条 workflow 此后**只**做真 PostgreSQL 取证：provider-neutral 的全量回归
+    // 已于 2026-09-04 移除（去向见 RFC349_T10_REGRESSION_COVERAGE_OWNERS 与下一条
+    // 用例）。它们从来不产出 provider 证据，却让整条的墙钟变成两段之和。
+    expect(regressionJob).toBeUndefined()
+    expect(workflow).not.toContain('functional-regression')
+  })
+
+  // Why this test exists: the 9 provider-neutral regression lanes that used to
+  // hang off this workflow were deleted on 2026-09-04 (they produced no provider
+  // evidence and doubled the wall clock — see RFC349_T10_REGRESSION_COVERAGE_OWNERS
+  // for the measured breakdown). Deleting duplicated coverage is only safe while
+  // the leg it was duplicating still exists. This walks the cost list row by row
+  // and re-checks the OWNER workflow, so "the lane we deferred to quietly lost
+  // that coverage" goes red here instead of silently reopening the hole.
+  //
+  // Each row also records WHY the surviving leg is the stronger one; that clause
+  // is asserted too, so a downgrade there (Main CI pinning a fixed seed, dropping
+  // an OS, the nightly re-adding a `--grep-invert`) is caught as well.
+  test('every deleted regression lane still has its coverage owner, and the owner is the stronger leg', () => {
+    const owners = {
+      'ci.yml': readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'),
+      'e2e-full-nightly.yml': readFileSync(
+        resolve(ROOT, '.github', 'workflows', 'e2e-full-nightly.yml'),
+        'utf8',
+      ),
+    } as const
+
+    expect(RFC349_T10_REGRESSION_COVERAGE_OWNERS.map((row) => row.evidenceRole)).toEqual([
       'provider-neutral-full-regression',
       'ui-only-full-regression',
       'ui-transport-full-regression',
     ])
-    expect(regressionJob).toContain('Run full frontend regression (UI-only oracle)')
-    expect(regressionJob).toContain('Run full E2E shard (UI/transport oracle)')
-    expect(regressionJob).not.toContain('RFC349_DATABASE_URL')
-    expect(regressionJob).not.toContain('RFC349_TARGET_FAULTS_DATABASE_URL')
+
+    for (const row of RFC349_T10_REGRESSION_COVERAGE_OWNERS) {
+      const owner = owners[row.ownerWorkflow as keyof typeof owners]
+      expect({ lane: row.lane, ownerFound: owner !== undefined }).toEqual({
+        lane: row.lane,
+        ownerFound: true,
+      })
+      // 那条命令确实还在归属方跑着。
+      expect({ lane: row.lane, runs: owner.includes(row.command) }).toEqual({
+        lane: row.lane,
+        runs: true,
+      })
+      // 归属方仍然是更强的那一份（换种子 / 多 OS / 全量档）。
+      expect({ lane: row.lane, stronger: owner.includes(row.strongerBecause) }).toEqual({
+        lane: row.lane,
+        stronger: true,
+      })
+    }
+
+    // Main CI 的后端腿仍是四分片——删掉的那条当年就是照它抄的，也是它兜住这份覆盖。
+    expect(owners['ci.yml']).toContain('shard: [1, 2, 3, 4]')
+    // 全量 e2e 腿不得重新加上 PR 档的过滤，否则 `@nightly` 会全域失守：删掉的那 9 条
+    // lane 里的 e2e 正是靠「不过滤」才和它等价。只看真正执行的 `run:` 行——这份 YAML 的
+    // 注释里就写着 PR 档用 `--grep-invert '@nightly'`，全文匹配会把注释也算进去。
+    const nightlyRunLines = owners['e2e-full-nightly.yml']
+      .split('\n')
+      .filter((line) => /^\s*run:/u.test(line))
+    expect(nightlyRunLines.filter((line) => line.includes('--grep-invert'))).toEqual([])
   })
 
-  // Why this test exists: the backend regression lane originally ran the WHOLE
-  // backend suite un-sharded in a single VM. The first time it ever executed
-  // (run 33722869768 @ b3883154e — every earlier run had it skipped by `needs:`)
-  // the runner was killed twice, at ~20m and ~23m, with `The runner has received
-  // a shutdown signal`, ZERO failing assertions, and two different cut points —
-  // while the identical file set and env passed green in Main CI's four ~7m
-  // ubuntu shards at that same SHA. One VM cannot carry four shards' worth of
-  // this suite. Keep the lane sharded exactly like Main CI: if a refactor ever
-  // collapses it back to one lane, this goes red instead of costing another
-  // 23-minute unattributable runner death.
-  test('runs the backend regression lane sharded exactly like Main CI', () => {
-    const workflow = readFileSync(WORKFLOW_PATH, 'utf8')
-    const regressionJob = / {2}functional-regression:[\s\S]*$/u.exec(workflow)?.[0]
-    expect(regressionJob).toBeDefined()
-
-    const backendLane = RFC349_T10_FULL_REGRESSION_TOPOLOGY.find(
-      (lane) => lane.evidenceRole === 'provider-neutral-full-regression',
-    )
-    expect(backendLane?.shards).toBe(4)
-    expect(backendLane?.command).toContain('--shard=${{ matrix.shard }}/4')
-
-    // Every declared backend lane maps to a distinct shard, covering 1..4 with
-    // no gap: a missing shard would silently drop a quarter of the suite while
-    // the job still reported green.
-    const declared = [
-      ...(regressionJob ?? '').matchAll(/- lane: (backend-\d+)\n {12}shard: (\d+)/gu),
-    ]
-    expect(declared.map((match) => match[1])).toEqual([
-      'backend-1',
-      'backend-2',
-      'backend-3',
-      'backend-4',
-    ])
-    expect(declared.map((match) => Number(match[2]))).toEqual([1, 2, 3, 4])
-
-    // The step guard must admit all four lanes, not just the historical `backend`.
-    expect(regressionJob).toContain("if: startsWith(matrix.lane, 'backend-')")
-    expect(regressionJob).not.toContain("if: matrix.lane == 'backend'")
-
-    // Main CI's own backend lane stays the reference topology this mirrors.
+  // Why this test exists: the backend regression lane that used to live here
+  // needed Main CI's ENVIRONMENT, not just its command — run 33732387691 went red
+  // on two gaps that were purely environmental (RFC-294 N1a provenance guards need
+  // `fetch-depth: 0`; `doctor returns ok when opencode + git present` needs a real
+  // opencode on PATH). Now that the lane is gone, those two properties have to
+  // hold on the leg that inherited the coverage, or the same two failures simply
+  // move rather than being covered.
+  test('the owning Main CI backend job still carries the environment that lane needed', () => {
     const mainCi = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
-    expect(mainCi).toContain('shard: [1, 2, 3, 4]')
-    expect(mainCi).toContain('--shard=${{ matrix.shard }}/4')
-  })
 
-  // Why this test exists: sharding was only the FIRST way this lane diverged
-  // from the reference backend job. Once it could finish, run 33732387691 red on
-  // two more config gaps, each a real test failure rather than a runner death:
-  //   backend-4 — the four RFC-294 N1a provenance guards ("reachable from HEAD")
-  //     need the full history Main CI pins with `fetch-depth: 0`; this lane took
-  //     the depth-1 default.
-  //   backend-1 — `doctor returns ok when opencode + git present` exercises a
-  //     real PATH binary on purpose, and Main CI installs it; this lane did not.
-  // A lane that calls itself "the repository's complete regression lanes" has to
-  // carry the reference job's environment, not just its command. Locking each
-  // dimension separately so the next gap names itself.
-  test('gives the backend regression lane the same job environment as Main CI', () => {
-    const workflow = readFileSync(WORKFLOW_PATH, 'utf8')
-    const regressionJob = / {2}functional-regression:[\s\S]*$/u.exec(workflow)?.[0]
-    const mainCi = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
-    expect(regressionJob).toBeDefined()
-
-    // Full history: the provenance guards replay a published snapshot.
-    expect(regressionJob).toContain('fetch-depth: 0')
     expect(mainCi).toContain('fetch-depth: 0')
-
-    // A real opencode on PATH: doctor and runtime-diagnostic tests want one.
-    expect(regressionJob).toContain('bun install -g opencode-ai@latest')
     expect(mainCi).toContain('bun install -g opencode-ai@latest')
-    // …and it must reach every backend shard, not just a single historical lane.
-    expect(regressionJob).toContain("if: startsWith(matrix.lane, 'backend-')")
+    // 两个 OS 都要跑：删掉的那条只有 ubuntu，Main CI 是它的超集。
+    expect(mainCi).toContain('os: [ubuntu-latest, macos-latest]')
   })
 
   test('locks before/after crash coverage for every migration phase and the first target chunk', () => {
