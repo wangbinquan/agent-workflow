@@ -53500,6 +53500,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/workspaceMaintenance.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/application/workspaceMaintenance.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9ae16d29a69e725e5628",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "DomainError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/workgroupTasks.ts#$file",
@@ -88674,9 +88691,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5216,
+    "architectureExceptions": 5217,
     "implementationSccs": 0,
-    "observedEdges": 6350,
+    "observedEdges": 6351,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -150285,6 +150302,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionIntents"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/application/workspaceMaintenance.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/workspaceMaintenance.ts#$file",
+      "id": "import:9ae16d29a69e725e5628",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "DomainError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/workgroupTasks.ts",
@@ -190822,7 +190855,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:30088ba759d3cde9de3f59d4e015bef3f527681b9d440db9bae907f66c871bca",
+  "sourceDigest": "sha256:51909f1c46c00f19ef911df00ba26d2803bdf807739ef4445b117d105b462d14",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

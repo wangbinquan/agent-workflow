@@ -202,8 +202,11 @@
       "id": "test-suite-allowed-skips",
       "file": "packages/backend/tests/test-suite-policy.test.ts",
       "symbol": "ALLOWED_SKIP_COUNTS",
-      "baseline": 42,
-      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。"
+      "baseline": 43,
+      "why": "被 skip 的测试计数。skip 是最安静的一种覆盖流失，只应减少（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-319 B80（5e7e08f0f）的 e2e/rfc319-canvas-editing-ops.spec.ts WF-22 在 Playwright webkit 上 test.skip（xyflow Shift+click 多选不稳，与 workflow-editor.spec.ts#skip 同一上游问题），那笔的 CI run 被后续 push 取消、清单没跟着登记，于是 31 → 32。RFC-254 的 opencode.cmd stdout 回归必须在真实 Windows 内核运行，非 Windows 腿显式 skip，于是 32 → 33。RFC-328 的 compiled-target output relay 同样必须由真实 Windows 内核和编译产物验证，非 Windows 腿显式 skip、windows-platform 持续执行，于是 33 → 34。RFC-349 的 PostgreSQL preflight、schema-contract 与 compiled provider integration 只在显式提供真实 PostgreSQL 环境时运行，普通 backend shards 保留 env-gated skip，于是 34 → 37。 RFC-356 三个新测试文件各自带**平台能力**门控的 skipIf：workspace-reclaim 3 处、iso-key-generations 2 处（都用 `chmod 0500` 造「删不掉」的屏障来证 blocked 与键换代，而 Windows 上 chmod 是 no-op、屏障立不起来，那一侧由 windows-platform 腿的注入式断言覆盖）、process-tree-quiesce 2 处（**双向**门控：POSIX 证进程组语义，win32 证「没有 Job Object 时立刻回 unknown、绝不空等预算」）。清单条目数 38 → 41。 RFC-357 PR-4：`rfc357-postgresql-page.integration.test.ts` 的环境门控 skip 入账，41 → 42。CI 的 `test-backend-postgresql` lane 里有一道 grep——真库那条用例一旦 skip 就报错退出，所以这条 skip 只在没有 URL 的普通跑批上成立。",
+      "allowGrowth": {
+        "why": "RFC-359 W2-T11b：能力矩阵的真 PostgreSQL 半边按环境门控 skip 计 1 次（42 → 43），登记进 test-suite-policy 账本。这是 design §11.1 自认的过渡形态：普通 backend 分片今天没有真库，改成 fail 会直接推红；真 PG lane 的 `(skip).*real PostgreSQL` grep 保证有库时必跑。W5-T19e 的 describeEachProvider 落地后该 skip 连同本条一起删除。下一笔不涨即删。"
+      }
     },
     {
       "id": "frontend-inline-loading-allowlist",
@@ -391,7 +394,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1933,
+      "baseline": 1936,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
         "why": "RFC-359 W2-T8/T9：新增统一事务原语两个文件（platform/persistence/databaseTransaction.ts 与 writerLease.ts）。这次上涨是**为了把 153 对成对适配器塌成一份**而先立的地基——RFC-359 的技术核心是「bun:sqlite 的同步事务包装器 vs PostgreSQL 的异步事务」这条约束只对那个包装器成立，显式 BEGIN IMMEDIATE + 显式 COMMIT/ROLLBACK 下 async 事务体在 SQLite 上有真原子性（实测三组对照，见该文件头注释）。障碍拆掉后 W4 会逐 context 合一，届时这几份账本应当**大幅下降**。下一笔不涨即删。"
@@ -429,8 +432,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6350,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6351,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "收 30103f667（fix(gc): 终态维护的水位覆盖判据只对最高代际比 digest）的账：那笔新增了 source-control/application/workspaceMaintenance.ts → @/util/errors（DomainError）一条 legacy-outbound 边，推上主干时未重采账本。本条由 RFC-359 W2-T11b 的重采顺带收齐、按归属点名，非本 RFC 引入。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -450,8 +456,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5216,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5217,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "收 30103f667（fix(gc): 终态维护的水位覆盖判据只对最高代际比 digest）的账：那笔新增了 source-control/application/workspaceMaintenance.ts → @/util/errors（DomainError）一条 legacy-outbound 边，推上主干时未重采账本。本条由 RFC-359 W2-T11b 的重采顺带收齐、按归属点名，非本 RFC 引入。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -485,7 +494,7 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26051,
+      "baseline": 26068,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
         "why": "RFC-359 W2-T8/T9：新增统一事务原语两个文件（platform/persistence/databaseTransaction.ts 与 writerLease.ts）。这次上涨是**为了把 153 对成对适配器塌成一份**而先立的地基——RFC-359 的技术核心是「bun:sqlite 的同步事务包装器 vs PostgreSQL 的异步事务」这条约束只对那个包装器成立，显式 BEGIN IMMEDIATE + 显式 COMMIT/ROLLBACK 下 async 事务体在 SQLite 上有真原子性（实测三组对照，见该文件头注释）。障碍拆掉后 W4 会逐 context 合一，届时这几份账本应当**大幅下降**。下一笔不涨即删。"
@@ -493,7 +502,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:30088ba759d3cde9de3f59d4e015bef3f527681b9d440db9bae907f66c871bca",
+    "sourceDigest": "sha256:51909f1c46c00f19ef911df00ba26d2803bdf807739ef4445b117d105b462d14",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -506,8 +515,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "88b9a59406b007318f20e83fba8957db3f7a6674",
-    "contentDigest": "sha256:5fc8521858a7c0aa9de22375b254acd69660c15badf93c97f0906380d05ca1cb",
+    "currentSnapshotSha": "05cffe60eb350700d7a3e07ded8a462024e068d5",
+    "contentDigest": "sha256:08041a190fcb5d5ffa3617b33fdd9a288497e5a4cd2781f72c9ad1b495884f75",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
