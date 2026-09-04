@@ -269,7 +269,8 @@ describe('RFC-328 exact-token runtime registry', () => {
     expect(secondController.signal.aborted).toBe(true)
     expect(
       module.runtimeRegistry.release({ token: second.token, controller: secondController }),
-    ).toBe(true)
+    ).toMatchObject({ kind: 'released' })
+    module.runtimeRegistry.settle(second.token)
     expect((await module.runtimeRegistry.awaitStopped(secondTicket)).kind).toBe('released')
   })
 
@@ -300,7 +301,10 @@ describe('RFC-328 exact-token runtime registry', () => {
     expect(() => module.claimGate.enter()).toThrow(
       expect.objectContaining({ code: 'task-execution-shutting-down' }),
     )
-    expect(module.runtimeRegistry.release({ token: claim.token, controller })).toBe(true)
+    expect(module.runtimeRegistry.release({ token: claim.token, controller })).toMatchObject({
+      kind: 'released',
+    })
+    module.runtimeRegistry.settle(claim.token)
     expect((await module.runtimeRegistry.awaitStopped(tickets[0]!)).kind).toBe('released')
   })
 
@@ -333,7 +337,10 @@ describe('RFC-328 exact-token runtime registry', () => {
       expect.objectContaining({ code: 'task-execution-shutting-down' }),
     )
 
-    expect(module.runtimeRegistry.release({ token: claim.token, controller })).toBe(true)
+    expect(module.runtimeRegistry.release({ token: claim.token, controller })).toMatchObject({
+      kind: 'released',
+    })
+    module.runtimeRegistry.settle(claim.token)
     await module.runtimeRegistry.awaitStopped(tickets[0]!)
     module.resume()
     expect(module.claimGate.isPaused).toBe(false)

@@ -527,9 +527,13 @@ describe('RFC-053 PR-A T1d — retry cascade kind matrix', () => {
       }),
     ).rejects.toMatchObject({ code: 'retry-child-cancel-failed' })
 
-    // Five earlier ownership / intent transactions also cross the same injected
-    // boundary; the child itself still exhausts all eight cancellation attempts.
-    expect(cancelCasAttempts).toBe(13)
+    // Four earlier ownership / intent transactions (retry status CAS, intent claim,
+    // the pre-cancel status write, releaseAfterStop) also cross the same injected
+    // `db.transaction` boundary; the child itself still exhausts all eight
+    // cancellation attempts. RFC-359 T7b moved the managed-process quiescence
+    // step onto the unified explicit-BEGIN primitive, which this proxy cannot
+    // see (13 → 12).
+    expect(cancelCasAttempts).toBe(12)
     const parent = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
     const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
     expect(parent.status).toBe('failed')

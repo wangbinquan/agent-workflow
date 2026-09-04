@@ -12,6 +12,7 @@ import {
   readExpectedMigrationChain,
 } from './schemaAdmission'
 import { migrateSqlite } from './sqliteMigrator'
+import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
 
 export type DbClient = ReturnType<typeof drizzle<typeof schema>>
 
@@ -83,6 +84,35 @@ function cpuMicros(): number | null {
     return u.user + u.system
   } catch {
     return null
+  }
+}
+
+/**
+ * RFC-359 W2-T11d —— 旁观者语句守卫（`dbTxSync` 守卫的语句级形态）。
+ *
+ * 统一事务原语在 SQLite 上用显式 `BEGIN IMMEDIATE` 划边界，体内可以 `await`；它已经把事务
+ * 安排在**新的事件循环任务**里开始（`platform/persistence/databaseTransaction.ts`），所以在
+ * 正确的事务体（只 await 数据库操作）下，别的 async 上下文根本没有机会在 BEGIN 与 COMMIT
+ * 之间跑。这里守的是剩下那种形态：事务体 await 了网络 / 子进程 / 文件系统，把事件循环让出去，
+ * 于是任何一条旁观者语句——不只是 `dbTxSync`，包括裸的 `db.update(...).run()` 与读——都会
+ * 落进别人开着的事务里、随它回滚或读到未提交状态。宁可让旁观者得到一条可归因的错误。
+ *
+ * 包的是 drizzle 实际走的两个入口（`prepare` / `query`）与 `exec`；本上下文自己的事务体
+ * 持有 frame，不受影响（`foreignExplicitTransactionOpen` 只判「别人的」）。
+ */
+export function guardForeignStatements(sqlite: Database, client: object): void {
+  for (const method of ['prepare', 'query'] as const) {
+    const orig = (sqlite[method] as (...a: unknown[]) => object).bind(sqlite)
+    ;(sqlite as unknown as Record<string, unknown>)[method] = (...args: unknown[]) => {
+      if (foreignExplicitTransactionOpen(client))
+        throw new CrossContextTransactionError('statement')
+      return orig(...args)
+    }
+  }
+  const origExec = (sqlite.exec as (...a: unknown[]) => unknown).bind(sqlite)
+  ;(sqlite as unknown as Record<string, unknown>).exec = (...args: unknown[]) => {
+    if (foreignExplicitTransactionOpen(client)) throw new CrossContextTransactionError('statement')
+    return origExec(...args)
   }
 }
 
@@ -223,6 +253,7 @@ export function openDb(opts: OpenDbOptions): DbClient {
   }
 
   const db = drizzle(sqlite, { schema })
+  guardForeignStatements(sqlite, db as object)
   try {
     if (!opts.skipMigrations) {
       const migrationsFolder = resolve(opts.migrationsFolder)
@@ -364,6 +395,7 @@ export function createInMemoryDb(
     }
   }
   const db = drizzle(sqlite, { schema })
+  guardForeignStatements(sqlite, db as object)
   if (opts.bootstrap !== 'required') legacyDaemonTestDbs.add(db as object)
   return db
 }

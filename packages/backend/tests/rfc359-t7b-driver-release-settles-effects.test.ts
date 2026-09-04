@@ -36,6 +36,7 @@ import {
 import {
   createExclusiveDaemonLockProof,
   createVerifiedStopProof,
+  ownershipTokenKey,
   ownershipTuple,
 } from '@/modules/task-execution/domain/ownership'
 import {
@@ -322,6 +323,49 @@ describeEachProvider('RFC-359 T7b —— 驱动释放清算 process effect（P0-
     const { effect, attempt } = await readEffect(db, seeded.effect.effectId)
     expect(effect.state).toBe('open')
     expect(attempt.state).toBe('acting')
+  })
+
+  test('两阶段停机：awaitStopped 只在库里 owner 行转移后才被唤醒，successor 随即可认领（RFC-092 S-1 回归）', async () => {
+    const db = harness.db
+    const seeded = await seedOwnedProcessEffect(db, { spawned: true, runStatus: 'done' })
+    const registry = seeded.module.runtimeRegistry
+    const ticket = { token: seeded.token, tokenKey: ownershipTokenKey(seeded.token) }
+    const ownerStateWhenWoken: string[] = []
+    const waiter = registry.awaitStopped(ticket).then(async (result) => {
+      ownerStateWhenWoken.push((await readOwner(db, seeded.taskId)).state)
+      return result
+    })
+    let finalizeStarted = false
+    const releasing = releaseTaskDriverAndFinalize(
+      {
+        registry,
+        persistence: seeded.persistence,
+        stopHeartbeat: () => {},
+        finalizeWorkspace: async () => {
+          finalizeStarted = true
+        },
+      },
+      { taskId: seeded.taskId, controller: seeded.controller },
+    )
+    // 运行时一停，任务在 settle 之前仍算在本进程手里：successor 不能插队认领。
+    await Promise.resolve()
+    expect(registry.hasTask(seeded.taskId)).toBe(true)
+    expect(await waiter).toMatchObject({ kind: 'released' })
+    // 被唤醒时库里已经不是 'claimed'（此前是 'claimed'：等待者一认领就撞 already has owner state）。
+    expect(ownerStateWhenWoken).toEqual(['released'])
+    expect(registry.hasTask(seeded.taskId)).toBe(false)
+    await releasing
+    expect(finalizeStarted).toBe(true)
+    // successor：同一任务的新 intent 立刻能认领到新 epoch。
+    const nextIntentId = `intent_${ulid()}`
+    await seeded.persistence.intents.submit({
+      request: { ...continuation(seeded.taskId), kind: 'resume' },
+      intentId: nextIntentId,
+    })
+    const next = await seeded.module.claimPersisted({ intentId: nextIntentId })
+    seeded.module.claimGate.leave(next.permit)
+    expect(next.token.epoch).toBe(seeded.token.epoch + 1)
+    expect((await readOwner(db, seeded.taskId)).state).toBe('claimed')
   })
 
   test('过期 / 重复的 driver finally 不碰库：controller 不匹配就直接返回', async () => {

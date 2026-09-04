@@ -23,11 +23,13 @@ const frames = new AsyncLocalStorage<readonly object[]>()
 const openDepth = new WeakMap<object, number>()
 
 export class CrossContextTransactionError extends Error {
-  constructor() {
+  constructor(operation: 'dbTxSync' | 'statement' = 'dbTxSync') {
     super(
-      'dbTxSync was called while an explicit transaction is open on this client from another ' +
-        'async context. The write would join that transaction and be rolled back with it. ' +
-        'Use the unified primitive (platform/persistence/databaseTransaction.ts) instead. [RFC-359]',
+      `${operation === 'dbTxSync' ? 'dbTxSync was called' : 'a statement was executed'} while an ` +
+        'explicit transaction is open on this client from another async context. The write would ' +
+        'join that transaction and be rolled back with it. Explicit transactions start on a fresh ' +
+        'event-loop task, so this only happens when a transaction body awaited something that is ' +
+        'not a database operation (platform/persistence/databaseTransaction.ts). [RFC-359]',
     )
     this.name = 'CrossContextTransactionError'
   }

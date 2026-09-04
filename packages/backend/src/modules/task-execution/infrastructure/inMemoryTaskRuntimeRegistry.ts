@@ -25,6 +25,13 @@ interface RuntimeEntry {
   readonly controller: AbortController
   readonly stopped: Promise<RuntimeStopResult>
   readonly resolveStopped: (result: RuntimeStopResult) => void
+  /**
+   * 两阶段停机（RFC-359 T7b 修订）：`release()` 只记下运行时的停机结果，`settle()` 才把它公布给
+   * `awaitStopped` 的等待者。中间这段是 driver 在库里转移 owner 行的窗口——等待者（resume /
+   * 取消 / webhook 终态控制 / 关机排空）要的都是「库里的 owner 已经不归它了」，早一步就会撞上
+   * `already has owner state 'claimed'`。
+   */
+  stopResult: RuntimeStopResult | null
 }
 
 function stopDigest(tokenKey: string, result: 'released' | 'unreaped', code?: string): string {
@@ -67,6 +74,7 @@ export class InMemoryTaskRuntimeRegistry {
       controller: input.controller,
       stopped,
       resolveStopped,
+      stopResult: null,
     })
     this.taskIndex.set(input.token.taskId, key)
     this.completed.delete(key)
@@ -98,15 +106,23 @@ export class InMemoryTaskRuntimeRegistry {
     )
   }
 
+  /**
+   * 第一阶段：运行时已停（子进程 / 调度循环退出），记下停机结果并返回给释放序列。
+   * 返回 null 表示 controller 不是现任、或已经释放过——过期 / 重复的 driver finally 不得再碰库。
+   * 任务在 `settle()` 之前仍算在本进程手里：`hasTask` / `tokenForTask` 照旧、successor 的
+   * `tryAttach` 仍被拒。
+   */
   release(input: {
     token: OwnershipToken
     controller: AbortController
     result?: Readonly<{ kind: 'released' }> | Readonly<{ kind: 'unreaped'; code: string }>
-  }): boolean {
+  }): RuntimeStopResult | null {
     assertOwnershipToken(input.token)
     const key = ownershipTokenKey(input.token)
     const entry = this.entries.get(key)
-    if (entry === undefined || entry.controller !== input.controller) return false
+    if (entry === undefined || entry.controller !== input.controller || entry.stopResult !== null) {
+      return null
+    }
     const base = input.result ?? { kind: 'released' as const }
     const result: RuntimeStopResult =
       base.kind === 'released'
@@ -116,11 +132,23 @@ export class InMemoryTaskRuntimeRegistry {
             code: base.code,
             evidenceDigest: stopDigest(key, 'unreaped', base.code),
           }
+    entry.stopResult = result
+    return result
+  }
+
+  /**
+   * 第二阶段：库里的 owner 行已经转移（released / recovery-required / 被新 owner 围栏），
+   * 把任务从本进程的索引里摘掉并唤醒 `awaitStopped` 的等待者。幂等；未 `release()` 的条目不动。
+   */
+  settle(token: OwnershipToken): void {
+    assertOwnershipToken(token)
+    const key = ownershipTokenKey(token)
+    const entry = this.entries.get(key)
+    if (entry === undefined || entry.stopResult === null) return
     this.entries.delete(key)
-    if (this.taskIndex.get(input.token.taskId) === key) this.taskIndex.delete(input.token.taskId)
-    this.completed.set(key, result)
-    entry.resolveStopped(result)
-    return true
+    if (this.taskIndex.get(token.taskId) === key) this.taskIndex.delete(token.taskId)
+    this.completed.set(key, entry.stopResult)
+    entry.resolveStopped(entry.stopResult)
   }
 
   tokenForTask(taskId: string): OwnershipToken | null {
@@ -159,6 +187,7 @@ export class InMemoryTaskRuntimeRegistry {
   clearForTesting(): void {
     for (const entry of [...this.entries.values()]) {
       this.release({ token: entry.token, controller: entry.controller })
+      this.settle(entry.token)
     }
     this.entries.clear()
     this.taskIndex.clear()

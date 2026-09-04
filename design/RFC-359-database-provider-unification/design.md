@@ -47,6 +47,7 @@ export interface DatabaseSession {
 
 ```
 await writerLease.acquire()          // 进程内单写者，异步互斥
+await new Promise(setImmediate)      // W2-T11d：让出本事件循环任务，事务在干净的任务里开始
 try {
   db.exec('BEGIN IMMEDIATE')         // 预占 writer（RFC-338 AC-2 的既有不变量）
   const r = await body(tx)
@@ -61,7 +62,23 @@ try {
 ```
 
 **为什么这是安全的**（proposal §3 三组实测）：不再依赖 `bun:sqlite` 的「回调返回即提交」启发式，
-事务边界由显式语句划定；单写者租约保证 `BEGIN` 与 `COMMIT` 之间没有第二个写者在同一连接上发语句。
+事务边界由显式语句划定；单写者租约保证 `BEGIN` 与 `COMMIT` 之间没有第二个**统一原语**写者在同一连接上发语句。
+
+**旁观者隔离（W2-T11d，2026-09-05 修订，CI 实撞 `6efee254f`）**：租约管不住过渡期仍存在的 276 处同步
+写者（`dbTxSync` 与裸 `db.update(...).run()`）——它们不排队，只要在 `BEGIN` 与 `COMMIT` 之间跑到就落进别人的
+事务。`await` 只让渡到微任务队列，而 Bun 在每个宏任务回调之后把微任务队列排空（实测三种形态：immediate /
+timer / 嵌套 immediate），所以旁观者能插进来的唯一途径是：**它的续体与事务体的续体排在同一条微任务队列里**。
+CI 撞到的正是这个：driver 释放序列在 `registry.release` 唤醒取消路径 / webhook 终态控制之后紧接着开事务，
+两边续体交错，旁观者 `dbTxSync` 撞上开着的事务（RFC-268 取消 500、RFC-303 终态控制落成 retryable、
+RFC-092 successor 认领撞 `claimed`）。修法是把事务安排在**新的事件循环任务**里开始（`setImmediate`）：被本轮
+唤醒的同步写者先跑完，事务体只 await 数据库操作时（bun:sqlite 是同步驱动，drizzle 的 thenable 当场执行），
+BEGIN 到 COMMIT 之间没有任何别的上下文能运行。三条守卫：
+- 事务体 await 了非数据库操作（跨宏任务）时，旁观者的**任何**语句（不只 `dbTxSync`）由 `db/client.ts`
+  `guardForeignStatements` 拦成 `CrossContextTransactionError`（drizzle 包成 `DrizzleError`，守卫错误在 `cause`）；
+- 事务自身在 COMMIT 时记一条带 BEGIN 处调用栈的 error 日志（`watchEventLoopYield`）——只记不抛：跨任务的检出
+  只能在下一轮事件循环观测，抛会变成时序相关的假红；
+- `rfc359-database-transaction.test.ts` 的「旁观者隔离」组把「唤醒 + 立刻开事务」与「微任务链探针不交错」锁住。
+成本：每笔 SQLite 统一事务多一次事件循环让渡（微秒级；持锁时间从 BEGIN 起算，不含等待）。PostgreSQL 会话不变。
 
 **读连接分离**：事务外的读走既有的只读连接（`platform/persistence/sqlite/readonlySqliteDatabase.ts`），
 WAL 下不被写事务阻塞，也不会误入他人事务。
@@ -82,7 +99,7 @@ WAL 下不被写事务阻塞，也不会误入他人事务。
 
 | 失败模式 | 后果 | 护栏 |
 | --- | --- | --- |
-| 事务体内 await 了**非数据库**的慢操作（网络 / 子进程 / 文件） | SQLite 上独占写者，其余写请求排队；长到超时即雪崩 | **守卫**：事务体内禁止 import 进程 / 网络 / fs 模块；`transaction()` 带可配置软超时并在超时点记结构化诊断（不中断，避免半提交） |
+| 事务体内 await 了**非数据库**的慢操作（网络 / 子进程 / 文件） | SQLite 上独占写者，其余写请求排队；长到超时即雪崩；**且旁观者隔离失效**（§3.2） | **守卫**：旁观者语句拦成 `CrossContextTransactionError`（`guardForeignStatements`）+ 事务 COMMIT 时记带调用栈的 error 日志（`watchEventLoopYield`，已落）；事务体内禁止 import 进程 / 网络 / fs 模块的 lint 与软超时诊断仍是 T12 |
 | 事务内嵌套调用 `transaction()` | 单写者租约自死锁 | 用 `AsyncLocalStorage` 检出重入，内层复用外层 `tx`（PG 侧同样复用，不开 savepoint——本仓无 savepoint 语义需求） |
 | body 抛错后 `ROLLBACK` 本身失败 | 连接残留在事务中 | `ROLLBACK` 失败即视为连接不可用，标记并重建；不吞错 |
 | 有人绕过原语裸调 `db.transaction(async …)` | 回到零原子性 | lint 规则 + 架构守卫禁止裸 `db.transaction(`（AC-5） |

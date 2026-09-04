@@ -1161,6 +1161,36 @@ gh api "repos/<owner>/<repo>/actions/runs?head_sha=$SHA" \
 它的绿是**独立且有分量的证据**（真 Windows 内核跑过），只是不能冒充 CI 门。按「windows-platform
 run」单独记即可。
 
+## 被 supersede 取消的 CI run 不是绿：main 可以红一整天而 watcher 一直「在跟」（2026-09-05 实撞）
+
+连续推送时 GitHub 会取消被后一笔 supersede 的 run。RFC-359 2026-09-04 一天推了二十多笔，每笔的 watcher 都
+「跟到下一笔」——**从 13:24 的 `902a5def5` 之后没有一个 CI run 真正跑完过**，直到深夜 `6efee254f` 才跑完并红了
+7 条（4 条是 T7b 起就红的驱动释放竞速、1 条账本、2 条 e2e），而中间每一笔都以为自己是绿的。
+
+判据：**`gh run list --workflow CI` 里 `conclusion=success` 的那个 sha 才是最近的绿**；`cancelled` 一律当作
+「没验证过」。改法：
+- 连推之间留够一次完整 CI 的时间（~25 分钟），或者推完一笔就等它跑完再推下一笔；
+- watcher 报告 superseded 时不要只跟，要把「上一次真正的绿是哪个 sha」一起打印出来；
+- 本地守卫清单要含 `tests/architecture/rfc317-module-boundary.test.ts`（R1/R2 边逐条相等）——这条只在 CI 跑，
+  两笔 T7c / T15-B 的新边就是这么漏到 CI 才红的。
+
+## SQLite 统一事务的「旁观者」：被你自己唤醒的续体会插进你的事务体（RFC-359 W2-T11d 实撞，2026-09-05）
+
+`platform/persistence/databaseTransaction.ts` 在 SQLite 上用显式 `BEGIN IMMEDIATE` + async 体。事务体的每个
+`await` 都让渡到微任务队列；Bun 在每个宏任务回调后排空微任务队列，所以**跨宏任务的上下文插不进来**，但
+**同一条微任务队列里的别的续体能**——典型形态：`registry.release()` resolve 了取消路径 / webhook 终态控制正在
+等的 promise，紧接着开事务，两边续体交错，旁观者的 `dbTxSync` 撞上开着的事务（`CrossContextTransactionError`：
+RFC-268 取消 500、RFC-303 终态控制落成 retryable），或者 successor 认领撞上还没释放的 owner 行
+（RFC-092 `already has owner state 'claimed'`）。
+
+修法与判据：
+- 原语拿到租约后先 `await new Promise(setImmediate)` 再 BEGIN：被本轮唤醒的同步写者先跑完，事务在干净的任务里开始；
+- 事务体**只 await 数据库操作**——await fs / spawn / fetch / timer 就跨出了本任务，隔离失效。现在旁观者的任何语句
+  都会被 `guardForeignStatements` 拦成 `CrossContextTransactionError`（在 `DrizzleError.cause` 上），事务自身在
+  COMMIT 时记一条带调用栈的 `[db-tx]` error 日志——看到这条日志就是事务体违规，去掉那个 await 或把它挪到事务外；
+- 「先 resolve 别人的 promise，再做自己的库事务」这种顺序本身就是风险：等待者要的往往是**库里的状态已转移**，
+  不是「运行时停了」。runtime registry 因此改成两阶段（`release` 记结果、库里 owner 行转移完才 `settle` 唤醒等待者）。
+
 ## 被 `needs:` 挡着从没跑过的 CI lane，等于**没被验证过能跑完**（RFC-349 实测，2026-09-03）
 
 `postgresql-evidence` 的 `functional-regression` lane 写着 `needs: [crash-large-and-soak,

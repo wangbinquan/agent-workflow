@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 285,
+    "inboundEdges": 288,
     "outboundEdges": 35,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -433,6 +433,23 @@
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionResourceSnapshots.ts#createPostgresqlTaskExecutionResourceBinding"
       ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "specifier": "@/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 T7c 的删除认领崩溃恢复是 provider 中立的一份实现（infrastructure/taskDeleteRecovery），PostgreSQL daemon 的 boot 序列直接调它；它的形参是 ProviderNeutralDatabase（drizzle 不透明类型），不能经 exact public 合同暴露，等 W3-T14/T16 两个 daemon 入口合一后随 boot 序列一起归 composition。",
+      "introducedByRFC": "RFC-359 W1-T7c（2026-09-04）",
+      "removeAfterWave": "RFC-359 W3-T14/T16（统一 boot 序列，daemon 入口归 composition）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "canonicalToOwnerEntryIds": [],
       "canonicalFacadeIds": []
     },
     {
@@ -6036,6 +6053,40 @@
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/taskDelete.ts"
       ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskDelete.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "specifier": "@/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 T7c 把删除认领的崩溃恢复与资源清理合成一份 provider 中立实现（infrastructure/taskDeleteRecovery），legacy 的 services/taskDelete.ts 在 W4 吸收任务删除之前仍直接消费该内部实现（cleanupDeletedTaskResources 与 boot 恢复的再导出）。",
+      "introducedByRFC": "RFC-359 W1-T7c（2026-09-04）",
+      "removeAfterWave": "RFC-359 W4（legacy 任务删除服务并入 task-execution，成对删除）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "canonicalToOwnerEntryIds": [],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/taskDelete.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "specifier": "@/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 T7c 把删除认领的崩溃恢复与资源清理合成一份 provider 中立实现（infrastructure/taskDeleteRecovery），legacy 的 services/taskDelete.ts 在 W4 吸收任务删除之前仍直接消费该内部实现（cleanupDeletedTaskResources 与 boot 恢复的再导出）。",
+      "introducedByRFC": "RFC-359 W1-T7c（2026-09-04）",
+      "removeAfterWave": "RFC-359 W4（legacy 任务删除服务并入 task-execution，成对删除）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "canonicalToOwnerEntryIds": [],
+      "canonicalFacadeIds": []
     },
     {
       "rule": "R1-inbound-module-internals",

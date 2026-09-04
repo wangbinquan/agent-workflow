@@ -23,15 +23,26 @@
 //
 // # 代价与护栏
 //
-// 显式边界让事务体里可以 `await`，也就打开了一个事件循环让渡窗口。两条护栏：
+// 显式边界让事务体里可以 `await`，也就打开了一个事件循环让渡窗口。三条护栏：
 //   · 同一客户端上的写事务由 `writerLease` 串行化（见该文件头注释）；
-//   · 事务体**只应 await 数据库操作**。await 网络 / 子进程 / 大文件会独占写者，
-//     其余写请求在应用层排队。这条目前靠约定，RFC-359 W2-T12 会补 lint 规则。
+//   · **旁观者隔离**（W2-T11d，2026-09-05 CI 实撞后补）：事务在**新的事件循环任务**里开始。
+//     await 只让渡到微任务队列，而 Bun 在每个宏任务回调之后把微任务队列排空（实测：immediate /
+//     timer / 嵌套 immediate 三种形态都如此）；所以只要事务体只 await 数据库操作（bun:sqlite 是
+//     同步驱动，drizzle 的 thenable 当场执行、微任务里 resolve），BEGIN 到 COMMIT 之间就**没有
+//     任何**别的上下文能插进来。反例正是 CI 撞到的形态：driver 释放序列在 `registry.release`
+//     唤醒了取消路径 / webhook 终态控制，它们的续体和事务体的续体排在同一条微任务队列里交错，
+//     旁观者的 `dbTxSync` 撞上开着的事务。拿到租约后先 `setImmediate` 让出本任务，被唤醒的
+//     同步写者先跑完，事务在干净的任务里开始。
+//   · 事务体**只应 await 数据库操作**。await 网络 / 子进程 / 文件系统会跨出本任务，隔离随之失效：
+//     旁观者语句由 `db/client.ts` 的 `guardForeignStatements` 拦成明确错误，事务本身在 COMMIT 时
+//     记一条带调用栈的 error 日志（`watchEventLoopYield`）——不抛，因为跨任务的检出只能在下一轮
+//     事件循环观测，抛会把它变成时序相关的假红。
 
 import { sql } from 'drizzle-orm'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { observeDbTransaction, type DbClient } from '@/db/client'
+import { createLogger } from '@/util/log'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 import { runInExplicitTransactionScope } from '@/db/transactionScope'
@@ -47,6 +58,36 @@ import { acquireWriterLease } from './writerLease'
 
 /** 事务句柄。两个 provider 上都是 drizzle 的同一套 query builder。 */
 export type DatabaseTransaction = ProviderNeutralDatabase
+
+const log = createLogger('db-tx')
+
+/** 让出当前事件循环任务；续体在一个微任务队列为空的新任务里运行（见头注释「旁观者隔离」）。 */
+function yieldEventLoopTask(): Promise<void> {
+  return new Promise<void>((resolve) => setImmediate(resolve))
+}
+
+/**
+ * 事务体跨出事件循环任务的检出。BEGIN 前排一个 immediate：事务体若只 await 数据库操作，COMMIT
+ * 一定先于它；它先跑到就说明事务体 await 了别的东西。只记日志（带 BEGIN 处的调用栈），理由见头注释。
+ */
+function watchEventLoopYield(): { readonly stop: () => void } {
+  let yielded = false
+  const site = new Error('explicit SQLite transaction opened here')
+  const immediate = setImmediate(() => {
+    yielded = true
+  })
+  return {
+    stop() {
+      clearImmediate(immediate)
+      if (yielded) {
+        log.error(
+          'explicit SQLite transaction yielded to the event loop: the body awaited something that is not a database operation; bystander statements were rejected meanwhile [RFC-359]',
+          { stack: site.stack ?? '' },
+        )
+      }
+    },
+  }
+}
 
 // 每个引擎一份能力矩阵单例：`session.engine` 与 `engineOf(tx)` 拿到的是同一个对象。
 const SQLITE_ENGINE = createSqliteCapabilities()
@@ -131,20 +172,29 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
     if (reused !== undefined) return await body(reused)
     const release = await acquireWriterLease(client)
     const tx = db as unknown as DatabaseTransaction
-    const startedAt = performance.now()
+    // 计时从 BEGIN 起：租约与让出的等待都不占写锁，RFC-311 的事务时长守卫看的是持锁时间。
+    let startedAt = performance.now()
     try {
-      db.run(sql.raw('BEGIN IMMEDIATE'))
-      let result: T
+      // 旁观者隔离（头注释）：让出本任务，被本轮唤醒的同步写者先跑完，事务在干净的任务里开始。
+      await yieldEventLoopTask()
+      startedAt = performance.now()
+      const yieldWatch = watchEventLoopYield()
       try {
-        result = await withFrame(client, tx, async () => await body(tx))
-      } catch (error) {
-        // ROLLBACK 自身失败意味着连接状态不可知——不吞，让它盖过原错误往上抛，
-        // 由调用方按「连接不可用」处置。静默继续会把后续语句留在一个开着的事务里。
-        db.run(sql.raw('ROLLBACK'))
-        throw error
+        db.run(sql.raw('BEGIN IMMEDIATE'))
+        let result: T
+        try {
+          result = await withFrame(client, tx, async () => await body(tx))
+        } catch (error) {
+          // ROLLBACK 自身失败意味着连接状态不可知——不吞，让它盖过原错误往上抛，
+          // 由调用方按「连接不可用」处置。静默继续会把后续语句留在一个开着的事务里。
+          db.run(sql.raw('ROLLBACK'))
+          throw error
+        }
+        db.run(sql.raw('COMMIT'))
+        return result
+      } finally {
+        yieldWatch.stop()
       }
-      db.run(sql.raw('COMMIT'))
-      return result
     } finally {
       release()
       // 与 dbTxSync 同一个观测点（RFC-311 的事务时长守卫读它），迁过来的事务不能从指标里消失。

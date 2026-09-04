@@ -16,6 +16,7 @@ import { CrossContextTransactionError } from '@/db/transactionScope'
 import { dbTxSync } from '@/db/txSync'
 import { createSqliteDatabaseSession } from '@/platform/persistence/databaseTransaction'
 import { acquireWriterLease, WriterLeaseTimeoutError } from '@/platform/persistence/writerLease'
+import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
 import { MIGRATIONS } from './migration-freeze'
 
 function scratchDb(): DbClient {
@@ -213,6 +214,134 @@ describe('RFC-359 —— 与 dbTxSync 的共存', () => {
       return 1
     })
     expect(values(db)).toEqual(['I1', 'I2'])
+  })
+})
+
+// RFC-359 W2-T11d —— 旁观者隔离（2026-09-05 CI 实撞：6efee254f 全分片红）。
+//
+// 撞上的形态：driver 释放序列里 `registry.release` 唤醒了取消路径 / webhook 终态控制，
+// 它们的续体和紧接着开的统一事务的续体排在**同一条微任务队列**里交错，旁观者的 `dbTxSync`
+// 撞上开着的显式事务 → CrossContextTransactionError（RFC-268 取消 500、RFC-303 终态控制
+// 落成 retryable）。修法：事务在新的事件循环任务里开始；只 await 数据库操作的事务体从此
+// 不可能被任何别的上下文插进来。这组用例把「唤醒 + 立刻开事务」的形态复现出来锁住。
+describe('RFC-359 W2-T11d —— 旁观者隔离：事务在新的事件循环任务里开始', () => {
+  test('被同一轮唤醒的同步写者先跑完，再开事务：两边都落库、无人报错', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    let wake!: () => void
+    const woken = new Promise<void>((resolve) => {
+      wake = resolve
+    })
+    // 旁观者：等着被唤醒，然后立刻做一笔同步写事务——修复前它会在事务体第一个 await 处插进来。
+    const bystander = woken.then(() =>
+      dbTxSync(db, (tx) => {
+        tx.run(sql.raw("insert into rfc359_scratch(v) values ('bystander')"))
+        return 1
+      }),
+    )
+    // 本上下文：唤醒旁观者后**同一个宏任务里**开事务，事务体只 await 数据库操作。
+    wake()
+    await session.transaction(async (tx) => {
+      insert(db, 'T1')
+      await tx.select({ n: sql<number>`count(*)` }).from(sql.raw('rfc359_scratch'))
+      insert(db, 'T2')
+    })
+    await expect(bystander).resolves.toBe(1)
+    // 旁观者先跑（它在事务开始前的那轮微任务里），事务体随后在干净的任务里整体执行。
+    expect(values(db)).toEqual(['bystander', 'T1', 'T2'])
+  })
+
+  test('只 await 数据库操作的事务体：BEGIN 到 COMMIT 之间没有别的上下文能跑', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    const observed: string[] = []
+    let inside = false
+    // 一个持续排队的微任务链：若事务体的微任务与它交错，它会观测到 inside=true。
+    let spins = 0
+    const spinner = (async () => {
+      while (spins < 200) {
+        await Promise.resolve()
+        spins += 1
+        if (inside) observed.push('interleaved')
+      }
+    })()
+    await session.transaction(async (tx) => {
+      inside = true
+      for (let i = 0; i < 5; i++) {
+        await tx.select({ n: sql<number>`count(*)` }).from(sql.raw('rfc359_scratch'))
+      }
+      insert(db, 'Z')
+      inside = false
+    })
+    await spinner
+    expect(
+      observed,
+      '事务体的微任务链与别的上下文交错了——旁观者隔离失效（事务不再在新的宏任务里开始？）',
+    ).toEqual([])
+    expect(values(db)).toEqual(['Z'])
+  })
+
+  test('事务体 await 了非数据库操作（跨宏任务）：旁观者的裸语句也被拦下，且事务记 error 日志', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    const lines: string[] = []
+    resetLoggerForTest()
+    setLoggerStdoutWriterForTest((line) => {
+      lines.push(line)
+    })
+    try {
+      let bystander: unknown = null
+      const outer = session.transaction(async () => {
+        insert(db, 'Y1')
+        // 违反约定：await 一个真正的事件循环 tick。隔离随之失效，旁观者会跑进来。
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        insert(db, 'Y2')
+      })
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      try {
+        // 不是 dbTxSync，是一条裸语句——同样会落进别人开着的事务，同样必须被拦。
+        insert(db, 'bystander')
+      } catch (error) {
+        bystander = error
+      }
+      await outer
+      // drizzle 把语句层的错误包成 DrizzleError，守卫错误在 cause 上。
+      const cause = (bystander as { cause?: unknown }).cause
+      expect(cause).toBeInstanceOf(CrossContextTransactionError)
+      expect((cause as Error).message).toContain('a statement was executed')
+      expect(values(db)).toEqual(['Y1', 'Y2'])
+      expect(
+        lines.some((line) =>
+          line.includes('explicit SQLite transaction yielded to the event loop'),
+        ),
+        '跨宏任务的事务体必须留下一条带调用栈的 error 日志，否则违规不可归因',
+      ).toBe(true)
+    } finally {
+      resetLoggerForTest()
+    }
+  })
+
+  test('只 await 数据库操作的事务体不记 yield 日志', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    const lines: string[] = []
+    resetLoggerForTest()
+    setLoggerStdoutWriterForTest((line) => {
+      lines.push(line)
+    })
+    try {
+      await session.transaction(async (tx) => {
+        insert(db, 'Q1')
+        await tx.select({ n: sql<number>`count(*)` }).from(sql.raw('rfc359_scratch'))
+        insert(db, 'Q2')
+      })
+      // 检出用的 immediate 在下一轮事件循环才跑；等它过去再断言。
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(lines.filter((line) => line.includes('yielded to the event loop'))).toEqual([])
+      expect(values(db)).toEqual(['Q1', 'Q2'])
+    } finally {
+      resetLoggerForTest()
+    }
   })
 })
 

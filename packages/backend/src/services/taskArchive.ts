@@ -77,7 +77,6 @@ import {
 } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { createLogger } from '@/util/log'
-import { sweepArchiveTempDirectories } from '@/modules/task-execution/infrastructure/archiveTempDirectorySweep'
 import { Paths } from '@/util/paths'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
@@ -741,7 +740,7 @@ function parseArchiveCleanupPlan(value: string): ArchiveCleanupPlanV2 | null {
 export async function recoverInterruptedArchives(
   db: LegacySqliteTaskDatabase,
   opts: TaskArchiveOptions = {},
-): Promise<{ promoted: string[]; discarded: string[] }> {
+): Promise<{ promoted: string[]; discarded: string[]; claimedRoots: ReadonlySet<string> }> {
   const archiveRoot = opts.archiveDir ?? Paths.taskArchiveDir
   const promoted: string[] = []
   const discarded: string[] = []
@@ -853,22 +852,9 @@ export async function recoverInterruptedArchives(
     }
   }
 
-  // RFC-359 W3-T15-B：`.tmp-*` 残留的提升 / 丢弃 / 放回规则与 PostgreSQL 归档恢复共用一份实现。
-  const swept = await sweepArchiveTempDirectories({
-    archiveRoot,
-    runsDir: opts.runsDir ?? Paths.runsDir,
-    logsDir: opts.logsDir ?? Paths.logsDir,
-    claimedRoots,
-    taskExists: async (taskId) =>
-      (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).get()) !==
-      undefined,
-  })
-  promoted.push(...swept.promoted)
-  discarded.push(...swept.discarded)
-  if (promoted.length > 0 || discarded.length > 0) {
-    log.info('recovered interrupted archives', { promoted, discarded })
-  }
-  return { promoted, discarded }
+  // `.tmp-*` 残留的提升 / 丢弃 / 放回由模块内的 `archiveTempDirectorySweep` 负责，两个 provider
+  // 共用一份；SQLite 适配器（`sqliteTaskArchiveMaintenanceCommand.ts`）拿着这里的 claimedRoots 去调它。
+  return { promoted, discarded, claimedRoots }
 }
 
 export interface TaskArchiveConfig {

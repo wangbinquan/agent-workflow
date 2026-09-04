@@ -39,13 +39,13 @@ import {
   users,
   workflows,
 } from '../src/db/schema'
+import { createSqliteTaskArchiveMaintenanceCommand } from '../src/modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand'
 import { createApp } from '../src/server'
 import {
   ARCHIVED_TABLES,
   ARCHIVE_EXEMPT_TABLES,
   archiveTaskTree,
   findArchivableTrees,
-  recoverInterruptedArchives,
   runTaskArchiveSweep,
 } from '../src/services/taskArchive'
 
@@ -316,7 +316,9 @@ describe('RFC-311 T19 — task archive', () => {
     mkdirSync(join(dirs.archiveDir, '.tmp-gone', 'db'), { recursive: true })
     writeFileSync(join(dirs.archiveDir, '.tmp-gone', 'manifest.json'), '{}', 'utf-8')
 
-    const recovered = await recoverInterruptedArchives(db, dirs)
+    // RFC-359 W3-T15-B：`.tmp-*` 收尾在模块的 SQLite 适配器里（与 PostgreSQL 共用一份规则），
+    // legacy 的 recoverInterruptedArchives 只续做 RFC-328 认领并交出 claimedRoots。
+    const recovered = await createSqliteTaskArchiveMaintenanceCommand(db).recover(dirs)
     expect(recovered.promoted).toEqual(['gone'])
     expect(recovered.discarded).toEqual(['still-here'])
     expect(existsSync(join(dirs.archiveDir, 'gone', 'manifest.json'))).toBe(true)

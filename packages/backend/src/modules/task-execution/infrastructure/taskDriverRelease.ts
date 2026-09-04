@@ -5,10 +5,15 @@
 // `releaseAfterStop`，而 PG 的 owner 释放一看到还开着的 effect 就抛 `task-execution-recovery-required`
 // ——每个跑过子进程的任务在 PG 上都以 owner 卡死收场。这里把顺序只写一次，两个 lifecycle 都委托：
 //
-//   registry 校验（token / controller）→ 读 unreaped 证据 → registry.release → 停心跳 → awaitStopped
+//   registry 校验（token / controller）→ 读 unreaped 证据 → registry.release（第一阶段）→ 停心跳
 //   → 读 owner → [released] 清算 managed-process → 仍有未决 effect ? outcome-unknown 闭合 : releaseAfterStop
 //              → [unreaped]  markRecoveryRequired
+//   → registry.settle（第二阶段：此时才唤醒 awaitStopped / awaitTaskDriverIdle 的等待者）
 //   → finalizeWorkspace
+//
+// 两阶段的原因（2026-09-05 CI 实撞，RFC-092 S-1）：等待者一被唤醒就会去认领，而库里的 owner 行
+// 要到上面那几笔事务提交后才不再是 'claimed'。此前 SQLite 的释放几乎全同步、靠微任务先后顺序碰巧
+// 赢了这场竞速；序列合一后多了几次 await 就输了。现在库里转移完才 settle，与顺序无关。
 //
 // 全部持久化动作走 `TaskExecutionPersistence` 的命名端口，provider 只在 bootstrap 选。
 
@@ -19,8 +24,9 @@ import {
   createVerifiedOutcomeUnknownClosure,
   createVerifiedStopProof,
   ownershipTokenKey,
+  type OwnershipToken,
 } from '../domain/ownership'
-import type { InMemoryTaskRuntimeRegistry } from './inMemoryTaskRuntimeRegistry'
+import type { InMemoryTaskRuntimeRegistry, RuntimeStopResult } from './inMemoryTaskRuntimeRegistry'
 
 export interface TaskDriverReleaseDependencies {
   readonly registry: InMemoryTaskRuntimeRegistry
@@ -44,19 +50,33 @@ export async function releaseTaskDriverAndFinalize(
   const intentId = registry.intentFor(token)
   if (intentId === null) return
   const unreaped = await persistence.effects.unreapedProcessCode(input.taskId)
-  if (
-    !registry.release({
-      token,
-      controller: input.controller,
-      result: unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
-    })
-  ) {
-    return
-  }
+  const stopResult = registry.release({
+    token,
+    controller: input.controller,
+    result: unreaped === null ? { kind: 'released' } : { kind: 'unreaped', code: unreaped },
+  })
+  if (stopResult === null) return
 
-  const tokenKey = ownershipTokenKey(token)
-  deps.stopHeartbeat(tokenKey)
-  const stopResult = await registry.awaitStopped({ token, tokenKey })
+  deps.stopHeartbeat(ownershipTokenKey(token))
+  try {
+    await transferOwnerRow(persistence, { taskId: input.taskId, token, intentId, stopResult })
+  } finally {
+    registry.settle(token)
+  }
+  await deps.finalizeWorkspace(input.taskId)
+}
+
+/** 库里的 owner 行转移：清算本 epoch 的 effect，再按停机结果释放或标记待恢复。 */
+async function transferOwnerRow(
+  persistence: TaskDriverReleaseDependencies['persistence'],
+  input: {
+    readonly taskId: string
+    readonly token: OwnershipToken
+    readonly intentId: string
+    readonly stopResult: RuntimeStopResult
+  },
+): Promise<void> {
+  const { token, intentId, stopResult } = input
   const owner = await persistence.ownership.read(input.taskId)
   if (owner !== null && owner.epoch === token.epoch) {
     if (stopResult.kind === 'released') {
@@ -118,5 +138,4 @@ export async function releaseTaskDriverAndFinalize(
       })
     }
   }
-  await deps.finalizeWorkspace(input.taskId)
 }

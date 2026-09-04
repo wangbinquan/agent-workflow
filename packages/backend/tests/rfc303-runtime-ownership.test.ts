@@ -74,10 +74,23 @@ describe('RFC-303 task driver ownership', () => {
     })
     await Promise.resolve()
     expect(settled).toBe(false)
-    expect(h.registry.release({ token: h.token, controller, result: { kind: 'released' } })).toBe(
-      true,
-    )
+    // RFC-359 T7b 修订：两阶段停机。release 只记下运行时的停机结果，任务仍算在本进程手里；
+    // 等待者要到 settle（库里 owner 行转移完）才被唤醒。
+    expect(
+      h.registry.release({ token: h.token, controller, result: { kind: 'released' } }),
+    ).toMatchObject({ kind: 'released' })
+    expect(h.registry.hasTask('task-1')).toBe(true)
+    expect(h.registry.tokenForTask('task-1')).toEqual(h.token)
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    // 重复的 release（同一 controller 的第二个 finally）不再生效。
+    expect(h.registry.release({ token: h.token, controller })).toBeNull()
+    h.registry.settle(h.token)
     expect(await h.registry.awaitStopped(ticket)).toMatchObject({ kind: 'released' })
+    expect(settled).toBe(true)
+    expect(h.registry.hasTask('task-1')).toBe(false)
+    // settle 幂等。
+    h.registry.settle(h.token)
   })
 
   test('a stale controller cannot release a newer or different owner', async () => {
@@ -92,7 +105,7 @@ describe('RFC-303 task driver ownership', () => {
       }),
     ).toBe('attached')
     h.gate.leave(h.permit)
-    expect(h.registry.release({ token: h.token, controller: new AbortController() })).toBe(false)
+    expect(h.registry.release({ token: h.token, controller: new AbortController() })).toBeNull()
     expect(h.registry.hasTask('task-1')).toBe(true)
 
     const ticket = h.registry.requestStop(h.token, cause)
@@ -102,7 +115,9 @@ describe('RFC-303 task driver ownership', () => {
         controller: owner,
         result: { kind: 'unreaped', code: 'child-unkillable' },
       }),
-    ).toBe(true)
+    ).toMatchObject({ kind: 'unreaped', code: 'child-unkillable' })
+    // 未 release 过的 settle 是空操作；release 过的才公布结果。
+    h.registry.settle(h.token)
     expect(await h.registry.awaitStopped(ticket)).toMatchObject({
       kind: 'unreaped',
       code: 'child-unkillable',

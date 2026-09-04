@@ -1,15 +1,23 @@
+import { eq } from 'drizzle-orm'
+
 import type { DbClient } from '@/db/client'
+import { tasks } from '@/db/schema'
 import {
   previewArchivableTrees,
   recoverInterruptedArchives,
   runManualTaskArchive,
   runTaskArchiveSweep,
 } from '@/services/taskArchive'
+import { createLogger } from '@/util/log'
 import type {
   TaskArchiveConfig,
   TaskArchiveMaintenanceCommand,
   TaskArchiveMaintenanceOptions,
+  TaskArchiveRecoveryReceipt,
 } from '../application/ports/taskArchiveMaintenanceCommand'
+import { sweepArchiveTempDirectories } from './archiveTempDirectorySweep'
+
+const log = createLogger('task-archive')
 
 export function createSqliteTaskArchiveMaintenanceCommand(
   db: DbClient,
@@ -35,8 +43,24 @@ export function createSqliteTaskArchiveMaintenanceCommand(
         { ...options, ...(input.now === undefined ? {} : { now: input.now }) },
       )
     },
-    async recover(options: TaskArchiveMaintenanceOptions) {
-      return await recoverInterruptedArchives(db, options)
+    // RFC-359 W3-T15-B：先续做 RFC-328 认领（legacy 实现），再按与 PostgreSQL 同一份规则收尾 `.tmp-*`。
+    async recover(options: TaskArchiveMaintenanceOptions): Promise<TaskArchiveRecoveryReceipt> {
+      const claims = await recoverInterruptedArchives(db, options)
+      const swept = await sweepArchiveTempDirectories({
+        archiveRoot: options.archiveDir,
+        runsDir: options.runsDir,
+        logsDir: options.logsDir,
+        claimedRoots: claims.claimedRoots,
+        taskExists: async (taskId) =>
+          (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId)).get()) !==
+          undefined,
+      })
+      const promoted = [...claims.promoted, ...swept.promoted]
+      const discarded = [...claims.discarded, ...swept.discarded]
+      if (promoted.length > 0 || discarded.length > 0) {
+        log.info('recovered interrupted archives', { promoted, discarded })
+      }
+      return { promoted, discarded }
     },
   })
 }
