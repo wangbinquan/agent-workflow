@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6307,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-355 T4：apply 大事务里「能先算完再写」的那一半（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档）从两个 provider 各抄一份收成共用两份文件，新增的具名符号入清单；两个 provider 的 apply 文件同批各缩 116 / 77 行。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -451,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5196,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-355 T4：apply 大事务里「能先算完再写」的那一半（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档）从两个 provider 各抄一份收成共用两份文件，新增的具名符号入清单；两个 provider 的 apply 文件同批各缩 116 / 77 行。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -489,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25928,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-355 T4：apply 大事务里「能先算完再写」的那一半（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档）从两个 provider 各抄一份收成共用两份文件，新增的具名符号入清单；两个 provider 的 apply 文件同批各缩 116 / 77 行。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -509,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c31844a303872753f64b27ea646f10aee7cbbd4c",
-    "contentDigest": "sha256:7471d71080f03980353674b1327083b04244a54a47408667e437e2de1fd12988",
+    "currentSnapshotSha": "db8dbf424a83e23aca072f03ca7dbd130fff198a",
+    "contentDigest": "sha256:4fe9822f7e0ba09715b674c9362b8ca08a63e4bfdfb9ac5b6ec5452cc5a5953f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
