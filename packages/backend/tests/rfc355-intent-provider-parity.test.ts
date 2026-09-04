@@ -114,6 +114,11 @@ describe('RFC-355 T1 —— 双 provider 的诊断词汇必须一致', () => {
     'intent-target-not-mounted',
     'intent-turn-in-flight',
     'intent-turn-not-found',
+    // RFC-358 AC-6（行为变更 B-2）—— 提交期的工作流图校验。draft 期那道门挡的是模型，
+    // 这道挡的是 draft 与 apply 之间的漂移：被引用 agent 的端口被别人改了、草稿产生于
+    // 图校验上线之前、finalName 改名断掉了按名字建立的 call 边。三类都会让一份确认页
+    // 上是绿的草稿在提交时被拒，所以它是**产品面**的新错误码，文案按成因分类。
+    'intent-workflow-invalid',
     'intent-working-set-applying',
     'intent-working-set-not-failed',
     'intent-working-set-not-found',
