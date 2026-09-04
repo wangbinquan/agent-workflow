@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1931,
+      "baseline": 1933,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
         "why": "RFC-359 W2-T8/T9：新增统一事务原语两个文件（platform/persistence/databaseTransaction.ts 与 writerLease.ts）。这次上涨是**为了把 153 对成对适配器塌成一份**而先立的地基——RFC-359 的技术核心是「bun:sqlite 的同步事务包装器 vs PostgreSQL 的异步事务」这条约束只对那个包装器成立，显式 BEGIN IMMEDIATE + 显式 COMMIT/ROLLBACK 下 async 事务体在 SQLite 上有真原子性（实测三组对照，见该文件头注释）。障碍拆掉后 W4 会逐 context 合一，届时这几份账本应当**大幅下降**。下一笔不涨即删。"
@@ -409,20 +409,14 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 480,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-359 W2-T8/T9：新增统一事务原语两个文件（platform/persistence/databaseTransaction.ts 与 writerLease.ts）。这次上涨是**为了把 153 对成对适配器塌成一份**而先立的地基——RFC-359 的技术核心是「bun:sqlite 的同步事务包装器 vs PostgreSQL 的异步事务」这条约束只对那个包装器成立，显式 BEGIN IMMEDIATE + 显式 COMMIT/ROLLBACK 下 async 事务体在 SQLite 上有真原子性（实测三组对照，见该文件头注释）。障碍拆掉后 W4 会逐 context 合一，届时这几份账本应当**大幅下降**。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 368,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-359 W2-T8/T9：新增统一事务原语两个文件（platform/persistence/databaseTransaction.ts 与 writerLease.ts）。这次上涨是**为了把 153 对成对适配器塌成一份**而先立的地基——RFC-359 的技术核心是「bun:sqlite 的同步事务包装器 vs PostgreSQL 的异步事务」这条约束只对那个包装器成立，显式 BEGIN IMMEDIATE + 显式 COMMIT/ROLLBACK 下 async 事务体在 SQLite 上有真原子性（实测三组对照，见该文件头注释）。障碍拆掉后 W4 会逐 context 合一，届时这几份账本应当**大幅下降**。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -491,7 +485,7 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26044,
+      "baseline": 26051,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
         "why": "RFC-359 W2-T8/T9：新增统一事务原语两个文件（platform/persistence/databaseTransaction.ts 与 writerLease.ts）。这次上涨是**为了把 153 对成对适配器塌成一份**而先立的地基——RFC-359 的技术核心是「bun:sqlite 的同步事务包装器 vs PostgreSQL 的异步事务」这条约束只对那个包装器成立，显式 BEGIN IMMEDIATE + 显式 COMMIT/ROLLBACK 下 async 事务体在 SQLite 上有真原子性（实测三组对照，见该文件头注释）。障碍拆掉后 W4 会逐 context 合一，届时这几份账本应当**大幅下降**。下一笔不涨即删。"
@@ -499,7 +493,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57",
+    "sourceDigest": "sha256:30088ba759d3cde9de3f59d4e015bef3f527681b9d440db9bae907f66c871bca",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +506,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5c01868c49a0190d3faf99a32ef0a975e9a92e41",
-    "contentDigest": "sha256:7ea98b9077eedad495829683bb35effdb71e8844348e0d70b42e58819aa7d2e1",
+    "currentSnapshotSha": "88b9a59406b007318f20e83fba8957db3f7a6674",
+    "contentDigest": "sha256:5fc8521858a7c0aa9de22375b254acd69660c15badf93c97f0906380d05ca1cb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

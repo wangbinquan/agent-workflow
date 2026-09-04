@@ -194,8 +194,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/db/txSync.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/db/txSync.ts#transaction:34",
-      "line": 34,
+      "id": "tx:packages/backend/src/db/txSync.ts#transaction:40",
+      "line": 40,
       "ownerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
       "status": "clear",
       "symbol": "dbTxSync",
@@ -5488,8 +5488,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:111",
-      "line": 111,
+      "id": "tx:packages/backend/src/platform/persistence/databaseTransaction.ts#transaction:114",
+      "line": 114,
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createPostgresqlDatabaseSession",
       "status": "clear",
       "symbol": "createPostgresqlDatabaseSession",
@@ -5900,7 +5900,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57",
+  "sourceDigest": "sha256:30088ba759d3cde9de3f59d4e015bef3f527681b9d440db9bae907f66c871bca",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

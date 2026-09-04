@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1931,
+    "entries": 1933,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1890,6 +1890,56 @@
       "symbol": "RetrySqliteWriteOptions",
       "targetContext": "platform",
       "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/db/transactionScope.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/db/transactionScope.ts#openDepth",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/db/transactionScope.ts#openDepth",
+      "symbol": "openDepth",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/db/transactionScope.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/db/transactionScope.ts#runInExplicitTransactionScope",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/db/transactionScope.ts#runInExplicitTransactionScope",
+      "symbol": "runInExplicitTransactionScope",
+      "targetContext": "platform",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -46027,7 +46077,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b9204bdc5e295cb7a856ed3e3230d260270b4d6cb6a49d2c8b0cb9636bf91c57",
+  "sourceDigest": "sha256:30088ba759d3cde9de3f59d4e015bef3f527681b9d440db9bae907f66c871bca",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
