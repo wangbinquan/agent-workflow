@@ -4,7 +4,7 @@
   "baseline": {
     "recordedAt": "2026-09-04",
     "inboundEdges": 287,
-    "outboundEdges": 36,
+    "outboundEdges": 35,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
   },
@@ -6962,29 +6962,6 @@
     },
     {
       "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/intent/application/dispatcher.ts",
-      "to": "packages/backend/src/ws/broadcaster",
-      "specifier": "@/ws/broadcaster",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 平移后暴露的既有反向依赖：intent 的编排一直在用 legacy 层的 `@/services/*` / `@/ws/*`（systemAgentRun / envelope / nodeRunMint / privilegedNodeLens / broadcaster / 两个 operationRevision 哈希 helper）。这些 helper 的正确归属分别在 task-execution / resource-catalog / 传输层，不在本刀的刀口内——本 RFC 只把 intent 的编排搬到位并如实入账，逐个归位随各自 owner 的下一波。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-294 W4-E（各 owner 认领 systemAgentRun / envelope / nodeRunMint / broadcaster 等公共件）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:13249f72baad9d9d00a9",
-        "import:99e98ccd109f052e2cbb"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/ws/broadcaster.ts#INTENT_SESSIONS_CHANNEL",
-        "owner:packages/backend/src/ws/broadcaster.ts#intentSessionsBroadcaster"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R2-outbound-module-to-legacy",
       "from": "packages/backend/src/modules/intent/application/dumpBuilder.ts",
       "to": "packages/backend/src/services/execution/callRefTarget",
       "specifier": "@/services/execution/callRefTarget",
@@ -8816,15 +8793,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b7266bdd4e042035909eae007c0ff06d4a8cd957d95e499c7ebb966fa98b972d",
+    "sourceDigest": "sha256:10966de52555bd14cf7e1dd70fa351a34e564151f76cf4f19d237dd9bb7ee248",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "db8dbf424a83e23aca072f03ca7dbd130fff198a",
-    "contentDigest": "sha256:404fde5e81f2dbda82f6c2b0b27ceb5c4846aeef1b03cbd2b06f3b04bc92630d",
+    "currentSnapshotSha": "b21d102c2a7198c594fd25952d91aac2e62e30a8",
+    "contentDigest": "sha256:8a0c86c5641ab7122a9e4e204fb1d8fb1e6456420d8467965dc429004ebc7a40",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

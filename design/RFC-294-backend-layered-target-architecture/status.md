@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b7266bdd4e042035909eae007c0ff06d4a8cd957d95e499c7ebb966fa98b972d`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:10966de52555bd14cf7e1dd70fa351a34e564151f76cf4f19d237dd9bb7ee248`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1940 |
+| backend production TS 文件 | 1942 |
 | `services/` 文件 | 327 |
-| `modules/**` 文件 / 非空 context | 1330 / 17 |
+| `modules/**` 文件 / 非空 context | 1332 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 367 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 77 |
-| RFC-317 boundary census（inbound / outbound） | 287 / 36 |
+| RFC-317 boundary census（inbound / outbound） | 287 / 35 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5196 |
+| `architectureExceptions` | 5197 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6307 |
+| `crossContextImports` | 6308 |
 | `facades` | 327 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25928 |
-| `mutationEntrypoints` | 1922 |
+| `moduleSymbolOwners` | 25934 |
+| `mutationEntrypoints` | 1923 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 982 |
 | `transactionExternalEffects` | 479 |
@@ -75,9 +75,9 @@
 | digital-employee / infrastructure | 13 |
 | identity-access / infrastructure | 13 |
 | memory / infrastructure | 13 |
+| intent / infrastructure | 12 |
 | source-control / infrastructure | 12 |
 | code-capability / domain | 11 |
-| intent / infrastructure | 11 |
 | system-operations / application | 11 |
 | memory / application | 10 |
 | source-control / application | 10 |
@@ -118,6 +118,7 @@
 | event-center / composition | 2 |
 | execution-contract / application | 2 |
 | execution-contract / public | 2 |
+| intent / ports | 2 |
 | intent / public | 2 |
 | knowledge-evolution / inbound | 2 |
 | runtime-management / infrastructure | 2 |
@@ -129,7 +130,6 @@
 | execution-contract / domain | 1 |
 | execution-contract / infrastructure | 1 |
 | intent / inbound | 1 |
-| intent / ports | 1 |
 | knowledge-evolution / composition | 1 |
 | memory / composition | 1 |
 | runtime-management / composition | 1 |
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3580 |
-| legacy-inbound | 1421 |
+| legacy-outbound | 3578 |
+| legacy-inbound | 1424 |
 | provider-mirror | 450 |
 | infrastructure-external | 400 |
 | offered-consumption | 175 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3580 |
-| legacy-inbound | 1421 |
+| legacy-outbound | 3578 |
+| legacy-inbound | 1424 |
 | off-dag-offered | 92 |
 | temporary-internal-debt | 90 |
 | no-circular | 6 |
@@ -238,7 +238,7 @@
 | W4-E9 | 61 |
 | W4-E2 | 44 |
 | W4-E7 | 44 |
-| W4-E4a | 40 |
+| W4-E4a | 41 |
 | W4-E4b | 38 |
 | W4-E3 | 27 |
 | W9-E | 11 |

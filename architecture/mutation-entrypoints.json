@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1922,
+    "entries": 1923,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -15723,6 +15723,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentScratchFilesystem.ts#createIntentScratchFilesystem",
       "symbol": "createIntentScratchFilesystem",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/intentSessionWsProjector.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentSessionWsProjector.ts#createIntentSessionWsPublisher",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSessionWsProjector.ts#createIntentSessionWsPublisher",
+      "symbol": "createIntentSessionWsPublisher",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -45809,7 +45833,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b7266bdd4e042035909eae007c0ff06d4a8cd957d95e499c7ebb966fa98b972d",
+  "sourceDigest": "sha256:10966de52555bd14cf7e1dd70fa351a34e564151f76cf4f19d237dd9bb7ee248",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
