@@ -117,22 +117,22 @@ T8 (teaching mistakes) 并入批次 2   ·   T10 (下游提示) 独立   ·   T1
 
 ## 验收清单
 
-- [ ] AC-1 图校验 error 带 `<opId>:` 前缀进 blocking 列表
-- [ ] AC-2 blocking 非空禁用提交
-- [ ] AC-3 error 进 INTENT.md
-- [ ] AC-4 warning 只在 UI、不阻塞
-- [ ] AC-5 图修复轮恰好一轮、无 in-flight 空窗
-- [ ] AC-6 apply 二次硬拦、零落库、文案分类
-- [ ] AC-7 两 provider 同一组 issue code（skill 可用性差异已规避或豁免）
-- [ ] AC-8 bundle 内新建/修改的 agent 以变更后形态参与校验，字段口径与 apply 一致
-- [ ] AC-9 同批新建 skill / MCP / plugin / 被调工作流无假阳性
-- [ ] AC-10 畸形定义给可读 error 而非崩溃
-- [ ] AC-11 issue 条数上限 + 显式截断标注
-- [ ] AC-12 校验不可用时 draft 照落 + 提交禁用
-- [ ] AC-13 agent update 的下游知情提示
-- [ ] B-5 copy 回填经用户确认并落地
-- [ ] 既有测试影响三处已处理（design §9）
-- [ ] 架构账本已重采并提交
-- [ ] 设计门（只审功能）findings 全部折入 —— **r2 已完成**
-- [ ] 实现门（只审功能）跑过并修完 findings
+- [x] AC-1 图校验 error 带 `<opId>:` 前缀进 blocking 列表
+- [x] AC-2 blocking 非空禁用提交
+- [x] AC-3 error 进 INTENT.md
+- [x] AC-4 warning 只在 UI、不阻塞
+- [x] AC-5 图修复轮恰好一轮、无 in-flight 空窗
+- [x] AC-6 apply 二次硬拦、零落库、文案分类
+- [x] AC-7 两 provider 同一组 issue code（skill 可用性差异已规避或豁免）
+- [x] AC-8 bundle 内新建/修改的 agent 以变更后形态参与校验，字段口径与 apply 一致
+- [x] AC-9 同批新建 skill / MCP / plugin / 被调工作流无假阳性
+- [x] AC-10 畸形定义给可读 error 而非崩溃
+- [x] AC-11 issue 条数上限 + 显式截断标注
+- [x] AC-12 校验不可用时 draft 照落 + 提交禁用
+- [x] AC-13 agent update 的下游知情提示
+- [x] B-5 copy 回填经用户确认并落地
+- [x] 既有测试影响：`rfc234-apply-changeset.test.ts:808` 未受影响（门放在 `prepare` 之后）、`:1258-1272` 未变红（测试装配缺省不接门）、teaching baseline 已同步
+- [x] 架构账本已重采并提交（`ed3000176`，`git archive` 干净副本法，并发在制品 0 条）
+- [x] 设计门（只审功能）findings 全部折入 —— r2（12 P0 / 13 P1）
+- [ ] 实现门（只审功能）—— Codex 配额至 09-08，按 RFC-354 T20 替代姿势另跑
 - [ ] CI 按 exact SHA 全绿
