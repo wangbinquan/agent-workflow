@@ -956,6 +956,76 @@ describe('RFC-234 /intent/$sessionId', () => {
     expect(screen.getByText(enUS.intent.draftStaleNotice)).toBeTruthy()
   })
 
+  // RFC-358 —— 工作流图校验的三条前端契约。
+  //
+  // 为什么存在：图校验的 error 走的是既有的 blocking 列表（所以红牌与禁提交一行都不用
+  // 改），但 warning 与「校验不可用」是两条新通道，各有自己的用户可见后果。
+
+  test('RFC-358: graph warnings render but never block committing', async () => {
+    installFetch(
+      detailFixture({
+        currentDraft: {
+          ...CLEAN_DRAFT,
+          validation: {
+            errors: [],
+            credentialFindings: [],
+            graphWarnings: [
+              {
+                opId: 'op-1',
+                code: 'clarify-no-iteration-cap',
+                where: 'n_clarify',
+                message: "clarify node 'n_clarify' is not inside a wrapper-loop",
+              },
+            ],
+          },
+        },
+      }),
+    )
+    await renderPage()
+    const list = await screen.findByTestId('intent-graph-warnings')
+    expect(within(list).getByText(/clarify-no-iteration-cap/)).toBeTruthy()
+    // 决策 D1 的用户可见半边：warning 只是提醒，提交照常可用。
+    const open = await screen.findByTestId('intent-open-commit')
+    expect((open as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('RFC-358 D7: unavailable graph validation pauses commit without discarding the draft', async () => {
+    installFetch(
+      detailFixture({
+        currentDraft: {
+          ...CLEAN_DRAFT,
+          validation: {
+            errors: [],
+            credentialFindings: [],
+            graphValidationUnavailable: true,
+          },
+        },
+      }),
+    )
+    await renderPage()
+    expect(await screen.findByTestId('intent-graph-unavailable')).toBeTruthy()
+    // 草稿还在（模型的产出没丢），但「绿」证明不了，所以提交暂停。
+    const open = await screen.findByTestId('intent-open-commit')
+    expect((open as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  test('RFC-358: the blocking banner labels its truncation instead of dropping silently', async () => {
+    installFetch(
+      detailFixture({
+        currentDraft: {
+          ...CLEAN_DRAFT,
+          validation: {
+            errors: Array.from({ length: 14 }, (_, i) => `op-1: edge-source-port-missing #${i}`),
+            credentialFindings: [],
+          },
+        },
+      }),
+    )
+    await renderPage()
+    const truncated = await screen.findByTestId('intent-blocking-truncated')
+    expect(truncated.textContent).toContain('4')
+  })
+
   test('add-mount dialog picks a resource and POSTs the mount ref', async () => {
     const rec: Recorded = { calls: [] }
     const detail = detailFixture()

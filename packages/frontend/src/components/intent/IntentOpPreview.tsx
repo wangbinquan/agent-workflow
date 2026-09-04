@@ -151,8 +151,9 @@ export function IntentOpPreview(props: IntentOpPreviewProps): ReactElement {
         {props.opErrors.length > 0 ? (
           <NoticeBanner tone="error">
             <ul>
-              {props.opErrors.map((error) => (
-                <li key={error}>{error}</li>
+              {props.opErrors.map((error, index) => (
+                // RFC-358: 图校验的同形消息会重复，错误串不能当 key。
+                <li key={`${index}:${error}`}>{error}</li>
               ))}
             </ul>
           </NoticeBanner>

@@ -182,6 +182,10 @@ export const enUS: Resources = {
     draftStaleNotice:
       'The session context moved; this draft cannot commit — send a new message to regenerate.',
     blockingErrors: '{{count}} blocking validation errors; the AI must fix them before commit.',
+    blockingErrorsTruncated: '{{count}} more not listed.',
+    graphWarnings: '{{count}} workflow validation warning(s) — these do not block committing.',
+    graphValidationUnavailable:
+      'Workflow graph validation is temporarily unavailable, so this draft cannot be confirmed launchable. Committing is paused — retry later or regenerate.',
     commitDisabledStale: 'Refresh the draft baseline before opening commit review.',
     commitDisabledValidation: 'Resolve the validation issues above before opening commit review.',
     commitDisabledGenerating: 'Commit review becomes available when this generation finishes.',

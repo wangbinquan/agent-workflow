@@ -159,6 +159,9 @@ export interface Resources {
     draftStale: string
     draftStaleNotice: string
     blockingErrors: string
+    blockingErrorsTruncated: string
+    graphWarnings: string
+    graphValidationUnavailable: string
     commitDisabledStale: string
     commitDisabledValidation: string
     commitDisabledGenerating: string
@@ -6919,6 +6922,10 @@ export const zhCN: Resources = {
     draftStale: '已过期',
     draftStaleNotice: '会话上下文已变化，此草稿不可提交；发送新消息重新生成。',
     blockingErrors: '{{count}} 个阻断性校验错误，需 AI 修复后才能提交。',
+    blockingErrorsTruncated: '还有 {{count}} 条未列出。',
+    graphWarnings: '{{count}} 条工作流校验提醒（不阻断提交）。',
+    graphValidationUnavailable:
+      '工作流图校验暂时不可用，无法确认这份草稿能否启动，提交已暂停。稍后重试或重新生成一轮。',
     commitDisabledStale: '先更新草稿基线，才能进入提交确认。',
     commitDisabledValidation: '先解决上方校验问题，才能进入提交确认。',
     commitDisabledGenerating: '本轮生成完成后即可进入提交确认。',

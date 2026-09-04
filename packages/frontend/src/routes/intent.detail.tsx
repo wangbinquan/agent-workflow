@@ -651,8 +651,46 @@ function IntentSessionDetailPage() {
                 <NoticeBanner tone="error">
                   <p>{t('intent.blockingErrors', { count: draft.validation.errors.length })}</p>
                   <ul>
-                    {draft.validation.errors.slice(0, 10).map((error) => (
-                      <li key={error}>{error}</li>
+                    {draft.validation.errors.slice(0, 10).map((error, index) => (
+                      // RFC-358: key 不能用错误串本身——图校验会引入大量同形消息
+                      // （同一条规则逐边产出），重复串会触发 React duplicate-key。
+                      <li key={`${index}:${error}`}>{error}</li>
+                    ))}
+                  </ul>
+                  {draft.validation.errors.length > 10 ? (
+                    // 截断必须显式标注：intentDoc.ts 的文件头把这条写成了约定——
+                    // "Any truncation is explicitly labeled — silence never means completeness"。
+                    <p data-testid="intent-blocking-truncated">
+                      {t('intent.blockingErrorsTruncated', {
+                        count: draft.validation.errors.length - 10,
+                      })}
+                    </p>
+                  ) : null}
+                </NoticeBanner>
+              ) : null}
+              {draft.validation.graphValidationUnavailable === true ? (
+                // RFC-358 D7：图校验没能跑起来。模型的产出不丢（草稿照常在），
+                // 但「绿」是一个有后果的判断——拿不到判据就不能放行提交。
+                <NoticeBanner tone="warning">
+                  <p data-testid="intent-graph-unavailable">
+                    {t('intent.graphValidationUnavailable')}
+                  </p>
+                </NoticeBanner>
+              ) : null}
+              {(draft.validation.graphWarnings ?? []).length > 0 ? (
+                <NoticeBanner tone="warning">
+                  <p>
+                    {t('intent.graphWarnings', {
+                      count: (draft.validation.graphWarnings ?? []).length,
+                    })}
+                  </p>
+                  <ul data-testid="intent-graph-warnings">
+                    {(draft.validation.graphWarnings ?? []).slice(0, 10).map((warning, index) => (
+                      <li key={`${index}:${warning.opId}:${warning.code}`}>
+                        {`${warning.opId}: ${warning.code}${
+                          warning.where === undefined ? '' : ` @${warning.where}`
+                        } — ${warning.message}`}
+                      </li>
                     ))}
                   </ul>
                 </NoticeBanner>
@@ -758,7 +796,12 @@ function IntentSessionDetailPage() {
                       type="button"
                       className="btn btn--primary"
                       disabled={
-                        draft.stale || draft.validation.errors.length > 0 || detail.session.inFlight
+                        draft.stale ||
+                        draft.validation.errors.length > 0 ||
+                        // RFC-358 D7：校验不可用与有 error 同效——两者都表示「此刻无法
+                        // 证明这份草稿是好的」，放行提交就等于给了假绿。
+                        draft.validation.graphValidationUnavailable === true ||
+                        detail.session.inFlight
                       }
                       onClick={() => setCommitOpen(true)}
                       data-testid="intent-open-commit"

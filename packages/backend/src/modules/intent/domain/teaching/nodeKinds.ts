@@ -154,7 +154,11 @@ export const INTENT_NODE_TEACHING = {
     notes: [
       'The reviewed source is the ONE edge into the review node targeting `__review_input__` (RFC-354: no `inputSource` field); approved single-document output ports are `approved_doc` and `approval_meta`. A comment template may use only `{{__review_comments__}}` plus canonical webhook trigger refs.',
     ],
-    mistakes: [],
+    mistakes: [
+      // RFC-358 §11 —— 本机生产库快照里，意图产出的工作流唯一带 error 的那一个就是这条
+      // （review 的被审源接在 wrapper-fanout 上）。它属于图校验才知道的规则家族。
+      'The reviewed source must come from an AGENT node whose port kind is markdown-ish — wiring a wrapper (fanout/loop/git) outlet or an input node into `__review_input__` does not validate.',
+    ],
   },
   clarify: {
     availability: { kind: 'public' },
@@ -170,7 +174,12 @@ export const INTENT_NODE_TEACHING = {
     notes: [
       `Fixed ports: inbound \`${CLARIFY_INPUT_PORT_NAME}\` (wire the asking agent's \`${CLARIFY_SOURCE_PORT_NAME}\` port to it), outbound \`${CLARIFY_OUTPUT_PORT_NAME}\` (wire it back to that agent's \`${CLARIFY_RESPONSE_TARGET_PORT_NAME}\` port).`,
     ],
-    mistakes: [],
+    mistakes: [
+      // RFC-358 D1 —— 图校验的 warning 不进 INTENT.md（它们是给人的提醒），所以这里是
+      // 模型唯一能学到它们的地方。这两条是最会反复复发的。
+      'A clarify node outside a wrapper-loop has no iteration cap — the agent may keep asking indefinitely. Put it inside a wrapper-loop with `max_iterations` unless the user explicitly wants an uncapped exchange.',
+      `Leaving the \`${CLARIFY_OUTPUT_PORT_NAME}\` port unwired means the answers never reach the agent that asked; wire it back to that agent.`,
+    ],
   },
   'clarify-cross-agent': {
     availability: { kind: 'public' },
