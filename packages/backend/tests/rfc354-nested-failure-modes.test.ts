@@ -20,17 +20,25 @@
 //     failure has to travel out through the frames, and every row along the way
 //     has to settle.
 //
-//   ③ CURRENT-BEHAVIOR LOCK (⚠️ not an endorsement): an ordinary edge between
-//     two SIBLING wrapper scopes. `loopA ∋ workerA` and `loopB ∋ workerB` are
-//     neither nested nor enclosing, so under the lexical rule `workerA`'s output
-//     is not visible from `workerB` at all. What actually happens today is that
-//     the workflow VALIDATES, the task runs to `done`, and `workerA`'s value is
-//     handed to `workerB` through the wall — the dependency is recorded against
-//     the neighbouring wrapper's generation row. This test pins that as it is so
-//     the behavior cannot drift unnoticed; it does not claim it is right. If the
-//     product decides the lexical rule wins here too, flip this test: the task
-//     becomes `failed` with `closure-binding-unresolved` and the leak assertion
-//     inverts.
+//   ③ the three wrapper WALLS, compared. Reading a node that lives inside
+//     another wrapper (a sibling scope — neither nested nor enclosing) is the
+//     same authoring action in all three cases, and today it gets two different
+//     answers:
+//
+//       wrapper-git    → refused, `wrapper-output-boundary-missing`, task failed
+//       wrapper-fanout → refused, `wrapper-output-boundary-missing`, task failed
+//       wrapper-loop   → ALLOWED; the value crosses and the task completes
+//
+//     The loop case is a CURRENT-BEHAVIOR LOCK (⚠️ not an endorsement). It reads
+//     the loop's LAST round and it resolves in the right frame — an outer loop's
+//     second generation reads that generation's value, not the first one's, so
+//     this is not a frame leak — but it does bypass the wrapper's declared
+//     return contract, and it is inconsistent with the other two walls. Pinned
+//     here so neither side can drift silently. If the product closes the hole,
+//     flip the loop test: it becomes `failed` with
+//     `wrapper-output-boundary-missing` like its siblings, and note that doing
+//     so is a capability contraction for any stored workflow already wired this
+//     way (CLAUDE.md §RFC workflow 第 7 条).
 //
 // Deterministic: in-memory SQLite, serial dispatch, real subprocesses driven by
 // a per-call plan (fixtures/scenario-opencode.ts); no sleeps, no network; temp
@@ -46,6 +54,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { agents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
+import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
@@ -93,6 +102,7 @@ async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise
 async function seedWorkflowAndTask(
   h: Harness,
   definition: WorkflowDefinition,
+  inputs: Record<string, string> = {},
 ): Promise<{ taskId: string }> {
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
@@ -112,7 +122,7 @@ async function seedWorkflowAndTask(
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     status: 'pending',
-    inputs: '{}',
+    inputs: JSON.stringify(inputs),
     startedAt: Date.now(),
   })
   return { taskId }
@@ -131,6 +141,16 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
       else process.env[k] = p
     }
   })
+}
+
+/** The git wrapper needs a real repo; the other cases do not pay for one. */
+async function initRepo(h: Harness): Promise<void> {
+  await runGit(h.worktreePath, ['init', '-q', '-b', 'main'])
+  await runGit(h.worktreePath, ['config', 'user.email', 't@t.test'])
+  await runGit(h.worktreePath, ['config', 'user.name', 't'])
+  writeFileSync(join(h.worktreePath, 'base.txt'), 'baseline\n')
+  await runGit(h.worktreePath, ['add', '.'])
+  await runGit(h.worktreePath, ['commit', '-q', '-m', 'init'])
 }
 
 function readTrace(h: Harness): Array<{ agent: string; callIndex: number }> {
@@ -299,10 +319,128 @@ describe('RFC-354 — nested failure modes', () => {
     expect(readTrace(h).filter((line) => line.agent === 'worker').length).toBe(2)
   }, 30000)
 
-  // ⚠️ CURRENT-BEHAVIOR LOCK — see ③ in the head note. Sibling scopes are not
-  // lexically visible to each other, yet today the edge validates and the value
-  // crosses. Flip this test if the product closes the hole.
-  test('CURRENT BEHAVIOR: an edge between two SIBLING wrapper scopes validates and carries the value across the wall', async () => {
+  test('a git wrapper wall refuses a sibling read: the inner agent port is not exposed', async () => {
+    await initRepo(h)
+    await seedAgent(h.db, 'gitWorker', ['findings'])
+    await seedAgent(h.db, 'workerB', ['verdict'])
+    const def = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'gitWorker', kind: 'agent-single', agentName: 'gitWorker' },
+        { id: 'gitw', kind: 'wrapper-git', nodeIds: ['gitWorker'] },
+        { id: 'workerB', kind: 'agent-single', agentName: 'workerB' },
+        {
+          id: 'loopB',
+          kind: 'wrapper-loop',
+          nodeIds: ['workerB'],
+          maxIterations: 1,
+          continueOnMaxIterations: true,
+          exitCondition: {
+            kind: 'port-equals',
+            nodeId: 'workerB',
+            portName: 'verdict',
+            value: '__NEVER__',
+          },
+          outputBindings: [{ name: 'b_out', bind: { nodeId: 'workerB', portName: 'verdict' } }],
+        },
+      ],
+      edges: [
+        {
+          id: 'e-cross',
+          source: { nodeId: 'gitWorker', portName: 'findings' },
+          target: { nodeId: 'workerB', portName: 'in' },
+        },
+      ],
+    } as unknown as WorkflowDefinition
+    const { taskId } = await seedWorkflowAndTask(h, def)
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({
+        gitWorker: [{ output: { findings: 'INSIDE-GIT' } }],
+        workerB: [{ output: { verdict: 'B' } }],
+      }),
+    )
+
+    await drive(h, taskId)
+
+    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(task?.status).toBe('failed')
+    expect(task?.errorMessage ?? '').toContain('wrapper-output-boundary-missing')
+    // A git wrapper exposes exactly `git_diff`; an inner agent's own ports never
+    // leak, so the consumer never runs.
+    expect(task?.errorMessage ?? '').toContain('gitWorker.findings')
+    expect(readTrace(h).filter((line) => line.agent === 'workerB').length).toBe(0)
+  }, 30000)
+
+  test('a fan-out wall refuses a sibling read: shard ports are not exposed either', async () => {
+    await seedAgent(h.db, 'shardWorker', ['result'])
+    await seedAgent(h.db, 'workerB', ['verdict'])
+    const def = {
+      $schema_version: 4,
+      inputs: [{ kind: 'files', key: 'docs', label: 'docs' }],
+      nodes: [
+        { id: 'inp', kind: 'input', inputKey: 'docs' },
+        {
+          id: 'fan',
+          kind: 'wrapper-fanout',
+          nodeIds: ['shardWorker'],
+          inputs: [{ name: 'docs', kind: 'list<path<md>>', isShardSource: true }],
+        },
+        { id: 'shardWorker', kind: 'agent-single', agentName: 'shardWorker' },
+        { id: 'workerB', kind: 'agent-single', agentName: 'workerB' },
+        {
+          id: 'loopB',
+          kind: 'wrapper-loop',
+          nodeIds: ['workerB'],
+          maxIterations: 1,
+          continueOnMaxIterations: true,
+          exitCondition: {
+            kind: 'port-equals',
+            nodeId: 'workerB',
+            portName: 'verdict',
+            value: '__NEVER__',
+          },
+          outputBindings: [{ name: 'b_out', bind: { nodeId: 'workerB', portName: 'verdict' } }],
+        },
+      ],
+      edges: [
+        {
+          id: 'e-docs',
+          source: { nodeId: 'inp', portName: 'docs' },
+          target: { nodeId: 'fan', portName: 'docs' },
+        },
+        {
+          id: 'e-cross',
+          source: { nodeId: 'shardWorker', portName: 'result' },
+          target: { nodeId: 'workerB', portName: 'in' },
+        },
+      ],
+    } as unknown as WorkflowDefinition
+    const { taskId } = await seedWorkflowAndTask(h, def, { docs: 'docs/a.md\ndocs/b.md' })
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({
+        shardWorker: [{ output: { result: 'SHARD-0' } }, { output: { result: 'SHARD-1' } }],
+        workerB: [{ output: { verdict: 'B' } }],
+      }),
+    )
+
+    await drive(h, taskId)
+
+    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(task?.status).toBe('failed')
+    expect(task?.errorMessage ?? '').toContain('wrapper-output-boundary-missing')
+    expect(task?.errorMessage ?? '').toContain('shardWorker.result')
+    // Which shard would it even have been? The refusal is what keeps that
+    // question from having to be answered.
+    expect(readTrace(h).filter((line) => line.agent === 'workerB').length).toBe(0)
+  }, 30000)
+
+  // ⚠️ CURRENT-BEHAVIOR LOCK — see ③ in the head note. The two tests above show
+  // git and fan-out refusing this exact authoring action; the loop does not.
+  // Flip this test (and the one after it) if the product closes the hole.
+  test('CURRENT BEHAVIOR: a wrapper-loop wall does NOT refuse it — the value crosses, in the right frame', async () => {
     await seedAgent(h.db, 'workerA', ['findings'])
     await seedAgent(h.db, 'workerB', ['verdict'])
     const siblingLoop = (id: string, member: string, port: string): Record<string, unknown> => ({
@@ -400,5 +538,83 @@ describe('RFC-354 — nested failure modes', () => {
       string
     >
     expect(Object.keys(consumed)).toEqual(['loopA'])
+  }, 30000)
+
+  // ⚠️ CURRENT-BEHAVIOR LOCK (companion to the one above).
+  //
+  // What the crossing is NOT: a frame leak. Put both sibling loops inside an
+  // outer loop and run two generations — each generation's consumer reads ITS
+  // OWN generation's producer, never the previous one's. So the hole is about
+  // the wrapper's declared return CONTRACT being bypassed, not about the
+  // scheduler losing track of which round it is in; a fix should keep this
+  // property (a "read the freshest row" repair would break it and go red here).
+  test('CURRENT BEHAVIOR: the sibling crossing still resolves per frame across outer generations', async () => {
+    await seedAgent(h.db, 'workerA', ['findings'])
+    await seedAgent(h.db, 'workerB', ['verdict'])
+    const innerLoop = (id: string, member: string, port: string): Record<string, unknown> => ({
+      id,
+      kind: 'wrapper-loop',
+      nodeIds: [member],
+      maxIterations: 1,
+      continueOnMaxIterations: true,
+      exitCondition: { kind: 'port-equals', nodeId: member, portName: port, value: '__NEVER__' },
+      outputBindings: [{ name: `${id}_out`, bind: { nodeId: member, portName: port } }],
+    })
+    const def = {
+      $schema_version: 1,
+      inputs: [],
+      nodes: [
+        { id: 'workerA', kind: 'agent-single', agentName: 'workerA' },
+        { id: 'workerB', kind: 'agent-single', agentName: 'workerB' },
+        innerLoop('loopA', 'workerA', 'findings'),
+        innerLoop('loopB', 'workerB', 'verdict'),
+        {
+          id: 'outer',
+          kind: 'wrapper-loop',
+          nodeIds: ['loopA', 'loopB'],
+          maxIterations: 2,
+          continueOnMaxIterations: true,
+          exitCondition: {
+            kind: 'port-equals',
+            nodeId: 'loopB',
+            portName: 'loopB_out',
+            value: '__NEVER__',
+          },
+          outputBindings: [],
+        },
+      ],
+      edges: [
+        {
+          id: 'e-sibling',
+          source: { nodeId: 'workerA', portName: 'findings' },
+          target: { nodeId: 'workerB', portName: 'in' },
+        },
+      ],
+    } as unknown as WorkflowDefinition
+    const { taskId } = await seedWorkflowAndTask(h, def)
+    writeFileSync(
+      h.planFile,
+      JSON.stringify({
+        workerA: [{ output: { findings: 'GEN-0' } }, { output: { findings: 'GEN-1' } }],
+        workerB: [{ output: { verdict: 'B' } }],
+      }),
+    )
+
+    await drive(h, taskId)
+
+    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    expect(task?.status).toBe('done')
+
+    const consumers = await h.db
+      .select()
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'workerB')))
+    expect(consumers.length).toBe(2)
+    const byScope = new Map(consumers.map((row) => [row.scopePath, row.promptText ?? '']))
+    expect([...byScope.keys()].sort()).toEqual(['outer:0/loopB:0', 'outer:1/loopB:0'])
+    expect(byScope.get('outer:0/loopB:0')).toContain('GEN-0')
+    expect(byScope.get('outer:0/loopB:0')).not.toContain('GEN-1')
+    expect(byScope.get('outer:1/loopB:0')).toContain('GEN-1')
+    expect(byScope.get('outer:1/loopB:0')).not.toContain('GEN-0')
   }, 30000)
 })

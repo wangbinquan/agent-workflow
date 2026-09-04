@@ -414,6 +414,10 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
           'packages/backend/tests/rfc354-nested-failure-modes.test.ts',
           'an inner loop that exhausts its ceiling',
         ),
+        fast(
+          'packages/backend/tests/rfc354-nested-failure-modes.test.ts',
+          'a git wrapper wall refuses a sibling read',
+        ),
       ],
     },
     { id: 'input-rejection', evidence: [workflowMatrix('rejects missing, unknown')] },
