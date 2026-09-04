@@ -40,7 +40,7 @@ exact 边的 owner 高度集中：176 条里 **153 条 owner=intent**，是目�
 `inFlightTurnId` / `draftHash` / `contextRevision`——但**写在两个文件里**。任何一次业务变更都要改两遍，
 而「改两遍」正是 RFC-352 与 RFC-353 各自开局撞到的那个漂移源。
 
-### 2.2 诊断词汇**已经开始分叉**（用户可见契约尚未漂）
+### 2.2 诊断词汇已分叉，且 **apply 层的用户可见行为已经真的漂了**（T1 实测更正）
 
 两个 apply 实现的字符串标识做集合对比：
 
@@ -49,12 +49,26 @@ exact 边的 owner 高度集中：176 条里 **153 条 owner=intent**，是目�
 - **只在 SQLite**：`intent-left-retryable`、`intent-converge-left-retryable`；
 - **只在 PostgreSQL**：`intent-resource-abort-failed`、`intent-resource-roll-forward-recovery-failed`。
 
-这四条**是 `log.warn` 的标签，不是抛出的错误码**（立项摸底时我一度把它们当成用户可见错误码，
-实读源码后更正）。但它们说明一件事：**两份拷贝已经在分头演进**——运维在两种部署上 grep 同一类失败，
-拿到的是不同的词。今天分叉的是日志，明天就是错误码。
+这四条是 `log.warn` 的标签，不是抛出的错误码——运维在两种部署上 grep 同一类失败拿到不同的词。
 
-另有一处结构差异：`intent-changeset-invalid` 在 PostgreSQL 侧由 apply **内联 parse 后抛出**，
-SQLite 侧则经 `services/intent/resolveChangeset` 门面处理——同一个判断，两条取用路径。
+**但立项时写的「用户可见契约尚未漂」是错的**。T1 落先红 oracle 时实测发现，
+`intent-changeset-invalid` 这一条在 **apply 层已经是真实的行为差异**：
+
+| 输入 | PostgreSQL | SQLite |
+| --- | --- | --- |
+| draft 的 `changesetJson` 不可解析 | `ValidationError('intent-changeset-invalid')`，带具体 parse 错误 | **裸 `JSON.parse` → 未分类 `SyntaxError`**，对客户端是 500 而不是带码的 4xx |
+| 可解析但不是合法 IntentChangeset | 同上，被挡下 | **完全不校验**，直接喂进 `preflight` / `resolveIntentBundle` |
+
+PostgreSQL 侧 `parseIntentChangeset(claim.draft.changesetJson)` 后判 `ok`；
+SQLite 侧是 `const changeset = JSON.parse(claim.draft.changesetJson)`（preflight 段）。
+`parseIntentChangeset` 本来就在 `@agent-workflow/shared`，两侧都能用，SQLite 只是没用。
+
+既有覆盖只在 **turn-engine 层**（`rfc234-turn-engine.test.ts` 断言 agent 产出非法 changeset 时报
+`intent-changeset-invalid`），**apply 层这条路径从来没测过**——draft 落库之后才损坏、
+或由更早版本写入的非法内容，走的正是这里。
+
+`rfc355-intent-apply-changeset-validation.test.ts` 已把它变成两条先红用例
+（实测 SQLite 抛 `SyntaxError: JSON Parse error: Expected '}'`），由 T4 合并编排时转绿。
 
 ### 2.3 intent 深取 resource-catalog 的技能文件机制（30 条）
 
