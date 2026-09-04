@@ -30,7 +30,7 @@ import {
   DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '../src/modules/task-execution/domain/digitalEmployeeHost'
-import { createAgent } from '../src/services/agent'
+import { createAgent, getAgentById } from '../src/services/agent'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -142,6 +142,7 @@ function runner(
 ): AgentActionExecutionRunner {
   return composeAgentActionExecution({
     db: h.db,
+    agents: { get: async (id) => getAgentById(h.db, id) },
     startDeps: {
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })

@@ -207,7 +207,9 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     const launchProjection = fields.find(
       (entry) => entry.id === 'field:StartTaskDeps.catalogVisibility',
     )!
-    expect(launchProjection.writers).toHaveLength(4)
+    // RFC-359 W1-T3：agent / script 两个 composer 的 `catalogVisibility: 'internal'` 写点合一到
+    // actionExecutionEnvironment.ts（4 → 3：environment / digitalEmployeeExecution / employeeTypePackage）。
+    expect(launchProjection.writers).toHaveLength(3)
     const catalogColumn = fields.find((entry) => entry.id === 'field:tasks.catalog_visibility')!
     expect(
       (catalogColumn.consumers as Array<Record<string, unknown>>).some(
@@ -425,8 +427,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
         status: 'canonical-writer',
       },
       {
-        file:
-          'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
+        file: 'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
         status: 'canonical-writer',
       },
     ])

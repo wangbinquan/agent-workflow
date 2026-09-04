@@ -93,6 +93,7 @@ import {
   createSqliteTaskIdleTimeoutPersistence,
   runTaskIdleTimeoutSweep,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
+import { getAgentById } from '@/services/agent'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
 import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
@@ -2381,6 +2382,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       db,
+      agents: { get: async (id) => getAgentById(db, id) },
       startDeps: buildStartTaskDeps(
         db,
         taskExecutionRuntime.schedulerDriver,
@@ -2395,6 +2397,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     }),
     scriptLauncher: composeScriptActionExecution({
       db,
+      agents: { get: async (id) => getAgentById(db, id) },
       startDeps: buildStartTaskDeps(
         db,
         taskExecutionRuntime.schedulerDriver,

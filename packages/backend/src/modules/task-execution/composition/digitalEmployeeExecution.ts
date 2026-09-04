@@ -45,12 +45,11 @@ import {
   synthesizeDigitalEmployeeScriptHostSnapshot,
 } from '../domain/digitalEmployeeHost'
 import { ensureDigitalEmployeeHostWorkflow } from './agentActionExecution'
+import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
 import type { DigitalEmployeeWorkspacePort } from './required-ports'
 import type {
   PostgresqlRootTaskLaunchKernel,
   PostgresqlRootTaskLaunchSubject,
-  PostgresqlTaskRoutePreparedWorkspace,
-  PostgresqlTaskRouteWorkspaceParticipant,
 } from '../infrastructure/postgresqlTaskRouteLaunchOperations'
 import type { TaskExecutionReadModels } from '../public/types'
 import type { TaskRouteOperations } from '../public/taskRoutes'
@@ -714,50 +713,6 @@ export interface PostgresqlDigitalEmployeeExecutionDependencies {
   readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
 }
 
-function borrowedPostgresqlWorkspace(
-  scene: Extract<
-    Awaited<ReturnType<DigitalEmployeeWorkspacePort['prepare']>>,
-    { kind: 'repository' }
-  >,
-): PostgresqlTaskRouteWorkspaceParticipant {
-  return Object.freeze({
-    async prepare(
-      input: Parameters<PostgresqlTaskRouteWorkspaceParticipant['prepare']>[0],
-    ): Promise<PostgresqlTaskRoutePreparedWorkspace> {
-      let state: 'open' | 'committed' | 'rolled-back' = 'open'
-      return Object.freeze({
-        taskId: input.taskId,
-        kind: 'single',
-        spaceKind: 'local',
-        repoPath: scene.workspacePath,
-        repoUrl: null,
-        cachedRepoId: null,
-        repoGroupId: null,
-        repoGroupName: null,
-        worktreePath: scene.workspacePath,
-        baseBranch: scene.baselineSha,
-        branch: '',
-        baseCommit: scene.baselineSha,
-        earlyError: null,
-        repositories: [],
-        nodePaths: [],
-        commit() {
-          if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
-          state = 'committed'
-        },
-        async rollback() {
-          // The workspace belongs to Development Automation. Rolling back a
-          // TaskExecution launch releases only this lease; physical cleanup is
-          // deliberately retained by the owner that materialized the scene.
-          if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
-          state = 'rolled-back'
-          return { taskId: input.taskId, complete: true, failures: [] }
-        },
-      })
-    },
-  })
-}
-
 function parsedPlanOutputPath(planPrompt: string): string | null {
   const legacyExpectedMatch = /EXPECTED_ANALYSIS_PLAN_PATH_JSON\n("[^"\\]*(?:\\.[^"\\]*)*")/.exec(
     planPrompt,
@@ -984,7 +939,10 @@ export function composePostgresqlDigitalEmployeeExecution(
           ...(scene.kind === 'repository'
             ? {
                 platformInputPaths: scene.platformInputPaths,
-                workspace: borrowedPostgresqlWorkspace(scene),
+                workspace: borrowedPostgresqlWorkspace({
+                  workspacePath: scene.workspacePath,
+                  baselineSha: scene.baselineSha,
+                }),
               }
             : {}),
         },

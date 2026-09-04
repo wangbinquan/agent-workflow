@@ -349,6 +349,7 @@ import { composeSqliteCollaborationRouteOperations } from '@/modules/collaborati
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/sqliteTaskCatalogSources'
+import { getAgentById } from '@/services/agent'
 import { buildStartTaskDeps } from '@/services/startTaskDeps'
 import { assertWorkflowSnapshotLaunchable } from '@/services/taskLaunchGate'
 import { createSqliteResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
@@ -1736,6 +1737,7 @@ function composeFallbackDevelopmentAutomation(
     ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
     agentLauncher: composeAgentActionExecution({
       db: deps.db,
+      agents: { get: async (id) => getAgentById(deps.db, id) },
       startDeps: buildStartTaskDeps(
         deps.db,
         deps.schedulerDriver,
@@ -1748,6 +1750,7 @@ function composeFallbackDevelopmentAutomation(
     }),
     scriptLauncher: composeScriptActionExecution({
       db: deps.db,
+      agents: { get: async (id) => getAgentById(deps.db, id) },
       startDeps: buildStartTaskDeps(
         deps.db,
         deps.schedulerDriver,

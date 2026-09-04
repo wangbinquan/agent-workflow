@@ -67,7 +67,20 @@
 > **T5（P0-5）确认已修**：seal 随 T2b 合一后 node_run 翻转是 CAS 条件 UPDATE，PG 不再 409；`rfc359-t2b` 新增两引擎用例锁住。
 > **T6（P0-6 坏定义工作流删除）已修**：PG 仓库删除路径只用原始行 ACL 身份与版本（不解析 definition），补齐 PG 从未有的
 > 非终态任务引用 / 定时任务引用两道删除守卫；SQLite stale 分支同改。`rfc359-t6-corrupt-workflow-delete.test.ts` 两引擎各绿。
-> **下一步**：T3（F-H2-2 development mission launcher 在 PG 未注入）→ W3-T14 / T16。
+> **T3（F-H2-2 development mission launcher）已修**：agent / script 动作执行器合一为
+> `composition/actionExecutionRunners.ts`（校验 → 宿主快照合成 → `launchHostTask` → 终态观察 / 取消 / 结果读取），
+> provider 只在 `actionExecutionEnvironment.ts` 提供「借用工作区上启动宿主任务」与「取消」（SQLite = `startTask` /
+> `cancelTask`，PG = 根启动内核 + 取消命令；`borrowedPostgresqlWorkspace` 从数字员工执行搬来共用），
+> `agentActionExecution.ts` / `scriptActionExecution.ts` 退成薄 composer；PG daemon 接上
+> `composePostgresqlAgentActionExecution` / `composePostgresqlScriptActionExecution` 与
+> `createPostgresqlDevelopmentMissionExecutionTerminalObserver`（与 `cli/start.ts` 同一个 ref-box 形态）。
+> `rfc359-t3-action-execution-runners.test.ts` 两引擎各绿 + 源码锁。
+> **W2-T11d（2026-09-05，CI 实撞 `6efee254f` 后补，见 `docs/dev-gotchas.md`）**：SQLite 统一事务改在新的事件循环任务里开始
+> （旁观者隔离），旁观者语句守卫扩到全部语句，事务体跨宏任务记 error 日志；runtime registry 两阶段停机
+> （`release` / `settle`），driver 释放序列在库里 owner 行转移后再唤醒等待者。**教训**：2026-09-04 13:24 `902a5def5`
+> 之后没有一个 CI run 真正跑完（全被 supersede 取消），四条驱动释放竞速红从 T7b 起潜伏到深夜——连推之间要等一次完整 CI；
+> 本地守卫清单补 `tests/architecture/rfc317-module-boundary.test.ts`。
+> **下一步**：W3-T14（`servePostgresqlDaemon` 永不返回形态）/ T16（`cli/start.ts` provider 分支归零）→ W4 成对删除。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

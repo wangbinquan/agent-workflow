@@ -245,6 +245,10 @@ import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { createPostgresqlMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
+import type { DevelopmentAutomationModule } from '@/modules/development-automation/composition'
+import { createPostgresqlDevelopmentMissionExecutionTerminalObserver } from '@/modules/development-automation/composition/executionTerminalObserver'
+import { composePostgresqlAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
+import { composePostgresqlScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/application/overview'
 import {
   ensureDigitalEmployeeAgentTemplates,
@@ -1443,6 +1447,51 @@ export async function composePostgresqlDaemonApplication(
     developmentAdapter,
     access: developmentConfigAccess,
   })
+  // RFC-359 W1-T3（F-H2-2）：agent / script 动作 launcher 与执行终态观察者——与 cli/start.ts 同一份
+  // 执行器（actionExecutionRunners.ts），只是宿主任务的启动 / 取消换成 PG 的根启动内核与取消命令。
+  // 此前 PG daemon 一个都没接，development mission 的每个动作都被 `*-launcher-not-wired` 挡下。
+  const developmentAutomationRef: { current: DevelopmentAutomationModule | null } = {
+    current: null,
+  }
+  const developmentTerminalObserver = createPostgresqlDevelopmentMissionExecutionTerminalObserver({
+    db: input.db,
+    async drive(missionId) {
+      const current = developmentAutomationRef.current
+      if (current === null) throw new Error('development-automation-not-composed')
+      try {
+        const outcome = await current.drive(missionId)
+        if (outcome.stop === 'step-budget') {
+          log.warn('development mission drive reached its bounded step budget', {
+            missionId,
+            steps: outcome.steps,
+          })
+        }
+        return outcome
+      } catch (err) {
+        log.warn('development mission drive after execution terminal failed', {
+          missionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+        throw err
+      }
+    },
+  })
+  const actionExecutionEnvironment = {
+    db: input.db,
+    actor: systemActor,
+    resourceAuthorityFor: (actor: Actor) => ({
+      actor,
+      authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+      resources: taskExecutionResources,
+    }),
+    launch: taskLaunchKernel,
+    cancelTask: (taskId: string) =>
+      taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+    readModels: taskExecutionProvider.readModels,
+    agents: {
+      get: (id: string) => classicCatalogs.agent.queries.get(authorityFor(systemActor), { id }),
+    },
+  }
   const developmentAutomation = composePostgresqlDevelopmentAutomation({
     db: input.db,
     appHome: input.appHome,
@@ -1457,7 +1506,20 @@ export async function composePostgresqlDaemonApplication(
     ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
     approvalGateway: developmentApprovalGateway,
+    agentLauncher: composePostgresqlAgentActionExecution({
+      ...actionExecutionEnvironment,
+      onTerminal: (executionRef) => {
+        void developmentTerminalObserver.agent(executionRef)
+      },
+    }),
+    scriptLauncher: composePostgresqlScriptActionExecution({
+      ...actionExecutionEnvironment,
+      onTerminal: (executionRef) => {
+        void developmentTerminalObserver.script(executionRef)
+      },
+    }),
   })
+  developmentAutomationRef.current = developmentAutomation
   const developmentMissions = composePostgresqlDevelopmentMissionOperations({
     db: input.db,
     deliveryProvider: developmentDeliveryProvider,
