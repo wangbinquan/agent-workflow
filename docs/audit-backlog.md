@@ -22,6 +22,7 @@
 | `design/codex-impl-gate-misc-2026-07-22.md`                                            | Codex 实现门杂项         | 见报告                                                                                                          |
 | `design/RFC-224-opencode-execution-identity/capability-regression-audit-2026-08-04.md` | RFC-224 能力回退全量裁决 | 6 实锤事故史 + 16 收尾修复；裁决 A/B/C 三栏；4 条 B 候选挂本文末节；RFC-255 进行中                              |
 | `design/system-commons-unification-audit-2026-08-12.md`                                | 系统公共功能全局归一审计 | 11 路并行审计；31 新发现 + 9 处登记面失真对账 + 22 条决策台账（D1-D22）；处置=包①随批落地 + RFC-284…289 路线    |
+| `design/dual-provider-parity-audit-2026-09-04.md`                                      | 双 provider 语义对账（SQLite ↔ PG） | 153 对全覆盖；**6 P0**（PG 上节点执行/boot 恢复整体不工作，P0-1 有可执行证据，全部在 `87d080300` 重核仍在）+ ~28 P1 + ~21 P2 + 5 存疑；其中 6 条已由 RFC-357 PR-3 修复，**~49 条待处置**；底座层 13 对零缺陷；**workgroupTurns 两套引擎未对拍，建议单独一轮** |
 
 ## 运行时 / 沙箱能力收口盘点（2026-07-31，RFC-237 root 事故后自查）
 
