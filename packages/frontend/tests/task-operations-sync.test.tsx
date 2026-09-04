@@ -25,7 +25,8 @@ vi.mock('../src/hooks/useWebSocket', () => ({
   },
 }))
 
-import { useTaskOperationsSync } from '../src/hooks/useTaskOperationsSync'
+import { TASK_LIST_COALESCE_MS, useTaskOperationsSync } from '../src/hooks/useTaskOperationsSync'
+import { TASK_OPERATIONS_QUERY_KEY } from '../src/hooks/useTaskOperationsPage'
 
 const HOOK_SOURCE = resolve(import.meta.dirname, '..', 'src', 'hooks', 'useTaskOperationsSync.ts')
 
@@ -75,7 +76,7 @@ describe('useTaskOperationsSync — 就地同步，绝不清空缓存', () => {
     ).not.toHaveBeenCalled()
   })
 
-  test('一秒内连来多帧只合并成两次重取（首帧立即 + 尾沿一次）', async () => {
+  test('一个窗口内连来多帧只合并成两次重取（首帧立即 + 尾沿一次）', async () => {
     vi.useFakeTimers()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
     renderHook(() => useTaskOperationsSync(), { wrapper: wrapper(client) })
@@ -87,12 +88,73 @@ describe('useTaskOperationsSync — 就地同步，绝不清空缓存', () => {
     })
     expect(invalidate, '首帧没有立即生效 ⇒ 状态变化要等一整个窗口才上屏').toHaveBeenCalledTimes(1)
 
-    await act(async () => vi.advanceTimersByTimeAsync(1_000))
+    // RFC-357：窗口从 1s 放到 10s。放得动的前提是屏幕已经由**就地更新**跟上了
+    // （下一条用例验证这一点），重取只剩「把权威数字对齐」这一个职责。
+    await act(async () => vi.advanceTimersByTimeAsync(TASK_LIST_COALESCE_MS))
 
     expect(
       invalidate,
       '窗口内的后续帧没有被合并 ⇒ 多任务并发时每条状态帧都会拉一遍列表',
     ).toHaveBeenCalledTimes(2)
+  })
+
+  test('RFC-357：状态帧先就地改缓存，不必等那次重取回来', () => {
+    vi.useFakeTimers()
+    const key = [...TASK_OPERATIONS_QUERY_KEY, {}, 'all-sources', 'root']
+    client.setQueryData(key, {
+      pages: [
+        {
+          schemaVersion: 1,
+          sourceIds: ['workflow'],
+          items: [{ id: 't1', status: 'running' }],
+          nextCursor: null,
+          facets: { all: 1, active: 1, attention: 0, finished: 0 },
+        },
+      ],
+      pageParams: [null],
+    })
+    renderHook(() => useTaskOperationsSync(), { wrapper: wrapper(client) })
+
+    act(() => {
+      captured?.({ type: 'task.status', taskId: 't1', status: 'failed' })
+    })
+
+    const patched = client.getQueryData(key) as {
+      pages: { items: { id: string; status: string }[]; facets: Record<string, number> }[]
+    }
+    // 帧到达的那一刻状态就变了——没有网络往返。
+    expect(patched.pages[0]!.items[0]!.status).toBe('failed')
+    // 但四个页签计数**没有**被就地算：它的分母含当前页看不见的行与子行，
+    // 缓存里没有，据此加减必然在一部分情况下算错（用户报的第一个问题就是数字乱跳）。
+    expect(patched.pages[0]!.facets).toEqual({ all: 1, active: 1, attention: 0, finished: 0 })
+  })
+
+  test('RFC-357：删除帧就地移除该行', () => {
+    vi.useFakeTimers()
+    const key = [...TASK_OPERATIONS_QUERY_KEY, {}, 'all-sources', 'root']
+    client.setQueryData(key, {
+      pages: [
+        {
+          schemaVersion: 1,
+          sourceIds: ['workflow'],
+          items: [
+            { id: 't1', status: 'done' },
+            { id: 't2', status: 'done' },
+          ],
+          nextCursor: null,
+          facets: { all: 2, active: 0, attention: 0, finished: 2 },
+        },
+      ],
+      pageParams: [null],
+    })
+    renderHook(() => useTaskOperationsSync(), { wrapper: wrapper(client) })
+
+    act(() => {
+      captured?.({ type: 'task.deleted', taskId: 't1' })
+    })
+
+    const patched = client.getQueryData(key) as { pages: { items: { id: string }[] }[] }
+    expect(patched.pages[0]!.items.map((row) => row.id)).toEqual(['t2'])
   })
 
   test('重连后补一次对账；首次建连不补（列表刚取过，再失效只会把它取消重来）', async () => {
