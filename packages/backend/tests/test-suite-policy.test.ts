@@ -49,6 +49,15 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-route-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/rfc238-mcp-runtime-test-real-e2e.test.ts#skipIf': 1,
+  // RFC-356 —— 三条都是**平台能力**门控，不是「这条测不通就跳过」：
+  //   · workspace-reclaim / iso-key-generations 用 `chmod 0500` 造「删不掉」的屏障来证
+  //     `blocked` 与换代，而 Windows 上 chmod 是 no-op（RFC-254 实测），屏障立不起来；
+  //     那一侧的等价覆盖由 windows-platform 腿上的注入式断言承担（design §11 证明力声明）。
+  //   · process-tree-quiesce 是**双向**门控：POSIX 侧证进程组语义，win32 侧证「没有 job
+  //     时立刻回 unknown、绝不空等预算」——两条各自只在对应平台有意义。
+  'packages/backend/tests/rfc356-workspace-reclaim.test.ts#skipIf': 3,
+  'packages/backend/tests/rfc356-iso-key-generations.test.ts#skipIf': 2,
+  'packages/backend/tests/rfc356-process-tree-quiesce.test.ts#skipIf': 2,
   // POSIX process-group semantics; the same file exercises Job Objects on Windows.
   'packages/backend/tests/rfc254-process-tree-ownership.test.ts#skipIf': 2,
   // Bun's detached `.cmd` pipe behaviour requires a real Windows kernel.

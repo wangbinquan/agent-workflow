@@ -1,5 +1,8 @@
 # RFC-356 技术设计
 
+> **修订 r3（2026-09-04，实现落地后）**：三批 PR 全部落地，实现期确定的两条偏离已补进 §10（第 7、8 条）。
+> 其余设计逐条落成，未再改形状。
+>
 > **修订 r2（2026-09-04，设计门后）**：两路对抗评审报出 3 条 P0 + 14 条 P1，逐条回源码复核后全部折入。
 > 本文档的 §2.2 阶梯形状、§3 的 RFC-254 契约改动、§4 的触发门、§5.3 的双身份 handle 都是 r2 才成立的形状；
 > r1 的对应写法**已作废**。改动理由逐条记在 §13。
@@ -138,6 +141,12 @@ N 棵工作树的普通父目录（`nodeIsolation.ts:172-180`、`:254-258`），
 `removeWorktree` 保留原签名与原语义（抛 `DomainError`）——它还有 GC / 备份 / 多仓拆卸等消费方，
 本 RFC 不改它们的失败面；`reclaimWorktreePath` 在其上组合。
 
+**r3 实现期补记的语义扩宽（写进了函数契约注释）**：阶梯只对**平台自己派生的路径**使用
+（`{appHome}/iso/…` 的 iso / resolve-iso、`{appHome}/worktrees/…` 的任务工作树）。
+改动前 `removeWorktree` 失败即「什么也没删」并抛出；阶梯会在 git 拒绝后升级为文件系统删除，
+于是传进一条**不属于本平台**的路径，后果从「报错」变成「删掉」。今天全部调用方传的都是派生
+路径（§2.3），但这条边界必须显式写下来，否则下一个复用它的人不会知道自己越界了。
+
 ### 2.3 消费方
 
 | 调用点                                                                                          | 改动                                                                                                                                                                                  |
@@ -235,8 +244,14 @@ assign 之前的窗口里 fork 出的后代不在 job 里。RFC-254 design.md:12
 `adoptProcessTree` 在 Bun 无 `dlopen` 的构建上返回 `null`（ARM64 实测，RFC-254）。处置：
 
 - `adoptSpawnedProcessTree` 返回 false ⇒ 杀树自动落到 `taskkill /T /F`，**不新增平台专属杀树路径**；
-- daemon 启动时按 `processTreeOwnershipDiagnosis()`（`util/windowsJobObject.ts:274-282`）warn 一次；
-- 该诊断同时进入 L1 `blocked` 的失败消息（§6）。
+- 按 `processTreeOwnershipDiagnosis()`（`util/windowsJobObject.ts`）warn 一次；
+- 该诊断同时进入失败消息（§6），由 `processTreeOwnershipStatus()` 导出给渲染方。
+
+> **实现期偏离（r3，落地时确定）**：这条 warn 最终挂在**首次 `adoptSpawnedProcessTree`**
+> 而不是 daemon 启动。两个理由：①它恰好在「真的要拉起 runtime 子进程」时才出现，
+> 对只跑管理面的 daemon 不制造噪音；②不必去动 3000 行的 `cli/start.ts`——那是并发
+> session 的高频改动面，共享工作树上冲突风险明显更高。可见性不减（仍是 daemon 日志里
+> 的一条 warn，且同一诊断进失败消息）。
 
 ## 4. L3 —— 杀树后等待树静默
 
@@ -446,6 +461,13 @@ Windows 上都可能带 `/`。AC-14 的测试两种形状都要断。
 4. **`removeWorktree` 保留原抛错语义**（§2.2），不把全仓消费方一起改成软失败。
 5. **不引入 `CREATE_SUSPENDED`**（§3.4），沿用 RFC-254 已记录的 spawn→assign 窗口处置。
 6. **`reclaimStalePrepArtifacts` 只复用第 1 层原语**（§2.3 修正 ④），AC-15 相应收窄。
+7. **（r3 实现期）归属降级 warn 挂在首次 adopt 而非 daemon 启动**，理由见 §3.5 引文块。
+8. **（r3 实现期）`IsoHandle` 采用「加字段 + 缺省回落」而不是把 `nodeRunId` 整体改名成
+   `isoKey`。** 改名是更诚实的命名（P0-1 正是这个歧义造成的），但 `nodeRunId` 在测试里有
+   87 处引用，共享工作树上的大改名与并发 RFC 冲突面过大。折中是：类型上把两个身份的语义
+   写死在文档注释里、`dbNodeRunId` 缺省等于物理键（今天所有调用点两者本来就相同，行为
+   逐字不变），并加一条**结构性防线**——形如 `-N` 的合成键若没有显式带 `dbNodeRunId`，
+   `createNodeIso` 响亮拒绝。整体改名留作后续清理。
 
 ## 11. 测试策略
 
@@ -475,7 +497,12 @@ Windows 上都可能带 `/`。AC-14 的测试两种形状都要断。
 AC-3 / AC-4 / AC-6 / AC-9 在 Windows 腿上**以注入方式证明**，POSIX 上用 chmod 屏障真做；
 「真机自然复现」不作为交付判据，这句话写进 AC 正文而不是风险附注。
 
-**先红后绿**：AC-5、AC-6、AC-14 三条今天都能写成红。
+**先红后绿（实现期更正）**：全 RFC 里能写成**真红**的只有 **AC-14**——`handleTaskIdOf` 是既有
+函数、既有缺陷，那条断言在改动前确实失败。AC-5 / AC-6 **不能**：`reclaimWorktreePath` 与
+`chooseIsoWorkspaceKey` 都是新函数，用例在改动前无从运行。它们改用**把改动前的死路钉成断言**
+来承载同一件事——先断言 `git worktree remove` 报 `is not a working tree`、`worktree add` 撞
+`already exists` 且 `--force` 不豁免，再断言新路径化解它。这比「先红」弱，是新函数能给出的
+最强形式；r2 把三条都写成「先红」，属措辞不实。
 
 **Windows CI paths（P1-8）**：`windows-platform.yml` 两份清单今天缺
 `services/nodeIsolation.ts`、`services/isolatedAgentRun.ts`、`services/schedulerAssembly.ts`、

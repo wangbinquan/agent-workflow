@@ -40,6 +40,7 @@ import {
   // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
   // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
+  isoKeyOf,
   mergeBackNodeIso,
   rebuildIsoHandle,
   snapshotNodeIsoFinal,
@@ -62,7 +63,6 @@ import {
   broadcastNodeStatus,
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
-  isoKeyOf,
   isolatedRunBinding,
   parseIsoJsonMap,
   parseIsoSubmodules,

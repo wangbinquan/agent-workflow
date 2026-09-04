@@ -68,6 +68,7 @@ import {
 } from '@/services/mergeAgent'
 import {
   discardNodeIso,
+  isoKeyOf,
   IsoWorkspaceBlockedError,
   MergeAgentChildUnreapedError,
   rebuildIsoHandle,
@@ -164,7 +165,6 @@ import {
   type StartTask,
 } from '@agent-workflow/shared'
 import { mkdirSync } from 'node:fs'
-import { basename } from 'node:path'
 import { processTreeOwnershipStatus } from '@/util/process'
 import { ulid } from 'ulid'
 
@@ -968,10 +968,6 @@ export function parseIsoJsonMap(s: string | null): Record<string, string> {
   }
 }
 
-/** RFC-210 round 6 P2 — the run id that KEYS the physical iso (worktree path +
- *  ref namespaces), recovered from the persisted container path. A
- *  process-retry keeps the original row's iso (D17) while its DB row is the
- *  retry mint; falling back to the row id preserves pre-column-era rows. */
 /**
  * RFC-356 G3 —— 把 iso 建树/重建失败渲染成能自证的一段话。
  *
@@ -996,12 +992,6 @@ export function describeIsoFailure(code: string, error: unknown): string {
       : `  进程树归属: 不可用（${ownership.reason}）—— 杀树降级为 taskkill 枚举，后代可能逃逸并继续持有工作树句柄`,
   )
   return lines.join('\n')
-}
-
-export function isoKeyOf(isoWorktreePath: string | null, rowId: string): string {
-  if (isoWorktreePath === null || isoWorktreePath === '') return rowId
-  const base = basename(isoWorktreePath)
-  return base === '' ? rowId : base
 }
 
 /**

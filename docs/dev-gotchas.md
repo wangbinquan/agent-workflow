@@ -940,6 +940,36 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 `packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts` 与四条
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
+## 「按 exact SHA 查 CI」很容易查到**另一个 workflow 的绿**（RFC-356 实撞，2026-09-04）
+
+`gh run list --commit <sha> --limit 1` 拿到的**不一定是 CI**。本仓同一个 SHA 上常挂三个
+workflow——`CI` / `windows-platform` / `integration-opencode`——而后两者的 paths 门控让它们
+**跑得快、经常先完成、而且是绿的**。于是「我按仓规查了 exact SHA 的 CI」会稳定地取到一条
+无关工作流的成功记录。
+
+**为什么这条特别毒**：它不报错、不返回空、还是绿的，和真取证长得一模一样；而同一个 SHA 上
+真正的 `CI` 那条，恰恰可能是并发 push 导致的 `cancelled`——**最需要被看见的那一条，正好是被
+顶掉的那一条**。2026-09-04 实撞：`bff1e395a` 上 `33836685512`(windows-platform)=success、
+`33836685515`(CI)=cancelled，只差 3 位数字；据此对外报了「CI 绿」，并差点写进 RFC 验收清单，
+是并发 session 复核时拦下的。
+
+**正确姿势**——按 workflow 名选，并且断言它：
+
+```bash
+gh run list --commit "$SHA" --json databaseId,name,status,conclusion \
+  -q '.[] | select(.name=="CI") | "\(.databaseId) \(.status) \(.conclusion)"'
+# 或
+gh api "repos/<owner>/<repo>/actions/runs?head_sha=$SHA" \
+  --jq '.workflow_runs[] | select(.name=="CI") | "\(.id) \(.status) \(.conclusion)"'
+```
+
+**写进 RFC / 验收清单时，workflow 名和 run id 一起记**（`CI run 33837911132`），只记 id 的话
+下一个人无从判断它是不是 CI——同一 SHA 上三个 id 只差几位。
+
+**副作用也别浪费**：windows-platform 那条腿如果覆盖了你本次的改动面（看它 paths 清单），
+它的绿是**独立且有分量的证据**（真 Windows 内核跑过），只是不能冒充 CI 门。按「windows-platform
+run」单独记即可。
+
 ## 被 `needs:` 挡着从没跑过的 CI lane，等于**没被验证过能跑完**（RFC-349 实测，2026-09-03）
 
 `postgresql-evidence` 的 `functional-regression` lane 写着 `needs: [crash-large-and-soak,

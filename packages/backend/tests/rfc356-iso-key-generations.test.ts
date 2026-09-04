@@ -17,12 +17,12 @@ import { join, resolve } from 'node:path'
 import {
   chooseIsoWorkspaceKey,
   createNodeIso,
+  isoKeyOf,
   isoWorktreePathFor,
   IsoWorkspaceBlockedError,
   MAX_ISO_KEY_GENERATIONS,
   rebuildIsoHandle,
 } from '../src/services/nodeIsolation'
-import { isoKeyOf } from '../src/modules/task-execution/composition/nodeMechanics'
 import { runGit } from '../src/util/git'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -155,6 +155,51 @@ describe('RFC-356 · 选键：常态零成本，有残留才回收', () => {
     },
     30_000,
   )
+
+  test('多仓：逐仓回收后容器只做整体删除，仍留在第 0 代', async () => {
+    // 多仓的容器是装着 N 棵树的**普通父目录**，对它走阶梯会先撞 `is not a working tree`、
+    // 随后的 rm -rf 会绕过 git 把 N 棵树一起删掉，所以它必须走「整体退避删除」那条。
+    const repoA = await initRepo()
+    const repoB = await initRepo()
+    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc356g-multi-'))
+    const container = isoWorktreePathFor(appHome, 'TM', 'KM', '')
+    for (const dir of ['a', 'b']) {
+      const leaf = join(container, dir)
+      mkdirSync(leaf, { recursive: true })
+      writeFileSync(join(leaf, 'residual.bin'), 'x')
+    }
+    const chosen = await chooseIsoWorkspaceKey({
+      appHome,
+      taskId: 'TM',
+      baseKey: 'KM',
+      canonRepos: [
+        { repoPath: repoA, worktreePath: repoA, worktreeDirName: 'a', baseBranch: 'main' },
+        { repoPath: repoB, worktreePath: repoB, worktreeDirName: 'b', baseBranch: 'main' },
+      ],
+    })
+    expect(chosen.key).toBe('KM')
+    expect(chosen.generation).toBe(0)
+    // 容器与两棵树都清干净了，且两个仓各自的 git 都没被越权动过。
+    expect(existsSync(container)).toBe(false)
+    for (const repo of [repoA, repoB]) {
+      expect((await runGit(repo, ['status', '--porcelain'])).exitCode).toBe(0)
+    }
+    removeTempDirSync(appHome)
+    removeTempDirSync(repoA)
+    removeTempDirSync(repoB)
+  }, 30_000)
+
+  test('容器判空要防 ENOENT：删除与判空之间有竞态，抛出去会变成一次假的 iso-setup 失败', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      'utf8',
+    )
+    const at = src.indexOf('function containerStillBlocks')
+    expect(at).toBeGreaterThan(-1)
+    const body = src.slice(at, src.indexOf('\n}', at))
+    expect(body, 'readdirSync 必须包在 try 里').toContain('try {')
+    expect(body, '读不到就当它不挡路').toMatch(/catch\s*\{\s*\n?\s*return false/)
+  })
 
   test('AC-7：换代后的路径能被 isoKeyOf 回读', () => {
     const path = isoWorktreePathFor('/home', 'T', 'K-2', '')

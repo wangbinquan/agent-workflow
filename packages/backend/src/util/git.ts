@@ -2601,6 +2601,12 @@ async function reclaimStaleRefLock(opts: {
  * **`absent` 不 prune**：调用方（选键）会在每次建树前探测，那一下 prune 会让正常
  * 创建路径凭空多一个持锁的 git 进程。悬空注册项由第 3b 档与既有 GC 的 prune 收。
  *
+ * ⚠️ **只对平台自己派生的路径使用**（`{appHome}/iso/…` 的 iso / resolve-iso、
+ * `{appHome}/worktrees/…` 的任务工作树）。这是**语义扩宽**，要说清楚：改动前
+ * `removeWorktree` 失败就是「什么也没删」并抛出；本阶梯会在 git 拒绝之后升级为
+ * 文件系统删除，所以传进一条不属于本平台的路径，后果从「报错」变成「删掉」。
+ * 调用方今天全部传的是派生路径（见 §2.3 消费方表），不要在此之外复用它。
+ *
  * ⚠️ **不要拿它回收多仓的容器目录**：`{appHome}/iso/{taskId}/{key}` 在多仓下只是装着
  * N 棵工作树的普通父目录，第 2 档会撞 `is not a working tree`、第 3 档的 `rm -rf`
  * 会**绕过 git 把 N 棵树一起删掉**。正确姿势是先逐仓走本函数（各用自己的 repoPath），

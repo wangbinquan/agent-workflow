@@ -32,8 +32,10 @@ RFC-254 的归属契约**（中高，且只有真 Windows CI 腿能证），L4 �
 `util/git.ts` 新增，四档 + 可选 `branchRef`。**锁粒度是本任务的核心判据**：`remove` / `prune` 持
 `withWorktreeRegistryLock`，`removeDirectoryWithRetry` **在锁外**；`absent` 档零进程零锁（不 prune）。
 `removeWorktree` 原签名/原语义不动。
-依赖：T1。测试：四档 outcome 各一（真 git 仓）；**AC-5 孤儿目录先红**；「`worktree add` 收空目录、拒非空目录」
-钉成回归；**锁外退避的证明**（阻塞回收期间同仓另一个 `worktree add` 不被阻塞）。
+依赖：T1。测试：四档 outcome 各一（真 git 仓）；**AC-5 孤儿目录**（用例先断言改动前那条死路
+——`git worktree remove` 报 `is not a working tree`——再断言回收后同一路径能重新建树）；
+「`worktree add` 收空目录、拒非空目录、`--force` 不豁免」钉成回归；**锁外退避的证明**
+（阻塞回收期间同仓另一个 `worktree add` 不被阻塞）。
 
 **RFC-356-T3｜iso 侧四处接入 + 多仓规则**
 `nodeIsolation.ts:1319`（discard）与 **resolve-iso 三处**（`:1489` / `:1555` / `:1709`）全部换用
@@ -131,8 +133,17 @@ daemon 启动按 `processTreeOwnershipDiagnosis()` warn 一次（`reason==='ffi-
 `isolatedAgentRun.ts`：锁内逐代选键——**gen 的第一步是 `existsSync(容器路径)` 短路（零进程零锁）**，
 只有真有残留才跑回收阶梯；`blocked` 进下一代，`MAX_ISO_KEY_GENERATIONS = 3`（design §5.2 已写明
 「脚本线预期会够到这个上限」，不要写成够不到的保险丝）。effect observer 用真实行 id（§5.4①）。
-依赖：T2、T14、T15。测试：**AC-6 先红**——屏障放在**基键树内部**（子目录 chmod 0500），
+依赖：T2、T14、T15。测试：AC-6 的屏障放在**基键树内部**（子目录 chmod 0500），
 放父目录会把新旧两代一起挡住、证不出换代（P2-6）；`isoKeyOf` 回读相等；`check-ref-format` 对 `-2` 合法。
+
+> **措辞更正（实现期）**：r2 把 AC-5 / AC-6 都写成「先红」，**不准确**。
+> `reclaimWorktreePath` 与 `chooseIsoWorkspaceKey` 都是**新函数**，它们的用例在改动前根本
+> 无法运行，谈不上「红」。全 RFC 里能写成**真红**的只有 **AC-14**（`handleTaskIdOf` 是既有
+> 函数、既有缺陷，那条断言在改动前确实失败）。
+> AC-5 / AC-6 的「改动前必然失败」是靠**把改动前的死路本身钉成断言**来承载的：用例里先断言
+> `git worktree remove` 报 `is not a working tree`、`worktree add` 撞 `already exists` 且
+> `--force` 不豁免，再断言新路径把它化解。这比「先红」弱，但它是新函数所能给出的最强形式，
+> 不该用更响的词去描述。
 
 **RFC-356-T17｜诊断渲染 + 注释修正**
 `onIsoSetupFailure` / `onIsoRecreateFailure` 渲染结构化诊断（残留路径 + 最后错误 + Job Object 可用性）；
@@ -172,26 +183,25 @@ PR-3   T14 ─┬─ T15 ─ T16 ─ T17 ─┐
 
 ## 3. 验收清单
 
-- [ ] AC-1 回收：路径不存在 ⇒ `absent`，**零进程零锁**（不 prune）
-- [ ] AC-2 回收：正常工作树一次 `remove` 成功；**创建侧常态只多一次 `existsSync`**
-- [ ] AC-3 回收：`remove` 失败 ⇒ 锁外退避删除 ⇒ prune ⇒ `removed via filesystem`
-- [ ] AC-4 回收：预算耗尽 ⇒ `blocked`（带残留路径 + 最后错误），不抛
-- [ ] AC-5 回收：注册项已丢的孤儿目录能被清掉（今天完全无解）
-- [ ] AC-6 重试换树时旧 iso `blocked` ⇒ 自动换代建树，节点继续重试
-- [ ] AC-7 换代路径能被 `isoKeyOf` 回读；resume / pending-merge 重放 / 冲突恢复三路定位正确
-- [ ] AC-8 wrapper iso 的 resume 自愈，且 `:1662` 的 merge-back handle 指向新树
-- [ ] AC-9 代际耗尽 ⇒ `iso-recreate-failed` + 三段结构化诊断
-- [ ] AC-10 Windows + FFI：Job Object 接管；**terminate 后 `liveCount()` 仍查内核**
-- [ ] AC-11 Windows 无 FFI：保持 taskkill 降级，无新增杀树路径，降级进 warn 与诊断
-- [ ] AC-12 杀树后在预算内等待静默（门 = 调用过 `killTree`，覆盖 drain 超时与带外杀树）；
-      等不到只 warn，不改 outcome / processUnreaped
-- [ ] AC-13 POSIX 行为逐字不变
-- [ ] AC-14 `handleTaskIdOf` 在 `\` 与 `/` 两种路径下都正确
-- [ ] AC-15 **目录删除**只有一份实现（阶梯本身因 `reclaimStalePrepArtifacts` 拿不到镜像仓而不强求统一）
-- [ ] AC-16 Windows 专属分支由 windows-platform CI 覆盖；**每个 PR** 各自同步两份 paths 清单
+- [x] AC-1 回收：路径不存在 ⇒ `absent`，**零进程零锁**（不 prune）—— `rfc356-workspace-reclaim`「路径不存在 ⇒ absent」
+- [x] AC-2 回收：正常工作树一次 `remove` 成功（`attempts:1`）；创建侧常态只多一次 `existsSync` —— `rfc356-iso-key-generations`「容器不存在 ⇒ 第 0 代直接选中，reclaimed=0」
+- [x] AC-3 回收：`remove` 失败 ⇒ 锁外退避删除 ⇒ prune ⇒ `removed via filesystem`（含「退避不持 registry 锁」的时序断言）
+- [x] AC-4 回收：预算耗尽 ⇒ `blocked`（带残留路径 + 最后错误），不抛 —— POSIX 上以 chmod 屏障真做
+- [x] AC-5 回收：注册项已丢的孤儿目录能被清掉 —— 用例先断言 git 自己报 `is not a working tree`，再断言回收后能重新建树
+- [x] AC-6 旧 iso `blocked` ⇒ 自动换代到 `-2` 并成功建树 —— 屏障放在**基键树内部**（放父目录会把两代一起挡住、证不出换代）
+- [x] AC-7 换代路径能被 `isoKeyOf` 回读；三处裸派生已补齐（wrapper ×2 + options-S1）
+- [x] AC-8 wrapper resume 走 CAS **之前**读到的 `cur.isoWorktreePath` 定位物理键；`:1662`（merge-back，硬故障档）与 `:1694`（discard，可容忍）分开注明。⚠️ **未做端到端的 wedge 复现**（需要造一棵真的清不掉的 wrapper iso + 完整 resume），当前证据是定位逻辑 + 顺序约束注释，记在 §5
+- [x] AC-9 代际耗尽 ⇒ `IsoWorkspaceBlockedError` 带 baseKey / 代数 / 残留路径 / 最后错误；`describeIsoFailure` 再拼上进程树归属可用性，分类字符串不变
+- [x] AC-10 契约已改（terminate 不关句柄、liveCount 不再短路、map 项保留），源码守卫钉死；**真内核验证靠 windows-platform 腿**
+- [x] AC-11 降级保持 taskkill，无新增平台专属路径；首次 adopt 打一条 warn，诊断进失败消息
+- [x] AC-12 门 = 调用过 `killTree`（三处杀树全过包装，源码守卫钉死）；`killStaleRunProcessTree` 补跳；等不到只 warn
+- [x] AC-13 POSIX 行为逐字不变 —— adopt 返 false、杀树仍走进程组；既有 rfc098 / rfc254 / s15 套件全绿
+- [x] AC-14 `handleTaskIdOf` 改 `/[\\/]/`，两种形状都认
+- [x] AC-15 目录删除收敛到 `removeDirectoryWithRetry` 一份：iso 侧、resolve-iso ×3、任务工作树、GC 四处、partial clone 全部走它
+- [x] AC-16 三个 PR 各自同步了两份 paths 清单（fsReclaim / nodeIsolation / isolatedAgentRun / schedulerAssembly / rfc356-\*.test.ts）；`root-test-entrypoint` 的 push ⊇ pull_request 守卫保持绿
 - [ ] AC-17 最终 sha 的主 CI run 级 `conclusion == success`（exact SHA 取证）
-- [ ] AC-18 stale `refs/heads/*.lock` 按 mtime 回收；年轻锁不动
-- [ ] AC-19 换代之后的 `discardNodeIso` 不抛（P0-1 守卫）
+- [x] AC-18 stale ref lock 按 mtime 回收（60s），年轻锁不动，逃逸段被拒，前缀形式一次收掉 `-2`/`-3`
+- [x] AC-19 双身份 handle 落地：observer 吃 `dbNodeRunId`、路径/ref 吃 `nodeRunId`（源码守卫）；合成键缺 DB 身份时 `createNodeIso` 响亮拒绝
 
 **证明力声明**：AC-3 / AC-4 / AC-6 / AC-9 的 `blocked` 档在 Windows CI 上**以注入方式证明**，
 POSIX 上用 chmod 屏障真做；「真机自然复现」不作为交付判据。

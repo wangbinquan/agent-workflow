@@ -11,6 +11,7 @@ import {
   // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
   // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
+  isoKeyOf,
   rebuildIsoHandle,
 } from '@/services/nodeIsolation'
 import { runGit } from '@/util/git'
@@ -21,7 +22,6 @@ import { mergeBackAndSettle } from '@/services/isolatedAgentRun'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import {
   isolatedRunBinding,
-  isoKeyOf,
   parseIsoJsonMap,
   parseIsoSubmodules,
   resolveMergeConflicts,
