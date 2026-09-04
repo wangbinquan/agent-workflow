@@ -32,6 +32,7 @@ import {
 import {
   assertMaintenanceTransition,
   maintenanceMemberSetDigest,
+  retainedWatermarkCoversSettledEffect,
   type MaintenanceMemberSnapshot,
   type TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
@@ -133,12 +134,7 @@ async function assertSettledLedgerCoverageTx(tx: PgTx, taskId: string): Promise<
       )
       .limit(1)
     const watermark = watermarks[0]
-    if (
-      watermark === undefined ||
-      (watermark.highestSettledGeneration ?? -1) < effect.operationGeneration ||
-      watermark.requestHash !== effect.requestHash ||
-      watermark.slotPathDigest !== effect.slotPathDigest
-    ) {
+    if (!retainedWatermarkCoversSettledEffect(effect, watermark)) {
       throw new TaskExecutionError(
         'task-terminal-maintenance-conflict',
         `task '${taskId}' effect '${effect.id}' lacks a complete retained watermark`,

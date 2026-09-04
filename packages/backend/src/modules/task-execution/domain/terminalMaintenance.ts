@@ -50,3 +50,41 @@ export function assertMaintenanceTransition(
     throw new Error(`illegal-maintenance-transition:${from}->${to}`)
   }
 }
+
+export interface SettledEffectCoverageProbe {
+  readonly operationGeneration: number
+  readonly requestHash: string
+  readonly slotPathDigest: string
+}
+
+export interface RetainedGenerationWatermark {
+  readonly highestSettledGeneration: number | null
+  readonly requestHash: string
+  readonly slotPathDigest: string
+}
+
+/**
+ * Does the retained ledger still cover this settled effect once the task's own
+ * rows are gone?
+ *
+ * A generation watermark is a per-family HIGH-WATER MARK: exactly one row per
+ * (execution_lineage_id, operation_family_key), carrying the digests of the
+ * highest settled generation only. Both writers scope digest equality to that
+ * generation (`settleTx` / recovery `upsertWatermark`, SQLite and PostgreSQL
+ * alike), so coverage of an OLDER generation is the generation bound alone —
+ * demanding digest equality there would permanently refuse terminal maintenance
+ * for any family that legitimately re-ran with a different request.
+ */
+export function retainedWatermarkCoversSettledEffect(
+  effect: SettledEffectCoverageProbe,
+  watermark: RetainedGenerationWatermark | undefined,
+): boolean {
+  if (watermark === undefined) return false
+  const highest = watermark.highestSettledGeneration ?? -1
+  if (highest < effect.operationGeneration) return false
+  if (highest > effect.operationGeneration) return true
+  return (
+    watermark.requestHash === effect.requestHash &&
+    watermark.slotPathDigest === effect.slotPathDigest
+  )
+}

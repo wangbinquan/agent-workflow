@@ -1,5 +1,6 @@
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 
+import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type {
   WorkspaceMaintenanceFilesystem,
@@ -35,6 +36,20 @@ class WorkspaceMaintenanceConflictError extends Error {
     super(message)
     this.name = 'WorkspaceMaintenanceConflictError'
   }
+}
+
+/**
+ * The terminal-maintenance store refuses a claim while the execution plane is
+ * still settling (`task-terminal-maintenance-conflict`). That is transient, not
+ * a cleanup failure: the tombstone stays and the next pass retries. Treating it
+ * as a failure warned on every GC tick and made `finalizeClaimedWorkspace`
+ * throw at a task-terminal event.
+ */
+function isMaintenanceConflict(error: unknown): boolean {
+  return (
+    error instanceof WorkspaceMaintenanceConflictError ||
+    (error instanceof DomainError && error.code === 'task-terminal-maintenance-conflict')
+  )
 }
 
 function parseCleanupPlan(value: string): WorkspaceGcCleanupPlanV1 | null {
@@ -215,7 +230,7 @@ export function createWorkspaceMaintenanceCommand(input: {
       const result = await resumeClaim(item, now)
       return result.removed ? 'removed' : 'finalized-missing'
     } catch (error) {
-      if (error instanceof WorkspaceMaintenanceConflictError) return 'busy'
+      if (isMaintenanceConflict(error)) return 'busy'
       log.warn('workspace prune failed (durable claim kept for recovery)', {
         taskId,
         error: error instanceof Error ? error.message : String(error),
