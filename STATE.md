@@ -17,11 +17,12 @@
 > **至今无法统一的唯一真障碍是事务**：`bun:sqlite` 的 `transaction` 是同步包装器（async 回调在第一个
 > `await` 处被当作已返回并 COMMIT），PG 客户端是 async，于是一个事务体没法同时跑在两侧——216 份
 > 适配器由此而来。**本 RFC 的技术核心是证明这条约束只对包装器成立**：实测「显式 `BEGIN IMMEDIATE`
-> + async 体 + 显式 COMMIT/ROLLBACK」在 bun:sqlite 上给出真回滚（现状机制同一场景残留两行、零原子性），
-> 且仓内 `sqliteLogicalTarget.ts:222` 已在这么做。五波推进（先修 P0 让 PG 可用 → 统一事务原语 →
-> 统一启动序列 → 逐 context 合一 153 对 → 防复辟守卫 + 真库进 push CI），每波自身可发布。
-> 两项能力影响呈确认（`dbTxSync` 退役、SQLite 写入改异步 + 进程内单写者串行）。
-> **批准前不动任何生产代码。**
+>
+> - async 体 + 显式 COMMIT/ROLLBACK」在 bun:sqlite 上给出真回滚（现状机制同一场景残留两行、零原子性），
+>   且仓内 `sqliteLogicalTarget.ts:222` 已在这么做。五波推进（先修 P0 让 PG 可用 → 统一事务原语 →
+>   统一启动序列 → 逐 context 合一 153 对 → 防复辟守卫 + 真库进 push CI），每波自身可发布。
+>   两项能力影响呈确认（`dbTxSync` 退役、SQLite 写入改异步 + 进程内单写者串行）。
+>   **批准前不动任何生产代码。**
 
 > ✅ **RFC 已完成（Done，2026-09-04）：[RFC-358 意图构建看得见工作流图校验](design/RFC-358-intent-graph-validation-feedback/proposal.md)。**
 > 起于用户实证「意图创建的东西过不了校验」。对账结论：意图链路**只跑第一层**
@@ -41,7 +42,12 @@
 > 查库失败时 draft 照落不丢模型产出。设计门两路评审（只审功能）报出 12 P0 / 13 P1 全部折入 r2 后才动工。
 > 提交链 `877c80e09` → `11cc7af6d` → `e29fef5d6` → `8a3d9a73c` → `1a8e24d23` → `ed3000176`（账本重采）。
 > 实现中自查出并修掉一个自引入的 bug（共享 apply 期重写时漏了 copy 的句柄重定向）。
-> 意图测试面全量 486 pass、前端 intent-detail 23 passed、rfc358 专用锁 21 例。
+> 意图测试面全量 486 pass、前端 intent-detail 23 passed、rfc358 专用锁 23 例。
+> **实现后连红三轮，四条根因全部是本 RFC 的，已逐条修掉并各带回归锁**（`1541c5e54` 嵌套 wrapper 的
+> loop 成员传递 + provider 隔离注释、`e6670a093` 图修复轮改由 `graphErrors` 触发而非 blockingErrors
+> 总数、`82d4af53b` 新错误码登记进 apply 面清单、`3b4bb659d` 账本随源码重采）。逐条归因与本地预检
+> 清单见 `plan.md §实现后的 CI 归因`。**实现门经用户 2026-09-04 决定不跑**（Codex 配额至 09-08），
+> 实现证据由三轮 CI 归因 + 本地 e2e 实跑（intent-builder 7/7、rfc319 全过）承担。
 
 > ✅ **已完成 RFC（Done，2026-09-04，四个 PR + 一笔修红全部推上 main）：[RFC-357 任务列表页查询归一（一份查询，两个 provider）](design/RFC-357-task-list-page-query-unification/proposal.md)。**
 > 起于用户「切了 PostgreSQL，任务列表还是卡」。慢的不是数据库：目录页对 task-execution 的三个源**各发一次**

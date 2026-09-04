@@ -115,6 +115,23 @@ T8 (teaching mistakes) 并入批次 2   ·   T10 (下游提示) 独立   ·   T1
 
 每批都自带测试（CLAUDE.md §Test-with-every-change：没有「先实现、之后补测试」这一档）。
 
+## 实现后的 CI 归因（三轮红，逐条落账）
+
+实现推上 `main` 后连红三轮，四条根因全部是本 RFC 的，已逐条修掉并各带回归锁：
+
+| 根因                                                     | 性质                                                                                                                                                                   | 修复                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `topology-cycle` 对**嵌套 wrapper 里的合法循环**误报     | validator 既有缺陷，被接上校验后才暴露：`buildLoopMembership` 只登记 wrapper-loop 的**直接**成员，`loop{ git{ a, b } }` 里 a↔b 的反馈环因此失去豁免                    | `1541c5e54` 改为沿容器链取最近的 loop 祖先；e2e 的 nested-cycle fixture 逐字内联进单测 |
+| PostgreSQL ports 文件注释里出现 "SQLite"                 | 撞 provider 隔离守卫                                                                                                                                                   | 同上，措辞改掉                                                                         |
+| 图修复轮由 `blockingErrors` **总数**触发                 | **实现执行错误**：第一层的错误（未挂载目标等，要用户做动作）也会自动重跑，白烧一轮并把 draft revision 序列整体后移，`rfc319-intent-draft-and-commit` 两个 shard 同时红 | `e6670a093` 单独记 `graphErrors` 作判据，补回归锁                                      |
+| 新错误码 `intent-workflow-invalid` 未登记进 apply 面清单 | 仓里有明文守卫要求「改这张表并说明为什么」                                                                                                                             | `82d4af53b` 登记并写清它挡什么                                                         |
+
+另有一条流程疏漏：改了生产源码却没重采账本（`3b4bb659d` 补）。**教训：改生产源码就要重采，sourceDigest 是全树 canonical 投影的哈希，一行也会变。**
+
+本地预检清单据此补齐（下次改意图 / 校验链路照跑）：意图单测面 + validator 面 + **`e2e/intent-builder.spec.ts` 与 `e2e/rfc319-intent-draft-and-commit.spec.ts`** + 架构守卫（干净副本）+ 改生产源码则重采账本。前两轮红都源于只跑了单测面。
+
+最终状态：`a9b3cb660` 的 19 个 backend/e2e job 中 16 success，两条 failure 属并发 RFC-359（新增两个 persistence 文件未重采账本），与本 RFC 无关。
+
 ## 验收清单
 
 - [x] AC-1 图校验 error 带 `<opId>:` 前缀进 blocking 列表
@@ -134,5 +151,5 @@ T8 (teaching mistakes) 并入批次 2   ·   T10 (下游提示) 独立   ·   T1
 - [x] 既有测试影响：`rfc234-apply-changeset.test.ts:808` 未受影响（门放在 `prepare` 之后）、`:1258-1272` 未变红（测试装配缺省不接门）、teaching baseline 已同步
 - [x] 架构账本已重采并提交（`ed3000176`，`git archive` 干净副本法，并发在制品 0 条）
 - [x] 设计门（只审功能）findings 全部折入 —— r2（12 P0 / 13 P1）
-- [ ] 实现门（只审功能）—— Codex 配额至 09-08，按 RFC-354 T20 替代姿势另跑
+- [x] 实现门 —— **用户 2026-09-04 决定不跑**（Codex 配额至 09-08；本 RFC 的实现证据改由三轮 CI 归因 + 本地 e2e 实跑承担，见下）
 - [ ] CI 按 exact SHA 全绿
