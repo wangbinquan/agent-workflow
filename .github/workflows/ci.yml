@@ -237,14 +237,22 @@ jobs:
       # 整条 lane 绿着却什么都没跑——本仓对「跑没跑」的要求见 rfc317 的 skipIf 账本。
       - name: Assert the server is reachable
         shell: bash
+        # 程序走**带引号的 heredoc**而不是 `bun --eval '…'`：后者是单引号里的一段 JS，
+        # shellcheck 会按 shell 展开去读它并报 SC2016（实撞，run 33859487150 的 scans）。
         run: |
-          bun --eval '
-            const sql = new (await import("bun")).SQL(process.env.RFC357_DATABASE_URL);
-            const rows = await sql`select 1 as ok`;
-            if (rows[0]?.ok !== 1) { console.error("postgres did not answer", rows); process.exit(1); }
-            console.log("postgres reachable");
-            await sql.close();
-          '
+          cat > pg-probe.mjs <<'PROBE'
+          import { SQL } from 'bun'
+          const sql = new SQL(process.env.RFC357_DATABASE_URL)
+          const rows = await sql`select 1 as ok`
+          if (rows[0]?.ok !== 1) {
+            console.error('postgres did not answer', rows)
+            process.exit(1)
+          }
+          console.log('postgres reachable')
+          await sql.close()
+          PROBE
+          bun pg-probe.mjs
+          rm -f pg-probe.mjs
 
       - name: Test the task list page against real PostgreSQL
         shell: bash

@@ -76,7 +76,37 @@ describe('RFC-357 delta 1 — user search folds case on BOTH sides, so LIKE sens
   })
 })
 
-describe('RFC-357 delta 2/3 — raw-SQL numbers are normalised in the projection', () => {
+describe('RFC-357 delta 2/3 — raw-SQL numbers are normalised EVERYWHERE they are read', () => {
+  // 真库 lane 抓到过两次，第二次正是这条断言原本漏掉的地方：**分页游标**从裸行取
+  // `branch_started_at` 直接编码，PostgreSQL 上写出字符串，下一页解码 422。
+  // 判据因此从「投影层归一了吗」升级成「页目录下有没有绕过归一的裸数值读取」。
+  test('every numeric column of the SQL row shape is read through the helper, cursor included', () => {
+    // 判据取自 `OperationsSqlRow` 的**声明**而不是正则扫属性读取：SQL 模板里到处是
+    // `p.branch_started_at` 这样的列引用，靠文本分不清「JS 读了一行」和「SQL 写了一列」。
+    // 从类型声明取数值列名，再要求每个列名都在某个 helper 调用里出现过——完整且稳定。
+    const projection = readFileSync(resolve(PAGE_DIR, 'projection.ts'), 'utf8')
+    const shape = projection.slice(
+      projection.indexOf('export interface OperationsSqlRow {'),
+      projection.indexOf('}', projection.indexOf('export interface OperationsSqlRow {')),
+    )
+    const numericColumns = [...shape.matchAll(/^\s*(\w+)\??:\s*number\b/gmu)].map(
+      (match) => match[1]!,
+    )
+    expect(numericColumns.length).toBeGreaterThan(8)
+
+    const consumers = projection + readFileSync(resolve(PAGE_DIR, 'page.ts'), 'utf8')
+    const unguarded = numericColumns.filter(
+      (column) =>
+        !new RegExp(`(?:numeric|nullableNumeric|numericOrZero)\\([^)]*'${column}'`, 'u').test(
+          consumers,
+        ),
+    )
+    expect(
+      unguarded,
+      'these numeric columns are read without the finite-checked helper and will be strings on PostgreSQL',
+    ).toEqual([])
+  })
+
   test('every numeric field the page emits goes through the finite-checked helper', () => {
     const projection = readFileSync(resolve(PAGE_DIR, 'projection.ts'), 'utf8')
     for (const field of [
@@ -95,9 +125,9 @@ describe('RFC-357 delta 2/3 — raw-SQL numbers are normalised in the projection
     }
     // 归一必须是「抛而不是放行」——NaN 静默进页比红一次糟得多。
     expect(projection).toContain('if (!Number.isFinite(parsed))')
+    // 游标那一处（lane 抓到的第二个缺陷）必须真的归一。
     const page = readFileSync(resolve(PAGE_DIR, 'page.ts'), 'utf8')
-    expect(page).toContain('function facetCount(')
-    expect(page).toContain('if (!Number.isFinite(parsed))')
+    expect(page).toContain("numeric(last.branch_started_at, 'branch_started_at')")
   })
 })
 

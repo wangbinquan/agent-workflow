@@ -22,7 +22,13 @@ import {
   type TaskOperationsPageOptions,
   type TaskOperationsRawQuery,
 } from './filters'
-import { mapRows, type OperationsSqlRow, type TaskListPageEnrichment } from './projection'
+import {
+  mapRows,
+  numeric,
+  numericOrZero,
+  type OperationsSqlRow,
+  type TaskListPageEnrichment,
+} from './projection'
 import {
   canUseFilteredFastPath,
   childQuery,
@@ -144,7 +150,10 @@ async function listPage(
     }
     nextCursor = encodeCursor({
       v: 1,
-      branchStartedAt: last.branch_started_at,
+      // 裸行里的这个值在 PostgreSQL 上是字符串（int8）。不归一的话游标编码出
+      // `"branchStartedAt":"178…"`，下一页解码时被 zod 拒成 422——真库 lane 抓到的
+      // 第二个 PostgreSQL-only 缺陷就是它。
+      branchStartedAt: numeric(last.branch_started_at, 'branch_started_at'),
       taskId: last.id,
       filterFingerprint: parsed.filterFingerprint,
     })
@@ -164,19 +173,10 @@ async function listPage(
     items,
     nextCursor,
     facets: {
-      all: facetCount(facetRow?.facet_all, 'facet_all'),
-      active: facetCount(facetRow?.facet_active, 'facet_active'),
-      attention: facetCount(facetRow?.facet_attention, 'facet_attention'),
-      finished: facetCount(facetRow?.facet_finished, 'facet_finished'),
+      all: numericOrZero(facetRow?.facet_all, 'facet_all'),
+      active: numericOrZero(facetRow?.facet_active, 'facet_active'),
+      attention: numericOrZero(facetRow?.facet_attention, 'facet_attention'),
+      finished: numericOrZero(facetRow?.facet_finished, 'facet_finished'),
     },
   })
-}
-
-/** 同 `projection.ts` 的 `numeric`：PostgreSQL 的 `count(*)` 是 int8，驱动交回字符串。 */
-function facetCount(value: unknown, field: string): number {
-  const parsed = value === null || value === undefined ? 0 : Number(value)
-  if (!Number.isFinite(parsed)) {
-    throw new Error(`task operations page carried a non-numeric ${field}: ${String(value)}`)
-  }
-  return parsed
 }

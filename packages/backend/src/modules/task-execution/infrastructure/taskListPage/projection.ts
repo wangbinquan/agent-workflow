@@ -23,25 +23,26 @@ import {
 } from './authorization'
 import type { TaskListPageDb } from './db'
 
-/** 一页内的富化查询。两个 provider 各自绑定自己的实现（见 `sqlite.ts`）。 */
-export interface TaskListPageEnrichment {
-  readonly owners: OwnerIdentityQueries
-  readonly failureCodes: (
-    rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
-  ) => Promise<ReadonlyMap<string, FailureCode | null>>
-}
+// ── 裸 SQL 回读的数值归一。**每一处**从 SQL 行里读数字的地方都必须走这三个 helper ──
+//
+// 为什么：`db.all(sql)` 这条路上 drizzle 的列 mapper 不参与，而 PostgreSQL 的 int8 /
+// numeric 按规范由驱动交回**字符串**（`count(*)` → "100000"，普通 bigint 列同理）；
+// SQLite 一直交 number。
+//
+// 这不是理论风险，是被真库 lane 抓到过**两次**的东西：
+//   1. 投影里的 `started_at` 等列（PR-1 就归一了）；
+//   2. **分页游标**——`page.ts` 直接拿 `last.branch_started_at` 编码，于是 PostgreSQL 上
+//      写出的是 `{"branchStartedAt":"1788278410000"}`，而 `TaskPageCursorSchema` 要求
+//      `z.number().int()`，翻第二页时自己解不开自己刚发的游标（422
+//      `task-page-cursor-invalid`）。静态守卫当时只盯着投影层，漏了这一处；lane 抓到了。
+//
+// 所以判据搬进一个独立文件，并由 `rfc357-narrow-projection` 钉住「页目录下不存在绕过它的
+// 裸数值读取」——下一处新的读点要么走这里，要么红。
+//
+// 非有限值一律抛：宁可红在这一行，也不要把 NaN 送进页里，或让 zod 在很远的地方报一个看
+// 不懂的形状错。
 
-/**
- * 裸 SQL 回读的数值归一。
- *
- * `db.all(sql)` 这条路上 drizzle 的列 mapper 不参与，而 PostgreSQL 的 int8 / numeric
- * 按规范由驱动交回**字符串**（`count(*)` → "100000"，普通 bigint 列同理）；SQLite 一直
- * 交 number。不归一的话，同一段代码在两个 provider 上行为不同——而症状是 zod 在很远的
- * 地方报一个看不懂的形状错，或者更糟，`a + 1` 变成字符串拼接。
- *
- * 非有限值一律抛：宁可红在这一行，也不要把 NaN 送进页里。
- */
-function numeric(value: unknown, field: string): number {
+export function numeric(value: unknown, field: string): number {
   const parsed = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(parsed)) {
     throw new Error(`task operations row carried a non-numeric ${field}: ${String(value)}`)
@@ -49,8 +50,21 @@ function numeric(value: unknown, field: string): number {
   return parsed
 }
 
-function nullableNumeric(value: unknown, field: string): number | null {
+export function nullableNumeric(value: unknown, field: string): number | null {
   return value === null || value === undefined ? null : numeric(value, field)
+}
+
+/** facets 缺列时按 0 计（子页不带 facets），其余与 `numeric` 同判据。 */
+export function numericOrZero(value: unknown, field: string): number {
+  return value === null || value === undefined ? 0 : numeric(value, field)
+}
+
+/** 一页内的富化查询。两个 provider 各自绑定自己的实现（见 `sqlite.ts`）。 */
+export interface TaskListPageEnrichment {
+  readonly owners: OwnerIdentityQueries
+  readonly failureCodes: (
+    rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
+  ) => Promise<ReadonlyMap<string, FailureCode | null>>
 }
 
 export interface OperationsSqlRow {

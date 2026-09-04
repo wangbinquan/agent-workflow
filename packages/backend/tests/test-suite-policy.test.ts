@@ -83,6 +83,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/rfc349-postgresql-target-faults.integration.test.ts#skip': 1,
   // 写矩阵要一台一次性外置 PostgreSQL（postgresql-evidence 提供），普通跑批跳过。
   'packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts#skip': 1,
+  // RFC-357：CI 的 `test-backend-postgresql` lane 起一台 postgres 服务容器后**必跑**这条
+  // （lane 里有一道 grep，一旦它 skip 就 `::error::` 退出——skip 也算通过，绿着骗人是
+  // 这类环境门控最容易掉进去的坑）。普通 backend 跑批没有 URL，因此在这里记一次。
+  'packages/backend/tests/rfc357-postgresql-page.integration.test.ts#skip': 1,
   'e2e/clarify.spec.ts#skip': 1,
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   // RFC-319 REPO-42（2026-08-26）：这里曾是 2 —— 一条是 gitea 夹具未配置时的条件跳过

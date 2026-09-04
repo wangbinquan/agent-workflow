@@ -34,6 +34,13 @@ type ErasedRule = (msg: unknown, ctx: unknown) => readonly QueryKey[] | void
 
 export interface WsInvalidationOptions<Ctx> {
   /**
+   * RFC-357：合并窗口可按面调。默认 1 秒服务的是「屏幕上的东西只能靠重取才更新」
+   * 的面；一旦某个面能对帧做**就地更新**（任务列表的状态 chip / 删除行），重取就只
+   * 剩「把这一页的权威数字对齐」这一个职责，可以放慢一个量级——用户看到的变化仍然
+   * 是即时的，而重取次数下降同样的量级。
+   */
+  coalesceMs?: number
+  /**
    * WS frames are notifications, not a replay log. Return the query surfaces
    * that must be reconciled after every physical open (initial, reconnect, or
    * auth rotation) so events missed while disconnected cannot leave stale UI.
@@ -58,10 +65,12 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
   const rulesRef = useRef(rules)
   const ctxRef = useRef(ctx)
   const reconcileOnOpenRef = useRef(options?.reconcileOnOpen)
+  const coalesceMsRef = useRef(options?.coalesceMs ?? INVALIDATE_COALESCE_MS)
   useEffect(() => {
     rulesRef.current = rules
     ctxRef.current = ctx
     reconcileOnOpenRef.current = options?.reconcileOnOpen
+    coalesceMsRef.current = options?.coalesceMs ?? INVALIDATE_COALESCE_MS
   })
   const pendingKeysRef = useRef(new Map<string, QueryKey>())
   const lastSentAtRef = useRef(new Map<string, number>())
@@ -102,7 +111,7 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
       for (const key of keys) {
         const hash = JSON.stringify(key)
         const lastSentAt = lastSentAtRef.current.get(hash)
-        if (lastSentAt === undefined || now - lastSentAt >= INVALIDATE_COALESCE_MS) {
+        if (lastSentAt === undefined || now - lastSentAt >= coalesceMsRef.current) {
           lastSentAtRef.current.set(hash, now)
           void qc.invalidateQueries({ queryKey: key })
         } else {
@@ -110,7 +119,7 @@ export function useWsInvalidation<M extends { type: string }, Ctx = void>(
         }
       }
       if (pendingKeysRef.current.size > 0 && flushTimerRef.current === null) {
-        flushTimerRef.current = window.setTimeout(flushPending, INVALIDATE_COALESCE_MS)
+        flushTimerRef.current = window.setTimeout(flushPending, coalesceMsRef.current)
       }
     },
   })
