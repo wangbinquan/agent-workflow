@@ -57,7 +57,9 @@
 > `services/nodeIsolation.ts`）而不是记一条 R1 债；`dd06e994a` 补账本与四条 `allowGrowth` 声明。
 > 用户裁决 D1～D5（换唯一路径自愈 / ARM64 保持降级 + 显式诊断 / 回收原语统一 / 完整修 RFC-254 契约 / 接受 release 杀幸存后代）。
 > 设计门两路评审报 3 条 P0 + 14 条 P1 全部折入（design §13 有改动索引）；其中 P0-1 拦下了一个**比 #13 更早触发**的新 wedge。
-> 交付取证与「按 `.name == "CI"` 选 run」的纪律见 plan §6。
+> **AC-17 取证**：`94df56ab8` 的 CI（run `33843296722`，`.name == "CI"` 已核）run 级 `conclusion == success`，五笔全部是其祖先。
+> 过程中真红过两次（`d28a66205` 全分片红：R1 越界边 + skipIf 未入账；`dd06e994a` 双 OS 红一条：RFC-328 act 清单按名字钉死），
+> 如实记在 plan §6，未抹掉。取证纪律与两条教训（按 `.name == "CI"` 选 run、改实现名会连累按名字钉死的多层守卫）已进 `docs/dev-gotchas.md`。
 
 > ✅ **已完成 RFC（Done，2026-09-04）：[RFC-355 Intent bounded context 归位（RFC-294 W4-E4a）](design/RFC-355-intent-context-cutover/proposal.md)。**
 > `services/intent/` **5136 行整目录删除**：18 个文件归位到 `modules/intent/{domain,application}`（1 个迁进 resource-catalog 的 composition，
@@ -72,7 +74,11 @@
 > 不再 import `@/ws/broadcaster`，并落下本仓**第一条**观测 intent 广播的测试。
 > **数字如实记账**：W4-E4a exact **176 → 41**、facade **18 → 0**、**全局 exception 净减 116**（5313 → 5197）。
 > **AC-3 / AC-4 / AC-8 未完全归零**，逐条理由写在 `proposal.md §9.2/§9.3/§9.4`（不是「已完成」的措辞放宽）。
-> **AC-9 取证**：`bec6c29f0` 的 CI run `33834461744`，run 级 `conclusion == success`；T4b 的后继取证见 `proposal.md §9.5`。
+> **AC-9 取证**：`94df56ab8` 的 CI run `33843296722`，`name == "CI"` 已核、run 级 `conclusion == success`、35/35 全绿，
+> RFC-355 的 14 笔提交全部在其祖先链上。中途三轮红两轮是并发 RFC-356 的、一轮（`7af8735fe`）是我自己的操作失误
+> （纯文档笔不涨账本 ⇒ 上一笔的一次性 `allowGrowth` 过期），逐条记在 `proposal.md §9.1` AC-9 行。
+> **实现门两路已跑**（只审功能）：第一路无回归；第二路挖出四处零预言力断言，已逐条处置并做变异验证，
+> 另有三项明确不处置、写在 §10.3，不假装解决。
 
 > ✅ **已完成 RFC（Done，2026-09-04）：[RFC-353 Knowledge Evolution bounded context 归位（RFC-294 W4-E3）](design/RFC-353-knowledge-evolution-context-cutover/proposal.md)。**
 > `modules/knowledge-evolution` 从「源码里根本不存在」到拥有 domain / application / infrastructure / inbound / public / composition 六层：fusion 编排与双 provider 持久化整体归位，融合适配器**不再直写** `memories` / `skills` / `skill_versions`（各经 owner 的 tx-bound participant），技能回滚的成员关系判据从 resource-catalog 迁入 KE，`routes/fusions.ts` 收成 decode-call-map 并迁至 KE inbound，两个 legacy facade（`services/fusion.ts` / `services/skillVersion.ts`）删除。

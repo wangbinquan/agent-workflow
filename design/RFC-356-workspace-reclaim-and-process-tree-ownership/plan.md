@@ -247,6 +247,12 @@ POSIX 上用 chmod 屏障真做；「真机自然复现」不作为交付判据�
 `managedProcess.ts` 都在它的 paths 清单里），也就是 Job Object 契约改动在**真 Windows
 内核**上跑过一次绿。
 
-**过程中真红过一次**：`d28a66205` 的 CI（`33837911132`）8 个 backend 分片双 OS 全红，
-两条都是 PR-3 的（R1 越界边 + skipIf 未入账），由 `18dc0120d` + `dd06e994a` 修复。
-如实记在这里，不抹掉。
+**过程中真红过两次，如实记在这里，不抹掉**：
+
+1. `d28a66205` 的 CI（`33837911132`）8 个 backend 分片双 OS 全红——R1 越界边（legacy 层
+   import 模块 composition）+ 7 处 skipIf 未入账，都是 PR-3 的。由 `18dc0120d` + `dd06e994a` 修复。
+2. `dd06e994a` 的 CI（`33840839902`）双 OS shard 3/4 同红一条——RFC-328 的 `actCallees`
+   按名字钉着 `removeWorktree`，而 T3 之后 `discardNodeIso` 已改调 `reclaimWorktreePath`。
+   由 `90795b153` 修复。**这一轮本可以避免**：修第一轮时只跑了 `tests/architecture/**`，
+   而 RFC-328 那条在 `tests/` 根下。教训已进 `docs/dev-gotchas.md`
+   （「改一个实现名，会连累按名字钉死的多层守卫」）。

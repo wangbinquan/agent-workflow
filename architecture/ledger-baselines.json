@@ -483,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25967,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-356 收口笔新增一个导出常量 `STALE_RUN_QUIESCE_BUDGET_MS`（`util/process.ts`）：带外杀树的静默预算刻意与 `TREE_QUIESCE_BUDGET_MS` 分开——它的消费方之一挂在 resume 请求路径上，且自身已等过两段宽限。25966 → 25967，仅此一个符号。上一笔（dd06e994a）的四条一次性许可已按 T17 规则全部退役。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -503,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "fc3198e9a4241661bd809991ecb54f6917c6286f",
-    "contentDigest": "sha256:183c642b89c67473c3fff78fdbb97a718bdebaf8575ec25dcdfa734e2c64704b",
+    "currentSnapshotSha": "94df56ab83b46cb475ceafcf9a31f3ecb5ecb2aa",
+    "contentDigest": "sha256:8d10e9d393b5ee3f62d09a736c2c8319bdac8dc08f4260bc89a36f098e02d752",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
