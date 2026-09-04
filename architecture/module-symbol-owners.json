@@ -6,7 +6,7 @@
     "moduleFiles": 1348,
     "productionFiles": 2739,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26068
+    "symbolsIncludingFileRoots": 26071
   },
   "entries": [
     {
@@ -157364,6 +157364,18 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "databaseSessionFor",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -157388,10 +157400,34 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#isPostgresqlDatabaseClient",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isPostgresqlDatabaseClient",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#reuseFrame",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "reuseFrame",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#sessions",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "sessions",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -313519,5 +313555,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dcca3311d2b5b0480705175a083dae2353d1f50686f9dadbf1eb3bec77d60208"
+  "sourceDigest": "sha256:2908f370f1d36e2ba16daefd62cd5f6a910918ce99dc77733611403a684486ad"
 }

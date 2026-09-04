@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26068,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26071,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W5-T19e：platform/persistence/databaseTransaction.ts 新导出 databaseSessionFor（按客户端记忆化取会话，全仓看 $provider 品牌的唯一地方之一）并让 DatabaseSession 携带 engine（引用 capabilities 的 createSqliteCapabilities / createPostgresqlCapabilities / EngineCapabilities），符号 owner 26068 → 26071。下一笔不涨即删。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:dcca3311d2b5b0480705175a083dae2353d1f50686f9dadbf1eb3bec77d60208",
+    "sourceDigest": "sha256:2908f370f1d36e2ba16daefd62cd5f6a910918ce99dc77733611403a684486ad",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e1c655d146d150ea2b43e5c4cf00d508fc7a89b1",
-    "contentDigest": "sha256:c3d76bd99559b74da92ed446068cba7e85bee744cb4e25766b224868164d4912",
+    "currentSnapshotSha": "fcedbc8d4e4c7d9653e29c3b4c7fd74c4d69b3c6",
+    "contentDigest": "sha256:cf67f6c314cb52f17323f60f720a8d1cf62c532413183ee787b1610e6b5d9e5e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
