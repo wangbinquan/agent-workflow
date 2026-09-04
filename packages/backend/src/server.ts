@@ -198,6 +198,7 @@ import { legacyIntentApplyResourceDependencies } from '@/modules/resource-catalo
 import {
   composeSqliteIntentApplyArtifactLifecycle,
   composeSqliteIntentApplyOperations,
+  createIntentSessionWsPublisher,
 } from '@/modules/intent/composition/apply'
 import {
   composeIntentDumpAuxiliaryQueries,
@@ -2630,6 +2631,7 @@ function composeSqliteApiRouteMounts(
   })
   const intentSessionRoutes = Object.freeze({
     configPath: deps.configPath,
+    events: createIntentSessionWsPublisher(),
     identityAccess,
     directAuthority: identityAccess.directAuthority,
     intentApply,

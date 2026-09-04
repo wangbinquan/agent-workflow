@@ -179,7 +179,10 @@ import {
   composeIntentTurnRuntimeResolver,
 } from '@/modules/intent/composition/auxiliaryQueries'
 import { composeIntentPlatformInventoryParticipant } from '@/modules/intent/composition/platformInventory'
-import { composePostgresqlIntentApplyOperations } from '@/modules/intent/composition/apply'
+import {
+  composePostgresqlIntentApplyOperations,
+  createIntentSessionWsPublisher,
+} from '@/modules/intent/composition/apply'
 import { createPostgresqlIntentApplyOperations } from '@/modules/intent/infrastructure/postgresqlIntentApplyOperations'
 import { createPostgresqlIntentApplyArtifactLifecycle } from '@/modules/intent/infrastructure/postgresqlIntentApplyArtifactLifecycle'
 import {
@@ -1534,8 +1537,10 @@ export async function composePostgresqlDaemonApplication(
     defaultRuntime: loadConfig(input.configPath).defaultRuntime ?? 'opencode',
     platformInventory: intentPlatformInventory,
   })
+  const intentSessionEvents = createIntentSessionWsPublisher()
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
+    events: intentSessionEvents,
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: input.appHome,
     runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
@@ -1548,6 +1553,7 @@ export async function composePostgresqlDaemonApplication(
   })
   const intentRoutes: PostgresqlAppCompositionInput['intent'] = Object.freeze({
     configPath: input.configPath,
+    events: intentSessionEvents,
     identityAccess,
     directAuthority: identityAccess.directAuthority,
     intentApply,

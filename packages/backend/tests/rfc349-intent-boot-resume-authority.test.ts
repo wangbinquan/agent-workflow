@@ -232,6 +232,7 @@ describe('RFC-349 intent boot resume authority', () => {
     const { sessionId, changeId } = await seedQueuedSuccessor()
     const resumed = await resumeQueuedIntentWorkingSets({
       persistence,
+      events: { publish: () => {} },
       identityAccess,
       appHome: '/tmp',
       configSnapshot: DEFAULT_CONFIG,
@@ -268,6 +269,7 @@ describe('RFC-349 intent boot resume authority', () => {
     const { changeId } = await seedQueuedSuccessor()
     await resumeQueuedIntentWorkingSets({
       persistence: createSqliteIntentPersistence(db),
+      events: { publish: () => {} },
       identityAccess,
       appHome: '/tmp',
       configSnapshot: DEFAULT_CONFIG,

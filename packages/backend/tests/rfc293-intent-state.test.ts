@@ -534,6 +534,7 @@ describe('RFC-293 Intent working state', () => {
     expect(
       await resumeQueuedIntentWorkingSets({
         persistence,
+        events: { publish: () => {} },
         identityAccess: createIdentityAccessRuntime({ db }),
         appHome: '/tmp',
         configSnapshot: DEFAULT_CONFIG,

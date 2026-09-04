@@ -40,7 +40,7 @@ import { registerRoute } from '@/routes/registry'
 import { loadConfig } from '@/config'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
-import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
+import type { IntentSessionEventPublisher } from '@/modules/intent/ports/intentSessionEvents'
 import type { IntentApplyOperations } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import { canAuditIntentSessions } from '@/modules/intent/public/operations'
@@ -121,6 +121,8 @@ export interface IntentSessionRouteDependencies {
   readonly resourceCatalogFor: (actor: Actor) => IntentResourceCatalogBinding
   /** Exact test seam; production composition leaves it absent. */
   readonly runTurn?: IntentDispatchDeps['runFn']
+  /** RFC-355 T4b：会话动静的播报面由 bootstrap 注入，inbound 不认识传输层。 */
+  readonly events: IntentSessionEventPublisher
 }
 
 export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDependencies): void {
@@ -139,6 +141,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
         appHome,
         configSnapshot,
         ...deps.intentTurnRuntime,
+        events: deps.events,
         resourceCatalogFor: deps.resourceCatalogFor,
         ...(deps.runTurn === undefined ? {} : { runFn: deps.runTurn }),
       },
@@ -153,11 +156,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
   }
 
   function emitSessionUpdated(sessionId: string, ownerUserId: string): void {
-    intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
-      type: 'intent.session.updated',
-      sessionId,
-      ownerUserId,
-    })
+    deps.events.publish({ type: 'intent.session.updated', sessionId, ownerUserId })
   }
 
   registerRoute(
@@ -754,7 +753,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
           decisions: parsed.data.decisions,
         },
       })
-      intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+      deps.events.publish({
         type: 'intent.apply.committed',
         sessionId: c.req.param('id'),
         journalId: receipt.journalId,

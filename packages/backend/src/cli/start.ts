@@ -73,6 +73,7 @@ import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
 } from '@/modules/intent/application/dispatcher'
+import { createIntentSessionWsPublisher } from '@/modules/intent/composition/apply'
 import { reapOrphanRuns } from '@/services/orphans'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
@@ -3184,6 +3185,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   intentDispatchDeps = Object.freeze({
     persistence: intentPersistence,
+    events: createIntentSessionWsPublisher(),
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: Paths.root,
     runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),

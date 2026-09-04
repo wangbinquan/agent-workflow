@@ -14,7 +14,7 @@ import {
 } from '@/auth/session'
 import type { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
-import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
+import type { IntentSessionEventPublisher } from '../ports/intentSessionEvents'
 import {
   resolveIntentTurnConfig,
   runIntentTurn,
@@ -38,14 +38,16 @@ export interface IntentDispatchDeps {
   /** Bootstrap-selected Resource Catalog query/context for this exact actor. */
   resourceCatalogFor(actor: Actor): IntentResourceCatalogBinding
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  /** RFC-355 T4b：会话动静的播报面由 bootstrap 注入，intent 不认识传输层。 */
+  readonly events: IntentSessionEventPublisher
 }
 
-function emitSessionUpdated(sessionId: string, ownerUserId: string): void {
-  intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
-    type: 'intent.session.updated',
-    sessionId,
-    ownerUserId,
-  })
+function emitSessionUpdated(
+  events: IntentSessionEventPublisher,
+  sessionId: string,
+  ownerUserId: string,
+): void {
+  events.publish({ type: 'intent.session.updated', sessionId, ownerUserId })
 }
 
 /** Launch a previously persisted reservation. Completion always checks for a
@@ -66,7 +68,7 @@ export async function dispatchIntentTurn(
     const event = pendingExecution
     pendingExecution = undefined
     lastExecutionBroadcastAt = Date.now()
-    intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+    deps.events.publish({
       type: 'intent.turn.execution.updated',
       sessionId: event.sessionId,
       turnId: event.turnId,
@@ -117,7 +119,7 @@ export async function dispatchIntentTurn(
           }
           if (event.type === 'intent.turn.started' || event.type === 'intent.turn.finished') {
             if (event.type === 'intent.turn.finished') flushExecution()
-            intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+            deps.events.publish({
               type: event.type,
               sessionId: event.sessionId,
               turnId: event.turnId ?? '',
@@ -139,7 +141,7 @@ export async function dispatchIntentTurn(
     })
     log.warn('intent-turn-fire-failed', { sessionId, err: detail, settled })
     if (settled) {
-      intentSessionsBroadcaster.broadcast(INTENT_SESSIONS_CHANNEL, {
+      deps.events.publish({
         type: 'intent.turn.finished',
         sessionId,
         turnId: reservation.turnId,
@@ -157,7 +159,7 @@ export async function dispatchIntentTurn(
       deps.configSnapshot.intentBuilderMaxGenerateRounds ?? 50,
     )
     if (next.reservation !== null) {
-      emitSessionUpdated(sessionId, actor.user.id)
+      emitSessionUpdated(deps.events, sessionId, actor.user.id)
       void dispatchIntentTurn(deps, sessionId, actor, next.reservation)
     }
   }
@@ -196,7 +198,7 @@ export async function resumeQueuedIntentWorkingSets(
     )
     if (next.reservation === null) continue
     resumed += 1
-    emitSessionUpdated(sessionId, actor.user.id)
+    emitSessionUpdated(deps.events, sessionId, actor.user.id)
     void dispatchIntentTurn(deps, sessionId, actor, next.reservation)
   }
   return resumed
