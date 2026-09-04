@@ -48,7 +48,7 @@ modules/intent/
 | 大事务 | L496-662 | L383-582 | 逐段对照后合并；写入面下沉为 `ports/intentApplyPersistence` |
 | roll-forward | L663-678（`design §9.5` 幂等） | L520-560（含 `intent-resource-roll-forward-recovery-failed` 日志） | 合并；日志标签统一（见 §5） |
 | 补偿 | L679-722（「durable artifact list 是 oracle」） | L536-582（含 `intent-resource-abort-failed` 日志） | 合并；**artifact 清单作为 oracle 这条不变** |
-| 工件归属 | 无 | `postgresqlIntentApplyArtifactOwners.ts` 独有 | **必须查清**：是 PostgreSQL 特有的持久化需求，还是 SQLite 漏了。查清前不合并（见 §7 R1） |
+| 工件归属 | 由 RC 注入（正确 owner） | intent 自带 `postgresqlIntentApplyArtifactOwners.ts` 拷贝 | **T0 已查清（§7.1）**：删 PostgreSQL 侧的拷贝，两侧统一走 RC participant |
 | 日志收敛 | `convergeIntentApplyJournal` L723-839 | `createPostgresqlIntentApplyJournalConvergence` | 合并成 `application/journalConvergence.ts`；provider 只出取数与写回 |
 
 ## 3. provider-neutral 化的切法
@@ -119,7 +119,7 @@ intent 的 apply 需要 RC 的技能工件能力：路径解析（`skillIdentity
 
 | # | 项 | 处置 |
 | --- | --- | --- |
-| R1 | `postgresqlIntentApplyArtifactOwners.ts` 在 SQLite 侧无对应物 | **实现前必须查清**：若是 PostgreSQL 的持久化机制细节，留在 provider；若是漏实现的业务面，作为本刀发现的真 bug 先红后绿。查清结论写进本文件后再动手 |
+| R1 | `postgresqlIntentApplyArtifactOwners.ts` 在 SQLite 侧无对应物 | **T0 已查清，见 §7.1**：两者都不是——是同一能力被实现在了边界的错误一侧 |
 | R2 | `dumpBuilder.ts` 928 行含大量逐字文本（inventory 截断说明、redaction 说明） | 迁位时按 RFC-353 T4 的教训加**字节级绊线**（长度 + digest），防手抄漏字 |
 | R3 | 两份 apply 合并时取错侧 | §2 逐段对照表 + §8 的先红后绿等价 oracle |
 | R4 | 5136 行平移量大，易与并发 session 撞车 | 开工前 `git fetch` 看 tip；按路径精确 `git add`，**提交前逐 hunk 认领**（RFC-353 §11.1 的教训） |
@@ -150,3 +150,27 @@ intent 的 apply 需要 RC 的技能工件能力：路径解析（`skillIdentity
 **C 类：先红后绿**
 
 B2 与 B3 必须在改造**前**就能复现两份实现的差异（B3 今天即红：四条标签分叉），再由实现转绿。
+
+
+## 7.1 T0 结论：`postgresqlIntentApplyArtifactOwners` 是「同一能力实现在边界错误一侧」
+
+实读 `c7c6fb81b` 的两条路径：
+
+| | SQLite 路径 | PostgreSQL 路径 |
+| --- | --- | --- |
+| 技能工件 stage / 发布 | 注入 **resource-catalog 自己的** `aggregateAdapters/legacyIntentApplyResourceParticipants.ts`（`stageSkillVersion` L258/L1042） | intent 自带 `postgresqlIntentApplyArtifactOwners.ts` 的 `createPostgresqlIntentSkillArtifactLifecycle`（288 行） |
+| 插件生成 / 安装 | 同上（`plannedGenerationDir` / `installPlugin` 由 RC 注入，L229/L1018） | intent 自带 `createPostgresqlIntentPluginArtifactLifecycle`，直接 `import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'` |
+| 对 RC 内部的依赖 | 无（RC 自己用自己的） | **深取 `skillFsPublish` / `skillHash` / `skillIdentityPaths`**——30 条 `temporary-internal-debt` 里 13 条出自这一个文件 |
+
+所以：
+
+- **不是** PostgreSQL 特有的持久化机制细节（能力本身两侧相同：建/改技能版本的暂存与发布、插件生成目录与安装）；
+- **也不是** SQLite 漏实现的业务面（SQLite 有，只是由**正确的 owner**（resource-catalog）提供）；
+- 而是 **PostgreSQL 路径把 RC 的能力在 intent 里重写了一遍**，并因此深取 RC 的内部实现。
+
+**对 T6 的影响（设计因此收紧）**：目标不是「给 SQLite 补一个 ArtifactOwners」，而是
+**让 PostgreSQL 路径改用 RC 的 owner 实现**——RC 出一个 provider 中性的技能/插件工件 participant，
+两个 provider 的 intent 都从那里取。`postgresqlIntentApplyArtifactOwners.ts` 整个删除。
+
+**对 §2 对照表的影响**：表中「工件归属」那一行的裁决由「必须查清」改为
+**「删 PostgreSQL 侧的拷贝，两侧统一走 RC participant」**。
