@@ -244,3 +244,59 @@ composition 要 provider 适配（RFC-353 立下的 bootstrap 装配口径，形
 `2f54a8be8`+`5cdc712a6`（T7 整目录归位）→ `9ef861059`+`948efb1d4`（T8 路由归位 + decode-call-map）
 → `7caf1e91f`+`391dd7efb`（T7 修红：Actor 收窄归 auth）→ `c31844a30`+`bfe459560`（T9 public 收口）
 → `db8dbf424`+`bec6c29f0`（T4 大事务计算合一）→ `b21d102c2`+`b8f02ad92`+`83be39dc0`（T4b 会话事件端口）。
+
+
+## 10. 实现门（2026-09-04，两路，只审功能）
+
+按 `plan.md §4` 在 declare done 前跑。共享 main 上我的提交与并发 session 的提交交错，
+按 `docs/dev-gotchas.md` 的备选路子用**独立子代理 + 精确文件清单**，并刻意错开两路视角
+（同一条 gotcha 记着：多路都看 diff 会因同一个盲区一起漏）。
+
+### 10.1 第一路：取值 / 形状放宽 → 反查消费方（不看 diff）
+
+**结论：无回归。** 逐条核过 12 项并给出对照命令，其中值得记的：
+
+- `IntentSessionDetail` 的每个键、两处 `.sort()` 比较子、`null` vs `undefined`、可选键的
+  spread 条件全部逐字保留；`mountSuggestions` 五种返回 `null` 的时机与迁位前完全一致；
+- `commitSeq` / `contextRevision` 两边**都**来自 claim 时的 session（不是事务内重读的
+  `sessionNow`），`preCommitManifest` 则来自 `sessionNow`——新旧一致；
+- `actorOfDirectAuthority` 在所有**可达**输入上与原 `(identity?.actor ?? null)` 等价
+  （`DirectAuthorityRuntime.admit` 只返回 `null` 或冻结对象，`actor` 不可能是 undefined）；
+- public 面删掉的 21 个符号**全是 `export type`**，零运行时消费方；
+- 20 条路由的 method / path / permissions / tokenAccess / summary 逐行 diff 为空；
+- 平移文件用 **git blob 哈希**核过：7 个完全相同，其余各 1-3 行 import。
+
+它另提一条**低危观察**（非本轮 bug）：`journalArtifacts.ts` 的 `staged` 类型改由 zod 推导
+之后，RC 的 `StagedSkillVersion` 与 intent 的 `.strict()` schema 之间**唯一的编译期链路被
+切断**了。以后 RC 往那个 interface 加字段，encode 会写进去、decode 会被 `.strict()` 拒，
+而 tsc 不再报——恢复失败会以运行时解码错误现形。**未处置**，登记在此：补一条 `satisfies`
+对账测试即可，属 RC 下一波的收口面。
+
+### 10.2 第二路：测试预言力（逐条做变异，不看实现对不对）
+
+detector = 1122 条 intent + contract 测试。**这一路挖出的东西比第一路重要**：
+
+| 严重度 | 发现 | 处置 |
+| --- | --- | --- |
+| P1 | **T4b 端口化最该证明的事没被证明**：六个 `events.publish` 调用点逐个删成 `void`，1122 条**全绿**。「前端从此再也收不到任何会话推送」当时无人挡 | 新增 `rfc355-intent-session-event-callsites.test.ts`（走真实生产接线：订阅真实广播器 + 真实路由，注入 spy 证明不了 bootstrap 装配是真的）；恢复路径那处由 `rfc349-intent-boot-resume-authority` 补断言。**四组发布点三组已有预言力，剩「fire 失败分支」仍空**，已在测试顶端标注 |
+| P1 | `sessionDetail` 的 `retrySource` 三个方向、`composerSource` 的 `conversation` 档、`latestAgentTurn` 取最新还是最早——**全部零预言力** | 抽进 `domain/sessionComposer.ts` 四个纯函数 + 21 条用例；评审当初全绿的 6 个变异现在全部变红 |
+| P2 | 我刚加的「错误码精确清单」**弱于其标题**：清单外文件新增码、清单内文件用反引号写，都能溜进去 | surface 换成真正的 apply 路径、`thrownCodes` 三种引号都认；实测 pin 与收工都是 36 条零增删，两种写法现在都红 |
+| P2 | 「传输层实现只有投影一个文件」只做单向包含，新建第三个文件抓单例照样绿 | 改成扫 `modules/intent/**` 全部 .ts 与清单逐条相等（剥注释后匹配） |
+| P2 | `shape` 正则认 token 的**确切顺序**，重排即免疫「不许再抄第二份」 | **未处置**，见 §10.3 |
+| P3 | 水位 merge、`unmountHandles` 在 `applyCommitPlan.test.ts` **本文件内**零判别力 | **未处置**（`rfc291-commit-auto-mount` 兜得住，非全局洞），见 §10.3 |
+
+它同时给出一份**零覆盖分支清单**（实现改错了没有任何测试会红），除上面已处置的外仍有：
+`sessionDetail` 的 `activity`、`commits` / `drafts` 两处排序、`includeOwner`、`stale`、
+`hasLaterApproval` 的推导、`sessionSummary` 的 `inFlight` 与 `newIntentSessionJourney` 常量。
+
+### 10.3 明确不处置的三项（留给下一波，不假装已解决）
+
+1. **fire 失败分支的 `turn.finished`** 仍无预言力——要驱动它得让 runFn 抛，且断言时序敏感；
+2. **`shape` 正则的顺序脆弱性**——真正的解法是按 AST 比对两个 provider 的判据调用序列，
+   那是一条独立的守卫，不该塞进本刀；
+3. **`sessionDetail` 剩余 8 处零覆盖分支**——它们在迁位**之前**同样零覆盖（当时是路由里的
+   内联表达式），本刀没有降低覆盖，也没有为它们新增覆盖。这条如实记，不写成「已改善」。
+
+**一句话**：`domain/` 的纯判据单测是本轮质量最高的部分（8/8 变异全红）；问题集中在
+「抽出来之后谁在用它」这一层，而两个源码文本账本都比它们的标题弱一档——那种弱最危险的
+地方不是漏了什么，是给下一个人「已经锁住了」的错觉。
