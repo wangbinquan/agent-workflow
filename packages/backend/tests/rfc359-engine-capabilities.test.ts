@@ -276,6 +276,25 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         }
         expect(cap.classifyError(caught)).toBe('unique-violation')
 
+        // ⑧ serializable()：两个并发事务对同一行读—改—写，SERIALIZABLE 下必有一方 40001；
+        //    重试后两次自增都落地。这条证明 opt-in 的重试路径真的在真库上工作。
+        await db.run(sql`delete from cap_scratch`)
+        await db.run(sql`insert into cap_scratch(name, v) values ('counter', 0)`)
+        const bump = () =>
+          session.serializable(async (tx) => {
+            const [row] = await tx.all<{ v: unknown }>(
+              sql`select v from cap_scratch where name = 'counter'`,
+            )
+            const next = cap.numericFromRawRow(row!.v, 'v') + 1
+            await new Promise((r) => setTimeout(r, 15)) // 让两笔交叠
+            await tx.run(sql`update cap_scratch set v = ${next} where name = 'counter'`)
+          })
+        await Promise.all([bump(), bump()])
+        const [after] = await db.all<{ v: unknown }>(
+          sql`select v from cap_scratch where name = 'counter'`,
+        )
+        expect(cap.numericFromRawRow(after!.v, 'v')).toBe(2)
+
         // ⑦ bigint 经驱动回来是字符串，矩阵归一成 number
         await db.run(sql`delete from cap_scratch`)
         await db.run(sql`insert into cap_scratch(v) values (1788278410000)`)

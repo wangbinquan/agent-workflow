@@ -1,14 +1,11 @@
 import { sql } from 'drizzle-orm'
+import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 export type PostgresqlResourceCatalogTransaction = Parameters<
   Parameters<PostgresqlDatabaseClient['transaction']>[0]
 >[0]
-
-function property(value: object, key: PropertyKey): unknown {
-  return Reflect.get(value, key)
-}
 
 export async function runPostgresqlResourceCatalogTransaction<T>(
   db: PostgresqlDatabaseClient,
@@ -31,22 +28,10 @@ export function isPostgresqlUniqueViolation(
   error: unknown,
   constraintNames: readonly string[],
 ): boolean {
-  let current = error
-  for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
-    const code = property(current, 'code')
-    const constraint = property(current, 'constraint')
-    if (
-      code === '23505' &&
-      (constraintNames.length === 0 ||
-        (typeof constraint === 'string' && constraintNames.includes(constraint)))
-    ) {
-      return true
-    }
-    current = property(current, 'cause')
-  }
-  const message = error instanceof Error ? error.message : String(error)
-  return (
-    /duplicate key value|unique constraint/i.test(message) &&
-    constraintNames.some((constraint) => message.includes(constraint))
-  )
+  // RFC-359（对账 F-I-13）：此前只看 `code === '23505'`，而 Bun.SQL 把 SQLSTATE 放在 `errno`、
+  // `code` 恒为 ERR_POSTGRES_SERVER_ERROR ⇒ 在真 PostgreSQL 上恒 false，并发同名拿 500 而非 409。
+  // 判据收进能力矩阵一份，这里只做约束名匹配。
+  const constraint = postgresqlUniqueViolationConstraint(error)
+  if (constraint === undefined) return false
+  return constraintNames.length === 0 || constraintNames.includes(constraint)
 }

@@ -195,6 +195,30 @@ function postgresqlSqlState(error: unknown): string | undefined {
   })
 }
 
+/**
+ * 沿 cause 链找 PostgreSQL 唯一冲突（SQLSTATE 23505），命中返回约束名（可能为空串）。
+ * **Bun.SQL 把 SQLSTATE 放在 `errno`**，`code` 恒为 `ERR_POSTGRES_SERVER_ERROR`（2026-09-04 真库实测：
+ * `PostgresError{code:'ERR_POSTGRES_SERVER_ERROR', errno:'23505', constraint:'…'}`）。对账 F-I-13：
+ * `isPostgresqlUniqueViolation` 此前只看 `code`，在真 PG 上恒 false ⇒ 并发同名拿 500 而非 409。
+ * 本仓在 `postgresqlSerializationRetry.ts` 已按 errno 修好 40001，这里是同一判据的唯一冲突版。
+ */
+export function postgresqlUniqueViolationConstraint(error: unknown): string | undefined {
+  let current: unknown = error
+  for (let depth = 0; depth < 8 && current !== null && typeof current === 'object'; depth += 1) {
+    const node = current as {
+      readonly errno?: unknown
+      readonly code?: unknown
+      readonly constraint?: unknown
+      readonly cause?: unknown
+    }
+    if (node.errno === '23505' || node.code === '23505') {
+      return typeof node.constraint === 'string' ? node.constraint : ''
+    }
+    current = node.cause
+  }
+  return undefined
+}
+
 export function createPostgresqlCapabilities(): EngineCapabilities {
   return Object.freeze({
     provider: 'postgresql',
@@ -215,8 +239,8 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     numericFromRawRow,
     classifyError: (error) => {
       if (postgresqlSerializationFailureCode(error) !== undefined) return 'serialization'
+      if (postgresqlUniqueViolationConstraint(error) !== undefined) return 'unique-violation'
       const state = postgresqlSqlState(error)
-      if (state === '23505') return 'unique-violation'
       if (state === '55P03') return 'busy' // lock_not_available（NOWAIT）
       return 'other'
     },

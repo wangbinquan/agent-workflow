@@ -33,6 +33,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 import { runInExplicitTransactionScope } from '@/db/transactionScope'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { acquireWriterLease } from './writerLease'
@@ -48,6 +49,14 @@ export interface DatabaseSession {
    * **重入是安全的**：同一客户端上嵌套调用会复用外层事务句柄，不会再开一层、也不会自死锁。
    */
   transaction<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
+  /**
+   * 显式 opt-in 的 SERIALIZABLE 事务。**默认不要用它**——`docs/dev-gotchas.md` 第 6 条实测：小表上
+   * SERIALIZABLE 的 predicate lock 是索引页粒度，8 并发满速冲突率 81.2%；READ COMMITTED + 聚合根
+   * `FOR UPDATE`（capabilities.lockAggregateRoot）后 0%。只给确实需要谓词级隔离的少数路径。
+   * PG：SET TRANSACTION ISOLATION LEVEL SERIALIZABLE + 40001/40P01 退避重试；SQLite：与 `transaction`
+   * 相同（BEGIN IMMEDIATE 本就完全串行）。重入时复用外层事务，不再抬升隔离级别。
+   */
+  serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
 }
 
 interface TransactionFrame {
@@ -101,6 +110,10 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
         release()
       }
     },
+    async serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+      // BEGIN IMMEDIATE 下整个库独占，已是最强隔离；与 transaction 同一条路。
+      return await this.transaction(body)
+    },
   })
 }
 
@@ -115,6 +128,24 @@ export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): D
         const handle = tx as unknown as DatabaseTransaction
         return await withFrame(client, handle, async () => await body(handle))
       })
+    },
+    async serializable<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
+      const reused = reuseFrame(client)
+      if (reused !== undefined) return await body(reused)
+      // 蓝本：modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts 的
+      // withPostgresqlSerializableTaskExecution。整笔事务作为重试单元——body 必须可重放。
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await db.transaction(async (tx) => {
+            await tx.run(sql.raw('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
+            const handle = tx as unknown as DatabaseTransaction
+            return await withFrame(client, handle, async () => await body(handle))
+          })
+        } catch (error) {
+          if (await retryPostgresqlSerialization(attempt, error)) continue
+          throw error
+        }
+      }
     },
   })
 }

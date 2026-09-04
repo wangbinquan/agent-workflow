@@ -215,3 +215,25 @@ describe('RFC-359 —— 与 dbTxSync 的共存', () => {
     expect(values(db)).toEqual(['I1', 'I2'])
   })
 })
+
+describe('RFC-359 —— serializable() opt-in（SQLite 侧等于 transaction）', () => {
+  test('抛错回滚、正常提交、重入复用，与 transaction 同一语义', async () => {
+    const db = scratchDb()
+    const session = createSqliteDatabaseSession(db)
+    await expect(
+      session.serializable(async () => {
+        insert(db, 'S1')
+        await new Promise((resolve) => setTimeout(resolve, 2))
+        throw new Error('boom')
+      }),
+    ).rejects.toThrow('boom')
+    expect(values(db)).toEqual([])
+    await session.serializable(async () => {
+      insert(db, 'S2')
+      await session.transaction(async () => {
+        insert(db, 'S3')
+      })
+    })
+    expect(values(db)).toEqual(['S2', 'S3'])
+  })
+})
