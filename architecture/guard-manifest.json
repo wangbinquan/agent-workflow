@@ -2110,8 +2110,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "a6bf2193ac5b2977af0c296c03d75ea071bba3d5",
-    "contentDigest": "sha256:f766c963b739778040b0052adf717a7094cb5e7052e7fdfd7944b96366b2b551",
+    "currentSnapshotSha": "2f54a8be82bc24d7dbede3919ae2d4d981ad2426",
+    "contentDigest": "sha256:1af1cc4832381b7abfe2a038a97b33f8a83bc0f378d74f7a8b2fbc056f97a37e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

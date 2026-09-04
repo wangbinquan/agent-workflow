@@ -336,10 +336,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
       "baseline": 151,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。",
-      "allowGrowth": {
-        "why": "RFC-355 T7：intent 的三个 public 符号（IntentDumpAuxiliaryQueries / IntentPlatformInventoryRow / IntentTurnRuntimeResolver）的唯一 consumer 随 services/intent 搬进模块内部，「模块外无人消费」第一次显形——这是归位暴露出的既有事实，不是新增豁免；T9 逐个裁决去留。"
-      }
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。"
     },
     {
       "id": "rfc294-review-dead-required-ports",
@@ -395,10 +392,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1922,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-355 T7：`modules/intent/composition/apply.ts` 接手原 services 门面的 applyIntentChangeset / convergeIntentApplyJournal，写入口清单多一个具名入口；同一批里 services/intent 的两个门面文件整体消失。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -506,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a6bf2193ac5b2977af0c296c03d75ea071bba3d5",
-    "contentDigest": "sha256:ae5782a6121c7e7051e4c89ba6dd5586af82af939533f921c0fd29e42ab99241",
+    "currentSnapshotSha": "2f54a8be82bc24d7dbede3919ae2d4d981ad2426",
+    "contentDigest": "sha256:6c2e66e984bd10b61bee1592c5231f6eb5ba5f737a0b844276a51075b8000fd7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
