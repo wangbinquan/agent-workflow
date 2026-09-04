@@ -46,6 +46,9 @@ import { parseHandleWatermark } from './manifest'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { buildIntentDoc, privilegesFromLens, type IntentDocTurn } from '../domain/intentDoc'
 import { validateDraftChangeset } from './resolveChangeset'
+import { validateChangesetWorkflowGraphs } from './graphValidation'
+import { draftGraphResolution } from '@/modules/intent/domain/workflowGraphCandidate'
+import type { IntentWorkflowGraphValidationPort } from './ports/intentWorkflowGraphValidation'
 import { sessionManifest, type ReservedIntentTurn, type IntentTurnRow } from './session'
 import { sha256Hex } from '@/util/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '@/modules/intent/domain/workflowCreateLayout'
@@ -93,6 +96,8 @@ export interface RunIntentTurnDeps {
   config: IntentTurnConfig
   readonly resourceCatalog: IntentResourceCatalogBinding
   readonly dumpAuxiliary: IntentDumpAuxiliaryQueries
+  /** RFC-358 —— 工作流图校验（resource-catalog 的 public 合同，由 bootstrap 装配）。 */
+  readonly graphValidation: IntentWorkflowGraphValidationPort
   /** Test seam — defaults to runSystemAgent. */
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
   /** WS seam (T7 wires the broadcaster); default noop. */
@@ -658,6 +663,25 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       agentBranchPorts: dump.agentBranchPorts,
     })
     report.errors.unshift(...normalized.errors)
+    // RFC-358 §4 —— 第二层：工作流图校验。第一层（上面那句）只查引用与形状，端口有没有连、
+    // wrapper 边界对不对、模板变量有没有来源全在这一层。此前它在意图链路上一次都不跑，于是
+    // 意图侧全绿落库、坏在编辑器 / 启动，而模型从头到尾没见过这些错误、无法自愈。
+    const graph = await validateChangesetWorkflowGraphs(
+      { graphValidation: deps.graphValidation },
+      {
+        actor: input.actor,
+        changeset: normalized.changeset,
+        resolution: draftGraphResolution(dump.manifest, normalized.changeset),
+        mode: 'draft',
+      },
+    )
+    if (graph.unavailable) {
+      // D7：拿不到判据就不能给绿，但也不丢模型这一轮已经 canonical 化的产出。
+      report.graphValidationUnavailable = true
+    } else {
+      report.errors.push(...graph.errors)
+      if (graph.warnings.length > 0) report.graphWarnings = [...graph.warnings]
+    }
     return settle(
       'changeset',
       {
@@ -665,6 +689,8 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         opCount: normalized.changeset.ops.length,
         blockingErrors: report.errors.length,
         credentialFindings: report.credentialFindings.length,
+        graphWarnings: report.graphWarnings?.length ?? 0,
+        ...(report.graphValidationUnavailable === true ? { graphValidationUnavailable: true } : {}),
         mountRequests,
         ...(cs.jsonRepair === undefined ? {} : { jsonRepair: cs.jsonRepair }),
       },

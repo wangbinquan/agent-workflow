@@ -117,7 +117,10 @@ export interface IntentSessionRouteDependencies {
   readonly directAuthority: DirectAuthorityBinding
   readonly intentApply: IntentApplyOperations
   readonly intentPersistence: IntentPersistence
-  readonly intentTurnRuntime: Pick<IntentDispatchDeps, 'runtimeResolver' | 'dumpAuxiliary'>
+  readonly intentTurnRuntime: Pick<
+    IntentDispatchDeps,
+    'runtimeResolver' | 'dumpAuxiliary' | 'graphValidation'
+  >
   readonly resourceCatalogFor: (actor: Actor) => IntentResourceCatalogBinding
   /** Exact test seam; production composition leaves it absent. */
   readonly runTurn?: IntentDispatchDeps['runFn']

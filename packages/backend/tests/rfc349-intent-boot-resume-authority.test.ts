@@ -52,7 +52,10 @@ import { createAgent } from '../src/services/agent'
 import { seedBuiltinRuntimes } from '../src/services/runtimeRegistry'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
-import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
+import {
+  intentGraphValidationForTest,
+  intentResourceCatalogBinding,
+} from './helpers/intentResourceCatalogBinding'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -249,6 +252,8 @@ describe('RFC-349 intent boot resume authority', () => {
           },
         }),
       }),
+      // RFC-358: 与生产装配一致——boot 恢复起的轮次同样跑工作流图校验。
+      graphValidation: intentGraphValidationForTest(db),
       resourceCatalogFor: productionShapedResourceCatalogFor(),
       runFn,
     })
@@ -291,6 +296,8 @@ describe('RFC-349 intent boot resume authority', () => {
           },
         }),
       }),
+      // RFC-358: 与生产装配一致——boot 恢复起的轮次同样跑工作流图校验。
+      graphValidation: intentGraphValidationForTest(db),
       resourceCatalogFor: productionShapedResourceCatalogFor(),
       runFn,
     })

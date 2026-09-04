@@ -48,7 +48,10 @@ import type {
 } from '../src/modules/intent/application/ports/intentPersistence'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
-import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
+import {
+  intentGraphValidationForTest,
+  intentResourceCatalogBinding,
+} from './helpers/intentResourceCatalogBinding'
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
@@ -547,6 +550,8 @@ describe('RFC-293 Intent working state', () => {
             },
           }),
         }),
+        // RFC-358: 与生产装配一致——boot 恢复起的轮次同样跑工作流图校验。
+        graphValidation: intentGraphValidationForTest(db),
         resourceCatalogFor: (candidate) => intentResourceCatalogBinding(db, candidate),
         runFn,
       }),

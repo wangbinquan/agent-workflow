@@ -286,7 +286,11 @@ assertType<
 assertType<Equal<Extract<keyof PluginCatalogModule, string>, 'queries' | 'operations'>>(true)
 assertType<Equal<Extract<keyof WorkflowQueries, string>, 'list' | 'get'>>(true)
 assertType<
-  Equal<Extract<keyof WorkflowValidationQueries, string>, 'validateStored' | 'validateDraft'>
+  Equal<
+    Extract<keyof WorkflowValidationQueries, string>,
+    // RFC-358: `validateCandidate` 是无既有行的候选校验（意图链路）。
+    'validateStored' | 'validateDraft' | 'validateCandidate'
+  >
 >(true)
 assertType<
   Equal<

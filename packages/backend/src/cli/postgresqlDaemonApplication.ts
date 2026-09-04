@@ -296,6 +296,7 @@ import {
   resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
 } from '@/modules/intent/application/dispatcher'
+import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 const log = createLogger('postgresql-daemon-application')
 
@@ -1549,6 +1550,11 @@ export async function composePostgresqlDaemonApplication(
     appHome: input.appHome,
     runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
     dumpAuxiliary: intentDumpAuxiliary,
+    // RFC-358: 两个 provider 的意图链路跑同一份图校验合同。
+    graphValidation: composeIntentWorkflowGraphValidation({
+      validationQueries: classicCatalogs.workflow.validationQueries,
+      authorityFor,
+    }),
     resourceCatalogFor: intentResourceCatalogFor,
   })
   const intentMaintenance = composePostgresqlIntentMaintenanceSnapshotQueries({
@@ -1565,6 +1571,10 @@ export async function composePostgresqlDaemonApplication(
     intentTurnRuntime: Object.freeze({
       runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
       dumpAuxiliary: intentDumpAuxiliary,
+      graphValidation: composeIntentWorkflowGraphValidation({
+        validationQueries: classicCatalogs.workflow.validationQueries,
+        authorityFor,
+      }),
     }),
     resourceCatalogFor: intentResourceCatalogFor,
   })

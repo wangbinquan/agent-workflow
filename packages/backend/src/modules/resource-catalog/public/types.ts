@@ -571,6 +571,79 @@ export interface GetWorkflowCatalogInput {
   readonly id: string
 }
 
+/**
+ * RFC-358 §3.3–§3.5 —— 候选期覆盖层：同一变更集里**即将存在**的资源。
+ *
+ * 意图构建器可以在一个变更集里同时新建 agent / skill / MCP / plugin / 工作流并让它们互相
+ * 引用。这些行此刻都还不在库里，而工作流校验器对它们做的是普通的存在性查找。不把它们喂
+ * 进去，一个**完全合法**的变更集会被判成 `skill-not-found` / `call-workflow-ref-missing`，
+ * 而生成它的 agent 根本改不掉——它建的技能就在同一批里。
+ *
+ * 覆盖层只描述「覆盖什么」；与存值的合并发生在 provider 侧（那里才有 live 行）。
+ */
+export interface WorkflowValidationAgentOverlay {
+  readonly agentId: string
+  /** true = 该 id 在库中不存在，按新行插入；false = 与 live 行合并。 */
+  readonly isNew: boolean
+  /**
+   * 只列变更集里**显式出现**的字段；缺省 = 沿用存值。
+   *
+   * 字段集刻意收在 `projectWorkflowValidationContext` 投影里、且判据真的读到的那些上：
+   * agent `inputs` 没有任何规则读（它是 edge-derived prompt vars），`readonly` 在 Agent
+   * 类型与校验器里都不存在，因此都不在这里。
+   */
+  readonly fields: {
+    readonly name?: string
+    readonly outputs?: readonly string[]
+    /** review 的 markdown 判据只读这个字段——漏了它 `review-input-source-not-markdown` 必误报。 */
+    readonly outputKinds?: Readonly<Record<string, string>>
+    /** wrapper-fanout 的 outlet 重命名；是 Record 不是数组。 */
+    readonly outputWrapperPortNames?: Readonly<Record<string, string>>
+    readonly branchPorts?: readonly string[]
+    readonly role?: Agent['role']
+    readonly skills?: Agent['skills']
+    readonly dependsOn?: readonly string[]
+    readonly mcp?: readonly string[]
+    readonly plugins?: readonly string[]
+  }
+}
+
+export interface WorkflowValidationWorkflowOverlay {
+  readonly id: string
+  readonly name: string
+  readonly definition: WorkflowDefinition
+}
+
+export interface WorkflowValidationCandidateOverlays {
+  readonly agents?: readonly WorkflowValidationAgentOverlay[]
+  /** 同批新建的技能——判据只做 id 存在性，不读内容。 */
+  readonly skills?: readonly { readonly id: string; readonly name: string }[]
+  readonly mcps?: readonly {
+    readonly id: string
+    readonly name: string
+    readonly enabled: boolean
+  }[]
+  readonly plugins?: readonly {
+    readonly id: string
+    readonly name: string
+    readonly enabled: boolean
+  }[]
+  /** 同批新建 / 修改的工作流，供 call 闭包按**名字**与 id 双键解析。 */
+  readonly callWorkflows?: readonly WorkflowValidationWorkflowOverlay[]
+}
+
+/** RFC-358 —— 无既有工作流行的候选校验（意图链路）。 */
+export interface ValidateWorkflowCandidateCatalogInput {
+  readonly definition: WorkflowDefinition
+  /**
+   * 候选自己的身份。**必填**：自调用判据读 `name`、环走查以 `id` 为根，不传这两条规则
+   * 会静默失效（draft 绿、apply 红）。create op 传预铸 / 占位 id + 变更集里的名字，
+   * update op 传真实行的 id 与本次的最终名字。
+   */
+  readonly currentWorkflow: { readonly id: string; readonly name: string }
+  readonly overlays?: WorkflowValidationCandidateOverlays
+}
+
 /** Closed input for the provider-owned workflow validation inventory. */
 export interface ValidateStoredWorkflowCatalogInput {
   readonly workflow: WorkflowCatalogDetail

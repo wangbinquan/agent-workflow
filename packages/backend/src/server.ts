@@ -445,6 +445,7 @@ import {
   unfuseAboveVersionSync,
 } from '@/modules/memory/composition'
 import { composeSqliteFusionSkillVersionCommit } from '@/modules/resource-catalog/composition/skillVersionCommit'
+import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 /**
  * Narrow in-process dependency seams for route tests that exercise diagnostics
@@ -2644,6 +2645,11 @@ function composeSqliteApiRouteMounts(
     intentTurnRuntime: Object.freeze({
       runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
       dumpAuxiliary: intentDumpAuxiliary,
+      // RFC-358: 图校验由 resource-catalog 提供，经它的 exact public 合同注入意图链路。
+      graphValidation: composeIntentWorkflowGraphValidation({
+        validationQueries: workflowCatalog.validationQueries,
+        authorityFor: intentAuthorityFor,
+      }),
     }),
     resourceCatalogFor: intentResourceCatalogFor,
     ...(deps.intentTestDependencies?.runFn === undefined

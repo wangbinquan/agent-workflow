@@ -22,6 +22,7 @@ import type { PostgresqlSkillContentLifecycle } from './postgresqlSkillRepositor
 import { skillFromPersistenceRow } from './skillPersistence'
 import {
   validateWorkflowDefinition,
+  withValidationOverlays,
   workflowDefinitionCandidateHashOf,
   workflowValidationContextHashOf,
   type ValidatorContext,
@@ -130,9 +131,12 @@ export function createPostgresqlWorkflowValidationPort(input: {
         ),
         currentWorkflow: candidate.currentWorkflow,
       }
+      // RFC-358: 与 SQLite provider 共用同一个合并纯函数——本文件自建 context，
+      // 覆盖层的合并规则若在这里重写一遍，迟早会与那边漂（RFC-355 T1 的实测教训）。
+      const merged = withValidationOverlays(context, candidate.overlays)
       return Object.freeze({
-        validationContextHash: workflowValidationContextHashOf(context),
-        result: validateWorkflowDefinition(candidate.definition, context),
+        validationContextHash: workflowValidationContextHashOf(merged),
+        result: validateWorkflowDefinition(candidate.definition, merged),
       })
     },
   }

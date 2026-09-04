@@ -481,6 +481,27 @@ export const IntentDraftDtoSchema = z
             })
             .strict(),
         ),
+        /**
+         * RFC-358 —— 工作流图校验的 warning。只呈给人，**不进 INTENT.md**（决策 D1）。
+         *
+         * 这个对象是 `.strict()` 且读点用的是抛错版 `.parse`（`sessionDetail.ts`），
+         * 所以往 `validation_json` 里写新键**必须**同步这里——否则该会话的详情接口整个 500。
+         * 可选是为了向后兼容：本 RFC 之前的 draft 行没有这两个键。
+         */
+        graphWarnings: z
+          .array(
+            z
+              .object({
+                opId: z.string(),
+                code: z.string(),
+                where: z.string().optional(),
+                message: z.string(),
+              })
+              .strict(),
+          )
+          .optional(),
+        /** RFC-358 D7 —— 图校验没能跑起来。提交按 error 同效禁用，但 draft 照常保留。 */
+        graphValidationUnavailable: z.boolean().optional(),
       })
       .strict(),
     slots: z.array(IntentSlotDtoSchema),

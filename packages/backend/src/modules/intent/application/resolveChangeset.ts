@@ -30,12 +30,24 @@ import {
   validateFinalNameForType,
 } from '@agent-workflow/shared'
 import { manifestByHandle, type IntentContextManifest, type IntentManifestEntry } from './manifest'
+import type { IntentGraphWarning } from './graphValidation'
+import {
+  IntentGraphRefUnresolved,
+  rewriteIntentWorkflowRefs,
+} from '@/modules/intent/domain/workflowGraphCandidate'
 
 export interface DraftValidationReport {
   /** Blocking structural errors — the draft cannot be committed while any exist. */
   errors: string[]
   /** Credential-shaped strings; block commit unless explicitly waived per slot. */
   credentialFindings: Array<CredentialFinding & { opId: string }>
+  /**
+   * RFC-358 —— 工作流图校验的 warning。只呈给人（确认页），**不进 INTENT.md**（决策 D1）。
+   * 与 `errors` 分开存正是那条裁决的锁点：`buildIntentDoc` 永远不读这个字段。
+   */
+  graphWarnings?: IntentGraphWarning[]
+  /** RFC-358 D7 —— 图校验不可用（查库失败）。绿不能给，但模型的产出也不丢。 */
+  graphValidationUnavailable?: boolean
 }
 
 interface TypedRef {
@@ -522,6 +534,17 @@ export function resolveIntentBundle(input: {
       finalIdByRef.set(op.target, entry.resourceId)
     }
   }
+  // RFC-358: domain 的重写函数按「句柄表 / tempRef 表」两张表查，与 draft 期同形。
+  // apply 期的句柄表是 manifest 的 resourceId，叠加 `finalIdByRef` 里已登记的句柄
+  // （copy 决策会把源句柄重定向到副本的新 id，那条重定向必须赢）。
+  const refIdByHandle = new Map<string, string>()
+  for (const [handle, entry] of byHandle) refIdByHandle.set(handle, entry.resourceId)
+  // copy 决策把源句柄重定向到副本的新 id（`finalIdByRef` 里以句柄为键的那些条目），
+  // 而 manifest 给的是**源**的 id。重定向必须赢——否则同批引用被 copy 元素的 op 会
+  // 重新指回源资源，正是 RFC-291 的重接线要防的事。
+  for (const [ref, id] of finalIdByRef) {
+    if (!isIntentTempRef(ref)) refIdByHandle.set(ref, id)
+  }
   const resolveRef = (ref: string): string => {
     const direct = finalIdByRef.get(ref)
     if (direct !== undefined) return direct
@@ -660,32 +683,24 @@ export function resolveIntentBundle(input: {
         break
       }
       case 'workflow': {
-        const def = JSON.parse(JSON.stringify(op.payload.definition)) as {
-          nodes: Array<Record<string, unknown>>
-        }
-        for (const node of def.nodes) {
-          if (node.kind === 'agent-single') {
-            const ref = node.agentRef as string
-            delete node.agentRef
-            node.agentId = resolveRef(ref)
-            continue
+        // RFC-358 T3 —— 重写规则收敛到 domain 的那一份（draft 期图校验用的是同一个
+        // 函数）。判据只要有两处就迟早会漂——RFC-355 T1 实测过同一处 changeset 校验
+        // 在两个 provider 上真的漂了。
+        //
+        // 唯一要守住的是**错误形状逐字不变**：这里解析不出必须仍是
+        // `intent-ref-unknown`，所以 domain 抛的类型化错误在这里翻译回来。
+        let def: { nodes: Array<Record<string, unknown>> }
+        try {
+          def = rewriteIntentWorkflowRefs(
+            op.payload.definition,
+            { byHandle: refIdByHandle, byTempRef: finalIdByRef },
+            'apply',
+          ) as { nodes: Array<Record<string, unknown>> }
+        } catch (err) {
+          if (err instanceof IntentGraphRefUnresolved) {
+            throw new ValidationError('intent-ref-unknown', `unknown reference ${err.ref}`)
           }
-          // RFC-291 面 E — rehydrate call edges the same way: the handle the
-          // model wrote becomes the canonical id cache the launcher reads.
-          //
-          // Keeping this cache is the whole point: the NAME alone cannot
-          // disambiguate two same-named rows, so dropping it here would make the
-          // next launch fall back to "oldest visible ULID" and silently run a
-          // different workflow than the one the dump showed (design-gate P1-a).
-          if (node.kind === 'call-workflow' && typeof node.workflowRef === 'string') {
-            const ref = node.workflowRef
-            delete node.workflowRef
-            node.workflowId = resolveRef(ref)
-          } else if (node.kind === 'call-workgroup' && typeof node.workgroupRef === 'string') {
-            const ref = node.workgroupRef
-            delete node.workgroupRef
-            node.workgroupId = resolveRef(ref)
-          }
+          throw err
         }
         // RFC-253 T28 — inject confirm-time secret values into script env; the
         // sentinel itself must never be persisted as a runtime value.

@@ -1,3 +1,5 @@
+import { createSqliteWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/sqliteWorkflowValidation'
+import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { Actor } from '../../src/auth/actor'
 import type { DbClient } from '../../src/db/client'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
@@ -219,12 +221,34 @@ export function runIntentTurnForTest(
           platformInventory: deps.platformInventory ?? EMPTY_PLATFORM_INVENTORY,
         }),
       resourceCatalog: intentResourceCatalogBinding(deps.db, input.actor, deps.appHome),
+      graphValidation: deps.graphValidation ?? intentGraphValidationForTest(deps.db),
       ...(deps.runFn === undefined ? {} : { runFn: deps.runFn }),
       ...(deps.onSessionEvent === undefined ? {} : { onSessionEvent: deps.onSessionEvent }),
       ...(deps.log === undefined ? {} : { log: deps.log }),
     },
     input,
   )
+}
+
+/**
+ * RFC-358 —— 测试用的**真实**图校验端口。
+ *
+ * 刻意不 stub：意图测试的 fixture 定义会真的过一遍工作流校验器，既覆盖了新链路，
+ * 也让「某个 fixture 其实是张坏图」这种事在它被当作正例用之前就暴露出来。
+ */
+export function intentGraphValidationForTest(db: DbClient): IntentWorkflowGraphValidationPort {
+  const port = createSqliteWorkflowValidationPort(db)
+  const graph: IntentWorkflowGraphValidationPort = {
+    async validate(input) {
+      const validated = await port.validate({
+        definition: input.definition,
+        currentWorkflow: input.currentWorkflow,
+        ...(input.overlays === undefined ? {} : { overlays: input.overlays }),
+      })
+      return Object.freeze({ ok: validated.result.ok, issues: validated.result.issues })
+    },
+  }
+  return Object.freeze(graph)
 }
 
 export function intentTurnRuntimeResolverForTest(db: DbClient) {

@@ -320,6 +320,7 @@ import {
   unfuseAboveVersionSync,
 } from '@/modules/memory/composition'
 import { composeSqliteFusionSkillVersionCommit } from '@/modules/resource-catalog/composition/skillVersionCommit'
+import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 export interface StartOptions {
   port?: number
@@ -3190,6 +3191,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     appHome: Paths.root,
     runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
     dumpAuxiliary: intentDumpAuxiliary,
+    // RFC-358: boot 恢复起的轮次与 HTTP 轮次走同一条图校验。
+    graphValidation: composeIntentWorkflowGraphValidation({
+      validationQueries: workflowCatalog.validationQueries,
+      authorityFor: intentAuthorityFor,
+    }),
     resourceCatalogFor: intentResourceCatalogFor,
   })
   const queuedBeforeIntentComposition = [...pendingIntentSessionIds]

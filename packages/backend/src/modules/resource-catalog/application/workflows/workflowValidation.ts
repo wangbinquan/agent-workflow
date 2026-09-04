@@ -7,6 +7,7 @@ import { ValidationError } from '@/util/errors'
 import type { WorkflowValidationQueries } from '../../public/queries'
 import type {
   ValidateStoredWorkflowCatalogInput,
+  ValidateWorkflowCandidateCatalogInput,
   ValidateWorkflowDraftCatalogInput,
 } from '../../public/types'
 import type { WorkflowOperationContext } from '../../public/participants'
@@ -108,6 +109,24 @@ export function createWorkflowValidationApplication(
       })
       return Object.freeze({
         candidateHash,
+        validationContextHash: validated.validationContextHash,
+        ok: validated.result.ok,
+        issues: Object.freeze([...validated.result.issues]),
+      })
+    },
+
+    // RFC-358 —— 无既有行的候选校验。意图链路在 draft 期与 apply preflight 各调一次；
+    // 覆盖层让同一变更集里即将存在的资源以**变更后**的形态参与判据。
+    async validateCandidate(
+      _authority: WorkflowOperationContext,
+      input: ValidateWorkflowCandidateCatalogInput,
+    ) {
+      const validated = await dependencies.validation.validate({
+        definition: input.definition,
+        currentWorkflow: input.currentWorkflow,
+        ...(input.overlays === undefined ? {} : { overlays: input.overlays }),
+      })
+      return Object.freeze({
         validationContextHash: validated.validationContextHash,
         ok: validated.result.ok,
         issues: Object.freeze([...validated.result.issues]),

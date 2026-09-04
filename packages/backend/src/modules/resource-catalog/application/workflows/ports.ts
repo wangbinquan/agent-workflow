@@ -13,6 +13,7 @@ import type {
   UpdateWorkflow,
 } from '@agent-workflow/shared'
 import type { WorkflowOperationContext } from '../../public/participants'
+import type { WorkflowValidationCandidateOverlays } from '../../public/types'
 
 export interface WorkflowAclIdentity {
   readonly id: string
@@ -60,6 +61,10 @@ export interface WorkflowPolicyPort {
 export interface WorkflowValidationCandidate {
   readonly definition: WorkflowDefinition
   readonly currentWorkflow: Readonly<{ id: string; name: string }>
+  /**
+   * RFC-358 —— 同一变更集里即将存在的资源（意图链路）。省略 = 与本 RFC 之前逐字节等价。
+   */
+  readonly overlays?: WorkflowValidationCandidateOverlays
 }
 
 /** Provider-owned inventory loader plus the shared pure validator. */

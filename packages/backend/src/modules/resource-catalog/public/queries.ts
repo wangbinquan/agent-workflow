@@ -44,6 +44,7 @@ import type {
   WorkflowCatalogDraftValidationResult,
   WorkflowCatalogValidationResult,
   ValidateStoredWorkflowCatalogInput,
+  ValidateWorkflowCandidateCatalogInput,
   ValidateWorkflowDraftCatalogInput,
   GetWorkgroupCatalogInput,
   WorkgroupCatalogDetail,
@@ -183,6 +184,18 @@ export interface WorkflowValidationQueries {
     authority: WorkflowOperationContext,
     input: ValidateWorkflowDraftCatalogInput,
   ): Promise<WorkflowCatalogDraftValidationResult>
+  /**
+   * RFC-358 —— 校验一份**尚未落库**的候选定义（意图链路）。
+   *
+   * 与 `validateDraft` 的差别有两处，都源于「意图会话在提交前没有工作流行」：
+   *  · 不要求 `workflow: WorkflowCatalogDetail`——create op 的工作流此刻还不存在；
+   *  · 不做 reference admission——引用可用性由意图第一层校验与 apply 期的
+   *    `assertRefsUsableInTx` 负责，在这里再查一次只会把「同批新建」误判成不可见。
+   */
+  validateCandidate(
+    authority: WorkflowOperationContext,
+    input: ValidateWorkflowCandidateCatalogInput,
+  ): Promise<WorkflowCatalogValidationResult>
 }
 
 export interface McpQueries {

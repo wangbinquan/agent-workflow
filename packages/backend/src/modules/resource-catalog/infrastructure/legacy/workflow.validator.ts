@@ -95,6 +95,12 @@ import {
   reviewInputSource,
 } from '@agent-workflow/shared'
 import { callEdgeKey, parseCallClosure } from '@/services/execution/closure'
+// RFC-358: 覆盖层合同住在本模块 public 面——application port 与 intent 都要引用它，
+// 而它们都不该 import 这个 legacy 文件。
+import type {
+  WorkflowValidationAgentOverlay,
+  WorkflowValidationCandidateOverlays,
+} from '../../public/types'
 import { asc, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import {
@@ -141,6 +147,11 @@ export interface ValidatorWorkflowRef {
 export interface WorkflowValidationCandidate {
   definition: WorkflowDefinition
   currentWorkflow?: { id: string; name: string }
+  /**
+   * RFC-358 —— 同一变更集里**即将存在**的资源（意图构建器）。见
+   * `WorkflowValidationCandidateOverlays`。省略 = 与本 RFC 之前逐字节等价。
+   */
+  overlays?: WorkflowValidationCandidateOverlays
   /**
    * RFC-271 T6f2（design §1.1c''' 三语境表）—— 启动期传**已冻结的闭包**，让校验
    * 与执行读同一份数据。
@@ -216,7 +227,9 @@ export async function loadWorkflowValidationContext(
     }
     if (candidate.currentWorkflow !== undefined) ctx.currentWorkflow = candidate.currentWorkflow
   }
-  return ctx
+  // RFC-358: 候选期覆盖层最后并入——它描述的是本次变更集里即将存在的资源，
+  // 必须盖在 live 快照之上（合并规则与 PostgreSQL provider 共用同一个纯函数）。
+  return withValidationOverlays(ctx, candidate?.overlays)
 }
 
 /** 根 id 未知时（未落库的候选）的占位——它永远不会出现在任何边键里。 */
@@ -502,6 +515,157 @@ export interface ValidatorContext {
    * the real id (a draft-only back-edge closes against stored rows).
    */
   currentWorkflow?: { id: string; name: string }
+}
+
+/**
+ * RFC-358 §3.3–§3.5 —— 候选期覆盖层：**即将存在**的资源。
+ *
+ * 意图构建器在同一个变更集里可以同时新建 agent / skill / MCP / plugin / 工作流并让它们
+ * 互相引用。这些行此刻都还不在库里，而校验器对它们做的是普通的存在性查找（`skillIds` /
+ * `mcpsKnown` / `pluginsKnown` / `agentById` / `callWorkflows`）。不把它们喂进来，一个
+ * **完全合法**的变更集会被判成 `skill-not-found` / `call-workflow-ref-missing`，而生成它的
+ * agent 根本改不掉——它建的技能就在同一批里。
+ *
+ * 覆盖层只描述「覆盖什么」；与存值的合并发生在**这里**（此处才有 live 行），调用方不必
+ * 预先知道存值。`fields` 刻意只收 `projectWorkflowValidationContext` 投影里、且判据真的
+ * 读到的那些字段——多一个字段就多一处要与 agent 保存路径保持同步的地方。
+ */
+/** 覆盖层与库状态不符——编码错误，不是用户可触发的路径。 */
+export class WorkflowValidationOverlayError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'WorkflowValidationOverlayError'
+  }
+}
+
+const PENDING_AGENT_TEMPLATE: Omit<Agent, 'id' | 'name'> = Object.freeze({
+  description: '',
+  outputs: [],
+  syncOutputsOnIterate: true,
+  permission: {},
+  skills: [],
+  dependsOn: [],
+  mcp: [],
+  plugins: [],
+  frontmatterExtra: {},
+  bodyMd: '',
+  schemaVersion: 1,
+  createdAt: 0,
+  updatedAt: 0,
+})
+
+function mergedAgentRow(base: Agent | undefined, overlay: WorkflowValidationAgentOverlay): Agent {
+  const seed: Agent =
+    base ??
+    ({
+      ...PENDING_AGENT_TEMPLATE,
+      id: overlay.agentId,
+      name: overlay.fields.name ?? overlay.agentId,
+    } as Agent)
+  const f = overlay.fields
+  // 每个键都必须是「显式出现才覆盖」——`?? seed.x` 会把变更集里显式的空数组
+  // （合法：把 outputs 清空）误当成缺省。
+  return {
+    ...seed,
+    ...(f.name === undefined ? {} : { name: f.name }),
+    ...(f.outputs === undefined ? {} : { outputs: [...f.outputs] }),
+    ...(f.outputKinds === undefined ? {} : { outputKinds: { ...f.outputKinds } }),
+    ...(f.outputWrapperPortNames === undefined
+      ? {}
+      : { outputWrapperPortNames: { ...f.outputWrapperPortNames } }),
+    ...(f.branchPorts === undefined ? {} : { branchPorts: [...f.branchPorts] }),
+    ...(f.role === undefined ? {} : { role: f.role }),
+    ...(f.skills === undefined ? {} : { skills: [...f.skills] }),
+    ...(f.dependsOn === undefined ? {} : { dependsOn: [...f.dependsOn] }),
+    ...(f.mcp === undefined ? {} : { mcp: [...f.mcp] }),
+    ...(f.plugins === undefined ? {} : { plugins: [...f.plugins] }),
+  } as Agent
+}
+
+/**
+ * RFC-358 —— 把候选期覆盖层并进一个已建好的 context。**两个 provider 共用这一份**：
+ * SQLite 走 `loadWorkflowValidationContext`、PostgreSQL 自建 context，合并规则只有这一处，
+ * 不会像 RFC-355 T1 实测过的那样漂。
+ */
+export function withValidationOverlays(
+  ctx: ValidatorContext,
+  overlays: WorkflowValidationCandidateOverlays | undefined,
+): ValidatorContext {
+  if (overlays === undefined) return ctx
+  const next: ValidatorContext = { ...ctx }
+
+  if (overlays.agents !== undefined && overlays.agents.length > 0) {
+    const byId = new Map(ctx.agents.map((agent) => [agent.id, agent]))
+    for (const overlay of overlays.agents) {
+      const base = byId.get(overlay.agentId)
+      if (overlay.isNew && base !== undefined) {
+        throw new WorkflowValidationOverlayError(
+          `agent overlay '${overlay.agentId}' claims to be new but already exists`,
+        )
+      }
+      if (!overlay.isNew && base === undefined) {
+        throw new WorkflowValidationOverlayError(
+          `agent overlay '${overlay.agentId}' claims to exist but no row was loaded`,
+        )
+      }
+      byId.set(overlay.agentId, mergedAgentRow(base, overlay))
+    }
+    next.agents = [...byId.values()]
+  }
+
+  if (overlays.skills !== undefined && overlays.skills.length > 0) {
+    const known = new Set(ctx.skills.map((skill) => skill.id))
+    next.skills = [
+      ...ctx.skills,
+      ...overlays.skills
+        .filter((pending) => !known.has(pending.id))
+        .map(
+          (pending): Skill => ({
+            id: pending.id,
+            name: pending.name,
+            description: '',
+            sourceKind: 'managed',
+            schemaVersion: 1,
+            contentVersion: 1,
+            metaRevision: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }),
+        ),
+    ]
+  }
+
+  if (overlays.mcps !== undefined && overlays.mcps.length > 0) {
+    const known = new Set((ctx.mcps ?? []).map((mcp) => mcp.id))
+    next.mcps = [
+      ...(ctx.mcps ?? []),
+      ...overlays.mcps
+        .filter((pending) => !known.has(pending.id))
+        .map((pending) => ({ id: pending.id, name: pending.name, enabled: pending.enabled })),
+    ]
+  }
+
+  if (overlays.plugins !== undefined && overlays.plugins.length > 0) {
+    const known = new Set((ctx.plugins ?? []).map((plugin) => plugin.id))
+    next.plugins = [
+      ...(ctx.plugins ?? []),
+      ...overlays.plugins
+        .filter((pending) => !known.has(pending.id))
+        .map((pending) => ({ id: pending.id, name: pending.name, enabled: pending.enabled })),
+    ]
+  }
+
+  if (overlays.callWorkflows !== undefined && overlays.callWorkflows.length > 0) {
+    // 双键与 `loadCallWorkflowClosure` 同形：名字是权威选择器、id 是解析缓存。
+    const merged = new Map(ctx.callWorkflows ?? [])
+    for (const ref of overlays.callWorkflows) {
+      merged.set(ref.name, ref)
+      merged.set(ref.id, ref)
+    }
+    next.callWorkflows = merged
+  }
+
+  return next
 }
 
 export const WORKFLOW_VALIDATION_CONTEXT_DOMAIN_V1 = 'workflow-validation-context/v1\n'
@@ -1713,7 +1877,9 @@ export function validateWorkflowDef(
           })
         }
       }
-      for (const ref of agent.skills) {
+      // RFC-358: `?? []` 与同段 mcp / plugins 对齐——生产 context 一律来自 listAgents(db)
+      // 必然物化，但候选期注入的行不该因为少一个字段就让整个校验器抛。
+      for (const ref of agent.skills ?? []) {
         // RFC-223 (PR-1): only MANAGED refs resolve against DB skill ids;
         // `project` refs are repo-local self-discovered skills (no DB row).
         if (ref.kind === 'managed' && !skillIds.has(ref.skillId)) {
@@ -1769,7 +1935,7 @@ export function validateWorkflowDef(
       // RFC-223 (PR-1): the dependsOn closure is keyed BY ID (dependsOn stores
       // agent ids; a rename can't re-route it).
       const seenInClosure = new Set<string>([agent.id])
-      const closureQueue = [...agent.dependsOn]
+      const closureQueue = [...(agent.dependsOn ?? [])]
       while (closureQueue.length > 0) {
         const depId = closureQueue.shift()
         if (depId === undefined) break
@@ -1785,7 +1951,7 @@ export function validateWorkflowDef(
           })
           continue
         }
-        for (const ref of dep.skills) {
+        for (const ref of dep.skills ?? []) {
           if (ref.kind === 'managed' && !skillIds.has(ref.skillId)) {
             issues.push({
               code: 'skill-not-found',
@@ -1827,7 +1993,7 @@ export function validateWorkflowDef(
             }
           }
         }
-        for (const next of dep.dependsOn) closureQueue.push(next)
+        for (const next of dep.dependsOn ?? []) closureQueue.push(next)
       }
       // RFC-060 PR-E: agent-multi removed; its sourcePort + shardingStrategy
       // validation rules deleted. wrapper-fanout (validated above in rule 4d)

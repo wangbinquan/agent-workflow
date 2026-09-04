@@ -7,6 +7,7 @@ import type {
   IntentTurnRuntimeResolver,
 } from '@/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
+import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import {
   actorOfDirectAuthority,
   admitDurableWorkOwner,
@@ -35,6 +36,8 @@ export interface IntentDispatchDeps {
   configSnapshot: ReturnType<typeof loadConfig>
   runtimeResolver: IntentTurnRuntimeResolver
   dumpAuxiliary: IntentDumpAuxiliaryQueries
+  /** RFC-358 —— 工作流图校验端口（resource-catalog public 合同）。 */
+  graphValidation: IntentWorkflowGraphValidationPort
   /** Bootstrap-selected Resource Catalog query/context for this exact actor. */
   resourceCatalogFor(actor: Actor): IntentResourceCatalogBinding
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
@@ -104,6 +107,7 @@ export async function dispatchIntentTurn(
         config,
         resourceCatalog: deps.resourceCatalogFor(actor),
         dumpAuxiliary: deps.dumpAuxiliary,
+        graphValidation: deps.graphValidation,
         onSessionEvent: (event) => {
           if (
             event.type === 'intent.turn.execution.updated' &&
