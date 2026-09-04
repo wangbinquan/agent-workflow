@@ -5454,9 +5454,9 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 367,
+    "entries": 368,
     "executionLocal": 52,
-    "longRunning": 82,
+    "longRunning": 83,
     "managed": 11,
     "periodic": 222
   },
@@ -8985,6 +8985,71 @@
     },
     {
       "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "owner lifecycle",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#closeRecoveredOutcomeUnknownAndRelease",
+      "kind": "execution-local",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "execution-local",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#closeRecoveredOutcomeUnknownAndRelease",
+      "phase": "execution",
+      "symbol": "closeRecoveredOutcomeUnknownAndRelease",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#MANAGED_PROCESS_RECOVERY_CLASS",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#MANAGED_PROCESS_RECOVERY_CLASS",
+      "phase": "unknown",
+      "symbol": "MANAGED_PROCESS_RECOVERY_CLASS",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#recoveredManagedProcessEvidence",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#recoveredManagedProcessEvidence",
+      "phase": "unknown",
+      "symbol": "recoveredManagedProcessEvidence",
+      "targetContext": "task-execution"
+    },
+    {
+      "dependencies": [
         "runtime"
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts",
@@ -9141,27 +9206,6 @@
       "targetContext": "task-execution"
     },
     {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#MANAGED_PROCESS_RECOVERY_CLASS",
-      "kind": "long-running",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#MANAGED_PROCESS_RECOVERY_CLASS",
-      "phase": "unknown",
-      "symbol": "MANAGED_PROCESS_RECOVERY_CLASS",
-      "targetContext": "task-execution"
-    },
-    {
       "dependencies": [
         "db"
       ],
@@ -9182,27 +9226,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#PostgresqlTaskExecutionRecoveryPersistence",
       "phase": "execution",
       "symbol": "PostgresqlTaskExecutionRecoveryPersistence",
-      "targetContext": "task-execution"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
-      "finalCriterion": "owner lifecycle",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#recoveredManagedProcessEvidence",
-      "kind": "execution-local",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "execution-local",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#recoveredManagedProcessEvidence",
-      "phase": "execution",
-      "symbol": "recoveredManagedProcessEvidence",
       "targetContext": "task-execution"
     },
     {
@@ -9371,7 +9394,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:95",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:93",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9385,7 +9408,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:95",
+      "symbol": "$setInterval:93",
       "targetContext": "task-execution"
     },
     {
@@ -13564,5 +13587,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f"
+  "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944"
 }

@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 61,
-    "transactionCallbacks": 480
+    "transactionCallbacks": 483
   },
   "entries": [
     {
@@ -4916,6 +4916,42 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:527",
+      "line": 527,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#resolveQuiescedManagedProcesses",
+      "status": "clear",
+      "symbol": "resolveQuiescedManagedProcesses",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:799",
+      "line": 799,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#closeOutcomeUnknownAndRelease",
+      "status": "clear",
+      "symbol": "closeOutcomeUnknownAndRelease",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#transaction:840",
+      "line": 840,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts#closeRecoveredOutcomeUnknownAndRelease",
+      "status": "clear",
+      "symbol": "closeRecoveredOutcomeUnknownAndRelease",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlFrameBackfillStore.ts#transaction:56",
@@ -4942,8 +4978,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#transaction:61",
-      "line": 61,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#transaction:67",
+      "line": 67,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionEffectPersistence.ts#serializable",
       "status": "clear",
       "symbol": "serializable",
@@ -4978,8 +5014,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#transaction:68",
-      "line": 68,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#transaction:73",
+      "line": 73,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts#serializable",
       "status": "clear",
       "symbol": "serializable",
@@ -5900,7 +5936,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f",
+  "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

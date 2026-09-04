@@ -322,10 +322,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
       "baseline": 45,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。",
-      "allowGrowth": {
-        "why": "RFC-359 W1-T7e：legacy/workgroup/lifecycle.ts → collaboration 一条 offered 边入账（+1）。下一笔不涨即删。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。"
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -394,10 +391,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1941,
+      "baseline": 1943,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7d/T7e：PG daemon 装配技能启动屏障；工作组协议块渲染器迁到 application 层、collaboration 新增 workgroupClarifyAskGate 一份实现（legacy 转发、PG 适配器接线）。下一笔不涨即删。"
+        "why": "RFC-359 W1-T7b：effect 静默清算与驱动释放序列各合一为一份实现（effectQuiescence.ts / taskDriverRelease.ts），中立端口补齐四个清算成员、PG successor 恢复改调同一份、新增 createTaskExecutionPersistence 分派。下一笔不涨即删。"
       }
     },
     {
@@ -411,15 +408,21 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 480,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 483,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T7b：effectQuiescence.ts 三个 DatabaseSession 事务体（managed-process 清算 / exact-stop 闭合 / successor 闭合）取代 PG 私有 serializable 副本，480 → 483。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 367,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 368,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T7b：驱动释放序列合一为 taskDriverRelease.ts（awaitStopped 后清算再释放），367 → 368。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -432,10 +435,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6397,
+      "baseline": 6408,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7d/T7e：PG daemon 装配技能启动屏障；工作组协议块渲染器迁到 application 层、collaboration 新增 workgroupClarifyAskGate 一份实现（legacy 转发、PG 适配器接线）。下一笔不涨即删。"
+        "why": "RFC-359 W1-T7b：effect 静默清算与驱动释放序列各合一为一份实现（effectQuiescence.ts / taskDriverRelease.ts），中立端口补齐四个清算成员、PG successor 恢复改调同一份、新增 createTaskExecutionPersistence 分派。下一笔不涨即删。"
       }
     },
     {
@@ -456,10 +459,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5268,
+      "baseline": 5278,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7d/T7e：PG daemon 装配技能启动屏障；工作组协议块渲染器迁到 application 层、collaboration 新增 workgroupClarifyAskGate 一份实现（legacy 转发、PG 适配器接线）。下一笔不涨即删。"
+        "why": "RFC-359 W1-T7b：effect 静默清算与驱动释放序列各合一为一份实现（effectQuiescence.ts / taskDriverRelease.ts），中立端口补齐四个清算成员、PG successor 恢复改调同一份、新增 createTaskExecutionPersistence 分派。下一笔不涨即删。"
       }
     },
     {
@@ -474,10 +477,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 987,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-359 W1-T7e：collaboration public participants 新增 createWorkgroupClarifyAskGate / countWorkgroupClarifyAsks 与两个输入/端口类型（RFC-207 §3.7.2 唯一判定点，两 provider 共用），985 → 989。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -497,15 +497,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26106,
+      "baseline": 26129,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7d/T7e：PG daemon 装配技能启动屏障；工作组协议块渲染器迁到 application 层、collaboration 新增 workgroupClarifyAskGate 一份实现（legacy 转发、PG 适配器接线）。下一笔不涨即删。"
+        "why": "RFC-359 W1-T7b：effect 静默清算与驱动释放序列各合一为一份实现（effectQuiescence.ts / taskDriverRelease.ts），中立端口补齐四个清算成员、PG successor 恢复改调同一份、新增 createTaskExecutionPersistence 分派。下一笔不涨即删。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2fe2a309ec9f6e4e27bac790078005cd6c8d2fa43a5fe7e40cdee70f1a2e715f",
+    "sourceDigest": "sha256:22452d777e99c536d92ba9f247b0868c4de981e203f6a0675229c5e69dbfa944",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -518,8 +518,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "49504f9d63eb8decc6298623aadf05221c2229fb",
-    "contentDigest": "sha256:f5b5a6bfbcddb86df19e173b4137cbce1518547d3e6e77ec30947efd23368173",
+    "currentSnapshotSha": "388c871446e614dbe26b712f72fa92839e5ebfb0",
+    "contentDigest": "sha256:96e2d63ea831d38f7a90c1623d0529723b964afb2d80967c49b9b2a1e6be3b85",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
