@@ -1,13 +1,14 @@
-// RFC-349 — PostgreSQL adapter for the human-gate rollback pre-drive atom.
+// RFC-359 W4-B1 —— 人工门 continuation 的 effect 检视 / 准备 / 结算：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
 import { and, eq, inArray } from 'drizzle-orm'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 
 import {
   taskExecutionEffectAttempts,
   taskExecutionEffects,
   taskExecutionIntents,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { GateContinuationEffectPersistence } from '../application/drive/gateContinuationEffectStep'
 import { waitForEffectResourceTurn } from '../application/effectResourceWait'
 import { TaskExecutionError } from '../application/taskExecutionError'
@@ -15,15 +16,15 @@ import {
   decodeHumanGateContinuationPayload,
   isLegacyTaskGateContinuationPayload,
 } from '../domain/humanGateContinuation'
-import { PostgresqlTaskExecutionEffectPersistence } from './postgresqlTaskExecutionEffectPersistence'
+import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 
 const CLASSIFIER_VERSION = 'rfc333-gate-workspace-rollback-v1'
 const TRANSPORT_VERSION = 'rfc333-local-plan-v1'
 
-export class PostgresqlGateContinuationEffectPersistence implements GateContinuationEffectPersistence {
+export class DrizzleGateContinuationEffectPersistence implements GateContinuationEffectPersistence {
   constructor(
-    private readonly db: PostgresqlDatabaseClient,
-    private readonly effects = new PostgresqlTaskExecutionEffectPersistence(db),
+    private readonly db: ProviderNeutralDatabase,
+    private readonly effects: TaskExecutionPersistence['effects'],
   ) {}
 
   async inspect(input: Parameters<GateContinuationEffectPersistence['inspect']>[0]) {

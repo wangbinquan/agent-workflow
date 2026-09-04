@@ -3,8 +3,7 @@
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { runFrameBackfill, type FrameBackfillReport } from '../application/frameBackfillJob'
-import { createPostgresqlFrameBackfillStore } from '../infrastructure/postgresqlFrameBackfillStore'
-import { createSqliteFrameBackfillStore } from '../infrastructure/sqliteFrameBackfillStore'
+import { createFrameBackfillStore } from '../infrastructure/frameBackfillStore'
 
 export type FrameBackfillDatabase =
   | { readonly provider: 'sqlite'; readonly db: DbClient }
@@ -22,9 +21,7 @@ export async function runFrameBackfillOnBoot(
   database: FrameBackfillDatabase,
   options: { readonly force?: boolean } = {},
 ): Promise<FrameBackfillReport> {
-  const store =
-    database.provider === 'sqlite'
-      ? createSqliteFrameBackfillStore(database.db)
-      : createPostgresqlFrameBackfillStore(database.db)
+  // RFC-359 W4-B1：存储只有一份实现，两个 provider 的客户端都直接可用。
+  const store = createFrameBackfillStore(database.db)
   return await runFrameBackfill({ store, ...(options.force === true ? { force: true } : {}) })
 }

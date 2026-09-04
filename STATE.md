@@ -91,6 +91,17 @@
 > **W4-B1 批 1 已落（2026-09-05）**：task-execution 三对逐字相同的适配器合一（taskOverviewQuery / branchTraceSnapshotReader /
 > taskRollbackQueries），六个 provider 文件删除；`rfc359-w4-b1-identical-adapters.test.ts` 两引擎各跑。剩 39 对，
 > 按相似度从高到低推进（read models 0.99 / gate continuation effect 0.95 / activation snapshot 0.93 / ws projection 0.89 …）。
+> **CI fc231e26f 红的收尾（2026-09-05）**：①serve 序列合一后 `bootstrap.stop()` 先停会话句柄，driver 收到的是
+> `provider-session-paused` 而不是关机原因，整任务被记成 canceled（e2e crash-recovery / RFC-294 oracle）——shared
+> `lifecycle.ts` 新增 `isDaemonInterruptionAbortReason`（关机 / 会话暂停 / 会话关闭三种 daemon 层中断），六处
+> `=== DAEMON_SHUTDOWN_ABORT_REASON` 改判它；②`hasTask` 改「在跑」后准入放行早于 intent 终结，continuation intent 撞
+> `task-continuation-conflict`（RFC-097 / RFC-287 / RFC-294）——resume / retry / sync 准入前
+> `awaitReleasedSettled`，SQLite 与 PG（`ActiveTaskExecutionParticipant.awaitReleasedSettled`）同做；③RFC-199 清单改指
+> actionExecutionRunners.ts。
+> **W4-B1 批 2a 已落**：五对只差客户端类型 / 同步异步形态的适配器合一（gateContinuationEffectPersistence /
+> nodeActivationSnapshotReader / taskArtifactPathQueries / dynamicWorkflowPersistence / frameBackfillStore，
+> 后者改走统一事务原语），十个 provider 文件删除；`settleGateRollback` 上端口；`rfc359-w4-b1-batch2a-adapters.test.ts`
+> 两引擎各跑。剩 34 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

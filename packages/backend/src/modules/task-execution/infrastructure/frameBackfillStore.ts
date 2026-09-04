@@ -1,13 +1,13 @@
-// RFC-354 T4 — SQLite adapter for the one-shot frame backfill.
+// RFC-359 W4-B1 —— RFC-354 一次性 frame 回填的存储：一份实现，两个 provider 共用。
 
 import { and, eq, isNull, sql } from 'drizzle-orm'
-import type { DbClient } from '@/db/client'
 import { clarifyRounds, maintenanceState, nodeRuns, tasks } from '@/db/schema'
-import { dbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { FRAME_BACKFILL_MARKER_KEY, type FrameBackfillStore } from '../application/frameBackfillJob'
 import type { FrameBackfillRunRow, FrameBackfillUpdate } from '../domain/frameBackfill'
 
-export function createSqliteFrameBackfillStore(db: DbClient): FrameBackfillStore {
+export function createFrameBackfillStore(db: ProviderNeutralDatabase): FrameBackfillStore {
   return {
     async readMarker() {
       const rows = await db
@@ -52,30 +52,31 @@ export function createSqliteFrameBackfillStore(db: DbClient): FrameBackfillStore
       return { workflowSnapshot: task[0].workflowSnapshot, runs }
     },
     async applyRunFrames(updates: readonly FrameBackfillUpdate[]) {
-      dbTxSync(db, (tx) => {
+      // 统一事务原语：SQLite 上是显式 BEGIN IMMEDIATE + 真回滚（裸 db.transaction 在 bun:sqlite 上零原子性）。
+      await databaseSessionFor(db).transaction(async (tx) => {
         for (const update of updates) {
-          tx.update(nodeRuns)
+          await tx
+            .update(nodeRuns)
             .set({ containerRunId: update.containerRunId, scopePath: update.scopePath })
             .where(eq(nodeRuns.id, update.id))
-            .run()
         }
       })
     },
     async alignClarifyRounds(taskId) {
-      const stale = and(
-        eq(clarifyRounds.taskId, taskId),
-        isNull(clarifyRounds.containerRunId),
-        sql`exists (select 1 from ${nodeRuns} where ${nodeRuns.id} = ${clarifyRounds.intermediaryNodeRunId} and ${nodeRuns.containerRunId} is not null)`,
-      )
-      const pending = await db.select({ id: clarifyRounds.id }).from(clarifyRounds).where(stale)
-      if (pending.length === 0) return 0
-      await db
+      const rows = await db
         .update(clarifyRounds)
         .set({
           containerRunId: sql`(select ${nodeRuns.containerRunId} from ${nodeRuns} where ${nodeRuns.id} = ${clarifyRounds.intermediaryNodeRunId})`,
         })
-        .where(stale)
-      return pending.length
+        .where(
+          and(
+            eq(clarifyRounds.taskId, taskId),
+            isNull(clarifyRounds.containerRunId),
+            sql`exists (select 1 from ${nodeRuns} where ${nodeRuns.id} = ${clarifyRounds.intermediaryNodeRunId} and ${nodeRuns.containerRunId} is not null)`,
+          ),
+        )
+        .returning({ id: clarifyRounds.id })
+      return rows.length
     },
   }
 }

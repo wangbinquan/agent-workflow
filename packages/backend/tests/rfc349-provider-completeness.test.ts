@@ -104,7 +104,7 @@ const PROVIDER_FORK_LEDGER = {
   // RFC-354 T4: the frame backfill picks its store by the provider-keyed
   // `FrameBackfillDatabase` union — a third provider cannot be passed in
   // without its own variant.
-  'modules/task-execution/composition/frameBackfill.ts': { forks: 1, fence: 'discriminated-union' },
+  // modules/task-execution/composition/frameBackfill.ts：RFC-359 W4-B1 后存储只有一份实现，不再按 provider 分叉。
   'modules/task-execution/composition/providerRuntime.ts': { forks: 2, fence: 'fenced-dispatch' },
   'modules/task-execution/composition/taskExecutionPersistence.ts': {
     forks: 4,

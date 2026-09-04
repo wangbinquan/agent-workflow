@@ -153,10 +153,30 @@ export interface WorkspacePreparationSettlementProjection {
   readonly nodePaths: readonly string[]
 }
 
+/** 人工门 continuation 的工作区回滚 effect 结算（RFC-333）；两个适配器同一签名，经端口暴露给中立的 gate 适配器。 */
+export interface GateRollbackSettlement {
+  readonly token: OwnershipToken
+  readonly effectId: string
+  readonly attemptId: string
+  readonly operationId: string
+  readonly planDigest: string
+  readonly sourceNodeRunIds: readonly string[]
+  readonly outcome:
+    | Readonly<{ kind: 'threw'; error: string }>
+    | Readonly<{
+        kind: 'completed'
+        rolledBack: boolean
+        applicationEvidence: 'applied' | 'definitely-not-applied'
+        receipt: Readonly<Record<string, unknown>>
+        successfulSourceNodeRunIds: readonly string[]
+      }>
+}
+
 /** Provider-neutral effect journal and resource-fence boundary. Business
  * projections that must share settlement atomicity are exposed as separate
  * named ports by their owning use case, never as a transaction callback. */
 export interface TaskExecutionEffectPersistence {
+  settleGateRollback(input: GateRollbackSettlement): Promise<void>
   readLineage(input: {
     readonly taskId: string
     readonly intentId: string

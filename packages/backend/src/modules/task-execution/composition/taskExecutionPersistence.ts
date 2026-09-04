@@ -15,8 +15,7 @@ import { SqliteTaskExecutionEffectPersistence } from '../infrastructure/sqliteTa
 import { PostgresqlTaskExecutionEffectPersistence } from '../infrastructure/postgresqlTaskExecutionEffectPersistence'
 import { PostgresqlTerminalMaintenancePersistence } from '../infrastructure/postgresqlTerminalMaintenancePersistence'
 import { SqliteTerminalMaintenancePersistence } from '../infrastructure/sqliteTerminalMaintenancePersistence'
-import { PostgresqlGateContinuationEffectPersistence } from '../infrastructure/postgresqlGateContinuationEffectPersistence'
-import { SqliteGateContinuationEffectPersistence } from '../infrastructure/sqliteGateContinuationEffectPersistence'
+import { DrizzleGateContinuationEffectPersistence } from '../infrastructure/gateContinuationEffectPersistence'
 import { PostgresqlTaskExecutionIntentTerminalPersistence } from '../infrastructure/postgresqlTaskExecutionIntentTerminalPersistence'
 import { SqliteTaskExecutionIntentTerminalPersistence } from '../infrastructure/sqliteTaskExecutionIntentTerminalPersistence'
 import { PostgresqlTaskExecutionRecoveryPersistence } from '../infrastructure/postgresqlTaskExecutionRecovery'
@@ -45,12 +44,10 @@ import { SqliteTaskExecutionShutdownOperations } from '../infrastructure/sqliteT
 import { PostgresqlTaskExecutionShutdownOperations } from '../infrastructure/postgresqlTaskExecutionShutdownOperations'
 import { SqliteNodeExecutionPersistence } from '../infrastructure/sqliteNodeExecutionPersistence'
 import { PostgresqlNodeExecutionPersistence } from '../infrastructure/postgresqlNodeExecutionPersistence'
-import { SqliteNodeActivationSnapshotReader } from '../infrastructure/sqliteNodeActivationSnapshotReader'
-import { PostgresqlNodeActivationSnapshotReader } from '../infrastructure/postgresqlNodeActivationSnapshotReader'
+import { DrizzleNodeActivationSnapshotReader } from '../infrastructure/nodeActivationSnapshotReader'
 import { SqliteMergeStateLifecyclePersistence } from '../infrastructure/sqliteMergeStateLifecyclePersistence'
 import { PostgresqlMergeStateLifecyclePersistence } from '../infrastructure/postgresqlMergeStateLifecyclePersistence'
-import { SqliteTaskArtifactPathQueries } from '../infrastructure/sqliteTaskArtifactPathQueries'
-import { PostgresqlTaskArtifactPathQueries } from '../infrastructure/postgresqlTaskArtifactPathQueries'
+import { DrizzleTaskArtifactPathQueries } from '../infrastructure/taskArtifactPathQueries'
 import { createSqliteTaskRecoveryOperations } from '../infrastructure/sqliteTaskRecoveryOperations'
 import { createPostgresqlTaskRecoveryOperations } from '../infrastructure/postgresqlTaskRecoveryOperations'
 import { createSqliteRuntimeSessionLeaseOperations } from '../infrastructure/sqliteRuntimeSessionLeaseOperations'
@@ -126,16 +123,16 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     intents: new SqliteTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new SqliteTerminalMaintenancePersistence(db),
-    gateContinuationEffects: new SqliteGateContinuationEffectPersistence(db, effects),
+    gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
     gateContinuationPreDrive: new SqliteGateContinuationPreDrivePersistence(db),
     scheduler: new SqliteSchedulerCompletionPersistence(db),
     childBudget: new SqliteChildTaskBudgetQueries(db),
     nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new SqliteNodeRunRuntimePersistence(db),
     nodeExecution: new SqliteNodeExecutionPersistence(db),
-    nodeActivation: new SqliteNodeActivationSnapshotReader(db),
+    nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new SqliteMergeStateLifecyclePersistence(db),
-    artifactPaths: new SqliteTaskArtifactPathQueries(db),
+    artifactPaths: new DrizzleTaskArtifactPathQueries(db),
     wrapperRuns: new SqliteWrapperRunPersistence(db),
     runtimeLifecycle: new SqliteTaskRuntimeLifecyclePersistence(db),
     intentTerminalization: new SqliteTaskExecutionIntentTerminalPersistence(db),
@@ -159,16 +156,16 @@ export function createPostgresqlTaskExecutionPersistence(
     intents: new PostgresqlTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new PostgresqlTerminalMaintenancePersistence(db),
-    gateContinuationEffects: new PostgresqlGateContinuationEffectPersistence(db, effects),
+    gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
     gateContinuationPreDrive: new PostgresqlGateContinuationPreDrivePersistence(db),
     scheduler: new PostgresqlSchedulerCompletionPersistence(db),
     childBudget: new PostgresqlChildTaskBudgetQueries(db),
     nodeRuns: new PostgresqlNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new PostgresqlNodeRunRuntimePersistence(db),
     nodeExecution: new PostgresqlNodeExecutionPersistence(db),
-    nodeActivation: new PostgresqlNodeActivationSnapshotReader(db),
+    nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new PostgresqlMergeStateLifecyclePersistence(db),
-    artifactPaths: new PostgresqlTaskArtifactPathQueries(db),
+    artifactPaths: new DrizzleTaskArtifactPathQueries(db),
     wrapperRuns: new PostgresqlWrapperRunPersistence(db),
     runtimeLifecycle: new PostgresqlTaskRuntimeLifecyclePersistence(db),
     intentTerminalization: new PostgresqlTaskExecutionIntentTerminalPersistence(db),
