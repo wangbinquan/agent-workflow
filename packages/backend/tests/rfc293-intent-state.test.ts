@@ -45,7 +45,7 @@ import {
 import type {
   IntentContextResourceAuthorization,
   IntentPersistence,
-} from '../src/modules/intent/public/operations'
+} from '../src/modules/intent/application/ports/intentPersistence'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'

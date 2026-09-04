@@ -35,7 +35,7 @@ import {
 import type {
   IntentContextResourceAuthorization,
   IntentPersistence,
-} from '../src/modules/intent/public/operations'
+} from '../src/modules/intent/application/ports/intentPersistence'
 import { composeSqliteResourceCatalog } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'

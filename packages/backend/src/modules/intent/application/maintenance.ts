@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-import type { IntentPersistence } from '@/modules/intent/public/operations'
+import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import { createLogger, type Logger } from '@/util/log'
 import { INTENT_SCRATCH_DIRNAME } from './turnEngine'
 

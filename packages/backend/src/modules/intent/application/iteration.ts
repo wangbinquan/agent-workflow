@@ -12,7 +12,7 @@ import type {
   IntentContextResourceAuthorization,
   IntentPersistence,
   ReservedIntentTurnRecord,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentPersistence'
 
 export interface ReservedIntentGeneration {
   receipt: IntentGenerationReceipt

@@ -52,10 +52,8 @@ import {
   runIntentTurnForTest as runIntentTurn,
 } from './helpers/intentResourceCatalogBinding'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import type {
-  IntentPersistence,
-  IntentResolvedRuntime,
-} from '../src/modules/intent/public/operations'
+import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
+import type { IntentResolvedRuntime } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_intent_000000000'

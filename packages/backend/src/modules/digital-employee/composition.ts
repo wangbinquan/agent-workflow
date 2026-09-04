@@ -496,7 +496,7 @@ export function createPostgresqlEmployeeReactionRoundQueries(
 }
 
 /**
- * RFC-348 —— intent 平台库存（`modules/intent/domain/platformInventory.ts`）列出真实数字人行时读的
+ * RFC-348 —— intent 平台库存（`modules/intent/application/platformInventory.ts`）列出真实数字人行时读的
  * 授权面切片：类型包 / 工具 / 岗位模板 / 员工定义的只读 list。
  *
  * 同 DE-02：调用方只认这个装配工厂，不直接 import `infrastructure/sqliteAuthoringStore`

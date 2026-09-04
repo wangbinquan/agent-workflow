@@ -30,10 +30,8 @@ import {
 import { createIntentSession } from '@/modules/intent/application/session'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
-import type {
-  IntentDumpAuxiliaryQueries,
-  IntentPersistence,
-} from '../src/modules/intent/public/operations'
+import type { IntentDumpAuxiliaryQueries } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
+import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { getMcpFixtureById } from './helpers/mcpServiceBinding'
 

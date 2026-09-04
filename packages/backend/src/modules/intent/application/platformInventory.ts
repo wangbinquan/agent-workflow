@@ -9,11 +9,11 @@
 import {
   platformOnlyResourceTypes,
   type PlatformOnlyResourceType,
-} from '@/modules/intent/domain/teaching/platformMap'
+} from '../domain/teaching/platformMap'
 import type {
   IntentPlatformInventoryParticipant,
   IntentPlatformInventoryRow,
-} from '@/modules/intent/public/operations'
+} from './ports/intentAuxiliaryQueries'
 
 export type PlatformInventoryRow = IntentPlatformInventoryRow
 export type IntentPlatformInventory = IntentPlatformInventoryParticipant

@@ -22,7 +22,7 @@ import {
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Actor } from '@/auth/actor'
-import type { IntentPersistence } from '@/modules/intent/public/operations'
+import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import { intentDraftLifecycleOf } from '../domain/draftLifecycle'
 import { intentMountSuggestionsOf } from '../domain/mountSuggestions'
 import { projectIntentJourney } from '../domain/journey'

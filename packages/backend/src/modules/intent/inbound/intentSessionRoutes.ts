@@ -41,7 +41,8 @@ import { loadConfig } from '@/config'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
-import type { IntentApplyOperations, IntentPersistence } from '@/modules/intent/public/operations'
+import type { IntentApplyOperations } from '@/modules/intent/application/ports/intentApplyOperations'
+import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import { canAuditIntentSessions } from '@/modules/intent/public/operations'
 import {
   intentSessionListJourneyOf,

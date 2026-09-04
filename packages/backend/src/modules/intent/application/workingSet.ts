@@ -12,7 +12,7 @@ import type {
   IntentPersistence,
   IntentWorkingSetChangeRecord,
   ReservedIntentTurnRecord,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentPersistence'
 
 export { applyIntentWorkingSetDelta }
 export type { AppliedIntentWorkingSetDelta }

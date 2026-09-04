@@ -14,7 +14,7 @@ import type {
   IntentContextResourceAuthorization,
   IntentSessionRecord,
   IntentTurnRecord,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentPersistence'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

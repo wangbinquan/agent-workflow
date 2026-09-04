@@ -18,7 +18,7 @@ import type {
   IntentSessionRecord,
   IntentTurnRecord,
   ReservedIntentTurnRecord,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentPersistence'
 import type { IntentContextResourceReference } from '@/modules/resource-catalog/public/participants'
 import { canAuditIntentSessions } from '@/modules/intent/public/operations'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'

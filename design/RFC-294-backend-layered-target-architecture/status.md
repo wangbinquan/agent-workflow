@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1ee66c6e0fab0926bc7259e01dc4f46e5b5b044c91c818040ef08af23ba1956c`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:2cd5ecac52c944d3e5de0e3dcb8bf0002cfd736adcdfb86da1f19bee569f641d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -38,7 +38,7 @@
 | `moduleSymbolOwners` | 25916 |
 | `mutationEntrypoints` | 1922 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 1003 |
+| `publicSurfaces` | 982 |
 | `transactionExternalEffects` | 479 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -62,13 +62,13 @@
 | task-execution / domain | 29 |
 | code-capability / infrastructure | 28 |
 | identity-access / application | 24 |
+| intent / application | 21 |
 | code-capability / application | 20 |
 | integration / application | 20 |
-| intent / application | 20 |
 | task-execution / engine | 20 |
 | integration / composition | 19 |
 | system-operations / infrastructure | 19 |
-| intent / domain | 17 |
+| intent / domain | 16 |
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
 | digital-employee / application | 13 |
@@ -260,17 +260,17 @@
 | digital-employee | 51 |
 | source-control | 45 |
 | development-automation | 39 |
-| intent | 31 |
 | knowledge-evolution | 26 |
 | event-center | 22 |
 | execution-contract | 22 |
 | memory | 22 |
 | code-capability | 19 |
 | integration | 13 |
+| intent | 10 |
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 152 / 1003）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 142 / 982）
 
 | context | 数量 |
 | --- | --- |
@@ -279,7 +279,6 @@
 | task-execution | 15 |
 | system-operations | 12 |
 | code-capability | 11 |
-| intent | 10 |
 | event-center | 8 |
 | development-automation | 7 |
 | source-control | 7 |

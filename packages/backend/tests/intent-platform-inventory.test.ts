@@ -14,14 +14,14 @@ import {
   platformOnlyResourceTypes,
   type PlatformOnlyResourceType,
 } from '../src/modules/intent/domain/teaching/platformMap'
-import type { IntentPlatformInventoryParticipant } from '../src/modules/intent/public/operations'
+import type { IntentPlatformInventoryParticipant } from '../src/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentResourceCatalogBinding } from '@/modules/intent/application/resourceCatalog'
 import { buildIntentDump } from '@/modules/intent/application/dumpBuilder'
 import {
   PLATFORM_INVENTORY_ROW_CAP,
   platformInventoryTypes,
   renderPlatformInventoryFile,
-} from '@/modules/intent/domain/platformInventory'
+} from '@/modules/intent/application/platformInventory'
 
 const ACTOR: Actor = {
   user: {

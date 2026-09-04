@@ -55,7 +55,7 @@ import { intentResourceVisibility } from '@/modules/intent/application/resourceC
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import type { IntentContextManifest } from '@/modules/intent/application/manifest'
 import { composeSqliteIntentPersistence } from '../src/modules/intent/composition/persistence'
-import type { IntentPersistence } from '../src/modules/intent/public/operations'
+import type { IntentPersistence } from '../src/modules/intent/application/ports/intentPersistence'
 import { composeSqliteIntentContextResourceAuthorizationSyncFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { intentResourceCatalogBinding } from './helpers/intentResourceCatalogBinding'
 

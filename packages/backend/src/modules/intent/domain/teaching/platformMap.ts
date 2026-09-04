@@ -4,7 +4,7 @@
 // The changeset contract only creates / updates the six `INTENT_RESOURCE_TYPES`;
 // the other nine ACL types exist on the platform and are visible to the model
 // as read-only inventory (`inventory/platform/<type>.md`, see
-// modules/intent/domain/platformInventory.ts) so it can say WHERE a user configures
+// modules/intent/application/platformInventory.ts) so it can say WHERE a user configures
 // one instead of inventing a changeset op for it. `satisfies
 // Record<AclResourceType, …>` makes a new ACL type fail to compile until it
 // declares a stance here; tests lock `intent-creatable` ⇔ `INTENT_RESOURCE_TYPES`

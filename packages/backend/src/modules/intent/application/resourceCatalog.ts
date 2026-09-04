@@ -39,7 +39,7 @@ import type {
 import type {
   IntentContextResourceAuthorization,
   IntentContextResourceAuthorityPair,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentPersistence'
 
 export interface IntentVisibleResource {
   resourceType: AclResourceType

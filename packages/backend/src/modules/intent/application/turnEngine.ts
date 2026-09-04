@@ -52,10 +52,10 @@ import { normalizeIntentWorkflowCreateLayouts } from '@/modules/intent/domain/wo
 import type { IntentResourceCatalogBinding } from './resourceCatalog'
 import type {
   IntentDumpAuxiliaryQueries,
-  IntentPersistence,
   IntentResolvedRuntime,
   IntentTurnRuntimeResolver,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentAuxiliaryQueries'
+import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 
 export const INTENT_BUILDER_AGENT_NAME = 'aw-intent-builder'
 export const INTENT_SCRATCH_DIRNAME = 'intent-scratch'

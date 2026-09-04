@@ -4,9 +4,9 @@ import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/sys
 import type { Actor } from '@/auth/actor'
 import type {
   IntentDumpAuxiliaryQueries,
-  IntentPersistence,
   IntentTurnRuntimeResolver,
-} from '@/modules/intent/public/operations'
+} from '@/modules/intent/application/ports/intentAuxiliaryQueries'
+import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
 import {
   actorOfDirectAuthority,
   admitDurableWorkOwner,
