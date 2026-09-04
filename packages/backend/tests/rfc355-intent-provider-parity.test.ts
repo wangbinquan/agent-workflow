@@ -117,30 +117,66 @@ describe('RFC-355 T1 —— 纯判据不许被抄成两份', () => {
   })
 })
 
-describe('RFC-355 T1 —— intent 不得深取 resource-catalog 的内部实现', () => {
-  test.each([
-    'postgresqlIntentApplyArtifactOwners.ts',
-    'postgresqlIntentApplyArtifactLifecycle.ts',
-    'sqliteIntentApplyArtifactLifecycle.ts',
-    'postgresqlIntentApplyOperations.ts',
-    'sqliteIntentApplyOperations.ts',
-  ])('%s 不 import resource-catalog 的 infrastructure/application/domain', (file: string) => {
+describe('RFC-355 T6 —— intent 深取 resource-catalog 内部实现的账本（只准缩，不准涨）', () => {
+  // T6 之前这里是「必须为空」的断言，于是它在 T6 落地前一直红——**而红的主干是全员的**。
+  // 改成账本逐条相等：**新增一条立刻红**（压力一点没丢），T6 逐条销账时把对应行删掉即可。
+  // 形态与仓里既有的 exact-debt 账本一致（`architecture/commons-debt.json` 等）。
+  //
+  // 这些边全部是 RFC-317 R2 禁止的跨 context 内部 import：intent 的 apply 直接取
+  // resource-catalog 的技能文件机制（路径解析 / 内容哈希 / 文件发布 / 版本提交 / boot 校验）。
+  // T6 的做法是让 RC 出一个技能工件 participant，两个 provider 的 intent 都从那里取
+  // ——形态复用 RFC-353 已验证过的 participant + bootstrap 装配。
+  const DEEP_IMPORT_DEBT: Readonly<Record<string, readonly string[]>> = {
+    // T0 查清：这个文件整份是「RC 的能力被 intent 重写了一遍」，T6 直接删除。
+    'postgresqlIntentApplyArtifactOwners.ts': [
+      '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourcePorts',
+      '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish',
+      '@/modules/resource-catalog/infrastructure/legacy/skillHash',
+      '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths',
+    ],
+    'postgresqlIntentApplyArtifactLifecycle.ts': [
+      '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants',
+      '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify',
+      '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish',
+      '@/modules/resource-catalog/infrastructure/legacy/skillHash',
+      '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths',
+    ],
+    'sqliteIntentApplyArtifactLifecycle.ts': [
+      '@/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntentApplyResourceParticipants',
+      '@/modules/resource-catalog/infrastructure/legacy/skill',
+      '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify',
+      '@/modules/resource-catalog/infrastructure/legacy/skillOperations',
+      '@/modules/resource-catalog/infrastructure/legacy/skillVersion',
+    ],
+    'postgresqlIntentApplyOperations.ts': [
+      '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlIntentApplyResourceParticipants',
+    ],
+    'sqliteIntentApplyOperations.ts': [],
+  }
+
+  test.each(Object.keys(DEEP_IMPORT_DEBT))('%s 的深取与账本逐条相等', (file: string) => {
     let source: string
     try {
       source = read('modules', 'intent', 'infrastructure', file)
     } catch {
-      // 文件已被本 RFC 删除（例如 T6 删掉 PostgreSQL 侧的工件拷贝）即视为达成。
+      // 文件已被 T6 删除即视为全部销账。
+      expect(DEEP_IMPORT_DEBT[file]).toBeDefined()
       return
     }
     const deep = [
-      ...source.matchAll(
-        /@\/modules\/resource-catalog\/(infrastructure|application|domain)[^'"]*/g,
+      ...new Set(
+        [
+          ...source.matchAll(
+            /@\/modules\/resource-catalog\/(?:infrastructure|application|domain)[^'"]*/g,
+          ),
+        ].map((m) => m[0]),
       ),
-    ].map((m) => m[0])
+    ].sort()
     expect(
-      [...new Set(deep)].sort(),
-      'RFC-317 R2：跨 context 只能经 exact `public/*`。这些深取应改为 RC offered participant，' +
-        '由 bootstrap 注入（形态见 RFC-353）。',
-    ).toEqual([])
+      deep,
+      'RFC-317 R2：跨 context 只能经 exact `public/*`。**多**了要么改走 RC offered participant、' +
+        '要么连同理由加进本账本；**少**了说明 T6 销账了——把对应行一并删掉，' +
+        '不删的话差额会变成下一个人的免费槽位。',
+    ).toEqual([...DEEP_IMPORT_DEBT[file]!].sort())
   })
 })

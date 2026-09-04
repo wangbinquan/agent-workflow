@@ -35,7 +35,8 @@ const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   'modules/identity-access/infrastructure/UserAccessRepository.ts::mapGrant':
     '行命名（snake_case vs camelCase）',
   'modules/identity-access/infrastructure/UserAccessRepository.ts::mapUser': '行命名与取值转换',
-  'modules/intent/infrastructure/IntentApplyOperations.ts::intentResourcePlanOf': '仅形参命名',
+  // RFC-355 T2 已销账：`intentResourcePlanOf` 收进 `modules/intent/application/intentResourcePlan.ts`，
+  // 两个 provider 共用一份，fork 不复存在（账本口径：销账要把条目一并删掉）。
   'modules/resource-catalog/infrastructure/PluginRepository.ts::ownerScopedNameWhere': '方言 SQL',
   'modules/resource-catalog/infrastructure/McpRepository.ts::ownerScopedNameWhere': '方言 SQL',
   'modules/resource-catalog/infrastructure/WorkgroupRepository.ts::ownerScopedNameWhere':
