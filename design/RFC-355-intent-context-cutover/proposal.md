@@ -178,7 +178,7 @@ SQLite 侧是 `const changeset = JSON.parse(claim.draft.changesetJson)`（prefli
 | **AC-6** 路由 decode-call-map + wire 冻结 | ✅ | `routes/intentSessions.ts` 不存在；`modules/intent/inbound/intentSessionRoutes.ts` 1094 → 836 行，详情 handler 的 ~180 行编排收进 application、两条判据进 domain；`api-contract-coverage` / `route-error-code-coverage` / 契约注册表全绿 |
 | **AC-7** 行为 oracle 除 import 外未改 | ✅ | 16 个平移文件 git 认出的都是 rename，除 `dumpBuilder.ts` / `turnEngine.ts` 各一行相对 import 外内容一字未动（design §7 R2 要的字节级绊线——没有手抄，绊线的目的结构性地不存在） |
 | **AC-8** W4-E4a 归零 + 全局净变化如实记账 | ⚠️ **176 → 41**，未归零；全局 **净减 116** | 见 §9.4 |
-| **AC-9** exact-SHA hosted CI success | ⚠️ **部分** | `bec6c29f0` 的 CI run `33834461744`（已按 `.name == "CI"` 核实）**run 级 conclusion == success**，覆盖 T4/T6/T7/T8/T9。**T4b 与实现门 r2 的后续几笔（`b21d102c2` 起）尚未拿到一轮含它们的绿 CI**——不是它们红，而是主干被并发 RFC-356 连续推红两轮（`d28a66205` 8 个 backend 分片全红、`dd06e994a` 仍红一条 `discardNodeIso` 的 act boundary），我的提交在那两轮里全部作为祖先陪跑。本地对受影响面逐轮跑绿（architecture 417 / intent 面 108 / rfc355 全套 52），但**本地不是取证**——这一格等主干转绿后补，不提前打勾 |
+| **AC-9** exact-SHA hosted CI success | ✅ | **`94df56ab8` 的 CI run `33843296722`（`name == "CI"` 已核）run 级 `conclusion == success`、35/35 全绿**，RFC-355 的 14 笔提交全部在其祖先链上（逐笔 `git merge-base --is-ancestor` 验过）。中途经历三轮红：`d28a66205`（并发 RFC-356 的 8 分片双 OS 全红）、`dd06e994a`（同上，剩一条 `discardNodeIso` act boundary）、`7af8735fe`（**我自己推红**——纯文档笔不涨账本，上一笔的四条一次性 `allowGrowth` 在我这笔变成过期项，T17 红；由并发 session 的退许可笔一并解掉）。三轮都不是 RFC-355 的实现问题，但第三轮是我的操作失误，如实记 |
 
 ### 9.2 AC-3 的诚实结论：合并到「事务机制」为止
 
@@ -243,7 +243,10 @@ composition 要 provider 适配（RFC-353 立下的 bootstrap 装配口径，形
 `68ea535e1`（先红 oracle 收成账本）→ `a6bf2193a`+`5cd217e9f`（T6 技能工件补偿归 RC）→
 `2f54a8be8`+`5cdc712a6`（T7 整目录归位）→ `9ef861059`+`948efb1d4`（T8 路由归位 + decode-call-map）
 → `7caf1e91f`+`391dd7efb`（T7 修红：Actor 收窄归 auth）→ `c31844a30`+`bfe459560`（T9 public 收口）
-→ `db8dbf424`+`bec6c29f0`（T4 大事务计算合一）→ `b21d102c2`+`b8f02ad92`+`83be39dc0`（T4b 会话事件端口）。
+→ `db8dbf424`+`bec6c29f0`（T4 大事务计算合一）→ `b21d102c2`+`b8f02ad92`+`83be39dc0`（T4b 会话事件端口）
+→ `04c97cf7a`（T10 收口）→ `1871ddaf1`（错误码清单第一次更正）→ `8f87e5a07`+`2784c7d9b`+`95ace20a8`+`bc4d0aebb`
+（实现门 r2 的四处处置 + §10）→ `7af8735fe`（AC-9 措辞更正）。共 14 笔。
+**取证**：`94df56ab8` 的 CI run `33843296722`，run 级 `conclusion == success`、35/35 全绿，14 笔全在其祖先链上。
 
 
 ## 10. 实现门（2026-09-04，两路，只审功能）

@@ -827,6 +827,46 @@ commit → repin provenance → **立刻 push**。推之前再 `git fetch` 确�
 不等就说明又有人推了，digest 要重算。中间不要插入任何耗时操作（跑测试、写文档），
 窗口越短越好。
 
+### 拷回生成产物：`git status` 回答的不是你要问的那个问题（2026-09-04 两人各踩一面）
+
+导出树跑完 census 之后要把 `architecture/*.json` 拷回真实仓库。这一步同一天被两个 session
+各踩了一种失败模式，**症状完全一样**——`git status` 显示一堆文件 modified、看上去很正常：
+
+- **少拷了一个文件**（RFC-356 owner）：为了避开别人的账本，把 `cp architecture/*.json` 改成
+  逐个列文件，漏了 `background-jobs.json`。而它记的是 `util/process.ts` 里几个 `setTimeout`
+  的**行号**——任何改动行数的提交都会动它。committed 账本停在旧行号，
+  `the seven canonical manifests are exact generated projections` 当场红。
+- **拷了但没覆盖成功**（RFC-355 owner）：同一段 `cp $TREE/architecture/*.json architecture/`
+  跑了两次都没落地。第一次靠 N1a 的 `contentDigest` 对不上才发现，第二次是顺手加了 `cmp`
+  当场抓到。
+
+两种情况下 `git status` 都照常显示 11–12 个文件 modified，因为它回答的是**「相对 HEAD 变了吗」**
+——那些文件确实变了（上一轮的产物还在），只是**没变成你这一轮要的那份**。`git diff --stat`
+同理。你要问的是第二个问题，而这两个命令都答不了。
+
+**判据两条，一起用才闭合**：
+
+1. **拷全部、再排除**，不要逐个列举要拷的。逐个列举把「全量覆盖」换成了「我记得住哪些是我的」，
+   而 `architecture/` 下有 16 个 json、其中若干不归你。反向做法是先 `cp` 全部、再对不属于自己的
+   那几个 `git checkout --` 回去——**漏的是排除项而不是产物**，而排除项漏了只会让 diff 变大、
+   当场看得见，不会静默留一份过期账本。
+2. **拷完逐文件 `cmp`**，别信 `git status`。RFC-356 owner 在下一轮按这个序列实操了一遍
+   （拷全部 → `git checkout --` 还原不属于自己的四份 → 逐文件 `cmp`），反馈是 `cmp` 那一步
+   当场就有价值——它把「我以为拷了」变成「我验过拷了」：
+
+   ```bash
+   ok=1
+   for f in "$TREE"/architecture/*.json; do
+     cmp -s "$f" "architecture/$(basename "$f")" || { echo "⚠ 未生效: $(basename "$f")"; ok=0; }
+   done
+   [ $ok -eq 1 ] && echo "逐字节一致"
+   ```
+
+**顺带一条相关的**：共用同一个 `.git` 时，别人的 commit 一落，你的 `HEAD` 就跟着动了。
+如果你正拿着**从旧 sha 导出的树**往回拷，就会把对方刚提交的账本整段回退（`why` 文本连同基线）。
+2026-09-04 实撞：差点把并发 session 的一整笔重采覆盖掉，靠 `git diff` 里出现了自己没写过的
+文案才发现。**拷回之前先 `git rev-parse HEAD`，确认它仍等于导出树的那个 sha。**
+
 ### 别人改了代码没同步 artifact 时，能不能代做
 
 判据是**这部分账本会不会被并发在制品污染**，不是"是不是我的改动"。
