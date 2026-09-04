@@ -962,7 +962,17 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 4. **`count(*)` / `sum(bigint)` 返回字符串**。前者是 int8、后者是 numeric，都超出 IEEE754 安全
    整数范围，驱动按规范交回字符串。裸 ``sql<number>`count(*)` `` 没有 mapper ⇒ 算术变拼接、
    JSON 里数字变字符串。用 Drizzle 自带的 `count()`（自带 `mapWith(Number)`）或显式
-   `.mapWith(Number)`。**普通列不受影响**——`bigint({ mode: 'number' })` 有 mapper。
+   `.mapWith(Number)`。
+   **普通列只在走 drizzle 列投影时才不受影响**——`bigint({ mode: 'number' })` 的 mapper 只在
+   那条路上参与；**裸 SQL 行不过 mapper，普通 int8 列照样交回字符串**（`db.all()` 直接吃
+   `sql` 模板、拿回原始行对象的那条路）。2026-09-04 RFC-357 实撞：分页游标直接取裸行的
+   `branch_started_at`（声明是 `integer('branch_started_at')`，普通列不是聚合），于是编码出
+   `{"branchStartedAt":"1788278410000"}`，而 `TaskPageCursorSchema` 要 `z.number().int()`
+   ⇒ **翻第二页时解不开自己刚发出去的游标**（422 `task-page-cursor-invalid`）。
+   **判据别按「是不是聚合函数」，按「这一行是不是裸 SQL 取回来的」**：是就每个数值列都要显式
+   归一（`taskListPage/projection.ts` 的 `numeric` / `nullableNumeric` / `numericOrZero`）。
+   同一处的静态守卫也因此升级为「从行类型声明取出全部数值列」而不是逐字列举字段名——
+   逐字列举正是它漏掉游标那处的原因。
 5. **布尔列被赋整数**。SQLite 没有布尔类型，`0`/`1` 就是 false/true；PostgreSQL 的 `boolean`
    拒绝整数混入（`CASE types boolean and integer cannot be matched`，42804）。`false` / `true`
    两个 dialect 都认（SQLite 3.23+），两侧可以共用同一份写法。
