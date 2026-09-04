@@ -40,7 +40,6 @@
 
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   clarifyRounds,
@@ -131,7 +130,7 @@ function parseQuestionIds(questionsJson: string): string[] {
  *  a worktree rollback (the SAME predicate submitClarifyAnswers uses: NOT inline session mode AND a
  *  pre_snapshot exists), else null. Caller has already gated kind==='self' + a non-empty worktree. */
 async function resolveSelfRollbackRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   askingNodeRunId: string,
   intermediaryNodeId: string,
   workflowSnapshot: string,
@@ -152,7 +151,7 @@ async function resolveSelfRollbackRun(
  *  (inlined to avoid a module-init import cycle — clarifyAutoDispatch is a leaf consumer). Only built
  *  for a member self run; a null-shard home skips it (see selfHomeHasOpenLedger). */
 async function buildDispatchedEntryShardResolver(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   entries: ReadonlyArray<Pick<typeof taskQuestions.$inferSelect, 'originNodeRunId' | 'sourceKind'>>,
 ): Promise<(e: { originNodeRunId: string; sourceKind: string }) => string | null> {
   const origins = Array.from(
@@ -179,7 +178,7 @@ async function buildDispatchedEntryShardResolver(
  * shim converts pre-upgrade leftovers to dispatched entries, so this ONE gate covers all owners.)
  */
 async function selfHomeHasOpenLedger(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   homeNodeId: string,
   /** RFC-172b (T6, S4): the shard of the self run being rolled back (workgroup member = assignment
@@ -253,7 +252,7 @@ async function selfHomeHasOpenLedger(
 }
 
 export interface AutoDispatchClarifyRoundArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   /** Provider-selected, bootstrap-owned post-commit memory participant. */
   memoryDistillEnqueuer: MemoryDistillEnqueuer
   /** The clarify / cross-clarify round's intermediary node_run id (= the route's :nodeRunId =
@@ -276,7 +275,8 @@ export interface AutoDispatchClarifyRoundArgs {
   /** RFC-333 T9 internal seam; public route callers use the collaboration command wrapper. */
   decisionParticipant?: ClarifySealDecisionParticipantInTx
   /** RFC-341 compiled-E2E seam. The seal primitive invokes it in the same JS stack immediately
-   * after dbTxSync commits and before any post-seal await or nested dispatch can wake recovery. */
+   * after the seal transaction commits and before any post-seal await or nested dispatch can wake
+   * recovery. */
   afterSealCommit?: () => Promise<void>
   now?: () => number
   /** Internal: binds the fresh post-seal convergence to its durable decision. */
@@ -325,7 +325,7 @@ export interface AutoDispatchClarifyDecisionResult extends AutoDispatchClarifyRo
  *  RFC-041 distill enqueue and the RFC-099 attribution freeze). Throws on a
  *  partial seal; returns the sealed question ids. */
 async function sealRoundAsWholeFinalize(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   args: AutoDispatchClarifyRoundArgs,
   round: {
     id: string
@@ -406,7 +406,7 @@ async function sealRoundAsWholeFinalize(
  *  auto-dispatch (aggregate sibling rounds → same board dispatch path; park
  *  等齐 on DESIGNER_DEFERRABLE_CONFLICTS). No-op for kind='self'. */
 async function dispatchSealedDesignerEntries(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   args: AutoDispatchClarifyRoundArgs,
   round: { kind: 'self' | 'cross'; taskId: string },
   originNodeRunId: string,
@@ -607,7 +607,7 @@ function mergeDurableDispatchResult(
 }
 
 async function rebuildCommittedClarifyDispatch(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   operationId: string,
   local: DispatchTaskQuestionsResult,
 ): Promise<DispatchTaskQuestionsResult> {
@@ -650,18 +650,20 @@ async function rebuildCommittedClarifyDispatch(
 }
 
 export async function finishCommittedClarifyAutoDispatch(input: {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
   readonly operationId: string
   readonly expectedTaskId?: string
   readonly expectedOriginNodeRunId?: string
   readonly expectedContinuationRef?: string
 }): Promise<AutoDispatchClarifyRoundResult> {
-  const operation = input.db
-    .select()
-    .from(collaborationGateOperations)
-    .where(eq(collaborationGateOperations.id, input.operationId))
-    .get()
+  const operation = (
+    await input.db
+      .select()
+      .from(collaborationGateOperations)
+      .where(eq(collaborationGateOperations.id, input.operationId))
+      .limit(1)
+  )[0]
   if (
     operation === undefined ||
     operation.id !== input.operationId ||
@@ -714,30 +716,34 @@ export async function finishCommittedClarifyAutoDispatch(input: {
     )
   }
   if (actorRole === undefined) {
-    const pending = input.db
-      .select({ id: taskQuestions.id })
-      .from(taskQuestions)
-      .where(
-        and(
-          eq(taskQuestions.taskId, operation.taskId),
-          eq(taskQuestions.originNodeRunId, originNodeRunId),
-          eq(taskQuestions.confirmation, 'open'),
-          isNotNull(taskQuestions.sealedAt),
-          isNull(taskQuestions.dispatchedAt),
-        ),
-      )
-      .get()
+    const pending = (
+      await input.db
+        .select({ id: taskQuestions.id })
+        .from(taskQuestions)
+        .where(
+          and(
+            eq(taskQuestions.taskId, operation.taskId),
+            eq(taskQuestions.originNodeRunId, originNodeRunId),
+            eq(taskQuestions.confirmation, 'open'),
+            isNotNull(taskQuestions.sealedAt),
+            isNull(taskQuestions.dispatchedAt),
+          ),
+        )
+        .limit(1)
+    )[0]
     if (pending !== undefined) {
       throw new ConflictError(
         'clarify-convergence-conflict',
         `clarify operation '${input.operationId}' has unfinished work without a durable actor role`,
       )
     }
-    const round = input.db
-      .select({ kind: clarifyRounds.kind, status: clarifyRounds.status })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, receipt.result.roundId))
-      .get()
+    const round = (
+      await input.db
+        .select({ kind: clarifyRounds.kind, status: clarifyRounds.status })
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.id, receipt.result.roundId))
+        .limit(1)
+    )[0]
     if (round === undefined || round.status !== 'answered') {
       throw new ConflictError(
         'clarify-convergence-stale',
@@ -805,7 +811,7 @@ export async function autoDispatchClarifyRoundWithDecision(
   }
   const directive = args.directive ?? 'continue'
   const decision = args.decision ?? {}
-  const replay = replayCommittedClarifyDecision({
+  const replay = await replayCommittedClarifyDecision({
     db: args.db,
     taskId: round.taskId,
     originNodeRunId: args.originNodeRunId,
@@ -834,7 +840,7 @@ export async function autoDispatchClarifyRoundWithDecision(
     }
   }
 
-  const prepared = prepareClarifyDecision({
+  const prepared = await prepareClarifyDecision({
     db: args.db,
     taskId: round.taskId,
     originNodeRunId: args.originNodeRunId,

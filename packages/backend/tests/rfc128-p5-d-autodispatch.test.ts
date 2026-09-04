@@ -85,7 +85,7 @@ async function commitClarifyDecisionThenInterrupt(input: {
     .where(eq(tasks.id, input.taskId))
     .get()!
   const directive = input.directive ?? 'continue'
-  const prepared = prepareClarifyDecision({
+  const prepared = await prepareClarifyDecision({
     db: input.db,
     taskId: input.taskId,
     originNodeRunId: input.originNodeRunId,

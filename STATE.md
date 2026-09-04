@@ -12,7 +12,12 @@
 > 同批合一的原子（每个都是一份实现 + PG 副本退役）：committed-event append、node_runs 铸造、human-gate
 > 任务跃迁 / continuation 准入 / 决定接受、human-gate 操作日志（journal）与持久化、collaboration 事件形状。
 > **T2a（反问下发命令端口）已修**：`questionDispatchCommand.ts` 一份实现，PG daemon 注入 `questionDispatches`。
-> **下一步**：T2b 快速澄清 / T2c 评审决定（各自的 dbTxSync 事务体按 T1 同法迁到 DatabaseSession）→ T7b/T7c/T7d/T7e → W3 统一启动序列。
+> **T2b（快速澄清决定）已修**：seal（`legacySqliteClarify/seal.ts`）/ clarify decision participant / autoDispatch 整条链
+> 迁到 `DatabaseSession`（事务体开头 `lockAggregateRoot(tasks)`），`reconcileRoundEntriesTx` / `setNodeClarifyDirectiveTx`
+> 随之中立；`clarifyDecisionCommand.ts` 一份实现，PG daemon 注入 `clarifyDecisions`（蒸馏入队走 PG 侧 memory 命令面）；
+> 自澄清回滚的 effect 观察者按客户端品牌挑两份真实现之一（fenced-dispatch 入账，W4 合一）。
+> `rfc359-t2b-clarify-decision.test.ts` 五个场景两引擎各绿。
+> **下一步**：T2c 评审决定（`legacySqliteReview.ts#submitReviewDecisionUnlocked` 的 dbTxSync 事务体按 T1 同法迁到 DatabaseSession）→ T7b/T7c/T7d/T7e → W3 统一启动序列。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

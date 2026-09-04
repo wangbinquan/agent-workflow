@@ -26,7 +26,11 @@ import { humanGateComposition } from '@/services/humanGateComposition'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import { dbTxSync } from '@/db/txSync'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import {
@@ -124,8 +128,9 @@ function graphForRound(round: ClarifyRoundRow) {
 /** RFC-128 P2-1 — tx-aware core of {@link reconcileTaskQuestionsForRound}: upsert a
  *  round's desired handler entries onto the GIVEN transaction. Extracted so the
  *  per-question seal primitive (services/clarifySeal.ts) can reconcile INSIDE its own
- *  single atomic dbTxSync (dbTxSync does not nest). Idempotent; preserves the manual
- *  overlay (override / confirmation / staged / sealed / audit) on existing rows.
+ *  single atomic transaction (RFC-359: a `DatabaseTransaction`, both engines). Idempotent;
+ *  preserves the manual overlay (override / confirmation / staged / sealed / audit) on
+ *  existing rows.
  *
  *  RFC-162 归一: reconcile emits exactly ONE entry per question — the ASKER (self/questioner).
  *  The designer-by-default gate (per-question seal + scope + directive) is DELETED; a designer
@@ -134,7 +139,10 @@ function graphForRound(round: ClarifyRoundRow) {
  *  for the asker rows; it must not touch the manually-added designer rows). The asker rows are
  *  UNCONDITIONAL (created lazily on first list / seal) and their `sealed_at` is stamped later by
  *  sealRoundQuestions. */
-export function reconcileRoundEntriesTx(tx: DbTxSync, round: ClarifyRoundRow): void {
+export async function reconcileRoundEntriesTx(
+  tx: DatabaseTransaction,
+  round: ClarifyRoundRow,
+): Promise<void> {
   if (round.status === 'canceled' || round.status === 'abandoned') return
   const questions = parseQuestions(round.questionsJson)
   if (questions.length === 0) return
@@ -145,7 +153,8 @@ export function reconcileRoundEntriesTx(tx: DbTxSync, round: ClarifyRoundRow): v
   })
   const now = Date.now()
   for (const d of desired) {
-    tx.insert(taskQuestions)
+    await tx
+      .insert(taskQuestions)
       .values({
         id: ulid(),
         taskId: round.taskId,
@@ -170,17 +179,19 @@ export function reconcileRoundEntriesTx(tx: DbTxSync, round: ClarifyRoundRow): v
           updatedAt: now,
         },
       })
-      .run()
   }
 }
 
 /** One clarify_round → upsert its desired handler entries (idempotent; preserves
  *  override / confirmation / staged / sealed / audit on existing rows). Thin wrapper that
  *  runs {@link reconcileRoundEntriesTx} in its own atomic transaction. */
-export function reconcileTaskQuestionsForRound(db: DbClient, round: ClarifyRoundRow): void {
+export async function reconcileTaskQuestionsForRound(
+  db: ProviderNeutralDatabase,
+  round: ClarifyRoundRow,
+): Promise<void> {
   // RFC-126: terminal/aborted rounds produce NO board entries — skip before opening a tx.
   if (round.status === 'canceled' || round.status === 'abandoned') return
-  dbTxSync(db, (tx) => reconcileRoundEntriesTx(tx, round))
+  await databaseSessionFor(db).transaction((tx) => reconcileRoundEntriesTx(tx, round))
 }
 
 /** RFC-128 P2-2 — the question ids of a clarify round (located by its origin node-run id)
@@ -190,7 +201,7 @@ export function reconcileTaskQuestionsForRound(db: DbClient, round: ClarifyRound
  *  Empty for a round with no prior per-question seal → the quick channel stays byte-for-
  *  byte unchanged (golden-lock). */
 export async function loadSealedQuestionIds(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   originNodeRunId: string,
 ): Promise<Set<string>> {
   const rows = await db
@@ -284,7 +295,7 @@ export async function listTaskQuestions(
   // Reconcile before the terminal read-model filter so a task whose first board
   // read happens after completion still retains its historical audit ledger.
   const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
-  for (const round of rounds) reconcileTaskQuestionsForRound(db, round)
+  for (const round of rounds) await reconcileTaskQuestionsForRound(db, round)
 
   // RFC-202's clarify/review inboxes hide every terminal task before projecting
   // actionable human work. Keep the task-question board on the same read-side

@@ -260,7 +260,7 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     )
     expect(participant).toContain('tx.insert(taskQuestions)')
     expect(seal).toContain('reconcileRoundEntriesTx(tx, {')
-    expect(questions).toContain('export function reconcileRoundEntriesTx(')
+    expect(questions).toContain('export async function reconcileRoundEntriesTx(')
   })
 
   test('T7 manual questions persist one operation and defer active-owner park to settle', () => {

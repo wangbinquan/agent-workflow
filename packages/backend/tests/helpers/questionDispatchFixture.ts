@@ -141,11 +141,16 @@ export async function seedRound(
   taskId: string,
   kind: 'self' | 'cross',
   questions: ClarifyQuestion[],
+  /** RFC-359 T2b：`awaiting_human` = 还没答的轮（澄清 node_run 也停在 awaiting_human），给快速澄清决定用。 */
+  over: { status?: 'answered' | 'awaiting_human' } = {},
 ): Promise<{ roundId: string; origin: string }> {
+  const open = over.status === 'awaiting_human'
   const askingRunId = await seedRun(db, taskId, kind === 'cross' ? ASKER : DESIGNER, {
     status: 'done',
   })
-  const intRunId = await seedRun(db, taskId, kind === 'cross' ? CC : CL, { status: 'done' })
+  const intRunId = await seedRun(db, taskId, kind === 'cross' ? CC : CL, {
+    status: open ? 'awaiting_human' : 'done',
+  })
   const roundId = ulid()
   await db.insert(clarifyRounds).values({
     id: roundId,
@@ -158,10 +163,10 @@ export async function seedRound(
     targetConsumerNodeId: kind === 'cross' ? DESIGNER : null,
     iteration: 0,
     questionsJson: JSON.stringify(questions),
-    answersJson: JSON.stringify(questions.map((q) => ans(q.id))),
+    answersJson: open ? '[]' : JSON.stringify(questions.map((q) => ans(q.id))),
     directive: 'continue',
-    status: 'answered',
-    answeredAt: Date.now(),
+    status: open ? 'awaiting_human' : 'answered',
+    answeredAt: open ? null : Date.now(),
   })
   return { roundId, origin: intRunId }
 }

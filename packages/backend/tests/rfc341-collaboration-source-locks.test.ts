@@ -79,10 +79,15 @@ describe('RFC-341 collaboration owner source locks', () => {
     const distillAt = autoDispatch.indexOf('await args.memoryDistillEnqueuer', forwardedBarrierAt)
     const askerReadAt = autoDispatch.indexOf('const askerRows =', roundAt)
     const nestedDispatchAt = autoDispatch.indexOf('dispatchTaskQuestions(', askerReadAt)
-    const txAt = seal.indexOf('const committed = dbTxSync(args.db, (tx) => {')
+    const txAt = seal.indexOf(
+      'const committed = await databaseSessionFor(args.db).transaction(async (tx) => {',
+    )
     const postCommitAt = seal.indexOf('await args.afterCommit?.()', txAt)
+    // RFC-359：事务体本身是 async（两个引擎一份实现），「提交后第一件事是 afterCommit」的锁改量
+    // 事务回调收尾（`    })`）到 afterCommit 之间不得再有 await/yield。
+    const txCloseAt = seal.lastIndexOf('\n    })\n', postCommitAt)
     const returnAt = seal.indexOf('return committed', postCommitAt)
-    const firstPostCommitAwait = seal.slice(txAt, postCommitAt).match(/\b(?:await|yield)\b/)
+    const firstPostCommitAwait = seal.slice(txCloseAt, postCommitAt).match(/\b(?:await|yield)\b/)
 
     expect(wrapperAt).toBeGreaterThan(-1)
     expect(replayReturnAt).toBeGreaterThan(replayAt)
@@ -98,6 +103,7 @@ describe('RFC-341 collaboration owner source locks', () => {
     expect(nestedDispatchAt).toBeGreaterThan(askerReadAt)
     expect(autoDispatch).not.toContain('await args.afterSealCommit?.()')
     expect(postCommitAt).toBeGreaterThan(txAt)
+    expect(txCloseAt).toBeGreaterThan(txAt)
     expect(firstPostCommitAwait).toBeNull()
     expect(returnAt).toBeGreaterThan(postCommitAt)
   })

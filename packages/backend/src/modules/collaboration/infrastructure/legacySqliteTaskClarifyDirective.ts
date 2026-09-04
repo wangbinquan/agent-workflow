@@ -15,8 +15,11 @@
 import { and, eq, ne } from 'drizzle-orm'
 import { isClarifyAskingNode, type ClarifyDirective } from '@agent-workflow/shared'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { taskNodeClarifyDirectives } from '@/db/schema'
 
 /**
@@ -40,7 +43,7 @@ export function isAskingNodeInSnapshot(snapshotJson: string, nodeId: string): bo
  * `undefined` when no row exists (⇒ caller treats as 'continue').
  */
 export async function getNodeClarifyDirective(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   shardKey?: string | null,
@@ -57,7 +60,7 @@ export async function getNodeClarifyDirective(
  * the stop it overrides. Returns `undefined` when no row exists.
  */
 export async function getNodeClarifyDirectiveRow(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   /**
@@ -93,7 +96,7 @@ export async function getNodeClarifyDirectiveRow(
  * behaviorally identical to an absent one.
  */
 export async function setNodeClarifyDirective(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   directive: ClarifyDirective,
@@ -101,23 +104,24 @@ export async function setNodeClarifyDirective(
   shardKey?: string | null,
   now = Date.now(),
 ): Promise<void> {
-  dbTxSync(db, (tx) => {
-    setNodeClarifyDirectiveTx(tx, taskId, nodeId, directive, setBy, shardKey ?? null, now)
-  })
+  await databaseSessionFor(db).transaction((tx) =>
+    setNodeClarifyDirectiveTx(tx, taskId, nodeId, directive, setBy, shardKey ?? null, now),
+  )
 }
 
-/** RFC-341 — transaction participant used by the clarify decision seal. */
-export function setNodeClarifyDirectiveTx(
-  tx: DbTxSync,
+/** RFC-341 — transaction participant used by the clarify decision seal (RFC-359: both engines). */
+export async function setNodeClarifyDirectiveTx(
+  tx: DatabaseTransaction,
   taskId: string,
   nodeId: string,
   directive: ClarifyDirective,
   setBy: string | null,
   shardKey: string | null,
   now: number,
-): void {
+): Promise<void> {
   const key = shardKey ?? ''
-  tx.insert(taskNodeClarifyDirectives)
+  await tx
+    .insert(taskNodeClarifyDirectives)
     .values({ taskId, nodeId, shardKey: key, directive, setBy, updatedAt: now })
     .onConflictDoUpdate({
       target: [
@@ -127,13 +131,13 @@ export function setNodeClarifyDirectiveTx(
       ],
       set: { directive, setBy, updatedAt: now },
     })
-    .run()
   // RFC-207 — a NODE-level 'continue' is the "un-stop everything here" gesture.
   // Without this the per-asker rows would keep winning the resolution above, and
   // the canvas toggle would read as continue while an asker stayed silenced —
   // a stop with no way back.
   if (key === '' && directive === 'continue') {
-    tx.delete(taskNodeClarifyDirectives)
+    await tx
+      .delete(taskNodeClarifyDirectives)
       .where(
         and(
           eq(taskNodeClarifyDirectives.taskId, taskId),
@@ -141,7 +145,6 @@ export function setNodeClarifyDirectiveTx(
           ne(taskNodeClarifyDirectives.shardKey, ''),
         ),
       )
-      .run()
   }
 }
 
@@ -150,7 +153,7 @@ export function setNodeClarifyDirectiveTx(
  * asking-agent node's toggle; nodes with no row are absent (⇒ 'continue').
  */
 export async function listNodeClarifyDirectives(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
 ): Promise<Record<string, ClarifyDirective>> {
   const rows = await db

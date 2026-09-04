@@ -252,7 +252,7 @@ import {
   createSqliteHumanGateTerminalSweepCommand,
 } from '@/modules/collaboration/composition'
 import {
-  createSqliteClarifyDecisionCommand,
+  createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createSqliteReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
@@ -1845,10 +1845,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
           taskExecutionReadModels: readModels,
           reviewDecisions: createSqliteReviewDecisionCommand({ db, appHome: Paths.root }),
           questionDispatches: createQuestionDispatchCommand(db),
-          clarifyDecisions: createSqliteClarifyDecisionCommand(
-            db,
-            memoryOperations.distillCommands,
-          ),
+          clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
         })
         collaborationContext = routeCollaborationContext
         return {

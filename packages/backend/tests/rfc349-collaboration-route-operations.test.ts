@@ -106,7 +106,7 @@ describe('RFC-349 collaboration route operations', () => {
     for (const factory of [
       'createSqliteReviewDecisionCommand',
       'createQuestionDispatchCommand',
-      'createSqliteClarifyDecisionCommand',
+      'createClarifyDecisionCommand',
     ]) {
       expect(start).toContain(factory)
       expect(composition).toContain(`export { ${factory} }`)
@@ -114,12 +114,12 @@ describe('RFC-349 collaboration route operations', () => {
     }
     expect(start).toContain('reviewDecisions: createSqliteReviewDecisionCommand')
     expect(start).toContain('questionDispatches: createQuestionDispatchCommand')
-    expect(start).toContain('clarifyDecisions: createSqliteClarifyDecisionCommand')
+    expect(start).toContain('clarifyDecisions: createClarifyDecisionCommand')
 
     for (const path of [
       'src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts',
       'src/modules/collaboration/infrastructure/questionDispatchCommand.ts',
-      'src/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition.ts',
+      'src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
     ]) {
       const text = source(path)
       expect(text, path).toContain('../composition/commandContext')

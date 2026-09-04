@@ -356,8 +356,8 @@
       "id": "rfc349-provider-specific-business-dependencies",
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
-      "baseline": 66,
-      "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。"
+      "baseline": 65,
+      "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。 RFC-359 W1-T2a：`services/questionDispatchComposition.ts` facade 改指 provider-中立的 `questionDispatchCommand`，67 → 66。 RFC-359 W1-T2b：`services/clarifyDecisionComposition.ts` facade 改指 provider-中立的 `clarifyDecisionCommand`，66 → 65。"
     },
     {
       "id": "rfc328-cross-context-provider-bridge-debt",
@@ -429,7 +429,7 @@
       "baseline": 6376,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T2a：questionDispatchCommand.ts 一份实现替代 SQLite 专属组合，PG daemon 注入 questionDispatches；taskDagCollaborationOperations 改动态 import。下一笔不涨即删。"
+        "why": "RFC-359 W1-T2b：clarifyDecisionCommand.ts 一份实现替代 SQLite 专属组合，seal / clarifyDecision 参与者改用 task-execution 的中立原子（两条 cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 clarifyDecisions。下一笔不涨即删。"
       }
     },
     {
@@ -453,7 +453,7 @@
       "baseline": 5243,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T2a：questionDispatchCommand.ts 一份实现替代 SQLite 专属组合，PG daemon 注入 questionDispatches；taskDagCollaborationOperations 改动态 import。下一笔不涨即删。"
+        "why": "RFC-359 W1-T2b：clarifyDecisionCommand.ts 一份实现替代 SQLite 专属组合，seal / clarifyDecision 参与者改用 task-execution 的中立原子（两条 cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 clarifyDecisions。下一笔不涨即删。"
       }
     },
     {

@@ -1,22 +1,27 @@
-// RFC-333 / RFC-349 — SQLite collaboration clarify decision transaction participant.
+// RFC-333 / RFC-349 / RFC-359 — collaboration clarify decision transaction participant.
+//
+// RFC-359 W1-T2b：一份实现，两个引擎。此前只有 SQLite 的 dbTxSync 版本（journal 用
+// `SqliteHumanGateOperationStore`、决定接受走 `bindTaskDecisionParticipantInTx`），PostgreSQL
+// 上快速澄清命令根本没有实现。现在 replay / prepare 跑在 `ProviderNeutralDatabase` 上，
+// 参与者在 seal 的 `DatabaseTransaction` 里复用已合一的原子：`DatabaseHumanGateOperationJournal`
+// / `acceptHumanGateDecisionTx` / `appendHumanGateDecisionCommittedEvent`。
+// 文件名沿用（多条源锁钉住路径），W4 pair-deletion 时统一改名。
 
 import { and, desc, eq, isNotNull, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { collaborationGateOperations, nodeRuns } from '@/db/schema'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/public/types'
-import {
-  bindTaskDecisionParticipantInTx,
-  humanGateNodeProjectionFence,
-} from '@/modules/task-execution/public/participants'
+import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
 import type { ClarifySealDecisionParticipantInTx } from './legacySqliteClarify/seal'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyAnswer, ClarifyDirective, TaskActorRole } from '@agent-workflow/shared'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/public/participants'
+import { appendHumanGateDecisionCommittedEvent } from './collaborationCommittedEvents'
 import {
   canonicalHumanGateRequestHash,
   canonicalHumanGateValueJson,
@@ -31,7 +36,10 @@ import {
   type ClarifyDecisionReceiptEnvelope,
 } from '../domain/clarifyDecision'
 import { gateDecisionReceipt } from '../domain/gateReceipt'
-import { SqliteHumanGateOperationStore } from './sqliteHumanGateOperationStore'
+import {
+  DatabaseHumanGateOperationJournal,
+  type HumanGateOperationJournal,
+} from './humanGateOperationJournal'
 
 export interface ClarifyDecisionArgs {
   readonly expectedTaskRevision?: number
@@ -87,16 +95,16 @@ function projectionMember(row: typeof nodeRuns.$inferSelect) {
   }
 }
 
-function ensureLegacyClarifyGateRevisionTx(input: {
-  tx: DbTxSync
-  operations: SqliteHumanGateOperationStore
+async function ensureLegacyClarifyGateRevisionTx(input: {
+  tx: DatabaseTransaction
+  operations: HumanGateOperationJournal
   taskId: string
   originNodeRunId: string
   expectedTaskRevision: number
   now: number
-}): number {
+}): Promise<number> {
   const gateRef = `clarify:${input.originNodeRunId}`
-  const current = input.operations.latestGateRevisionTx({
+  const current = await input.operations.latestGateRevisionTx({
     tx: input.tx,
     gateKind: 'clarify',
     gateRef,
@@ -121,14 +129,14 @@ function ensureLegacyClarifyGateRevisionTx(input: {
       ),
     },
   }
-  const begun = input.operations.beginTx({
+  const begun = await input.operations.beginTx({
     tx: input.tx,
     operationId: ulid(input.now),
     request,
     idempotencyKey: `legacy:clarify:${input.originNodeRunId}:1`,
     now: input.now,
   })
-  input.operations.commitTx({
+  await input.operations.commitTx({
     tx: input.tx,
     operationId: begun.operation.id,
     expectedClaimEpoch: begun.operation.claimEpoch,
@@ -140,7 +148,7 @@ function ensureLegacyClarifyGateRevisionTx(input: {
     }),
     now: input.now,
   })
-  input.operations.completeTx({
+  await input.operations.completeTx({
     tx: input.tx,
     operationId: begun.operation.id,
     expectedClaimEpoch: begun.operation.claimEpoch,
@@ -149,8 +157,8 @@ function ensureLegacyClarifyGateRevisionTx(input: {
   return 1
 }
 
-export function replayCommittedClarifyDecision(input: {
-  db: DbClient
+export async function replayCommittedClarifyDecision(input: {
+  db: ProviderNeutralDatabase
   taskId: string
   originNodeRunId: string
   roundId: string
@@ -159,10 +167,10 @@ export function replayCommittedClarifyDecision(input: {
   answers: readonly ClarifyAnswer[]
   directive: ClarifyDirective
   decision: ClarifyDecisionArgs
-}): ClarifyDecisionReceiptEnvelope | null {
+}): Promise<ClarifyDecisionReceiptEnvelope | null> {
   const gateRef = `clarify:${input.originNodeRunId}`
   const payload = clarifyDecisionPayload(input)
-  const rows = input.db
+  const rows = await input.db
     .select()
     .from(collaborationGateOperations)
     .where(
@@ -174,7 +182,6 @@ export function replayCommittedClarifyDecision(input: {
       ),
     )
     .orderBy(desc(collaborationGateOperations.createdAt))
-    .all()
   const explicit = input.decision.idempotencyKey
   const candidate = rows.find((row) => {
     if (explicit !== undefined && row.idempotencyKey !== explicit) return false
@@ -229,8 +236,8 @@ export function replayCommittedClarifyDecision(input: {
   return decodeClarifyDecisionReceipt(candidate.receiptJson!)
 }
 
-export function prepareClarifyDecision(input: {
-  db: DbClient
+export async function prepareClarifyDecision(input: {
+  db: ProviderNeutralDatabase
   taskId: string
   originNodeRunId: string
   roundId: string
@@ -240,22 +247,23 @@ export function prepareClarifyDecision(input: {
   directive: ClarifyDirective
   taskRevision: number
   decision: ClarifyDecisionArgs
-}): PreparedClarifyDecision {
+}): Promise<PreparedClarifyDecision> {
   const gateRef = `clarify:${input.originNodeRunId}`
   const latestGateRevision =
-    input.db
-      .select({ revision: collaborationGateOperations.resultGateRevision })
-      .from(collaborationGateOperations)
-      .where(
-        and(
-          eq(collaborationGateOperations.gateKind, 'clarify'),
-          eq(collaborationGateOperations.gateRef, gateRef),
-          isNotNull(collaborationGateOperations.resultGateRevision),
-        ),
-      )
-      .orderBy(desc(collaborationGateOperations.resultGateRevision))
-      .limit(1)
-      .get()?.revision ?? 0
+    (
+      await input.db
+        .select({ revision: collaborationGateOperations.resultGateRevision })
+        .from(collaborationGateOperations)
+        .where(
+          and(
+            eq(collaborationGateOperations.gateKind, 'clarify'),
+            eq(collaborationGateOperations.gateRef, gateRef),
+            isNotNull(collaborationGateOperations.resultGateRevision),
+          ),
+        )
+        .orderBy(desc(collaborationGateOperations.resultGateRevision))
+        .limit(1)
+    )[0]?.revision ?? 0
   const capturedGateRevision =
     input.decision.expectedGateRevision ?? (latestGateRevision === 0 ? 1 : latestGateRevision)
   const request: CanonicalHumanGateRequest = {
@@ -281,7 +289,7 @@ export function prepareClarifyDecision(input: {
   const idempotencyKey = input.decision.idempotencyKey ?? deriveHumanGateCompatibilityKey(request)
   const capture: PreparedClarifyDecision['capture'] = {}
   const participant: ClarifySealDecisionParticipantInTx = {
-    acceptTx(sealed) {
+    async acceptTx(sealed) {
       if (
         sealed.taskId !== input.taskId ||
         sealed.roundId !== input.roundId ||
@@ -293,8 +301,8 @@ export function prepareClarifyDecision(input: {
           `clarify round ${input.originNodeRunId} changed before decision commit`,
         )
       }
-      const operations = new SqliteHumanGateOperationStore()
-      const currentGateRevision = ensureLegacyClarifyGateRevisionTx({
+      const operations = new DatabaseHumanGateOperationJournal()
+      const currentGateRevision = await ensureLegacyClarifyGateRevisionTx({
         tx: sealed.tx,
         operations,
         taskId: input.taskId,
@@ -308,7 +316,7 @@ export function prepareClarifyDecision(input: {
           `clarify gate revision changed (expected ${capturedGateRevision}, current ${currentGateRevision})`,
         )
       }
-      const begun = operations.beginTx({
+      const begun = await operations.beginTx({
         tx: sealed.tx,
         operationId,
         request,
@@ -325,20 +333,19 @@ export function prepareClarifyDecision(input: {
         capture.envelope = decodeClarifyDecisionReceipt(begun.operation.receiptJson)
         return
       }
-      operations.markPreparedTx({
+      await operations.markPreparedTx({
         tx: sealed.tx,
         operationId: begun.operation.id,
         expectedClaimEpoch: begun.operation.claimEpoch,
         manifestJson,
         now: sealed.now,
       })
-      const sourceRows = sealed.tx
+      const sourceRows = await sealed.tx
         .select()
         .from(nodeRuns)
         .where(inArray(nodeRuns.id, [input.originNodeRunId]))
         .limit(1)
-        .all()
-      const accepted = bindTaskDecisionParticipantInTx(sealed.tx).acceptGateDecisionTx({
+      const accepted = await acceptHumanGateDecisionTx(sealed.tx, {
         taskId: input.taskId,
         gate: { kind: 'clarify', ref: gateRef },
         expectedTaskRevision: request.expectedTaskRevision,
@@ -375,20 +382,20 @@ export function prepareClarifyDecision(input: {
           roundFullySealed: sealed.roundFullySealed,
         },
       }
-      operations.commitTx({
+      await operations.commitTx({
         tx: sealed.tx,
         operationId: begun.operation.id,
         expectedClaimEpoch: begun.operation.claimEpoch,
         receiptJson: encodeClarifyDecisionReceipt(envelope),
         now: sealed.now,
       })
-      operations.completeTx({
+      await operations.completeTx({
         tx: sealed.tx,
         operationId: begun.operation.id,
         expectedClaimEpoch: begun.operation.claimEpoch,
         now: sealed.now,
       })
-      const collaborationEventRef = appendHumanGateDecisionCommittedEventTx(sealed.tx, {
+      const collaborationEventRef = await appendHumanGateDecisionCommittedEvent(sealed.tx, {
         family: 'clarify',
         gate: {
           taskId: input.taskId,

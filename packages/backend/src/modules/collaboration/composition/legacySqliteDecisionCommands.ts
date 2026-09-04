@@ -4,4 +4,4 @@
 
 export { createSqliteReviewDecisionCommand } from '../infrastructure/legacySqliteReviewDecisionComposition'
 export { createQuestionDispatchCommand } from '../infrastructure/questionDispatchCommand'
-export { createSqliteClarifyDecisionCommand } from '../infrastructure/legacySqliteClarifyDecisionComposition'
+export { createClarifyDecisionCommand } from '../infrastructure/clarifyDecisionCommand'

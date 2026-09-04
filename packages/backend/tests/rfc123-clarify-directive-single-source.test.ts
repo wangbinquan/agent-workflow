@@ -435,7 +435,9 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     // cross 的 asking = questioner——同一字段覆盖两 kind)。RFC-341 将它收进同一个 seal
     // dbTxSync，避免 answer 已提交但 stop directive 丢失。prettier 可能换行,归一化匹配。
     const norm = (s: string) => s.replace(/\s+/g, ' ')
-    const txAt = sealSrc.indexOf('const committed = dbTxSync(args.db, (tx) => {')
+    const txAt = sealSrc.indexOf(
+      'const committed = await databaseSessionFor(args.db).transaction(async (tx) => {',
+    )
     const directiveAt = sealSrc.indexOf('setNodeClarifyDirectiveTx(', txAt)
     const afterCommitAt = sealSrc.indexOf('await args.afterCommit?.()', directiveAt)
 

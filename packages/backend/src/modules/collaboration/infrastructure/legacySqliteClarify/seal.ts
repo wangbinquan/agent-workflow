@@ -4,7 +4,8 @@
 // centralized-answer pane (P4) build on. It seals a SUBSET of a clarify round's
 // questions without minting any rerun (the defer/control channel; the quick-channel
 // rerun mint stays in clarify.ts/crossClarify.ts). The ENTIRE sequence runs inside ONE
-// dbTxSync (RFC-128 P2-1): the round + its entries are re-read inside the transaction
+// DatabaseSession transaction (RFC-128 P2-1; RFC-359: one body, both engines): the round + its
+// entries are re-read inside the transaction
 // and every write commits atomically, so two overlapping seals on the same round cannot
 // lose-update answers_json or land "all sealed but round still awaiting_human". For each
 // call it:
@@ -36,8 +37,12 @@
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  engineOf,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify/service'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
@@ -56,13 +61,13 @@ import {
   type TaskActorRole,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
-import { appendHumanGateDecisionCommittedEventTx } from '@/modules/collaboration/public/participants'
+import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
+import { appendHumanGateDecisionCommittedEvent } from '../collaborationCommittedEvents'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 export interface SealRoundQuestionsArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   /** The clarify round's intermediary node_run id (= clarify_rounds.intermediaryNodeRunId
    *  = task_questions.originNodeRunId). Locates the round to seal into. */
   originNodeRunId: string
@@ -114,15 +119,16 @@ export interface SealRoundQuestionsArgs {
    * quick channel supplies it so answer sealing and durable continuation
    * admission share one commit; the deferred control channel omits it. */
   decisionParticipant?: ClarifySealDecisionParticipantInTx
-  /** RFC-341 compiled-E2E seam. Invoked in the seal primitive immediately after dbTxSync returns,
-   * before this frame reaches any await/yield or publishes post-commit events. */
+  /** RFC-341 compiled-E2E seam. Invoked in the seal primitive immediately after the seal
+   * transaction commits, before this frame reaches any other await/yield or publishes post-commit
+   * events. */
   afterCommit?: () => Promise<void>
   now?: () => number
 }
 
 export interface ClarifySealDecisionParticipantInTx {
   acceptTx(input: {
-    readonly tx: DbTxSync
+    readonly tx: DatabaseTransaction
     readonly taskId: string
     readonly roundId: string
     readonly originNodeRunId: string
@@ -132,7 +138,7 @@ export interface ClarifySealDecisionParticipantInTx {
     readonly sealedQuestionIds: readonly string[]
     readonly roundFullySealed: boolean
     readonly now: number
-  }): void
+  }): Promise<void>
 }
 
 export interface SealRoundQuestionsResult {
@@ -169,10 +175,11 @@ function parseJsonRecord<T extends Record<string, unknown>>(json: string | null)
 }
 
 /** RFC-128 §7/§10 — seal a subset of a clarify round's questions (control channel; no
- *  rerun mint). The whole sequence runs in ONE dbTxSync (P2-1): the round + entries are
- *  re-read inside the transaction (no TOCTOU) and all writes commit atomically. Async
- *  signature, fully-synchronous body (dbTxSync requires it) — `await`-able by callers and
- *  rejects cleanly when a guard throws. See the file header for the full contract. */
+ *  rerun mint). The whole sequence runs in ONE transaction (P2-1): the round + entries are
+ *  re-read inside the transaction (no TOCTOU) and all writes commit atomically. RFC-359: the
+ *  transaction is a `DatabaseSession` transaction — one body, both engines; PostgreSQL
+ *  serializes same-task seals / dispatches on the task aggregate-root row lock. Rejects
+ *  cleanly when a guard throws. See the file header for the full contract. */
 export async function sealRoundQuestions(
   args: SealRoundQuestionsArgs,
 ): Promise<SealRoundQuestionsResult> {
@@ -183,7 +190,7 @@ export async function sealRoundQuestions(
   // already read lockedIds (empty) and is about to write a stale whole-round answersJson over it
   // (data loss, breaks P2-2). The taskId is read first (for the lock); the tx re-reads the round
   // (TOCTOU-free). Lock order: sealRoundQuestions is HTTP-route-only (never under the scheduler's A),
-  // takes B alone → no A→B/B→A cycle. The directive participant writes in the same short dbTxSync.
+  // takes B alone → no A→B/B→A cycle. The directive participant writes in the same short tx.
   const taskIdRow = (
     await args.db
       .select({ taskId: clarifyRounds.taskId })
@@ -192,14 +199,21 @@ export async function sealRoundQuestions(
       .limit(1)
   )[0]
   const runSealTx = async () => {
-    const committed = dbTxSync(args.db, (tx) => {
+    const committed = await databaseSessionFor(args.db).transaction(async (tx) => {
+      // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发 seal / dispatch 靠任务聚合根行锁串行
+      // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。round 缺失时不加锁，让下面抛 NotFound。
+      if (taskIdRow !== undefined) {
+        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskIdRow.taskId)
+      }
       // Re-read the round INSIDE the tx so a concurrent seal's committed answers/status are
       // observed (TOCTOU-free).
-      const round = tx
-        .select()
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.intermediaryNodeRunId, args.originNodeRunId))
-        .all()[0]
+      const round = (
+        await tx
+          .select()
+          .from(clarifyRounds)
+          .where(eq(clarifyRounds.intermediaryNodeRunId, args.originNodeRunId))
+          .limit(1)
+      )[0]
       if (round === undefined) {
         throw new NotFoundError(
           'clarify-round-not-found',
@@ -219,11 +233,13 @@ export async function sealRoundQuestions(
       // must independently refuse to persist answers into a task that is
       // already done/canceled. Same-tx read keeps it TOCTOU-free. failed /
       // interrupted stay answerable (revivable, design §1).
-      const owningTask = tx
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, round.taskId))
-        .all()[0]
+      const owningTask = (
+        await tx
+          .select({ status: tasks.status })
+          .from(tasks)
+          .where(eq(tasks.id, round.taskId))
+          .limit(1)
+      )[0]
       if (
         owningTask !== undefined &&
         (owningTask.status === 'done' || owningTask.status === 'canceled')
@@ -261,7 +277,7 @@ export async function sealRoundQuestions(
       //            pre-RFC-136 behaviour. echo entries (RFC-134, born-dispatched) neither
       //            veto nor get re-stamped: the receipt card reads the injection face, not
       //            the seal face.
-      const existingEntries = tx
+      const existingEntries = await tx
         .select({
           questionId: taskQuestions.questionId,
           sealedAt: taskQuestions.sealedAt,
@@ -271,7 +287,6 @@ export async function sealRoundQuestions(
         })
         .from(taskQuestions)
         .where(eq(taskQuestions.originNodeRunId, args.originNodeRunId))
-        .all()
       const alreadySealed = new Set<string>()
       if (round.status === 'answered') for (const q of questions) alreadySealed.add(q.id)
       for (const e of existingEntries) if (e.sealedAt !== null) alreadySealed.add(e.questionId)
@@ -376,7 +391,8 @@ export async function sealRoundQuestions(
       // + answeredAt) only when fully sealed NOW (RFC-136: an answered round being re-answered
       // keeps its original answeredAt/answeredBy/directive). Keep status 'awaiting_human' on a
       // partial seal (NEVER a new DB 'partial' status — RFC-128 §2 / RFC-126).
-      tx.update(clarifyRounds)
+      await tx
+        .update(clarifyRounds)
         .set({
           answersJson: mergedJson,
           ...directiveSet,
@@ -390,12 +406,11 @@ export async function sealRoundQuestions(
             : {}),
         })
         .where(eq(clarifyRounds.id, round.id))
-        .run()
 
       // RFC-217 T8（真 T17）—— 双写退役：clarify_rounds 即唯一数据源。
 
       // RFC-128 P2 (Codex P1) — on FULL seal, close the intermediary clarify/cross-clarify
-      // node_run (awaiting_human → done) ATOMICALLY with the round flip (same dbTxSync).
+      // node_run (awaiting_human → done) ATOMICALLY with the round flip (same transaction).
       // Without this the answered round's clarify node_run stays awaiting_human and
       // deriveFrontier buckets it into awaitingHuman FOREVER: loadOpenClarify keys off the
       // SESSION status (already flipped to answered here), but the node_run's own
@@ -410,17 +425,17 @@ export async function sealRoundQuestions(
       // (RFC-136: flipNow — an answered round's node_run is already closed; the CAS would
       // no-op anyway, the gate just keeps the re-answer path free of flip side effects.)
       if (flipNow) {
-        tx.update(nodeRuns)
+        await tx
+          .update(nodeRuns)
           .set({ status: 'done', finishedAt: ts })
           .where(and(eq(nodeRuns.id, args.originNodeRunId), eq(nodeRuns.status, 'awaiting_human')))
-          .run()
       }
 
       // (3) Reconcile against the EFFECTIVE round (status reflects the writes above). RFC-162:
       // reconcile emits only the ONE asker (self/questioner) entry per question — no designer
       // gate, no seal/scope/directive inputs. The questioner/self rows are unconditional; their
-      // `sealed_at` is stamped in step (4) below. Done on the SAME tx (dbTxSync can't nest).
-      reconcileRoundEntriesTx(tx, {
+      // `sealed_at` is stamped in step (4) below. Done on the SAME tx (transactions don't nest).
+      await reconcileRoundEntriesTx(tx, {
         ...round,
         status: fullySealed ? 'answered' : round.status,
         answersJson: mergedJson,
@@ -431,7 +446,8 @@ export async function sealRoundQuestions(
       // (4) Stamp sealed_at on the (question × role) entries sealed by THIS call that are
       // not yet stamped. Idempotent via IS NULL. (Designer entries created above for a
       // fully-sealed round derive `sealed` from round.status — no backfill needed.)
-      tx.update(taskQuestions)
+      await tx
+        .update(taskQuestions)
         .set({ sealedAt: ts, sealedBy: args.sealedBy ?? null, updatedAt: ts })
         .where(
           and(
@@ -440,13 +456,13 @@ export async function sealRoundQuestions(
             isNull(taskQuestions.sealedAt),
           ),
         )
-        .run()
 
       // (4a) RFC-136 — RE-seal stamp: a re-answered question's entries get their
       // sealed_at/sealed_by moved to THIS call (unconditional — they are already stamped, the
       // IS-NULL write above skips them). (RFC-162: the echo exemption is gone — echo deleted.)
       if (resealSet.size > 0) {
-        tx.update(taskQuestions)
+        await tx
+          .update(taskQuestions)
           .set({ sealedAt: ts, sealedBy: args.sealedBy ?? null, updatedAt: ts })
           .where(
             and(
@@ -454,7 +470,6 @@ export async function sealRoundQuestions(
               inArray(taskQuestions.questionId, [...resealSet]),
             ),
           )
-          .run()
       }
 
       // (4b) RFC-128 (用户 2026-07-01) — AUTO-STAGE: opt-in (centralized-answer control channel).
@@ -468,7 +483,8 @@ export async function sealRoundQuestions(
       // on every non-echo entry, so a re-answered question auto-stages back into 待下发 exactly
       // like a fresh answer (改完即待发); echo rows keep their stamp via the IS-NULL guard.
       if (args.autoStage === true) {
-        tx.update(taskQuestions)
+        await tx
+          .update(taskQuestions)
           .set({ stagedAt: ts, stagedBy: args.sealedBy ?? null, updatedAt: ts })
           .where(
             and(
@@ -477,13 +493,12 @@ export async function sealRoundQuestions(
               isNull(taskQuestions.stagedAt),
             ),
           )
-          .run()
       }
 
       // RFC-341 — stop is part of the committed decision fact, not an async
       // post-commit side effect that can be lost at the commit-before-wake edge.
       if (flipNow && effectiveDirective === 'stop' && round.askingNodeId) {
-        setNodeClarifyDirectiveTx(
+        await setNodeClarifyDirectiveTx(
           tx,
           round.taskId,
           round.askingNodeId,
@@ -498,7 +513,7 @@ export async function sealRoundQuestions(
       if (flipNow && args.decisionParticipant === undefined) {
         const operationRef = `clarify-seal:${round.id}:${ulid(ts)}`
         const eventGroupId = committedEventGroupId('collaboration', operationRef)
-        const taskEventRef = appendTaskNodeStatusesCommittedEventTx(tx, {
+        const taskEventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
           taskId: round.taskId,
           reason: 'human-gate',
           nodeChanges: [
@@ -518,7 +533,7 @@ export async function sealRoundQuestions(
           },
         })
         if (taskEventRef !== null) eventRefs.push(taskEventRef)
-        const collaborationEventRef = appendHumanGateDecisionCommittedEventTx(tx, {
+        const collaborationEventRef = await appendHumanGateDecisionCommittedEvent(tx, {
           family: 'clarify',
           gate: {
             taskId: round.taskId,
@@ -541,7 +556,7 @@ export async function sealRoundQuestions(
         if (collaborationEventRef !== null) eventRefs.push(collaborationEventRef)
       }
 
-      args.decisionParticipant?.acceptTx({
+      await args.decisionParticipant?.acceptTx({
         tx,
         taskId: round.taskId,
         roundId: round.id,
@@ -563,7 +578,7 @@ export async function sealRoundQuestions(
         eventRefs,
       }
     })
-    // RFC-341: this call must be the first operation after the synchronous transaction returns.
+    // RFC-341: this call must be the first operation after the transaction commits.
     // The compiled E2E callback writes its marker synchronously before returning a pending promise,
     // so neither the continuous event dispatcher nor the continuation worker can claim the durable
     // intent before the harness SIGKILLs the daemon. Production builds return from the seam at once.

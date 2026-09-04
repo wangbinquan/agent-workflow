@@ -46,7 +46,6 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/bundle/postgresqlApply.ts -> @/platform/persistence/postgresqlResourcePackageAtomicApply :: export:*',
   'packages/backend/src/services/clarify/rounds.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyRounds :: export:*',
   'packages/backend/src/services/clarifyDecision.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyDecision :: export:*',
-  'packages/backend/src/services/clarifyDecisionComposition.ts -> @/modules/collaboration/infrastructure/legacySqliteClarifyDecisionComposition :: export:*',
   'packages/backend/src/services/execution/childBudget.ts -> @/modules/task-execution/infrastructure/sqliteChildTaskBudgetQueries :: SqliteChildTaskBudgetQueries',
   'packages/backend/src/services/execution/executionWatch.ts -> @/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels :: createSqliteTaskExecutionReadModels',
   'packages/backend/src/services/execution/outcome.ts -> @/modules/task-execution/infrastructure/sqliteTaskExecutionReadModels :: createSqliteTaskExecutionReadModels',

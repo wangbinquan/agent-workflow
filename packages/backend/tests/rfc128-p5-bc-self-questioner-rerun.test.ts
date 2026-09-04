@@ -872,7 +872,7 @@ describe('RFC-128 P5-BC §5.2.14 mixed-path write-flow', () => {
       .select()
       .from(clarifyRounds)
       .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
-    reconcileTaskQuestionsForRound(db, roundRows[0]!)
+    await reconcileTaskQuestionsForRound(db, roundRows[0]!)
     const afterReconcile = await db
       .select()
       .from(taskQuestions)
@@ -1081,7 +1081,7 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
     const fn = fnBody(src, 'export async function sealRoundQuestions')
     expect(fn.includes('getTaskQuestionWriteSem(')).toBe(true)
     expect(fn.includes('.run(runSealTx)')).toBe(true)
-    expect(fn.includes('dbTxSync(args.db')).toBe(true)
+    expect(fn.includes('databaseSessionFor(args.db).transaction(')).toBe(true)
   })
 
   // ②(a) behavioral — control-seal q1 = option A, then quick-finalize the WHOLE round posting a

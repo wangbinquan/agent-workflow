@@ -105,6 +105,12 @@ const PROVIDER_FORK_LEDGER = {
   'platform/persistence/databaseProviderRuntime.ts': { forks: 1, fence: 'fenced-dispatch' },
   // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。
   'platform/persistence/databaseTransaction.ts': { forks: 2, fence: 'fenced-dispatch' },
+  // RFC-359 W1-T2b：自澄清回滚的 effect 账本在两个 provider 上各有一份 persistence（W4 待合一），
+  // 观察者按客户端品牌挑一份，残余分支沉入 never 汇。
+  'modules/task-execution/infrastructure/legacySqliteNodeRollback.ts': {
+    forks: 2,
+    fence: 'fenced-dispatch',
+  },
 } as const
 
 function providerForkCounts(): Record<string, number> {

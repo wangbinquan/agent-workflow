@@ -341,7 +341,7 @@ import {
   planMembersReplacement,
 } from '@/modules/collaboration/composition'
 import {
-  createSqliteClarifyDecisionCommand,
+  createClarifyDecisionCommand,
   createQuestionDispatchCommand,
   createSqliteReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
@@ -1856,7 +1856,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     taskExecutionReadModels,
     reviewDecisions: createSqliteReviewDecisionCommand({ db: deps.db, appHome }),
     questionDispatches: createQuestionDispatchCommand(deps.db),
-    clarifyDecisions: createSqliteClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
+    clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
   })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
