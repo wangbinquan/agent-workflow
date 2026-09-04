@@ -503,6 +503,9 @@ export function moduleShapes(repoRoot: string): ModuleShape[] {
 /** 文件枚举 API：出现其一即认为该守卫在扫语料，而非读固定几个文件。 */
 const CORPUS_ENUMERATION_CALLEES = new Set([
   'readdirSync',
+  // RFC-349 陷阱守卫的共享语料（`architecture/postgresqlSurface.ts`）。不登记的话
+  // 消费它的守卫会被判成「不扫语料」，于是不必自证语料下限——语料哪天塌了照样绿。
+  'postgresqlExecutionSurface',
   'readdir',
   'opendirSync',
   'globSync',

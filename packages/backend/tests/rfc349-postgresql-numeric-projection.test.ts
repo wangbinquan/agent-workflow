@@ -19,9 +19,10 @@
 // `DECODED_BY_CALLER` 里写明由哪个解码函数负责。
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { count } from 'drizzle-orm'
+
+import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
 
 const srcRoot = resolve(import.meta.dir, '..', 'src')
 
@@ -33,6 +34,12 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
   'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': {
     total: 'decodeResourceLimitTokenTotal() 显式接受 string / bigint / number 三种形态',
   },
+  'modules/development-automation/infrastructure/retentionSweeper.ts': {
+    n:
+      '两条保留期清扫（SQLite 同步版 / PostgreSQL 异步版）都把 count(*) 交给调用点的 ' +
+      'Number() 再放进 expiredBundleRefsPending；这个文件同时装着两个 provider 的实现，' +
+      '所以一条登记覆盖两处',
+  },
   'modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts': {
     all_count:
       'repositoryWorkspaceSqlStore.cachedRepoFacets 的调用点对 all/referenced/attention ' +
@@ -42,18 +49,14 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
 
 const AGGREGATE = /\bsql(?:<[^>]*>)?`[^`]*\b(?:count|sum|avg|max|min)\(/gu
 
-function postgresqlAdapterFiles(): string[] {
-  const files: string[] = []
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir)) {
-      const path = join(dir, entry)
-      if (statSync(path).isDirectory()) walk(path)
-      else if (entry.startsWith('postgresql') && entry.endsWith('.ts')) files.push(path)
-    }
-  }
-  walk(srcRoot)
-  return files
-}
+/**
+ * 语料是**类型可达**的 PG 执行面，不是文件名前缀。
+ *
+ * 初版按 `entry.startsWith('postgresql')` 取语料，于是双 provider 共用实现
+ * （`taskIdleTimeoutPersistence.ts` 那种）与按领域命名却吃 PG 客户端的文件整体逃出
+ * 判据——2026-09-04 实测漏掉 27 个文件。判据搬到 `architecture/postgresqlSurface.ts`
+ * 单一实现，三条陷阱守卫共用。
+ */
 
 describe('RFC-349 PostgreSQL aggregates come back as numbers', () => {
   test("drizzle's count() carries the Number mapper that a raw template lacks", () => {
@@ -75,9 +78,9 @@ describe('RFC-349 PostgreSQL aggregates come back as numbers', () => {
       ]),
     )
 
-    for (const file of postgresqlAdapterFiles()) {
-      const relative = file.slice(srcRoot.length + 1)
-      const text = readFileSync(file, 'utf8')
+    for (const file of postgresqlExecutionSurface(srcRoot)) {
+      const relative = file.path
+      const text = file.text
       for (const match of text.matchAll(AGGREGATE)) {
         const start = match.index ?? 0
         // The template ends at the next backtick that closes it; `.mapWith(` must

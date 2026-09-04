@@ -20,13 +20,15 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { is } from 'drizzle-orm'
 import { SQLiteTable } from 'drizzle-orm/sqlite-core'
 
 import * as schema from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+
+import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
 
 const srcRoot = resolve(import.meta.dir, '..', 'src')
 
@@ -83,18 +85,11 @@ function nullableColumnsByTableExport(): Map<string, Record<string, NullableColu
   return tables
 }
 
-function postgresqlAdapterFiles(): string[] {
-  const files: string[] = []
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir)) {
-      const path = join(dir, entry)
-      if (statSync(path).isDirectory()) walk(path)
-      else if (entry.startsWith('postgresql') && entry.endsWith('.ts')) files.push(path)
-    }
-  }
-  walk(srcRoot)
-  return files
-}
+/**
+ * 语料是**类型可达**的 PG 执行面，不是文件名前缀——按前缀取语料会漏掉双 provider 共用
+ * 实现与按领域命名却吃 PG 客户端的文件（2026-09-04 实测 27 个）。判据单一实现见
+ * `architecture/postgresqlSurface.ts`。
+ */
 
 describe('RFC-349 NULL ordering is the same on both providers', () => {
   test('the premise: SQLite sorts NULL first ascending and last descending', () => {
@@ -131,9 +126,9 @@ describe('RFC-349 NULL ordering is the same on both providers', () => {
       ]),
     )
 
-    for (const file of postgresqlAdapterFiles()) {
-      const relative = file.slice(srcRoot.length + 1)
-      const text = readFileSync(file, 'utf8')
+    for (const file of postgresqlExecutionSurface(srcRoot)) {
+      const relative = file.path
+      const text = file.text
       for (const match of text.matchAll(
         /\b(asc|desc)\(([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\)/gu,
       )) {

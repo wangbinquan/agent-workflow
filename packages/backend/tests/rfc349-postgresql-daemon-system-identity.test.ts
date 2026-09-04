@@ -99,6 +99,25 @@ describe('RFC-349 — PostgreSQL daemon 的系统身份', () => {
     expect(current!.status).toBe('active')
   })
 
+  test('三个组合根都不手捏 actor —— 判据不只钉 PostgreSQL 那一棵', () => {
+    // 只钉出事的那棵树，等于把同一个坑留给另外两棵。三个组合根都拿得到注册表，
+    // 也都有「daemon 自己要一个身份」的需求，判据必须一视同仁。
+    const roots = [
+      'src/cli/postgresqlDaemonApplication.ts',
+      'src/cli/start.ts',
+      'src/server.ts',
+    ] as const
+    const offenders = roots.filter((root) =>
+      readFileSync(resolve(import.meta.dir, '..', root), 'utf8').includes('buildActor('),
+    )
+    expect(
+      offenders,
+      '组合根手捏了 actor ⇒ 注册表按对象引用查不到它，交给 authorityFor / ' +
+        'resourceAuthorityFor 必抛 foreign-legacy-actor-projection。走 admitDaemonIdentity / ' +
+        'admitDurableWorkOwner',
+    ).toEqual([])
+  })
+
   test('daemon 组合根不再手捏系统 actor', () => {
     const source = readFileSync(DAEMON_SOURCE, 'utf8')
     const at = source.indexOf('const systemActor')

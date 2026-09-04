@@ -31,10 +31,29 @@ import { ilike } from 'drizzle-orm'
 
 import * as schema from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
+import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
 import { compilePostgresqlSql } from '@/platform/persistence/postgresqlSql'
 
 const backendRoot = resolve(import.meta.dir, '..')
 const read = (path: string): string => readFileSync(resolve(backendRoot, path), 'utf8')
+
+/**
+ * `文件相对 src 的路径 -> 被匹配的列 -> 为什么这里大小写敏感才是对的`。
+ *
+ * 这三类模式都不是用户输入：前两条按代码写死的 JSON 片段找引用（id 是 ULID，大小写
+ * 由生成器决定），第三条按平台自己的常量前缀过滤消费者。改成 ilike 反而会误召回。
+ */
+const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
+  'modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts': {
+    'agents.mcp': '按 `%"<mcpId>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
+  },
+  'modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts': {
+    'agents.plugins': '同上，按 `%"<pluginId>"%` 找引用',
+  },
+  'platform/events/committed/postgresqlPersistence.ts': {
+    'committedEventDeliveries.consumerId': "按平台常量前缀 'event-center.%' 过滤消费者",
+  },
+}
 
 /** `like(` but not `ilike(` / `notLike(`. */
 const PLAIN_LIKE = /(?<![A-Za-z])like\(/gu
@@ -105,16 +124,43 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
     ).toBeNull()
   })
 
-  test('the three deliberate exact-case matches stay `like`', () => {
-    // 见文件头的说明：它们的模式来自代码常量或存下来的 id，大小写敏感才是对的。
-    expect(
-      read('src/modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts'),
-    ).toContain('like(agents.plugins,')
-    expect(
-      read('src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts'),
-    ).toContain('like(agents.mcp,')
-    expect(read('src/platform/events/committed/postgresqlPersistence.ts')).toContain(
-      "like(committedEventDeliveries.consumerId, 'event-center.%')",
+  test('every plain `like` on the PostgreSQL execution surface is deliberate', () => {
+    // 初版只点名了当时那三处，是**点状夹具不是扫描器**：新写一处面向用户输入的
+    // `like(` 不会让任何断言变红，而它在 PostgreSQL 上就是静默少召回。改成扫描整个
+    // PG 执行面（语料判据见 `architecture/postgresqlSurface.ts`），每一处裸 like 都必须
+    // 在下面写明「为什么大小写敏感才是对的」；写不出理由的就该改 ilike。
+    const surface = postgresqlExecutionSurface(resolve(backendRoot, 'src'))
+    expect(surface.length, 'PG 执行面语料为空 ⇒ 判据失效（扫描根写错？）').toBeGreaterThanOrEqual(
+      200,
     )
+
+    const unexplained: string[] = []
+    const stale = new Map<string, Set<string>>(
+      Object.entries(DELIBERATE_EXACT_CASE).map(([file, reasons]) => [
+        file,
+        new Set(Object.keys(reasons)),
+      ]),
+    )
+    for (const file of surface) {
+      for (const match of file.text.matchAll(/(?:^|[^i\w])like\(\s*([\w.]+)/gu)) {
+        const column = match[1]!
+        if (DELIBERATE_EXACT_CASE[file.path]?.[column] !== undefined) {
+          stale.get(file.path)?.delete(column)
+          continue
+        }
+        const line = file.text.slice(0, match.index).split('\n').length
+        unexplained.push(`${file.path}:${line} like(${column})`)
+      }
+    }
+
+    expect(
+      unexplained,
+      'PG 执行面上出现了没有写明理由的裸 like ⇒ PostgreSQL 的 LIKE 大小写敏感，' +
+        '面向用户输入的匹配会静默少召回。改用 ilike，或在 DELIBERATE_EXACT_CASE 里写清为什么',
+    ).toEqual([])
+    expect(
+      [...stale].flatMap(([file, columns]) => [...columns].map((column) => `${file}#${column}`)),
+      '这些「有意精确匹配」的登记已经没有对应的 like 了 ⇒ 删掉，别留着当免死金牌',
+    ).toEqual([])
   })
 })

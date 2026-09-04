@@ -1671,6 +1671,18 @@
       "lines": 171
     },
     {
+      "id": "rfc349-postgresql-surface-guard",
+      "file": "packages/backend/tests/architecture/rfc349-postgresql-surface-guard.test.ts",
+      "runner": "bun",
+      "mechanism": "source-text",
+      "corpusScanner": true,
+      "minCorpusFiles": 200,
+      "assertsAbsence": true,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 115
+    },
+    {
       "id": "rfc349-provider-cutover",
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "runner": "bun",
@@ -2116,14 +2128,14 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c6b083e4358a94b348e8f941de64b504012a78ca03e1df186d9299a775483b04",
+    "sourceDigest": "sha256:502dccfd3256df4bad12c1404d1efa9d393ed51ff1787c5e6536f853984fc8fe",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "234524c5275183bfa46d0a2fe49b5aa84f95f97c",
-    "contentDigest": "sha256:c772ff1134b3e98a2cfbfbdc3f212276a5a69b3c668e53e3d4de22e86fa356d9",
+    "currentSnapshotSha": "0156e64d6b166c05484573a9455df918f5a918f2",
+    "contentDigest": "sha256:b9894b67510d37f4e7e67ee5b7c811e1cab0c1a24e1b9aa0863033861b6c055d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
