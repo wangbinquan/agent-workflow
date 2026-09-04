@@ -3315,12 +3315,37 @@ function readStringArray(node: unknown, key: string): string[] {
   return v.filter((s): s is string => typeof s === 'string')
 }
 
+/**
+ * 每个节点最近的 **wrapper-loop 祖先**（没有则不在表里）。
+ *
+ * RFC-358：此前这里只登记 loop 的**直接**成员，于是嵌套 wrapper 下 loop 成员关系断掉——
+ * `loop{ git{ a, b } }` 里 a↔b 的反馈环，a / b 都不是 loop 的直接成员，`topology-cycle`
+ * 的「同 loop 内的边不算 DAG 依赖」豁免因此落空，一个**合法**的嵌套循环被判成
+ * 「cycle outside any loop wrapper」。产品语义是 wrapper 可以任意层嵌套（loop in loop
+ * 亦然），所以成员关系必须沿容器链传递。
+ *
+ * 取**最近**的 loop 祖先而不是最外层：内层 loop 的环归内层，跨层的边两端 loop 不同、
+ * 仍按普通依赖参与环检测——这正是原判据想要的粒度。
+ */
 function buildLoopMembership(nodes: WorkflowDefinition['nodes']): Map<string, string> {
+  const containerOf = new Map<string, string>()
+  const kindById = new Map<string, string>()
+  for (const node of nodes) {
+    kindById.set(node.id, node.kind)
+    if (!isWrapperKind(node.kind)) continue
+    for (const inner of readStringArray(node, 'nodeIds')) containerOf.set(inner, node.id)
+  }
   const map = new Map<string, string>()
   for (const node of nodes) {
-    if (node.kind !== 'wrapper-loop') continue
-    for (const inner of readStringArray(node, 'nodeIds')) {
-      map.set(inner, node.id)
+    const seen = new Set<string>([node.id])
+    let cursor = containerOf.get(node.id)
+    while (cursor !== undefined && !seen.has(cursor)) {
+      seen.add(cursor)
+      if (kindById.get(cursor) === 'wrapper-loop') {
+        map.set(node.id, cursor)
+        break
+      }
+      cursor = containerOf.get(cursor)
     }
   }
   return map

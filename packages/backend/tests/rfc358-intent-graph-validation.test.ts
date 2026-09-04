@@ -166,6 +166,91 @@ describe('RFC-358 — draft-time workflow graph validation', () => {
     expect(outcome.errors).toEqual([])
   })
 
+  test('e2e nested-cycle fixture (RFC-302) stays green under graph validation', async () => {
+    // 这份定义逐字取自 `packages/system-mocks/src/runtime/mode-intent.ts` 的
+    // NESTED_CYCLE_WORKFLOW_CHANGESET —— e2e `intent-builder.spec.ts:508` 断言它的
+    // `validation.errors` 为空。把同一形态锁进单测层：嵌套 wrapper（loop 套 git）、
+    // 两个 agent 之间的合法环、以及 wrapper-output 边喂给 loop 的 exitCondition。
+    const changeset = changesetOf([
+      {
+        opId: 'op-1',
+        action: 'create',
+        resourceType: 'agent',
+        tempRef: '$new:e2e-nested-cycle-worker',
+        payload: {
+          name: 'e2e-nested-cycle-worker',
+          description: 'nested cycle worker',
+          outputs: ['out'],
+          bodyMd: 'Traverse the loop.',
+        },
+      },
+      {
+        opId: 'op-2',
+        action: 'create',
+        resourceType: 'workflow',
+        tempRef: '$new:e2e-nested-cycle-workflow',
+        payload: {
+          name: 'e2e-nested-cycle-workflow',
+          description: 'nested wrapper and legal loop cycle fixture',
+          definition: {
+            $schema_version: 6,
+            inputs: [],
+            nodes: [
+              {
+                id: 'outer_loop',
+                kind: 'wrapper-loop',
+                nodeIds: ['git_scope'],
+                maxIterations: 3,
+                exitCondition: { kind: 'port-empty', portName: 'diff' },
+                position: { x: 0, y: 0 },
+              },
+              {
+                id: 'git_scope',
+                kind: 'wrapper-git',
+                nodeIds: ['worker_a', 'worker_b'],
+                position: { x: 0, y: 0 },
+              },
+              {
+                id: 'worker_a',
+                kind: 'agent-single',
+                agentRef: '$new:e2e-nested-cycle-worker',
+                promptTemplate: 'A receives {{feedback}}.',
+                position: { x: 0, y: 0 },
+              },
+              {
+                id: 'worker_b',
+                kind: 'agent-single',
+                agentRef: '$new:e2e-nested-cycle-worker',
+                promptTemplate: 'B receives {{feedback}}.',
+                position: { x: 0, y: 0 },
+              },
+            ],
+            edges: [
+              {
+                id: 'a_to_b',
+                source: { nodeId: 'worker_a', portName: 'out' },
+                target: { nodeId: 'worker_b', portName: 'feedback' },
+              },
+              {
+                id: 'b_to_a',
+                source: { nodeId: 'worker_b', portName: 'out' },
+                target: { nodeId: 'worker_a', portName: 'feedback' },
+              },
+              {
+                id: 'git_to_loop',
+                boundary: 'wrapper-output',
+                source: { nodeId: 'git_scope', portName: 'git_diff' },
+                target: { nodeId: 'outer_loop', portName: 'diff' },
+              },
+            ],
+          },
+        },
+      },
+    ])
+    const outcome = await runGraph(changeset)
+    expect(outcome.errors).toEqual([])
+  })
+
   test('P0-1：覆盖层带 outputKinds 才不会误报 review-input-source-not-markdown', async () => {
     const reviewDefinition = (agentRef: string) => ({
       $schema_version: 6,

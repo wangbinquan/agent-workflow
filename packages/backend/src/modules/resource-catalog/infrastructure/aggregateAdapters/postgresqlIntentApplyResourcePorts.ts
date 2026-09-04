@@ -489,7 +489,7 @@ function exactAgentPatch(plan: UpdatePlanOf<'agent'>): Readonly<Record<string, u
 }
 
 function applyAgentPatch(current: Agent, patch: Readonly<Record<string, unknown>>) {
-  // RFC-358 T9：判据搬进 domain，与 create/copy 分支和 SQLite provider 共用一份。
+  // RFC-358 T9：判据搬进 domain，与 create/copy 分支、以及另一个 provider 共用一份。
   return UpdateAgentSchema.parse(withAgentSidecarsFrom(patch, current))
 }
 
@@ -519,7 +519,7 @@ function createAgentPort(
         // RFC-358 T9（B-5）—— copy 把 update 归一成 create，而此前 create 分支不回填
         // sidecar，于是「复制一个 builtin agent 再改」会静默丢掉分支端口 / 输出 kind /
         // 角色 / fanout 重命名。源行只有在事务里才读得到，所以回填落在这里而不是
-        // prepare（那时还没有 transaction）。
+        // prepare（那时还没有 transaction）。判据本身在 domain，两个 provider 共用。
         let input = prepared.input
         const copiedFrom = plan.action === 'create' ? plan.copiedFromResourceId : undefined
         if (copiedFrom !== undefined) {
