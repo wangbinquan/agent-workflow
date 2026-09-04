@@ -56,10 +56,11 @@ export interface PostgresqlWorkflowPersistenceSemantics {
     current: Workflow,
     candidate: WorkflowDraftSnapshot,
   ): Promise<void>
+  /** 只拿 ACL 身份：删除必须对定义损坏的行仍可用。 */
   assertDeleteInTransaction(
     transaction: PostgresqlResourceCatalogTransaction,
     authority: WorkflowOperationContext,
-    current: Workflow,
+    current: WorkflowAclIdentity,
   ): Promise<void>
   created?(workflow: Workflow): Promise<void> | void
   updated?(receipt: SaveWorkflowReceipt): Promise<void> | void
@@ -74,6 +75,15 @@ function stale(id: string, current: Workflow) {
   return staleConflictError('workflow', `workflow '${id}' changed; reload`, {
     current: workflowRevisionOf(current),
   })
+}
+
+/** 版本冲突：正常行带 revision 详情；定义损坏的行只报冲突，不让 stale 分支自己 422。 */
+function staleRow(id: string, row: typeof workflows.$inferSelect) {
+  try {
+    return stale(id, workflowFromPersistenceRow(row))
+  } catch {
+    return staleConflictError('workflow', `workflow '${id}' changed; reload`)
+  }
 }
 
 function aclIdentity(row: typeof workflows.$inferSelect): WorkflowAclIdentity {
@@ -255,15 +265,17 @@ export function createPostgresqlWorkflowRepository(input: {
         async (transaction) => {
           const row = await transaction.select().from(workflows).where(eq(workflows.id, id)).get()
           if (row === undefined) throw notFound(id)
-          const current = workflowFromPersistenceRow(row)
-          if (current.version !== deletion.expectedVersion) throw stale(id, current)
-          await input.semantics.assertDeleteInTransaction(transaction, authority, current)
+          // RFC-359 W1-T6（P0-6）：删除路径不解析 definition——定义损坏的工作流必须能删（与 SQLite
+          // deleteWorkflow 同规则：只用原始行的 ACL 身份与版本）。此前第二条语句就是
+          // workflowFromPersistenceRow(row)，坏行在 PG 上 422、永远删不掉。
+          if (row.version !== deletion.expectedVersion) throw staleRow(id, row)
+          await input.semantics.assertDeleteInTransaction(transaction, authority, aclIdentity(row))
           const removed = await transaction
             .delete(workflows)
             .where(and(eq(workflows.id, id), eq(workflows.version, deletion.expectedVersion)))
             .returning({ version: workflows.version })
             .get()
-          if (removed === undefined) throw stale(id, current)
+          if (removed === undefined) throw staleRow(id, row)
           return removed.version
         },
       )

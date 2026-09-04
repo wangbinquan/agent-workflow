@@ -64,7 +64,10 @@
 > `currentTaskExecutionContext(taskId)`，真无主才走无主围栏；PG effect 账本私有 `assertOwner` 去掉对 attach 时冻结
 > token 的 revision / leaseUntil 等值与租约过期判定（首次心跳后所有 effect 写入被拒），只留身份 + epoch + claimed。
 > `rfc359-t7-owner-fences.test.ts` 三个场景两引擎各绿 + 源码锁。
-> **下一步**：T5（P0-5 已随 T2b 合一，补双引擎用例确认）/ T6（P0-6 坏定义工作流 PG 删不掉）/ T3（F-H2-2）→ W3-T14 / T16。
+> **T5（P0-5）确认已修**：seal 随 T2b 合一后 node_run 翻转是 CAS 条件 UPDATE，PG 不再 409；`rfc359-t2b` 新增两引擎用例锁住。
+> **T6（P0-6 坏定义工作流删除）已修**：PG 仓库删除路径只用原始行 ACL 身份与版本（不解析 definition），补齐 PG 从未有的
+> 非终态任务引用 / 定时任务引用两道删除守卫；SQLite stale 分支同改。`rfc359-t6-corrupt-workflow-delete.test.ts` 两引擎各绿。
+> **下一步**：T3（F-H2-2 development mission launcher 在 PG 未注入）→ W3-T14 / T16。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

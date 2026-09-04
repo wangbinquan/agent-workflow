@@ -275,4 +275,31 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     expect(JSON.parse(events[0]!.payloadJson).payload.gateStatus).toBe('deferred')
     expect(await mintedReruns(db, taskId)).toHaveLength(0)
   })
+
+  test('P0-5（T5）：澄清 node_run 已离开 awaiting_human 时整轮 seal 仍成功——CAS 安全 no-op，不 409、答案不回滚', async () => {
+    // 审计 P0-5：SQLite 是带 CAS 的条件 UPDATE（命中 0 行即安全 no-op），PG 此前走 set({ allowedFrom:
+    // ['awaiting_human'] }) 对终态行抛 ConflictError 并回滚整笔答案。seal 现在是一份 DatabaseSession 实现，
+    // 两个引擎都必须是 SQLite 的语义：failed / interrupted 的澄清节点仍可答，答案落库、round 翻 answered。
+    const db = harness.db
+    const taskId = freshTaskId()
+    const round = await seedOpenSelfRound(db, taskId)
+    await db
+      .update(nodeRuns)
+      .set({ status: 'failed', finishedAt: Date.now() })
+      .where(eq(nodeRuns.id, round.origin))
+    const full = await sealRoundQuestions({
+      db,
+      originNodeRunId: round.origin,
+      answers: [ans('q1'), ans('q2')],
+      sealedBy: 'u1',
+      sealedByRole: 'owner',
+    })
+    expect(full.roundFullySealed).toBe(true)
+    const sealed = await roundById(db, round.roundId)
+    expect(sealed.status).toBe('answered')
+    expect(
+      JSON.parse(sealed.answersJson ?? '[]').map((a: { questionId: string }) => a.questionId),
+    ).toEqual(['q1', 'q2'])
+    expect((await runById(db, round.origin)).status).toBe('failed')
+  })
 })

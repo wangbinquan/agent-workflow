@@ -698,10 +698,18 @@ export async function deleteWorkflow(
     assertPrincipalCanGovernInTx(tx, principal, currentRow)
 
     if (currentRow.version !== parsed.data.expectedVersion) {
+      // RFC-359 T6：定义损坏的行在版本冲突时也只报 409——revision 详情算得出就带上，算不出不让
+      // stale 分支自己 422（与 PostgreSQL 仓库的 staleRow 同规则）。
+      let current: WorkflowRevision | undefined
+      try {
+        current = workflowRevisionOf(rowToWorkflow(currentRow))
+      } catch {
+        current = undefined
+      }
       throw staleConflictError(
         'workflow',
         `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
-        { current: workflowRevisionOf(rowToWorkflow(currentRow)) },
+        current === undefined ? undefined : { current },
       )
     }
 

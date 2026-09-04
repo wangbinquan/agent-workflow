@@ -1,4 +1,5 @@
 import {
+  TERMINAL_TASK_STATUSES,
   RESOURCE_DISPLAY_NAME_MAX,
   WorkflowDraftSnapshotSchema,
   WorkflowNameSchema,
@@ -13,11 +14,12 @@ import {
   type WorkflowDefinition,
   type WorkflowDraftSnapshot,
 } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, notInArray } from 'drizzle-orm'
 
-import { agents, resourceGrants, workflows, workgroups } from '@/db/schema'
+import { agents, resourceGrants, scheduledTasks, tasks, workflows, workgroups } from '@/db/schema'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
+import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
 import { privilegedNodeLensFor } from '@/services/privilegedNodeLens'
 import { assertScriptAuthorAllowed } from '@/services/scriptAuthorGate'
 
@@ -215,9 +217,69 @@ async function assertDefinitionReferences(input: {
   }
 }
 
+/**
+ * RFC-359 W1-T6：与 SQLite deleteWorkflow 同规则——只拒**非终态**引用（running / pending / awaiting_* /
+ * interrupted）；仅被历史（终态）任务引用的 workflow 允许删除。此前 PG 删除完全不查任务引用。
+ */
+async function assertNoNonTerminalTaskReferences(
+  transaction: PostgresqlResourceCatalogTransaction,
+  workflowId: string,
+): Promise<void> {
+  const rows = await transaction
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(eq(tasks.workflowId, workflowId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
+    )
+    .all()
+  if (rows.length > 0) {
+    throw new ConflictError(
+      'workflow-in-use',
+      `workflow '${workflowId}' has ${rows.length} non-terminal task(s) referencing it; finish or cancel them first`,
+      { referenceCount: rows.length },
+    )
+  }
+}
+
+/** RFC-202 T5 / RFC-359 W1-T6：定时任务仍以该 workflow 为启动目标时拒删（与 SQLite 同形，同样只对
+ * 主体可见的 schedule 披露名字，其余只给计数）。 */
+async function assertNoScheduledReferences(
+  transaction: PostgresqlResourceCatalogTransaction,
+  authority: WorkflowOperationContext,
+  workflowId: string,
+): Promise<void> {
+  const schedRows = await transaction
+    .select({
+      id: scheduledTasks.id,
+      name: scheduledTasks.name,
+      launchKind: scheduledTasks.launchKind,
+      launchPayload: scheduledTasks.launchPayload,
+      ownerUserId: scheduledTasks.ownerUserId,
+    })
+    .from(scheduledTasks)
+    .all()
+  const referencing = scheduledRowsReferencing(schedRows, {
+    launchKind: 'workflow',
+    payloadKey: 'workflowId',
+    id: workflowId,
+  })
+  if (referencing.length === 0) return
+  const canSeeAll = authority.permissions.has('tasks:read:all' as never)
+  const visible = referencing.filter((r) => canSeeAll || r.ownerUserId === authority.user.id)
+  throw new ConflictError(
+    'workflow-scheduled-referenced',
+    `workflow '${workflowId}' is the launch target of ${referencing.length} scheduled task(s); delete or repoint them first`,
+    {
+      scheduledCount: referencing.length,
+      visibleScheduled: visible.map((r) => ({ id: r.id, name: r.name })),
+      hiddenCount: referencing.length - visible.length,
+    },
+  )
+}
+
 async function assertNotCalledByWorkflow(
   transaction: PostgresqlResourceCatalogTransaction,
-  current: Workflow,
+  current: Pick<Workflow, 'id' | 'name'>,
 ): Promise<void> {
   const rows = await transaction
     .select({ id: workflows.id, definition: workflows.definition })
@@ -324,7 +386,9 @@ export function createPostgresqlWorkflowPersistenceSemantics(input: {
         previous: current.definition,
       })
     },
-    async assertDeleteInTransaction(transaction, _authority, current) {
+    async assertDeleteInTransaction(transaction, authority, current) {
+      await assertNoNonTerminalTaskReferences(transaction, current.id)
+      await assertNoScheduledReferences(transaction, authority, current.id)
       await assertNotCalledByWorkflow(transaction, current)
     },
     created: input.events?.created,
