@@ -6,7 +6,7 @@
     "moduleFiles": 1328,
     "productionFiles": 2714,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25915
+    "symbolsIncludingFileRoots": 25916
   },
   "entries": [
     {
@@ -2839,6 +2839,18 @@
       "removeAfterWave": "W4-E0",
       "status": "legacy-target",
       "symbol": "$file",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "auth",
+      "exported": true,
+      "file": "packages/backend/src/auth/session.ts",
+      "id": "owner:packages/backend/src/auth/session.ts#actorOfDirectAuthority",
+      "removeAfterWave": "W4-E0",
+      "status": "legacy-target",
+      "symbol": "actorOfDirectAuthority",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -311679,5 +311691,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c7bac1703661062060ed6f63bf6b54029c8048984e645923497c10ab1d20239a"
+  "sourceDigest": "sha256:1ee66c6e0fab0926bc7259e01dc4f46e5b5b044c91c818040ef08af23ba1956c"
 }

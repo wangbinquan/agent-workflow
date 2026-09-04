@@ -426,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6304,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6305,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-355 T7 修红：`services/intent/dispatcher.ts` 里一句既有的 `as unknown as Actor` 随迁位进了能力伪造守卫的扫描面（该守卫只看 modules/），CI 双 OS 红。正解是让收窄回到 Actor 的 owner 侧——`auth/session.ts` 新出 `actorOfDirectAuthority`，`resolveActor` 里同形状的第二份 cast 一并收成一份。账本 +1 是这个具名符号与它那条边，换掉的是一处结构性伪造点。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5193,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5194,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-355 T7 修红：`services/intent/dispatcher.ts` 里一句既有的 `as unknown as Actor` 随迁位进了能力伪造守卫的扫描面（该守卫只看 modules/），CI 双 OS 红。正解是让收窄回到 Actor 的 owner 侧——`auth/session.ts` 新出 `actorOfDirectAuthority`，`resolveActor` 里同形状的第二份 cast 一并收成一份。账本 +1 是这个具名符号与它那条边，换掉的是一处结构性伪造点。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25915,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25916,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-355 T7 修红：`services/intent/dispatcher.ts` 里一句既有的 `as unknown as Actor` 随迁位进了能力伪造守卫的扫描面（该守卫只看 modules/），CI 双 OS 红。正解是让收窄回到 Actor 的 owner 侧——`auth/session.ts` 新出 `actorOfDirectAuthority`，`resolveActor` 里同形状的第二份 cast 一并收成一份。账本 +1 是这个具名符号与它那条边，换掉的是一处结构性伪造点。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c7bac1703661062060ed6f63bf6b54029c8048984e645923497c10ab1d20239a",
+    "sourceDigest": "sha256:1ee66c6e0fab0926bc7259e01dc4f46e5b5b044c91c818040ef08af23ba1956c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

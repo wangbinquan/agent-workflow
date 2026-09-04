@@ -7,7 +7,11 @@ import type {
   IntentPersistence,
   IntentTurnRuntimeResolver,
 } from '@/modules/intent/public/operations'
-import { admitDurableWorkOwner, type DirectAuthorityAdmissionRuntime } from '@/auth/session'
+import {
+  actorOfDirectAuthority,
+  admitDurableWorkOwner,
+  type DirectAuthorityAdmissionRuntime,
+} from '@/auth/session'
 import type { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
@@ -182,7 +186,7 @@ export async function resumeQueuedIntentWorkingSets(
     // — which is exactly how every queued successor silently died after a crash.
     const admitted = await admitDurableWorkOwner(deps.identityAccess, session.ownerUserId)
     if (admitted === null) continue
-    const actor = admitted.actor as unknown as Actor
+    const actor = actorOfDirectAuthority(admitted)
     const next = await activateIntentWorkingSetChange(
       deps.persistence,
       intentResourceVisibility(deps.resourceCatalogFor(actor)),

@@ -615,6 +615,30 @@ grep -rn "\b$old\b" packages/backend/tests            # ③ 只提文件名、�
 ②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
 它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。
 
+## 把文件搬进 `modules/` 会让它第一次进架构守卫的扫描面（RFC-355 T7 实撞，2026-09-04）
+
+搬家的另一半风险与上一条相反：不是断言找不到文件，而是**文件第一次被某个扫描器看见**。
+本仓多条守卫的语料就是 `packages/backend/src/modules/**`——`services/` 里的同一段代码它们
+一眼都不看。于是一次纯平移（`git mv`，内容一字未改）会让存量写法当场变成「新增违规」：
+
+- 实撞：`services/intent/dispatcher.ts` 里一句既有的 `admitted.actor as unknown as Actor`，
+  迁进 `modules/intent/application/` 后被能力伪造守卫判为
+  `casts/rewraps Actor outside owner factory`，CI 的 backend shard 2/4 双 OS 红。
+
+**跑守卫时别只跑 `tests/architecture/`**——本仓的架构守卫有一半在 `tests/` 根下，靠文件名
+识别（与 `census.ts` 的 `GUARD_FILE_NAME_PATTERN` 同一套词）。搬动 `modules/` 下的文件后至少跑：
+
+```bash
+cd packages/backend
+bun test $(ls tests/*.test.ts | grep -E "architecture|boundary|ratchet|lock|guard|invariants|preflight|callsite|extinction|interlock") tests/architecture/
+```
+
+（`tests/rfc294-architecture-preflight.test.ts` 就在根下，**不在** `tests/architecture/`。）
+
+处置上优先「把违规的形状改对」而不是入账：上面那处的正解是让收窄回到 `Actor` 的 owner 侧
+（`auth/session.ts` 出一个 `actorOfDirectAuthority`），顺带把 `resolveActor` 里同形状的
+第二份 cast 也收成一份——债本来就该消失，而不是换个账本继续记。
+
 ## 对 CI 不检查的共享 md 跑 `prettier --write`，会把别人的行全变成 diff（2026-09-03 实撞）
 
 CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:check:repo-ui` 那张**点名清单**
