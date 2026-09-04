@@ -105,8 +105,10 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
     expect(escStart).toBeGreaterThan(-1)
     expect(escEnd).toBeGreaterThan(escStart)
     const escSrc = mpSrc.slice(escStart, escEnd)
-    expect(countNonCommentMatches(escSrc, /killTree\(child, 'SIGTERM'\)/g)).toBe(1)
-    expect(countNonCommentMatches(escSrc, /killTree\(child, 'SIGKILL'\)/g)).toBe(1)
+    // RFC-356 T10：三处杀树都改走 `killTreeForRun`（同一个 `killTree`，外加「本次运行
+    // 杀过树」的门，供收尾等树静默用）。升级链的判据不变——先 SIGTERM、宽限后 SIGKILL。
+    expect(countNonCommentMatches(escSrc, /killTreeForRun\('SIGTERM'\)/g)).toBe(1)
+    expect(countNonCommentMatches(escSrc, /killTreeForRun\('SIGKILL'\)/g)).toBe(1)
     // The grace timer must be unref'd (a wedged child can't pin bun test).
     expect(escSrc).toContain('killTimer.unref()')
     // Both the caller abort and the timeout route through the same escalate().

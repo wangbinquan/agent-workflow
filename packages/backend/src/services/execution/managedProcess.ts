@@ -10,7 +10,12 @@
 import type { Logger } from '@/util/log'
 import { randomUUID } from 'node:crypto'
 import { closeSync, openSync, readSync } from 'node:fs'
-import { killProcessTree } from '@/util/process'
+import {
+  adoptSpawnedProcessTree,
+  awaitProcessTreeQuiesced,
+  killProcessTree,
+  releaseProcessTreeOwnership,
+} from '@/util/process'
 import { explainSpawnEnoent } from '@/util/spawnDiagnostics'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
@@ -522,6 +527,18 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     activeOutputSpool === undefined ? Promise.resolve() : childExited.then(() => {})
 
   const pid = typeof child.pid === 'number' ? child.pid : null
+  // RFC-356 T9 —— 把树接管进 Job Object（win32 且 Bun 有 FFI 时才真的做事；
+  // 其余平台返回 false，行为逐字不变）。
+  //
+  // **必须先于下面的 `onSpawned`**：那是一次 DB 往返，把它排在 assign 之前会把
+  // RFC-254 记录的 spawn→assign 窗口从微秒扩成一次落库。带 launcher 的路径上子
+  // 进程还在等激活帧，窗口实际已经关闭。
+  //
+  // 接线本身是 RFC-356 补的：`adoptSpawnedProcessTree` 自 RFC-254 写好后**一次都
+  // 没有被生产代码调用过**（唯一调用点是它自己的测试），于是 Windows 杀树一直退在
+  // `taskkill /T /F` 的快照枚举上、后代可逃逸——逃逸的后代占着 iso 工作树的句柄，
+  // 正是 issue #13 里 `git worktree remove` 删不掉的直接原因。
+  if (pid !== null) adoptSpawnedProcessTree(pid)
   let activationFailure: string | null = null
   if (pid !== null && req.onSpawned !== undefined) {
     try {
@@ -728,6 +745,16 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         )
 
   let outcome: ManagedProcessOutcome = activationFailure === null ? 'exited' : 'spawn-failed'
+  // RFC-356 T10 —— 本次运行有没有杀过树。它是「收尾要不要等树静默」的门。
+  //
+  // 门不能定在 `escalate()` 上：drain 超时那条分支**绕过 escalate 直接 killTree**，
+  // 而它的触发条件逐字就是「幸存的孙进程把管道写端占着」——正是随后卡住
+  // `git worktree remove` 的那个句柄持有者。干净退出的运行不置此标志，时序逐字不变。
+  let treeKillAttempted = false
+  const killTreeForRun = (signal: 'SIGTERM' | 'SIGKILL'): void => {
+    treeKillAttempted = true
+    killTree(child, signal)
+  }
   let killTimer: ReturnType<typeof setTimeout> | undefined
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined
   let reapDeadlineTimer: ReturnType<typeof setTimeout> | undefined
@@ -751,10 +778,10 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     if (killTimer !== undefined) return
     launcherInterruptedResolve?.()
     launcherOutputSeenResolve?.()
-    killTree(child, 'SIGTERM')
+    killTreeForRun('SIGTERM')
     killTimer = setTimeout(() => {
       log.warn('child ignored SIGTERM past grace; escalating to SIGKILL', { pid, graceMs })
-      killTree(child, 'SIGKILL')
+      killTreeForRun('SIGKILL')
       // After SIGKILL, bound the reap: if the child still hasn't exited by the
       // final margin, abandon it as child-unkillable instead of awaiting forever.
       // impl-gate P2-1: this deadline settles the exit race (via reapDeadlineFire)
@@ -852,6 +879,13 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     // — the exact liveness bound the pre-RFC-280 runner protected with
     // `child.unref()` and the T7 collapse dropped.
     child.unref()
+    // RFC-356 T9 —— 这条分支**刻意不释放** Job Object 归属。
+    // `releaseProcessTreeOwnership` 走的是 `dispose()`，语义是「停止跟踪**并**停止
+    // 整棵树」，而这里的前提正是「树没死、我们主动放弃它」。留着归属换两件事：
+    // ①后续的带外杀树（`killStaleRunProcessTree` → `killProcessTree` → ownedTrees）
+    // 仍能拿到原子 job terminate 而不是退回 taskkill 枚举；②job 带 KILL_ON_JOB_CLOSE，
+    // 树最终随 daemon 退出而死。代价是每个 unkillable 运行留一个句柄到 daemon 结束
+    // ——这条路径极罕见，记在 RFC-356 design §12 的债里。
     cleanupWindowsOutputSpool(outputSpool)
     return {
       outcome,
@@ -892,7 +926,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     stdoutPump.cancel()
     stderrPump.cancel()
     controlPump?.cancel()
-    killTree(child, 'SIGKILL')
+    killTreeForRun('SIGKILL')
     if (outcome === 'exited') {
       // RFC-280 T4: an agent caller keeps the real exitCode (trailing output
       // lost = evidence degradation, reported via drainTimedOut); the
@@ -911,6 +945,21 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   // orchestration metadata.  Keep user/runtime diagnostics byte-for-byte while
   // removing those records from the returned tail.
   stderrTail = stripLauncherProtocol(stderrTail, launchNonce)
+
+  // RFC-356 T10 —— 杀过树的运行，收尾前等整棵树真的静默。
+  //
+  // 杀树的 syscall 返回不等于后代已经退出，而后代只要还活着就还占着 iso 工作树里的
+  // 句柄（iso 就是子进程的 cwd），紧随其后的 `git worktree remove` 便会失败——那正是
+  // issue #13 死链的第一步。门是 `treeKillAttempted`：干净退出的运行一步都不多走。
+  // 等不到只 warn，**不改 outcome、不改 processUnreaped**——那是另一条判据。
+  if (treeKillAttempted && pid !== null) {
+    await awaitProcessTreeQuiesced(pid, { log })
+  }
+  // RFC-356 T9：释放归属。⚠️ 这是「关句柄 = 杀整棵树」，所以在 drain 超时但保留
+  // exitCode 的分支上，一次**成功**运行的幸存后代也会在这里被终止。这是已申报的
+  // 行为变更（proposal §7⑤）：那些后代正是 #13 的句柄持有者，也是平台既有意图里
+  // 本就要收割的孤儿。
+  if (pid !== null) releaseProcessTreeOwnership(pid)
 
   cleanupWindowsOutputSpool(outputSpool)
 

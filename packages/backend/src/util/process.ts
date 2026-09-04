@@ -1,5 +1,12 @@
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { adoptProcessTree, type ProcessTreeOwnership } from '@/util/windowsJobObject'
+import { createLogger } from '@/util/log'
+import {
+  adoptProcessTree,
+  processTreeOwnershipDiagnosis,
+  type ProcessTreeOwnership,
+} from '@/util/windowsJobObject'
+
+const log = createLogger('process-tree')
 
 // RFC-098 WP-8 (scheduler audit S-15) — process-tree governance primitives.
 //
@@ -95,9 +102,18 @@ export function killProcessTree(pid: number, signal: KillTreeSignal): boolean {
 function killProcessTreeWin32(pid: number): boolean {
   const owned = ownedTrees.get(pid)
   if (owned !== undefined) {
-    owned.terminate()
-    ownedTrees.delete(pid)
-    return true
+    // RFC-356 T8 —— 两处修正。
+    //
+    // ① **尊重 `terminate()` 的返回值**。这里以前丢弃它、无条件 `return true`，
+    //    在 Job Object 尚未接线的年代无害；接线之后它变活：`managedProcess.killTree`
+    //    会据此跳过 `child.kill()` 兜底，把一次失败的 syscall 当成「肯定死了」
+    //    ——正是 `windowsJobObject.ts` 顶部注释点名要杜绝的那种断言。
+    // ② **不再在 terminate 之后删 map 项**。归属要活到运行收尾（由
+    //    `releaseProcessTreeOwnership` 出表），否则杀树那一刻就没人能回答
+    //    「树死透了没有」，而 issue #13 里挡住 `git worktree remove` 的正是
+    //    杀不干净的后代。带外杀树（`killStaleRunProcessTree`）也因此仍能拿到
+    //    原子 job terminate 而不是退回 taskkill 枚举。
+    return owned.terminate()
   }
   try {
     const res = Bun.spawnSync({
@@ -130,9 +146,43 @@ const ownedTrees = new Map<number, ProcessTreeOwnership>()
 export function adoptSpawnedProcessTree(pid: number): boolean {
   if (process.platform !== 'win32') return false
   const owned = adoptProcessTree(pid)
-  if (owned === null) return false
+  if (owned === null) {
+    warnOwnershipDegradedOnce()
+    return false
+  }
   ownedTrees.set(pid, owned)
   return true
+}
+
+/**
+ * RFC-356 T11 —— 归属不可用时，把降级这件事说出来，且只说一次。
+ *
+ * `bun:ffi` 的 `dlopen()` 不在每个 Bun 构建里（Windows ARM64 构建禁用了 TinyCC，
+ * RFC-254 真机实测），那里 Job Object 整体不可用，杀树退回 `taskkill /T /F` 的
+ * 快照枚举——走的时候新 fork 的后代会逃逸，而逃逸的后代占着 iso 工作树的句柄正是
+ * issue #13 的成因。降级本身是既定处置（用户裁决 D2：不为 ARM64 新增平台专属杀树
+ * 路径），但它必须**可见**。
+ *
+ * 挂在首次 adopt 而不是 daemon 启动：这样它恰好在「真的要拉起 runtime 子进程」时
+ * 才出现，且不必去动 3000 行的 `cli/start.ts`（共享工作树上并发改动风险更高）。
+ */
+let ownershipDegradationWarned = false
+function warnOwnershipDegradedOnce(): void {
+  if (ownershipDegradationWarned) return
+  ownershipDegradationWarned = true
+  const diagnosis = processTreeOwnershipDiagnosis()
+  log.warn('windows process-tree ownership unavailable; tree kills degrade to taskkill', {
+    reason: diagnosis.reason,
+    consequence:
+      'descendants spawned during the taskkill snapshot walk can escape and keep holding ' +
+      'handles inside the run workspace (see RFC-356 / issue #13)',
+  })
+}
+
+/** RFC-356 —— 供诊断消息复用：本机进程树归属可不可用、为什么。 */
+export function processTreeOwnershipStatus(): { available: boolean; reason: string } {
+  const d = processTreeOwnershipDiagnosis()
+  return { available: d.available, reason: d.reason }
 }
 
 export function releaseProcessTreeOwnership(pid: number): void {
@@ -171,6 +221,54 @@ export function isProcessTreeAlive(pid: number): boolean | null {
     const e = err as NodeJS.ErrnoException
     return e.code === 'EPERM'
   }
+}
+
+/** RFC-356 L3 —— 「树到底死透了没有」的三态回答。 */
+export type TreeQuiesceOutcome = 'dead' | 'alive' | 'unknown'
+
+/**
+ * RFC-356 —— 杀树之后、动它的工作树之前，等整棵树静默的预算。
+ *
+ * 2s：被杀的运行本来就在异常路径上，多等这点换「iso 目录删得掉」是划算的；
+ * 干净退出的运行不走这条路（门在 `managedProcess.killTree` 上）。
+ */
+export const TREE_QUIESCE_BUDGET_MS = 2_000
+
+/**
+ * 等 `pid` 的整棵树静默。
+ *
+ * 为什么需要它（issue #13）：杀树的 syscall 返回不等于后代已经退出，而后代
+ * 只要还活着就还占着 iso 工作树里的句柄，紧随其后的 `git worktree remove`
+ * 就会失败——那正是 #13 那条死链的第一步。
+ *
+ * - POSIX：进程组**就是**树，`kill(-pid, 0)` 是精确判据。
+ * - win32 + Job Object：查 job 的活动进程数（依赖 RFC-356 T7 让 `terminate()`
+ *   不再关句柄，否则这里永远看不到真实计数）。
+ * - win32 无 job：`isProcessTreeAlive` 返回 null ⇒ **立刻回 `'unknown'`**，
+ *   绝不空等预算。测不出就说测不出，不拿墙钟冒充证据。
+ */
+export async function awaitProcessTreeQuiesced(
+  pid: number,
+  opts?: { budgetMs?: number; pollMs?: number; log?: TreeQuiesceLog },
+): Promise<TreeQuiesceOutcome> {
+  const budgetMs = opts?.budgetMs ?? TREE_QUIESCE_BUDGET_MS
+  const pollMs = opts?.pollMs ?? 25
+  const deadline = Date.now() + budgetMs
+  for (;;) {
+    const alive = isProcessTreeAlive(pid)
+    if (alive === null) return 'unknown'
+    if (!alive) return 'dead'
+    if (Date.now() >= deadline) {
+      opts?.log?.warn('process tree still alive past the quiesce budget', { pid, budgetMs })
+      return 'alive'
+    }
+    await Bun.sleep(pollMs)
+  }
+}
+
+/** 只用到 warn 的最小日志面——避免 util/process 反向依赖 util/log 的完整接口。 */
+export interface TreeQuiesceLog {
+  warn(msg: string, fields?: Record<string, unknown>): void
 }
 
 /**
@@ -260,6 +358,8 @@ export interface StaleRunKillOpts {
   now?: number
   /** Bounded SIGTERM grace before the SIGKILL escalation. Default 1s. */
   termWaitMs?: number
+  /** RFC-356: optional sink for the tree-quiesce warning. */
+  quiesceLog?: TreeQuiesceLog
 }
 
 /**
@@ -310,17 +410,25 @@ export async function killStaleRunProcessTree(
         : pidCommandLooksLikeAgentChild(pid)
   if (!matchesShape) return 'command-mismatch'
 
+  // RFC-356 T10：直接子进程没了**不等于**树没了。本函数的四个消费方里，
+  // `services/task.ts` 的 resume 前回滚在返回后**紧接着往那棵树里写 git**，
+  // 逃逸的后代还占着句柄时就会复现 issue #13。所以判定「killed」之前多等一跳
+  // 树静默——判据本身不变（仍由 `isProcessAlive` 决定），只是不急着返回。
+  const settled = async (): Promise<StaleRunKillOutcome> => {
+    await awaitProcessTreeQuiesced(pid, { ...(opts.quiesceLog ? { log: opts.quiesceLog } : {}) })
+    return 'killed'
+  }
   killProcessTree(pid, 'SIGTERM')
   const termWaitMs = opts.termWaitMs ?? 1_000
   const termDeadline = Date.now() + termWaitMs
   while (Date.now() < termDeadline) {
-    if (!isProcessAlive(pid)) return 'killed'
+    if (!isProcessAlive(pid)) return await settled()
     await Bun.sleep(50)
   }
   killProcessTree(pid, 'SIGKILL')
   const killDeadline = Date.now() + 500
   while (Date.now() < killDeadline) {
-    if (!isProcessAlive(pid)) return 'killed'
+    if (!isProcessAlive(pid)) return await settled()
     await Bun.sleep(50)
   }
   return 'kill-failed'

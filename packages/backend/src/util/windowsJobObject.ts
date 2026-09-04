@@ -23,9 +23,17 @@ import { dlopen, ptr } from 'bun:ffi'
 export interface ProcessTreeOwnership {
   readonly kind: 'windows-job-object' | 'posix-process-group' | 'none'
   /** Terminate every process in the tree. Idempotent. Returns false when the
-   * syscall itself failed — the caller must not then claim the tree is gone. */
+   * syscall itself failed — the caller must not then claim the tree is gone.
+   *
+   * RFC-356 T7: this does NOT close the handle. Ownership (and therefore the
+   * ability to observe the tree dying) survives the kill; `dispose` is the only
+   * close point. */
   terminate: () => boolean
-  /** Live process count, or null when this platform cannot answer. */
+  /** Live process count, or null when this platform cannot answer.
+   *
+   * RFC-356 T7: still answers AFTER `terminate()` — that window is exactly when
+   * the platform needs to know whether the tree has actually gone away before
+   * deleting its worktree (issue #13). Zero only once `dispose` has run. */
   liveCount: () => number | null
   /**
    * Stop tracking AND stop the tree.
@@ -210,21 +218,22 @@ export function adoptProcessTree(pid: number): ProcessTreeOwnership | null {
       kind: 'windows-job-object',
       terminate: () => {
         if (closed) return true
-        let ok = false
-        try {
-          ok = k32.symbols.TerminateJobObject(handle, 1) !== 0
-        } finally {
-          closed = true
-          k32.symbols.CloseHandle(handle)
-        }
-        // The return value is the whole point: a caller that treats a failed
-        // syscall as "definitely dead" is making exactly the claim this module
-        // exists to make trustworthy. (Closing the last handle of a
-        // KILL_ON_JOB_CLOSE job very likely kills the tree anyway — but
-        // "likely" is not the answer being asked for.)
-        return ok
+        // RFC-356 T7 —— `terminate()` **不再顺带关句柄**。
+        //
+        // 它以前在 finally 里 `closed = true; CloseHandle(handle)`，于是杀树那一刻
+        // 观测面就被销毁：`liveCount()` 会走下面的 `closed` 短路返回硬编码的 0，
+        // `killProcessTreeWin32` 又紧跟着把 map 项删掉，`isProcessTreeAlive` 从此返回
+        // null。结果是「杀完等树真的死透再删工作树」这件事在 Windows 上**根本无法观测**
+        // ——而那正是 issue #13 里 `git worktree remove` 被句柄挡住的根因所在。
+        //
+        // 现在关句柄的唯一出口是 `dispose()`（语义不变：停止跟踪**并**停止整棵树）。
+        // 句柄留着不会让树活下来——job 仍带 KILL_ON_JOB_CLOSE，daemon 退出即终止。
+        return k32.symbols.TerminateJobObject(handle, 1) !== 0
+        // 返回值是重点：把失败的 syscall 当成「肯定死了」，正是本模块要杜绝的断言。
       },
       liveCount: () => {
+        // `closed` 只在 dispose 之后为真——那时句柄已关，无从查起。terminate 之后
+        // 照样查内核，这是 RFC-356 L3 等待树静默的唯一证据来源。
         if (closed) return 0
         const info = new Uint8Array(ACCOUNTING_STRUCT_BYTES)
         const ok = k32.symbols.QueryInformationJobObject(

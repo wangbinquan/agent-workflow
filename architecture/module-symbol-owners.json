@@ -6,7 +6,7 @@
     "moduleFiles": 1332,
     "productionFiles": 2719,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25943
+    "symbolsIncludingFileRoots": 25951
   },
   "entries": [
     {
@@ -210088,6 +210088,18 @@
       "currentLayer": "util",
       "exported": true,
       "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#awaitProcessTreeQuiesced",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "awaitProcessTreeQuiesced",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/process.ts",
       "id": "owner:packages/backend/src/util/process.ts#DEFAULT_VERSION_PROBE_TIMEOUT_MS",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -210172,10 +210184,34 @@
       "currentLayer": "util",
       "exported": false,
       "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#log",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "log",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
+      "file": "packages/backend/src/util/process.ts",
       "id": "owner:packages/backend/src/util/process.ts#ownedTrees",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "ownedTrees",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
+      "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#ownershipDegradationWarned",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "ownershipDegradationWarned",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -210262,6 +210298,18 @@
       "symbol": "ProcessLivenessOptions",
       "targetContext": "task-execution",
       "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#processTreeOwnershipStatus",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "processTreeOwnershipStatus",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
     },
     {
       "currentContext": "legacy",
@@ -210364,6 +210412,42 @@
       "currentLayer": "util",
       "exported": true,
       "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#TREE_QUIESCE_BUDGET_MS",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "TREE_QUIESCE_BUDGET_MS",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#TreeQuiesceLog",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "TreeQuiesceLog",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#TreeQuiesceOutcome",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "TreeQuiesceOutcome",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/process.ts",
       "id": "owner:packages/backend/src/util/process.ts#VersionProbeOpts",
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
@@ -210380,6 +210464,18 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "VersionProbeResult",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
+      "file": "packages/backend/src/util/process.ts",
+      "id": "owner:packages/backend/src/util/process.ts#warnOwnershipDegradedOnce",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "warnOwnershipDegradedOnce",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -312015,5 +312111,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a6dd8ea57cbac46c3a38bbc20298bd02c8a79927006ecb831b2fc4420d352393"
+  "sourceDigest": "sha256:76f84511a50903767dbf46617c42475e80053d725093f8e8d915f6d8d69b5441"
 }
