@@ -1,5 +1,5 @@
 import type { DbClient } from '../../src/db/client'
-import { createSqliteTaskDagCollaborationOperations } from '../../src/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations'
+import { createTaskDagCollaborationOperations } from '../../src/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { createSqliteCollaborationRuntimeMechanics } from '../../src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '../../src/modules/task-execution/public/participants'
@@ -216,7 +216,7 @@ export function runTaskWithRealTestTopology(
       runtimeSessionLeases,
       runtimeRegistry,
       taskDagCollaboration:
-        options.taskDagCollaboration ?? createSqliteTaskDagCollaborationOperations(options.db),
+        options.taskDagCollaboration ?? createTaskDagCollaborationOperations(options.db),
       collaborationRuntime:
         options.collaborationRuntime ?? createSqliteCollaborationRuntimeMechanics(options.db),
       workgroupTurns: options.workgroupTurns ?? createSqliteWorkgroupTurnsOperations(options.db),

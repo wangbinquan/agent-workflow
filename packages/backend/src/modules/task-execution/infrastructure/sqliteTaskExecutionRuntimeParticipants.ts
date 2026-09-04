@@ -19,7 +19,7 @@ import { composeWrapperRuntime } from '../composition/wrapperRuntime'
 import type { RuntimeRegistryOperations } from '@/services/runtimeRegistry'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
-import { createSqliteTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/sqliteTaskDagCollaborationOperations'
+import { createTaskDagCollaborationOperations } from '@/modules/collaboration/infrastructure/taskDagCollaborationOperations'
 import { createSqliteWorkgroupTurnsOperations } from './sqliteWorkgroupTurnsOperations'
 import { createSqliteChildExecutionLaunchOperations } from './sqliteChildExecutionLaunchOperations'
 
@@ -63,7 +63,7 @@ export function createSqliteTaskExecutionRuntimeParticipants(input: {
           persistence: input.persistence,
           runtimeSessionLeases: input.runtimeSessionLeases,
           runtimeRegistry: input.runtimeRegistry,
-          taskDagCollaboration: createSqliteTaskDagCollaborationOperations(input.db),
+          taskDagCollaboration: createTaskDagCollaborationOperations(input.db),
           collaborationRuntime: input.collaborationRuntime,
           workgroupTurns: createSqliteWorkgroupTurnsOperations(input.db),
           childLaunch: createSqliteChildExecutionLaunchOperations(input.db),

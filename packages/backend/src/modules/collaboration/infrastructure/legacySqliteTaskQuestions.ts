@@ -24,6 +24,7 @@ import { createManualQuestionOpen } from '@/modules/collaboration/public/command
 import { humanGateComposition } from '@/services/humanGateComposition'
 
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRunOutputs, nodeRuns, taskQuestions, tasks } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -814,7 +815,7 @@ async function deriveEntryPhase(db: DbClient, entry: TaskQuestionRow): Promise<T
  *  always reruns its handler, so its target MUST have run (else it would park-but-never-
  *  dispatch). Shared so create / reassign / dispatch agree on "runnable". */
 export async function taskNodeHasRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
 ): Promise<boolean> {

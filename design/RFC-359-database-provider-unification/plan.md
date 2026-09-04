@@ -19,7 +19,7 @@ W1 接线类条目 → W3 → W4 → W5 → W6**。原稿「W1 优先」的理�
 
 | 任务 | 内容 | 证据 |
 | --- | --- | --- |
-| T1 | **P0-7** 延迟提问自动派发：PG 无实现。做法二选一（设计门定）——①把 `legacySqliteClarify/autoDispatch.ts` 收成 provider-中立一份；②W2 之后再合一，W1 先给 PG 一个诚实降级（不抛、记结构化诊断） | 真机实证，`node_runs` 0 行 |
+| T1 ✅ | **P0-7** 延迟提问自动派发：PG 无实现。**已按做法①落地（2026-09-05）**：派发管线 `legacySqliteTaskQuestionDispatch.ts` 改跑 `DatabaseSession`（事务体开头 `lockAggregateRoot(tasks)`），事务体里的六类参与者各合成一份中立实现（committed-event append / node_runs 铸造 / human-gate 跃迁 / continuation 准入 / 决定接受 / gate 操作日志），`createTaskDagCollaborationOperations` 两 provider 共用，PG daemon 的 `DeferredTaskQuestionDispatcherBinding` 删除。`rfc359-t1-deferred-question-dispatch.test.ts` + 三个原子测试在两个引擎上各绿 | 真机实证，`node_runs` 0 行 → 两引擎各铸出 cross-clarify-answer rerun |
 | T2 | **F-H2-1** 评审决定 / 反问下发 / 快速澄清三条命令端口：PG 无实现，路由必 500 | `commandContext.ts:161-186` |
 | T3 | **F-H2-2** development mission 的 `agentLauncher` / `scriptLauncher` 未注入 + 终态观察者零调用 | `agentActionOrchestrator.ts:274-279` |
 | T4 | **P0-3/P0-4** boot 恢复四步在 PG 不可达；`servePostgresqlDaemon` 永不返回 | `cli/start.ts:1160-1162,1570,2007-2037` |
@@ -46,15 +46,15 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   （design §3.2 / §3.3）。
 - **T9** `platform/persistence/writerLease.ts`：SQLite 进程内单写者异步租约 + 重入检出
   （`AsyncLocalStorage`）。
-- **T10** 原子性对拍用例：proposal §3 的三组实测固化，两个 provider 各跑一遍（**AC-3**）。
+- **T10 ✅** 原子性对拍用例：proposal §3 的三组实测固化，两个 provider 各跑一遍（**AC-3**）——`rfc359-database-transaction.test.ts`（SQLite 前提 + 原语）与 `rfc359-each-provider-harness.test.ts`（双引擎回滚 / 提交）。
 - **T11（修订）** ~~`dbTxSync` 改为兼容层~~ **做不到**（同步返回 `T`，转调异步必改签名）。改为：
   逐 context 迁移调用点，与 W4 各批同批；`dbTxSync` 调用点归零时删除。过渡期共存危险形态已由
   `db/transactionScope.ts` 堵死（`88b9a5940`）。
-- **T11b** `platform/persistence/capabilities.ts`：`EngineCapabilities` 接口 + 两个 provider 实现
+- **T11b ✅** `platform/persistence/capabilities.ts`：`EngineCapabilities` 接口 + 两个 provider 实现
   （design §5）。把散落的既有资产收进来：`postgresqlNullOrdering.ts`、三条 parity 守卫的判据、
   `postgresqlSerializationRetry.ts` 的 `errno` 判据、RFC-357 的 `numeric*` 归一、标量函数 shim 清单。
   每项双引擎实测断言。
-- **T11c** PG 会话默认 READ COMMITTED，`serializable(…)` 作 opt-in；`lockAggregateRoot` / `claimRows` /
+- **T11c ✅** PG 会话默认 READ COMMITTED，`serializable(…)` 作 opt-in；`lockAggregateRoot` / `claimRows` /
   `advisoryLock` 三个并发原语落地并双引擎实测。
 - **T12** 事务体软超时 + 结构化诊断；lint 规则禁止事务体内 import 进程/网络/fs（design §3.4）。
 - **T13** RFC-311 基准库上实测吞吐前后对比，结果写回 proposal §6 的 **C-2**。
@@ -93,7 +93,7 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 - **T19b** 组合根全量：`cli/` 与 `*/composition*` 下禁 `*-not-bound` 与晚绑定 holder。
 - **T19c** 启动序列恰有一个调用方，`cli/start.ts` 无 provider 执行分支。
 - **T19d** 覆盖率对等棘轮（过渡期，可在 W1 后立即上）：同一 port 两侧行覆盖率差超阈值即红。
-- **T19e** `tests/helpers/eachProvider.ts`：`describeEachProvider` harness（design §11.1）——双引擎是
+- **T19e ✅（首版）** `tests/helpers/eachProvider.ts`：`describeEachProvider` harness（design §11.1）——双引擎是
   **缺省**，PG 侧无 URL 即 **fail** 而非 skip（`AW_TEST_PROVIDERS=sqlite` 仅本地显式降级）；
   per-file schema 隔离；body 拿不到 provider 名。存量 816 文件 / 1,882 处 `createInMemoryDb(` 逐 context 迁入。
 - **T19f** 守卫「测试不得写死引擎」：harness 之外的 `createInMemoryDb(` 棘轮 1,882 → 0；测试内
@@ -101,7 +101,7 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 - **T21b** 执行链取证进 push CI：两个引擎上各起一个任务跑到 done（RFC-349 验收漏掉的那一环）；
   `postgresql-evidence.yml` 的 `prepareSoakDataset` 不再把在飞任务归一成 done。
 - **T20** 方言表完备性守卫（语料按类型可达派生，沿用 `tests/architecture/postgresqlSurface.ts`）。
-- **T21** **四个 backend 分片各自带 `services: postgres:17`**，PG 半边在每个分片里跑（design §11.2）；
+- **T21 ✅（首版，`test-backend-postgresql` 窄 lane 暂留）** **四个 backend 分片各自带 `services: postgres:17`**，PG 半边在每个分片里跑（design §11.2）；
   `test-backend-postgresql` 窄 lane 退役。时长由 per-file schema 并行 + W4 后测试数减半对冲，
   实测写回 proposal §6。按 D5 不打折。
 - **T22** 退役 `rfc349-dual-provider-predicate-drift`（对象已消失），退役 `dbTxSync`（**C-1**）。

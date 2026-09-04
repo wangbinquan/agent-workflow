@@ -33,7 +33,12 @@
 import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  engineOf,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -75,7 +80,6 @@ const DISPATCH_RUN_COLUMNS = {
 } as const
 
 type DispatchRunRow = Pick<typeof nodeRuns.$inferSelect, keyof typeof DISPATCH_RUN_COLUMNS>
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
   type CauseClass,
@@ -86,7 +90,9 @@ import { evaluateDesignerRerunReadiness } from '@/services/clarify/service'
 import { pickFreshestRun } from '@/services/freshness'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
-import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
+import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
+import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
+import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 import {
   assertTaskAcceptsQuestions,
@@ -104,15 +110,17 @@ import type {
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
 import {
   humanGateComposition,
-  type HumanGateOperationStoreBridge as SqliteHumanGateOperationStore,
   type QuestionDispatchManifestBridge as QuestionDispatchManifest,
   type QuestionDispatchReceiptEnvelopeBridge as QuestionDispatchReceiptEnvelope,
 } from '@/services/humanGateComposition'
-import { appendTaskNodeStatusesCommittedEventTx } from '@/modules/task-execution/public/participants'
 import {
-  appendHumanGateDecisionCommittedEventTx,
-  appendQuestionDispatchCommittedEventTx,
-} from '@/modules/collaboration/public/participants'
+  appendHumanGateDecisionCommittedEvent,
+  appendQuestionDispatchCommittedEvent,
+} from './collaborationCommittedEvents'
+import {
+  DatabaseHumanGateOperationJournal,
+  type HumanGateOperationJournal,
+} from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
@@ -227,16 +235,16 @@ function decisionResultFromEnvelope(
   }
 }
 
-function replayCommittedQuestionDispatch(input: {
-  db: DbClient
+async function replayCommittedQuestionDispatch(input: {
+  db: ProviderNeutralDatabase
   taskId: string
   entryIds: readonly string[]
   actor: DispatchTaskQuestionsActor
   decision: DispatchTaskQuestionsDecisionArgs
-}): DispatchTaskQuestionsDecisionResult | null {
+}): Promise<DispatchTaskQuestionsDecisionResult | null> {
   const gateRef = `questions:${input.taskId}`
   const payload = questionDispatchPayload(input.entryIds)
-  const rows = input.db
+  const rows = await input.db
     .select()
     .from(collaborationGateOperations)
     .where(
@@ -248,7 +256,6 @@ function replayCommittedQuestionDispatch(input: {
       ),
     )
     .orderBy(desc(collaborationGateOperations.createdAt))
-    .all()
   const explicit = input.decision.idempotencyKey
   const candidate = rows.find((row) => {
     if (explicit !== undefined && row.idempotencyKey !== explicit) return false
@@ -287,15 +294,15 @@ function replayCommittedQuestionDispatch(input: {
   return decisionResultFromEnvelope(decodeQuestionDispatchReceipt(candidate.receiptJson!), true)
 }
 
-function ensureLegacyQuestionGateRevisionTx(input: {
-  tx: DbTxSync
-  operations: SqliteHumanGateOperationStore
+async function ensureLegacyQuestionGateRevisionTx(input: {
+  tx: DatabaseTransaction
+  operations: HumanGateOperationJournal
   taskId: string
   expectedTaskRevision: number
   gateRef: string
   now: number
-}): number {
-  const current = input.operations.latestGateRevisionTx({
+}): Promise<number> {
+  const current = await input.operations.latestGateRevisionTx({
     tx: input.tx,
     gateKind: 'questions',
     gateRef: input.gateRef,
@@ -317,14 +324,14 @@ function ensureLegacyQuestionGateRevisionTx(input: {
       ),
     },
   }
-  const begun = input.operations.beginTx({
+  const begun = await input.operations.beginTx({
     tx: input.tx,
     operationId: ulid(input.now),
     request,
     idempotencyKey: `legacy:${input.gateRef}:1`,
     now: input.now,
   })
-  input.operations.commitTx({
+  await input.operations.commitTx({
     tx: input.tx,
     operationId: begun.operation.id,
     expectedClaimEpoch: begun.operation.claimEpoch,
@@ -336,7 +343,7 @@ function ensureLegacyQuestionGateRevisionTx(input: {
     }),
     now: input.now,
   })
-  input.operations.completeTx({
+  await input.operations.completeTx({
     tx: input.tx,
     operationId: begun.operation.id,
     expectedClaimEpoch: begun.operation.claimEpoch,
@@ -432,7 +439,7 @@ const CAUSE_PRIORITY: Record<CauseClass, number> = {
  * nothing stamped) when ANY requested clarify entry is unsealed.
  */
 async function assertRequestedEntriesSealed(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   requested: TaskQuestionRow[],
 ): Promise<void> {
   const clarifyEntries = requested.filter((e) => e.sourceKind !== 'manual')
@@ -503,7 +510,7 @@ function mapEntryShards(
 }
 
 export async function resolveEntryShardKeys(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   entries: TaskQuestionRow[],
 ): Promise<Map<string, string | null>> {
   const originIds = entryOriginIds(entries)
@@ -516,31 +523,6 @@ export async function resolveEntryShardKeys(
       })
       .from(clarifyRounds)
       .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
-    for (const r of rounds) shardByOrigin.set(r.origin, r.askingShardKey)
-  }
-  return mapEntryShards(entries, shardByOrigin)
-}
-
-/** RFC-172b (T5): the SYNC mirror of {@link resolveEntryShardKeys} for the in-tx recheck (dbTxSync
- *  is synchronous — no await inside). Same asking_shard_key join, same manual→null contract, so the
- *  in-tx (target, shard) gate is byte-consistent with the async pre-check. Only entries that
- *  APPEARED between the pre-check and the tx need this (an entry's shard is immutable once its round
- *  exists), but resolving the whole set is cheap and keeps the two paths identical. */
-function resolveEntryShardKeysSync(
-  tx: DbTxSync,
-  entries: TaskQuestionRow[],
-): Map<string, string | null> {
-  const originIds = entryOriginIds(entries)
-  const shardByOrigin = new Map<string, string | null>()
-  if (originIds.length > 0) {
-    const rounds = tx
-      .select({
-        origin: clarifyRounds.intermediaryNodeRunId,
-        askingShardKey: clarifyRounds.askingShardKey,
-      })
-      .from(clarifyRounds)
-      .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
-      .all()
     for (const r of rounds) shardByOrigin.set(r.origin, r.askingShardKey)
   }
   return mapEntryShards(entries, shardByOrigin)
@@ -597,7 +579,7 @@ function computeUpstreamFrontier(
  * scheduler cascade. Resume is the caller's job.
  */
 export async function dispatchTaskQuestions(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -620,7 +602,7 @@ export async function dispatchTaskQuestions(
  * lifecycle release, one canonical continuation, and the replay receipt share
  * the same transaction. The returned continuation ref is composition-only. */
 export async function dispatchTaskQuestionsWithDecision(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -632,7 +614,7 @@ export async function dispatchTaskQuestionsWithDecision(
       'entryIds (a non-empty array of task_question ids) is required',
     )
   }
-  const replay = replayCommittedQuestionDispatch({ db, taskId, entryIds, actor, decision })
+  const replay = await replayCommittedQuestionDispatch({ db, taskId, entryIds, actor, decision })
   if (replay !== null) return replay
 
   const capture: PreparedQuestionDispatchDecision['capture'] = {}
@@ -655,7 +637,7 @@ export async function dispatchTaskQuestionsWithDecision(
  *  are cleared, but dispatch filters on neither, so the stale id would still dispatch withdrawn
  *  work. Returns EMPTY_RESULT when nothing is queued. */
 export async function dispatchDeferredTaskQuestions(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   actor: DispatchTaskQuestionsActor,
   opts?: {
@@ -791,7 +773,7 @@ function selectDispatchBatch(requested: TaskQuestionRow[]): {
  *  prechecks, resolve per-entry shards, and precompute the mint plans (all
  *  async reads happen HERE so the commit tx body stays purely synchronous). */
 async function planDispatchFrontier(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   snapshot: string,
   byTarget: Map<string, TaskQuestionRow[]>,
@@ -899,7 +881,7 @@ async function planDispatchFrontier(
 }
 
 async function dispatchTaskQuestionsLocked(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -956,7 +938,7 @@ async function dispatchTaskQuestionsLocked(
     )
   if (requested.length === 0) {
     if (decision === undefined) return EMPTY_RESULT
-    const prepared = prepareQuestionDispatchDecision({
+    const prepared = await prepareQuestionDispatchDecision({
       db,
       taskId,
       entryIds,
@@ -1069,7 +1051,7 @@ async function dispatchTaskQuestionsLocked(
   const { dispatchEntries, deferredEntries, byTarget } = selectDispatchBatch(requested)
   if (byTarget.size === 0) {
     if (decision === undefined) return EMPTY_RESULT
-    const prepared = prepareQuestionDispatchDecision({
+    const prepared = await prepareQuestionDispatchDecision({
       db,
       taskId,
       entryIds,
@@ -1103,7 +1085,7 @@ async function dispatchTaskQuestionsLocked(
   const prepared =
     decision === undefined
       ? undefined
-      : prepareQuestionDispatchDecision({
+      : await prepareQuestionDispatchDecision({
           db,
           taskId,
           entryIds,
@@ -1131,8 +1113,8 @@ async function dispatchTaskQuestionsLocked(
   )
 }
 
-function prepareQuestionDispatchDecision(input: {
-  db: DbClient
+async function prepareQuestionDispatchDecision(input: {
+  db: ProviderNeutralDatabase
   taskId: string
   entryIds: readonly string[]
   actor: DispatchTaskQuestionsActor
@@ -1140,22 +1122,24 @@ function prepareQuestionDispatchDecision(input: {
   rerunNodeRunIds: readonly string[]
   args: DispatchTaskQuestionsDecisionArgs
   capture: PreparedQuestionDispatchDecision['capture']
-}): PreparedQuestionDispatchDecision {
+}): Promise<PreparedQuestionDispatchDecision> {
   const gateRef = `questions:${input.taskId}`
   const latestGateRevision =
-    input.db
-      .select({ revision: collaborationGateOperations.resultGateRevision })
-      .from(collaborationGateOperations)
-      .where(
-        and(
-          eq(collaborationGateOperations.gateKind, 'questions'),
-          eq(collaborationGateOperations.gateRef, gateRef),
-          isNotNull(collaborationGateOperations.resultGateRevision),
-        ),
-      )
-      .orderBy(desc(collaborationGateOperations.resultGateRevision))
-      .limit(1)
-      .get()?.revision ?? 0
+    (
+      await input.db
+        .select({ revision: collaborationGateOperations.resultGateRevision })
+        .from(collaborationGateOperations)
+        .where(
+          and(
+            eq(collaborationGateOperations.gateKind, 'questions'),
+            eq(collaborationGateOperations.gateRef, gateRef),
+            isNotNull(collaborationGateOperations.resultGateRevision),
+          ),
+        )
+        .orderBy(desc(collaborationGateOperations.resultGateRevision))
+        .limit(1)
+        .get()
+    )?.revision ?? 0
   const capturedGateRevision =
     input.args.expectedGateRevision ?? (latestGateRevision === 0 ? 1 : latestGateRevision)
   const request: CanonicalHumanGateRequest = {
@@ -1191,7 +1175,7 @@ function prepareQuestionDispatchDecision(input: {
  *  retryable-error mapping and post-commit broadcasts/result assembly. Runs
  *  with question-write lock B held by the dispatchTaskQuestions entry. */
 async function commitDispatchPlan(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   actor: DispatchTaskQuestionsActor,
   plan: {
@@ -1273,31 +1257,35 @@ async function commitDispatchPlan(
     // deadlock. RFC-140 W2: the lock is now acquired at the dispatchTaskQuestions ENTRY (whole
     // read→plan→stamp pipeline) — see the wrapper above; this block runs lock-held.
     {
-      dbTxSync(db, (tx) => {
+      await databaseSessionFor(db).transaction(async (tx) => {
+        // PostgreSQL READ COMMITTED 下「先 SELECT 再 CAS」要靠任务聚合根行锁在同任务的并发派发之间串行；
+        // SQLite 的 BEGIN IMMEDIATE 本就全库独占（no-op）。
+        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)
         // (Codex re-gate H2): the terminal pre-check (assertTaskAcceptsQuestions, above) is a
         // TOCTOU window — the scheduler can trySetTaskStatus(done/canceled) between it and this
         // tx. Re-read tasks.status INSIDE the tx and roll back the WHOLE tx (no stamp, no mint)
         // if the task went terminal, so nothing is minted onto a finished task. Reuses the SAME
         // terminal set as the pre-check (no drift).
-        const curTask = tx
-          .select({
-            status: tasks.status,
-            lifecycleEventRevision: tasks.lifecycleEventRevision,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .all()[0]
+        const curTask = (
+          await tx
+            .select({
+              status: tasks.status,
+              lifecycleEventRevision: tasks.lifecycleEventRevision,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, taskId))
+        )[0]
         if (curTask === undefined || QUESTION_DISPATCH_CLOSED_TASK_STATUSES.has(curTask.status)) {
           throw new ConflictError(
             'task-terminal',
             `task ${taskId} became ${curTask?.status ?? 'missing'} before dispatch committed; nothing stamped or minted`,
           )
         }
-        let begun: ReturnType<SqliteHumanGateOperationStore['beginTx']> | undefined
+        let begun: Awaited<ReturnType<HumanGateOperationJournal['beginTx']>> | undefined
         const operations =
-          decision === undefined ? undefined : humanGateComposition.createHumanGateOperationStore()
+          decision === undefined ? undefined : new DatabaseHumanGateOperationJournal()
         if (decision !== undefined && operations !== undefined) {
-          const currentGateRevision = ensureLegacyQuestionGateRevisionTx({
+          const currentGateRevision = await ensureLegacyQuestionGateRevisionTx({
             tx,
             operations,
             taskId,
@@ -1311,7 +1299,7 @@ async function commitDispatchPlan(
               `question gate revision changed (expected ${decision.capturedGateRevision}, current ${currentGateRevision})`,
             )
           }
-          begun = operations.beginTx({
+          begun = await operations.beginTx({
             tx,
             operationId: decision.operationId,
             request: decision.request,
@@ -1330,7 +1318,7 @@ async function commitDispatchPlan(
             committed = true
             return
           }
-          operations.markPreparedTx({
+          await operations.markPreparedTx({
             tx,
             operationId: begun.operation.id,
             expectedClaimEpoch: begun.operation.claimEpoch,
@@ -1341,7 +1329,7 @@ async function commitDispatchPlan(
         const stillNull =
           dispatchIds.length === 0
             ? []
-            : tx
+            : await tx
                 .select({
                   id: taskQuestions.id,
                   override: taskQuestions.overrideTargetNodeId,
@@ -1363,7 +1351,6 @@ async function commitDispatchPlan(
                     eq(taskQuestions.confirmation, 'open'),
                   ),
                 )
-                .all()
         if (stillNull.length !== dispatchIds.length) throw new ConcurrentClaim()
         // Re-verify the planned snapshot is unchanged (atomic with the stamp+mint). A concurrent
         // reassign/reconcile that moved any entry's effective target (or origin) → retryable
@@ -1383,31 +1370,30 @@ async function commitDispatchPlan(
         // — re-run BOTH ledger gates inside the tx so a concurrent dispatch / quick-channel answer
         // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
         // runs + output ids ONCE for both.
-        const txRuns = tx
+        const txRuns = await tx
           .select(DISPATCH_RUN_COLUMNS)
           .from(nodeRuns)
           .where(eq(nodeRuns.taskId, taskId))
-          .all()
         const txOutputIds: ReadonlySet<string> =
           txRuns.length === 0
             ? new Set<string>()
             : new Set(
-                tx
-                  .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-                  .from(nodeRunOutputs)
-                  .where(
-                    inArray(
-                      nodeRunOutputs.nodeRunId,
-                      txRuns.map((r) => r.id),
-                    ),
-                  )
-                  .all()
-                  .map((r) => r.nodeRunId),
+                (
+                  await tx
+                    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
+                    .from(nodeRunOutputs)
+                    .where(
+                      inArray(
+                        nodeRunOutputs.nodeRunId,
+                        txRuns.map((r) => r.id),
+                      ),
+                    )
+                ).map((r) => r.nodeRunId),
               )
         // (a) RFC-128 P5-BC (R2-2, §5.2.12 contract 3): the in-flight recheck spans ANY deferred role
         //     (self/questioner/designer) DISPATCHED entry — the cross-batch serialization half.
         //     (RFC-162: 'echo' role deleted; the three deferred roles are the whole set now.)
-        const txDispatched = tx
+        const txDispatched = await tx
           .select()
           .from(taskQuestions)
           .where(
@@ -1417,13 +1403,12 @@ async function commitDispatchPlan(
               isNotNull(taskQuestions.dispatchedAt),
             ),
           )
-          .all()
         if (txDispatched.length > 0) {
           // RFC-172b (T5): the in-tx recheck must be shard-aware too — else a concurrent sibling
           // member dispatch that committed between the pre-check and here would re-block THIS member
           // node-wide. Sync-resolve the (possibly newly-appeared) in-flight entries' shards; reuse
           // the pre-tx `mintShardsByTarget` (built from dispatchEntries, which don't change).
-          const txInflightShards = resolveEntryShardKeysSync(tx, txDispatched)
+          const txInflightShards = await resolveEntryShardKeys(tx, txDispatched)
           const blocker = findOpenDispatchTarget(
             affected,
             {
@@ -1441,7 +1426,8 @@ async function commitDispatchPlan(
         // ledger — nothing mints quick continuations anymore (autoDispatchClarifyRound is the
         // only answer path and it dispatches), so the dispatched-ledger recheck above is complete.
         if (dispatchIds.length > 0) {
-          tx.update(taskQuestions)
+          await tx
+            .update(taskQuestions)
             .set({ dispatchedAt: now, dispatchedBy: actor.userId, updatedAt: now })
             // §5.2.14 finding B: confirmation='open' mirrors the CAS guard — never stamp a SUPERSEDED
             // (quick-finalize-confirmed) entry (the CAS above already threw ConcurrentClaim if any
@@ -1462,7 +1448,8 @@ async function commitDispatchPlan(
         // dispatches these once their home's in-flight rerun finishes. dispatched_at IS NULL
         // keeps a concurrently-claimed row inert (its marker would be inert anyway).
         if (deferredEntries.length > 0) {
-          tx.update(taskQuestions)
+          await tx
+            .update(taskQuestions)
             .set({ autoDispatchDeferredAt: now, updatedAt: now })
             .where(
               and(
@@ -1475,16 +1462,17 @@ async function commitDispatchPlan(
             )
             .run()
         }
-        const nodeRunMint = createSqliteNodeRunMintParticipantInTx(tx)
+        const nodeRunMint = createNodeRunMintParticipantInTx(tx)
         for (const p of mintPlans) {
-          nodeRunMint.mint(p.input)
+          await nodeRunMint.mint(p.input)
         }
         // RFC-134 §3.1 (retained) — seal 行戳归一化：本批 stamp 的 clarify 行若 sealed_at NULL
         // （能过 assertRequestedEntriesSealed 只因源轮已 answered——契约「已下发 ≠ 可渲染」），
         // 同事务补行戳，凡下发必可被 selectAgentQueue 渲染。sealed_by 留 NULL =「answered 轮证据
         // 落戳」审计语义；manual 不补（无 seal 概念）；已 sealed 不改写（黄金锁）；forward-only。
         if (dispatchIds.length > 0) {
-          tx.update(taskQuestions)
+          await tx
+            .update(taskQuestions)
             .set({ sealedAt: now, updatedAt: now })
             .where(
               and(
@@ -1500,29 +1488,26 @@ async function commitDispatchPlan(
           const projectionRows =
             rerunNodeRunIds.length === 0
               ? []
-              : tx
+              : await tx
                   .select()
                   .from(nodeRuns)
                   .where(inArray(nodeRuns.id, rerunNodeRunIds))
                   .limit(rerunNodeRunIds.length)
-                  .all()
-          const accepted = humanGateComposition
-            .bindTaskDecisionParticipantInTx(tx)
-            .acceptGateDecisionTx({
-              taskId,
-              // Task-execution owns only the two runtime park kinds. Question
-              // dispatch releases the clarify park while collaboration keeps
-              // its finer `questions` audit identity.
-              gate: { kind: 'clarify', ref: decision.gateRef },
-              expectedTaskRevision: decision.request.expectedTaskRevision,
-              expectedNodeProjection: humanGateNodeProjectionFence(
-                projectionRows.map(questionDispatchProjectionMember),
-              ),
-              continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
-              operationId: begun.operation.id,
-              now,
-              nodeChanges: pendingProjectionNodeChanges,
-            })
+          const accepted = await acceptHumanGateDecisionTx(tx, {
+            taskId,
+            // Task-execution owns only the two runtime park kinds. Question
+            // dispatch releases the clarify park while collaboration keeps
+            // its finer `questions` audit identity.
+            gate: { kind: 'clarify', ref: decision.gateRef },
+            expectedTaskRevision: decision.request.expectedTaskRevision,
+            expectedNodeProjection: humanGateNodeProjectionFence(
+              projectionRows.map(questionDispatchProjectionMember),
+            ),
+            continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
+            operationId: begun.operation.id,
+            now,
+            nodeChanges: pendingProjectionNodeChanges,
+          })
           const envelope: QuestionDispatchReceiptEnvelope = {
             schemaVersion: 1,
             kind: 'question-dispatch',
@@ -1542,14 +1527,14 @@ async function commitDispatchPlan(
               deferred: deferredEntries,
             },
           }
-          operations.commitTx({
+          await operations.commitTx({
             tx,
             operationId: begun.operation.id,
             expectedClaimEpoch: begun.operation.claimEpoch,
             receiptJson: encodeQuestionDispatchReceipt(envelope),
             now,
           })
-          operations.completeTx({
+          await operations.completeTx({
             tx,
             operationId: begun.operation.id,
             expectedClaimEpoch: begun.operation.claimEpoch,
@@ -1563,7 +1548,7 @@ async function commitDispatchPlan(
             roundId: null,
           }
           const eventGroupId = committedEventGroupId('collaboration', begun.operation.id)
-          const decisionEventRef = appendHumanGateDecisionCommittedEventTx(tx, {
+          const decisionEventRef = await appendHumanGateDecisionCommittedEvent(tx, {
             family: 'questions',
             gate,
             decision: { gateKind: 'questions', kind: 'dispatched' },
@@ -1577,7 +1562,7 @@ async function commitDispatchPlan(
               correlationRef: `human-gate-node-run:${gateNodeRunId}`,
             },
           })
-          const questionEventRef = appendQuestionDispatchCommittedEventTx(tx, {
+          const questionEventRef = await appendQuestionDispatchCommittedEvent(tx, {
             gate,
             questionIds: [...dispatchIds, ...deferredEntries.map((entry) => entry.entryId)],
             reruns: dispatchedReruns.map((rerun) => ({
@@ -1617,7 +1602,7 @@ async function commitDispatchPlan(
           const taskEventRef =
             pendingProjectionNodeChanges.length === 0
               ? null
-              : appendTaskNodeStatusesCommittedEventTx(tx, {
+              : await appendTaskNodeStatusesCommittedEvent(tx, {
                   taskId,
                   reason: 'human-gate',
                   nodeChanges: pendingProjectionNodeChanges,
@@ -1629,7 +1614,7 @@ async function commitDispatchPlan(
                     correlationRef: `human-gate-node-run:${gateNodeRunId}`,
                   },
                 })
-          const questionEventRef = appendQuestionDispatchCommittedEventTx(tx, {
+          const questionEventRef = await appendQuestionDispatchCommittedEvent(tx, {
             gate: {
               taskId,
               nodeRunId: gateNodeRunId,
@@ -1886,7 +1871,7 @@ function findOpenDispatchTarget(
  * node's open run finishes.
  */
 async function assertNoInFlightDispatch(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   affected: ReadonlySet<string>,
   mintCauseByTarget: ReadonlyMap<string, CauseClass>,
@@ -1942,7 +1927,10 @@ async function assertNoInFlightDispatch(
 }
 
 /** node_run ids (within `runIds`) that captured ≥1 <workflow-output> row. */
-async function runIdsWithOutput(db: DbClient, runIds: string[]): Promise<Set<string>> {
+async function runIdsWithOutput(
+  db: ProviderNeutralDatabase,
+  runIds: string[],
+): Promise<Set<string>> {
   if (runIds.length === 0) return new Set()
   const rows = await db
     .select({ nodeRunId: nodeRunOutputs.nodeRunId })
@@ -2032,7 +2020,7 @@ function ledgerDesc(l: LedgerResolution): string {
 }
 
 export async function resolveBorrowForNode(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   iteration: number,
@@ -2111,7 +2099,7 @@ export async function resolveBorrowForNode(
  * conflicting agents in one continuation. Returns the borrowed agentName, or null.
  */
 async function resolveDeferredSelfQuestionerBorrowForNode(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   iteration: number,
@@ -2223,7 +2211,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
  * designer dispatch is reported `{ open: true, borrowAgentName: null }`.
  */
 async function resolveDesignerBorrowForNode(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   nodeId: string,
   iteration: number,
@@ -2295,7 +2283,7 @@ async function resolveDesignerBorrowForNode(
  * override to ANY agent node — designer or not — carries the answer without a graph edge.
  */
 async function assertSafeFrontierTarget(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   targetNodeId: string,
 ): Promise<void> {
@@ -2324,7 +2312,7 @@ async function assertSafeFrontierTarget(
  * question set, not the graph designer's siblings).
  */
 async function assertDesignerReady(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   targetNodeId: string,
   group: TaskQuestionRow[],
@@ -2395,7 +2383,7 @@ interface FrontierMintPlan {
  * the same dispatch transaction.
  */
 export async function buildFrontierMintPlan(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   taskId: string,
   targetNodeId: string,
   // RFC-127 借壳: the node whose agent X is borrowed (null = home runs its own agent).

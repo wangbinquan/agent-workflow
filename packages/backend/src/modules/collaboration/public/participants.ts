@@ -11,7 +11,6 @@ import {
 
 export type { HumanGateOpenParticipantResult } from '../application/ports/humanGateOpenParticipant'
 export type {
-  DeferredTaskQuestionDispatcher,
   TaskDagCollaborationOperations,
   TaskDagOpenClarifyEvidence,
 } from '../application/ports/taskDagCollaborationOperations'

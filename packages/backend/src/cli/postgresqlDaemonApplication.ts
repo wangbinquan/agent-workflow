@@ -90,13 +90,12 @@ import type { TaskDriveCoordinator } from '@/modules/task-execution/application/
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createPostgresqlTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/postgresqlTaskDriverLifecycle'
 import {
-  createPostgresqlCollaborationRuntimeMechanics,
-  createPostgresqlCollaborationCommandContext,
-  createPostgresqlTaskDagCollaborationOperations,
   composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory,
+  createPostgresqlCollaborationCommandContext,
+  createPostgresqlCollaborationRuntimeMechanics,
+  createTaskDagCollaborationOperations,
 } from '@/modules/collaboration/composition'
 import { composePostgresqlCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
-import type { DeferredTaskQuestionDispatcher } from '@/modules/collaboration/public/participants'
 import {
   readCommittedReviewArtifactBody,
   resolveCollaborationTaskAccess,
@@ -310,20 +309,6 @@ function isForeignAclType(type: string): type is ForeignResourceAclType {
     type === 'employee_tool' ||
     type === 'employee_job_template'
   )
-}
-
-class DeferredTaskQuestionDispatcherBinding implements DeferredTaskQuestionDispatcher {
-  private current: DeferredTaskQuestionDispatcher | null = null
-
-  bind(participant: DeferredTaskQuestionDispatcher): void {
-    if (this.current !== null) throw new Error('deferred-question-dispatcher-already-bound')
-    this.current = participant
-  }
-
-  async autoDispatchDeferredQuestions(taskId: string): Promise<void> {
-    if (this.current === null) throw new Error('deferred-question-dispatcher-not-bound')
-    await this.current.autoDispatchDeferredQuestions(taskId)
-  }
 }
 
 type PostgresqlProviderRuntime = Extract<
@@ -716,11 +701,9 @@ export async function composePostgresqlDaemonApplication(
       collaboration: workgroupClarify,
     }),
   )
-  const deferredQuestionDispatcher = new DeferredTaskQuestionDispatcherBinding()
-  const taskDagCollaboration = createPostgresqlTaskDagCollaborationOperations({
-    db: input.db,
-    deferredQuestions: deferredQuestionDispatcher,
-  })
+  // RFC-359 W1-T1（P0-7）：派发管线跑在 DatabaseSession 上，两个 provider 共用同一份投影；
+  // 此前这里是一个从未被 bind 的 holder，每个 tick 抛 deferred-question-dispatcher-not-bound。
+  const taskDagCollaboration = createTaskDagCollaborationOperations(input.db)
   const workspaceMaintenance = composePostgresqlWorkspaceMaintenanceCommand({
     db: input.db,
     appHome: input.appHome,

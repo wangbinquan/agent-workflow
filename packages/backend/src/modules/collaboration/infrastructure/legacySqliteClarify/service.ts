@@ -68,6 +68,7 @@ import {
 import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { clarifyRounds, nodeRuns, tasks } from '@/db/schema'
 import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
 import { humanGateComposition } from '@/services/humanGateComposition'
@@ -453,7 +454,7 @@ async function findSelfGateRunForShard(
 // ---------------------------------------------------------------------------
 
 export interface EvaluateDesignerRerunReadinessArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   taskId: string
   designerNodeId: string
   definition: WorkflowDefinition

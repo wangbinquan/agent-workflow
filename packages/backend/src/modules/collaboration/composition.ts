@@ -13,7 +13,7 @@ export {
   type PostgresqlCollaborationNodeRunLifecycleParticipantFactory,
   type PostgresqlCollaborationRuntimeMechanicsDependencies,
 } from './infrastructure/postgresqlCollaborationRuntimeMechanics'
-export { createPostgresqlTaskDagCollaborationOperations } from './infrastructure/postgresqlTaskDagCollaborationOperations'
+export { createTaskDagCollaborationOperations } from './infrastructure/taskDagCollaborationOperations'
 export {
   createCollaborationWsProjector,
   createSqliteCollaborationCommittedEventProjection,

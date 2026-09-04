@@ -13,8 +13,3 @@ export interface TaskDagCollaborationOperations {
   loadOpenClarifyEvidence(taskId: string): Promise<TaskDagOpenClarifyEvidence>
   loadUndispatchedParkTargets(taskId: string): Promise<ReadonlySet<string>>
 }
-
-/** Required command supplied by the provider-native question-dispatch runtime. */
-export interface DeferredTaskQuestionDispatcher {
-  autoDispatchDeferredQuestions(taskId: string): Promise<void>
-}

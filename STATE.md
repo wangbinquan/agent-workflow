@@ -2,7 +2,19 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
-> 🚧 **进行中 RFC（Draft，待批，2026-09-04）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
+> 🚧 **进行中 RFC（已批准 2026-09-04，In Progress）：[RFC-359 数据库 provider 统一抽象](design/RFC-359-database-provider-unification/proposal.md)。**
+> **进度（2026-09-05）**：W2 事务原语与能力矩阵已落（`platform/persistence/databaseTransaction.ts` / `capabilities.ts` /
+> `writerLease.ts`，`databaseSessionFor` / `engineOf` / `affectedRows`）；W5-T19e 双引擎 harness
+> （`tests/helpers/eachProvider.ts`：`describeEachProvider`，PG 缺库即红）与 W5-T21（四个 ubuntu 分片各带真
+> PostgreSQL，macOS 是唯一显式 `AW_TEST_PROVIDERS=sqlite` 的 lane）已进 CI；**W1-T1（P0-7）已修**：派发管线
+> `legacySqliteTaskQuestionDispatch.ts` 跑在 `DatabaseSession` 上，`createTaskDagCollaborationOperations` 两 provider
+> 共用，PG daemon 的 `*-not-bound` holder 删除，`rfc359-t1-deferred-question-dispatch.test.ts` 在两个引擎上各绿。
+> 同批合一的原子（每个都是一份实现 + PG 副本退役）：committed-event append、node_runs 铸造、human-gate
+> 任务跃迁 / continuation 准入 / 决定接受、human-gate 操作日志（journal）与持久化、collaboration 事件形状。
+> **下一步**：T2（评审 / 澄清决定三条命令端口，同一批原子已备好）→ T7b/T7c/T7d/T7e → W3 统一启动序列。
+> SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
+> 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
+> 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。
 > 起于用户明令「数据库统一抽象，以后不允许再出现两种数据库一个好一个不好的分支」。前置是覆盖全部
 > 153 对配对适配器 **+ 163 个无配对 PG 面文件**（49,748 行，与已审面积相当）的对账
 > （`design/dual-provider-parity-audit-2026-09-04.md`），确证 **9 条 P0 + 约 32 条 P1 + 约 21 条 P2**。

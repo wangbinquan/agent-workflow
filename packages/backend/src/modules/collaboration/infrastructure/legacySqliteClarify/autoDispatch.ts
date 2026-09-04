@@ -41,6 +41,7 @@
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   clarifyRounds,
   collaborationGateOperations,
@@ -1231,7 +1232,10 @@ export async function autoDispatchClarifyRound(
  *  Runs OUTSIDE lock B (dispatchTaskQuestions acquires it internally — non-reentrant). Callers:
  *  the runTask tick top (scheduler.ts), pre-deriveFrontier, so a freshly-released home (its
  *  in-flight rerun just completed) redispatches on the very tick that completion triggers. */
-export async function autoDispatchDeferredQuestions(db: DbClient, taskId: string): Promise<void> {
+export async function autoDispatchDeferredQuestions(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+): Promise<void> {
   // Codex impl-gate P2: TASK_QUESTION_CONFLICT.targetChanged resolves by RE-PLANNING, not by waiting —
   // and this tick may be the LAST one (the scope can go quiescent right after), which would
   // strand the marker until a manual dispatch. Retry the re-plan immediately, bounded (the

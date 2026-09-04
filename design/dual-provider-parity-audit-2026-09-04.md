@@ -56,6 +56,9 @@ daemon log: ERROR [scheduler] runTask: scope threw — failing task error=deferr
 
 **P0-7：PostgreSQL 上「延迟提问自动派发」子系统未实现，占位符在运行时抛错，每个任务必死。**
 
+> **已修（RFC-359 W1-T1，2026-09-05）**：派发管线改跑统一事务原语，`createTaskDagCollaborationOperations` 两 provider 共用，
+> holder 删除；`packages/backend/tests/rfc359-t1-deferred-question-dispatch.test.ts` 在 SQLite 与真 PostgreSQL 上各绿。
+
 - `cli/postgresqlDaemonApplication.ts:719` 创建 `DeferredTaskQuestionDispatcherBinding`，`:722`
   作为 `deferredQuestions` 依赖传给 `createPostgresqlTaskDagCollaborationOperations`；
   **全文件对它的 `.bind(...)` 调用计数 = 0**，`current` 永远是 `null`（`:323-325` 抛）。

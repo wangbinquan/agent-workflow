@@ -3975,3 +3975,10 @@ instead of importing another SQLite/PostgreSQL factory.」
 - 进程级 schema 投影（`db/providerSchema.ts` 的 `activeProvider`）是全局的，harness 在每个用例
   前显式选引擎、用完还原；自己手写 PostgreSQL 用例时同样要 `selectDatabaseSchemaProvider`
   成对使用，否则会渗进同进程后面的文件（本仓有前科）。
+- **Bun.SQL 的字符串绑定参数会按 json 类型二次序列化**：`pool.unsafe('… $1::json', ['[...]'])` 送到服务端的是
+  JSON **标量** `"[...]"`，`json_populate_recordset` 报 `cannot call json_populate_recordset on a scalar`。
+  要把 JSON 数组文本当 json 用，改成带唯一标签的美元引号内联（`$aw_seed$…$aw_seed$::json`），别走绑定参数。
+- **PostgreSQL 迁移器只投影 DDL，不种子行**：SQLite 迁移脚本里 `INSERT` 的行（`committed_event_family_cutovers`、
+  `auth_login_policy`、框架内置资源……）生产上是随 RFC-349 逻辑复制从 SQLite 带过去的。一个「只迁移过」的
+  PostgreSQL 库上 `appendCommittedEvent` 会直接 `cutover is missing`。harness 因此在迁移后把一个刚迁移完的
+  SQLite 内存库整表按外键拓扑复制进去，两个引擎的「起点」才是同一个；自己手写真库用例时同样要先种这些行。
