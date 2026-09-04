@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1949,
+    "entries": 1952,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -28964,6 +28964,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#createTaskArchiveMaintenanceCommand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#createTaskArchiveMaintenanceCommand",
+      "symbol": "createTaskArchiveMaintenanceCommand",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/composition/sqliteGateContinuationPreDrive.ts#createSqliteGateContinuationPreDriveStep",
@@ -30142,6 +30167,80 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#ArchiveTempDirectorySweepInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#ArchiveTempDirectorySweepInput",
+      "symbol": "ArchiveTempDirectorySweepInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#ArchiveTempDirectorySweepReceipt",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#ArchiveTempDirectorySweepReceipt",
+      "symbol": "ArchiveTempDirectorySweepReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#restoreLegacyMovedDirectories",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#restoreLegacyMovedDirectories",
+      "symbol": "restoreLegacyMovedDirectories",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": false,
         "event": false,
@@ -31244,19 +31343,17 @@
     {
       "controls": {
         "audit": true,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#createPostgresqlTaskArchiveMaintenanceCommand",
       "missingControls": [
-        "authority",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#createPostgresqlTaskArchiveMaintenanceCommand",
@@ -44306,31 +44403,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/taskArchive.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/taskArchive.ts#restoreLegacyMovedDirectories",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#restoreLegacyMovedDirectories",
-      "symbol": "restoreLegacyMovedDirectories",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -46456,7 +46528,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f",
+  "sourceDigest": "sha256:44fd76e2d3dc1bd1f84cae672cc8e27dd008dfdaa801dad4d40ed938ac3ba568",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -48084,8 +48156,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#397:tasks",
-        "line": 397,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#399:tasks",
+        "line": 399,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#finalizeDatabase",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -48100,8 +48172,8 @@
         "controlSubtype": null,
         "dataClass": "taskExecutionMaintenanceClaims",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#400:taskExecutionMaintenanceClaims",
-        "line": 400,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#402:taskExecutionMaintenanceClaims",
+        "line": 402,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#finalizeDatabase",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -51060,8 +51132,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskArchive.ts",
-        "id": "task-authority:packages/backend/src/services/taskArchive.ts#709:tasks",
-        "line": 709,
+        "id": "task-authority:packages/backend/src/services/taskArchive.ts#702:tasks",
+        "line": 702,
         "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

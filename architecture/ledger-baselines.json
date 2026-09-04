@@ -391,8 +391,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1949,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1952,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W3-T15-B：终态维护恢复其余四步走中立命令面（archiveTempDirectorySweep.ts、archive.recover 端口、workspace recover 扩展、两个中立工厂），两个 daemon 入口同序调用。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -412,27 +415,27 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 369,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 370,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-359 W3-T15-B：终态维护恢复其余四步走中立命令面（archiveTempDirectorySweep.ts、archive.recover 端口、workspace recover 扩展、两个中立工厂），两个 daemon 入口同序调用。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 495,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-359 W3-T15-A：端口化 boot 步骤（回收策略注册 / 凭据租约清理 / 融合三步 / 定时载荷治愈 / 模板与 demo 播种 / 投递恢复）按 SQLite 同序接进 PG daemon。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6448,
+      "baseline": 6457,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W3-T15-A：端口化 boot 步骤（回收策略注册 / 凭据租约清理 / 融合三步 / 定时载荷治愈 / 模板与 demo 播种 / 投递恢复）按 SQLite 同序接进 PG daemon。下一笔不涨即删。"
+        "why": "RFC-359 W3-T15-B：终态维护恢复其余四步走中立命令面（archiveTempDirectorySweep.ts、archive.recover 端口、workspace recover 扩展、两个中立工厂），两个 daemon 入口同序调用。下一笔不涨即删。"
       }
     },
     {
@@ -453,10 +456,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5316,
+      "baseline": 5325,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W3-T15-A：端口化 boot 步骤（回收策略注册 / 凭据租约清理 / 融合三步 / 定时载荷治愈 / 模板与 demo 播种 / 投递恢复）按 SQLite 同序接进 PG daemon。下一笔不涨即删。"
+        "why": "RFC-359 W3-T15-B：终态维护恢复其余四步走中立命令面（archiveTempDirectorySweep.ts、archive.recover 端口、workspace recover 扩展、两个中立工厂），两个 daemon 入口同序调用。下一笔不涨即删。"
       }
     },
     {
@@ -491,12 +494,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26142,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26149,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-359 W3-T15-B：终态维护恢复其余四步走中立命令面（archiveTempDirectorySweep.ts、archive.recover 端口、workspace recover 扩展、两个中立工厂），两个 daemon 入口同序调用。下一笔不涨即删。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f",
+    "sourceDigest": "sha256:44fd76e2d3dc1bd1f84cae672cc8e27dd008dfdaa801dad4d40ed938ac3ba568",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -509,8 +515,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "30376ef64435ba36be4e0e736cd0e62abca2bacd",
-    "contentDigest": "sha256:eb980c4d3befff994fe70d3de5d94633db2e4892fbf3597c5d336d1f96700db9",
+    "currentSnapshotSha": "80b5bbeabb8b9776801b10e61e7fc8abfcb2fd28",
+    "contentDigest": "sha256:5589fe4c156876c53f400c48edfc059eb69e69bd2cab6cdd0367b5f83a840764",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

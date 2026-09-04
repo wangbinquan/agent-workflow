@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1063,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20704,
+    "recursiveFields": 20707,
     "symbols": 987
   },
   "entries": [
@@ -124427,6 +124427,16 @@
           "type": "number"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recover.$parameter:input.webhookClaims.$variant:0",
+          "type": "'stale'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recover.$parameter:input.webhookClaims.$variant:1",
+          "type": "'all'"
+        },
+        {
           "consumerEdgeIds": [
             "import:1608d07293904b654b32"
           ],
@@ -124439,6 +124449,11 @@
             "import:1608d07293904b654b32"
           ],
           "fieldPath": "$method:recover.$return.failed",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recover.$return.healed",
           "type": "number"
         },
         {
@@ -163779,7 +163794,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f",
+  "sourceDigest": "sha256:44fd76e2d3dc1bd1f84cae672cc8e27dd008dfdaa801dad4d40ed938ac3ba568",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1973,
+    "backendFiles": 1974,
     "frontendFiles": 622,
     "legacyFiles": 616,
-    "moduleFiles": 1357,
-    "productionFiles": 2750,
+    "moduleFiles": 1358,
+    "productionFiles": 2751,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26142
+    "symbolsIncludingFileRoots": 26149
   },
   "entries": [
     {
@@ -119209,6 +119209,18 @@
     {
       "currentContext": "source-control",
       "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts#composeWorkspaceMaintenanceCommand",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "composeWorkspaceMaintenanceCommand",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts",
       "id": "owner:packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts#filesystem",
@@ -128567,6 +128579,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts#TaskArchiveRecoveryReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskArchiveRecoveryReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts#TaskArchiveSweepReceipt",
       "removeAfterWave": null,
       "status": "current-module",
@@ -133491,6 +133515,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "composeSqliteTaskExecutionProviderRuntime",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#createTaskArchiveMaintenanceCommand",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "createTaskArchiveMaintenanceCommand",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -139899,6 +139935,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "hostWorkflowRow",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#ArchiveTempDirectorySweepInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ArchiveTempDirectorySweepInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#ArchiveTempDirectorySweepReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ArchiveTempDirectorySweepReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#restoreLegacyMovedDirectories",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "restoreLegacyMovedDirectories",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/archiveTempDirectorySweep.ts#sweepArchiveTempDirectories",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "sweepArchiveTempDirectories",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -204904,18 +205000,6 @@
       "symbol": "recoverInterruptedArchives",
       "targetContext": "task-execution",
       "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/taskArchive.ts",
-      "id": "owner:packages/backend/src/services/taskArchive.ts#restoreLegacyMovedDirectories",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "restoreLegacyMovedDirectories",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -314409,5 +314493,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f"
+  "sourceDigest": "sha256:44fd76e2d3dc1bd1f84cae672cc8e27dd008dfdaa801dad4d40ed938ac3ba568"
 }

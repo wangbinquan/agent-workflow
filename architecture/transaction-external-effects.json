@@ -4966,8 +4966,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#transaction:372",
-      "line": 372,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#transaction:374",
+      "line": 374,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#finalizeDatabase",
       "status": "clear",
       "symbol": "finalizeDatabase",
@@ -5914,8 +5914,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/services/taskArchive.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/taskArchive.ts#dbTxSync:685",
-      "line": 685,
+      "id": "tx:packages/backend/src/services/taskArchive.ts#dbTxSync:678",
+      "line": 678,
       "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
       "status": "clear",
       "symbol": "deleteTreeRows",
@@ -5938,7 +5938,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5f7b5f90883ceaad6b37b2330ac6206c78ce4c4fd85aa1e73172eddb5760a68f",
+  "sourceDigest": "sha256:44fd76e2d3dc1bd1f84cae672cc8e27dd008dfdaa801dad4d40ed938ac3ba568",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
