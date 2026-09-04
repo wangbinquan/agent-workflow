@@ -6,7 +6,7 @@
     "moduleFiles": 1360,
     "productionFiles": 2753,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26175
+    "symbolsIncludingFileRoots": 26182
   },
   "entries": [
     {
@@ -5355,6 +5355,30 @@
       "currentLayer": "cli",
       "exported": false,
       "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#composeDaemonProviderSession",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "composeDaemonProviderSession",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#ComposedDaemonProviderSession",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ComposedDaemonProviderSession",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
       "id": "owner:packages/backend/src/cli/start.ts#ComposedPostgresqlProviderSession",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -5373,6 +5397,18 @@
       "symbol": "composePostgresqlProviderSession",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "composeSqliteProviderSession",
+      "targetContext": "bootstrap",
+      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -5419,6 +5455,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "DaemonProviderRuntimeComposition",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#DaemonProviderSessionComposeInput",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderSessionComposeInput",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "owner:packages/backend/src/cli/start.ts#DaemonProviderSessionComposer",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "DaemonProviderSessionComposer",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -5545,18 +5605,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#PostgresqlProviderRuntime",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "PostgresqlProviderRuntime",
-      "targetContext": "bootstrap",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
       "exported": true,
       "file": "packages/backend/src/cli/start.ts",
       "id": "owner:packages/backend/src/cli/start.ts#readyBrowserUrl",
@@ -5583,10 +5631,10 @@
       "currentLayer": "cli",
       "exported": false,
       "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#servePostgresqlDaemon",
+      "id": "owner:packages/backend/src/cli/start.ts#serveDaemon",
       "removeAfterWave": "W9",
       "status": "legacy-target",
-      "symbol": "servePostgresqlDaemon",
+      "symbol": "serveDaemon",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -158458,6 +158506,30 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#PostgresqlDatabaseProviderRuntime",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "PostgresqlDatabaseProviderRuntime",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseProviderRuntime",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "requireDatabaseProviderRuntime",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
       "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#resolveDatabaseProviderRuntime",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -158498,6 +158570,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ResolvedDatabaseProviderRuntime",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#SqliteDatabaseProviderRuntime",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "SqliteDatabaseProviderRuntime",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -314805,5 +314889,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e"
+  "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589"
 }

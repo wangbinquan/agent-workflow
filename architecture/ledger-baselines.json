@@ -349,8 +349,8 @@
       "id": "rfc345-resource-acl-facade-compatibility",
       "file": "packages/backend/tests/rfc345-resource-acl-facade-retirement.test.ts",
       "symbol": "EXACT_COMPATIBILITY_DEBT",
-      "baseline": 48,
-      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。"
+      "baseline": 47,
+      "why": "RFC-345 Resource ACL facade retirement 的逐 consumer 精确兼容债；新 consumer 不得进入旧 facade，条目只许随 public owner contract cutover 下降。 RFC-345 T9（2026-09-02）：11 条 bootstrap/package 边真退役（其中 `services/skill-zip.ts` consumer 归零后已删除），其余 11 条按 consumer 归属转交 W4-E1/W4/W4-E4a/W9-E，63 → 52。 RFC-352 T9/T10（2026-09-03）：memory 名下的两条边销账——`modules/memory/infrastructure/sqliteMemoryCatalog.ts` 与 `routes/memories.ts` 的 `hasResourceAclBypass` 都改到 `resource-catalog/public/types` 的唯一出口，52 → 50。 RFC-353 T5：fusion 编排迁进 knowledge-evolution 时把 `hasResourceAclBypass` 一并改经 `resource-catalog/public/types` 的唯一出口，该 consumer 归零，50 → 49。 RFC-359 W1-T3 后 task-execution 的动作执行器不再消费 services/agent（Agent 查询由 bootstrap 注入），48 → 47。"
     },
     {
       "id": "rfc349-provider-specific-business-dependencies",
@@ -392,10 +392,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1957,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-359 W1-T3 + W2-T11d（2026-09-05）：agent / script 动作执行器一份实现（actionExecutionRunners / actionExecutionEnvironment 两个新文件）、PG daemon 接上 launcher 与终态观察者；SQLite 统一事务旁观者隔离（guardForeignStatements / watchEventLoopYield）与 runtime registry 两阶段停机。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -422,7 +419,7 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 495,
+      "baseline": 494,
       "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
@@ -485,15 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26175,
+      "baseline": 26182,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T3 + W2-T11d（2026-09-05）：agent / script 动作执行器一份实现（actionExecutionRunners / actionExecutionEnvironment 两个新文件）、PG daemon 接上 launcher 与终态观察者；SQLite 统一事务旁观者隔离（guardForeignStatements / watchEventLoopYield）与 runtime registry 两阶段停机。"
+        "why": "RFC-359 W3-T14 / W3-T16 + 54e560a1b CI 收尾（2026-09-05）：serveDaemon 合一、composeSqliteProviderSession 抽出与查表装配、requireDatabaseProviderRuntime、registry hasTask/awaitReleasedSettled、bootstrap 改走目录查询面。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e",
+    "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -506,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "3c1eca179288e213847180ad20b7458972a8a0a8",
-    "contentDigest": "sha256:2c60a0396de8c66e5c4c80c466a9bc01c865cc165d813f6030dd06761bf7160e",
+    "currentSnapshotSha": "34bc7abf5b21b064faae30ffff06bb2a4da6644c",
+    "contentDigest": "sha256:110bbab077878e27a49c548a980520cef97348bcd5dc651582b94667f842decc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

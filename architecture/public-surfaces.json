@@ -140964,8 +140964,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:52aebe854233bde53a8c",
-            "import:d6081cab0c06792087a4"
+            "import:52aebe854233bde53a8c"
           ],
           "name": "child",
           "signatureDigest": "sha256:01ca5abb9f44e42121d3b40743de6fd5fd85d2d05d02b2371725a1c73bf20124"
@@ -163790,7 +163789,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e",
+  "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -1,20 +1,20 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 495,
+    "ambientWiring": 494,
     "architectureExceptions": 5323,
     "backgroundJobs": 370,
     "crossContextImports": 6459,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26175,
+    "moduleSymbolOwners": 26182,
     "mutationEntrypoints": 1957,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 987,
     "transactionExternalEffects": 483
   },
   "metrics": {
-    "ambientWiringEntries": 495,
+    "ambientWiringEntries": 494,
     "appDepsConsumers": [],
     "backendProductionFiles": 1976,
     "backendValueSccs": [
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e"
+  "sourceDigest": "sha256:9724a12590d709058db8af3eefe75343fb941bb1fe83dba0611a1a269189d589"
 }
