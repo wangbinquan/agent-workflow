@@ -1,12 +1,12 @@
 import {
-  TASK_LIST_ACTIVE_STATUSES,
-  TASK_LIST_ATTENTION_STATUSES,
-  TASK_LIST_FINISHED_STATUSES,
-  canonicalTaskStatuses,
+  TaskListViewSchema,
   isWorkgroupTask,
   parseTaskStatusList,
+  taskMatchesListView,
   type TaskCatalogListItem,
   type TaskListItem,
+  type TaskListView,
+  type TaskOperationsFacets,
   type TaskStatus,
 } from '@agent-workflow/shared'
 
@@ -143,22 +143,46 @@ function limitOf(raw: string | undefined): number {
   return value
 }
 
-function selectedStatuses(input: TaskCatalogSourceListInput): ReadonlySet<TaskStatus> | null {
-  const explicit = input.statuses === undefined ? null : parseTaskStatusList(input.statuses)
-  if (explicit !== null) return new Set(canonicalTaskStatuses(explicit))
-  if (input.view === 'active') return new Set(TASK_LIST_ACTIVE_STATUSES)
-  if (input.view === 'attention') return new Set(TASK_LIST_ATTENTION_STATUSES)
-  if (input.view === 'finished') return new Set(TASK_LIST_FINISHED_STATUSES)
-  if (input.view !== undefined && input.view !== 'all') {
-    throw new ValidationError('task-page-filter-invalid', `unknown view: ${input.view}`)
+/** The explicit `statuses=` filter, which is INDEPENDENT of the view: SQLite
+ *  applies both (`nonViewCondition` carries the statuses, `viewCondition` the
+ *  view), so a status filter must not swallow the view here either. Invalid
+ *  input is rejected rather than silently degraded to "no filter". */
+function explicitStatuses(input: TaskCatalogSourceListInput): ReadonlySet<TaskStatus> | null {
+  if (input.statuses === undefined) return null
+  const parsed = parseTaskStatusList(input.statuses)
+  if (parsed === null) {
+    throw new ValidationError('task-page-filter-invalid', 'statuses must contain known values')
   }
-  return null
+  return new Set(parsed)
 }
 
-function statusFacet(status: TaskStatus): 'active' | 'attention' | 'finished' {
-  if ((TASK_LIST_ACTIVE_STATUSES as readonly string[]).includes(status)) return 'active'
-  if ((TASK_LIST_ATTENTION_STATUSES as readonly string[]).includes(status)) return 'attention'
-  return 'finished'
+function listView(input: TaskCatalogSourceListInput): TaskListView {
+  if (input.view === undefined) return 'all'
+  const parsed = TaskListViewSchema.safeParse(input.view)
+  if (!parsed.success) {
+    throw new ValidationError('task-page-filter-invalid', `unknown view: ${input.view}`)
+  }
+  return parsed.data
+}
+
+function hasOpenAlert(item: TaskListItem): boolean {
+  return (item.openAlertCount ?? 0) > 0
+}
+
+/** Facet counts over the view-independent match set. The four buckets OVERLAP
+ *  by construction (`awaiting_review` is both active and attention, `failed` is
+ *  both finished and attention) and `attention` also takes open lifecycle
+ *  alerts — so each row is tested against every view instead of being sorted
+ *  into one bucket. Same predicate the SQLite `facet_values` CTE evaluates. */
+function facetsOf(items: readonly TaskListItem[]): TaskOperationsFacets {
+  const facets = { all: items.length, active: 0, attention: 0, finished: 0 }
+  for (const item of items) {
+    const alert = hasOpenAlert(item)
+    if (taskMatchesListView('active', item.status, alert)) facets.active += 1
+    if (taskMatchesListView('attention', item.status, alert)) facets.attention += 1
+    if (taskMatchesListView('finished', item.status, alert)) facets.finished += 1
+  }
+  return facets
 }
 
 function source(
@@ -185,10 +209,17 @@ function source(
         // source/view filters below.
         limit: 10_000,
       })
-      const statuses = selectedStatuses(input)
+      const statuses = explicitStatuses(input)
+      const view = listView(input)
       const q = input.q?.trim().toLocaleLowerCase()
       const cursor = input.cursor === undefined ? null : decodeCursor(input.cursor)
-      const all = rows
+      // Two layers, exactly as SQLite splits `non_view_matches` / `matches`:
+      // the non-view filters decide the FACET DENOMINATOR, and the view is
+      // laid on top of that for the page itself. Counting the facets on the
+      // view-filtered set instead rewrote all four tab counts on every tab
+      // click ("进行中" reported attention/finished as 0), which is what the
+      // `facets ignore view` contract exists to prevent.
+      const nonViewMatches = rows
         .filter((item) => sourceOf(item) === sourceId)
         .filter((item) => statuses === null || statuses.has(item.status))
         .filter((item) => {
@@ -211,24 +242,24 @@ function source(
             item.repoPath,
           ].some((value) => value?.toLocaleLowerCase().includes(q) === true)
         })
+      const matches = nonViewMatches
+        .filter((item) => taskMatchesListView(view, item.status, hasOpenAlert(item)))
         .sort((left, right) => right.startedAt - left.startedAt || right.id.localeCompare(left.id))
       const afterCursor =
         cursor === null
-          ? all
-          : all.filter(
+          ? matches
+          : matches.filter(
               (item) =>
                 item.startedAt < cursor.startedAt ||
                 (item.startedAt === cursor.startedAt && item.id.localeCompare(cursor.taskId) < 0),
             )
       const limit = limitOf(input.limit)
       const page = afterCursor.slice(0, limit)
-      const counts = { active: 0, attention: 0, finished: 0 }
-      for (const item of all) counts[statusFacet(item.status)] += 1
       return {
         items: page.map((item) => normalized(sourceId, item, now())),
         nextCursor:
           afterCursor.length > page.length && page.length > 0 ? encodeCursor(page.at(-1)!) : null,
-        facets: { all: all.length, ...counts },
+        facets: facetsOf(nonViewMatches),
       }
     },
   } satisfies TaskCatalogSource)

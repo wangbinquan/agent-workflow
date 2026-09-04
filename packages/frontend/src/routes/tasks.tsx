@@ -15,6 +15,7 @@ import {
   type TaskListView,
   type TaskCatalogListItem,
   type TaskCatalogPage,
+  type TaskOperationsFacets,
   type TaskOperationsFilters,
   type TaskOperationsListItem,
   type TaskSourceId,
@@ -321,7 +322,17 @@ function TasksPage() {
     selectedSource?.id,
   )
   const items = useMemo(() => dedupeItems(query.data?.pages), [query.data?.pages])
-  const facets = query.data?.pages[0]?.facets ?? EMPTY_FACETS
+  // 页签计数是**粘性**的：`view` 在 queryKey 里（useTaskOperationsPage），换页签
+  // 就是一次全新的查询，`query.data` 在响应回来之前是 undefined。直接回退到全零
+  // 会让四个数字先一起归零再跳回来——用户 2026-09-04 报的「点每个页签，其他页签
+  // 数字都在变、每次还不一样」有一半是这个（另一半是 PostgreSQL 源把 facets 数在
+  // 了 view 过滤之后，见 postgresqlTaskCatalogSources.ts）。facets 本就与 view 无关
+  // （契约见 rfc244-task-operations「facets ignore view」），沿用上一次已知值在
+  // 飞行期间是正确的，新响应一到即替换。
+  const fetchedFacets = query.data?.pages[0]?.facets
+  const lastFacets = useRef<TaskOperationsFacets>(EMPTY_FACETS)
+  if (fetchedFacets !== undefined) lastFacets.current = fetchedFacets
+  const facets = fetchedFacets ?? lastFacets.current
   // 列表就地跟随 WS：状态帧 / 新任务 / 删除都在后台重取后原地替换，不空屏、
   // 不回顶部、不折叠已展开的分支（见 useTaskOperationsSync 的注释）。
   useTaskOperationsSync()
