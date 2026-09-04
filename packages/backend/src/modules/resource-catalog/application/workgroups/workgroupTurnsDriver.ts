@@ -267,6 +267,11 @@ export interface WorkgroupClarifyAllowedInput {
   readonly clarifyBudget: number | undefined
 }
 
+/** RC 自有的 required 端口：由 bootstrap 用 collaboration 的判定实现（design §3.1 只画 COL→TE，RC 不 import COL）。 */
+export interface WorkgroupClarifyAllowedPort {
+  allowed(input: WorkgroupClarifyAllowedInput): Promise<boolean>
+}
+
 export interface WorkgroupTurnsPersistencePort {
   load(taskId: string): Promise<WorkgroupTurnsSnapshot | null>
   commit(input: WorkgroupTurnsLedgerCommit): Promise<WorkgroupTurnsLedgerCommitReceipt>

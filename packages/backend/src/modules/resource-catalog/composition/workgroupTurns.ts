@@ -1,6 +1,6 @@
-import type { WorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { WorkgroupClarifyAllowedPort } from '../application/workgroups/workgroupTurnsDriver'
 import {
   createPostgresqlWorkgroupTurnsOperations,
   type PostgresqlWorkgroupHostLedgerParticipantFactory,
@@ -13,7 +13,7 @@ import {
 export function composePostgresqlWorkgroupTurnsOperations(
   db: PostgresqlDatabaseClient,
   hostLedgerFactory: PostgresqlWorkgroupHostLedgerParticipantFactory,
-  clarifyAskGate: WorkgroupClarifyAskGate,
+  clarifyAskGate: WorkgroupClarifyAllowedPort,
 ): WorkgroupTurnsOperations {
   return createPostgresqlWorkgroupTurnsOperations({
     db,
