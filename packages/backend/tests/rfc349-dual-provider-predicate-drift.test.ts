@@ -44,8 +44,6 @@ const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   'modules/resource-catalog/infrastructure/CatalogQuery.ts::catalogWhere': '方言 SQL',
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance.ts::parseArtifacts':
     '行命名与取值转换',
-  'modules/task-execution/infrastructure/TaskCatalogSources.ts::source': '组装形状不同（非判据）',
-  'modules/task-execution/infrastructure/TaskCatalogSources.ts::targetLabel': '入参形状不同',
   'modules/task-execution/infrastructure/RuntimeSessionLeaseOperations.ts::constraintViolation':
     '驱动错误形状',
 }

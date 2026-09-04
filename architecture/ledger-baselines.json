@@ -62,8 +62,8 @@
       "id": "rfc349-dual-provider-predicate-forks",
       "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
       "symbol": "ALLOWED_DIVERGENCE",
-      "baseline": 17,
-      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。"
+      "baseline": 15,
+      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。"
     },
     {
       "id": "rfc294-cross-context-pilot-debt",
@@ -427,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6350,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "本笔是 RFC-358 T6/T9/T10 的增量重采，做法与上一笔相同：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），所以产物只描述**已提交**的代码，工作树里并发 session 的在制品（terminal-maintenance 那批）不会渗进来。本项 +4：全部是 RFC-358——图修复轮的持久化端口（`settleTurn` 的预约材料与回执）、copy 的 sidecar 回填判据（`resource-catalog/domain/agentSidecarBackfill`，两个 provider 共用一份），以及下游知情提示所需的 `workflowsUsingAgents` 端口与三个装配根的 `workflowQueries` 注入。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -486,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26029,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "本笔是 RFC-358 T6/T9/T10 的增量重采，做法与上一笔相同：在 HEAD 的只读导出上重算（`git archive` 出一份干净副本再跑生成器，算法与 CI 逐字相同），所以产物只描述**已提交**的代码，工作树里并发 session 的在制品（terminal-maintenance 那批）不会渗进来。本项 +5：全部是 RFC-358——图修复轮的持久化端口（`settleTurn` 的预约材料与回执）、copy 的 sidecar 回填判据（`resource-catalog/domain/agentSidecarBackfill`，两个 provider 共用一份），以及下游知情提示所需的 `workflowsUsingAgents` 端口与三个装配根的 `workflowQueries` 注入。下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -506,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1a8e24d23b8424403bffa6991ddcf1f08d982574",
-    "contentDigest": "sha256:5f66cdafc275d998ce122a9d4a0186e2c7fa44cfb9b7a749154d96fc1677f42d",
+    "currentSnapshotSha": "560ec86a71dadec7f908438c3ca5e9ee26f7db87",
+    "contentDigest": "sha256:c4261a5ee96f0f92298c38fe2b4848122c53a8750eb0e61d102ffba0c226868a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
