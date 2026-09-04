@@ -51,7 +51,10 @@ import { PostgresqlTaskRollbackQueries } from './postgresqlTaskRollbackQueries'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import { assertPostgresqlTaskOwnerlessTx, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  withPostgresqlSerializableTaskExecution,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })

@@ -21,7 +21,10 @@ import { createPostgresqlTaskAuthorizationParticipantInTx } from './postgresqlTa
 import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import { assertPostgresqlTaskOwnerlessTx, type PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  type PostgresqlTaskExecutionTransaction,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const HOST_NODE_IDS = ['__wg_leader__', '__wg_member__'] as const

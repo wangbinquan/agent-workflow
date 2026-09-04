@@ -16,9 +16,7 @@ import {
   type EventSourceDescriptor,
   type EventTypeDescriptor,
 } from '@/modules/event-center/domain/model'
-import {
-  createPostgresqlCommittedEventDeliveryPersistence,
-} from '@/platform/events/committed/postgresqlPersistence'
+import { createPostgresqlCommittedEventDeliveryPersistence } from '@/platform/events/committed/postgresqlPersistence'
 import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {

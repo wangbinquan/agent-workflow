@@ -14,7 +14,12 @@ import type {
   NodeRunMintInput,
 } from '../application/ports/nodeRunLifecyclePersistence'
 import type { NodeRunLifecycleParticipantInTx } from '../public/commands'
-import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  assertPostgresqlTaskOwnerTx,
+  type PostgresqlTaskExecutionTransaction,
+  withPostgresqlSerializableTaskExecution,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 

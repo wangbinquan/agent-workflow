@@ -94,8 +94,14 @@ import {
   type PostgresqlTaskRouteLaunchDependencies,
 } from './postgresqlTaskRouteLaunchOperations'
 import { createPostgresqlTaskRouteRepairOperations } from './postgresqlTaskRouteRepairOperations'
-import { withPostgresqlSerializableTaskExecution, withPostgresqlTaskAggregateTransaction } from './postgresqlTaskLifecycleTransaction'
-import { appendTaskLifecycleTransitionCommittedEvent, appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
+import {
+  withPostgresqlSerializableTaskExecution,
+  withPostgresqlTaskAggregateTransaction,
+} from './postgresqlTaskLifecycleTransaction'
+import {
+  appendTaskLifecycleTransitionCommittedEvent,
+  appendTaskNodeStatusesCommittedEvent,
+} from './taskLifecycleCommittedEvents'
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 
 function lacksMaterializedWorkspace(path: string): boolean {

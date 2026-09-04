@@ -134,11 +134,7 @@ export async function transitionHumanGateTask(
     .returning({ lifecycleEventRevision: tasks.lifecycleEventRevision })
   const changed = updated[0]
   if (changed === undefined) {
-    throw new ConcurrentTaskTransition(
-      input.taskId,
-      expectedFrom,
-      `human-gate:${input.transition}`,
-    )
+    throw new ConcurrentTaskTransition(input.taskId, expectedFrom, `human-gate:${input.transition}`)
   }
   const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
     taskId: input.taskId,

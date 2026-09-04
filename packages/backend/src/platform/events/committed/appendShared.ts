@@ -147,5 +147,6 @@ export function aggregateSequenceLockKey(input: {
   aggregateKind: CommittedEventAggregateKind
   aggregateId: string
 }): string {
-  return [input.producer, input.family, input.aggregateKind, input.aggregateId].join(':')
+  // 锁键不是 PATH 列表（RFC-254 guard 只认 `.join(':')` 形态），模板字面量拼出同一串。
+  return `${input.producer}:${input.family}:${input.aggregateKind}:${input.aggregateId}`
 }

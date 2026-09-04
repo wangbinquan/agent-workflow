@@ -48,7 +48,12 @@ import {
   tasks,
   workgroupAssignments,
 } from '@/db/schema'
-import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  assertPostgresqlTaskOwnerTx,
+  type PostgresqlTaskExecutionTransaction,
+  withPostgresqlSerializableTaskExecution,
+} from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'

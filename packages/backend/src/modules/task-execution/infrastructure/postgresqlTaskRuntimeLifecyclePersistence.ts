@@ -12,7 +12,12 @@ import {
 } from '@/services/lifecycle'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
-import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, withPostgresqlSerializableTaskExecution, type PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  assertPostgresqlTaskOwnerTx,
+  withPostgresqlSerializableTaskExecution,
+  type PostgresqlTaskExecutionTransaction,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 type LifecycleRow = Readonly<{

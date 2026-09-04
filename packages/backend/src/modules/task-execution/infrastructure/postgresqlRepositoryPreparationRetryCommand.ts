@@ -23,7 +23,10 @@ import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecu
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { submitTaskContinuation } from './taskContinuationAdmission'
-import { assertPostgresqlTaskOwnerlessTx, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  withPostgresqlSerializableTaskExecution,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import type {
   PostgresqlTaskRoutePreparedWorkspace,

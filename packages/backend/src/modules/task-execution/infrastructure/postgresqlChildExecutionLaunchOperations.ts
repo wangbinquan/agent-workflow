@@ -55,7 +55,10 @@ import type { TaskExecutionModule } from '../composition'
 import { sha256Hex } from '../domain/digest'
 import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
-import { type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import {
+  type PostgresqlTaskExecutionTransaction,
+  withPostgresqlSerializableTaskExecution,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 
 // Wire-frozen task/workflow identities. TaskExecution repeats them here rather

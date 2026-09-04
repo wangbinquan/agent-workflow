@@ -14,7 +14,11 @@ import type {
   HumanGateTaskParkResult,
 } from '../application/ports/humanGateTaskLifecycle'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
-import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import {
+  assertPostgresqlTaskOwnerlessTx,
+  assertPostgresqlTaskOwnerTx,
+  withPostgresqlSerializableTaskExecution,
+} from './postgresqlTaskLifecycleTransaction'
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'

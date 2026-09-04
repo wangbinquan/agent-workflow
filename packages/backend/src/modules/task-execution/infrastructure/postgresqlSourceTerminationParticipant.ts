@@ -31,8 +31,14 @@ import {
 import type { OwnershipToken } from '../domain/ownership'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import { withPostgresqlSerializableTaskExecution, type PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
-import { appendTaskLifecycleTransitionCommittedEvent, appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
+import {
+  withPostgresqlSerializableTaskExecution,
+  type PostgresqlTaskExecutionTransaction,
+} from './postgresqlTaskLifecycleTransaction'
+import {
+  appendTaskLifecycleTransitionCommittedEvent,
+  appendTaskNodeStatusesCommittedEvent,
+} from './taskLifecycleCommittedEvents'
 
 const CANCELABLE: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
 const CANCELABLE_NODE_STATUSES = [...allowedFromStatusesForEvent({ kind: 'mark-canceled' })]

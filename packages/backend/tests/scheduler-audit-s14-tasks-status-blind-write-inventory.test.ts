@@ -49,6 +49,8 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskRuntimeLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts': 1,
+  // RFC-359 W1-T1：human-gate 任务跃迁的一份中立实现（SQLite/PG 共用），CAS on lifecycleEventRevision。
+  'modules/task-execution/infrastructure/humanGateTaskTransition.ts': 1,
   'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 2,
   'modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts': 2,
 }

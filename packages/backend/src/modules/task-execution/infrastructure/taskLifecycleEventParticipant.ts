@@ -33,7 +33,9 @@ export function appendTaskLifecycleTransitionCommittedEventTx(
 
 export function appendTaskNodeStatusesCommittedEventTx(
   tx: DbTxSync,
-  input: TaskNodeStatusesCommittedEventInput & { readonly reason: TaskNodeStatusesCommittedEventInput['reason'] },
+  input: TaskNodeStatusesCommittedEventInput & {
+    readonly reason: TaskNodeStatusesCommittedEventInput['reason']
+  },
 ): CommittedEventRef | null {
   return appendCommittedEventTx(tx, taskNodeStatusesCommittedEventInput(input)).eventRef
 }

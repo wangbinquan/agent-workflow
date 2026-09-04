@@ -35,7 +35,10 @@ import type { OwnershipToken } from '../domain/ownership'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
 import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
-import { appendTaskCreatedCommittedEvent, appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
+import {
+  appendTaskCreatedCommittedEvent,
+  appendTaskLifecycleTransitionCommittedEvent,
+} from './taskLifecycleCommittedEvents'
 
 const CANCELABLE_NODE_RUN_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 

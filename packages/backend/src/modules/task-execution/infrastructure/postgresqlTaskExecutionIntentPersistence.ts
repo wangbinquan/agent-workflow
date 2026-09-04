@@ -79,9 +79,6 @@ export class PostgresqlTaskExecutionIntentPersistence implements TaskExecutionIn
   async submitContinuation(
     input: Parameters<TaskExecutionIntentPersistence['submitContinuation']>[0],
   ): Promise<SubmittedTaskExecutionIntent> {
-    return await serializable(
-      this.db,
-      async (tx) => await submitTaskContinuation(tx, input),
-    )
+    return await serializable(this.db, async (tx) => await submitTaskContinuation(tx, input))
   }
 }

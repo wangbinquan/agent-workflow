@@ -93,7 +93,10 @@ import type {
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
 import { createPostgresqlTaskAuthorizationQueries } from './postgresqlTaskAuthorization'
-import { type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import {
+  type PostgresqlTaskExecutionTransaction,
+  withPostgresqlSerializableTaskExecution,
+} from './postgresqlTaskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 
 // These values are wire-frozen in task snapshots and node-run identities. They

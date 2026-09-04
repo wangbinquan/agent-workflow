@@ -64,7 +64,10 @@ export async function submitCanonicalTaskExecutionIntent(
     .where(eq(tasks.id, request.taskId))
     .get()
   if (task === undefined) {
-    throw new TaskExecutionError('task-continuation-stale', `task '${request.taskId}' does not exist`)
+    throw new TaskExecutionError(
+      'task-continuation-stale',
+      `task '${request.taskId}' does not exist`,
+    )
   }
   if (task.lifecycleEventRevision !== request.expectedTaskRevision) {
     throw new TaskExecutionError(
