@@ -35,6 +35,7 @@ import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
+import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
 import {
   requireCommittableDraft,
   assertIntentDraftUnresolved,
@@ -612,7 +613,7 @@ async function applyInner(
         await deps.artifacts.compensate(artifact)
       } catch (err) {
         compensationErrors.push(err)
-        log.warn('intent-artifact-compensation-failed', {
+        log.warn(INTENT_APPLY_DIAGNOSTICS.artifactCompensationFailed, {
           kind: artifact.kind,
           err: err instanceof Error ? err.message : String(err),
         })
@@ -624,7 +625,7 @@ async function applyInner(
       // lets boot/hourly convergence retry. Marking it failed would make the
       // converger skip the residue forever.
       keepRetryable(error, compensationErrors)
-      log.warn('intent-left-retryable', {
+      log.warn(INTENT_APPLY_DIAGNOSTICS.applyLeftRetryable, {
         journalId,
         err: error instanceof Error ? error.message : String(error),
       })
@@ -665,7 +666,7 @@ export async function convergeIntentApplyJournal(
       // The journal is the recovery oracle. If it is corrupt or an old lossy
       // skill-version shape, claiming compensation/roll-forward succeeded is
       // worse than leaving the row visible for repair.
-      log.warn('intent-journal-artifact-corrupt', {
+      log.warn(INTENT_APPLY_DIAGNOSTICS.journalArtifactCorrupt, {
         journalId: row.id,
         state: row.state,
         err: err instanceof Error ? err.message : String(err),
@@ -700,7 +701,7 @@ export async function convergeIntentApplyJournal(
           await artifactLifecycle.compensate(artifact)
         } catch (err) {
           compensationErrors.push(err)
-          log.warn('intent-converge-compensation-failed', {
+          log.warn(INTENT_APPLY_DIAGNOSTICS.convergeCompensationFailed, {
             journalId: row.id,
             kind: artifact.kind,
             err: err instanceof Error ? err.message : String(err),
@@ -718,7 +719,7 @@ export async function convergeIntentApplyJournal(
             .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
             .run()
         })
-        log.warn('intent-converge-left-retryable', { journalId: row.id })
+        log.warn(INTENT_APPLY_DIAGNOSTICS.convergeLeftRetryable, { journalId: row.id })
         continue
       }
       const cas = dbTxSync(db, (tx) =>

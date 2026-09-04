@@ -1,6 +1,7 @@
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
+import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
 import {
   assertIntentDraftUnresolved,
   assertIntentSessionClaimable,
@@ -445,7 +446,7 @@ export function createPostgresqlIntentApplyOperations(
         try {
           await resourceSession.abortPrepared({ databaseCommitted: true })
         } catch (abortError) {
-          log.warn('intent-resource-roll-forward-recovery-failed', {
+          log.warn(INTENT_APPLY_DIAGNOSTICS.resourceRollForwardRecoveryFailed, {
             journalId,
             err: abortError instanceof Error ? abortError.message : String(abortError),
           })
@@ -461,7 +462,7 @@ export function createPostgresqlIntentApplyOperations(
         await resourceSession.abortPrepared({ databaseCommitted: false })
       } catch (compensationError) {
         compensationErrors.push(compensationError)
-        log.warn('intent-resource-abort-failed', {
+        log.warn(INTENT_APPLY_DIAGNOSTICS.resourceAbortFailed, {
           journalId,
           err:
             compensationError instanceof Error
@@ -475,7 +476,7 @@ export function createPostgresqlIntentApplyOperations(
           await dependencies.artifacts.compensate(artifact)
         } catch (compensationError) {
           compensationErrors.push(compensationError)
-          log.warn('intent-artifact-compensation-failed', {
+          log.warn(INTENT_APPLY_DIAGNOSTICS.artifactCompensationFailed, {
             kind: artifact.kind,
             err:
               compensationError instanceof Error
@@ -506,7 +507,7 @@ export function createPostgresqlIntentApplyOperations(
       try {
         artifacts = decodeRecoveryArtifacts(row.preparedArtifactsJson)
       } catch (error) {
-        log.warn('intent-journal-artifact-corrupt', {
+        log.warn(INTENT_APPLY_DIAGNOSTICS.journalArtifactCorrupt, {
           journalId: row.id,
           state: row.state,
           err: error instanceof Error ? error.message : String(error),
@@ -535,7 +536,7 @@ export function createPostgresqlIntentApplyOperations(
             await dependencies.artifacts.compensate(artifact)
           } catch (error) {
             errors.push(error)
-            log.warn('intent-converge-compensation-failed', {
+            log.warn(INTENT_APPLY_DIAGNOSTICS.convergeCompensationFailed, {
               journalId: row.id,
               kind: artifact.kind,
               err: error instanceof Error ? error.message : String(error),

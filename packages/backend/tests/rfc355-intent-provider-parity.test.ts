@@ -44,13 +44,19 @@ describe('RFC-355 T1 —— 双 provider 的诊断词汇必须一致', () => {
   const sqlite = read(...SQLITE_APPLY)
   const postgresql = read(...PG_APPLY)
 
-  test('用户可见的错误码两侧集合相等（今天已经一致，本条防它以后漂）', () => {
-    const s = [...thrownCodes(sqlite)].sort()
-    const p = [...thrownCodes(postgresql)].sort()
-    // 两侧都必须真的抛过东西，否则本断言零预言力。
-    expect(s.length).toBeGreaterThanOrEqual(10)
-    expect(p.length).toBeGreaterThanOrEqual(10)
-    expect(s).toEqual(p)
+  test('用户可见的错误码两侧集合相等，且词汇由共享判据持有', () => {
+    // 判据搬进 domain/application 之后，provider 文件里**本来就不该**再留多少错误码——
+    // 所以这里不能再要求「两侧各 ≥ 10 条」（那是改造前的形态）。真正的断言是两件事：
+    //   ① 两个 provider 剩下的错误码集合相等（谁多一条谁就在悄悄分叉）；
+    //   ② 词汇的**主体**在共享判据文件里，否则本条会退化成「两个空集也算过」。
+    expect([...thrownCodes(sqlite)].sort()).toEqual([...thrownCodes(postgresql)].sort())
+
+    const shared = [
+      read('modules', 'intent', 'domain', 'applyClaim.ts'),
+      read('modules', 'intent', 'domain', 'storedChangeset.ts'),
+      read('modules', 'intent', 'application', 'intentResourcePlan.ts'),
+    ].join('\n')
+    expect([...thrownCodes(shared)].length).toBeGreaterThanOrEqual(6)
   })
 
   test('诊断标签（含 log.warn）两侧集合相等——今天红：四条各只在一侧', () => {
