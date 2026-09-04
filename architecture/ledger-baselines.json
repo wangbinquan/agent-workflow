@@ -482,12 +482,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25966,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25968,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-349 的 PostgreSQL 任务目录源修 facets 语义（原本把四个计数数在 view 过滤之后，换页签就把四个数字整体重写）：新增 explicitStatuses / listView / hasOpenAlert / facetsOf 四个判据、退掉 selectedStatuses / statusFacet 两个，净 +2 顶层符号。本可把两个一次性小判据内联回去做到净 0，但同一文件此刻正被并发 session 改写（origin 过滤下推到 provider 查询），提交它会连带推上他们半截的跨文件改动；故本笔用一次性豁免记账，下一笔不涨即删。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:68bc5ff48bb782be8cd89afd9c5f8c844fe4f0726c86240a5fc23d0b96331318",
+    "sourceDigest": "sha256:8e2de0c7f5d7ed7c9481250d1e5f0aece85928f37709d93f46719884fe3ed8f8",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +503,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "76f43f7d53633dca82d9436020a3b4df3c65d7e2",
-    "contentDigest": "sha256:7b7318d3aa306620d73802e628dca09dce5ed8bb53f8c1a690066eef9610dff2",
+    "currentSnapshotSha": "bfc84968a75a2cab7ac99835a70b71c2447d333c",
+    "contentDigest": "sha256:9f748cd795c4520df9c53e758e0f53fae63519771d9b3f38ffda61eac06c8ea9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

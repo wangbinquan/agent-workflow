@@ -6,7 +6,7 @@
     "moduleFiles": 1333,
     "productionFiles": 2720,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25966
+    "symbolsIncludingFileRoots": 25968
   },
   "entries": [
     {
@@ -141545,10 +141545,58 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#explicitStatuses",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "explicitStatuses",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#facetsOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "facetsOf",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#hasOpenAlert",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "hasOpenAlert",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#limitOf",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "limitOf",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#listView",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "listView",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -141573,18 +141621,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "normalized",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#selectedStatuses",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "selectedStatuses",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -141621,18 +141657,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "sourceOf",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskCatalogSources.ts#statusFacet",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "statusFacet",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -312291,5 +312315,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:68bc5ff48bb782be8cd89afd9c5f8c844fe4f0726c86240a5fc23d0b96331318"
+  "sourceDigest": "sha256:8e2de0c7f5d7ed7c9481250d1e5f0aece85928f37709d93f46719884fe3ed8f8"
 }
