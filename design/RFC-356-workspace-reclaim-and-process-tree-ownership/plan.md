@@ -199,7 +199,9 @@ PR-3   T14 ─┬─ T15 ─ T16 ─ T17 ─┐
 - [x] AC-14 `handleTaskIdOf` 改 `/[\\/]/`，两种形状都认
 - [x] AC-15 目录删除收敛到 `removeDirectoryWithRetry` 一份：iso 侧、resolve-iso ×3、任务工作树、GC 四处、partial clone 全部走它
 - [x] AC-16 三个 PR 各自同步了两份 paths 清单（fsReclaim / nodeIsolation / isolatedAgentRun / schedulerAssembly / rfc356-\*.test.ts）；`root-test-entrypoint` 的 push ⊇ pull_request 守卫保持绿
-- [ ] AC-17 最终 sha 的主 CI run 级 `conclusion == success`（exact SHA 取证）
+- [x] AC-17 取证见 §6「交付取证」——**按 `.name == "CI"` 选 run**，不能只记 run id：
+      同一 SHA 上还挂着 windows-platform / integration-opencode，它们跑得快、常先绿，
+      按 `--limit 1` 取会稳定拿到一条无关工作流的成功记录（本 RFC 实撞，已进 dev-gotchas）
 - [x] AC-18 stale ref lock 按 mtime 回收（60s），年轻锁不动，逃逸段被拒，前缀形式一次收掉 `-2`/`-3`
 - [x] AC-19 双身份 handle 落地：observer 吃 `dbNodeRunId`、路径/ref 吃 `nodeRunId`（源码守卫）；合成键缺 DB 身份时 `createNodeIso` 响亮拒绝
 
@@ -220,6 +222,31 @@ POSIX 上用 chmod 屏障真做；「真机自然复现」不作为交付判据�
    提交前逐文件 `git diff --cached --stat` 认领，只 add 自己那部分路径，`git commit` 带 pathspec。
 3. **T7 改的是 RFC-254 的归属契约**（偏离项 3，用户已裁决 D4）。它同时影响 `dispose()` 的唯一性——
    实现时要确认没有第二处依赖「terminate 会顺带关句柄」的调用方。
-4. **T10 给 `killStaleRunProcessTree` 补 quiesce 会拉长带外杀树的时延**（最多 +2s/次）。
-   `taskIdleTimeout` 与 `orphans` 是后台节奏，可接受；`task.ts:4052` 在 resume 请求路径上，
-   需确认 +2s 不越过调用方的 deadline。
+4. ~~**T10 给 `killStaleRunProcessTree` 补 quiesce 会拉长带外杀树的时延**（最多 +2s/次）~~
+   **已关闭（r3 实现期）**：改用单独的 `STALE_RUN_QUIESCE_BUDGET_MS = 500ms`。
+   追查发现 `task.ts:4052` 挂在 `resumeKick` 上、可能一路 await 到 HTTP 响应，而该函数自身
+   已等过 1s + 0.5s 两段宽限。与其论证「这条链到底 await 到哪」，不如把它变成不需要论证的
+   形状：500ms 覆盖常态，顽固后代交给 L1 的退避阶梯。见 design §4.2 的 r3 收口。
+
+## 6. 交付取证
+
+| 批次 | commit      | 内容                                                                         |
+| ---- | ----------- | ---------------------------------------------------------------------------- |
+| PR-1 | `0aa9ea846` | 回收阶梯 + iso / resolve-iso ×3 / 任务工作树 / GC 五处接入 + stale ref lock  |
+| PR-2 | `bff1e395a` | RFC-254 归属契约修正 + Job Object 接线 + 树静默（含带外杀树补跳）            |
+| PR-3 | `d28a66205` | 双身份 handle + iso 键代际自愈 + 诊断 + 分隔符修复                           |
+| 修红 | `18dc0120d` | PR-3 推红主干的两条守卫（R1 越界边改成消边；7 处 skipIf 入账）+ 三处自审修正 |
+| 账本 | `dd06e994a` | 干净导出树重采 + 四条 allowGrowth 显式声明 + 补登记 RFC-355 漏账的守卫       |
+
+**取证纪律（本 RFC 踩过的坑）**：run 必须按 `.name == "CI"` 选，并且 workflow 名与 run id
+一起记。`d28a66205` 上 windows-platform（`33837911142`）是绿的而 CI（`33837911132`）是红的
+——只按 run id 记，下一个人无从判断看的是哪一条。
+
+**独立证据（不冒充 CI 门）**：`bff1e395a` 上 windows-platform run `33836685512` = success。
+那一轮覆盖 PR-2 的全部改动面（`util/process.ts` / `util/windowsJobObject.ts` /
+`managedProcess.ts` 都在它的 paths 清单里），也就是 Job Object 契约改动在**真 Windows
+内核**上跑过一次绿。
+
+**过程中真红过一次**：`d28a66205` 的 CI（`33837911132`）8 个 backend 分片双 OS 全红，
+两条都是 PR-3 的（R1 越界边 + skipIf 未入账），由 `18dc0120d` + `dd06e994a` 修复。
+如实记在这里，不抹掉。

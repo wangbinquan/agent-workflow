@@ -41,22 +41,23 @@
 > 改 `wrapper-output` 边界边、系统通道折进端口表、clarify 落 `skipped` 行、schema v5→6 + 纯升级器（32 示例 golden）。
 > 唯一收缩项 C-7（v6 YAML 向下不兼容）待用户确认；D1 平铺存储已确认；三个 PR；设计门待用户决定。
 
-> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-04）：[RFC-356 残留工作树回收 + Windows 进程树归属接线](design/RFC-356-workspace-reclaim-and-process-tree-ownership/proposal.md)。**
-> 三件套已落档，**批准前不改生产代码**。起于 GitHub issue #13（Windows / v0.18.14）：超时杀进程后 iso 工作树删不掉，重试建不起来，任务停摆。
-> 定位出的是一条**必然链**而非偶发——`discardNodeIso` 的 `git worktree remove` 失败后只 warn「留待 GC」，而 iso GC 明确跳过活跃任务
-> （`systemWorkspaceGc.ts:976`），重试又在**同一条**路径上裸 `worktree add`（iso 键 = 不变的原始行 id，D17）⇒ `fatal: already exists`；
-> 注册项一旦丢失，`worktree remove` 改报 `is not a working tree`，平台再无任何路径能清掉它。第二根因：`adoptSpawnedProcessTree`
-> 在生产代码里**一次都没被调用**（唯一调用点是自己的测试），Windows 杀树一直是 taskkill 快照枚举、后代可逃逸。用户裁决「全做」
-> （D1 换唯一路径自愈 / D2 ARM64 保持降级 + 显式诊断 / D3 回收原语统一成一份），拆 3 个 PR。
-> **设计门已跑完两路**（事实核对 + 对抗攻击；Codex 配额至 09-08，按 RFC-354 T20 既定替代姿势改由独立子代理同强度评审、只审功能）：
-> 40 条事实断言成立（含穷举确认「只剩三处裸派生」完整），报 **3 条 P0 + 14 条 P1**，逐条回源码复核后全部折入，三件套修订为 **r2**。
-> P0-1：discard 侧 effect observer 吃合成键会抛穿 `runAssembly`（比 #13 更早的新 wedge）⇒ `IsoHandle` 拆双身份；
-> P0-2：L3 在 Windows+job 上恒空转（`terminate()` 关句柄 + `liveCount()` 硬编码 0 + 杀树后即删 map 项）⇒ 用户裁决 **D4「完整修」RFC-254 归属契约**；
-> P0-3：L3 触发门漏了 drain 超时与带外杀树两条真句柄源 ⇒ 门改成「调用过 `killTree`」+ 给 `killStaleRunProcessTree` 补一跳。
-> 另：用户裁决 **D5 接受**「接线后 release 会杀掉成功运行的幸存后代」并在 proposal §7⑤ 申报；
-> 一条 P2 判定评审员报错（`FAILURE_CODES` 确实存在于 `packages/shared/src/schemas/task.ts:420`），未采纳。
-> 并发 session 的实测线索（被 abort 的 `worktree add` 留下 stale `refs/heads/*.lock`、仓内无人清，`docs/audit-backlog.md:3961`）已折进回收阶梯。
-> **批准前不改生产代码**；实现门留到三个 PR 全部落地后。
+> ✅ **已完成 RFC（Done，2026-09-04，三个 PR + 一笔修红 + 一笔账本全部推上 main）：[RFC-356 残留工作树回收 + Windows 进程树归属接线](design/RFC-356-workspace-reclaim-and-process-tree-ownership/proposal.md)。**
+> 起于 GitHub issue #13（Windows / v0.18.14）：超时杀进程后 iso 工作树删不掉，重试建不起来，任务停摆。
+> 定位出的是一条**必然链**：`discardNodeIso` 的 `git worktree remove` 失败后只 warn「留待 GC」，而 iso GC 明确跳过活跃任务
+> （`systemWorkspaceGc.ts:976`），重试又在**同一条**路径上裸 `worktree add` ⇒ `already exists`；注册项一旦丢失，remove 改报
+> `is not a working tree`，平台再无任何路径能清掉它。第二根因：`adoptSpawnedProcessTree` 在生产代码里**一次都没被调用过**。
+> **PR-1 `0aa9ea846`**：`reclaimWorktreePath` 四档阶梯（退避删除**在 registry 锁外**、`absent` 零进程零锁）+ `util/fsReclaim.ts`；
+> iso / resolve-iso ×3 / 任务工作树 / GC 五处接入；stale `refs/heads/*.lock` 按 mtime 回收（并发 session 实测线索）。
+> **PR-2 `bff1e395a`**：RFC-254 归属契约修正（`terminate()` 不再关句柄、`liveCount()` 不再短路、`killProcessTreeWin32` 保留
+> map 项并尊重返回值）+ Job Object 接线 + `awaitProcessTreeQuiesced`（门 = 调用过 `killTree`，覆盖 drain 超时与四个带外杀树消费方）。
+> **PR-3 `d28a66205`**：`IsoHandle` 双身份（`dbNodeRunId` / 物理 iso 键）+ 键代际自愈（`{原键}-2`）+ 结构化诊断 + `handleTaskIdOf`
+> 分隔符修复。选键第一步是 `existsSync` 短路，常态零 git 进程零锁。
+> **`d28a66205` 真把主干推红过一次**（CI run 33837911132，8 个 backend 分片双 OS 全红），两条都是 PR-3 的：legacy 层新增
+> 了指向模块 composition 的 R1 越界边、7 处 skipIf 没入账。`18dc0120d` 修复——越界边选**消边**（`isoKeyOf` 搬回
+> `services/nodeIsolation.ts`）而不是记一条 R1 债；`dd06e994a` 补账本与四条 `allowGrowth` 声明。
+> 用户裁决 D1～D5（换唯一路径自愈 / ARM64 保持降级 + 显式诊断 / 回收原语统一 / 完整修 RFC-254 契约 / 接受 release 杀幸存后代）。
+> 设计门两路评审报 3 条 P0 + 14 条 P1 全部折入（design §13 有改动索引）；其中 P0-1 拦下了一个**比 #13 更早触发**的新 wedge。
+> 交付取证与「按 `.name == "CI"` 选 run」的纪律见 plan §6。
 
 > ✅ **已完成 RFC（Done，2026-09-04）：[RFC-355 Intent bounded context 归位（RFC-294 W4-E4a）](design/RFC-355-intent-context-cutover/proposal.md)。**
 > `services/intent/` **5136 行整目录删除**：18 个文件归位到 `modules/intent/{domain,application}`（1 个迁进 resource-catalog 的 composition，

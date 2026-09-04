@@ -235,6 +235,14 @@ export type TreeQuiesceOutcome = 'dead' | 'alive' | 'unknown'
 export const TREE_QUIESCE_BUDGET_MS = 2_000
 
 /**
+ * 带外杀树（`killStaleRunProcessTree`）收尾时的静默预算——刻意比上面小。
+ *
+ * 它的消费方之一（resume 前回滚）可能在请求路径上，而它自己已经等过 1s + 0.5s
+ * 两段宽限。这里只覆盖「树正在退出、只差最后一跳」的常态；顽固后代交给回收阶梯。
+ */
+export const STALE_RUN_QUIESCE_BUDGET_MS = 500
+
+/**
  * 等 `pid` 的整棵树静默。
  *
  * 为什么需要它（issue #13）：杀树的 syscall 返回不等于后代已经退出，而后代
@@ -415,7 +423,16 @@ export async function killStaleRunProcessTree(
   // 逃逸的后代还占着句柄时就会复现 issue #13。所以判定「killed」之前多等一跳
   // 树静默——判据本身不变（仍由 `isProcessAlive` 决定），只是不急着返回。
   const settled = async (): Promise<StaleRunKillOutcome> => {
-    await awaitProcessTreeQuiesced(pid, { ...(opts.quiesceLog ? { log: opts.quiesceLog } : {}) })
+    await awaitProcessTreeQuiesced(pid, {
+      // **带外杀树用更小的预算**（不是 TREE_QUIESCE_BUDGET_MS 的 2s）。
+      // 本函数的四个消费方里，`services/task.ts` 的 resume 前回滚挂在
+      // `resumeKick` 上、可能一路 await 到 HTTP 响应；而它自身已经等过
+      // 1s（SIGTERM 宽限）+ 0.5s（SIGKILL 宽限），再叠 2s 就是 2.3 倍。
+      // 500ms 足以覆盖「树已经在退出、只差最后一跳」的常态；真有顽固后代时
+      // 剩下的由回收阶梯的退避接着扛——那一层本来就是为这种情况准备的。
+      budgetMs: STALE_RUN_QUIESCE_BUDGET_MS,
+      ...(opts.quiesceLog ? { log: opts.quiesceLog } : {}),
+    })
     return 'killed'
   }
   killProcessTree(pid, 'SIGTERM')

@@ -290,8 +290,16 @@ r2 的门：
 1. **门改成「本次运行调用过 `killTree`」**——在 `managedProcess.killTree`（`:270`）里置一个本次运行的标志，
    收尾相位据此决定等不等。这样 escalate 路径与 drain 超时路径都被覆盖，干净退出仍逐字不等。
 2. **`killStaleRunProcessTree` 内部补一跳**：`killProcessTree(pid,'SIGKILL')` 之后、返回 `'killed'` 之前，
-   调一次 `awaitProcessTreeQuiesced`。这样带外杀树的三个消费方（含 `task.ts:4052` 的杀完即回滚）
+   调一次 `awaitProcessTreeQuiesced`。这样带外杀树的四个消费方（含 `task.ts:4052` 的杀完即回滚）
    一起受益，且不改它的返回值语义（`'killed'` 仍由 `isProcessAlive` 判定，quiesce 只是多等一会）。
+
+   **r3 实现期收口**：这一跳用**单独的、更小的**预算 `STALE_RUN_QUIESCE_BUDGET_MS = 500ms`，
+   不是 `TREE_QUIESCE_BUDGET_MS`。r2 的 plan §5.4 把「+2s 会不会越过 resume 的 deadline」
+   留成了未决项；实现期追下去发现 `task.ts:4052` 挂在 `resumeKick` 上、可能一路 await 到 HTTP
+   响应，而该函数自身已经等过 1s（SIGTERM 宽限）+ 0.5s（SIGKILL 宽限），再叠 2s 是 2.3 倍。
+   与其去论证「这条链到底 await 到哪」，不如**把它变成不需要论证的形状**：500ms 足以覆盖
+   「树正在退出、只差最后一跳」的常态，顽固后代由 L1 的退避阶梯接着扛——那一层本来就是
+   为这种情况准备的。未决项就此关闭。
 
 等不到只 `log.warn`（带 pid / 预算 / 最后一次 liveCount），**不改 `outcome`、不改 `processUnreaped`**
 ——`shouldRetryNodeFailure(failureCode, processUnreaped)`（`nodeMechanics.ts:910-923`）的既有语义不动。

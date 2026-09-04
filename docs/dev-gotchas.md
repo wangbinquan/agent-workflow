@@ -940,6 +940,33 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 `packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts` 与四条
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
+## 改一个实现名，会连累**按名字钉死**的多层守卫（RFC-356 实撞，2026-09-04 一次改动连红三层）
+
+本仓有大量守卫是**按符号名**匹配的，改实现时它们不会「自动跟上」，而是各自红一次。
+RFC-356 把 `discardNodeIso` 里的 `removeWorktree` 换成 `reclaimWorktreePath`、把
+`killTree(child, sig)` 包成 `killTreeForRun(sig)`、把 `await rm(leaf)` 换成
+`removeDirectoryWithRetry(leaf)`，一共踩响了三层：
+
+| 守卫                                                   | 判据形状                                        | 表现                       |
+| ------------------------------------------------------ | ----------------------------------------------- | -------------------------- |
+| `rfc328-architecture-guards` 的 `actCallees`           | 按名字要求某函数体内出现某个副作用原语          | 「missing act boundary」   |
+| `rfc287-t13-deferred-prep` 的 F4 / partial-clone       | 正则匹配 `await rm(leaf` / `await rm(path`      | 「必须异步」红             |
+| `scheduler-audit-s15` 的升级链                          | 正则匹配 `killTree\(child, 'SIGTERM'\)`         | 「升级链不见了」           |
+
+**判据不变、只是拼写变了**——这三条锁的都还是同一件事（副作用要被 effect observer 括起来 /
+删除必须异步 / 先 TERM 后 KILL）。所以处置是**跟随更新守卫并在注释里写清「判据不变」**，
+不是删守卫、也不是登记豁免。
+
+**与「把文件搬进 `modules/` 会让它第一次进架构守卫的扫描面」（本文件上方，RFC-355 实撞）是同一
+根的两面**：守卫的语料/匹配面与实现的**位置**或**拼写**耦合——搬位置会让存量写法第一次被扫到，
+改拼写会让既有断言认不出来。两条一起看更完整。
+
+**动手前的自查**（比事后被 CI 逐层打红便宜）：改一个会被守卫点名的实现前，先
+`grep -rn "<旧符号名>" packages/backend/tests/ | grep -v "\.test\.ts:.*import"`，
+把命中的守卫一并读一遍。**光跑 `tests/architecture/**` 不够**——RFC-328 那条在
+`tests/rfc328-architecture-guards.test.ts`，不在那个目录下；RFC-356 就是因此漏了它、
+在修完前两条之后又红了一轮。
+
 ## 「按 exact SHA 查 CI」很容易查到**另一个 workflow 的绿**（RFC-356 实撞，2026-09-04）
 
 `gh run list --commit <sha> --limit 1` 拿到的**不一定是 CI**。本仓同一个 SHA 上常挂三个

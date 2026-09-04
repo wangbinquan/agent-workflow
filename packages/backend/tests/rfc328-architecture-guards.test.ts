@@ -95,7 +95,12 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     [
       {
         callable: 'discardNodeIso',
-        actCallees: new Set(['removeWorktree']),
+        // RFC-356 T3：丢弃这一跳从「一发 `removeWorktree`」换成回收阶梯
+        // （`reclaimWorktreePath`：remove → 锁外退避删除 → prune）。守卫锁的判据
+        // 不变——**这个真实外部副作用必须被 effect observer 括起来**——只是 act
+        // 原语换了名字。RFC-328 的 act 清单按名字匹配，所以改实现必须同步改这里，
+        // 否则守卫会报「act boundary 不见了」（本 RFC 实撞，CI run 33840839902）。
+        actCallees: new Set(['reclaimWorktreePath']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],
