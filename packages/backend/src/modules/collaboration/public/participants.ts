@@ -12,10 +12,6 @@ import {
   countWorkgroupClarifyAsks as countWorkgroupClarifyAsksInternal,
   createWorkgroupClarifyAskGate as createWorkgroupClarifyAskGateInternal,
 } from '../infrastructure/workgroupClarifyAskGate'
-export type {
-  WorkgroupClarifyAskGate,
-  WorkgroupClarifyAskInput,
-} from '../infrastructure/workgroupClarifyAskGate'
 
 export type { HumanGateOpenParticipantResult } from '../application/ports/humanGateOpenParticipant'
 export type {
