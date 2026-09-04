@@ -242,3 +242,60 @@ export interface EngineCapabilities {
 
 - 不为 PG 写第二份「快路径」实现——那是分叉。所有优化都经能力矩阵表达。
 - 不给 SQLite 加 PG 才有的东西的模拟——SQLite 侧渲染成它的最优形态或 no-op 即可。
+
+## 11. 质量防护与架构防护总纲（用户 2026-09-04 追加：新增功能**天然**要验证到两种数据库）
+
+「天然」是这一节的判据：**一个新功能，什么都不多做，就已经在两个引擎上被验证了；只在一个引擎上
+验证的，是要登记理由的例外。** 今天正好相反——`createInMemoryDb(MIGRATIONS)` 在 816 个测试文件里
+出现 1,882 次，SQLite 是缺省，PG 是 `env ? test : test.skip` 的可选项，没有 URL 就静默跳过、绿着骗人。
+本 RFC 自己 T11b 的第一版也犯了这个错（`pgTest = env ? test : test.skip`），在这里改正。
+
+### 11.1 测试 harness：双引擎是缺省
+
+```ts
+// tests/helpers/eachProvider.ts
+describeEachProvider('memory catalog', ({ session, capabilities, db }) => {
+  test('…', async () => { /* 同一段断言，跑两遍 */ })
+})
+```
+
+- `describeEachProvider` 把 body 各跑一遍：SQLite 用内存库；PostgreSQL 用 CI 服务容器里**按测试文件
+  隔离的 schema**（`create schema t_<hash>` + 迁移基线），互不串扰，可并行。
+- **PG 侧不是 skip 而是 fail**：URL 缺失即整个 describe 红，除非进程显式声明
+  `AW_TEST_PROVIDERS=sqlite`（本地开发快速迭代用）。CI 永远不设它。「无库则跳过」这个形态被禁掉，
+  因为它正是 12 条 P0 能穿过验收的机制。
+- body 拿到的是 `DatabaseSession` + `EngineCapabilities` + provider-中立客户端；**拿不到 provider 名**。
+  测试要按引擎分叉时只能走 `capabilities`（例如 `capabilities.isolation === 'exclusive'` 时跳过一条
+  并发断言），并且分叉本身被计数（§11.3 守卫 6）。
+
+### 11.2 CI：真 PostgreSQL 是 backend 测试的默认环境，不是一条 lane
+
+今天 `test-backend-postgresql` 是独立窄 lane（`services: postgres:17`，只跑 `rfc357-*`）。目标：
+- **四个 backend 分片各自带 `services: postgres:17`**，`AW_TEST_PG_URL` 对每个分片可用；
+  `describeEachProvider` 的 PG 半边在每个分片里跑。窄 lane 退役。
+- 分片时长上涨由两件事对冲：per-file schema 隔离让 PG 半边可并行；W4 合一后适配器测试数减半。
+  实测数字在 W5-T21 落地时写回 proposal §6。
+- `postgresql-evidence.yml`（周跑规模 / 迁移 / 崩溃取证）保留，分工不变；但它的
+  `prepareSoakDataset` 不再把在飞任务归一成 `done`——新增「起任务 → 进 running → 跑完」的执行链
+  取证，在两个引擎上各一遍（§11.3 守卫 8）。
+
+### 11.3 守卫全表（架构 + 质量，按失效类对位）
+
+| # | 守卫 | 挡什么 | 落在哪 |
+| --- | --- | --- | --- |
+| 1 | provider 命名文件只许在 `platform/persistence/`（棘轮 → 0） | A 语义重推 | W5-T17 |
+| 2 | `provider === '<literal>'` 只许在 `platform/persistence/` | A | W5-T19 |
+| 3 | 组合根全量：禁 `*-not-bound` / 晚绑定 holder | B 装配缺口 | W5-T19b |
+| 4 | 启动序列恰一个调用方；`cli/start.ts` 无 provider 执行分支 | B | W5-T19c |
+| 5 | 能力矩阵每项双引擎真实执行断言（本提交已落第一版） | C 方言陷阱 | W2-T11b ✅ |
+| 6 | **测试不得写死引擎**：`createInMemoryDb(` 在 harness 之外的出现次数棘轮 1,882 → 0；测试内按 provider 分叉必须经 `capabilities` 且计数入账 | A+B+C 的验证盲区 | W5-T19f |
+| 7 | 覆盖率对等棘轮：同一 port 两侧行覆盖率差超阈值即红（过渡期；今天能钉住全部 12 条 P0） | A+B | W5-T19d |
+| 8 | 执行链取证：两个引擎上各起一个任务跑到 done，进 push CI 的 e2e | B（RFC-349 验收漏掉的那一环） | W5-T21b |
+| 9 | 性能守卫双引擎，PG 基线不劣于 SQLite，一侧变慢即红 | 优化只落一侧 | W6-T27 |
+| 10 | schema 投影补触发器维度，投影完整性有断言 | 结构漂移 | W3-T16b |
+| 11 | 全量 backend 套件在真 PG 上、在 push 上跑（§11.2） | 最终 oracle | W5-T21 |
+
+**判定标准不变**：一个新工程师加一个功能，能不能不小心让它只在一个 provider 上工作？11 条守卫
+下的答案应当是——他写的测试自动跑两遍（6/11），他写的实现不能提 provider 名（1/2），他装的东西
+不能是空占位符（3），他漏装的东西启动序列会报（4），他碰到的引擎差异只能进矩阵（5），他改坏的
+性能一侧变慢即红（9）。**每一条都是编译错误或 CI 红，没有一条靠人自觉。**

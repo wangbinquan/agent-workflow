@@ -93,10 +93,17 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 - **T19b** 组合根全量：`cli/` 与 `*/composition*` 下禁 `*-not-bound` 与晚绑定 holder。
 - **T19c** 启动序列恰有一个调用方，`cli/start.ts` 无 provider 执行分支。
 - **T19d** 覆盖率对等棘轮（过渡期，可在 W1 后立即上）：同一 port 两侧行覆盖率差超阈值即红。
-- **T19e** `tests/helpers/eachProvider.ts`：`describeEachProvider` harness；存量测试逐 context 迁入。
+- **T19e** `tests/helpers/eachProvider.ts`：`describeEachProvider` harness（design §11.1）——双引擎是
+  **缺省**，PG 侧无 URL 即 **fail** 而非 skip（`AW_TEST_PROVIDERS=sqlite` 仅本地显式降级）；
+  per-file schema 隔离；body 拿不到 provider 名。存量 816 文件 / 1,882 处 `createInMemoryDb(` 逐 context 迁入。
+- **T19f** 守卫「测试不得写死引擎」：harness 之外的 `createInMemoryDb(` 棘轮 1,882 → 0；测试内
+  按 provider 分叉须经 `capabilities` 且计数入账。
+- **T21b** 执行链取证进 push CI：两个引擎上各起一个任务跑到 done（RFC-349 验收漏掉的那一环）；
+  `postgresql-evidence.yml` 的 `prepareSoakDataset` 不再把在飞任务归一成 done。
 - **T20** 方言表完备性守卫（语料按类型可达派生，沿用 `tests/architecture/postgresqlSurface.ts`）。
-- **T21** **全量 backend 套件**在真 PG 上进 push CI 合并门（**AC-6**），不是窄 lane。
-  CI 时间约翻倍，按 D5 不打折。
+- **T21** **四个 backend 分片各自带 `services: postgres:17`**，PG 半边在每个分片里跑（design §11.2）；
+  `test-backend-postgresql` 窄 lane 退役。时长由 per-file schema 并行 + W4 后测试数减半对冲，
+  实测写回 proposal §6。按 D5 不打折。
 - **T22** 退役 `rfc349-dual-provider-predicate-drift`（对象已消失），退役 `dbTxSync`（**C-1**）。
 
 ## 5b. W6 —— PostgreSQL 最高性能（design §10）

@@ -87,6 +87,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // （lane 里有一道 grep，一旦它 skip 就 `::error::` 退出——skip 也算通过，绿着骗人是
   // 这类环境门控最容易掉进去的坑）。普通 backend 跑批没有 URL，因此在这里记一次。
   'packages/backend/tests/rfc357-postgresql-page.integration.test.ts#skip': 1,
+  // RFC-359 W2-T11b：能力矩阵的真 PostgreSQL 半边按环境门控 skip（过渡形态，design §11.1 自认反面
+  // 教材）；真库 lane 的 `(skip).*real PostgreSQL` grep 保证有库时必跑。T19e harness 落地后删除。
+  'packages/backend/tests/rfc359-engine-capabilities.test.ts#skip': 1,
   'e2e/clarify.spec.ts#skip': 1,
   'e2e/focus-ring-clip.spec.ts#skip': 1,
   // RFC-319 REPO-42（2026-08-26）：这里曾是 2 —— 一条是 gitea 夹具未配置时的条件跳过

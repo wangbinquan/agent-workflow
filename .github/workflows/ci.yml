@@ -261,7 +261,8 @@ jobs:
             packages/backend/tests/rfc357-postgresql-page.integration.test.ts \
             packages/backend/tests/rfc357-page-parity.test.ts \
             packages/backend/tests/rfc357-provider-portability.test.ts \
-            packages/backend/tests/rfc357-task-list-authorization.test.ts 2>&1 | tee rfc357-postgres.log
+            packages/backend/tests/rfc357-task-list-authorization.test.ts \
+            packages/backend/tests/rfc359-engine-capabilities.test.ts 2>&1 | tee rfc357-postgres.log
           # `realTest` 在缺 URL 时会 skip；skip 也算「通过」，于是一条连不上库的 lane
           # 会绿着骗人。这里显式要求真库那条用例**跑过**。
           if grep -q "(skip).*real PostgreSQL" rfc357-postgres.log; then
