@@ -45879,7 +45879,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aaf4300bb4b6e4d718f612111633c211f2bcc954a35c7a3422829929abe0f516",
+  "sourceDigest": "sha256:68bc5ff48bb782be8cd89afd9c5f8c844fe4f0726c86240a5fc23d0b96331318",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

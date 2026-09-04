@@ -2,6 +2,18 @@
 
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
+> 🔧 **单笔修复（2026-09-04，非 RFC）：PostgreSQL daemon 的系统身份改为正式 admit**。
+> `cli/postgresqlDaemonApplication.ts` 在模块作用域用 `buildActor(…)` 手捏了一个 `systemActor`，而授权句柄是按
+> **对象引用**从 `AuthorityClaimRegistry` 的 WeakMap 里取的（只有 `mintDirectAuthority` 会往里写），于是选了
+> PostgreSQL 的部署上四条 daemon 自用路径**必抛** `foreign-legacy-actor-projection`：动态工作流校验上下文
+> （代理启动前的校验）、工作组启动的 `loadExistingAgentIds`、数字员工执行的 `agents.get` / `workflows.get` 与
+> `resourceAuthorityFor`。SQLite 部署看不到——那边压根不走系统 actor（校验直接查库，数字员工执行走
+> `composeDigitalEmployeeExecution` 的 `startDeps` 依赖链）。改为组合期一次 `admitDaemonIdentity`
+> （admit 不出来就带名字启动失败，而不是四条路径各炸各的）。回归防护
+> `rfc349-postgresql-daemon-system-identity.test.ts`：admit 出来的身份能穿两种生产接线 / 手捏的确实被注册表拒 /
+> 组合根不许退回手捏；`rfc347` 的 `buildActor(` 账本少一条，架构 canonical 已重采并 pin。
+> 通用教训进 `docs/dev-gotchas.md` §「授权句柄按**对象引用**取」。
+
 > ✅ **已完成 RFC（Done，2026-09-04，三个 PR 全部推上 main）：[RFC-354 节点语义统一：参数 / 返回值 / 闭包 + 帧（全部 14 种节点，任意深度嵌套）](design/RFC-354-wrapper-as-node/proposal.md)。**
 > **PR-1（T1～T10）已落地**：`node_runs.container_run_id` / `scope_path` + `clarify_rounds.container_run_id`（迁移 0223）、帧 = 既有 wrapper 代际行
 > `(container_run_id, iteration)`、`domain/environmentChain.ts`（词法环境链：本地 / 闭包 / 参数按帧解析，`closure-binding-unresolved` 直接失败）、

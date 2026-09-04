@@ -14,10 +14,10 @@ import { join } from 'node:path'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { eq } from 'drizzle-orm'
 
-import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import { loadConfig } from '@/config'
-import { admitDaemonIdentity } from '@/auth/session'
+import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import {
   createPostgresqlIdentityAccessCrossContextBindings,
   composePostgresqlOidcIdentityOperations,
@@ -299,17 +299,6 @@ import {
 
 const log = createLogger('postgresql-daemon-application')
 
-const systemActor = buildActor({
-  user: {
-    id: SYSTEM_USER_ID,
-    username: SYSTEM_USER_ID,
-    displayName: 'System',
-    role: 'admin',
-    status: 'active',
-  },
-  source: 'daemon',
-})
-
 const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
 const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
 
@@ -446,6 +435,16 @@ export async function composePostgresqlDaemonApplication(
   await core.systemOperations.applyPendingRestore()
 
   const identityAccess = core.identityAccess
+  // daemon 自用的系统身份也必须由注册表**铸**出来。授权句柄按对象引用从
+  // `AuthorityClaimRegistry` 的 WeakMap 里取（只有 `mintDirectAuthority` 会往里写），
+  // 手捏的投影会被 `authorityForLegacyProjection` 抛 `foreign-legacy-actor-projection`
+  // ——本文件下面四条 daemon 自用路径（动态工作流校验上下文、工作组启动的
+  // `loadExistingAgentIds`、数字员工执行的 `agents.get` / `workflows.get` 与
+  // `resourceAuthorityFor`）全都吃这一对句柄。`__system__` 由迁移 0018 播种且不可禁用，
+  // admit 不出来说明这个库根本没法用，宁可在启动时带名字失败。
+  const systemIdentity = await admitDaemonIdentity(identityAccess)
+  if (systemIdentity === null) throw new Error('postgresql-daemon-system-identity-not-admitted')
+  const systemActor = actorOfDirectAuthority(systemIdentity)
   const resourceCatalog = composePostgresqlResourceCatalog({ db: input.db })
   let collaborationContext: Parameters<typeof readCommittedReviewArtifactBody>[0] | null = null
   const memoryOperations = composePostgresqlMemoryOperations({

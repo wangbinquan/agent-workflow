@@ -304,9 +304,13 @@ describe('RFC-347 exact production source locks', () => {
     expect(source('src/modules/identity-access/public/participants.ts')).not.toContain(
       'LegacyActorProjectionFactory',
     )
+    // PostgreSQL daemon 组合根从这份账本里退出去了：它手捏的 `systemActor` 拿不到注册表
+    // 句柄，四条 daemon 自用路径（动态工作流校验 / 工作组启动 / 数字员工执行的
+    // agents·workflows 读与 resourceAuthorityFor）在真库上必抛
+    // `foreign-legacy-actor-projection`，现改为 `admitDaemonIdentity` 正式 admit。
+    // 判据与复现见 `rfc349-postgresql-daemon-system-identity.test.ts`。
     expect(callPaths('buildActor(')).toEqual([
       'src/auth/actor.ts',
-      'src/cli/postgresqlDaemonApplication.ts',
       'src/modules/memory/infrastructure/postgresqlMemoryCatalogOperations.ts',
       'src/modules/memory/infrastructure/sqliteMemoryCatalog.ts',
       'src/modules/resource-catalog/infrastructure/sqliteDigitalEmployeeAgentTemplateCatalog.ts',

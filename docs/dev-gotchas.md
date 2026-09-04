@@ -980,6 +980,30 @@ git commit -F msg.txt --pathspec-from-file=paths.txt
 `packages/backend/tests/rfc349-postgresql-write-matrix.integration.test.ts` 与四条
 `rfc349-*-parity` / `rfc349-postgresql-numeric-projection`。
 
+## 授权句柄按**对象引用**取：手捏 actor 编译得过、注册表不认（同一形状实撞两次，2026-09-04）
+
+`AuthorityClaimRegistry` 把「授权句柄 ↔ actor 投影」记在 **WeakMap** 里，只有 `mintDirectAuthority`
+会往里写（`modules/identity-access/application/operationContext.ts`）。于是
+`authorityForLegacyProjection(actor)`（`routes/operationAuthority.ts` 的 `directOperationAuthority` /
+`directRequestAuthority` 都走它）认的不是 actor 的**内容**，而是**那一个对象**：`buildActor({…})` 拼出
+来的投影哪怕字段与真身逐一相等、账号也确实活着，照样抛 `foreign-legacy-actor-projection`。daemon
+自用身份要 `admitDaemonIdentity`，替属主跑存量工作要 `admitDurableWorkOwner`，两个都在
+`auth/session.ts`。
+
+**这类缺陷藏得住，是因为两个 provider 各有一份手写组合根**。`cli/start.ts`（SQLite）与
+`cli/postgresqlDaemonApplication.ts`（PostgreSQL）是同一产品的两棵装配树，一条只存在于其中一棵的
+接线**没有任何测试会碰**——没有测试组装得起任何一棵（要真库 / 要全量子系统）。于是 typecheck 绿、
+全量 CI 绿、code review 也看不出，而选了 PostgreSQL 的部署上四条路径必炸：动态工作流校验上下文、
+工作组启动的 `loadExistingAgentIds`、数字员工执行的 `agents.get` / `workflows.get` 与
+`resourceAuthorityFor`。第一次是 RFC-349 的启动恢复（`fe3fd3fef`，手捏投影喂 Resource Catalog），
+第二次就是这个 daemon 组合根。
+
+**怎么防**：① `rfc347-identity-access-runtime.test.ts` 里 `callPaths('buildActor(')` 的账本就是清单
+——每留一条都要能回答「这个 actor 会不会流到 `authorityForLegacyProjection`」，会就必须改成 admit；
+② 组合根在测试里装不起来时退到**源码层断言**（本仓既有做法），把「这里必须来自被 admit 的身份」
+钉住，别指望运行时用例兜底；③ 只在一个 provider 的组合根上出现的接线，写完先去另一棵树的对应
+位置看一眼——两边不对称本身就是要解释的事。
+
 ## 改一个实现名，会连累**按名字钉死**的多层守卫（RFC-356 实撞，2026-09-04 一次改动连红三层）
 
 本仓有大量守卫是**按符号名**匹配的，改实现时它们不会「自动跟上」，而是各自红一次。

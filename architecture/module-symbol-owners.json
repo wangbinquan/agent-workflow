@@ -6,7 +6,7 @@
     "moduleFiles": 1333,
     "productionFiles": 2720,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25967
+    "symbolsIncludingFileRoots": 25966
   },
   "entries": [
     {
@@ -5144,18 +5144,6 @@
       "status": "legacy-target",
       "symbol": "PostgresqlProviderRuntime",
       "targetContext": "runtime-management",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#systemActor",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "systemActor",
-      "targetContext": "task-execution",
       "targetLayer": "inbound"
     },
     {
@@ -312303,5 +312291,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aaf4300bb4b6e4d718f612111633c211f2bcc954a35c7a3422829929abe0f516"
+  "sourceDigest": "sha256:68bc5ff48bb782be8cd89afd9c5f8c844fe4f0726c86240a5fc23d0b96331318"
 }
