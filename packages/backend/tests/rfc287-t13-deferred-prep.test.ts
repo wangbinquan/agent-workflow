@@ -1809,7 +1809,8 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
     )
     const at = gcSrc.indexOf('async runPartialCloneGc(')
     const fn = gcSrc.slice(at, gcSrc.indexOf('\n    },', at))
-    expect(fn, '必须用异步 rm').toMatch(/await rm\(path/)
+    // RFC-356 T5：同上，删除走 `removeDirectoryWithRetry`（异步 + 退避）。
+    expect(fn, '必须用异步删除原语').toMatch(/await removeDirectoryWithRetry\(path/)
     expect(fn, '不得退回同步 rmSync').not.toMatch(/rmSync\(path/)
   })
 })
@@ -1914,8 +1915,11 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
   test('F4：删除残留 worktree 必须异步（本函数在请求路径上）', () => {
     // 它跑在 retryRepoPreparation 的后台分叉**之前**，同步递归删除一个几十 GB 的
     // 残留 worktree 会把 Bun 的单事件循环冻到遍历结束。
+    // RFC-356 T4：删除原语收敛成全仓唯一的 `removeDirectoryWithRetry`（内部 await
+    // `fs/promises.rm`，并在 Windows 上退避重试）。守卫锁的判据不变——必须 await、
+    // 不得退回同步递归删除——只是跟着换了拼写。
     const body = reclaim()
-    expect(body).toMatch(/await rm\(leaf/)
+    expect(body).toMatch(/await removeDirectoryWithRetry\(leaf/)
     expect(body, '不得退回同步 rmSync').not.toMatch(/rmSync\(leaf/)
   })
 

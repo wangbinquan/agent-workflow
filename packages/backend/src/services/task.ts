@@ -160,12 +160,14 @@ import {
   gitDiffSnapshot,
   initScratchRepo,
   isGitWorkTree,
+  reclaimStaleRefLocks,
   type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
   worktreeDiff,
   runGit,
   withWorktreeRegistryLock,
 } from '@/util/git'
+import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
 import {
@@ -5299,18 +5301,22 @@ async function reclaimStalePrepArtifacts(
         if (!slug.isDirectory()) continue
         const leaf = join(worktreesRoot, slug.name, task.id)
         if (!existsSync(leaf)) continue
-        try {
-          // `await rm` 而非同步 `rmSync`（五轮门 Codex F4）：本函数在**请求路径上**
-          // （retryRepoPreparation 的后台分叉之前），一个几十 GB / 百万文件的残留
-          // worktree 会把 Bun 的单事件循环冻到遍历结束——HTTP 响应、取消请求、
-          // deadline timer 全部排在它后面。与同一批把 GC 改成 `await rm` 同形。
-          await rm(leaf, { recursive: true, force: true })
+        // `await` 而非同步删除（五轮门 Codex F4）：本函数在**请求路径上**
+        // （retryRepoPreparation 的后台分叉之前），一个几十 GB / 百万文件的残留
+        // worktree 会把 Bun 的单事件循环冻到遍历结束——HTTP 响应、取消请求、
+        // deadline timer 全部排在它后面。
+        // RFC-356 T4：改走全仓唯一的退避删除原语。这里拿不到该 slug 对应的镜像仓
+        // （镜像集合要到下面步骤 ③ 才解析），所以用不上 `reclaimWorktreePath` 的
+        // 阶梯第 2 档，只复用第 1 层。
+        const reclaimed = await removeDirectoryWithRetry(leaf, { log })
+        if (reclaimed.removed) {
           log.info('reclaimed a stale prep worktree before retry', { taskId: task.id, path: leaf })
-        } catch (err) {
+        } else {
           log.warn('could not remove a stale prep worktree', {
             taskId: task.id,
             path: leaf,
-            error: err instanceof Error ? err.message : String(err),
+            attempts: reclaimed.attempts,
+            error: reclaimed.lastError ?? '',
           })
         }
       }
@@ -5338,6 +5344,22 @@ async function reclaimStalePrepArtifacts(
       // 第 2 份起是 `agent-workflow/{taskId}-2`、`-3`…（repoGroupLayout 的去重后缀）。
       // 只删不带后缀那条，会让第二仓的建树永远撞 "branch already exists"、每次重试
       // 复现、无法自愈（五轮门 Codex F3）。按前缀枚举全删。
+      // RFC-356 T4：先清陈旧的 ref lock。被 abort 掐掉的 `git worktree add` 会留下
+      // `refs/heads/agent-workflow/{taskId}.lock`，而仓内此前**没有任何生产路径清它**
+      // ——下一次在同一分支名上建树就永远撞 `cannot lock ref … File exists`，与 issue #13
+      // 同形（残留物挡住重建、且无自愈路径）。锁挡住的 ref 未必存在，所以 for-each-ref
+      // 看不到它，必须按前缀直接扫锁文件。只删 60s 之前落的锁，不抢活着的 git。
+      const locksCleared = await reclaimStaleRefLocks({
+        repoPath: row.localPath,
+        branchRef: `agent-workflow/${task.id}*`,
+        log,
+      })
+      if (locksCleared > 0) {
+        log.info('reclaimed stale branch ref locks before retry', {
+          taskId: task.id,
+          count: locksCleared,
+        })
+      }
       const listed = await runGit(row.localPath, [
         'for-each-ref',
         '--format=%(refname)',

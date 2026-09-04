@@ -25,7 +25,7 @@ import {
   isoRefName,
   materializeTree,
   mergeTreeInMemory,
-  removeWorktree,
+  reclaimWorktreePath,
   runGit,
   snapshotFullState,
 } from '@/util/git'
@@ -1315,18 +1315,24 @@ export async function discardNodeIso(
   let partialFailures = 0
   try {
     for (const r of handle.repos) {
-      try {
-        await removeWorktree({
-          repoPath: r.canonWorktreePath,
-          worktreePath: r.isoWorktreePath,
-          force: true,
-          timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
-        })
-      } catch (err) {
+      // RFC-356 T3：走回收阶梯（remove → 锁外退避删除 → prune），不再是一发
+      // `worktree remove` 一击即弃。`blocked` 只记 warn 并计入 partialFailures，
+      // 由调用方的选键（RFC-356 L4）换代绕开。
+      const reclaimed = await reclaimWorktreePath({
+        repoPath: r.canonWorktreePath,
+        worktreePath: r.isoWorktreePath,
+        timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+        ...(log === undefined ? {} : { log }),
+      })
+      if (reclaimed.kind === 'blocked') {
         partialFailures += 1
-        log?.warn('iso worktree remove failed (leaving for GC)', {
-          isoWorktreePath: r.isoWorktreePath,
-          error: err instanceof Error ? err.message : String(err),
+        // 文案不再承诺 GC：iso GC **明确跳过活跃 / 非终态任务**
+        // （`systemWorkspaceGc.ts` / `workspaceMaintenance.ts`），任务还活着的时候
+        // 没有任何代码会来收这个残留——旧文案「leaving for GC」对活任务从不成立。
+        log?.warn('iso worktree reclaim blocked (will retry with a new generation)', {
+          isoWorktreePath: reclaimed.residualPath,
+          attempts: reclaimed.attempts,
+          error: reclaimed.lastError,
         })
       }
       await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
@@ -1485,10 +1491,14 @@ export async function resolveConflictWithAgent(
   // A stale resolve-iso (crash mid-resolution) would make `worktree add` fail;
   // remove it first (best-effort), then fail LOUD if the add still fails — running
   // the agent against a missing/stale worktree would mis-judge resolution (Codex P2).
+  // RFC-356 T3：resolve-iso 就落在 iso 容器**内部**，删不掉会让容器非空、
+  // 直接挡住同代重建，所以这里也走回收阶梯而不是一发 remove。
   if (existsSync(resolveIso)) {
-    await removeWorktree({ repoPath: repoGit, worktreePath: resolveIso, force: true }).catch(
-      () => {},
-    )
+    await reclaimWorktreePath({
+      repoPath: repoGit,
+      worktreePath: resolveIso,
+      ...(log === undefined ? {} : { log }),
+    })
   }
   const add = await runGit(repoGit, ['worktree', 'add', '--detach', resolveIso, cmt])
   if (add.exitCode !== 0) {
@@ -1552,14 +1562,18 @@ export async function resolveConflictWithAgent(
     taskBaseHead: conflict.taskBaseHead,
   })
   // §6.2⑤: discard the resolve-iso (resolution now lives in canon).
-  await removeWorktree({ repoPath: repoGit, worktreePath: resolveIso, force: true }).catch(
-    (err) => {
-      log?.warn('resolve-iso remove failed (leaving for GC)', {
-        resolveIso,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    },
-  )
+  const discardedResolveIso = await reclaimWorktreePath({
+    repoPath: repoGit,
+    worktreePath: resolveIso,
+    ...(log === undefined ? {} : { log }),
+  })
+  if (discardedResolveIso.kind === 'blocked') {
+    log?.warn('resolve-iso reclaim blocked (container stays non-empty)', {
+      resolveIso,
+      attempts: discardedResolveIso.attempts,
+      error: discardedResolveIso.lastError,
+    })
+  }
   return { resolved: true, unresolved: [], resolveIsoPath: null }
 }
 
@@ -1706,16 +1720,18 @@ export async function completeHumanResolvedConflict(
       taskBaseHead: r.taskBaseHead,
     })
     // resolved — discard the resolve-iso.
-    await removeWorktree({
+    const humanResolveDiscard = await reclaimWorktreePath({
       repoPath: r.canonWorktreePath,
       worktreePath: resolveIso,
-      force: true,
-    }).catch((err) => {
-      log?.warn('resolve-iso remove failed after human resolution (leaving for GC)', {
-        resolveIso,
-        error: err instanceof Error ? err.message : String(err),
-      })
+      ...(log === undefined ? {} : { log }),
     })
+    if (humanResolveDiscard.kind === 'blocked') {
+      log?.warn('resolve-iso reclaim blocked after human resolution', {
+        resolveIso,
+        attempts: humanResolveDiscard.attempts,
+        error: humanResolveDiscard.lastError,
+      })
+    }
   }
   return { allResolved: unresolved.length === 0, unresolvedRepos: unresolved }
 }

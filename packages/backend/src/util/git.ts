@@ -5,11 +5,12 @@
 // will not survive lsFiles, which we accept as a v1 limitation.
 
 import type { GitRef } from '@agent-workflow/shared'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import { hardenGitArgs } from '@/util/gitHardening'
 import { NULL_DEVICE_FOR_HOST } from '@/util/platformExec'
 import type { Logger } from '@/util/log'
@@ -2478,6 +2479,183 @@ export async function removeWorktree(opts: RemoveWorktreeOptions): Promise<void>
       500,
     )
   }
+}
+
+// -----------------------------------------------------------------------------
+// RFC-356 T2 — 残留工作树回收阶梯。
+//
+// 起于 issue #13：Windows 上节点超时被杀后，逃逸的后代还占着 iso 工作树里的句柄，
+// `git worktree remove` 报 `failed to delete '…': Invalid argument`，而
+// `discardNodeIso` 只 warn 一句「留待 GC」就放过去了——可 iso GC **明确跳过活跃任务**
+// （`systemWorkspaceGc.ts` / `workspaceMaintenance.ts`），那句承诺对活任务从不成立。
+// 于是残留目录一直挡着同一条路径，重试的 `git worktree add` 逐次撞
+// `fatal: '<path>' already exists`，任务永久停摆。
+//
+// 更糟的是：`worktree remove` 删目录失败时注册项可能已被删掉，此后同一路径改报
+// `fatal: '<path>' is not a working tree`——平台**再没有任何路径**能清掉它。
+// 本阶梯就是为这两种形态准备的。
+// -----------------------------------------------------------------------------
+
+export type ReclaimWorktreeOutcome =
+  | { kind: 'absent' }
+  | { kind: 'removed'; via: 'git' | 'filesystem'; attempts: number }
+  | { kind: 'blocked'; residualPath: string; lastError: string; attempts: number }
+
+/**
+ * RFC-356 §2.4 —— stale ref lock 的判龄阈值。
+ *
+ * 被 abort 掐掉的 `git worktree add` 会留下 `refs/heads/<branch>.lock`，而仓内
+ * **没有任何生产路径清它**（2026-09-04 实测，`docs/audit-backlog.md`），于是下一次
+ * 在同一分支名上建树永远撞 `cannot lock ref … File exists`——与 issue #13 同形。
+ *
+ * 只删「老」锁：活着的 git 进程正持有的锁不能抢。
+ */
+export const STALE_REF_LOCK_MIN_AGE_MS = 60_000
+
+/**
+ * 清掉 `refs/heads/` 之下的陈旧 ref lock，返回删除个数（尽力而为，绝不抛）。
+ *
+ * `branchRef` 是精确分支名（`agent-workflow/abc`），或**以 `*` 结尾的前缀**
+ * （`agent-workflow/abc*`，用来一次收掉 repo-group 的 `-2` / `-3` 去重后缀）。
+ *
+ * 只删 `STALE_REF_LOCK_MIN_AGE_MS` 之前落的锁——活着的 git 进程正持有的锁不能抢。
+ */
+export async function reclaimStaleRefLocks(opts: {
+  repoPath: string
+  branchRef: string
+  log?: Logger | undefined
+}): Promise<number> {
+  const ref = opts.branchRef
+  if (ref.length === 0) return 0
+  // 分支名来自平台内部（`agent-workflow/{taskId}` 之类），但拼路径前仍要挡住
+  // 逃逸段——一个 `..` 就能把 unlink 指到 git 目录之外。
+  if (ref.split(/[\\/]/).some((seg) => seg === '..' || seg === '.')) return 0
+  const wildcard = ref.endsWith('*')
+  const bare = wildcard ? ref.slice(0, -1) : ref
+  const relDir = dirname(bare)
+  const namePrefix = basename(bare)
+  if (namePrefix.length === 0) return 0
+  let removed = 0
+  try {
+    const common = await runGit(opts.repoPath, [
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-common-dir',
+    ])
+    if (common.exitCode !== 0) return 0
+    const commonDir = common.stdout.trim()
+    if (commonDir.length === 0) return 0
+    const lockDir = join(commonDir, 'refs', 'heads', relDir === '.' ? '' : relDir)
+    const names = wildcard
+      ? readdirSync(lockDir).filter((n) => n.startsWith(namePrefix) && n.endsWith('.lock'))
+      : [`${namePrefix}.lock`]
+    for (const name of names) {
+      const lockPath = join(lockDir, name)
+      try {
+        const age = Date.now() - statSync(lockPath).mtimeMs
+        if (age < STALE_REF_LOCK_MIN_AGE_MS) continue // 可能有活着的 git 正持有它
+        await unlink(lockPath)
+        removed += 1
+        opts.log?.info('reclaimed a stale git ref lock', { lockPath, ageMs: age })
+      } catch {
+        // 这一个锁不存在 / 删不掉，继续看下一个。
+      }
+    }
+  } catch {
+    // 目录不存在（绝大多数情况）——没有锁要清。
+  }
+  return removed
+}
+
+/** `reclaimWorktreePath` 内部用的精确名版本；`branchRef` 缺省即不做。 */
+async function reclaimStaleRefLock(opts: {
+  repoPath: string
+  branchRef?: string | undefined
+  log?: Logger | undefined
+}): Promise<void> {
+  if (opts.branchRef === undefined || opts.branchRef.length === 0) return
+  await reclaimStaleRefLocks({
+    repoPath: opts.repoPath,
+    branchRef: opts.branchRef,
+    ...(opts.log === undefined ? {} : { log: opts.log }),
+  })
+}
+
+/**
+ * RFC-356 —— 回收一条残留的工作树路径，返回**它到底怎么了**而不是抛异常。
+ *
+ * 阶梯（锁的粒度是判据的一部分）：
+ *
+ * | 档 | 动作                                   | registry 锁 | 结果                     |
+ * | -- | -------------------------------------- | ----------- | ------------------------ |
+ * | 1  | 路径不存在                             | 否（零进程）| `absent`                 |
+ * | 2  | `git worktree remove --force`          | **是**      | `removed via git`        |
+ * | 3  | 退避删除目录                            | **否**      | —                        |
+ * | 3b | 删掉了 ⇒ `git worktree prune`          | **是**      | `removed via filesystem` |
+ * | 4  | 仍在                                   | —           | `blocked`                |
+ *
+ * **退避删除必须在锁外**：`withWorktreeRegistryLock` 按 common git dir 归一，同仓的
+ * 全部任务 / 分片 / 子任务共用一把。全程持锁会让一次阻塞回收把整仓的 registry 锁握满
+ * 数秒，期间所有兄弟分片的 `worktree add` 全部排队。退避删除根本不碰 registry。
+ *
+ * **`absent` 不 prune**：调用方（选键）会在每次建树前探测，那一下 prune 会让正常
+ * 创建路径凭空多一个持锁的 git 进程。悬空注册项由第 3b 档与既有 GC 的 prune 收。
+ *
+ * ⚠️ **不要拿它回收多仓的容器目录**：`{appHome}/iso/{taskId}/{key}` 在多仓下只是装着
+ * N 棵工作树的普通父目录，第 2 档会撞 `is not a working tree`、第 3 档的 `rm -rf`
+ * 会**绕过 git 把 N 棵树一起删掉**。正确姿势是先逐仓走本函数（各用自己的 repoPath），
+ * 容器最后、且只走 `removeDirectoryWithRetry`。
+ */
+export async function reclaimWorktreePath(opts: {
+  /** 同一 common git dir 的任一工作树——`remove` / `prune` 都从这里发。 */
+  repoPath: string
+  worktreePath: string
+  /** 该工作树占用的分支名（可选）。给了就顺带清它的 stale ref lock。 */
+  branchRef?: string | undefined
+  timeoutMs?: number | undefined
+  delaysMs?: readonly number[] | undefined
+  log?: Logger | undefined
+}): Promise<ReclaimWorktreeOutcome> {
+  if (!existsSync(opts.worktreePath)) {
+    // 目录压根没建起来也可能留下 ref lock（add 在锁定 ref 之后、checkout 之前被掐）。
+    await reclaimStaleRefLock(opts)
+    return { kind: 'absent' }
+  }
+
+  let lastError = ''
+  try {
+    await removeWorktree({
+      repoPath: opts.repoPath,
+      worktreePath: opts.worktreePath,
+      force: true,
+      ...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+    })
+    await reclaimStaleRefLock(opts)
+    return { kind: 'removed', via: 'git', attempts: 1 }
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : String(error)
+  }
+
+  const fs = await removeDirectoryWithRetry(opts.worktreePath, {
+    ...(opts.delaysMs === undefined ? {} : { delaysMs: opts.delaysMs }),
+    ...(opts.log === undefined ? {} : { log: opts.log }),
+  })
+  if (!fs.removed) {
+    return {
+      kind: 'blocked',
+      residualPath: opts.worktreePath,
+      lastError: fs.lastError ?? lastError,
+      attempts: 1 + fs.attempts,
+    }
+  }
+  // 目录没了，注册项现在是悬空的——prune 掉，否则 `worktree list` 会一直带着它。
+  await withWorktreeRegistryLock(opts.repoPath, () =>
+    runGit(opts.repoPath, ['worktree', 'prune'], {
+      ...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+    }),
+  )
+  await reclaimStaleRefLock(opts)
+  return { kind: 'removed', via: 'filesystem', attempts: 1 + fs.attempts }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

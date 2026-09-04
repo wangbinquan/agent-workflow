@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, statSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 
-import { deleteSnapshotRefs, removeWorktree, runGit } from '@/util/git'
+import { removeDirectoryWithRetry } from '@/util/fsReclaim'
+import { deleteSnapshotRefs, removeWorktree, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type {
   WorkspaceMaintenanceFilesystem,
@@ -30,7 +30,8 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
       const workspaceExisted = task.worktreePath !== '' && existsSync(task.worktreePath)
       if (task.spaceKind === 'scratch') {
         if (workspaceExisted) {
-          await rm(task.worktreePath, { recursive: true, force: true })
+          // RFC-356 T5：Windows 上一击即弃会在句柄尚未释放时留下整棵树。
+          await removeDirectoryWithRetry(task.worktreePath, { log })
           input.invalidateWorkspacePath(task.worktreePath)
         }
       } else if (task.repoCount > 1) {
@@ -45,7 +46,7 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
           }
           await deleteSnapshotRefs(repository.repoPath, task.id)
         }
-        if (workspaceExisted) await rm(task.worktreePath, { recursive: true, force: true })
+        if (workspaceExisted) await removeDirectoryWithRetry(task.worktreePath, { log })
       } else {
         if (workspaceExisted) {
           await removeWorktree({
@@ -65,11 +66,20 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
     async removeIsoContainer(task: WorkspaceTaskRecord | null, taskId: string): Promise<boolean> {
       const containerRoot = join(input.appHome, 'iso', taskId)
       const existed = existsSync(containerRoot)
-      await rm(containerRoot, { recursive: true, force: true })
+      // RFC-356 T5：退避删除。容器是装着 N 棵 iso 工作树的普通父目录，
+      // 所以这里**不能**走 `reclaimWorktreePath` 的阶梯（它会先撞
+      // `is not a working tree`），只能整体删。
+      await removeDirectoryWithRetry(containerRoot, { log })
       if (task !== null) {
         for (const worktreePath of [task.worktreePath, task.repoPath]) {
           if (worktreePath !== '' && existsSync(worktreePath)) {
-            await runGit(worktreePath, ['worktree', 'prune']).catch(() => {})
+            // RFC-356 T5：`prune` 改到 registry 锁内执行——它与
+            // `worktree add` / `remove` 一样改 common-dir 注册表，不持锁时会把
+            // 另一个任务半初始化的注册项观察到并删掉（`services/task.ts` 记着
+            // 这条 RFC-287 五轮门实证）。这处此前是全仓唯一一个裸 prune。
+            await withWorktreeRegistryLock(worktreePath, () =>
+              runGit(worktreePath, ['worktree', 'prune']),
+            ).catch(() => {})
           }
         }
       }
@@ -124,7 +134,7 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
 
     async removeAgedPath(path: string, now: number, minAgeMs: number): Promise<boolean> {
       if (now - statSync(path).mtimeMs < minAgeMs) return false
-      await rm(path, { recursive: true, force: true })
+      await removeDirectoryWithRetry(path, { log }) // RFC-356 T5
       return true
     },
 
@@ -140,8 +150,9 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
         const path = join(root, entry.name)
         try {
           if (now - statSync(path).mtimeMs < minAgeMs) continue
-          await rm(path, { recursive: true, force: true })
-          removed += 1
+          // RFC-356 T5：半成品 clone 目录同样可能被 Windows 上尚未退出的 git
+          // 句柄占着——退避一次，并按真实结果计数（此前无条件 +1）。
+          if ((await removeDirectoryWithRetry(path, { log })).removed) removed += 1
         } catch (error) {
           log.warn('failed to remove an orphaned partial clone directory', {
             path,

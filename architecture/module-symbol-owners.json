@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1942,
+    "backendFiles": 1943,
     "frontendFiles": 621,
-    "legacyFiles": 610,
+    "legacyFiles": 611,
     "moduleFiles": 1332,
-    "productionFiles": 2718,
+    "productionFiles": 2719,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25934
+    "symbolsIncludingFileRoots": 25943
   },
   "entries": [
     {
@@ -207279,6 +207279,54 @@
       "currentContext": "legacy",
       "currentLayer": "util",
       "exported": false,
+      "file": "packages/backend/src/util/fsReclaim.ts",
+      "id": "owner:packages/backend/src/util/fsReclaim.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/fsReclaim.ts",
+      "id": "owner:packages/backend/src/util/fsReclaim.ts#DEFAULT_RECLAIM_DELAYS_MS",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "DEFAULT_RECLAIM_DELAYS_MS",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/fsReclaim.ts",
+      "id": "owner:packages/backend/src/util/fsReclaim.ts#removeDirectoryWithRetry",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "removeDirectoryWithRetry",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/fsReclaim.ts",
+      "id": "owner:packages/backend/src/util/fsReclaim.ts#RemoveDirectoryWithRetryResult",
+      "removeAfterWave": "W4-E1",
+      "status": "legacy-target",
+      "symbol": "RemoveDirectoryWithRetryResult",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
       "file": "packages/backend/src/util/git.ts",
       "id": "owner:packages/backend/src/util/git.ts#$file",
       "removeAfterWave": "W5",
@@ -208168,6 +208216,54 @@
       "currentLayer": "util",
       "exported": false,
       "file": "packages/backend/src/util/git.ts",
+      "id": "owner:packages/backend/src/util/git.ts#reclaimStaleRefLock",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "reclaimStaleRefLock",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/git.ts",
+      "id": "owner:packages/backend/src/util/git.ts#reclaimStaleRefLocks",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "reclaimStaleRefLocks",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/git.ts",
+      "id": "owner:packages/backend/src/util/git.ts#ReclaimWorktreeOutcome",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "ReclaimWorktreeOutcome",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/git.ts",
+      "id": "owner:packages/backend/src/util/git.ts#reclaimWorktreePath",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "reclaimWorktreePath",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": false,
+      "file": "packages/backend/src/util/git.ts",
       "id": "owner:packages/backend/src/util/git.ts#RegisteredWorktree",
       "removeAfterWave": "W5",
       "status": "legacy-target",
@@ -208376,6 +208472,18 @@
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "snapshotRefPrefix",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "util",
+      "exported": true,
+      "file": "packages/backend/src/util/git.ts",
+      "id": "owner:packages/backend/src/util/git.ts#STALE_REF_LOCK_MIN_AGE_MS",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "STALE_REF_LOCK_MIN_AGE_MS",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -311907,5 +312015,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:10966de52555bd14cf7e1dd70fa351a34e564151f76cf4f19d237dd9bb7ee248"
+  "sourceDigest": "sha256:a6dd8ea57cbac46c3a38bbc20298bd02c8a79927006ecb831b2fc4420d352393"
 }

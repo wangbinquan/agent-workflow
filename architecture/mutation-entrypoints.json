@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1923,
+    "entries": 1925,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -25855,7 +25855,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem.ts",
@@ -25864,7 +25864,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem.ts#createNodeWorkspaceMaintenanceFilesystem",
@@ -44678,6 +44677,55 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/util/fsReclaim.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/util/fsReclaim.ts#removeDirectoryWithRetry",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/util/fsReclaim.ts#removeDirectoryWithRetry",
+      "symbol": "removeDirectoryWithRetry",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/util/fsReclaim.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/util/fsReclaim.ts#RemoveDirectoryWithRetryResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/util/fsReclaim.ts#RemoveDirectoryWithRetryResult",
+      "symbol": "RemoveDirectoryWithRetryResult",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -45833,7 +45881,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:10966de52555bd14cf7e1dd70fa351a34e564151f76cf4f19d237dd9bb7ee248",
+  "sourceDigest": "sha256:a6dd8ea57cbac46c3a38bbc20298bd02c8a79927006ecb831b2fc4420d352393",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -50229,8 +50277,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3474:tasks",
-        "line": 3474,
+        "id": "task-authority:packages/backend/src/services/task.ts#3476:tasks",
+        "line": 3476,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50245,8 +50293,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3599:taskExecutionIntents",
-        "line": 3599,
+        "id": "task-authority:packages/backend/src/services/task.ts#3601:taskExecutionIntents",
+        "line": 3601,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50261,8 +50309,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#3656:tasks",
-        "line": 3656,
+        "id": "task-authority:packages/backend/src/services/task.ts#3658:tasks",
+        "line": 3658,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -50277,8 +50325,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4285:tasks",
-        "line": 4285,
+        "id": "task-authority:packages/backend/src/services/task.ts#4287:tasks",
+        "line": 4287,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#cancelTask",
         "requiredBrandedProof": "ExactTerminalControlTuple",
         "revisionPredicate": "task-lifecycle-cas-and-source-or-terminal-control-fence",
@@ -50293,8 +50341,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#5891:tasks",
-        "line": 5891,
+        "id": "task-authority:packages/backend/src/services/task.ts#5913:tasks",
+        "line": 5913,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
