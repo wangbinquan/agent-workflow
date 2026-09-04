@@ -391,10 +391,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1946,
+      "baseline": 1949,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7c：删除认领崩溃恢复合一为一份实现（taskDeleteRecovery.ts / terminalMaintenanceClaim.ts），services/taskDelete.ts 只再导出，PG daemon 启动时接入。下一笔不涨即删。"
+        "why": "RFC-359 W3-T4：boot 恢复四步合一为 composition/bootRecovery.ts（两个 daemon 入口共用），新增 createRuntimeSessionLeaseOperations 分派。下一笔不涨即删。"
       }
     },
     {
@@ -415,8 +415,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 368,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 369,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-359 W3-T4：boot 恢复四步合一为 composition/bootRecovery.ts（两个 daemon 入口共用），新增 createRuntimeSessionLeaseOperations 分派。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -429,10 +432,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6435,
+      "baseline": 6444,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7c：删除认领崩溃恢复合一为一份实现（taskDeleteRecovery.ts / terminalMaintenanceClaim.ts），services/taskDelete.ts 只再导出，PG daemon 启动时接入。下一笔不涨即删。"
+        "why": "RFC-359 W3-T4：boot 恢复四步合一为 composition/bootRecovery.ts（两个 daemon 入口共用），新增 createRuntimeSessionLeaseOperations 分派。下一笔不涨即删。"
       }
     },
     {
@@ -453,10 +456,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5303,
+      "baseline": 5312,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7c：删除认领崩溃恢复合一为一份实现（taskDeleteRecovery.ts / terminalMaintenanceClaim.ts），services/taskDelete.ts 只再导出，PG daemon 启动时接入。下一笔不涨即删。"
+        "why": "RFC-359 W3-T4：boot 恢复四步合一为 composition/bootRecovery.ts（两个 daemon 入口共用），新增 createRuntimeSessionLeaseOperations 分派。下一笔不涨即删。"
       }
     },
     {
@@ -491,15 +494,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26135,
+      "baseline": 26142,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T7c：删除认领崩溃恢复合一为一份实现（taskDeleteRecovery.ts / terminalMaintenanceClaim.ts），services/taskDelete.ts 只再导出，PG daemon 启动时接入。下一笔不涨即删。"
+        "why": "RFC-359 W3-T4：boot 恢复四步合一为 composition/bootRecovery.ts（两个 daemon 入口共用），新增 createRuntimeSessionLeaseOperations 分派。下一笔不涨即删。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39",
+    "sourceDigest": "sha256:ff5e5dd91d01763a2bb8ab2e6abf4c9aa68c34f0687b50bd753a72fd72171967",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +515,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "74bb4c9f6c7f4f48d6d1a44cda73cf34376afc1d",
-    "contentDigest": "sha256:7d097e9ebccb79f7a80c9b37ad71de17061e4f953e81b3f153b0bf0118b603ec",
+    "currentSnapshotSha": "9dd1f050f490e414821e695d38a73025f3f02cc6",
+    "contentDigest": "sha256:d58fb6c50d483d25737e0112186f68d7d78f057d0aa543d3c1abfcb00f727046",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -1225,6 +1225,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:03fd83124aba69dcb5ce",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof",
+      "toPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toSymbol": "createDaemonLockProof",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/humanGateOperationPersistence.ts#$file",
@@ -1835,6 +1852,23 @@
       "toPath": "packages/backend/src/services/nodeRunMint.ts",
       "toSymbol": "frozenRuntimeOfSessionWith",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:059bd71dd977a05eb3b7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#runTaskExecutionBootRecovery",
+      "toPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toSymbol": "runTaskExecutionBootRecovery",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -20590,6 +20624,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:39ae4200983303719ed1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#reapOrphanRuns",
+      "toPath": "packages/backend/src/services/orphans.ts",
+      "toSymbol": "reapOrphanRuns",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceCatalogOverview.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceCatalogOverview.ts",
       "fromSymbol": "$file",
@@ -22898,6 +22949,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "plugins",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:403d141087cfaf13cb3c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof",
+      "toPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toSymbol": "createDaemonLockProof",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -55185,6 +55253,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9cb4cd454ef118124fbd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E4b",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#repairRuntimeSessionLeasesAfterOrphanReap",
+      "toPath": "packages/backend/src/services/runtimeSessionLease.ts",
+      "toSymbol": "repairRuntimeSessionLeasesAfterOrphanReap",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts",
       "fromSymbol": "$file",
@@ -72253,6 +72338,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ce7d09ac18f44c62d4c3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#ReapResult",
+      "toPath": "packages/backend/src/services/orphans.ts",
+      "toSymbol": "ReapResult",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
       "fromSymbol": "$file",
@@ -73048,6 +73150,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d11d2635bda8c8c6cd98",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createRuntimeSessionLeaseOperations",
+      "toPath": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "toSymbol": "createRuntimeSessionLeaseOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -75801,6 +75920,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside",
       "toPath": "packages/backend/src/util/safePath.ts",
       "toSymbol": "realpathInside",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d7aa6045df080a9b4453",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -85836,6 +85972,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f45c27c42d79cb852e54",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#runTaskExecutionBootRecovery",
+      "toPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toSymbol": "runTaskExecutionBootRecovery",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts#$file",
       "fromPath": "packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts",
       "fromSymbol": "$file",
@@ -90153,9 +90306,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5303,
+    "architectureExceptions": 5312,
     "implementationSccs": 0,
-    "observedEdges": 6435,
+    "observedEdges": 6444,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -91396,6 +91549,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts#getAclResourceOwnerInTx"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:03fd83124aba69dcb5ce",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/bootRecovery",
+      "syntax": "static-import",
+      "targetSymbol": "createDaemonLockProof",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/humanGateOperationPersistence.ts",
@@ -92034,6 +92203,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/nodeRunMint.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#frozenRuntimeOfSessionWith"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:059bd71dd977a05eb3b7",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/bootRecovery",
+      "syntax": "static-import",
+      "targetSymbol": "runTaskExecutionBootRecovery",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#runTaskExecutionBootRecovery"
     },
     {
       "edgeKind": "value",
@@ -113445,6 +113630,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "id": "import:39ae4200983303719ed1",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/orphans",
+      "syntax": "static-import",
+      "targetSymbol": "reapOrphanRuns",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/orphans.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#reapOrphanRuns"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceCatalogOverview.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceCatalogOverview.ts#$file",
@@ -116098,6 +116299,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#plugins"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:403d141087cfaf13cb3c",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/bootRecovery",
+      "syntax": "static-import",
+      "targetSymbol": "createDaemonLockProof",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof"
     },
     {
       "edgeKind": "type",
@@ -153429,6 +153646,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "id": "import:9cb4cd454ef118124fbd",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E4b",
+      "role": "legacy-outbound",
+      "specifier": "@/services/runtimeSessionLease",
+      "syntax": "static-import",
+      "targetSymbol": "repairRuntimeSessionLeasesAfterOrphanReap",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/runtimeSessionLease.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#repairRuntimeSessionLeasesAfterOrphanReap"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts#$file",
@@ -173076,6 +173309,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/digitalEmployeeEventObserver.ts#composeDevelopmentEmployeeEventObserver"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "id": "import:ce7d09ac18f44c62d4c3",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/orphans",
+      "syntax": "static-import",
+      "targetSymbol": "ReapResult",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/orphans.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/orphans.ts#ReapResult"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/infrastructure/postgresqlCustomEventSourceStore.ts",
@@ -174050,6 +174299,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:d11d2635bda8c8c6cd98",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/taskExecutionPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "createRuntimeSessionLeaseOperations",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createRuntimeSessionLeaseOperations"
     },
     {
       "edgeKind": "type",
@@ -177026,6 +177291,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/safePath.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
+      "id": "import:d7aa6045df080a9b4453",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "value",
@@ -188278,6 +188559,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:f45c27c42d79cb852e54",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/bootRecovery",
+      "syntax": "static-import",
+      "targetSymbol": "runTaskExecutionBootRecovery",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#runTaskExecutionBootRecovery"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/legacyTaskExecutionResourceDependencies.ts#$file",
       "id": "import:f473827726fb7eab6a98",
@@ -193661,7 +193958,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ece2f203f40ef285b5e6ecfc5730da9602107ca9db3883951e22c90aa73f9c39",
+  "sourceDigest": "sha256:ff5e5dd91d01763a2bb8ab2e6abf4c9aa68c34f0687b50bd753a72fd72171967",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
