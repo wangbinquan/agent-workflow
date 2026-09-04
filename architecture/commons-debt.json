@@ -4824,7 +4824,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:c8428c76a714f5cb83bb"
+        "import:3e8deb11c405dc183858"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -4870,7 +4870,7 @@
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:b1e62972ccaa991001c6"
+        "import:c1a0be9d0441ca517d40"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#$file",
       "canonicalToOwnerEntryIds": [
@@ -8743,15 +8743,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
+    "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "d8070b5c5b5056039afa38bafe49cce3033c115d",
-    "contentDigest": "sha256:aaab2a86d228df2f0c0a41d5d10dc003895a1354780394e203baaed7c2a23ab2",
+    "currentSnapshotSha": "3d74846d8483a71ed78459307083bed7e5d49237",
+    "contentDigest": "sha256:0d86bd431bf7d5a75901de8ce3d5a2037c2619618f1404a4b3c38e1dc6f1eb72",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

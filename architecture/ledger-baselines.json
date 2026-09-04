@@ -139,8 +139,11 @@
       "id": "node-run-direct-status-writes",
       "file": "packages/backend/tests/lifecycle-grep-guard.test.ts",
       "symbol": "DIRECT_STATUS_WRITE_ALLOWLIST",
-      "baseline": 8,
-      "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）"
+      "baseline": 9,
+      "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T2c：node_run 状态 CAS 合成一份中立事务内内核 `nodeRunLifecycleTransition.ts`（两处直写），PG participant 委托过去（其账本 2 → 1），8 → 9；W4 删 SQLite 同步孪生后回落。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T2c：nodeRunLifecycleTransition.ts 一份中立内核入账（+1 文件）。下一笔不涨即删。"
+      }
     },
     {
       "id": "merge-state-blind-writes",
@@ -189,10 +192,7 @@
       "file": "packages/backend/tests/scheduler-audit-s14-tasks-status-blind-write-inventory.test.ts",
       "symbol": "STATUS_WRITE_ALLOWLIST",
       "baseline": 11,
-      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T1：human-gate 任务跃迁合成一份中立实现 `humanGateTaskTransition.ts`（CAS on lifecycleEventRevision），两 provider 的旧写点在 W4 pair-deletion 前仍在，10 → 11；W4 删孪生后回落。",
-      "allowGrowth": {
-        "why": "RFC-359 W1-T1/T2b：human-gate 任务跃迁合成一份中立实现 humanGateTaskTransition.ts，两 provider 旧写点在 W4 pair-deletion 前仍在，10 → 11。下一笔不涨即删。"
-      }
+      "why": "tasks.status 的 provider lifecycle 直写站点（C9 点名）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T1：human-gate 任务跃迁合成一份中立实现 `humanGateTaskTransition.ts`（CAS on lifecycleEventRevision），两 provider 的旧写点在 W4 pair-deletion 前仍在，10 → 11；W4 删孪生后回落。"
     },
     {
       "id": "shared-schema-any-allowlist",
@@ -394,8 +394,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1935,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1939,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-359 W1-T2c：nodeRunLifecycleTransition / taskAuthorization / committedReviewArtifactReader / reviewMutationScope 四份中立原子替代 PG 副本，评审五个事务体迁到 DatabaseSession，写入口净 +4。下一笔不涨即删。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -429,10 +432,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6382,
+      "baseline": 6388,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T2b：clarifyDecisionCommand.ts 一份实现替代 SQLite 专属组合，seal / clarifyDecision 参与者改用 task-execution 的中立原子（两条 cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 clarifyDecisions。下一笔不涨即删。"
+        "why": "RFC-359 W1-T2c：reviewDecisionCommand.ts 一份实现替代 SQLite 专属组合，legacySqliteReview 的决定 / 评论 / 选择改用 task-execution 的中立原子（cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 reviewDecisions。下一笔不涨即删。"
       }
     },
     {
@@ -453,10 +456,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5251,
+      "baseline": 5261,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T2b：clarifyDecisionCommand.ts 一份实现替代 SQLite 专属组合，seal / clarifyDecision 参与者改用 task-execution 的中立原子（两条 cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 clarifyDecisions。下一笔不涨即删。"
+        "why": "RFC-359 W1-T2c：reviewDecisionCommand.ts 一份实现替代 SQLite 专属组合，legacySqliteReview 的决定 / 评论 / 选择改用 task-execution 的中立原子（cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 reviewDecisions。下一笔不涨即删。"
       }
     },
     {
@@ -491,15 +494,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26090,
+      "baseline": 26097,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-359 W1-T2b：新增 clarifyDecisionCommand.ts 的 owner 条目（替代已删的 legacySqliteClarifyDecisionComposition.ts），净 +1。下一笔不涨即删。"
+        "why": "RFC-359 W1-T2c：reviewDecisionCommand.ts 一份实现替代 SQLite 专属组合，legacySqliteReview 的决定 / 评论 / 选择改用 task-execution 的中立原子（cross-context 内部 import 待 W4 收进 public participants），PG daemon 注入 reviewDecisions。下一笔不涨即删。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
+    "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -512,8 +515,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d8070b5c5b5056039afa38bafe49cce3033c115d",
-    "contentDigest": "sha256:cf6ee7b34fb963f19678f444979803114bb285587db0bf02a0703b2cf25618c7",
+    "currentSnapshotSha": "3d74846d8483a71ed78459307083bed7e5d49237",
+    "contentDigest": "sha256:c258918cda787692362910861fbb18fc56508bab7e19b97d6e9365c9f71919f5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

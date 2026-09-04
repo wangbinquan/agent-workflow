@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1935,
+    "entries": 1939,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -5152,55 +5152,6 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts#createReviewDecisionCommandContext",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts#createReviewDecisionCommandContext",
-      "symbol": "createReviewDecisionCommandContext",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts#createSqliteReviewDecisionCommand",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts#createSqliteReviewDecisionCommand",
-      "symbol": "createSqliteReviewDecisionCommand",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
         "transaction": true
       },
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteTaskClarifyDirective.ts",
@@ -6162,6 +6113,55 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommandContext",
       "symbol": "createQuestionDispatchCommandContext",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#createReviewDecisionCommand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#createReviewDecisionCommand",
+      "symbol": "createReviewDecisionCommand",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#createReviewDecisionCommandContext",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#createReviewDecisionCommandContext",
+      "symbol": "createReviewDecisionCommandContext",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -30259,6 +30259,98 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#setNodeRunStatusTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#setNodeRunStatusTx",
+      "symbol": "setNodeRunStatusTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#SetNodeRunStatusTxInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#SetNodeRunStatusTxInput",
+      "symbol": "SetNodeRunStatusTxInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#transitionNodeRunStatusTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#transitionNodeRunStatusTx",
+      "symbol": "transitionNodeRunStatusTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#TransitionNodeRunStatusTxInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#TransitionNodeRunStatusTxInput",
+      "symbol": "TransitionNodeRunStatusTxInput",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": true
       },
@@ -30999,53 +31091,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#createPostgresqlTaskArchiveMaintenanceCommand",
       "symbol": "createPostgresqlTaskArchiveMaintenanceCommand",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskAuthorization.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskAuthorization.ts#createPostgresqlTaskAuthorizationParticipantInTx",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskAuthorization.ts#createPostgresqlTaskAuthorizationParticipantInTx",
-      "symbol": "createPostgresqlTaskAuthorizationParticipantInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskAuthorization.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskAuthorization.ts#createPostgresqlTaskAuthorizationQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskAuthorization.ts#createPostgresqlTaskAuthorizationQueries",
-      "symbol": "createPostgresqlTaskAuthorizationQueries",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -32666,6 +32711,55 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations.ts#createSqliteWorkgroupTurnsOperations",
       "symbol": "createSqliteWorkgroupTurnsOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationParticipantInTx",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationParticipantInTx",
+      "symbol": "createTaskAuthorizationParticipantInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationQueries",
+      "symbol": "createTaskAuthorizationQueries",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46120,7 +46214,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
+  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46230,7 +46324,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 277,
+      "durableWriterSites": 278,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -46260,8 +46354,24 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1006:nodeRunOutputs",
-        "line": 1006,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1007:nodeRunOutputs",
+        "line": 1007,
+        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
+        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
+        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
+        "symbol": "dispatchReviewNodeUnlocked"
+      },
+      {
+        "allowedTables": [
+          "nodeRunOutputs"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "dispatchReviewNodeUnlocked",
+        "controlSubtype": "gate-control",
+        "dataClass": "nodeRunOutputs",
+        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1020:nodeRunOutputs",
+        "line": 1020,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46276,8 +46386,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1032:nodeRunEvents",
-        "line": 1032,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1046:nodeRunEvents",
+        "line": 1046,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46292,8 +46402,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1158:nodeRuns",
-        "line": 1158,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1172:nodeRuns",
+        "line": 1172,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46308,8 +46418,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1301:nodeRunOutputs",
-        "line": 1301,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1315:nodeRunOutputs",
+        "line": 1315,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46324,8 +46434,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1314:nodeRunOutputs",
-        "line": 1314,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1328:nodeRunOutputs",
+        "line": 1328,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46340,8 +46450,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1334:nodeRunEvents",
-        "line": 1334,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#1348:nodeRunEvents",
+        "line": 1348,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46356,8 +46466,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#3722:nodeRunOutputs",
-        "line": 3722,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#3737:nodeRunOutputs",
+        "line": 3737,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46372,24 +46482,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#968:nodeRuns",
-        "line": 968,
-        "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
-        "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
-        "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
-        "symbol": "dispatchReviewNodeUnlocked"
-      },
-      {
-        "allowedTables": [
-          "nodeRunOutputs"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "dispatchReviewNodeUnlocked",
-        "controlSubtype": "gate-control",
-        "dataClass": "nodeRunOutputs",
-        "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#993:nodeRunOutputs",
-        "line": 993,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#982:nodeRuns",
+        "line": 982,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -46848,6 +46942,38 @@
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
+        "consumer": "transitionNodeRunStatusTx",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#120:nodeRuns",
+        "line": 120,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#transitionNodeRunStatusTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "transitionNodeRunStatusTx"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "setNodeRunStatusTx",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#96:nodeRuns",
+        "line": 96,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts#setNodeRunStatusTx",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "setNodeRunStatusTx"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
         "consumer": "mint",
         "controlSubtype": null,
         "dataClass": "nodeRuns",
@@ -47232,28 +47358,12 @@
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
-        "consumer": "set",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#118:nodeRuns",
-        "line": 118,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#createPostgresqlNodeRunLifecycleParticipantInTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createPostgresqlNodeRunLifecycleParticipantInTx"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
         "consumer": "transition",
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#202:nodeRuns",
-        "line": 202,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#174:nodeRuns",
+        "line": 174,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunLifecyclePersistence.ts#PostgresqlNodeRunLifecyclePersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

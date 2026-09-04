@@ -436,37 +436,37 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dbTxSync:2531",
-      "line": 2531,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2543",
+      "line": 2543,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewCommentUnlocked",
       "status": "clear",
       "symbol": "addReviewCommentUnlocked",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dbTxSync:2681",
-      "line": 2681,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2691",
+      "line": 2691,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#updateReviewCommentTextUnlocked",
       "status": "clear",
       "symbol": "updateReviewCommentTextUnlocked",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dbTxSync:2766",
-      "line": 2766,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:2776",
+      "line": 2776,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#deleteReviewCommentUnlocked",
       "status": "clear",
       "symbol": "deleteReviewCommentUnlocked",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [
@@ -475,25 +475,25 @@
       ],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dbTxSync:3515",
-      "line": 3515,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:3526",
+      "line": 3526,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#submitReviewDecisionUnlocked",
       "status": "co-located-risk",
       "symbol": "submitReviewDecisionUnlocked",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#dbTxSync:4273",
-      "line": 4273,
+      "id": "tx:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#transaction:4287",
+      "line": 4287,
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#setDocumentSelectionUnlocked",
       "status": "clear",
       "symbol": "setDocumentSelectionUnlocked",
       "targetContext": "collaboration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
@@ -4954,8 +4954,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#transaction:41",
-      "line": 41,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#transaction:25",
+      "line": 25,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionIntentPersistence.ts#serializable",
       "status": "clear",
       "symbol": "serializable",
@@ -5900,7 +5900,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:615c3c179ea06328a1184e2267973c40997885df6d81e3857a227e9fafcce018",
+  "sourceDigest": "sha256:314613961bfef88b32025074e74698f95a2080f68c2fded0da38d18359b94062",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
