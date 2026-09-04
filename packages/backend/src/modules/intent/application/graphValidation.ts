@@ -4,7 +4,20 @@
 // `mode`（解析不出时跳过 / 抛）。判据本身一份——applyCommitPlan.ts 的文件头记着 RFC-355
 // 的教训：同一判据抄两份，差别只在哪一条先漂。
 
-import type { IntentChangeset, WorkflowValidationIssue } from '@agent-workflow/shared'
+import {
+  WorkflowDefinitionSchema,
+  migrateWorkflowDefinitionToLatest,
+  type Agent,
+  type IntentChangeset,
+  type WorkflowDefinition,
+  type WorkflowValidationIssue,
+} from '@agent-workflow/shared'
+import type {
+  WorkflowValidationAgentOverlay,
+  WorkflowValidationCandidateOverlays,
+  WorkflowValidationWorkflowOverlay,
+} from '@/modules/resource-catalog/public/types'
+import type { ResolvedIntentOp } from './resolveChangeset'
 import type { Actor } from '@/auth/actor'
 import { createLogger } from '@/util/log'
 import {
@@ -124,4 +137,141 @@ export async function validateChangesetWorkflowGraphs(
     errors.push(`… and ${truncated} more graph validation error(s) not listed`)
   }
   return { unavailable: false, errors, warnings }
+}
+
+/**
+ * RFC-358 §7（决策 D3）—— apply preflight 的二次硬拦。
+ *
+ * 与 draft 期是同一套判据、同一个端口，差别只在输入：这里的 op 已经解析完毕，
+ * `definition` 里是**最终 canonical id**、payload 是 canonical 形状。所以不再走
+ * 「假想解析」，直接从 resolved op 派生覆盖层。
+ *
+ * 为什么 draft 绿了还要再拦一次：draft 与 apply 之间 live 库可能变（别人改了被引用
+ * agent 的输出端口）、草稿可能产生于本功能上线之前、`finalName` 槽可能改名从而断掉
+ * 按名字建立的 call 边。这三类都不是「用户此刻做错了什么」，所以文案要分类。
+ */
+export async function validateResolvedBundleWorkflowGraphs(
+  deps: { readonly graphValidation: IntentWorkflowGraphValidationPort },
+  input: {
+    readonly actor: Actor
+    readonly ops: readonly ResolvedIntentOp[]
+  },
+): Promise<IntentGraphValidationOutcome> {
+  const workflowOps = input.ops.filter((op) => op.resourceType === 'workflow')
+  if (workflowOps.length === 0) return { unavailable: false, errors: [], warnings: [] }
+
+  const agents: WorkflowValidationAgentOverlay[] = []
+  const skills: { id: string; name: string }[] = []
+  const mcps: { id: string; name: string; enabled: boolean }[] = []
+  const plugins: { id: string; name: string; enabled: boolean }[] = []
+  const callWorkflows: WorkflowValidationWorkflowOverlay[] = []
+  for (const op of input.ops) {
+    const payload = op.payload as Record<string, unknown>
+    const name = String(payload.name ?? op.resourceId)
+    switch (op.resourceType) {
+      case 'agent':
+        agents.push({
+          agentId: op.resourceId,
+          isNew: op.action === 'create',
+          fields: {
+            name,
+            outputs: (payload.outputs ?? []) as readonly string[],
+            skills: (payload.skills ?? []) as Agent['skills'],
+            dependsOn: (payload.dependsOn ?? []) as readonly string[],
+            mcp: (payload.mcp ?? []) as readonly string[],
+            plugins: (payload.plugins ?? []) as readonly string[],
+            ...(payload.outputKinds === undefined
+              ? {}
+              : { outputKinds: payload.outputKinds as Readonly<Record<string, string>> }),
+            ...(payload.branchPorts === undefined
+              ? {}
+              : { branchPorts: payload.branchPorts as readonly string[] }),
+            ...(payload.outputWrapperPortNames === undefined
+              ? {}
+              : {
+                  outputWrapperPortNames: payload.outputWrapperPortNames as Readonly<
+                    Record<string, string>
+                  >,
+                }),
+            ...(payload.role === undefined ? {} : { role: payload.role as Agent['role'] }),
+          },
+        })
+        break
+      case 'skill':
+        skills.push({ id: op.resourceId, name })
+        break
+      case 'mcp':
+        mcps.push({ id: op.resourceId, name, enabled: payload.enabled !== false })
+        break
+      case 'plugin':
+        plugins.push({ id: op.resourceId, name, enabled: payload.enabled !== false })
+        break
+      default:
+        break
+    }
+  }
+
+  const candidates: { opId: string; definition: WorkflowDefinition; name: string }[] = []
+  for (const op of workflowOps) {
+    const payload = op.payload as { name?: unknown; definition?: unknown }
+    const parsed = WorkflowDefinitionSchema.safeParse(payload.definition)
+    if (!parsed.success) {
+      // canonical schema 在 `prepare` 里会给出 `intent-op-canonical-invalid`，
+      // 这里不抢它的判据，只是不把畸形定义送进校验器。
+      continue
+    }
+    const definition = migrateWorkflowDefinitionToLatest(parsed.data)
+    const name = String(payload.name ?? op.resourceId)
+    candidates.push({ opId: op.opId, definition, name })
+    callWorkflows.push({ id: op.resourceId, name, definition })
+  }
+
+  const overlays: WorkflowValidationCandidateOverlays = {
+    ...(agents.length === 0 ? {} : { agents }),
+    ...(skills.length === 0 ? {} : { skills }),
+    ...(mcps.length === 0 ? {} : { mcps }),
+    ...(plugins.length === 0 ? {} : { plugins }),
+    ...(callWorkflows.length === 0 ? {} : { callWorkflows }),
+  }
+
+  const errors: string[] = []
+  const warnings: IntentGraphWarning[] = []
+  for (const candidate of candidates) {
+    const op = workflowOps.find((each) => each.opId === candidate.opId)
+    const result = await deps.graphValidation.validate({
+      actor: input.actor,
+      definition: candidate.definition,
+      currentWorkflow: { id: op?.resourceId ?? candidate.opId, name: candidate.name },
+      overlays,
+    })
+    let perOp = 0
+    for (const issue of result.issues) {
+      if ((issue.severity ?? 'error') === 'warning') {
+        warnings.push({ opId: candidate.opId, code: issue.code, message: issue.message })
+        continue
+      }
+      if (perOp >= INTENT_GRAPH_ISSUE_CAPS.perOp || errors.length >= INTENT_GRAPH_ISSUE_CAPS.total)
+        continue
+      perOp += 1
+      errors.push(formatError(candidate.opId, issue))
+    }
+  }
+  return { unavailable: false, errors, warnings }
+}
+
+/**
+ * RFC-358 B-2 —— 提交被图校验拦下时的文案。
+ *
+ * 一律说「引用的资源发生了变化」会把用户引到错误方向：这道门的触发面不止 live 库漂移，
+ * 还包括本功能上线前产生的存量草稿、以及 `finalName` 改名断掉按名字建立的 call 边。
+ * 所以文案讲清楚「这份草稿现在过不了工作流校验」并给出可执行的下一步。
+ */
+export function intentWorkflowInvalidMessage(errors: readonly string[]): string {
+  const head = errors.slice(0, 3).join('; ')
+  const more = errors.length > 3 ? ` (+${errors.length - 3} more)` : ''
+  return (
+    `this draft no longer passes workflow validation: ${head}${more}. ` +
+    'The referenced resources may have changed since the draft was generated, ' +
+    'or the draft predates workflow graph validation — regenerate a turn and review the fixes.'
+  )
 }

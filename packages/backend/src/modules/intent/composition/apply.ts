@@ -1,3 +1,4 @@
+import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { DbClient } from '@/db/client'
 import {
   applyIntentChangeset as applyIntentChangesetWithLifecycle,
@@ -53,6 +54,8 @@ export interface SqliteIntentApplyCompositionDependencies {
     readonly npmBin?: string
     readonly timeoutMs?: number
   }
+  /** RFC-358 §7 —— 提交期工作流图校验（AC-6）。 */
+  readonly graphValidation?: IntentWorkflowGraphValidationPort
 }
 
 /** Legacy SQLite mechanism stays behind the same async command seam as PostgreSQL. */
@@ -76,6 +79,9 @@ export function composeSqliteIntentApplyOperations(
           ...(dependencies.pluginInstallOpts === undefined
             ? {}
             : { pluginInstallOpts: dependencies.pluginInstallOpts }),
+          ...(dependencies.graphValidation === undefined
+            ? {}
+            : { graphValidation: dependencies.graphValidation }),
         },
         {
           ...input.command,

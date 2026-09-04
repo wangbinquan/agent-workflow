@@ -2038,6 +2038,12 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
   const intentApply = composeSqliteIntentApplyOperations({
     db: effectiveDeps.db,
     appHome,
+    // RFC-358 §7（AC-6）—— 提交期的图校验。draft 期那道门挡的是模型；这道挡的是
+    // draft 与 apply 之间的漂移（别人改了被引用 agent 的端口、上线前的存量草稿）。
+    graphValidation: composeIntentWorkflowGraphValidation({
+      validationQueries: workflowCatalog.validationQueries,
+      authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
+    }),
     resources: composeIntentApplyResourceBinding(
       legacyIntentApplyResourceDependencies,
       providerResourceCatalog.persistence.identities,

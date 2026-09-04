@@ -34,6 +34,11 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
+import {
+  intentWorkflowInvalidMessage,
+  validateResolvedBundleWorkflowGraphs,
+} from '../application/graphValidation'
+import type { IntentWorkflowGraphValidationPort } from '../application/ports/intentWorkflowGraphValidation'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
 import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
 import {
@@ -123,6 +128,11 @@ export interface ApplyIntentDeps {
     readonly timeoutMs?: number
   }
   faults?: ApplyIntentFaults
+  /**
+   * RFC-358 §7（决策 D3）—— 提交期的图校验。缺省表示不拦（既有测试装配保持原样）；
+   * 生产装配必须给，否则 AC-6 这道门形同虚设。
+   */
+  graphValidation?: IntentWorkflowGraphValidationPort
   log?: Logger
 }
 
@@ -389,6 +399,29 @@ async function applyInner(
           )
         }
         throw error
+      }
+    }
+
+    // ── RFC-358 §7 —— 提交期的图校验（决策 D3，兑现 RFC-234 §9.2 的未落地项）──
+    //
+    // 位置必须在 `prepare` 循环**之后**：canonical `WorkflowDefinitionSchema.parse`
+    // 是在 prepare 里跑的，放它之前会拿到未校验的定义、在 `edge.target.nodeId` 上抛
+    // TypeError（500），并把「canonical schema rejection maps to
+    // intent-op-canonical-invalid, not 500」那条既有回归推红。
+    //
+    // 还在 prestage 之前：此刻尚无任何副作用（插件未装、技能未 stage），失败就是干净
+    // 的零落库，不需要补偿。
+    if (deps.graphValidation !== undefined) {
+      const graph = await validateResolvedBundleWorkflowGraphs(
+        { graphValidation: deps.graphValidation },
+        { actor: deps.actor, ops: bundle.ops },
+      )
+      if (graph.errors.length > 0) {
+        throw new ValidationError(
+          'intent-workflow-invalid',
+          intentWorkflowInvalidMessage(graph.errors),
+          { issues: graph.errors },
+        )
       }
     }
 

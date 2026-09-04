@@ -1514,6 +1514,11 @@ export async function composePostgresqlDaemonApplication(
   })
   const intentApplyOperations = createPostgresqlIntentApplyOperations({
     db: input.db,
+    // RFC-358 §7（AC-6）—— 与 SQLite provider 同一道门、同一份判据。
+    graphValidation: composeIntentWorkflowGraphValidation({
+      validationQueries: classicCatalogs.workflow.validationQueries,
+      authorityFor,
+    }),
     resources: composePostgresqlIntentApplyResourceBinding({
       db: input.db,
       mcpLifecycle: createPostgresqlMcpTransactionLifecycle(),

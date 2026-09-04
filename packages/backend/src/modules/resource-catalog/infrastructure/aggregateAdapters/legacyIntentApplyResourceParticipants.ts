@@ -30,6 +30,7 @@ import { agents, mcps, plugins, skillOperations, skills, workflows, workgroups }
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import { createIntentApplyResourceParticipantInTx } from '../../application/participants/intentApplyResourceParticipant'
+import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 import type {
   IntentApplyResourceParticipantInTx,
   ResourceRequestContext,
@@ -807,7 +808,16 @@ export function createLegacyIntentApplyResourceSession(
       switch (plan.kind) {
         case 'agent': {
           if (plan.action === 'create') {
-            const parsed = CreateAgentSchema.parse(plan.payload)
+            // RFC-358 T9（B-5）—— copy 把 update 归一成 create，但此前这条分支不回填
+            // sidecar，于是「复制一个 builtin agent 再改」会静默丢掉分支端口 / 输出
+            // kind / 角色 / fanout 重命名。回填之后 draft 与 apply 的口径也自然同形。
+            const copySource =
+              plan.copiedFromResourceId === undefined
+                ? null
+                : await dependencies.getAgentById(db, plan.copiedFromResourceId)
+            const parsed = CreateAgentSchema.parse(
+              copySource === null ? plan.payload : withAgentSidecarsFrom(plan.payload, copySource),
+            )
             remember({
               plan,
               kind: 'agent-create',
@@ -829,17 +839,8 @@ export function createLegacyIntentApplyResourceSession(
             )
           }
           const { name: _name, ...patchBody } = plan.payload as Readonly<Record<string, unknown>>
-          const mutablePatch = { ...patchBody }
-          for (const key of [
-            'branchPorts',
-            'outputKinds',
-            'role',
-            'outputWrapperPortNames',
-          ] as const) {
-            if (!(key in mutablePatch) && existing[key] !== undefined) {
-              mutablePatch[key] = existing[key]
-            }
-          }
+          // RFC-358 T9：与 create/copy 分支、与 PostgreSQL provider 共用同一份判据。
+          const mutablePatch = withAgentSidecarsFrom(patchBody, existing)
           remember({
             plan,
             kind: 'agent-update',

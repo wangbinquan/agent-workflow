@@ -13,7 +13,17 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { join } from 'node:path'
 import { parseIntentChangeset, type IntentChangeset } from '@agent-workflow/shared'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { eq } from 'drizzle-orm'
+import { canonicalIntentJson } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
+import { intentDrafts, intentSessions, workflows as workflowsTable } from '../src/db/schema'
+import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
+import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
+import { createIntentSession } from '@/modules/intent/application/session'
+import { withAgentSidecarsFrom } from '@/modules/resource-catalog/domain/agentSidecarBackfill'
 import { users } from '../src/db/schema'
 import { createAgent } from '../src/services/agent'
 import {
@@ -535,5 +545,154 @@ describe('RFC-358 — graph repair turn', () => {
     })
     expect(settled.graphRepair).toBeUndefined()
     expect(settled.kind).toBe('error')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RFC-358 T7/T9（决策 D3/D5）—— 提交期的二次硬拦，与 copy 的 sidecar 回填。
+
+describe('RFC-358 — apply-time gate and copy backfill', () => {
+  let persistence: IntentPersistence
+  let appHome: string
+
+  beforeEach(() => {
+    persistence = composeSqliteIntentPersistence({
+      db,
+      contextAuthorization: composeSqliteIntentContextResourceAuthorizationSyncFactory(),
+    })
+    appHome = mkdtempSync(join(tmpdir(), 'aw-rfc358-'))
+    mkdirSync(join(appHome, 'skills'), { recursive: true })
+  })
+
+  function installDraft(sessionId: string, changeset: IntentChangeset) {
+    const canonical = canonicalIntentJson(changeset)
+    const draftHash = `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`
+    const draftId = ulid()
+    db.insert(intentDrafts)
+      .values({
+        id: draftId,
+        sessionId,
+        revision: 1,
+        changesetJson: canonical,
+        validationJson: '{"errors":[],"credentialFindings":[]}',
+        draftHash,
+        contextRevision: 0,
+        createdAt: Date.now(),
+      })
+      .run()
+    db.update(intentSessions)
+      .set({ currentDraftId: draftId, contextManifestJson: '[]' })
+      .where(eq(intentSessions.id, sessionId))
+      .run()
+    return { draftRevision: 1, draftHash }
+  }
+
+  async function seedSession() {
+    const catalog = intentResourceCatalogBinding(db, actor, appHome)
+    return await createIntentSession(persistence, intentResourceVisibility(catalog), actor, {
+      message: 'build',
+    })
+  }
+
+  test('AC-6: a workflow that fails graph validation is refused at commit with zero rows written', async () => {
+    const { session } = await seedSession()
+    // 一条边指向 agent 上并不存在的端口 —— 图校验才看得见的那类错误。
+    const badDefinition = {
+      $schema_version: 6,
+      inputs: [{ key: 'task', kind: 'text', label: 'Task', required: true }],
+      nodes: [
+        { id: 'n_in', kind: 'input', inputKey: 'task' },
+        { id: 'n_agent', kind: 'agent-single', agentRef: '$new:auditor', promptTemplate: 'go' },
+        { id: 'n_out', kind: 'output', outputName: 'result' },
+      ],
+      edges: [
+        {
+          id: 'e1',
+          source: { nodeId: 'n_in', portName: 'task' },
+          target: { nodeId: 'n_agent', portName: 'task' },
+        },
+        {
+          id: 'e2',
+          source: { nodeId: 'n_agent', portName: 'nope_not_a_port' },
+          target: { nodeId: 'n_out', portName: 'result' },
+        },
+      ],
+    }
+    const changeset = changesetOf([
+      agentOp('$new:auditor', 'auditor'),
+      workflowOp('op-2', '$new:wf', 'bad-pipeline', badDefinition),
+    ])
+    const draft = installDraft(session.id, changeset)
+
+    const before = db.select().from(workflowsTable).all().length
+    await expect(
+      applyIntentChangeset(
+        {
+          db,
+          appHome,
+          actor,
+          ...intentApplyResourceBinding(db, actor),
+          graphValidation: intentGraphValidationForTest(db),
+        },
+        { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: [] },
+      ),
+    ).rejects.toThrow(/intent-workflow-invalid|workflow validation/)
+    // preflight 段还没有任何副作用，所以零落库。
+    expect(db.select().from(workflowsTable).all().length).toBe(before)
+  })
+
+  test('AC-6: the same bundle commits cleanly once the edge is wired to a real port', async () => {
+    const { session } = await seedSession()
+    const changeset = changesetOf([
+      agentOp('$new:auditor', 'auditor'),
+      workflowOp('op-2', '$new:wf', 'good-pipeline', linearDefinition('$new:auditor')),
+    ])
+    const draft = installDraft(session.id, changeset)
+    const receipt = await applyIntentChangeset(
+      {
+        db,
+        appHome,
+        actor,
+        ...intentApplyResourceBinding(db, actor),
+        graphValidation: intentGraphValidationForTest(db),
+      },
+      { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: [] },
+    )
+    expect(receipt.applied.some((each) => each.resourceType === 'workflow')).toBe(true)
+  })
+
+  test('B-5: a copied agent keeps the source sidecars instead of silently dropping them', async () => {
+    // 现状（本改动之前）：copy 把 update 归一成 create，而 create 分支不回填 sidecar，
+    // 于是 outputKinds / branchPorts / role / outputWrapperPortNames 四个字段静默消失。
+    const source = await createAgent(
+      db,
+      {
+        name: 'source-agent',
+        description: 'd',
+        outputs: ['report', 'needs_fix'],
+        outputKinds: { report: 'markdown', needs_fix: 'signal' },
+        branchPorts: ['needs_fix'],
+        role: 'normal',
+        permission: {},
+        skills: [],
+        dependsOn: [],
+        mcp: [],
+        plugins: [],
+        frontmatterExtra: {},
+        bodyMd: 'b',
+        syncOutputsOnIterate: true,
+      },
+      { ownerUserId: OWNER, actor },
+    )
+    const backfilled = withAgentSidecarsFrom(
+      // 变更集只带 outputs，四个 sidecar 全部省略 —— 省略即保留。
+      { name: 'copy-of-source', description: 'd', outputs: ['report', 'needs_fix'] },
+      source,
+    )
+    expect(backfilled.outputKinds).toEqual({ report: 'markdown', needs_fix: 'signal' })
+    expect(backfilled.branchPorts).toEqual(['needs_fix'])
+    // 显式给出的空值是「清空」，不能被存值盖回去。
+    const cleared = withAgentSidecarsFrom({ branchPorts: [] }, source)
+    expect(cleared.branchPorts).toEqual([])
   })
 })

@@ -1,3 +1,8 @@
+import {
+  intentWorkflowInvalidMessage,
+  validateResolvedBundleWorkflowGraphs,
+} from '../application/graphValidation'
+import type { IntentWorkflowGraphValidationPort } from '../application/ports/intentWorkflowGraphValidation'
 import { formatChangesetIssues } from '@agent-workflow/shared'
 import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
@@ -84,6 +89,8 @@ export interface PostgresqlIntentApplyDependencies {
   readonly db: PostgresqlDatabaseClient
   readonly resources: PostgresqlIntentApplyResourceBinding
   readonly artifacts: PostgresqlIntentApplyArtifactLifecycle
+  /** RFC-358 §7 —— 提交期图校验。缺省不拦（既有测试装配保持原样）。 */
+  readonly graphValidation?: IntentWorkflowGraphValidationPort
   readonly id?: () => string
   readonly now?: () => number
 }
@@ -271,6 +278,22 @@ export function createPostgresqlIntentApplyOperations(
           throw error
         }
       }
+      // RFC-358 §7（决策 D3）—— 与 SQLite provider 同一份判据、同一个位置：
+      // prepare 之后（canonical parse 已跑过）、prestage 之前（尚无任何副作用）。
+      if (dependencies.graphValidation !== undefined) {
+        const graph = await validateResolvedBundleWorkflowGraphs(
+          { graphValidation: dependencies.graphValidation },
+          { actor: request.actor, ops: bundle.ops },
+        )
+        if (graph.errors.length > 0) {
+          throw new ValidationError(
+            'intent-workflow-invalid',
+            intentWorkflowInvalidMessage(graph.errors),
+            { issues: graph.errors },
+          )
+        }
+      }
+
       for (const plan of plans) await resourceSession.prestage(plan, { recordArtifact })
       request.faults?.beforeTx?.()
 

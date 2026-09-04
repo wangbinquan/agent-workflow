@@ -1,3 +1,4 @@
+import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 import {
   CreateAgentSchema,
   CreateMcpSchema,
@@ -488,11 +489,8 @@ function exactAgentPatch(plan: UpdatePlanOf<'agent'>): Readonly<Record<string, u
 }
 
 function applyAgentPatch(current: Agent, patch: Readonly<Record<string, unknown>>) {
-  const candidate: Record<string, unknown> = { ...patch }
-  for (const field of ['branchPorts', 'outputKinds', 'role', 'outputWrapperPortNames'] as const) {
-    if (!(field in candidate) && current[field] !== undefined) candidate[field] = current[field]
-  }
-  return UpdateAgentSchema.parse(candidate)
+  // RFC-358 T9：判据搬进 domain，与 create/copy 分支和 SQLite provider 共用一份。
+  return UpdateAgentSchema.parse(withAgentSidecarsFrom(patch, current))
 }
 
 function createAgentPort(
@@ -518,30 +516,45 @@ function createAgentPort(
     async commitInTransaction({ transaction, plan, prepared }) {
       const committedAt = now()
       if (prepared.kind === 'create') {
+        // RFC-358 T9（B-5）—— copy 把 update 归一成 create，而此前 create 分支不回填
+        // sidecar，于是「复制一个 builtin agent 再改」会静默丢掉分支端口 / 输出 kind /
+        // 角色 / fanout 重命名。源行只有在事务里才读得到，所以回填落在这里而不是
+        // prepare（那时还没有 transaction）。
+        let input = prepared.input
+        const copiedFrom = plan.action === 'create' ? plan.copiedFromResourceId : undefined
+        if (copiedFrom !== undefined) {
+          const sourceRow = await transaction
+            .select()
+            .from(agents)
+            .where(eq(agents.id, copiedFrom))
+            .get()
+          if (sourceRow !== undefined) {
+            input = CreateAgentSchema.parse(
+              withAgentSidecarsFrom(plan.payload, agentFromPersistenceRow(sourceRow)),
+            )
+          }
+        }
         await assertVisibleReferences(
           transaction,
           actor,
-          agentReferenceGroups(prepared.input, prepared.pendingIds),
+          agentReferenceGroups(input, prepared.pendingIds),
         )
-        await assertAgentGraphAcyclic(transaction, plan.resourceId, prepared.input.dependsOn)
-        await assertRuntimeExists(transaction, prepared.input.runtime)
+        await assertAgentGraphAcyclic(transaction, plan.resourceId, input.dependsOn)
+        await assertRuntimeExists(transaction, input.runtime)
         const collision = await transaction
           .select({ id: agents.id })
           .from(agents)
-          .where(and(eq(agents.ownerUserId, actor.user.id), eq(agents.name, prepared.input.name)))
+          .where(and(eq(agents.ownerUserId, actor.user.id), eq(agents.name, input.name)))
           .get()
         if (collision !== undefined) {
-          throw new ConflictError(
-            'agent-name-in-use',
-            `agent '${prepared.input.name}' already exists`,
-          )
+          throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
         }
         const inserted = await transaction
           .insert(agents)
           .values(
             createAgentPersistenceValues({
               id: plan.resourceId,
-              agent: prepared.input,
+              agent: input,
               ownerUserId: actor.user.id,
               now: committedAt,
             }),
