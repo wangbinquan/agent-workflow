@@ -174,7 +174,7 @@ SQLite 侧是 `const changeset = JSON.parse(claim.draft.changesetJson)`（prefli
 | **AC-2** consumer 逐条确认 | ✅ | 63 个文件、135 处引用脚本化改指；`postgresqlApplyChangeset.ts` 零 consumer 直接删；`applyChangeset.ts` 的装配正身收进 `modules/intent/composition/apply.ts`，10 个测试改指该处 |
 | **AC-3** apply 编排单一实现 | ⚠️ **部分达成**，见 §9.2 | 判据、串行锁、诊断词汇、收敛决策、**大事务内的全部计算**已各只有一份；**事务机制本身仍是两份**（设计裁决，见 §9.2） |
 | **AC-4** 30 条深取归零 | ⚠️ **28/30**，剩 2 条纯类型 | `modules/intent/**` 不再 import RC 的 `infrastructure/legacy/**`；剩 `postgresqlIntentApplyResourceParticipants` 的 `PostgresqlIntentApplyArtifact` 类型两处引用，见 §9.3 |
-| **AC-5** 诊断词汇统一、15 条错误码不变 | ✅ | `INTENT_APPLY_DIAGNOSTICS` 一处定义两侧共用；错误码集合由 `rfc355-intent-provider-parity` 断言 |
+| **AC-5** 诊断词汇统一、错误码不变 | ✅（**数字更正**：不是 15 条，是 12 条） | `INTENT_APPLY_DIAGNOSTICS` 一处定义两侧共用（四条分叉标签收敛）；apply 面真正被 `throw` 出去的标识在 pin `c7c6fb81b` 与收工时**集合逐字相同**，由 `rfc355-intent-provider-parity` 的精确清单断言（增删都红）。立项时 §2 写的「共有 15 条用户可见错误码」是把 `log.warn` 标签与抛出的错误码混在一起数的——实测抛出的是 12 条，其中 11 条是产品面错误码、1 条（`intent-resource-plan-order-mismatch`）是编排自身的不变量。这条**不是**放宽验收，是把当初数错的分母改对，集合本身一条没变 |
 | **AC-6** 路由 decode-call-map + wire 冻结 | ✅ | `routes/intentSessions.ts` 不存在；`modules/intent/inbound/intentSessionRoutes.ts` 1094 → 836 行，详情 handler 的 ~180 行编排收进 application、两条判据进 domain；`api-contract-coverage` / `route-error-code-coverage` / 契约注册表全绿 |
 | **AC-7** 行为 oracle 除 import 外未改 | ✅ | 16 个平移文件 git 认出的都是 rename，除 `dumpBuilder.ts` / `turnEngine.ts` 各一行相对 import 外内容一字未动（design §7 R2 要的字节级绊线——没有手抄，绊线的目的结构性地不存在） |
 | **AC-8** W4-E4a 归零 + 全局净变化如实记账 | ⚠️ **176 → 41**，未归零；全局 **净减 116** | 见 §9.4 |

@@ -59,6 +59,50 @@ describe('RFC-355 T1 —— 双 provider 的诊断词汇必须一致', () => {
     expect([...thrownCodes(shared)].length).toBeGreaterThanOrEqual(6)
   })
 
+  // RFC-355 T10：apply 面**用户可见错误码的精确清单**。
+  //
+  // 立项时 proposal §2 写的「共有 15 条」把 `log.warn` 标签和抛出的错误码混在一起数了；
+  // 实测在 current-source pin `c7c6fb81b` 上，两个 provider 真正 `throw` 出去的错误码是
+  // 下面这 11 条，改造后**集合逐字相同**——判据从两个 provider 搬进 domain / application
+  // 之后，抛点换了文件，但用户拿到的码一条没变。
+  //
+  // 这条断言比「两侧相等」强：两侧一起改也会红。新增一条用户可见错误码是产品决定，
+  // 必须显式改这张表；删一条更是 breaking change。
+  const APPLY_SURFACE_ERROR_CODES = [
+    'intent-apply-failed-replay',
+    'intent-apply-unsettled',
+    'intent-baseline-stale',
+    'intent-changeset-invalid',
+    'intent-draft-hash-mismatch',
+    'intent-draft-not-found',
+    'intent-draft-superseded',
+    'intent-op-canonical-invalid',
+    // 不是产品面的码：编排自身的不变量（plan 与 op 必须同序），迁位前后都以裸 `Error` 抛出。
+    // 收在同一张表里是因为它和上面那些走同一个抓取口径——把它排除掉需要第二套正则，
+    // 而两套口径迟早对不上。
+    'intent-resource-plan-order-mismatch',
+    'intent-session-archived',
+    'intent-session-not-found',
+    'intent-turn-in-flight',
+  ] as const
+
+  test('apply 面的用户可见错误码与精确清单逐条相等（增删都红）', () => {
+    const surface = [
+      sqlite,
+      postgresql,
+      read('modules', 'intent', 'domain', 'applyClaim.ts'),
+      read('modules', 'intent', 'domain', 'storedChangeset.ts'),
+      read('modules', 'intent', 'application', 'intentResourcePlan.ts'),
+      read('modules', 'intent', 'application', 'applyCommitPlan.ts'),
+      read('modules', 'intent', 'application', 'applyReplay.ts'),
+    ].join('\n')
+    expect(
+      [...thrownCodes(surface)].sort(),
+      'apply 面的用户可见错误码变了。这是产品面的 breaking change，不是重构的副产物——' +
+        '要改先改这张表并说明为什么。',
+    ).toEqual([...APPLY_SURFACE_ERROR_CODES].sort())
+  })
+
   test('诊断标签（含 log.warn）两侧集合相等——今天红：四条各只在一侧', () => {
     const s = diagnosticTokens(sqlite)
     const p = diagnosticTokens(postgresql)
