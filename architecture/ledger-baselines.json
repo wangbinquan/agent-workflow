@@ -483,14 +483,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25970,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-349 的 PostgreSQL 任务目录源修 facets 语义（原本把四个计数数在 view 过滤之后，换页签就把四个数字整体重写）：新增 explicitStatuses / listView / hasOpenAlert / facetsOf 四个判据、退掉 selectedStatuses / statusFacet 两个，净 +2 顶层符号。本可把两个一次性小判据内联回去做到净 0，但同一文件此刻正被并发 session 改写（origin 过滤下推到 provider 查询），提交它会连带推上他们半截的跨文件改动；故本笔用一次性豁免记账，下一笔不涨即删。 同一笔里另有 +2 来自 origin 过滤下推（本条 why 上半段提到的那次并发改动，已在同一 commit 落地）：`taskListOriginMatches`（shared，来源→launch_origin 存储值的单一判据，与 `taskMatchesListView` 同列）与 PostgreSQL 目录源的 `listOrigin`（入参校验）。它替掉的是一份按 scheduled_task_id 猜来源的内存实现——那份实现让界面上的「事件」/「API」筛选直接 400。合计 25966 → 25970，下一笔不涨即删。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c6b083e4358a94b348e8f941de64b504012a78ca03e1df186d9299a775483b04",
+    "sourceDigest": "sha256:f65721b16fcf18017511d3c60929d938e82a1862a0d5105bf0312a8ae191f99b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -503,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "234524c5275183bfa46d0a2fe49b5aa84f95f97c",
-    "contentDigest": "sha256:492b8fcafb68741e8d936c95e82db1fcb35980d69d73dc9e12742df4a4f68dde",
+    "currentSnapshotSha": "b214688e1f9479c3425d2c3a2d9858c6d74e8c34",
+    "contentDigest": "sha256:455264a03ee0c2dbe3f5d03eaf53bf319c24c6f5450faca2c5f6fec180d58169",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
