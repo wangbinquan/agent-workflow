@@ -2,6 +2,7 @@ import { and, asc, count, eq, inArray, isNotNull, isNull, notLike } from 'drizzl
 
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
 import type {
   NodeExecutionPersistence,
@@ -69,8 +70,12 @@ async function fencedTaskId(
     .limit(1)
   const taskId = rows[0]?.taskId
   if (taskId === undefined) return null
-  if (context === undefined) await assertPostgresqlTaskOwnerlessTx(tx, taskId)
-  else await assertPostgresqlTaskOwnerTx(tx, context.token, now)
+  // RFC-359 W1-T7（P0-1）：与 SQLite 的 withTaskExecutionMutation 同一规则——显式上下文缺席时读环境
+  // 上下文（drive 在 runWithTaskExecutionContext 里跑，runner 不逐处传 executionContext），真无主才走
+  // 无主围栏。此前把 undefined 当无主，节点的第一次写就被自己 claimed 的 owner 拒掉。
+  const effective = context ?? currentTaskExecutionContext(taskId)
+  if (effective === undefined) await assertPostgresqlTaskOwnerlessTx(tx, taskId)
+  else await assertPostgresqlTaskOwnerTx(tx, effective.token, now)
   // 聚合根行锁。这几个写事务跑在 READ COMMITTED 上（见
   // `withPostgresqlNodeRunAggregateTransaction` 的实测数据），同一个 node run 的并发写手
   // 靠这把锁串起来。**必须在 owner fence 之后**：其余 owned 写手都是先 fence 再动

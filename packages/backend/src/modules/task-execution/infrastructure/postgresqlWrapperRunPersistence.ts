@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from 'drizzle-orm'
 
 import { nodeRuns } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { pickFrameSourceRun } from '@/services/freshness'
 import type { WrapperRunPersistence } from '../application/ports/wrapperRunPersistence'
 import {
@@ -86,10 +87,12 @@ export class PostgresqlWrapperRunPersistence implements WrapperRunPersistence {
         .limit(1)
       const row = rows[0]
       if (row === undefined) return
-      if (input.executionContext === undefined) {
+      // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则）。
+      const executionContext = input.executionContext ?? currentTaskExecutionContext(row.taskId)
+      if (executionContext === undefined) {
         await assertPostgresqlTaskOwnerlessTx(tx, row.taskId)
       } else {
-        await assertPostgresqlTaskOwnerTx(tx, input.executionContext.token, Date.now())
+        await assertPostgresqlTaskOwnerTx(tx, executionContext.token, Date.now())
       }
       const next = clearReuseDisabledProgress(row.wrapperProgressJson)
       if (next === null) return

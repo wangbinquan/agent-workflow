@@ -34,6 +34,7 @@ import {
   splitMarkdownDocs,
   reviewInputSource,
 } from '@agent-workflow/shared'
+import { currentTaskExecutionContext } from '@/modules/task-execution/public/operations'
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
 import {
@@ -1023,16 +1024,18 @@ async function inspectPostgresqlCrossClarify(
   if (directive?.directive !== 'stop') return { kind: 'awaiting' as const }
   const now = Date.now()
   await withPostgresqlSerializableTaskExecution(db, async (tx) => {
-    if (input.executionContext === undefined) {
+    // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则），真无主才走无主围栏。
+    const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
+    if (executionContext === undefined) {
       await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
     } else {
-      if (input.executionContext.token.taskId !== input.taskId) {
+      if (executionContext.token.taskId !== input.taskId) {
         throw new ConflictError(
           'task-execution-context-mismatch',
-          `execution context for '${input.executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
+          `execution context for '${executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
         )
       }
-      await assertPostgresqlTaskOwnerTx(tx, input.executionContext.token, now)
+      await assertPostgresqlTaskOwnerTx(tx, executionContext.token, now)
     }
     await dependencies.nodeRunLifecycle.inTransaction(tx).set({
       nodeRunId: input.nodeRunId,
@@ -1167,16 +1170,18 @@ async function autoApproveEmptyPostgresqlReview(input: {
   })
   const eventRefs = await withPostgresqlSerializableTaskExecution(input.db, async (tx) => {
     const nodeRunLifecycle = input.nodeRunLifecycle.inTransaction(tx)
-    if (input.executionContext === undefined) {
+    // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则），真无主才走无主围栏。
+    const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
+    if (executionContext === undefined) {
       await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
     } else {
-      if (input.executionContext.token.taskId !== input.taskId) {
+      if (executionContext.token.taskId !== input.taskId) {
         throw new ConflictError(
           'task-execution-context-mismatch',
-          `execution context for '${input.executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
+          `execution context for '${executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
         )
       }
-      await assertPostgresqlTaskOwnerTx(tx, input.executionContext.token, now)
+      await assertPostgresqlTaskOwnerTx(tx, executionContext.token, now)
     }
 
     const currentTasks = await tx

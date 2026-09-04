@@ -58,7 +58,13 @@
 > `healed` 回填 RFC-165 前被删目录的幽灵工作区）；两个 daemon 入口同序调用，SQLite boot 不再调 `recoverInterruptedArchives`
 > / `recoverInterruptedWorkspaceGc` / `runClaimedWebhookWorkspacePrunes` / `reconcileLegacyPrunedWorkspaces`。
 > `rfc359-w3-t15b-terminal-maintenance-recovery.test.ts` 五个场景两引擎各绿。
-> **下一步**：W3-T14（servePostgresqlDaemon 永不返回形态）/ T16（start.ts 的 provider 分支归零）。
+> **W1-T7（P0-1 / P0-2 两道 owner 围栏）已修**：PG 的八处 owner 围栏（节点执行投影 / node_run 生命周期 / wrapper /
+> merge state / 工作区 profile / 任务状态 / collaboration 两处）此前把「未显式传 executionContext」当无主，drive 里
+> 节点的第一次写就被自己 claimed 的 owner 拒掉——改为与 SQLite 同规则：显式上下文缺席时读
+> `currentTaskExecutionContext(taskId)`，真无主才走无主围栏；PG effect 账本私有 `assertOwner` 去掉对 attach 时冻结
+> token 的 revision / leaseUntil 等值与租约过期判定（首次心跳后所有 effect 写入被拒），只留身份 + epoch + claimed。
+> `rfc359-t7-owner-fences.test.ts` 三个场景两引擎各绿 + 源码锁。
+> **下一步**：T5（P0-5 已随 T2b 合一，补双引擎用例确认）/ T6（P0-6 坏定义工作流 PG 删不掉）/ T3（F-H2-2）→ W3-T14 / T16。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

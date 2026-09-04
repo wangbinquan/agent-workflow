@@ -7,6 +7,7 @@ import {
 
 import { nodeRuns } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { MergeStateLifecyclePersistence } from '../application/ports/mergeStateLifecyclePersistence'
 import {
@@ -31,10 +32,12 @@ export class PostgresqlMergeStateLifecyclePersistence implements MergeStateLifec
       if (row === undefined) {
         throw new NotFoundError('node-run-not-found', `node_run ${input.nodeRunId} not found`)
       }
-      if (input.executionContext === undefined) {
+      // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则）。
+      const executionContext = input.executionContext ?? currentTaskExecutionContext(row.taskId)
+      if (executionContext === undefined) {
         await assertPostgresqlTaskOwnerlessTx(tx, row.taskId)
       } else {
-        await assertPostgresqlTaskOwnerTx(tx, input.executionContext.token, input.now ?? Date.now())
+        await assertPostgresqlTaskOwnerTx(tx, executionContext.token, input.now ?? Date.now())
       }
       const from = (row.mergeState ?? null) as MergeStateOrNull
       const to = nextMergeState(from, input.event)

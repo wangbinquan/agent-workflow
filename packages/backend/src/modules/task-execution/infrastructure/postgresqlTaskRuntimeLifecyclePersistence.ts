@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 
 import { tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import {
   ConcurrentTaskTransition,
@@ -218,16 +219,18 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
     tx: Parameters<Parameters<typeof withPostgresqlSerializableTaskExecution>[1]>[0],
     input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0],
   ): Promise<void> {
-    if (input.executionContext === undefined) {
+    // RFC-359 W1-T7（P0-1）：与 SQLite 的 taskLifecycle 写点同规则——显式上下文缺席时读环境上下文。
+    const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
+    if (executionContext === undefined) {
       await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
       return
     }
-    if (input.executionContext.token.taskId !== input.taskId) {
+    if (executionContext.token.taskId !== input.taskId) {
       throw new ConflictError(
         'task-execution-context-mismatch',
-        `execution context for '${input.executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
+        `execution context for '${executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
       )
     }
-    await assertPostgresqlTaskOwnerTx(tx, input.executionContext.token, input.now)
+    await assertPostgresqlTaskOwnerTx(tx, executionContext.token, input.now)
   }
 }

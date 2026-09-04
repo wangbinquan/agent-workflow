@@ -2,6 +2,7 @@ import { and, asc, eq } from 'drizzle-orm'
 
 import { taskCollaborators, taskRepos, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import type {
   TaskEngineApplicationPersistence,
   TaskEngineDriveSnapshot,
@@ -49,10 +50,12 @@ export class PostgresqlTaskEngineApplicationPersistence implements TaskEngineApp
     input: Parameters<TaskEngineApplicationPersistence['updateWorkspaceProfile']>[0],
   ): Promise<boolean> {
     return await withPostgresqlSerializableTaskExecution(this.db, async (transaction) => {
-      if (input.executionContext === undefined) {
+      // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则）。
+      const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
+      if (executionContext === undefined) {
         await assertPostgresqlTaskOwnerlessTx(transaction, input.taskId)
       } else {
-        await assertPostgresqlTaskOwnerTx(transaction, input.executionContext.token, input.now)
+        await assertPostgresqlTaskOwnerTx(transaction, executionContext.token, input.now)
       }
       const rows = await transaction
         .update(taskRepos)

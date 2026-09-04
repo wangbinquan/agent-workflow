@@ -7,6 +7,7 @@ import { and, eq } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   NodeRunLifecyclePersistence,
@@ -30,9 +31,11 @@ const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
 async function fence(
   tx: PostgresqlTaskExecutionTransaction,
   taskId: string,
-  executionContext: NodeRunMintInput['executionContext'],
+  explicitContext: NodeRunMintInput['executionContext'],
   now: number,
 ): Promise<void> {
+  // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则），真无主才走无主围栏。
+  const executionContext = explicitContext ?? currentTaskExecutionContext(taskId)
   if (executionContext === undefined) {
     await assertPostgresqlTaskOwnerlessTx(tx, taskId)
     return

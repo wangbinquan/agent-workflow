@@ -75,7 +75,7 @@ async function serializable<T>(db: PostgresqlDatabaseClient, body: (tx: PgTx) =>
   }
 }
 
-async function assertOwner(tx: PgTx, token: OwnershipToken, now: number): Promise<void> {
+async function assertOwner(tx: PgTx, token: OwnershipToken): Promise<void> {
   assertOwnershipToken(token)
   const rows = await tx
     .select({
@@ -95,10 +95,10 @@ async function assertOwner(tx: PgTx, token: OwnershipToken, now: number): Promis
     owner.ownerId !== token.ownerId ||
     owner.daemonGeneration !== token.daemonGeneration ||
     owner.epoch !== token.epoch ||
-    owner.state !== 'claimed' ||
-    owner.revision !== token.ownerRevision ||
-    owner.leaseUntil !== token.leaseUntil ||
-    owner.leaseUntil < now
+    // RFC-359 W1-T7（P0-2）：与公共 assertPostgresqlTaskOwnerTx / SQLite withOwnedTaskTx 同规则——
+    // 不可变 capability 只点名 owner 身份 + epoch；心跳会推进 revision / lease，attach 时冻结的 token
+    // 不能拿它们做等值谓词（此前首次心跳后所有 effect 写入被拒）。
+    owner.state !== 'claimed'
   ) {
     throw new TaskExecutionError(
       'task-execution-stale-owner',
@@ -276,7 +276,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
     const resources = canonicalResourceKeySet(input.resourceKeys)
     const recoveryDescriptorJson = bounded(input.recoveryDescriptorJson)
     return await serializable(this.db, async (tx) => {
-      await assertOwner(tx, input.token, now)
+      await assertOwner(tx, input.token)
       const intents = await tx
         .select({
           id: taskExecutionIntents.id,
@@ -557,7 +557,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
       )
     }
     const now = input.now ?? Date.now()
-    await assertOwner(tx, input.token, now)
+    await assertOwner(tx, input.token)
     const attemptRows = await tx
       .select()
       .from(taskExecutionEffectAttempts)
@@ -912,7 +912,7 @@ export class PostgresqlTaskExecutionEffectPersistence implements TaskExecutionEf
   ): Promise<void> {
     const now = input.now ?? Date.now()
     await serializable(this.db, async (tx) => {
-      await assertOwner(tx, input.token, now)
+      await assertOwner(tx, input.token)
       const attempts = await tx
         .select({
           state: taskExecutionEffectAttempts.state,
