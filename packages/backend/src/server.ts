@@ -343,7 +343,7 @@ import {
 import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
-  createSqliteReviewDecisionCommand,
+  createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { composeSqliteCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createSqliteCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics'
@@ -1854,7 +1854,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     db: deps.db,
     appHome,
     taskExecutionReadModels,
-    reviewDecisions: createSqliteReviewDecisionCommand({ db: deps.db, appHome }),
+    reviewDecisions: createReviewDecisionCommand({ db: deps.db, appHome }),
     questionDispatches: createQuestionDispatchCommand(deps.db),
     clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
   })

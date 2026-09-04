@@ -1,5 +1,5 @@
 import type { DbClient } from '@/db/client'
-import { SqliteCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/sqliteCommittedReviewArtifactReader'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { SqliteMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { createSqliteMemoryDistillSessionCapture } from '@/modules/memory/infrastructure/memoryDistillSessionCapture'
 import { SqliteMemoryDistillWorkStore } from '@/modules/memory/infrastructure/sqliteMemoryDistillWorkStore'
@@ -8,7 +8,7 @@ import { enqueueDistillJob } from '@/modules/memory/application/distill/schedule
 import { appHome } from '@/util/paths'
 
 export function createSqliteMemoryDistillTestContext(db: DbClient, root = appHome()) {
-  const reviewedArtifacts = new SqliteCommittedReviewArtifactReader(db, root)
+  const reviewedArtifacts = new DatabaseCommittedReviewArtifactReader(db, root)
   return Object.freeze({
     store: new SqliteMemoryDistillWorkStore(db, createSqliteMemoryDistillSessionCapture(db)),
     runtimeResolver: new SqliteMemoryDistillRuntimeResolver(db),

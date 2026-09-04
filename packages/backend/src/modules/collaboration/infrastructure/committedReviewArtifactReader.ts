@@ -1,8 +1,16 @@
+// RFC-359 W1-T2c —— 已提交评审文稿正文读取的**一份**实现，两个引擎共用。
+//
+// 此前 `sqliteCommittedReviewArtifactReader.ts`（同步 `.get()`）与
+// `postgresqlCommittedReviewArtifactReader.ts` 各一份，逻辑逐字相同：先查 artifact 日志
+// （consumed/finalized 且操作 committed/completed），final 路径在则按 digest 校验读取，
+// 否则回退 staged 路径。
+
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { and, eq, inArray } from 'drizzle-orm'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { sha256Hex } from '@/util/hash'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import { HumanGateOperationError } from '../domain/humanGateOperation'
@@ -23,9 +31,9 @@ function readVerified(path: string, sha256: string, byteSize: number): string {
   return body.toString('utf8')
 }
 
-export class PostgresqlCommittedReviewArtifactReader implements CommittedReviewArtifactReader {
+export class DatabaseCommittedReviewArtifactReader implements CommittedReviewArtifactReader {
   constructor(
-    private readonly db: PostgresqlDatabaseClient,
+    private readonly db: ProviderNeutralDatabase,
     private readonly appHome: string,
   ) {}
 

@@ -39,7 +39,6 @@ import {
   sql,
 } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { ulid } from 'ulid'
 import type {
   AgentOutputKind,
@@ -98,13 +97,18 @@ import type {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import {
+  databaseSessionFor,
+  engineOf,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import {
   finalizeCommittedHumanGate,
   prepareReviewGateOpen,
 } from '@/modules/collaboration/public/commands'
 import {
   humanGateComposition,
-  type HumanGateOperationStoreBridge as SqliteHumanGateOperationStore,
   type ReviewDecisionManifestBridge as ReviewDecisionManifest,
   type ReviewDecisionReceiptEnvelopeBridge as ReviewDecisionReceiptEnvelope,
   type ValidatedWorkspaceRollbackPlanBridge as ValidatedWorkspaceRollbackPlan,
@@ -139,11 +143,14 @@ import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/pub
 import { parseConsumedJson } from '@/services/freshness'
 import {
   assertNodeRunSourceTerminationAdmission,
-  setNodeRunStatusTx,
   transitionHumanGateTaskTx,
   transitionNodeRunStatus,
-  transitionNodeRunStatusTx,
 } from '@/services/lifecycle'
+// RFC-359 W1-T2c：决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核。
+import {
+  setNodeRunStatusTx,
+  transitionNodeRunStatusTx,
+} from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import { snapshotNodeAgentWhere } from '@/services/agent'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
 import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
@@ -165,19 +172,26 @@ import {
   ValidationError,
 } from '@/util/errors'
 import { SqliteNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/sqliteNodeRunLifecyclePersistence'
+import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
+import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import {
-  createSqliteTaskAuthorizationParticipantInTx,
-  createSqliteTaskAuthorizationQueries,
-} from '@/modules/task-execution/infrastructure/sqliteTaskAuthorization'
+  createTaskAuthorizationParticipantInTx,
+  createTaskAuthorizationQueries,
+} from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
 import {
-  appendHumanGateDecisionCommittedEventTx,
-  appendReviewCommentsChangedCommittedEventTx,
-  appendReviewSelectionChangedCommittedEventTx,
-} from '@/modules/collaboration/public/participants'
+  appendHumanGateDecisionCommittedEvent,
+  appendReviewCommentsChangedCommittedEvent,
+  appendReviewSelectionChangedCommittedEvent,
+} from './collaborationCommittedEvents'
+import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
+import {
+  DatabaseHumanGateOperationJournal,
+  type HumanGateOperationJournal,
+} from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 
@@ -506,7 +520,7 @@ export function pickFreshestReviewRun(
  * provenance (legacy rows) → null (readers use the fallback chain).
  */
 async function upstreamPortArchiveJson(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   reviewRun: typeof nodeRuns.$inferSelect,
   sourceNodeId: string,
   sourcePortName: string,
@@ -1615,15 +1629,13 @@ async function loadPriorRound(
 }
 
 export async function readDocVersionBody(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   appHome: string,
   docVersion: DocVersion,
 ): Promise<string> {
   try {
-    return await readCommittedReviewArtifactBody(
-      humanGateComposition.createCollaborationCommandContext({ db, appHome }),
-      docVersion.bodyPath,
-    )
+    // RFC-359：正文读取器两引擎一份（日志校验 + final/staged 回退），不再经 SQLite 命令上下文。
+    return await new DatabaseCommittedReviewArtifactReader(db, appHome).read(docVersion.bodyPath)
   } catch {
     const abs = join(appHome, docVersion.bodyPath)
     throw new NotFoundError('doc-version-body-missing', `doc_version body file not found: ${abs}`)
@@ -1908,7 +1920,7 @@ export async function countPendingReviews(db: DbClient, actor?: Actor): Promise<
   if (actor === undefined || rows.length === 0) return rows.length
 
   const taskIds = [...new Set(rows.map((row) => row.taskId))]
-  const visibleTaskIds = await createSqliteTaskAuthorizationQueries(db).visibleTaskIds({
+  const visibleTaskIds = await createTaskAuthorizationQueries(db).visibleTaskIds({
     subject: {
       userId: actor.user.id,
       canReadAllTasks: actor.permissions.has('tasks:read:all'),
@@ -2379,7 +2391,7 @@ export async function listReviewRounds(
 // ---------------------------------------------------------------------------
 
 export interface AddReviewCommentArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   nodeRunId: string
   /**
@@ -2405,7 +2417,7 @@ export interface AddReviewCommentArgs {
 }
 
 async function assertReviewRoundWritable(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
 ): Promise<typeof nodeRuns.$inferSelect> {
   const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1))[0]
@@ -2457,7 +2469,7 @@ export async function addReviewComment(
  * was exactly the data error this closes. Callers must name the document.
  */
 export async function selectPendingDocVersion(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   docVersionId: string | undefined,
 ): Promise<DocVersion> {
@@ -2528,26 +2540,24 @@ async function addReviewCommentUnlocked(
     authorRole: args.authorRole ?? null,
     createdAt: now,
   }
-  const eventRefs = dbTxSync(args.db, (tx) => {
-    tx.insert(reviewComments)
-      .values({
-        id,
-        docVersionId: dv.id,
-        anchorSectionPath: canonical.sectionPath,
-        anchorParagraphIdx: canonical.paragraphIdx,
-        anchorOffsetStart: canonical.offsetStart,
-        anchorOffsetEnd: canonical.offsetEnd,
-        selectedText: canonical.selectedText,
-        contextBefore: canonical.contextBefore,
-        contextAfter: canonical.contextAfter,
-        occurrenceIndex: canonical.occurrenceIndex,
-        commentText: args.commentText,
-        author: args.author ?? LOCAL_DECIDER,
-        authorRole: args.authorRole ?? null,
-        createdAt: now,
-      })
-      .run()
-    const eventRef = appendReviewCommentsChangedCommittedEventTx(tx, {
+  const eventRefs = await databaseSessionFor(args.db).transaction(async (tx) => {
+    await tx.insert(reviewComments).values({
+      id,
+      docVersionId: dv.id,
+      anchorSectionPath: canonical.sectionPath,
+      anchorParagraphIdx: canonical.paragraphIdx,
+      anchorOffsetStart: canonical.offsetStart,
+      anchorOffsetEnd: canonical.offsetEnd,
+      selectedText: canonical.selectedText,
+      contextBefore: canonical.contextBefore,
+      contextAfter: canonical.contextAfter,
+      occurrenceIndex: canonical.occurrenceIndex,
+      commentText: args.commentText,
+      author: args.author ?? LOCAL_DECIDER,
+      authorRole: args.authorRole ?? null,
+      createdAt: now,
+    })
+    const eventRef = await appendReviewCommentsChangedCommittedEvent(tx, {
       gate: {
         taskId: dv.taskId,
         nodeRunId: args.nodeRunId,
@@ -2604,7 +2614,7 @@ function assertCommentWriteAllowed(author: string, authz: ReviewCommentAuthz): v
 }
 
 export async function updateReviewCommentText(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   commentId: string,
   commentText: string,
@@ -2616,7 +2626,7 @@ export async function updateReviewCommentText(
 }
 
 async function updateReviewCommentTextUnlocked(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   commentId: string,
   commentText: string,
@@ -2678,9 +2688,9 @@ async function updateReviewCommentTextUnlocked(
   }
   const now = Date.now()
   const operationRef = `review-comment:update:${commentId}:${ulid(now)}`
-  const eventRefs = dbTxSync(db, (tx) => {
-    tx.update(reviewComments).set({ commentText }).where(eq(reviewComments.id, commentId)).run()
-    const eventRef = appendReviewCommentsChangedCommittedEventTx(tx, {
+  const eventRefs = await databaseSessionFor(db).transaction(async (tx) => {
+    await tx.update(reviewComments).set({ commentText }).where(eq(reviewComments.id, commentId))
+    const eventRef = await appendReviewCommentsChangedCommittedEvent(tx, {
       gate: {
         taskId: dv.taskId,
         nodeRunId,
@@ -2707,7 +2717,7 @@ async function updateReviewCommentTextUnlocked(
 }
 
 export async function deleteReviewComment(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   commentId: string,
   authz: ReviewCommentAuthz,
@@ -2718,7 +2728,7 @@ export async function deleteReviewComment(
 }
 
 async function deleteReviewCommentUnlocked(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   nodeRunId: string,
   commentId: string,
   authz: ReviewCommentAuthz,
@@ -2763,9 +2773,9 @@ async function deleteReviewCommentUnlocked(
   }
   assertCommentWriteAllowed(row.author, authz)
   const now = Date.now()
-  const eventRefs = dbTxSync(db, (tx) => {
-    tx.delete(reviewComments).where(eq(reviewComments.id, commentId)).run()
-    const eventRef = appendReviewCommentsChangedCommittedEventTx(tx, {
+  const eventRefs = await databaseSessionFor(db).transaction(async (tx) => {
+    await tx.delete(reviewComments).where(eq(reviewComments.id, commentId))
+    const eventRef = await appendReviewCommentsChangedCommittedEvent(tx, {
       gate: {
         taskId: dv.taskId,
         nodeRunId,
@@ -2878,7 +2888,7 @@ export const REVIEW_DECISION_POLICY = {
 } as const satisfies { [K in ReviewDecisionKind]: ReviewDecisionPolicyOf<K> }
 
 export interface SubmitReviewDecisionArgs {
-  db: DbClient
+  db: ProviderNeutralDatabase
   appHome: string
   nodeRunId: string
   decision: ReviewDecisionKind
@@ -2955,7 +2965,8 @@ export async function submitReviewDecision(
 //   external  the worktree rollback (reject / iterate with the rollback flag),
 //             idempotent, before the transaction (its outcome is a persisted fact
 //             on the retired row — see design §6.3 for the residual form).
-//   commit    ONE dbTxSync: re-check, batch selections, batch comments, archive,
+//   commit    ONE transaction (RFC-359: DatabaseSession, both engines): re-check, batch
+//             selections, batch comments, archive,
 //             outputs / status / re-run mints / sibling cascade.
 //   after     WS events and the best-effort distill enqueue (N10 / P14).
 //
@@ -3111,14 +3122,14 @@ function resultFromReviewDecisionReceipt(
  * Explicit keys match their one row; keyless web/MCP callers match the latest
  * canonical payload/actor and reuse that row's captured revisions.
  */
-function replayCommittedReviewDecision(
+async function replayCommittedReviewDecision(
   args: SubmitReviewDecisionArgs,
   taskId: string,
-): SubmitReviewDecisionResult | null {
+): Promise<SubmitReviewDecisionResult | null> {
   const gateRef = `review:${args.nodeRunId}`
   const payload = canonicalReviewDecisionPayload(args)
   const actorUserId = args.actor?.user.id ?? null
-  const rows = args.db
+  const rows = await args.db
     .select()
     .from(collaborationGateOperations)
     .where(
@@ -3130,7 +3141,6 @@ function replayCommittedReviewDecision(
       ),
     )
     .orderBy(desc(collaborationGateOperations.createdAt))
-    .all()
   const explicit = args.idempotencyKey
   const candidate = rows.find((row) => {
     if (explicit !== undefined && row.idempotencyKey !== explicit) return false
@@ -3172,17 +3182,17 @@ function replayCommittedReviewDecision(
   )
 }
 
-function ensureLegacyReviewGateRevisionTx(input: {
-  tx: DbTxSync
-  operations: SqliteHumanGateOperationStore
+async function ensureLegacyReviewGateRevisionTx(input: {
+  tx: DatabaseTransaction
+  operations: HumanGateOperationJournal
   taskId: string
   nodeRunId: string
   expectedTaskRevision: number
   reviewIteration: number
   now: number
-}): number {
+}): Promise<number> {
   const gateRef = `review:${input.nodeRunId}`
-  const current = input.operations.latestGateRevisionTx({
+  const current = await input.operations.latestGateRevisionTx({
     tx: input.tx,
     gateKind: 'review',
     gateRef,
@@ -3209,14 +3219,14 @@ function ensureLegacyReviewGateRevisionTx(input: {
     },
   }
   const operationId = ulid(input.now)
-  const begun = input.operations.beginTx({
+  const begun = await input.operations.beginTx({
     tx: input.tx,
     operationId,
     request,
     idempotencyKey: `legacy:review:${input.nodeRunId}:1`,
     now: input.now,
   })
-  input.operations.commitTx({
+  await input.operations.commitTx({
     tx: input.tx,
     operationId: begun.operation.id,
     expectedClaimEpoch: begun.operation.claimEpoch,
@@ -3228,7 +3238,7 @@ function ensureLegacyReviewGateRevisionTx(input: {
     }),
     now: input.now,
   })
-  input.operations.completeTx({
+  await input.operations.completeTx({
     tx: input.tx,
     operationId: begun.operation.id,
     expectedClaimEpoch: begun.operation.claimEpoch,
@@ -3280,7 +3290,7 @@ async function submitReviewDecisionUnlocked(
       'review decision idempotency key must not be empty',
     )
   }
-  const replay = replayCommittedReviewDecision(args, run.taskId)
+  const replay = await replayCommittedReviewDecision(args, run.taskId)
   if (replay !== null) return replay
   // Widened to the lookup view (RFC-149): `rerun` is absent on approve and the
   // full re-run policy on reject / iterate — the ONE place the path forks.
@@ -3292,7 +3302,7 @@ async function submitReviewDecisionUnlocked(
   const memberBefore =
     args.actor === undefined
       ? false
-      : await createSqliteTaskAuthorizationQueries(db).canActOnTask({
+      : await createTaskAuthorizationQueries(db).canActOnTask({
           taskId: run.taskId,
           userId: args.actor.user.id,
         })
@@ -3468,19 +3478,20 @@ async function submitReviewDecisionUnlocked(
   const gateRef = `review:${args.nodeRunId}`
   const capturedTaskRevision = args.expectedTaskRevision ?? taskRow.lifecycleEventRevision
   const latestGateRevision =
-    db
-      .select({ revision: collaborationGateOperations.resultGateRevision })
-      .from(collaborationGateOperations)
-      .where(
-        and(
-          eq(collaborationGateOperations.gateKind, 'review'),
-          eq(collaborationGateOperations.gateRef, gateRef),
-          isNotNull(collaborationGateOperations.resultGateRevision),
-        ),
-      )
-      .orderBy(desc(collaborationGateOperations.resultGateRevision))
-      .limit(1)
-      .get()?.revision ?? 0
+    (
+      await db
+        .select({ revision: collaborationGateOperations.resultGateRevision })
+        .from(collaborationGateOperations)
+        .where(
+          and(
+            eq(collaborationGateOperations.gateKind, 'review'),
+            eq(collaborationGateOperations.gateRef, gateRef),
+            isNotNull(collaborationGateOperations.resultGateRevision),
+          ),
+        )
+        .orderBy(desc(collaborationGateOperations.resultGateRevision))
+        .limit(1)
+    )[0]?.revision ?? 0
   // A legacy gate is seeded to revision 1 in the final transaction before the
   // decision operation begins. New RFC-333 gates already have open revision 1.
   const capturedGateRevision =
@@ -3508,38 +3519,45 @@ async function submitReviewDecisionUnlocked(
     workspaceRollbackPlan,
   }
   const decisionManifestJson = encodeReviewDecisionManifest(decisionManifest)
-  const operations = humanGateComposition.createHumanGateOperationStore()
+  const operations = new DatabaseHumanGateOperationJournal()
 
   // ── commit: one transaction ───────────────────────────────────────────────
   const nextIter = policy.bumpsIteration ? run.reviewIteration + 1 : run.reviewIteration
-  const committed = dbTxSync(db, (tx) => {
+  const committed = await databaseSessionFor(db).transaction(async (tx) => {
+    // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发决定 / 取消靠任务聚合根行锁串行
+    // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。
+    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, run.taskId)
     // 0. Re-check at the commit point: a concurrent cancel / decision / member
     //    removal that slipped past the lock-free prepare loses here.
-    const liveRun = tx
-      .select({
-        status: nodeRuns.status,
-        reviewIteration: nodeRuns.reviewIteration,
-        taskId: nodeRuns.taskId,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .get()
-    const liveTask = tx
-      .select({
-        status: tasks.status,
-        ownerUserId: tasks.ownerUserId,
-        sourceTerminationFence: tasks.sourceTerminationFence,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, run.taskId))
-      .get()
+    const liveRun = (
+      await tx
+        .select({
+          status: nodeRuns.status,
+          reviewIteration: nodeRuns.reviewIteration,
+          taskId: nodeRuns.taskId,
+        })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, args.nodeRunId))
+        .limit(1)
+    )[0]
+    const liveTask = (
+      await tx
+        .select({
+          status: tasks.status,
+          ownerUserId: tasks.ownerUserId,
+          sourceTerminationFence: tasks.sourceTerminationFence,
+        })
+        .from(tasks)
+        .where(eq(tasks.id, run.taskId))
+        .limit(1)
+    )[0]
     if (liveRun === undefined || liveTask === undefined) {
       throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
     }
     const memberNow =
       args.actor === undefined
         ? false
-        : createSqliteTaskAuthorizationParticipantInTx(tx).canActOnTask({
+        : await createTaskAuthorizationParticipantInTx(tx).canActOnTask({
             taskId: run.taskId,
             userId: args.actor.user.id,
           })
@@ -3549,7 +3567,7 @@ async function submitReviewDecisionUnlocked(
     const effectiveRole: TaskActorRole | null =
       args.actor !== undefined ? freshRole : (args.authorRole ?? null)
 
-    const currentGateRevision = ensureLegacyReviewGateRevisionTx({
+    const currentGateRevision = await ensureLegacyReviewGateRevisionTx({
       tx,
       operations,
       taskId: taskRow.id,
@@ -3564,7 +3582,7 @@ async function submitReviewDecisionUnlocked(
         `review gate revision changed (expected ${capturedGateRevision}, current ${currentGateRevision})`,
       )
     }
-    const begun = operations.beginTx({
+    const begun = await operations.beginTx({
       tx,
       operationId,
       request,
@@ -3583,7 +3601,7 @@ async function submitReviewDecisionUnlocked(
         receipt: decodeReviewDecisionReceipt(begun.operation.receiptJson),
       }
     }
-    operations.markPreparedTx({
+    await operations.markPreparedTx({
       tx,
       operationId: begun.operation.id,
       expectedClaimEpoch: begun.operation.claimEpoch,
@@ -3594,7 +3612,7 @@ async function submitReviewDecisionUnlocked(
     // 1. Batch selections (RFC-129: judging the current content clears stale).
     let selectionsApplied = 0
     for (const s of selections) {
-      const changed = tx
+      const changed = await tx
         .update(docVersions)
         .set({ selection: s.selection, selectionStale: false })
         .where(
@@ -3605,7 +3623,6 @@ async function submitReviewDecisionUnlocked(
           ),
         )
         .returning({ id: docVersions.id })
-        .all()
       if (changed.length === 0) {
         throw new ConflictError(
           'review-doc-decided',
@@ -3620,19 +3637,21 @@ async function submitReviewDecisionUnlocked(
     const inserted: Array<{ docVersion: DocVersion; comment: ReviewComment }> = []
     let skipped = 0
     for (const c of comments) {
-      const dup = tx
-        .select({ id: reviewComments.id })
-        .from(reviewComments)
-        .where(
-          and(
-            eq(reviewComments.docVersionId, c.docVersion.id),
-            eq(reviewComments.anchorOffsetStart, c.anchor.offsetStart),
-            eq(reviewComments.anchorOffsetEnd, c.anchor.offsetEnd),
-            eq(reviewComments.selectedText, c.anchor.selectedText),
-            eq(reviewComments.commentText, c.commentText),
-          ),
-        )
-        .get()
+      const dup = (
+        await tx
+          .select({ id: reviewComments.id })
+          .from(reviewComments)
+          .where(
+            and(
+              eq(reviewComments.docVersionId, c.docVersion.id),
+              eq(reviewComments.anchorOffsetStart, c.anchor.offsetStart),
+              eq(reviewComments.anchorOffsetEnd, c.anchor.offsetEnd),
+              eq(reviewComments.selectedText, c.anchor.selectedText),
+              eq(reviewComments.commentText, c.commentText),
+            ),
+          )
+          .limit(1)
+      )[0]
       if (dup !== undefined) {
         skipped += 1
         continue
@@ -3641,24 +3660,22 @@ async function submitReviewDecisionUnlocked(
       const createdAt = Date.now()
       const author = args.author ?? LOCAL_DECIDER
       const authorRole = effectiveRole
-      tx.insert(reviewComments)
-        .values({
-          id,
-          docVersionId: c.docVersion.id,
-          anchorSectionPath: c.anchor.sectionPath,
-          anchorParagraphIdx: c.anchor.paragraphIdx,
-          anchorOffsetStart: c.anchor.offsetStart,
-          anchorOffsetEnd: c.anchor.offsetEnd,
-          selectedText: c.anchor.selectedText,
-          contextBefore: c.anchor.contextBefore,
-          contextAfter: c.anchor.contextAfter,
-          occurrenceIndex: c.anchor.occurrenceIndex,
-          commentText: c.commentText,
-          author,
-          authorRole,
-          createdAt,
-        })
-        .run()
+      await tx.insert(reviewComments).values({
+        id,
+        docVersionId: c.docVersion.id,
+        anchorSectionPath: c.anchor.sectionPath,
+        anchorParagraphIdx: c.anchor.paragraphIdx,
+        anchorOffsetStart: c.anchor.offsetStart,
+        anchorOffsetEnd: c.anchor.offsetEnd,
+        selectedText: c.anchor.selectedText,
+        contextBefore: c.anchor.contextBefore,
+        contextAfter: c.anchor.contextAfter,
+        occurrenceIndex: c.anchor.occurrenceIndex,
+        commentText: c.commentText,
+        author,
+        authorRole,
+        createdAt,
+      })
       inserted.push({
         docVersion: c.docVersion,
         comment: {
@@ -3678,14 +3695,13 @@ async function submitReviewDecisionUnlocked(
     //    comments render into its decisionReason (carried, with a File header,
     //    into the aggregated re-run prompt by buildReviewPromptContext).
     for (const d of dvs) {
-      const commentRows = tx
+      const commentRows = await tx
         .select()
         .from(reviewComments)
         .where(eq(reviewComments.docVersionId, d.id))
         .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-        .all()
       const commentsArr = commentRows.map(rowToReviewComment)
-      const claimed = tx
+      const claimed = await tx
         .update(docVersions)
         .set({
           decision: args.decision,
@@ -3704,14 +3720,13 @@ async function submitReviewDecisionUnlocked(
         })
         .where(and(eq(docVersions.id, d.id), eq(docVersions.decision, 'pending')))
         .returning({ id: docVersions.id })
-        .all()
       if (claimed.length === 0) {
         throw new ConflictError(
           'review-decision-conflict',
           `doc_version ${d.id} was decided concurrently; review ${args.nodeRunId} decision claim lost`,
         )
       }
-      tx.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id)).run()
+      await tx.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id))
     }
 
     if (outputs !== null) {
@@ -3719,7 +3734,8 @@ async function submitReviewDecisionUnlocked(
       //     downstream bindings + the task-detail Outputs tab can resolve them.
       //     Upsert (RFC-052): defense-in-depth against a re-entered approve.
       for (const out of outputs) {
-        tx.insert(nodeRunOutputs)
+        await tx
+          .insert(nodeRunOutputs)
           .values({
             nodeRunId: args.nodeRunId,
             portName: out.portName,
@@ -3731,10 +3747,9 @@ async function submitReviewDecisionUnlocked(
             target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
             set: { content: out.content, kind: out.kind, archiveJson: out.archiveJson },
           })
-          .run()
       }
       // RFC-053: approve-review enforces awaiting_review → done at the helper.
-      transitionNodeRunStatusTx({
+      await transitionNodeRunStatusTx({
         tx,
         nodeRunId: args.nodeRunId,
         event: { kind: policy.lifecycleEvent },
@@ -3752,7 +3767,7 @@ async function submitReviewDecisionUnlocked(
         // RFC-053: supersede must be able to cancel BOTH live rows AND a `done`
         // row (typical — the agent finished before the decision). allowTerminal
         // documents the intentional terminal-rewrite.
-        setNodeRunStatusTx({
+        await setNodeRunStatusTx({
           tx,
           nodeRunId: up.latest.id,
           to: 'canceled',
@@ -3772,7 +3787,7 @@ async function submitReviewDecisionUnlocked(
         // parent; startedAt null = "no timing until it actually runs"
         // (RFC-074 PR-C: no clarifyIteration inherit, see
         // review-iterate-inherits-clarify-iteration.test.ts).
-        createSqliteNodeRunMintParticipantInTx(tx).mint({
+        await createNodeRunMintParticipantInTx(tx).mint({
           id: up.rerunNodeRunId,
           taskId: dv.taskId,
           nodeId: up.nodeId,
@@ -3789,7 +3804,8 @@ async function submitReviewDecisionUnlocked(
       // upstream agent syncs ≥ 2 markdown outputs — decided in prepare).
       for (const sibling of rerun.siblings) {
         for (const pendingId of sibling.pendingDocVersionIds) {
-          tx.update(docVersions)
+          await tx
+            .update(docVersions)
             .set({
               decision: 'rejected',
               decisionReason: 'invalidated by sibling reject (RFC-005 A2)',
@@ -3797,9 +3813,8 @@ async function submitReviewDecisionUnlocked(
               decidedBy: SYSTEM_DECIDER,
             })
             .where(eq(docVersions.id, pendingId))
-            .run()
         }
-        setNodeRunStatusTx({
+        await setNodeRunStatusTx({
           tx,
           nodeRunId: sibling.runId,
           to: 'pending',
@@ -3812,7 +3827,7 @@ async function submitReviewDecisionUnlocked(
       // Bump this review's reviewIteration + status=pending so the scheduler
       // re-runs it (RFC-053: iterate-review / reject-review enforce
       // awaiting_review → pending).
-      transitionNodeRunStatusTx({
+      await transitionNodeRunStatusTx({
         tx,
         nodeRunId: args.nodeRunId,
         event: { kind: policy.lifecycleEvent },
@@ -3824,16 +3839,15 @@ async function submitReviewDecisionUnlocked(
     const projectionRows =
       lineageIds.length === 0
         ? []
-        : tx
+        : await tx
             .select()
             .from(nodeRuns)
             .where(inArray(nodeRuns.id, lineageIds))
             .limit(lineageIds.length)
-            .all()
     const expectedNodeProjection = humanGateNodeProjectionFence(
       projectionRows.map(reviewDecisionProjectionMember),
     )
-    const accepted = humanGateComposition.bindTaskDecisionParticipantInTx(tx).acceptGateDecisionTx({
+    const accepted = await acceptHumanGateDecisionTx(tx, {
       taskId: taskRow.id,
       gate: { kind: 'review', ref: gateRef },
       expectedTaskRevision: capturedTaskRevision,
@@ -3878,21 +3892,21 @@ async function submitReviewDecisionUnlocked(
         selectionsApplied,
       },
     }
-    operations.commitTx({
+    await operations.commitTx({
       tx,
       operationId: begun.operation.id,
       expectedClaimEpoch: begun.operation.claimEpoch,
       receiptJson: encodeReviewDecisionReceipt(receipt),
       now: decidedAt,
     })
-    operations.completeTx({
+    await operations.completeTx({
       tx,
       operationId: begun.operation.id,
       expectedClaimEpoch: begun.operation.claimEpoch,
       now: decidedAt,
     })
 
-    const collaborationEventRef = appendHumanGateDecisionCommittedEventTx(tx, {
+    const collaborationEventRef = await appendHumanGateDecisionCommittedEvent(tx, {
       family: 'review',
       gate: {
         taskId: taskRow.id,
@@ -3992,7 +4006,7 @@ async function submitReviewDecisionUnlocked(
  * RFC-099 prompt isolation: no decider identity in the port payload.
  */
 async function planSingleDocApprove(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   run: typeof nodeRuns.$inferSelect,
   dv: DocVersion,
   readBody: (d: DocVersion) => string,
@@ -4039,7 +4053,7 @@ async function planSingleDocApprove(
  * view — RFC-326 design §6.1.
  */
 async function planMultiDocApprove(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   run: typeof nodeRuns.$inferSelect,
   effectiveDvs: DocVersion[],
   readBody: (d: DocVersion) => string,
@@ -4228,7 +4242,7 @@ async function planRerun(
  * still awaiting and the doc_version is a pending multi-document member.
  */
 export async function setDocumentSelection(args: {
-  db: DbClient
+  db: ProviderNeutralDatabase
   nodeRunId: string
   docVersionId: string
   selection: 'accepted' | 'not_accepted'
@@ -4239,7 +4253,7 @@ export async function setDocumentSelection(args: {
 }
 
 async function setDocumentSelectionUnlocked(args: {
-  db: DbClient
+  db: ProviderNeutralDatabase
   nodeRunId: string
   docVersionId: string
   selection: 'accepted' | 'not_accepted'
@@ -4270,14 +4284,14 @@ async function setDocumentSelectionUnlocked(args: {
     )
   }
   const now = Date.now()
-  const eventRefs = dbTxSync(args.db, (tx) => {
-    tx.update(docVersions)
+  const eventRefs = await databaseSessionFor(args.db).transaction(async (tx) => {
+    await tx
+      .update(docVersions)
       // RFC-129: a human judging the CURRENT content clears the inherited-stale
       // flag (the sole clear path; see loadPriorRoundMembers stale propagation).
       .set({ selection: args.selection, selectionStale: false })
       .where(eq(docVersions.id, args.docVersionId))
-      .run()
-    const eventRef = appendReviewSelectionChangedCommittedEventTx(tx, {
+    const eventRef = await appendReviewSelectionChangedCommittedEvent(tx, {
       gate: {
         taskId: dvRow.taskId,
         nodeRunId: args.nodeRunId,
@@ -4306,7 +4320,7 @@ async function setDocumentSelectionUnlocked(args: {
 }
 
 async function iterateSiblingCascadeApplies(args: {
-  db: DbClient
+  db: ProviderNeutralDatabase
   upstreamNodeId: string
   definition: WorkflowDefinition
 }): Promise<boolean> {

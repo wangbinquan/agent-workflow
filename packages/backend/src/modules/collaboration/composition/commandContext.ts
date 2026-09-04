@@ -25,12 +25,11 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGateOperationPersistence'
 import { SqliteHumanGateOperationStore } from '../infrastructure/sqliteHumanGateOperationStore'
 import { SqliteManualQuestionOpenWriter } from '../infrastructure/sqliteManualQuestionOpenWriter'
-import { SqliteCommittedReviewArtifactReader } from '../infrastructure/sqliteCommittedReviewArtifactReader'
+import { DatabaseCommittedReviewArtifactReader } from '../infrastructure/committedReviewArtifactReader'
 import { SqliteReviewNodeReviewerStore } from '../infrastructure/sqliteReviewNodeReviewerStore'
 import { createSqliteReviewTaskAccessPort } from '../infrastructure/sqliteReviewTaskAccess'
 import { SqliteTaskFeedbackStore } from '../infrastructure/sqliteTaskFeedbackStore'
 import { PostgresqlClarifyQuestionSnapshotReader } from '../infrastructure/postgresqlClarifyQuestionSnapshotReader'
-import { PostgresqlCommittedReviewArtifactReader } from '../infrastructure/postgresqlCommittedReviewArtifactReader'
 import { PostgresqlManualQuestionOpenWriter } from '../infrastructure/postgresqlManualQuestionOpenWriter'
 import { PostgresqlReviewNodeReviewerStore } from '../infrastructure/postgresqlReviewNodeReviewerStore'
 import { createPostgresqlReviewTaskAccessPort } from '../infrastructure/postgresqlReviewTaskAccess'
@@ -83,7 +82,9 @@ export function createCollaborationCommandContext(
       clarifyDirectives: createSqliteClarifyDirectiveStore(input.db),
       ...(input.appHome === undefined
         ? {}
-        : { committedArtifacts: new SqliteCommittedReviewArtifactReader(input.db, input.appHome) }),
+        : {
+            committedArtifacts: new DatabaseCommittedReviewArtifactReader(input.db, input.appHome),
+          }),
     },
     ...(input.appHome === undefined
       ? {}
@@ -111,10 +112,7 @@ export function createPostgresqlCollaborationCommandContext(
       ...(input.appHome === undefined
         ? {}
         : {
-            committedArtifacts: new PostgresqlCommittedReviewArtifactReader(
-              input.db,
-              input.appHome,
-            ),
+            committedArtifacts: new DatabaseCommittedReviewArtifactReader(input.db, input.appHome),
           }),
     },
     ...(input.appHome === undefined

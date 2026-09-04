@@ -18,7 +18,7 @@ import {
   createSqliteTaskAuthorizationParticipantInTx,
   createSqliteTaskAuthorizationQueries,
 } from '@/modules/task-execution/infrastructure/sqliteTaskAuthorization'
-import { createPostgresqlTaskAuthorizationParticipantInTx } from '@/modules/task-execution/infrastructure/postgresqlTaskAuthorization'
+import { createTaskAuthorizationParticipantInTx } from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -221,7 +221,7 @@ describe('RFC-349 task transaction participants', () => {
   test('PostgreSQL binds authorization and minting to one reserved transaction', async () => {
     const fixture = postgresqlFixture()
     await fixture.db.transaction(async (tx) => {
-      const authorization = createPostgresqlTaskAuthorizationParticipantInTx(tx)
+      const authorization = createTaskAuthorizationParticipantInTx(tx)
       await expect(
         authorization.canViewTask({
           subject: { userId: 'observer', canReadAllTasks: false },

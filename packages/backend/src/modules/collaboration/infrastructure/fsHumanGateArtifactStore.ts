@@ -1,9 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, posix } from 'node:path'
-import { and, eq, inArray } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
-import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type {
   HumanGateArtifactStore,
@@ -129,45 +126,4 @@ export class FsHumanGateArtifactStore implements HumanGateArtifactStore {
     rmSync(staged, { force: true })
     rmSync(`${staged}.writing`, { force: true })
   }
-}
-
-export function readCommittedReviewArtifactBody(
-  db: DbClient,
-  appHome: string,
-  finalPath: string,
-): string {
-  const artifact = db
-    .select({
-      stagedPath: collaborationGateArtifacts.stagedPath,
-      sha256: collaborationGateArtifacts.sha256,
-      byteSize: collaborationGateArtifacts.byteSize,
-    })
-    .from(collaborationGateArtifacts)
-    .innerJoin(
-      collaborationGateOperations,
-      eq(collaborationGateOperations.id, collaborationGateArtifacts.operationId),
-    )
-    .where(
-      and(
-        eq(collaborationGateArtifacts.finalPath, finalPath),
-        inArray(collaborationGateArtifacts.state, ['consumed', 'finalized']),
-        inArray(collaborationGateOperations.state, ['committed', 'completed']),
-      ),
-    )
-    .get()
-  const final = absolutePath(appHome, finalPath)
-  if (existsSync(final)) {
-    if (artifact === undefined) return readFileSync(final, 'utf8')
-    return assertContent(final, artifact.sha256, artifact.byteSize).toString('utf8')
-  }
-  if (artifact !== undefined) {
-    const staged = absolutePath(appHome, artifact.stagedPath)
-    if (existsSync(staged)) {
-      return assertContent(staged, artifact.sha256, artifact.byteSize).toString('utf8')
-    }
-  }
-  throw new HumanGateOperationError(
-    'human-gate-artifact-missing',
-    `review body file not found: ${finalPath}`,
-  )
 }

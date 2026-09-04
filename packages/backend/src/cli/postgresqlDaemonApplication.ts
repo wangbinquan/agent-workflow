@@ -7,6 +7,7 @@
 import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
+  createReviewDecisionCommand,
 } from '@/modules/collaboration/composition/legacySqliteDecisionCommands'
 import {
   WORKFLOW_SCHEMA_VERSION,
@@ -700,6 +701,8 @@ export async function composePostgresqlDaemonApplication(
     questionDispatches: createQuestionDispatchCommand(input.db),
     // RFC-359 W1-T2b：快速澄清决定同样是一份实现；蒸馏入队走 PG 侧的 memory 命令面。
     clarifyDecisions: createClarifyDecisionCommand(input.db, memoryOperations.distillCommands),
+    // RFC-359 W1-T2c：评审决定同样是一份实现（决定 / 评论 / 选择五个事务体跑在 DatabaseSession 上）。
+    reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
   })
   collaborationContext = boundCollaborationContext
   const workgroupClarify = composePostgresqlWorkgroupTaskRoomClarifyParticipantFactory()

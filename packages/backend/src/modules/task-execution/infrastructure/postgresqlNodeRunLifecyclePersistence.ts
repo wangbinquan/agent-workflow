@@ -1,6 +1,5 @@
 import {
   allowedFromStatusesForEvent,
-  isTerminalNodeRunStatus,
   nextNodeRunStatus,
   type NodeRunStatus,
 } from '@agent-workflow/shared'
@@ -22,6 +21,7 @@ import {
 } from './postgresqlTaskLifecycleTransaction'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 
 const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
   allowedFromStatusesForEvent({ kind: 'mark-canceled' }),
@@ -97,36 +97,8 @@ export function createPostgresqlNodeRunLifecycleParticipantInTx(
 ): NodeRunLifecycleParticipantInTx {
   return Object.freeze({
     async set(input: Parameters<NodeRunLifecycleParticipantInTx['set']>[0]) {
-      const row = await rowForUpdate(tx, input.nodeRunId)
-      assertSourceTerminationAdmission({
-        taskId: row.taskId,
-        fence: row.sourceTerminationFence,
-        to: input.to,
-      })
-      if (isTerminalNodeRunStatus(row.status) && input.allowTerminal !== true) {
-        throw new ConflictError(
-          'illegal-node-run-transition',
-          `node_run ${input.nodeRunId} is terminal ('${row.status}'); refuse to overwrite`,
-        )
-      }
-      if (!input.allowedFrom.includes(row.status)) {
-        throw new ConflictError(
-          'illegal-node-run-transition',
-          `node_run ${input.nodeRunId} status='${row.status}' not in allowedFrom`,
-        )
-      }
-      const updated = await tx
-        .update(nodeRuns)
-        .set({ status: input.to, ...(input.extra ?? {}) })
-        .where(and(eq(nodeRuns.id, input.nodeRunId), eq(nodeRuns.status, row.status)))
-        .returning({ id: nodeRuns.id })
-      if (updated[0] === undefined) {
-        throw new ConflictError(
-          'concurrent-node-run-transition',
-          `node_run ${input.nodeRunId} status changed concurrently`,
-        )
-      }
-      return { from: row.status, to: input.to }
+      // RFC-359 W1-T2c：事务内 CAS 与 SQLite 同一份实现（nodeRunLifecycleTransition.ts）。
+      return await setNodeRunStatusTx({ tx, ...input })
     },
     async completeClarifyNode(
       input: Parameters<NodeRunLifecycleParticipantInTx['completeClarifyNode']>[0],

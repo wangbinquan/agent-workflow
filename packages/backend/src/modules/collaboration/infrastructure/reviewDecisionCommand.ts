@@ -1,9 +1,16 @@
-// RFC-349 SQLite compatibility bridge from collaboration's public command
-// to the legacy review domain writer. Continuation ownership is the
-// collaboration worker, never the request.
+// RFC-359 W1-T2c（F-H2-1 之三）—— collaboration 的评审决定命令端口：一份实现，两个引擎。
+//
+// 此前只有 `createSqliteReviewDecisionCommand`（`legacySqliteReviewDecisionComposition.ts`），
+// PostgreSQL daemon 从未注入 `reviewDecisions`，路由一到就 500；决定事务体
+// （`legacySqliteReview.ts#submitReviewDecisionUnlocked`）现在跑在 `DatabaseSession` 上，
+// 评论 / 选择 / 决定的五个事务体两个 provider 共用。
+//
+// 保留动态 import：命令端口由 bootstrap 一次性组合，静态 import 评审域会经
+// `services/humanGateComposition` 绕回 collaboration 的 composition barrel，形成值环。
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { TaskActorRole } from '@agent-workflow/shared'
 import type {
   CollaborationCommandContext,
@@ -11,14 +18,14 @@ import type {
 } from '@/modules/collaboration/public/types'
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
-export function createSqliteReviewDecisionCommand(input: {
-  readonly db: DbClient
+export function createReviewDecisionCommand(input: {
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
 }): ReviewDecisionCommandPort {
   return {
     async submit(command) {
-      const { submitReviewDecision: submitLegacyReviewDecision } = await import('@/services/review')
-      const decided = await submitLegacyReviewDecision({
+      const { submitReviewDecision } = await import('./legacySqliteReview')
+      const decided = await submitReviewDecision({
         db: input.db,
         appHome: input.appHome,
         nodeRunId: command.nodeRunId,
@@ -50,19 +57,16 @@ export function createSqliteReviewDecisionCommand(input: {
   }
 }
 
+/** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createReviewDecisionCommandContext(input: {
   readonly db: DbClient
   readonly appHome: string
   readonly actor: Actor
   readonly authorRole: TaskActorRole
 }): CollaborationCommandContext {
-  const reviewDecisions = createSqliteReviewDecisionCommand({
-    db: input.db,
-    appHome: input.appHome,
-  })
   return createCollaborationCommandContext({
     db: input.db,
     appHome: input.appHome,
-    reviewDecisions,
+    reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
   })
 }

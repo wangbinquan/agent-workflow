@@ -92,7 +92,7 @@ import type {
   TaskRouteMultipartFilePart,
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
-import { createPostgresqlTaskAuthorizationQueries } from './postgresqlTaskAuthorization'
+import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
   type PostgresqlTaskExecutionTransaction,
   withPostgresqlSerializableTaskExecution,
@@ -1208,7 +1208,7 @@ export function createPostgresqlTaskRouteLaunchOperations(
   workgroup: WorkgroupRouteTaskLaunchOperations
 }> {
   const arms = createPostgresqlTaskLaunchArms(dependencies)
-  const authorization = createPostgresqlTaskAuthorizationQueries(dependencies.db)
+  const authorization = createTaskAuthorizationQueries(dependencies.db)
   const assertReplayVisible = async (actor: Actor, sourceTaskId: string): Promise<void> => {
     const visible = await authorization.canViewTask({
       subject: {

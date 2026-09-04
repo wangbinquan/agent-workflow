@@ -14,10 +14,8 @@ import type {
 } from '@/modules/collaboration/application/ports/humanGateArtifactStore'
 import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from '@/modules/collaboration/application/ports/humanGateOperationStore'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
-import {
-  FsHumanGateArtifactStore,
-  readCommittedReviewArtifactBody,
-} from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
+import { FsHumanGateArtifactStore } from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -159,7 +157,9 @@ describe('RFC-333 T4 review artifact recovery', () => {
     commitPrepared({ db, operations, operationId: 'operation-committed' })
 
     expect(existsSync(absolute(appHome, plan.finalPath))).toBe(false)
-    expect(readCommittedReviewArtifactBody(db, appHome, plan.finalPath)).toBe(body)
+    expect(await new DatabaseCommittedReviewArtifactReader(db, appHome).read(plan.finalPath)).toBe(
+      body,
+    )
 
     const recovery = new HumanGateOperationRecovery({
       operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
@@ -176,7 +176,9 @@ describe('RFC-333 T4 review artifact recovery', () => {
     })
     expect(readFileSync(absolute(appHome, plan.finalPath), 'utf8')).toBe(body)
     expect(existsSync(absolute(appHome, plan.stagedPath))).toBe(false)
-    expect(readCommittedReviewArtifactBody(db, appHome, plan.finalPath)).toBe(body)
+    expect(await new DatabaseCommittedReviewArtifactReader(db, appHome).read(plan.finalPath)).toBe(
+      body,
+    )
     expect(
       db
         .select({ state: collaborationGateOperations.state })
@@ -235,7 +237,9 @@ describe('RFC-333 T4 review artifact recovery', () => {
       now: () => now,
     })
     expect(await firstRecovery.runOnce()).toMatchObject({ claimed: 1, failed: 1 })
-    expect(readCommittedReviewArtifactBody(db, appHome, plan.finalPath)).toBe(body)
+    expect(await new DatabaseCommittedReviewArtifactReader(db, appHome).read(plan.finalPath)).toBe(
+      body,
+    )
     expect(existsSync(absolute(appHome, plan.finalPath))).toBe(false)
 
     now += DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1

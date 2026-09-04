@@ -4814,12 +4814,12 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/reviewDecisionComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand",
+      "specifier": "@/modules/collaboration/infrastructure/reviewDecisionCommand",
       "edgeKind": "value",
       "syntax": "export",
       "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；RFC-359 W1-T2c 起目标已是 provider-中立的 reviewDecisionCommand，这条边要等 services facade 退役才消失，仍须收敛到 owner public/composition 合同。",
       "introducedByRFC": "RFC-349（provider cutover current-source census）",
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
@@ -4828,7 +4828,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReviewDecisionComposition.ts#$file"
+        "owner:packages/backend/src/modules/collaboration/infrastructure/reviewDecisionCommand.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/reviewDecisionComposition.ts"
@@ -4860,12 +4860,12 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/reviewMutationCoordinator.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/sqliteReviewMutationScope",
-      "specifier": "@/modules/collaboration/infrastructure/sqliteReviewMutationScope",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope",
+      "specifier": "@/modules/collaboration/infrastructure/reviewMutationScope",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy service 直接消费 owner 内部实现；RFC-359 W1-T2c 起目标已是 provider-中立的 reviewMutationScope（两引擎同一份作用域解析），这条边要等 coordinator 收进 collaboration composition 才消失。",
       "introducedByRFC": "RFC-349（provider cutover current-source census）",
       "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
       "findingId": "G-01",
@@ -4874,7 +4874,7 @@
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteReviewMutationScope.ts#SqliteReviewMutationScopeResolver"
+        "owner:packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts#DatabaseReviewMutationScopeResolver"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/reviewMutationCoordinator.ts"

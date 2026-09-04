@@ -44,7 +44,7 @@ import {
   workflows,
 } from '../src/db/schema'
 import { createCollaborationCommandContext } from '../src/modules/collaboration/composition'
-import { createSqliteReviewDecisionCommand } from '../src/modules/collaboration/composition/legacySqliteDecisionCommands'
+import { createReviewDecisionCommand } from '../src/modules/collaboration/composition/legacySqliteDecisionCommands'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import {
   ALL_TOOLS,
@@ -140,7 +140,7 @@ async function harness(): Promise<Harness> {
       db,
       appHome,
       taskExecutionReadModels: taskExecutionRuntime.readModels,
-      reviewDecisions: createSqliteReviewDecisionCommand({ db, appHome }),
+      reviewDecisions: createReviewDecisionCommand({ db, appHome }),
     }),
   }
   const app = createApp(deps)

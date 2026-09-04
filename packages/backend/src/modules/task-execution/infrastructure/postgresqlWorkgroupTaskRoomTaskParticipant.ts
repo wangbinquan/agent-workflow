@@ -17,7 +17,7 @@ import type {
   WorkgroupTaskRoomTaskParticipantInTx,
   WorkgroupTaskRoomTaskSnapshot,
 } from '../public/commands'
-import { createPostgresqlTaskAuthorizationParticipantInTx } from './postgresqlTaskAuthorization'
+import { createTaskAuthorizationParticipantInTx } from './taskAuthorization'
 import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
@@ -83,7 +83,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
   tx: PostgresqlTaskExecutionTransaction,
   clarify: WorkgroupTaskRoomClarifyParticipantInTx,
 ): WorkgroupTaskRoomTaskParticipantInTx {
-  const authorization = createPostgresqlTaskAuthorizationParticipantInTx(tx)
+  const authorization = createTaskAuthorizationParticipantInTx(tx)
 
   function authorizationSubject(
     authority: Parameters<WorkgroupTaskRoomTaskParticipantInTx['loadVisible']>[0],

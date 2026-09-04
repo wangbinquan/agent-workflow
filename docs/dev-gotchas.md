@@ -3955,6 +3955,23 @@ instead of importing another SQLite/PostgreSQL factory.」
 只改了一个前端组件 + 加一条前端测试，同样要重采，否则 `rfc294-canonical-manifests` 当场红。
 「架构账本只跟后端有关」是错觉——**任何落在那四个 `src` 下的改动都要重采**。
 
+### 大迁移推之前的最小自查（RFC-359 T1/T2 三次推红的教训）
+
+CI 是唯一权威门，但**改了几十个文件的迁移**推上去红三次（2026-09-05：格式 18 个文件、三条源锁 /
+棘轮、一条 eslint unused import、一条 S-10 事务守卫），每次都是 15 分钟一轮的 CI 才告诉你。这类
+提交前本地花 3 分钟做这四件事，能把它们全部提前抓住：
+
+1. `bun run typecheck` + `bun run lint`（**全量**，不是只 lint 改过的文件——批量改 import 的脚本
+   会在你没碰的文件里留下 unused import）；
+2. `bun run format:check`（改 import 的脚本 / `git rm` + 手写文件都不会自动过 prettier）；
+3. 守卫族分批跑：`bun test tests/architecture tests/rfc294-architecture-preflight.test.ts tests/rfc328-architecture-guards.test.ts`
+   与 `bun test tests/*guard* tests/*lock* tests/*inventory* tests/*grep* tests/rfc349-* tests/rfc317-* tests/lifecycle-* tests/scheduler-audit-*`
+   ——源锁、逐文件棘轮（tasks.status 直写 / node_runs 直写 / allowTerminal / RFC-254 平台面 /
+   S-10 事务形态）多半不在你改的测试文件里；
+4. 几百个测试文件**合在一个 bun 进程里跑会互相干扰**（路由注册表是进程级的，会出现
+   `declared operation has no mounted binding` 一类假红）——看到成批的路由测试失败先把那几个
+   文件单独跑一遍再判断，别急着改产品代码。
+
 ## 双引擎测试是缺省：`describeEachProvider` 的用例本地怎么跑（RFC-359 §11.1，2026-09-04）
 
 `packages/backend/tests/helpers/eachProvider.ts` 的 `describeEachProvider(name, body)` 把同一段

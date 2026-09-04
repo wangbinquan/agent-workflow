@@ -86,7 +86,7 @@ import type {
 import { createPostgresqlCollaborationCommandContext } from '../composition/commandContext'
 import { isDispatchedEntryConsumed, isTargetNodeConsumed } from './legacySqliteClarify/rerunLedger'
 import { createPostgresqlClarifyDirectiveStore } from './postgresqlClarifyDirectiveStore'
-import { PostgresqlCommittedReviewArtifactReader } from './postgresqlCommittedReviewArtifactReader'
+import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
 
 const log = createLogger('collaboration-runtime-mechanics')
 const WG_LEADER_NODE_ID = '__wg_leader__'
@@ -1113,7 +1113,7 @@ async function loadPostgresqlPriorRound(input: {
     const current = byIndex.get(row.itemIndex)
     if (current === undefined || row.id > current.id) byIndex.set(row.itemIndex, row)
   }
-  const reader = new PostgresqlCommittedReviewArtifactReader(input.db, input.appHome)
+  const reader = new DatabaseCommittedReviewArtifactReader(input.db, input.appHome)
   const members: PriorRoundMember[] = []
   for (const row of byIndex.values()) {
     let body = ''

@@ -82,7 +82,7 @@ import {
   type CollaborationProjectionFrame,
 } from '../domain/collaborationCommittedEvent'
 import { buildReviewAnchorDocument, resolveReviewAnchor } from '../domain/reviewAnchor'
-import { PostgresqlCommittedReviewArtifactReader } from './postgresqlCommittedReviewArtifactReader'
+import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
 import { PostgresqlManualQuestionOpenWriter } from './postgresqlManualQuestionOpenWriter'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
@@ -371,7 +371,7 @@ async function commentsForVersion(
 
 async function buildReviewMember(
   db: PostgresqlDatabaseClient,
-  reader: PostgresqlCommittedReviewArtifactReader,
+  reader: DatabaseCommittedReviewArtifactReader,
   row: DocVersionRow,
 ): Promise<{ summary: ReviewDocumentSummary; decision: DocVersionDecision }> {
   let body = ''
@@ -466,7 +466,7 @@ async function listPostgresqlReviewRounds(
   nodeRunId: string,
 ): Promise<ReviewRoundSummary[]> {
   const rows = await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, nodeRunId))
-  const reader = new PostgresqlCommittedReviewArtifactReader(db, appHome)
+  const reader = new DatabaseCommittedReviewArtifactReader(db, appHome)
   const result: ReviewRoundSummary[] = []
   for (const round of groupReviewRounds(rows)) {
     const members: ReviewRoundMember[] = []
@@ -526,7 +526,7 @@ async function getPostgresqlReviewDetail(
   )
   const current = selectCurrentReviewRound(versions)!
   const currentVersion = rowToDocVersion(current.representative)
-  const reader = new PostgresqlCommittedReviewArtifactReader(db, appHome)
+  const reader = new DatabaseCommittedReviewArtifactReader(db, appHome)
   let currentBody = ''
   try {
     currentBody = await reader.read(currentVersion.bodyPath)
@@ -578,7 +578,7 @@ async function getPostgresqlVersionDetail(
 ) {
   const row = (await db.select().from(docVersions).where(eq(docVersions.id, versionId)).limit(1))[0]
   if (row === undefined || row.reviewNodeRunId !== nodeRunId) return null
-  const body = await new PostgresqlCommittedReviewArtifactReader(db, appHome).read(row.bodyPath)
+  const body = await new DatabaseCommittedReviewArtifactReader(db, appHome).read(row.bodyPath)
   return { ...rowToDocVersion(row), body, comments: await commentsForVersion(db, row) }
 }
 
@@ -860,7 +860,7 @@ async function addPostgresqlReviewComment(
   const prepared = await serializable(db, async (tx) => {
     await assertPostgresqlReviewWritable(tx, input.nodeRunId)
     const version = await selectPendingPostgresqlDocVersion(tx, input.nodeRunId, input.docVersionId)
-    const body = await new PostgresqlCommittedReviewArtifactReader(db, input.appHome).read(
+    const body = await new DatabaseCommittedReviewArtifactReader(db, input.appHome).read(
       version.bodyPath,
     )
     const resolved = resolvePostgresqlCommentAnchor(body, input)

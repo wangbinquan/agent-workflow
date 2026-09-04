@@ -87,7 +87,7 @@ import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskRouteListFilters, TaskRouteOperations } from '../public/taskRoutes'
 import { PostgresqlBranchTraceSnapshotReader } from './postgresqlBranchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
-import { createPostgresqlTaskAuthorizationQueries } from './postgresqlTaskAuthorization'
+import { createTaskAuthorizationQueries } from './taskAuthorization'
 import {
   createPostgresqlRootTaskLaunchKernel,
   createPostgresqlTaskExecutionLaunchParticipant,
@@ -799,7 +799,7 @@ async function launchMultipart(
   }
   const authority = dependencies.launch.resourceAuthorityFor(actor)
   if (task.data.sourceTaskId !== undefined) {
-    const visible = await createPostgresqlTaskAuthorizationQueries(dependencies.db).canViewTask({
+    const visible = await createTaskAuthorizationQueries(dependencies.db).canViewTask({
       subject: {
         userId: actor.user.id,
         canReadAllTasks: actor.permissions.has('tasks:read:all'),
@@ -1924,7 +1924,7 @@ async function deleteTask(
 export function createPostgresqlTaskRouteOperations(
   dependencies: PostgresqlTaskRouteOperationsDependencies,
 ): TaskRouteOperations {
-  const authorization = createPostgresqlTaskAuthorizationQueries(dependencies.db)
+  const authorization = createTaskAuthorizationQueries(dependencies.db)
   const launches = createPostgresqlTaskExecutionLaunchParticipant({
     db: dependencies.db,
     ...dependencies.launch,
