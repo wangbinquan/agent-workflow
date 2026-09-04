@@ -38,10 +38,19 @@ export class PostgresqlLogicalTargetError extends Error {
       | 'postgresql-target-chunk-mismatch'
       | 'postgresql-target-schema-finalize'
       | 'postgresql-target-verification'
+      // The violated invariant rides in the CODE, not only in the message: the
+      // durable failure record is a closed shape whose only free field is a
+      // `detailCode` slug (same idiom as `SqliteLogicalSourceMutationCode`), so a
+      // bare `postgresql-target-verification` leaves the operator nothing to act
+      // on.
+      | `postgresql-target-verification.${string}`
       | 'postgresql-target-generation-fence',
     message: string,
+    // Carrying the provider failure lets `classifyDatabaseMigrationFailure` walk
+    // the chain and read the real PostgreSQL code instead of guessing from ours.
+    options?: { readonly cause?: unknown },
   ) {
-    super(message)
+    super(message, options)
     this.name = 'PostgresqlLogicalTargetError'
   }
 }
@@ -298,6 +307,13 @@ async function assertTargetCoverage(input: {
   }
 }
 
+/**
+ * Only a violated invariant is a verification verdict. Anything else the
+ * verifier throws — a statement timeout, a terminated session, a driver fault —
+ * travels on unchanged so it keeps its own provider code and is classified as
+ * the transient target failure it is. Collapsing the two is what turned a 2026-09-04
+ * production outage into a permanent `verification-mismatch` with no way to resume.
+ */
 async function assertTargetBusinessInvariants(input: {
   readonly connection: PostgresqlReservedConnection
   readonly contract: LogicalSchemaContract
@@ -306,7 +322,11 @@ async function assertTargetBusinessInvariants(input: {
     await verifyPostgresqlLogicalTargetBusinessInvariants(input)
   } catch (error) {
     if (error instanceof PostgresqlLogicalTargetInvariantError) {
-      throw new PostgresqlLogicalTargetError('postgresql-target-verification', error.message)
+      throw new PostgresqlLogicalTargetError(
+        `postgresql-target-verification.${error.invariant}`,
+        error.message,
+        { cause: error },
+      )
     }
     throw error
   }
@@ -320,7 +340,11 @@ async function assertTargetIdentitySequences(input: {
     await verifyPostgresqlLogicalTargetIdentitySequences(input)
   } catch (error) {
     if (error instanceof PostgresqlLogicalTargetInvariantError) {
-      throw new PostgresqlLogicalTargetError('postgresql-target-verification', error.message)
+      throw new PostgresqlLogicalTargetError(
+        `postgresql-target-verification.${error.invariant}`,
+        error.message,
+        { cause: error },
+      )
     }
     throw error
   }
@@ -381,6 +405,24 @@ export async function openPostgresqlLogicalTarget(input: {
     await input.verifyMigrationHistory(input.plan)
   }
   const connection = await input.runtime.providerPool().reserve()
+  // First thing on this session, before the advisory lock and long before
+  // `finalizeSchema`: drop the ONLINE guards this pool sets from config
+  // (`urlWithServerTimeouts`). `statementTimeoutMs` bounds one request and
+  // `idleTimeoutMs` is a pool knob doubling as the server's idle-in-transaction
+  // guard — at the shipped 60s/30s both are hostile to this session, which holds
+  // ONE transaction across the coverage census, the closed cross-table oracle and
+  // every index/constraint statement, against a target that still has no indexes
+  // at all. On a multi-GB target the server then cancels a single `CREATE INDEX`
+  // (57014) or terminates the whole session after 30s of client-side idleness
+  // (25P03), and the migration used to end there, unresumable.
+  //
+  // `lock_timeout` is deliberately left at the configured budget: it measures
+  // someone ELSE blocking us, which is a real fault worth failing fast on, and
+  // this target is supposed to be exclusively ours.
+  await connection.unsafe(
+    "SELECT set_config('statement_timeout', '0', false), " +
+      "set_config('idle_in_transaction_session_timeout', '0', false)",
+  )
   const lockKey = `rfc349-copy:${input.operationId}`
   const lockRows = await connection.unsafe(
     'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
@@ -669,6 +711,7 @@ export async function openPostgresqlLogicalTarget(input: {
         throw new PostgresqlLogicalTargetError(
           'postgresql-target-schema-finalize',
           'PostgreSQL target constraints, indexes or identities failed final verification',
+          { cause: error },
         )
       }
       // Outside the DDL transaction on purpose: ANALYZE takes its own snapshot,

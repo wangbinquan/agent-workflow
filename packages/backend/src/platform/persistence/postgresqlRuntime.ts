@@ -186,6 +186,13 @@ function defaultPoolFactory(options: PostgresqlPoolOptions): PostgresqlPool {
   }) as unknown as PostgresqlPool
 }
 
+/**
+ * NOTE: these are the ONLINE budgets. `statementTimeoutMs` bounds one request and
+ * `idleTimeoutMs` is really a pool knob ("how long may a pooled connection sit
+ * unused") that doubles as the server's idle-in-transaction guard. The one
+ * migration session overrides both — see `openPostgresqlLogicalTarget`, which
+ * holds a single transaction far longer than any request may run.
+ */
 function urlWithServerTimeouts(url: string, config: PostgresqlConfig): string {
   const parsed = new URL(url)
   const existing = parsed.searchParams.get('options')?.trim()

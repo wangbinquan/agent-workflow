@@ -11,6 +11,19 @@ const quote = (identifier: string): string => `"${identifier.replaceAll('"', '""
 const applicationTable = (table: string): string =>
   `${quote(POSTGRESQL_APPLICATION_SCHEMA)}.${quote(table)}`
 
+/**
+ * Only a violated invariant is thrown from here. A verification QUERY that
+ * fails is not a verification RESULT: both verifiers used to flatten every
+ * driver failure into `PostgresqlLogicalTargetInvariantError(..., 'query-error')`,
+ * which reported an infrastructure fault as a data-integrity violation and
+ * discarded the provider error outright. Because `verification` classifies as
+ * `verification-mismatch` / `retryable: false`, that permanently blocked resume
+ * — a 60s `statement_timeout` on an unindexed multi-GB target, or a session the
+ * server terminated, both landed there and sent the operator hunting for data
+ * corruption that did not exist (2026-09-04 production forensics). Everything
+ * that is not a verdict now propagates untouched, keeping the provider's own
+ * code and message for `classifyDatabaseMigrationFailure` to read.
+ */
 export class PostgresqlLogicalTargetInvariantError extends Error {
   constructor(
     public readonly invariant: string,
@@ -541,17 +554,7 @@ export async function verifyPostgresqlLogicalTargetBusinessInvariants(input: {
   for (const invariant of BUSINESS_INVARIANTS) {
     const tables = bindTables(invariant, input.contract)
     if (tables === null) continue
-    let rows: readonly Record<string, unknown>[]
-    try {
-      rows = await input.connection.unsafe(invariant.query(tables))
-    } catch (error) {
-      if (error instanceof PostgresqlLogicalTargetInvariantError) throw error
-      throw new PostgresqlLogicalTargetInvariantError(
-        invariant.id,
-        invariant.tables[0] ?? 'unknown',
-        'query-error',
-      )
-    }
+    const rows = await input.connection.unsafe(invariant.query(tables))
     const violation = rows[0]
     if (violation === undefined) continue
     const table =
@@ -595,76 +598,67 @@ export async function verifyPostgresqlLogicalTargetIdentitySequences(input: {
     const physical = mappedTable(table)
     for (const column of table.columns.filter((candidate) => candidate.identity)) {
       const invariant = 'identity-sequence-next-value'
-      try {
-        const sequenceRows = await input.connection.unsafe(
-          'SELECT pg_get_serial_sequence($1, $2) AS sequence_name',
-          [`${POSTGRESQL_APPLICATION_SCHEMA}.${physical}`, column.name],
-        )
-        const sequenceName = sequenceRows[0]?.sequence_name
-        if (typeof sequenceName !== 'string' || sequenceName.length === 0) {
-          throw new PostgresqlLogicalTargetInvariantError(invariant, table.id, column.name)
-        }
-        const originalRows = await input.connection.unsafe(
-          `SELECT last_value, is_called FROM ${sequenceRelation(
-            sequenceName,
-            invariant,
-            table.id,
-            column.name,
-          )}`,
-        )
-        const originalLastValue = databaseInteger(
-          originalRows[0]?.last_value,
+      const sequenceRows = await input.connection.unsafe(
+        'SELECT pg_get_serial_sequence($1, $2) AS sequence_name',
+        [`${POSTGRESQL_APPLICATION_SCHEMA}.${physical}`, column.name],
+      )
+      const sequenceName = sequenceRows[0]?.sequence_name
+      if (typeof sequenceName !== 'string' || sequenceName.length === 0) {
+        throw new PostgresqlLogicalTargetInvariantError(invariant, table.id, column.name)
+      }
+      const originalRows = await input.connection.unsafe(
+        `SELECT last_value, is_called FROM ${sequenceRelation(
+          sequenceName,
+          invariant,
+          table.id,
+          column.name,
+        )}`,
+      )
+      const originalLastValue = databaseInteger(
+        originalRows[0]?.last_value,
+        invariant,
+        table.id,
+        `${column.name}:sequence-state`,
+      )
+      const originalIsCalled = originalRows[0]?.is_called
+      if (typeof originalIsCalled !== 'boolean') {
+        throw new PostgresqlLogicalTargetInvariantError(
           invariant,
           table.id,
           `${column.name}:sequence-state`,
         )
-        const originalIsCalled = originalRows[0]?.is_called
-        if (typeof originalIsCalled !== 'boolean') {
-          throw new PostgresqlLogicalTargetInvariantError(
-            invariant,
-            table.id,
-            `${column.name}:sequence-state`,
-          )
-        }
-        const maxRows = await input.connection.unsafe(
-          `SELECT MAX(${quote(column.name)}) AS max_value FROM ${applicationTable(physical)}`,
-        )
-        const maxValue =
-          maxRows[0]?.max_value === null || maxRows[0]?.max_value === undefined
-            ? null
-            : databaseInteger(maxRows[0]?.max_value, invariant, table.id, column.name)
+      }
+      const maxRows = await input.connection.unsafe(
+        `SELECT MAX(${quote(column.name)}) AS max_value FROM ${applicationTable(physical)}`,
+      )
+      const maxValue =
+        maxRows[0]?.max_value === null || maxRows[0]?.max_value === undefined
+          ? null
+          : databaseInteger(maxRows[0]?.max_value, invariant, table.id, column.name)
 
-        // nextval is intentionally probed inside the reserved finalize transaction.
-        // PostgreSQL sequences are non-transactional, so restore the exact setval
-        // state immediately after observing the candidate; no probe row commits.
-        let nextValueRaw: unknown
-        try {
-          const nextRows = await input.connection.unsafe(
-            'SELECT nextval($1::regclass) AS next_value',
-            [sequenceName],
-          )
-          nextValueRaw = nextRows[0]?.next_value
-        } finally {
-          await input.connection.unsafe('SELECT setval($1::regclass, $2, $3)', [
-            sequenceName,
-            originalLastValue,
-            originalIsCalled,
-          ])
-        }
-        const nextValue = databaseInteger(nextValueRaw, invariant, table.id, column.name)
-        if (maxValue !== null ? nextValue <= maxValue : nextValue < 1n) {
-          throw new PostgresqlLogicalTargetInvariantError(
-            invariant,
-            table.id,
-            `${column.name}:${nextValue.toString()}`,
-          )
-        }
-      } catch (error) {
-        if (error instanceof PostgresqlLogicalTargetInvariantError) throw error
+      // nextval is intentionally probed inside the reserved finalize transaction.
+      // PostgreSQL sequences are non-transactional, so restore the exact setval
+      // state immediately after observing the candidate; no probe row commits.
+      let nextValueRaw: unknown
+      try {
+        const nextRows = await input.connection.unsafe(
+          'SELECT nextval($1::regclass) AS next_value',
+          [sequenceName],
+        )
+        nextValueRaw = nextRows[0]?.next_value
+      } finally {
+        await input.connection.unsafe('SELECT setval($1::regclass, $2, $3)', [
+          sequenceName,
+          originalLastValue,
+          originalIsCalled,
+        ])
+      }
+      const nextValue = databaseInteger(nextValueRaw, invariant, table.id, column.name)
+      if (maxValue !== null ? nextValue <= maxValue : nextValue < 1n) {
         throw new PostgresqlLogicalTargetInvariantError(
           invariant,
           table.id,
-          `${column.name}:query-error`,
+          `${column.name}:${nextValue.toString()}`,
         )
       }
     }

@@ -223,6 +223,17 @@ export function classifyDatabaseMigrationFailure(
       (normalizedMessages.includes('terminating connection') ||
         normalizedMessages.includes('terminated connection') ||
         normalizedMessages.includes('administrator command'))) ||
+    // A session the server tore down does not always reach us as a coded
+    // PostgresError. `idle_in_transaction_session_timeout` kills the backend
+    // outright, and Bun.SQL then surfaces the next use of the dead handle as a
+    // bare `Error: connection must be a PostgresSQLConnection` — no `code`, no
+    // `sqlState`, nothing for the code-based rules above to match. Read those off
+    // the message chain, or an ordinary target outage is recorded as a permanent,
+    // unresumable failure (2026-09-04 production forensics).
+    normalizedMessages.includes('connection must be a postgressqlconnection') ||
+    normalizedMessages.includes('connection closed') ||
+    normalizedMessages.includes('connection terminated') ||
+    normalizedMessages.includes('idle-in-transaction') ||
     codes.some((candidate) => /^08[0-9a-z]{3}$/i.test(candidate)) ||
     codes.some((candidate) =>
       ['40001', '40P01', '57014', '57P01', '57P02', '57P03'].includes(candidate.toUpperCase()),
