@@ -3974,7 +3974,15 @@ Unable to create '…/repo/.git/refs/heads/agent-workflow/terminal-race.lock': F
 （等锁消失，超时删锁重试一次），因为它撞上的锁与该用例要验的东西无关。
 
 **未决的是产品侧问题**：`createWorktree` 被 abort 掐掉后，那个半路死掉的 `git worktree add`
-子进程可能把 `refs/heads/<branch>.lock` 留在仓里，而平台的回收路径目前**没有任何一步**会清它。
+子进程可能把 `refs/heads/<branch>.lock` 留在仓里，而平台的回收路径目前（RFC-356 落地前）
+**没有任何一步**会清它。
+
+**2026-09-04 补正**（与 RFC-356 owner 对账后）：RFC-356 T4 落地之后，生产路径上会**在重试那一跳**
+自愈——`reclaimStalePrepArtifacts` 的调用点在 `services/task.ts` 的 `retryRepoPreparation` 里，
+`reclaimWorktreePath` 带 `branchRef` 时会检查并清掉 stale lock（且只在 mtime 早于 60s 时删，
+免得抢活着的 git 进程持有的锁）。**没被覆盖的是「首次尝试内自愈」**：首次 `worktree add` 撞锁
+仍会失败一次。本条用例走的正是直接 `worktree add`、不经 `retryRepoPreparation` 的那条路，
+所以夹具侧的 `addWorktreeToleratingStaleRefLock` 要长期留着。
 后果与 issue #13 同形——下一次在同一分支名上 `worktree add` 会一直 `cannot lock ref`。
 这正落在 **RFC-356（残留工作树回收 + 进程树归属）** 的刀口上：那份 RFC 的回收阶梯
 （`reclaimWorktreePath`：remove → 退避 rm → prune）需要把 **stale ref lock** 也算进要回收的

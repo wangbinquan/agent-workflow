@@ -1,6 +1,6 @@
 # RFC-355 技术设计 —— Intent bounded context 归位
 
-- 状态：Draft（2026-09-04）
+- 状态：**Done**（2026-09-04 落地；§3 的「一份编排」按设计裁决收敛到「计算合一、事务机制留在 provider」，逐条见 `proposal.md §9.2`）
 - current-source pin：`c7c6fb81b`
 - 所有 `file:line` 锚点按该提交的 committed blob 取
 

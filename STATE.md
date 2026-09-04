@@ -58,8 +58,20 @@
 > 并发 session 的实测线索（被 abort 的 `worktree add` 留下 stale `refs/heads/*.lock`、仓内无人清，`docs/audit-backlog.md:3961`）已折进回收阶梯。
 > **批准前不改生产代码**；实现门留到三个 PR 全部落地后。
 
-> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-04）：[RFC-355 Intent bounded context 归位（RFC-294 W4-E4a）](design/RFC-355-intent-context-cutover/proposal.md)。**
-> 三件套已落档，**批准前不改生产代码**。核心不是搬文件：apply 编排在两个 provider 上是逐行并行的两份（含一个 44 行逐字节相同、只有形参名不同的纯判据），诊断词汇已开始分叉，另有 30 条 intent→resource-catalog 的跨 context 内部 import。
+> ✅ **已完成 RFC（Done，2026-09-04）：[RFC-355 Intent bounded context 归位（RFC-294 W4-E4a）](design/RFC-355-intent-context-cutover/proposal.md)。**
+> `services/intent/` **5136 行整目录删除**：18 个文件归位到 `modules/intent/{domain,application}`（1 个迁进 resource-catalog 的 composition，
+> 2 个兼容门面删除，装配正身收进 `modules/intent/composition/apply.ts`）。`routes/intentSessions.ts` 1088 行迁进
+> `modules/intent/inbound/`（836 行）并收成 decode-call-map——详情 handler 的 ~180 行编排收进 `application/sessionDetail.ts`，
+> 草稿生命周期与挂载建议两条判据进 domain 并各带用例（此前它们是路由里的内联表达式，**没有任何可直接断言的面**）。
+> 技能工件补偿归 resource-catalog（intent 只声明窄端口、bootstrap 注入），深取 **30 → 2** 条纯类型边。
+> apply 大事务里**能先算完再写的那一半**收成一份（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest /
+> handle 水位 / 重放三档），两个 provider 的 apply 文件 842/684 → **653/520** 行；**事务机制按设计裁决留在 provider**
+> （同步 `dbTxSync` 与 async `db.transaction` 形状不同，硬反转会让事务在 Promise 兑现前提交——RFC-353 实测过）。
+> public 面按「无 consumer 不公开」**26 → 5** 个符号；会话事件收成 `ports/intentSessionEvents.ts`，intent 的 application / inbound
+> 不再 import `@/ws/broadcaster`，并落下本仓**第一条**观测 intent 广播的测试。
+> **数字如实记账**：W4-E4a exact **176 → 41**、facade **18 → 0**、**全局 exception 净减 116**（5313 → 5197）。
+> **AC-3 / AC-4 / AC-8 未完全归零**，逐条理由写在 `proposal.md §9.2/§9.3/§9.4`（不是「已完成」的措辞放宽）。
+> **AC-9 取证**：`bec6c29f0` 的 CI run `33834461744`，run 级 `conclusion == success`；T4b 的后继取证见 `proposal.md §9.5`。
 
 > ✅ **已完成 RFC（Done，2026-09-04）：[RFC-353 Knowledge Evolution bounded context 归位（RFC-294 W4-E3）](design/RFC-353-knowledge-evolution-context-cutover/proposal.md)。**
 > `modules/knowledge-evolution` 从「源码里根本不存在」到拥有 domain / application / infrastructure / inbound / public / composition 六层：fusion 编排与双 provider 持久化整体归位，融合适配器**不再直写** `memories` / `skills` / `skill_versions`（各经 owner 的 tx-bound participant），技能回滚的成员关系判据从 resource-catalog 迁入 KE，`routes/fusions.ts` 收成 decode-call-map 并迁至 KE inbound，两个 legacy facade（`services/fusion.ts` / `services/skillVersion.ts`）删除。

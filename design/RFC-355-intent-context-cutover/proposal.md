@@ -1,6 +1,6 @@
 # RFC-355 —— Intent bounded context 归位（RFC-294 W4-E4a）
 
-- 状态：Draft（2026-09-04；待用户批准）
+- 状态：**Done**（2026-09-04 落地；验收见 §9）
 - 关联：RFC-294 §1.1 W4-E4a；前置 RFC-353（W4-E3，Done）、RFC-352（W4-E2，Done）、RFC-345（W4-C，Done）
 - owner 波次：W4-E4a
 - current-source pin：`c7c6fb81b`
@@ -162,3 +162,85 @@ SQLite 侧是 `const changeset = JSON.parse(claim.draft.changesetJson)`（prefli
 
 **最大的风险是合并两份 apply 时悄悄改了行为**。对策同 RFC-353：先落双 provider 等价 oracle（先红），
 再合并（转绿）；`design.md` 会把两份实现逐段对照成一张表，差异处逐条标注「取哪一侧、为什么」。
+
+
+## 9. 验收结果（2026-09-04）
+
+### 9.1 逐条对照
+
+| AC | 结论 | 取证 |
+| --- | --- | --- |
+| **AC-1** `services/intent/` 归零 | ✅ | 目录不存在；18 个文件里 16 个 `git mv` 平移进 `modules/intent/{domain,application}`、1 个（`legacyIntentApplyResourceDependencies.ts`）迁进 resource-catalog 的 composition、2 个兼容门面删除。`facades.json` 里提到 `services/intent` 的行 **18 → 0** |
+| **AC-2** consumer 逐条确认 | ✅ | 63 个文件、135 处引用脚本化改指；`postgresqlApplyChangeset.ts` 零 consumer 直接删；`applyChangeset.ts` 的装配正身收进 `modules/intent/composition/apply.ts`，10 个测试改指该处 |
+| **AC-3** apply 编排单一实现 | ⚠️ **部分达成**，见 §9.2 | 判据、串行锁、诊断词汇、收敛决策、**大事务内的全部计算**已各只有一份；**事务机制本身仍是两份**（设计裁决，见 §9.2） |
+| **AC-4** 30 条深取归零 | ⚠️ **28/30**，剩 2 条纯类型 | `modules/intent/**` 不再 import RC 的 `infrastructure/legacy/**`；剩 `postgresqlIntentApplyResourceParticipants` 的 `PostgresqlIntentApplyArtifact` 类型两处引用，见 §9.3 |
+| **AC-5** 诊断词汇统一、15 条错误码不变 | ✅ | `INTENT_APPLY_DIAGNOSTICS` 一处定义两侧共用；错误码集合由 `rfc355-intent-provider-parity` 断言 |
+| **AC-6** 路由 decode-call-map + wire 冻结 | ✅ | `routes/intentSessions.ts` 不存在；`modules/intent/inbound/intentSessionRoutes.ts` 1094 → 836 行，详情 handler 的 ~180 行编排收进 application、两条判据进 domain；`api-contract-coverage` / `route-error-code-coverage` / 契约注册表全绿 |
+| **AC-7** 行为 oracle 除 import 外未改 | ✅ | 16 个平移文件 git 认出的都是 rename，除 `dumpBuilder.ts` / `turnEngine.ts` 各一行相对 import 外内容一字未动（design §7 R2 要的字节级绊线——没有手抄，绊线的目的结构性地不存在） |
+| **AC-8** W4-E4a 归零 + 全局净变化如实记账 | ⚠️ **176 → 41**，未归零；全局 **净减 116** | 见 §9.4 |
+| **AC-9** exact-SHA hosted CI success | ✅ | `bec6c29f0` run `33834461744` **run 级 conclusion == success**（覆盖 T4/T6/T7/T8/T9）；T4b 的取证见 §9.5 |
+
+### 9.2 AC-3 的诚实结论：合并到「事务机制」为止
+
+`design.md §3` 当初的设想是 application 出计划、provider 开事务，两份编排合成一份。实际落地
+到「**大事务内的全部计算**收成一份、事务机制留在 provider」为止，理由在 design §3 已经写明并
+在落地时再次确认：`dbTxSync`（SQLite，同步回调）与 `db.transaction`（PostgreSQL，async）的形状
+不同，同步事务回调里 `await` 会让事务在 Promise 兑现前提交（RFC-353 实测过）。硬把事务反转进
+application 只会得到一个「两边都用不满」的抽象。
+
+因此现在的分法是：
+
+- **一份**：claim 判据（`domain/applyClaim`）、changeset 解码（`domain/storedChangeset`）、
+  资源计划（`application/intentResourcePlan`）、串行锁（`application/sessionApplyLock`）、
+  收敛决策与诊断词汇（`application/journalConvergence`）、重放三档（`application/applyReplay`）、
+  **大事务内的基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest /
+  handle 水位**（`application/applyCommitPlan`）；
+- **两份**：`applyInner` / `applyUnlocked` 的**步骤序列与读写机制**（各 ~200 行，主体是
+  `tx.select/update` 与 `await transaction.…` 的机制差异）。
+
+两个 provider 的 apply 文件因此从 842/684 行降到 653/520 行。**AC-3 原文写的「四处各只有一个源」
+（claim 判据 / settle 重验 / 串行锁 / 日志收敛）确实全部达成**；「编排只有一份实现」这一句在
+事务机制层面没有达成，且按设计裁决**不应**达成。变异测试以 `rfc349-dual-provider-predicate-drift`
+的 exact 清单承担（同名顶层函数实现不同即红），本刀把该清单从 18 降到 17。
+
+### 9.3 AC-4 的剩余 2 条
+
+`modules/intent/infrastructure/postgresql{IntentApplyOperations,IntentApplyArtifactLifecycle}.ts`
+仍 `import type { PostgresqlIntentApplyArtifact }`。这是**纯类型**边，两处都登记在
+`rfc355-intent-provider-parity.test.ts` 的 `DEEP_IMPORT_DEBT` 精确账本里（只能缩不能涨）。
+彻底消除要把该工件分类搬到某一侧独占：搬给 intent 则 RC 的适配器反向依赖 intent，搬给 RC 则
+intent 的 journal 契约由别的 context 定义——两条路都得连带动 RC 的 `public/`，超出本刀范围。
+
+### 9.4 AC-8：数字与逐条归因
+
+| 面 | 开工（`c7c6fb81b`） | 收工 | 变化 |
+| --- | ---: | ---: | ---: |
+| W4-E4a exact ids | 176 | **41** | **−135** |
+| 其中 legacy-inbound | 117 | 34 | −83 |
+| 其中 temporary-internal-debt | 30 | 5 | −25 |
+| 其中 legacy-outbound | 29 | 2 | −27 |
+| facade 行（提到 `services/intent`） | 18 | **0** | −18 |
+| **全局 exception 总数** | 5313 | **5197** | **−116** |
+| `services/intent/` 行数 | 5136 | **0** | −5136 |
+| `routes/intentSessions.ts` 行数 | 1088 | **0**（inbound 836 行） | −1088 |
+
+**没有归零，原因写清**：剩下的 34 条 `legacy-inbound` 全部是 bootstrap（`server.ts` /
+`cli/start.ts` / `cli/postgresqlDaemonApplication.ts` / `platform/background/maintenanceWorker.ts`）
+指向 `modules/intent/{composition,application}` 的装配边。**那正是 RFC-294 的目标形态**——装配
+只在根上做；它们仍被记成 `legacy-inbound`，只因为 bootstrap 文件本身还住在 `src/cli` /
+`src/server.ts`，把它们搬出 legacy 目录不在本刀的刀口内（且会影响所有 context）。
+剩 5 条 `temporary-internal-debt`：2 条是 §9.3 的纯类型边，3 条是 intent 的 composition 向 RC 的
+composition 要 provider 适配（RFC-353 立下的 bootstrap 装配口径，形态正确）。
+剩 2 条 `legacy-outbound`：`infrastructure/intentSessionWsProjector.ts` → `@/ws/broadcaster`
+的值 / 类型两记，是**专职投影文件**，与 task-execution / collaboration 的既有形态一致。
+
+**与 RFC-353 的对比**：那一刀因为把跨 context 的 provider 装配收到 bootstrap，全局 exception
+净增 17；本刀净**减** 116——差别在于本刀同时消灭了 `services/intent/` 整目录与 18 个 facade，
+减掉的边远多于装配边带来的增量。这个数字按 RFC-353 §9 立下的口径直接实测，没有做任何折算。
+
+### 9.5 落地链
+
+`68ea535e1`（先红 oracle 收成账本）→ `a6bf2193a`+`5cd217e9f`（T6 技能工件补偿归 RC）→
+`2f54a8be8`+`5cdc712a6`（T7 整目录归位）→ `9ef861059`+`948efb1d4`（T8 路由归位 + decode-call-map）
+→ `7caf1e91f`+`391dd7efb`（T7 修红：Actor 收窄归 auth）→ `c31844a30`+`bfe459560`（T9 public 收口）
+→ `db8dbf424`+`bec6c29f0`（T4 大事务计算合一）→ `b21d102c2`+`b8f02ad92`+`83be39dc0`（T4b 会话事件端口）。

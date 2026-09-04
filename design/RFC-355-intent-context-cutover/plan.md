@@ -1,6 +1,6 @@
 # RFC-355 实施计划 —— Intent bounded context 归位
 
-- 状态：Draft（待用户批准）
+- 状态：**Done**（2026-09-04 落地；逐条验收见 `proposal.md §9`）
 - current-source pin：`c7c6fb81b`
 - 开工分母：W4-E4a exact **176**（legacy-inbound 117 / temporary-internal-debt 30 / legacy-outbound 29）、
   facade **18**（17 legacy-implementation + 1 thin-facade）、`services/intent/` **5136 行**、
@@ -83,3 +83,32 @@ AC-9 exact-SHA hosted CI run 级 success。
 **比 RFC-353 大**：那一刀是 1218 + 226 行平移 + 两个 participant；这一刀是 5136 + 1088 行平移
 + 一份编排合并 + 一个 participant。按 RFC-353 的实际节奏（T1→T12 约一个工作日连续推进），
 本刀预计需要 1.5～2 倍的推进量，且 T4 那一步无法并行。
+
+
+## 8. 落地记录（2026-09-04）
+
+| 任务 | 结果 |
+| --- | --- |
+| T0 | 查清：`postgresqlIntentApplyArtifactOwners.ts` 是**同一能力实现在了边界的错误一侧**（属 RC 的聚合写点适配）。T6 把它迁进 RC 的 `infrastructure/aggregateAdapters/` |
+| T1 | 先红 oracle 一度被误推上 main（`ef013afb2`），当日以 `68ea535e1` 改成 `DEEP_IMPORT_DEBT` 精确账本形态（压力保留、main 不红）。教训已记 `proposal.md §9`，操作面教训记在提交说明里 |
+| T2/T3 | `intentResourcePlanOf` / claim 判据 / 串行锁提取完成 |
+| **T4** | **部分按设计裁决收敛**：大事务内的全部计算收成 `application/{applyCommitPlan,applyReplay}.ts`，事务机制按 design §3 留在 provider。两个 provider 的 apply 文件 842/684 → 653/520 行。详见 `proposal.md §9.2` |
+| T4b（计划外） | 会话事件收成 `ports/intentSessionEvents.ts`，intent 的 application / inbound 不再 import `@/ws/broadcaster`；本仓**第一条**观测 intent 广播的测试随之落地 |
+| T5 | 诊断词汇与收敛决策合一 |
+| T6 | 技能工件补偿归 RC（`SqliteSkillArtifactCompensation` / `PostgresqlSkillArtifactCompensation` 两个端口 + RC composition 装配出口），intent 深取 15 → 2（均为纯类型） |
+| T7 | `services/intent/` 18 个文件整目录归位并删除；`git mv` 平移，除两行相对 import 外内容一字未动 |
+| T8 | 路由迁进 `modules/intent/inbound/`（1094 → 836 行），详情 handler 收成 decode-call-map，两条判据进 domain 并各带用例 |
+| T9 | `public/operations.ts` 26 → 5 个符号（「无 consumer 不公开」）；零 consumer public symbol 账本 152 → 142 |
+| T10 | 账本重采（**走 HEAD 导出树**，工作树里有并发 session 的 RFC-356 在制品）+ 本节收口 |
+
+### 8.1 过程中撞到并已沉淀的坑
+
+- **搬文件进 `modules/` 会让存量写法第一次进架构守卫的扫描面**：`dispatcher.ts` 里一句既有的
+  `as unknown as Actor` 平移后被能力伪造守卫判红（CI 双 OS）。正解是让收窄回到 `Actor` 的 owner
+  侧（`auth/session.ts` 出 `actorOfDirectAuthority`），顺带把 `resolveActor` 里同形状的第二份
+  cast 收成一份。已记 `docs/dev-gotchas.md`——含「本仓一半架构守卫在 `tests/` 根下、不在
+  `tests/architecture/`」与按文件名批量跑守卫的命令。
+- **共享工作树上不能就地跑 `architecture:write`**：并发 session 的 RFC-356 在制品会被卷进共享
+  账本。就地跑与 HEAD 导出树跑的数字实测差 5199/6310/25943/1925 对 5197/6308/25934/1923。
+- **`rfc303-worktree-abort-cleanup` 的间歇红**：被 abort 掐掉的 `git worktree add` 留下
+  `refs/heads/*.lock`。已在用例侧鲁棒化，产品侧结论登记进 `docs/audit-backlog.md` 并交由 RFC-356。
