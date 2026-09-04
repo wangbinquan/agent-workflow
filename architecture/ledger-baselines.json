@@ -392,10 +392,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1923,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-355 T4b：intent 的 application / inbound 不再 import `@/ws/broadcaster`——会话事件收成窄端口（`ports/intentSessionEvents.ts`），唯一实现是 `infrastructure/intentSessionWsProjector.ts`，由三个 bootstrap 根注入。W4-E4a 的 legacy-outbound 4 → 2，代价是 bootstrap→module 的入账边 +3，净 +1；那 +3 正是 RFC-294 的目标形态（装配只在根上做），按 AC-8 如实记数、不写「不增」。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -430,10 +427,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6308,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-355 T4b：intent 的 application / inbound 不再 import `@/ws/broadcaster`——会话事件收成窄端口（`ports/intentSessionEvents.ts`），唯一实现是 `infrastructure/intentSessionWsProjector.ts`，由三个 bootstrap 根注入。W4-E4a 的 legacy-outbound 4 → 2，代价是 bootstrap→module 的入账边 +3，净 +1；那 +3 正是 RFC-294 的目标形态（装配只在根上做），按 AC-8 如实记数、不写「不增」。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -454,10 +448,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5197,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-355 T4b：intent 的 application / inbound 不再 import `@/ws/broadcaster`——会话事件收成窄端口（`ports/intentSessionEvents.ts`），唯一实现是 `infrastructure/intentSessionWsProjector.ts`，由三个 bootstrap 根注入。W4-E4a 的 legacy-outbound 4 → 2，代价是 bootstrap→module 的入账边 +3，净 +1；那 +3 正是 RFC-294 的目标形态（装配只在根上做），按 AC-8 如实记数、不写「不增」。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -492,10 +483,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25934,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-355 T4b：intent 的 application / inbound 不再 import `@/ws/broadcaster`——会话事件收成窄端口（`ports/intentSessionEvents.ts`），唯一实现是 `infrastructure/intentSessionWsProjector.ts`，由三个 bootstrap 根注入。W4-E4a 的 legacy-outbound 4 → 2，代价是 bootstrap→module 的入账边 +3，净 +1；那 +3 正是 RFC-294 的目标形态（装配只在根上做），按 AC-8 如实记数、不写「不增」。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -512,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b21d102c2a7198c594fd25952d91aac2e62e30a8",
-    "contentDigest": "sha256:6befea729665ec2a2bb5de014aabc4007db7131a8dbe996e567ee8e9812ee780",
+    "currentSnapshotSha": "b8f02ad929786ed0d3a164501162eff58447f2e4",
+    "contentDigest": "sha256:45ff5153894bb504d208b649a412522f5ac03e1326da871f4f34b7016f556e13",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
