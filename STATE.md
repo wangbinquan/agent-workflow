@@ -48,7 +48,11 @@
 > `createRuntimeSessionLeaseOperations(db)`。P0-4 根因一并修：PG 的 `assertPostgresqlTaskOwnerlessTx` 此前把
 > `!== 'released'` 一律拒绝，撤销后的收割 / 修复全部 409——改为只拒活着的 `claimed`（SQLite 侧这几条路不读 owner）。
 > `rfc359-w3-t4-boot-recovery.test.ts` 两引擎各绿 + 两入口顺序锁。
-> **下一步**：W3-T14（servePostgresqlDaemon 永不返回形态）/ T15（其余 PG 缺的 boot 步骤逐条接上）/ T16。
+> **W3-T15-A（端口化 boot 步骤接入 PG daemon）已修**：终态工作区回收策略注册（P1-12 的注册半边）、孤儿凭据租约清理、
+> 融合三步（provenance 修复 fail-closed / 决定恢复 / 资源播种）、定时载荷治愈、数字员工模板、demo 播种、webhook 投递恢复
+> 全部按 `cli/start.ts` 同序接进 `postgresqlDaemonApplication.ts`（runtime 注册表 boot 在 PG 路径由 provider 会话建立时
+> 跑过一次，不重复）。`rfc359-w3-t15-boot-step-parity.test.ts` 锁两个入口同组标记、同相对顺序。
+> **下一步**：T15-B（archive / workspace-gc / webhook prune / legacy pruned 四步的中立版）→ T14 / T16。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /
 > 同步事件参与者）在其余 dbTxSync 调用方迁完前保留，随 W4 逐个删除；`legacySqliteTaskQuestionDispatch.ts`
 > 已是中立实现但文件名未改（12 处测试按路径锁它，随 W4-collaboration 一并改名）。

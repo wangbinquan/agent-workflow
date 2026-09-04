@@ -65,6 +65,14 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
 - **T15** 逐条接上 PG 缺的 boot 步骤（补审已列全）：boot 恢复四步、skill catalog boot 五项、
   终态工作区回收策略注册、数字员工模板播种、demo 播种、融合三步、定时任务载荷治愈、
   终态维护恢复五项。**多数 PG 适配器已写好且已接进 persistence，只是没人调。**
+  - **T15-A ✅（2026-09-05）**：boot 恢复四步（T4）、skill catalog boot 五项（T7d）、终态工作区回收策略注册（P1-12
+    注册半边；`postgresqlSourceTerminationParticipant.ts` 手写 UPDATE 不查策略仍待修）、孤儿凭据租约清理、融合三步、
+    定时载荷治愈、数字员工模板、demo 播种、webhook 投递恢复、终态维护恢复五项之 delete（T7c）已按 `cli/start.ts`
+    同序接进 `postgresqlDaemonApplication.ts`；runtime 注册表 boot 在 PG 路径由 `composePostgresqlProviderSession`
+    跑过一次、不重复。`rfc359-w3-t15-boot-step-parity.test.ts` 锁两入口同组标记、同相对顺序。
+  - **T15-B（待做）**：终态维护恢复其余四步——`recoverInterruptedArchives`（`services/taskArchive.ts`）、
+    `recoverInterruptedWorkspaceGc` / `runClaimedWebhookWorkspacePrunes` / `reconcileLegacyPrunedWorkspaces`
+    （`platform/persistence/sqlite/systemWorkspaceGc.ts`）仍是 `DbClient` 形参 + 同步 store，须按 T7c 同法写中立版。
 - **T16** `cli/start.ts` 里 `provider === 'sqlite'` 的执行分支归零（**AC-2**）。
 - **T16b** schema 契约补**触发器**维度：今天投影只覆盖表/列/约束/索引，9 个 SQLite 触发器一个都没到 PG。
   首个实锤（2026-09-05，T2a 真库用例）：`rfc328_tasks_lineage_after_insert` / `rfc328_node_runs_lineage_after_insert` 在 SQLite 上回填

@@ -246,7 +246,16 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { createPostgresqlMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/application/overview'
-import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import {
+  ensureDigitalEmployeeAgentTemplates,
+  listDigitalEmployeeAgentTemplates,
+} from '@/services/digitalEmployeeAgentTemplates'
+import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
+import { composePostgresqlWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
+import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
+import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
+import { composePostgresqlDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
+import { composePostgresqlCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
@@ -433,6 +442,20 @@ export async function composePostgresqlDaemonApplication(
   // the selected schema. A live non-empty target is rejected by the restore
   // coordinator; bootstrap never drops or aliases the active schema.
   await core.systemOperations.applyPendingRestore()
+
+  // RFC-300 / RFC-359 W3-T15（P1-12）：终态工作区回收策略——integration 判 Webhook 归属，lifecycle 在终态
+  // CAS 里写认领，GC 物理删除；每次转移时读配置，开关热生效。此前 PG daemon 从未注册，
+  // `webhookTaskWorkspaceAutoCleanup` 在 PG 上完全无效、worktree 永不回收。
+  registerTerminalWorkspacePrunePolicy(
+    composePostgresqlWebhookTerminalWorkspacePrunePolicy({
+      db: input.db,
+      enabled: () => loadConfig(input.configPath).webhookTaskWorkspaceAutoCleanup,
+    }),
+  )
+  const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)
+  if (removedCredentialLeases > 0) {
+    log.info('orphaned git credential leases removed', { count: removedCredentialLeases })
+  }
 
   // RFC-223 PR-5 / RFC-359 W1-T7d（P0-11）：技能身份屏障是 DB 就绪后的第一件事——恢复遗留结构操作、
   // 清理崩溃残留的 skill_operation_locks / reserving 行、证明 DB/FS/FK 一致，然后才允许任何消费方
@@ -1032,6 +1055,16 @@ export async function composePostgresqlDaemonApplication(
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
   })
+  // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
+  // name-only 行之前完成。fail-closed：不包 try，修复失败即 daemon 不起（与 cli/start.ts 同）。
+  {
+    const { repairFusionProvenance } =
+      await import('@/modules/knowledge-evolution/public/operations')
+    const report = await repairFusionProvenance(fusionOperations.persistence)
+    if (Object.values(report).some((count) => count > 0)) {
+      log.info('fusion provenance repair complete', { ...report })
+    }
+  }
   const taskExecutionCatalogSources = composeTaskExecutionCatalogSources(
     // RFC-357：目录源不再经 `routes.tasks.listItems` 把行拉进内存，改用与 SQLite 共用的
     // 下推页查询；owner 身份由这里注入（模块自己去 compose 别的 context 是被判红的形状）。
@@ -1121,6 +1154,12 @@ export async function composePostgresqlDaemonApplication(
     taskTermination: composePostgresqlTaskSourceTermination(input.db),
   })
   await webhookTerminalControl.reconcileOnBoot()
+  const recoveredDeliveries = await recoverInterruptedDeliveries(
+    composePostgresqlWebhookDeliveryPersistence(input.db),
+  )
+  if (recoveredDeliveries > 0) {
+    log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
+  }
   // RFC-354 T4 — one-shot frame backfill for rows minted before frames existed
   // (marker-gated; a single maintenance_state read on every later boot).
   try {
@@ -1939,6 +1978,65 @@ export async function composePostgresqlDaemonApplication(
       error: err instanceof Error ? err.message : String(err),
     })
   }
+
+  // RFC-359 W3-T15：以下 boot 步骤与 cli/start.ts 同序、同一份实现；此前 PG daemon 一步都没跑
+  //（终态维护恢复里的 archive / workspace-gc / webhook prune / legacy pruned 四步仍是 SQLite 专属实现，归 T15-B）。
+  // 5b5. RFC-165 §9：把存量 path-mode 定时启动载荷治愈成当前形状——幂等 + best-effort。
+  try {
+    const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
+    const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
+    if (healed.converted > 0 || healed.disabled > 0) {
+      log.info('scheduled launch payloads healed', healed)
+    }
+  } catch (err) {
+    log.warn('scheduled payload heal on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // 5b5. RFC-170 T6：恢复崩溃留下的融合 DECISION 半状态（多事务决定）——best-effort。
+  try {
+    const { recoverFusionDecisions } =
+      await import('@/modules/knowledge-evolution/public/operations')
+    const r = await recoverFusionDecisions(fusionOperations.persistence)
+    if (r.rolledForward + r.rolledBack + r.rejectFailed > 0) {
+      log.info('fusion decision recovery on boot', { ...r })
+    }
+  } catch (err) {
+    log.warn('fusion decision recovery on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // 5e. RFC-101：内置 skill-fusion agent + workflow 幂等播种。
+  try {
+    const { seedFusionResources } = await import('@/modules/knowledge-evolution/public/operations')
+    await seedFusionResources(fusionOperations.persistence)
+  } catch (err) {
+    log.warn('fusion resource seed on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // RFC-310：业务模板是平台资源，不是 schema 数据；DB 准入后播种。
+  await ensureDigitalEmployeeAgentTemplates(digitalEmployeeAgentTemplates)
+
+  // 5e-bis. RFC-307：示例内容，每次安装只提供一次（marker 门控）；从不致命。
+  try {
+    const { seedDemoContent } = await import('@/services/demoSeed')
+    const result = await seedDemoContent({
+      resourceCatalog: composePostgresqlDemoResourceCatalogSeedParticipant(input.db),
+      codeCapability: composePostgresqlCodeCapabilityDemoSeedParticipant(input.db),
+    })
+    if (result.seeded) log.info('demo content seeded (delete it and it stays deleted)')
+  } catch (err) {
+    log.warn('demo content seed on boot failed', {
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // 5f（runtime 注册表 boot）不在这里：PG 路径由 cli/start.ts 的 composePostgresqlProviderSession
+  // 在 provider 会话建立时跑过一次（rfc359-w3-t15 锁住「恰好一次」）。
 
   // RFC-101 / RFC-359 T7d：HTTP 起来之前把版本快照与 live files 对齐（best-effort）。
   try {
