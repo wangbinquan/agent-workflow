@@ -426,8 +426,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6305,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6307,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-355 T4：apply 大事务里「能先算完再写」的那一半（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档）从两个 provider 各抄一份收成共用两份文件，新增的具名符号入清单；两个 provider 的 apply 文件同批各缩 116 / 77 行。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -447,8 +450,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5194,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5196,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-355 T4：apply 大事务里「能先算完再写」的那一半（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档）从两个 provider 各抄一份收成共用两份文件，新增的具名符号入清单；两个 provider 的 apply 文件同批各缩 116 / 77 行。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -482,12 +488,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25916,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25928,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-355 T4：apply 大事务里「能先算完再写」的那一半（基线重验 / bundle 内创建名 / plan↔op 同序 / receipt 行 / 谱系与新 manifest / handle 水位 / 重放三档）从两个 provider 各抄一份收成共用两份文件，新增的具名符号入清单；两个 provider 的 apply 文件同批各缩 116 / 77 行。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2cd5ecac52c944d3e5de0e3dcb8bf0002cfd736adcdfb86da1f19bee569f641d",
+    "sourceDigest": "sha256:b7266bdd4e042035909eae007c0ff06d4a8cd957d95e499c7ebb966fa98b972d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

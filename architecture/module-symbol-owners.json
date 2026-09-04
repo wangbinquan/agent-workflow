@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1938,
+    "backendFiles": 1940,
     "frontendFiles": 621,
     "legacyFiles": 610,
-    "moduleFiles": 1328,
-    "productionFiles": 2714,
+    "moduleFiles": 1330,
+    "productionFiles": 2716,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25916
+    "symbolsIncludingFileRoots": 25928
   },
   "entries": [
     {
@@ -68035,6 +68035,162 @@
       "currentContext": "intent",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#appliedEntryOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "appliedEntryOf",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#assertIntentApplyBaselineFresh",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertIntentApplyBaselineFresh",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#bundleCreatedNamesOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bundleCreatedNamesOf",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#IntentApplyClaimBaseline",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyClaimBaseline",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#IntentApplyCommitMutation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyCommitMutation",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#intentApplyCommitMutationOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "intentApplyCommitMutationOf",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#IntentApplySessionSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplySessionSnapshot",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#IntentBundleCreatedNames",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentBundleCreatedNames",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyCommitPlan.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyCommitPlan.ts#requireOpForPlan",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "requireOpForPlan",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/intent/application/applyReplay.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyReplay.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyReplay.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyReplay.ts#IntentApplyJournalOutcomeRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "IntentApplyJournalOutcomeRow",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/applyReplay.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/applyReplay.ts#intentApplyReplayOutcomeOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "intentApplyReplayOutcomeOf",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/intent/application/dispatcher.ts",
       "id": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
       "removeAfterWave": null,
@@ -75024,18 +75180,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlIntentApplyResourceBinding",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "intent",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts",
-      "id": "owner:packages/backend/src/modules/intent/infrastructure/postgresqlIntentApplyOperations.ts#replayIntentApplyOutcome",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "replayIntentApplyOutcome",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -311691,5 +311835,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2cd5ecac52c944d3e5de0e3dcb8bf0002cfd736adcdfb86da1f19bee569f641d"
+  "sourceDigest": "sha256:b7266bdd4e042035909eae007c0ff06d4a8cd957d95e499c7ebb966fa98b972d"
 }

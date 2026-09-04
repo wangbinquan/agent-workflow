@@ -44,6 +44,14 @@ import {
 } from '../domain/applyClaim'
 import { createSessionApplyLock } from '../application/sessionApplyLock'
 import {
+  appliedEntryOf,
+  assertIntentApplyBaselineFresh,
+  bundleCreatedNamesOf,
+  intentApplyCommitMutationOf,
+  requireOpForPlan,
+} from '../application/applyCommitPlan'
+import { intentApplyReplayOutcomeOf } from '../application/applyReplay'
+import {
   intentApplyJournal,
   intentDraftResolutions,
   intentDrafts,
@@ -60,12 +68,6 @@ import type {
 } from '@/modules/resource-catalog/public/participants'
 import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
 import {
-  applyCommitMounts,
-  createHandleAllocator,
-  handleWatermarkOf,
-  lineageRootOf,
-  mergeHandleWatermarks,
-  parseHandleWatermark,
   type IntentContextManifest,
   type IntentManifestEntry,
 } from '@/modules/intent/application/manifest'
@@ -279,30 +281,7 @@ async function applyInner(
     return { kind: 'claimed' as const, session, draft: committable }
   })
 
-  if (claim.kind === 'replay') {
-    const row = claim.existing
-    if (row.state === 'committed' && row.receiptJson !== null) {
-      return JSON.parse(row.receiptJson) as IntentApplyReceipt
-    }
-    if (row.state === 'failed') {
-      throw new ConflictError(
-        'intent-apply-failed-replay',
-        row.error ?? 'this apply attempt failed',
-        {
-          journalId: row.id,
-        },
-      )
-    }
-    // prepared/applying without a live lock holder = a crashed attempt that
-    // boot convergence has not yet swept. Refuse rather than guess.
-    throw new ConflictError(
-      'intent-apply-unsettled',
-      'a prior apply attempt is unsettled; retry later',
-      {
-        journalId: row.id,
-      },
-    )
-  }
+  if (claim.kind === 'replay') return intentApplyReplayOutcomeOf(claim.existing)
 
   // P2-1: the whole claim→settle window is registered so the converger can
   // never mistake this process's own live apply for a crashed one.
@@ -432,61 +411,27 @@ async function applyInner(
         throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
       }
 
-      // Codex impl-gate P1-1: claim-time checks alone leave the prestage
-      // window (npm install / skill staging) open to rebase/mount/new drafts.
-      // Re-assert the session identity INSIDE the commit transaction so a
-      // moved epoch or superseded draft can never land, and the epoch bump
-      // below builds on the value we actually verified.
-      const sessionNow = tx
+      const sessionRow = tx
         .select()
         .from(intentSessions)
         .where(eq(intentSessions.id, input.sessionId))
         .get()
-      if (
-        sessionNow === undefined ||
-        sessionNow.contextRevision !== claim.session.contextRevision ||
-        sessionNow.currentDraftId !== claim.draft.id ||
-        sessionNow.inFlightTurnId !== null
-      ) {
-        throw new ConflictError(
-          'intent-baseline-stale',
-          'the session changed while the apply was staging; rebase and regenerate',
-        )
+      const baseline = {
+        claimSession: claim.session,
+        claimDraftId: claim.draft.id,
+        sessionNow: sessionRow,
       }
-
-      // Names this very bundle is about to create, by type. These are read from
-      // the resolved plans so finalName overlays have already been applied.
-      const bundleCreatedNames = { workflow: new Set<string>(), workgroup: new Set<string>() }
-      for (const plan of plans) {
-        if (plan.action !== 'create') continue
-        const bucket =
-          plan.kind === 'workflow'
-            ? bundleCreatedNames.workflow
-            : plan.kind === 'workgroup'
-              ? bundleCreatedNames.workgroup
-              : null
-        if (bucket === null) continue
-        const name = (plan.payload as { readonly name?: unknown }).name
-        if (typeof name === 'string' && name.length > 0) bucket.add(name)
-      }
+      assertIntentApplyBaselineFresh(baseline)
+      const sessionNow = baseline.sessionNow
+      const bundleCreatedNames = bundleCreatedNamesOf(plans)
 
       const resourceParticipant = resourceSession.participantInTransaction(tx, {
         bundleCreatedNames,
       })
       for (const [index, plan] of plans.entries()) {
-        const op = bundle.ops[index]
-        if (op === undefined || op.opId !== plan.operationId) {
-          throw new Error('intent-resource-plan-order-mismatch')
-        }
+        const op = requireOpForPlan(bundle.ops[index], plan)
         resourceParticipant.authorizeAndCommit(deps.authority, plan)
-        applied.push({
-          opId: op.opId,
-          resourceType: op.resourceType,
-          resourceId: op.resourceId,
-          action: op.action,
-          fromCopy: op.fromCopy,
-          name: (op.payload as { readonly name: string }).name,
-        })
+        applied.push(appliedEntryOf(op))
         tx.insert(intentProvenance)
           .values({
             resourceType: op.resourceType,
@@ -500,76 +445,19 @@ async function applyInner(
 
       deps.faults?.inTxAfterOps?.()
 
-      // RFC-291 面 B — copy bookkeeping, read off the PRE-COMMIT manifest.
-      //
-      // `sessionNow` is the row this transaction already CAS-verified above, so
-      // its manifest is the authoritative baseline for the migration below.
-      //
-      // The lineage recorded is the ROOT, not the immediate source: copying C1
-      // (itself a copy of O) records O. Recording C1 would break "keep only the
-      // newest copy" — O→C1→C2 then O→C3 would retire C1 but not C2, leaving
-      // two roots (design-gate P1-c).
-      const preCommitManifest = JSON.parse(sessionNow.contextManifestJson) as IntentContextManifest
-      const preCommitByHandle = new Map(preCommitManifest.map((entry) => [entry.handle, entry]))
-      const copySourceHandles: string[] = []
-      const lineageOriginByResourceId = new Map<string, string>()
-      for (const op of bundle.ops) {
-        const sourceHandle = op.copiedFromHandle
-        if (sourceHandle === undefined) continue
-        copySourceHandles.push(sourceHandle)
-        const sourceEntry = preCommitByHandle.get(sourceHandle)
-        // Unresolvable handle degrades to "mount the copy, don't chase lineage"
-        // rather than failing the commit: the entry is only missing if the
-        // session moved under us, which the CAS above already ruled out.
-        if (sourceEntry !== undefined) {
-          lineageOriginByResourceId.set(op.resourceId, lineageRootOf(sourceEntry))
-        }
-      }
-
-      const commitSeq = claim.session.commitSeq + 1
-      // RFC-291 面 A/B — mount what this commit created, IN THIS TRANSACTION.
-      //
-      // Doing it afterwards would leave a "resources landed, mounts missing"
-      // window, which is exactly the defect this RFC exists to remove: nothing
-      // repairs it later, because convergeIntentApplyJournal only rolls the
-      // filesystem side forward for `committed` rows (see the bottom of this
-      // file) — it never replays the big transaction.
-      //
-      // `action` here is the NORMALIZED action (resolveChangeset), so a copy
-      // already counts as a create; no second predicate needed.
-      const nextManifest = applyCommitMounts(preCommitManifest, {
-        // Read off the resolved ops, not the receipt: the receipt's resourceType
-        // is the wire-level string while these carry the canonical union type.
-        created: bundle.ops
-          .filter((op) => op.action === 'create')
-          .map((op) => {
-            const origin = lineageOriginByResourceId.get(op.resourceId)
-            return {
-              resourceType: op.resourceType,
-              resourceId: op.resourceId,
-              ...(origin === undefined ? {} : { copiedFromResourceId: origin }),
-            }
-          }),
-        unmountHandles: copySourceHandles,
+      const mutation = intentApplyCommitMutationOf({
+        claimSession: claim.session,
+        preCommitManifestJson: sessionNow.contextManifestJson,
+        ops: bundle.ops,
       })
-      // Close the context epoch (design-gate P1-5): the applied draft archives,
-      // the current pointer clears, and stale fences force a fresh dump before
-      // the next generation can target the new baselines. The mount migration
-      // rides the SAME epoch bump — it is part of this commit, not a new one.
+      const commitSeq = mutation.commitSeq
       tx.update(intentSessions)
         .set({
-          commitSeq,
-          contextRevision: claim.session.contextRevision + 1,
+          commitSeq: mutation.commitSeq,
+          contextRevision: mutation.contextRevision,
           currentDraftId: null,
-          contextManifestJson: JSON.stringify(nextManifest),
-          // 面 F — creates mint handles here too, so the watermark must move
-          // with them or a later epoch could hand the ordinal to another row.
-          handleWatermarkJson: JSON.stringify(
-            mergeHandleWatermarks(
-              parseHandleWatermark(claim.session.handleWatermarkJson),
-              handleWatermarkOf(createHandleAllocator(nextManifest)),
-            ),
-          ),
+          contextManifestJson: mutation.contextManifestJson,
+          handleWatermarkJson: mutation.handleWatermarkJson,
           updatedAt: Date.now(),
         })
         .where(eq(intentSessions.id, input.sessionId))

@@ -3,6 +3,14 @@ import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
 import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
 import {
+  appliedEntryOf,
+  assertIntentApplyBaselineFresh,
+  bundleCreatedNamesOf,
+  intentApplyCommitMutationOf,
+  requireOpForPlan,
+} from '../application/applyCommitPlan'
+import { intentApplyReplayOutcomeOf } from '../application/applyReplay'
+import {
   assertIntentDraftUnresolved,
   assertIntentSessionClaimable,
   assertIntentSessionReady,
@@ -36,16 +44,7 @@ import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger, type Logger } from '@/util/log'
 import type { ApplyIntentFaults } from './sqliteIntentApplyOperations'
 import type { IntentJournalArtifact } from '@/modules/intent/domain/journalArtifacts'
-import {
-  applyCommitMounts,
-  createHandleAllocator,
-  handleWatermarkOf,
-  lineageRootOf,
-  mergeHandleWatermarks,
-  parseHandleWatermark,
-  type IntentContextManifest,
-  type IntentManifestEntry,
-} from '@/modules/intent/application/manifest'
+import { type IntentManifestEntry } from '@/modules/intent/application/manifest'
 import { resolveIntentBundle } from '@/modules/intent/application/resolveChangeset'
 import { sessionManifest } from '@/modules/intent/application/session'
 
@@ -109,24 +108,6 @@ function decodeRecoveryArtifacts(json: string): IntentApplyRecoveryArtifact[] {
     }
     return value as IntentApplyRecoveryArtifact
   })
-}
-
-function replayIntentApplyOutcome(row: typeof intentApplyJournal.$inferSelect): IntentApplyReceipt {
-  if (row.state === 'committed' && row.receiptJson !== null) {
-    return JSON.parse(row.receiptJson) as IntentApplyReceipt
-  }
-  if (row.state === 'failed') {
-    throw new ConflictError(
-      'intent-apply-failed-replay',
-      row.error ?? 'this apply attempt failed',
-      { journalId: row.id },
-    )
-  }
-  throw new ConflictError(
-    'intent-apply-unsettled',
-    'a prior apply attempt is unsettled; retry later',
-    { journalId: row.id },
-  )
 }
 
 export function createPostgresqlIntentApplyOperations(
@@ -197,7 +178,7 @@ export function createPostgresqlIntentApplyOperations(
       return { kind: 'claimed' as const, session, draft: committable }
     })
 
-    if (claim.kind === 'replay') return replayIntentApplyOutcome(claim.existing)
+    if (claim.kind === 'replay') return intentApplyReplayOutcomeOf(claim.existing)
     active.add(journalId)
     const artifacts: IntentApplyRecoveryArtifact[] = []
     const recordArtifact = async (artifact: PostgresqlIntentApplyArtifact): Promise<void> => {
@@ -305,57 +286,27 @@ export function createPostgresqlIntentApplyOperations(
         if (cas === undefined) {
           throw new ConflictError('intent-apply-unsettled', 'journal claim lost')
         }
-        const sessionNow = await transaction
+        const sessionRow = await transaction
           .select()
           .from(intentSessions)
           .where(eq(intentSessions.id, input.sessionId))
           .get()
-        if (
-          sessionNow === undefined ||
-          sessionNow.contextRevision !== claim.session.contextRevision ||
-          sessionNow.currentDraftId !== claim.draft.id ||
-          sessionNow.inFlightTurnId !== null
-        ) {
-          throw new ConflictError(
-            'intent-baseline-stale',
-            'the session changed while the apply was staging; rebase and regenerate',
-          )
+        const baseline = {
+          claimSession: claim.session,
+          claimDraftId: claim.draft.id,
+          sessionNow: sessionRow,
         }
-
-        const bundleCreatedNames = {
-          workflow: new Set<string>(),
-          workgroup: new Set<string>(),
-        }
-        for (const plan of plans) {
-          if (plan.action !== 'create') continue
-          const bucket =
-            plan.kind === 'workflow'
-              ? bundleCreatedNames.workflow
-              : plan.kind === 'workgroup'
-                ? bundleCreatedNames.workgroup
-                : null
-          if (bucket === null) continue
-          const name = (plan.payload as { readonly name?: unknown }).name
-          if (typeof name === 'string' && name.length > 0) bucket.add(name)
-        }
+        assertIntentApplyBaselineFresh(baseline)
+        const sessionNow = baseline.sessionNow
+        const bundleCreatedNames = bundleCreatedNamesOf(plans)
         const attempt = resourceSession.createTransactionAttempt(transaction, {
           bundleCreatedNames,
         })
         const applied: IntentApplyReceipt['applied'] = []
         for (const [index, plan] of plans.entries()) {
-          const operation = bundle.ops[index]
-          if (operation === undefined || operation.opId !== plan.operationId) {
-            throw new Error('intent-resource-plan-order-mismatch')
-          }
+          const operation = requireOpForPlan(bundle.ops[index], plan)
           await attempt.participant.authorizeAndCommit(authority, plan)
-          applied.push({
-            opId: operation.opId,
-            resourceType: operation.resourceType,
-            resourceId: operation.resourceId,
-            action: operation.action,
-            fromCopy: operation.fromCopy,
-            name: (operation.payload as { readonly name: string }).name,
-          })
+          applied.push(appliedEntryOf(operation))
           await transaction.insert(intentProvenance).values({
             resourceType: operation.resourceType,
             resourceId: operation.resourceId,
@@ -366,50 +317,20 @@ export function createPostgresqlIntentApplyOperations(
         }
         request.faults?.inTxAfterOps?.()
 
-        const preCommitManifest = JSON.parse(
-          sessionNow.contextManifestJson,
-        ) as IntentContextManifest
-        const preCommitByHandle = new Map(
-          preCommitManifest.map((entry) => [entry.handle, entry] as const),
-        )
-        const copySourceHandles: string[] = []
-        const lineageOriginByResourceId = new Map<string, string>()
-        for (const operation of bundle.ops) {
-          const sourceHandle = operation.copiedFromHandle
-          if (sourceHandle === undefined) continue
-          copySourceHandles.push(sourceHandle)
-          const sourceEntry = preCommitByHandle.get(sourceHandle)
-          if (sourceEntry !== undefined) {
-            lineageOriginByResourceId.set(operation.resourceId, lineageRootOf(sourceEntry))
-          }
-        }
-        const commitSeq = claim.session.commitSeq + 1
-        const nextManifest = applyCommitMounts(preCommitManifest, {
-          created: bundle.ops
-            .filter((operation) => operation.action === 'create')
-            .map((operation) => {
-              const origin = lineageOriginByResourceId.get(operation.resourceId)
-              return {
-                resourceType: operation.resourceType,
-                resourceId: operation.resourceId,
-                ...(origin === undefined ? {} : { copiedFromResourceId: origin }),
-              }
-            }),
-          unmountHandles: copySourceHandles,
+        const mutation = intentApplyCommitMutationOf({
+          claimSession: claim.session,
+          preCommitManifestJson: sessionNow.contextManifestJson,
+          ops: bundle.ops,
         })
+        const commitSeq = mutation.commitSeq
         await transaction
           .update(intentSessions)
           .set({
-            commitSeq,
-            contextRevision: claim.session.contextRevision + 1,
+            commitSeq: mutation.commitSeq,
+            contextRevision: mutation.contextRevision,
             currentDraftId: null,
-            contextManifestJson: JSON.stringify(nextManifest),
-            handleWatermarkJson: JSON.stringify(
-              mergeHandleWatermarks(
-                parseHandleWatermark(claim.session.handleWatermarkJson),
-                handleWatermarkOf(createHandleAllocator(nextManifest)),
-              ),
-            ),
+            contextManifestJson: mutation.contextManifestJson,
+            handleWatermarkJson: mutation.handleWatermarkJson,
             updatedAt: now(),
           })
           .where(eq(intentSessions.id, input.sessionId))
