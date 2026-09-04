@@ -163641,20 +163641,14 @@
           "symbol": "startTaskImpl"
         },
         {
-          "file": "packages/backend/src/modules/task-execution/composition/agentActionExecution.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/agentActionExecution.ts#$file",
+          "file": "packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#$file",
           "sourceToken": "catalogVisibility: 'internal'",
           "symbol": "$file"
         },
         {
           "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
-          "sourceToken": "catalogVisibility: 'internal'",
-          "symbol": "$file"
-        },
-        {
-          "file": "packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts#$file",
           "sourceToken": "catalogVisibility: 'internal'",
           "symbol": "$file"
         },
@@ -163688,20 +163682,14 @@
       "rollback": "Stop passing the internal projection; preserve persisted membership on existing rows.",
       "writers": [
         {
-          "file": "packages/backend/src/modules/task-execution/composition/agentActionExecution.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/agentActionExecution.ts#$file",
+          "file": "packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#$file",
           "sourceToken": "catalogVisibility: 'internal'",
           "symbol": "$file"
         },
         {
           "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
-          "sourceToken": "catalogVisibility: 'internal'",
-          "symbol": "$file"
-        },
-        {
-          "file": "packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/scriptActionExecution.ts#$file",
           "sourceToken": "catalogVisibility: 'internal'",
           "symbol": "$file"
         },
@@ -163802,7 +163790,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082",
+  "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e",
   "targetContexts": [
     "collaboration",
     "development-automation",

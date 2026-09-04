@@ -447,9 +447,13 @@
       "introducedByRFC": "RFC-359 W1-T7c（2026-09-04）",
       "removeAfterWave": "RFC-359 W3-T14/T16（统一 boot 序列，daemon 入口归 composition）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [],
+      "canonicalImportEdgeIds": [
+        "import:13b339c0a916b051f997"
+      ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "canonicalToOwnerEntryIds": [],
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes"
+      ],
       "canonicalFacadeIds": []
     },
     {
@@ -6066,10 +6070,20 @@
       "introducedByRFC": "RFC-359 W1-T7c（2026-09-04）",
       "removeAfterWave": "RFC-359 W4（legacy 任务删除服务并入 task-execution，成对删除）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [],
+      "canonicalImportEdgeIds": [
+        "import:02dc177a81a7bc54553b",
+        "import:3cfa0568a7d13c577db5",
+        "import:42cbd3cad275e56ef388"
+      ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
-      "canonicalToOwnerEntryIds": [],
-      "canonicalFacadeIds": []
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteCleanupPlanV2",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteRecoveryResult",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteWorktreeTarget"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskDelete.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -6083,10 +6097,18 @@
       "introducedByRFC": "RFC-359 W1-T7c（2026-09-04）",
       "removeAfterWave": "RFC-359 W4（legacy 任务删除服务并入 task-execution，成对删除）",
       "findingId": "G-01",
-      "canonicalImportEdgeIds": [],
+      "canonicalImportEdgeIds": [
+        "import:8712a4c1021fb5749a0d",
+        "import:949aa3b39b251a52904a"
+      ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
-      "canonicalToOwnerEntryIds": [],
-      "canonicalFacadeIds": []
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#cleanupDeletedTaskResources",
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#recoverInterruptedTaskDeletes"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/taskDelete.ts"
+      ]
     },
     {
       "rule": "R1-inbound-module-internals",
@@ -8794,15 +8816,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082",
+    "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "370aba4b282028bd82dfa71713b6d4d6b33cacbe",
-    "contentDigest": "sha256:c2e0880b581f1361e63ae4225910d4e8d4d385565b50bb3ff88aaef301638314",
+    "currentSnapshotSha": "3c1eca179288e213847180ad20b7458972a8a0a8",
+    "contentDigest": "sha256:909b04ae7636d7cbd574cb1a17d91b578e7905ecf1a7a38c33ad031471661d47",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

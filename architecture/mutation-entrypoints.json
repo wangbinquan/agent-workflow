@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1952,
+    "entries": 1957,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -28394,6 +28394,124 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createPostgresqlActionExecutionEnvironment",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createPostgresqlActionExecutionEnvironment",
+      "symbol": "createPostgresqlActionExecutionEnvironment",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createSqliteActionExecutionEnvironment",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts#createSqliteActionExecutionEnvironment",
+      "symbol": "createSqliteActionExecutionEnvironment",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#cancel",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#cancel",
+      "symbol": "cancel",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#createAgentActionExecutionRunner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#createAgentActionExecutionRunner",
+      "symbol": "createAgentActionExecutionRunner",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#createScriptActionExecutionRunner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#createScriptActionExecutionRunner",
+      "symbol": "createScriptActionExecutionRunner",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -30356,7 +30474,7 @@
         "authority": "effect",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts",
@@ -30366,7 +30484,6 @@
         "audit",
         "authorization",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts#RuntimeEntry",
@@ -32561,10 +32678,10 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand.ts",
@@ -32572,10 +32689,8 @@
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand.ts#createSqliteTaskArchiveMaintenanceCommand",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskArchiveMaintenanceCommand.ts#createSqliteTaskArchiveMaintenanceCommand",
@@ -35447,7 +35562,7 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
+        "event": true,
         "fenceOrOcc": false,
         "transaction": true
       },
@@ -35458,7 +35573,6 @@
         "audit",
         "authority",
         "authorization",
-        "event",
         "fenceOrOcc"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#createSqliteDatabaseSession",
@@ -46528,7 +46642,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b9a0cf7cf5cd2ca836d7859f8ef4e61edc1ea2506072d511ddfd29027e3aa082",
+  "sourceDigest": "sha256:c3add136b81d7da2dfc5977fadc7556ac5c1e01bcafe612238bd2d847af7846e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -51132,8 +51246,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskArchive.ts",
-        "id": "task-authority:packages/backend/src/services/taskArchive.ts#702:tasks",
-        "line": 702,
+        "id": "task-authority:packages/backend/src/services/taskArchive.ts#701:tasks",
+        "line": 701,
         "ownerEntryId": "owner:packages/backend/src/services/taskArchive.ts#deleteTreeRows",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
