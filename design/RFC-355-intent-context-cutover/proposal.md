@@ -1,0 +1,150 @@
+# RFC-355 —— Intent bounded context 归位（RFC-294 W4-E4a）
+
+- 状态：Draft（2026-09-04；待用户批准）
+- 关联：RFC-294 §1.1 W4-E4a；前置 RFC-353（W4-E3，Done）、RFC-352（W4-E2，Done）、RFC-345（W4-C，Done）
+- owner 波次：W4-E4a
+- current-source pin：`c7c6fb81b`
+
+## 1. 背景
+
+`modules/intent/` 已经存在（33 文件 / 9730 行，domain·application·infrastructure·composition·public 五层），
+但**它并不是 intent 的全部**。摸底（`c7c6fb81b` 的 committed census）给出的分母：
+
+| 面 | 数字 | 说明 |
+| --- | ---: | --- |
+| W4-E4a exact 边 | 176 | `legacy-inbound` 117 / `temporary-internal-debt` 30 / `legacy-outbound` 29 |
+| W4-E4a facade | 18 | **17 个 `legacy-implementation` + 1 个 `thin-facade`**，目标层全部是 `intent/application` |
+| 搁浅在 `services/intent/` 的实现 | 5136 行 | 最大三个：`dumpBuilder.ts` 928、`resolveChangeset.ts` 822、`turnEngine.ts` 726 |
+| `routes/intentSessions.ts` | 1088 行 | 全仓最大的路由文件之一 |
+
+exact 边的 owner 高度集中：176 条里 **153 条 owner=intent**，是目前所有未开工 W4-E 切片里
+自足性最好的一块（对照：W4-E1 844 条但 owner 是 task-execution、W4-B 186 条 owner 是 integration）。
+
+## 2. 立项前查明的三处真问题
+
+不是「把文件搬个位置」。摸底实读源码后，有三件事必须在这一刀里处理，否则搬完就是给债换门牌：
+
+### 2.1 apply 编排在两个 provider 上是**逐行并行的两份**
+
+`intent-apply`（claim → 解析 changeset → 资源计划 → 落工件 → settle → 收敛日志）在仓里有两份：
+
+| | SQLite | PostgreSQL |
+| --- | --- | --- |
+| 主文件 | `sqliteIntentApplyOperations.ts` 842 行 | `postgresqlIntentApplyOperations.ts` 684 行 |
+| 工件生命周期 | `sqliteIntentApplyArtifactLifecycle.ts` 136 行 | `postgresqlIntentApplyArtifactLifecycle.ts` 435 行 |
+| 工件归属 | **无** | `postgresqlIntentApplyArtifactOwners.ts`（独有） |
+| 日志收敛 | `convergeIntentApplyJournal`（同文件内函数） | `createPostgresqlIntentApplyJournalConvergence`（独立工厂） |
+| session 串行锁 | `withSessionApplyLock`（15 行） | `withSessionLock`（**同一算法，另写一遍**） |
+
+两侧的 claim 段逐条对应——同样先查 session 归属、再查 `clientMutationId` 重放、再判 `active` /
+`inFlightTurnId` / `draftHash` / `contextRevision`——但**写在两个文件里**。任何一次业务变更都要改两遍，
+而「改两遍」正是 RFC-352 与 RFC-353 各自开局撞到的那个漂移源。
+
+### 2.2 诊断词汇**已经开始分叉**（用户可见契约尚未漂）
+
+两个 apply 实现的字符串标识做集合对比：
+
+- **共有 15 条**用户可见错误码（`intent-session-not-found` / `intent-draft-hash-mismatch` /
+  `intent-apply-unsettled` / `intent-baseline-stale` … ）——**用户可见面目前一致**；
+- **只在 SQLite**：`intent-left-retryable`、`intent-converge-left-retryable`；
+- **只在 PostgreSQL**：`intent-resource-abort-failed`、`intent-resource-roll-forward-recovery-failed`。
+
+这四条**是 `log.warn` 的标签，不是抛出的错误码**（立项摸底时我一度把它们当成用户可见错误码，
+实读源码后更正）。但它们说明一件事：**两份拷贝已经在分头演进**——运维在两种部署上 grep 同一类失败，
+拿到的是不同的词。今天分叉的是日志，明天就是错误码。
+
+另有一处结构差异：`intent-changeset-invalid` 在 PostgreSQL 侧由 apply **内联 parse 后抛出**，
+SQLite 侧则经 `services/intent/resolveChangeset` 门面处理——同一个判断，两条取用路径。
+
+### 2.3 intent 深取 resource-catalog 的技能文件机制（30 条）
+
+30 条 `temporary-internal-debt` **全部**是 `modules/intent/infrastructure/*` →
+`modules/resource-catalog/infrastructure/*`，取的是 RC 的 legacy 技能机制：
+`skillFsPublish`、`skillIdentityPaths`、`skillHash`、`skillVersion`、`skillBootVerify`、`skill.ts`、
+`skillOperations`，以及 RC 的 `aggregateAdapters/*IntentApplyResource*`。
+
+这是 RFC-317 R2 明令禁止的跨 context 内部 import，也**正是 RFC-353 刚解决过的同一类问题**——
+那一刀给 resource-catalog 落了 `SkillVersionCommitParticipantInTx` 与 `composition/skillVersionCommit.ts`
+装配出口，并确立了「跨 context 的 provider 装配一律在 bootstrap / system-operation 根上完成」。
+本刀直接沿用同一形态，不重新发明。
+
+## 3. 目标
+
+1. `services/intent/` 归零：18 个文件（5136 行）迁入 `modules/intent/{domain,application}`，facade 全部删除。
+2. apply 编排收成**一份 provider-neutral application**，两个 provider 只剩「怎么读、怎么写、怎么开事务」的薄 adapter；
+   session 串行锁、claim 判据、settle 重验、日志收敛各只有一处实现。
+3. 30 条 `intent → resource-catalog/infrastructure` 深取归零：改经 RC offered participant（形态复用 RFC-353）。
+4. `routes/intentSessions.ts` 迁入 `modules/intent/inbound/` 并收成 decode-call-map。
+5. 诊断词汇统一：两个 provider 对同一失败类使用同一组标签（当前分叉的四条各归其位或收成一条）。
+
+## 4. 非目标
+
+- **不带任何用户可见的新功能**（用户 2026-09-04 裁决 D4）。这一刀是纯架构刀，wire 面逐字冻结。
+- 不动 intent 的产品语义：turn 引擎的生成行为、dump 的内容与截断规则、working-set 的 mount 语义、
+  changeset 的解析与冲突规则，全部保持现状，由 §7 的行为 oracle 钉死。
+- 不做 RFC-294 的「bootstrap 唯一装配」（各根逐个注入收成一个装配入口）——那是 W5 / W9 的活，
+  本刀反而会像 RFC-353 一样**增加**几条 bootstrap→module 的入账边，如实记在 §7 的验收里。
+- 安全加固类一律不承接（用户 2026-08-26 硬规则）：不做事务内二次重验、不加并发竞态终检、
+  不写存在性 oracle。§2.1 提到的 session 串行锁只做「两份合成一份」的**去重**，不改其并发语义。
+
+## 5. 用户故事
+
+本刀无用户可见变更。受益方是维护者：
+
+- **改一次 intent 的 apply 行为，只需要改一处**——今天要在 SQLite 与 PostgreSQL 两个文件里各改一遍，
+  漏一边就是「同一操作在两种部署上行为不同」，而这类 bug 只有切换 provider 才会暴露。
+- **在两种部署上排查同一类失败，grep 到的是同一组词**——今天不是。
+- **读 intent 的实现不用先分辨「这段在 services/ 还是 modules/」**——今天 5136 行在前者、9730 行在后者，
+  且两边互相 import。
+
+## 6. 能力影响清单
+
+本刀**不关闭、不收缩任何既有能力**（RFC workflow 第 7 条的门槛因此不触发）：
+
+- 五条 `/api/intent-sessions*` wire 面（method / path / permissions / 出参形状 / 错误码）逐字不变；
+- 15 条用户可见错误码一条不删、不改语义；
+- 两个 provider 的部署形态、启动顺序、daemon handle 均不变；
+- 唯一「减少」的是 `services/intent/**` 这 18 个文件的 import 路径——它们没有外部消费者，
+  §7 的 AC-2 逐条验证。
+
+## 7. 验收标准
+
+- **AC-1** `packages/backend/src/services/intent/` 目录不存在；18 个 facade/legacy-implementation 全部删除，
+  生产 consumer = 0。
+- **AC-2** 删除前逐个文件确认外部 consumer 为零或已改指 `modules/intent/public/*`；转交出去的逐条记账。
+- **AC-3** apply 编排只有一份 provider-neutral 实现：claim 判据、settle 重验、session 串行锁、
+  日志收敛四处各只有一个源；两个 provider 的 adapter 里不再出现这四类判断。
+  **变异测试**：把任一 provider 的 adapter 换成另一半的实现必红。
+- **AC-4** `modules/intent/**` 不 import 任何 `modules/resource-catalog/{infrastructure,application,domain}/**`；
+  30 条 `temporary-internal-debt` 归零，改经 RC offered participant。
+- **AC-5** 两个 provider 的诊断标签集合相等（当前分叉的四条收敛）；15 条用户可见错误码一条不变。
+- **AC-6** `routes/intentSessions.ts` 不存在；路由住在 `modules/intent/inbound/`，文件内无 DB / OCC /
+  资源计划 / 工件编排；`/api/intent-sessions*` 的 wire 面逐字不变（契约注册表断言）。
+- **AC-7** 行为 oracle 全绿且**除 import 路径外一行未改**（清单见 §8）。
+- **AC-8** W4-E4a 自有 exact ids 归零；转交出去的逐条带 owner 与 removeWave；
+  **全局 exception 的净变化如实记账**（本刀预期会增加若干 bootstrap→module 入账边，
+  按 RFC-353 §9「AC-12 的更正」立下的口径，**不写「不增」**，写实测数字与逐条归因）。
+- **AC-9** exact-SHA hosted CI 终态成功（run 级 `conclusion == success`；并发 push 取消时按含本提交的后继 SHA 判）。
+
+## 8. 行为 oracle（除 import 路径外一行不改）
+
+摸底已确认这些是 intent 的行为预言，迁位不得改动它们的断言：
+
+- `rfc234-apply-changeset.test.ts`（含 `intent-draft-hash-mismatch` 等错误码断言）
+- `rfc291-*` intent 改单夹具
+- intent builder 的 e2e 三幕（`e2e/intent-builder.spec.ts`）
+- 双 provider 对拍类用例（`rfc349-*` 家族中涉及 intent 的部分）
+
+具体文件清单与逐条对应关系在 `design.md §测试策略` 里钉死；任何行为漂移都会在那里变红。
+
+## 9. 风险与诚实估计
+
+| 面 | 规模 | 风险 |
+| --- | ---: | --- |
+| 纯平移（`services/intent/*` → `modules/intent/*`） | 5136 行 | 低，但量大；`dumpBuilder` 928 行含大量逐字文本，需按 RFC-353 T4 的教训加**字节级绊线** |
+| apply 编排双份合一 | ~1500 行 → 一份 + 两个薄 adapter | **本刀最大风险**：两份拷贝已分头演进，合并时必须逐段确认「哪一侧是对的」，不能默认取其一 |
+| RC 深取切 participant | 30 条边 | 中，形态已由 RFC-353 验证过 |
+| 路由迁位 + 收 decode-call-map | 1088 行 | 中；wire 面由契约注册表与 e2e 双锁 |
+
+**最大的风险是合并两份 apply 时悄悄改了行为**。对策同 RFC-353：先落双 provider 等价 oracle（先红），
+再合并（转绿）；`design.md` 会把两份实现逐段对照成一张表，差异处逐条标注「取哪一侧、为什么」。

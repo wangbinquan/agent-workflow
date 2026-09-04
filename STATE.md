@@ -41,6 +41,9 @@
 > 改 `wrapper-output` 边界边、系统通道折进端口表、clarify 落 `skipped` 行、schema v5→6 + 纯升级器（32 示例 golden）。
 > 唯一收缩项 C-7（v6 YAML 向下不兼容）待用户确认；D1 平铺存储已确认；三个 PR；设计门待用户决定。
 
+> 🚧 **进行中 RFC（Draft，待用户批准，2026-09-04）：[RFC-355 Intent bounded context 归位（RFC-294 W4-E4a）](design/RFC-355-intent-context-cutover/proposal.md)。**
+> 三件套已落档，**批准前不改生产代码**。核心不是搬文件：apply 编排在两个 provider 上是逐行并行的两份（含一个 44 行逐字节相同、只有形参名不同的纯判据），诊断词汇已开始分叉，另有 30 条 intent→resource-catalog 的跨 context 内部 import。
+
 > ✅ **已完成 RFC（Done，2026-09-04）：[RFC-353 Knowledge Evolution bounded context 归位（RFC-294 W4-E3）](design/RFC-353-knowledge-evolution-context-cutover/proposal.md)。**
 > `modules/knowledge-evolution` 从「源码里根本不存在」到拥有 domain / application / infrastructure / inbound / public / composition 六层：fusion 编排与双 provider 持久化整体归位，融合适配器**不再直写** `memories` / `skills` / `skill_versions`（各经 owner 的 tx-bound participant），技能回滚的成员关系判据从 resource-catalog 迁入 KE，`routes/fusions.ts` 收成 decode-call-map 并迁至 KE inbound，两个 legacy facade（`services/fusion.ts` / `services/skillVersion.ts`）删除。
 > 新功能：`GET /api/skills/:id/provenance` + `SkillVersionHistory` 的融合版本行可展开，看这一版吃进了哪些知识。
