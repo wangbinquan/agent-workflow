@@ -38,7 +38,7 @@ import {
 } from '../domain/manualQuestionOpen'
 import { decodeReviewGateOpenManifest, type ReviewGateOpenManifest } from '../domain/reviewGateOpen'
 import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from './humanGateOperationTransactionStore'
-import { appendPostgresqlHumanGateOpenedEventTx } from './postgresqlCollaborationCommittedEvents'
+import { appendHumanGateOpenedCommittedEvent } from './collaborationCommittedEvents'
 
 type PgTx = PostgresqlCommittedEventTransaction
 
@@ -746,7 +746,7 @@ export class PostgresqlHumanGateOpenParticipantInTx {
         }
       }
       await projectReviewGateOpen(this.tx, this.nodeRunMint, this.nodeRunLifecycle, reviewManifest)
-      collaborationEventRef = await appendPostgresqlHumanGateOpenedEventTx(this.tx, {
+      collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {
         family: 'review',
         gate: {
           taskId: operation.taskId,
@@ -777,7 +777,7 @@ export class PostgresqlHumanGateOpenParticipantInTx {
         this.nodeRunLifecycle,
         clarifyManifest,
       )
-      collaborationEventRef = await appendPostgresqlHumanGateOpenedEventTx(this.tx, {
+      collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {
         family: 'clarify',
         gate: {
           taskId: operation.taskId,

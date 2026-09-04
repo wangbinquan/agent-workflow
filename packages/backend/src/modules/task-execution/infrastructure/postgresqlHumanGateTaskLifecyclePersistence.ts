@@ -14,14 +14,10 @@ import type {
   HumanGateTaskParkResult,
 } from '../application/ports/humanGateTaskLifecycle'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
-import {
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  transitionPostgresqlHumanGateTaskTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
-import { createPostgresqlNodeRunMintParticipantInTx } from './postgresqlNodeRunMintParticipant'
+import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { PostgresqlTaskRuntimeLifecyclePersistence } from './postgresqlTaskRuntimeLifecyclePersistence'
 
 class ManualQuestionPending extends Error {}
@@ -48,7 +44,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       }
       const consumed = await new PostgresqlHumanGateOpenParticipantInTx(
         tx,
-        createPostgresqlNodeRunMintParticipantInTx(tx),
+        createNodeRunMintParticipantInTx(tx),
         createPostgresqlNodeRunLifecycleParticipantInTx(tx),
       ).consumePreparedGateTx({
         prepared: input.prepared,
@@ -58,7 +54,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       if (consumed.gate.kind !== input.prepared.gateKind) {
         throw new Error('prepared-human-gate-kind-mismatch')
       }
-      const parked = await transitionPostgresqlHumanGateTaskTx(tx, {
+      const parked = await transitionHumanGateTask(tx, {
         taskId: input.prepared.taskId,
         expectedTaskRevision: input.prepared.expectedTaskRevision,
         transition: consumed.gate.kind === 'review' ? 'park-review' : 'park-human',
@@ -109,7 +105,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       }
       const gates = new PostgresqlHumanGateOpenParticipantInTx(
         tx,
-        createPostgresqlNodeRunMintParticipantInTx(tx),
+        createNodeRunMintParticipantInTx(tx),
         createPostgresqlNodeRunLifecycleParticipantInTx(tx),
       )
       const operationIds = await gates.listPreparedManualQuestionParksTx(input.taskId)
@@ -138,7 +134,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
           eventRefs: [] as readonly TaskExecutionPostCommitEventRef[],
         }
       }
-      const parked = await transitionPostgresqlHumanGateTaskTx(tx, {
+      const parked = await transitionHumanGateTask(tx, {
         taskId: input.taskId,
         expectedTaskRevision: task.lifecycleEventRevision,
         transition: 'park-human',
@@ -164,7 +160,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
         async (tx) => {
           const pending = await new PostgresqlHumanGateOpenParticipantInTx(
             tx,
-            createPostgresqlNodeRunMintParticipantInTx(tx),
+            createNodeRunMintParticipantInTx(tx),
             createPostgresqlNodeRunLifecycleParticipantInTx(tx),
           ).listPreparedManualQuestionParksTx(input.taskId)
           if (pending.length > 0) throw new ManualQuestionPending()

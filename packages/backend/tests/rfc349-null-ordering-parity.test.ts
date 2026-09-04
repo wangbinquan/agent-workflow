@@ -37,9 +37,6 @@ const srcRoot = resolve(import.meta.dir, '..', 'src')
  * 每条都必须是能在同一个查询里读出来的判据，不是「一般不会为空」。
  */
 const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
-  'modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts': {
-    resultGateRevision: '同一个 WHERE 里有 isNotNull(resultGateRevision)',
-  },
   'modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts': {
     nextRunAt: '同一个 WHERE 里有 isNotNull(nextRunAt)',
   },
@@ -161,10 +158,7 @@ describe('RFC-349 NULL ordering is the same on both providers', () => {
 
   test('the two claim sweeps that deliberately include NULLs use the SQLite placement', () => {
     const gate = readFileSync(
-      join(
-        srcRoot,
-        'modules/collaboration/infrastructure/postgresqlHumanGateOperationPersistence.ts',
-      ),
+      join(srcRoot, 'modules/collaboration/infrastructure/humanGateOperationJournal.ts'),
       'utf8',
     )
     const events = readFileSync(

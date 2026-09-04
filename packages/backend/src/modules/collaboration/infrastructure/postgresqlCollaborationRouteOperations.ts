@@ -55,10 +55,8 @@ import {
 } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import {
-  appendPostgresqlCommittedEventTx,
-  type PostgresqlCommittedEventTransaction,
-} from '@/platform/events/committed/postgresqlPersistence'
+import { type PostgresqlCommittedEventTransaction } from '@/platform/events/committed/postgresqlPersistence'
+import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
@@ -625,7 +623,7 @@ async function appendCollaborationProjectionEvent(
           projectionFrames: input.projectionFrames,
         }
       : { gate: input.gate, projectionFrames: input.projectionFrames }
-  const receipt = await appendPostgresqlCommittedEventTx(tx, {
+  const receipt = await appendCommittedEvent(tx, {
     producer: 'collaboration',
     family: input.family,
     type: input.type,

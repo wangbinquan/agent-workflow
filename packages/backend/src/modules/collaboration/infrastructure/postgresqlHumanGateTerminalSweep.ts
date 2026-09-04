@@ -1,10 +1,8 @@
 import { and, eq } from 'drizzle-orm'
 
 import { clarifyRounds, nodeRuns } from '@/db/schema'
-import {
-  appendPostgresqlTaskNodeStatusesTx,
-  withPostgresqlSerializableTaskExecution,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -90,7 +88,7 @@ export function createPostgresqlHumanGateTerminalSweepCommand(
           }
         }
         if (result.canceledRuns.length === 0) return null
-        return await appendPostgresqlTaskNodeStatusesTx(tx, {
+        return await appendTaskNodeStatusesCommittedEvent(tx, {
           taskId: input.taskId,
           nodeChanges: result.canceledRuns.map((run) => ({
             nodeRunId: run.nodeRunId,

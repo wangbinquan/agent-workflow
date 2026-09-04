@@ -21,13 +21,10 @@ import { nextRetryIndex } from '../application/nextRetryIndex'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
-import { createPostgresqlNodeRunMintParticipantInTx } from './postgresqlNodeRunMintParticipant'
-import { submitPostgresqlTaskContinuationTx } from './postgresqlTaskExecutionIntentPersistence'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  assertPostgresqlTaskOwnerlessTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { submitTaskContinuation } from './taskContinuationAdmission'
+import { assertPostgresqlTaskOwnerlessTx, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import type {
   PostgresqlTaskRoutePreparedWorkspace,
   PostgresqlTaskRouteWorkspaceRepository,
@@ -371,7 +368,7 @@ async function recordPreparationFailure(
         `task '${snapshot.task.id}' changed during repository preparation`,
       )
     }
-    const prepRunId = await createPostgresqlNodeRunMintParticipantInTx(tx).mint({
+    const prepRunId = await createNodeRunMintParticipantInTx(tx).mint({
       id: nextId(),
       taskId: snapshot.task.id,
       nodeId: REPO_PREP_NODE_ID,
@@ -406,7 +403,7 @@ async function recordPreparationFailure(
         `task '${snapshot.task.id}' changed while repository preparation failed`,
       )
     }
-    const admittedEvent = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const admittedEvent = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: snapshot.task.id,
       lifecycleRevision: admitted.revision,
       previousStatus: snapshot.task.status as TaskStatus,
@@ -415,7 +412,7 @@ async function recordPreparationFailure(
       occurredAt: now,
       identity: { operationRef, eventGroupId: operationRef, eventGroupOrdinal: 0 },
     })
-    const failedEvent = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const failedEvent = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: snapshot.task.id,
       lifecycleRevision: failed.revision,
       previousStatus: 'pending',
@@ -505,7 +502,7 @@ async function commitPreparedWorkspace(
         })),
       )
     }
-    const prepRunId = await createPostgresqlNodeRunMintParticipantInTx(tx).mint({
+    const prepRunId = await createNodeRunMintParticipantInTx(tx).mint({
       id: nextId(),
       taskId: snapshot.task.id,
       nodeId: REPO_PREP_NODE_ID,
@@ -515,7 +512,7 @@ async function commitPreparedWorkspace(
       iteration: 0,
       overrides: { startedAt: now, finishedAt: now },
     })
-    await submitPostgresqlTaskContinuationTx(tx, {
+    await submitTaskContinuation(tx, {
       taskId: snapshot.task.id,
       intentId,
       kind: 'retry-repository-preparation',
@@ -525,7 +522,7 @@ async function commitPreparedWorkspace(
       now,
       advanceOperationGeneration: true,
     })
-    const event = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const event = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: snapshot.task.id,
       lifecycleRevision: admitted.revision,
       previousStatus: snapshot.task.status as TaskStatus,

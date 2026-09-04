@@ -49,13 +49,10 @@ import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventR
 import { taskStopProjection } from '../domain/sourceTermination'
 import { PostgresqlTaskRollbackQueries } from './postgresqlTaskRollbackQueries'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
-import { submitPostgresqlTaskContinuationTx } from './postgresqlTaskExecutionIntentPersistence'
+import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  assertPostgresqlTaskOwnerlessTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { assertPostgresqlTaskOwnerlessTx, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
@@ -299,7 +296,7 @@ async function admitResume(
         `task '${task.id}' changed state while admitting resume`,
       )
     }
-    await submitPostgresqlTaskContinuationTx(tx, {
+    await submitTaskContinuation(tx, {
       taskId: task.id,
       intentId,
       kind: 'resume',
@@ -309,7 +306,7 @@ async function admitResume(
       now,
       advanceOperationGeneration: true,
     })
-    const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: task.id,
       lifecycleRevision: row.lifecycleEventRevision,
       previousStatus: task.status,
@@ -627,7 +624,7 @@ async function cancelCascade(
         .from(tasks)
         .where(and(eq(tasks.parentTaskId, taskId), inArray(tasks.status, CANCELABLE_TASK_STATUSES)))
     ).map((child) => child.id)
-    const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId,
       lifecycleRevision: nextRevision,
       previousStatus: task.status as TaskStatus,

@@ -48,15 +48,10 @@ import {
   tasks,
   workgroupAssignments,
 } from '@/db/schema'
-import {
-  appendPostgresqlTaskNodeStatusesTx,
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  type PostgresqlTaskExecutionTransaction,
-  transitionPostgresqlHumanGateTaskTx,
-  withPostgresqlSerializableTaskExecution,
-} from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
-import { createPostgresqlNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant'
+import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
+import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
+import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
+import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import type { NodeRunLifecycleParticipantInTx } from '@/modules/task-execution/public/commands'
 import {
   finalizeCommittedHumanGate,
@@ -1272,7 +1267,7 @@ async function autoApproveEmptyPostgresqlReview(input: {
       }
       nodeRunId = input.reuse.id
     } else {
-      nodeRunId = await createPostgresqlNodeRunMintParticipantInTx(tx).mint({
+      nodeRunId = await createNodeRunMintParticipantInTx(tx).mint({
         taskId: input.taskId,
         nodeId: input.nodeId,
         status: 'awaiting_review',
@@ -1345,7 +1340,7 @@ async function autoApproveEmptyPostgresqlReview(input: {
       },
     ]
     if (input.taskStatus !== 'awaiting_review') {
-      const eventRef = await appendPostgresqlTaskNodeStatusesTx(tx, {
+      const eventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
         taskId: input.taskId,
         nodeChanges,
         occurredAt: now,
@@ -1356,7 +1351,7 @@ async function autoApproveEmptyPostgresqlReview(input: {
       return eventRef === null ? [] : [eventRef]
     }
     return (
-      await transitionPostgresqlHumanGateTaskTx(tx, {
+      await transitionHumanGateTask(tx, {
         taskId: input.taskId,
         expectedTaskRevision: input.expectedTaskRevision,
         transition: 'release-review',

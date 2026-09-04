@@ -377,7 +377,7 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     expect(workspace).toContain('createPostgresqlTaskWorkspaceMaterializer')
     expect(workspace).toContain('materializeSpaceWithProvider')
     expect(retry).toContain('createPostgresqlRepositoryPreparationRetryCommand')
-    expect(retry).toContain('submitPostgresqlTaskContinuationTx')
+    expect(retry).toContain('submitTaskContinuation')
     expect(retry).toContain('await publishCommittedEventsAfterCommit')
     expect(provider).toContain(
       'createPostgresqlTaskRouteWorkspaceParticipant(workspaceDependencies)',

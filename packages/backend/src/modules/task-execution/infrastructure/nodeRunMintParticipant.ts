@@ -1,10 +1,16 @@
+// RFC-359 —— node_runs 的铸造参与者：一份实现，两个引擎。
+//
+// 此前 `sqliteNodeRunMintParticipant.ts`（同步）与 `postgresqlNodeRunMintParticipant.ts`（异步）
+// 是逐字相同的 SQL 抄两遍。这里是唯一的 async 版本；同步版本在其余 dbTxSync 调用方迁完之前保留
+// （RFC-098 的 node_runs INSERT 守卫同时登记这两处 canonical writer）。
+
 import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm'
 
 import { nodeRuns } from '@/db/schema'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { buildNodeRunMintRecord } from '../application/buildNodeRunMintRecord'
-import { childScopePath } from '../domain/environmentChain'
 import type { NodeRunMintInput } from '../application/ports/nodeRunLifecyclePersistence'
-import type { PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import { childScopePath } from '../domain/environmentChain'
 
 const ABANDONABLE_MERGE_STATES = [
   'isolating',
@@ -13,14 +19,14 @@ const ABANDONABLE_MERGE_STATES = [
   'conflict-human',
 ] as const
 
-/** Provider-private participant for an already-reserved PostgreSQL transaction. */
-export interface PostgresqlNodeRunMintParticipantInTx {
+/** 在调用方已持有的事务里铸造 node_runs 行。 */
+export interface NodeRunMintParticipantInTx {
   mint(input: NodeRunMintInput): Promise<string>
 }
 
-export function createPostgresqlNodeRunMintParticipantInTx(
-  tx: PostgresqlTaskExecutionTransaction,
-): PostgresqlNodeRunMintParticipantInTx {
+export function createNodeRunMintParticipantInTx(
+  tx: DatabaseTransaction,
+): NodeRunMintParticipantInTx {
   return Object.freeze({
     async mint(input: NodeRunMintInput) {
       const record = buildNodeRunMintRecord(input)
@@ -31,21 +37,20 @@ export function createPostgresqlNodeRunMintParticipantInTx(
         const container =
           record.containerRunId === null
             ? undefined
-            : (
-                await tx
-                  .select({ nodeId: nodeRuns.nodeId, scopePath: nodeRuns.scopePath })
-                  .from(nodeRuns)
-                  .where(eq(nodeRuns.id, record.containerRunId))
-                  .limit(1)
-              )[0]
+            : await tx
+                .select({ nodeId: nodeRuns.nodeId, scopePath: nodeRuns.scopePath })
+                .from(nodeRuns)
+                .where(eq(nodeRuns.id, record.containerRunId))
+                .get()
         scopePath =
           container === undefined
             ? ''
             : childScopePath(container.scopePath, container.nodeId, record.iteration)
       }
       const values = { ...record, scopePath }
-      // Prior generations of the SAME frame are superseded by this mint (frame
-      // is part of the key — see the SQLite twin).
+      // Prior generations of the SAME frame are superseded by this mint. The frame is part of
+      // the key: a nested loop's round-0 row under outer round 1 must never abandon the round-0
+      // row under outer round 0.
       const priorRows = await tx
         .select({ id: nodeRuns.id })
         .from(nodeRuns)

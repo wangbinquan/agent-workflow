@@ -421,8 +421,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
     const sites = generated.mutationEntrypoints.nodeRunInsertSites as Array<Record<string, unknown>>
     expect(sites.map(({ file, status }) => ({ file, status }))).toEqual([
       {
-        file:
-          'packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts',
+        file: 'packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
         status: 'canonical-writer',
       },
       {

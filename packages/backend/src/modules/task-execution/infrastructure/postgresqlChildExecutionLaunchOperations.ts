@@ -55,11 +55,8 @@ import type { TaskExecutionModule } from '../composition'
 import { sha256Hex } from '../domain/digest'
 import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
-import {
-  appendPostgresqlTaskCreatedTx,
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 
 // Wire-frozen task/workflow identities. TaskExecution repeats them here rather
 // than importing Resource Catalog provider-private infrastructure.
@@ -734,7 +731,7 @@ async function launchPreparedChild(
         .where(eq(tasks.id, row.id))
       cursor = row.parentTaskId
     }
-    return await appendPostgresqlTaskCreatedTx(tx, {
+    return await appendTaskCreatedCommittedEvent(tx, {
       taskId,
       status: 'pending',
       errorSummary: null,

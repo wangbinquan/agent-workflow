@@ -26,6 +26,16 @@ import {
 } from '@/db/schema'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
 import { sha256Hex } from '@/util/hash'
+import {
+  assertNonNegativeInteger,
+  assertPositiveInteger,
+  assertProducerFamily,
+  cutoverFromRow,
+  deterministicEventId,
+  eventRefFromRow,
+  storedEventFromRow,
+  validateAppendInput,
+} from './appendShared'
 import type {
   AppendCommittedEventInput,
   AppendCommittedEventReceipt,
@@ -38,61 +48,13 @@ import type {
   CommittedEventEnvelopeV1,
   CommittedEventFamily,
   CommittedEventProducer,
-  CommittedEventRef,
   ManualCommittedEventRetryInput,
   ManualCommittedEventRetryReceipt,
   StoredCommittedEvent,
 } from './types'
 
-const MIGRATED_CANONICAL_HEX_DIGEST_PREFIX = 'canonical-hex-v1:'
-
-function payloadDigestMatches(payloadJson: string, payloadDigest: string): boolean {
-  if (payloadDigest.startsWith(MIGRATED_CANONICAL_HEX_DIGEST_PREFIX)) {
-    const expected = Array.from(new TextEncoder().encode(payloadJson), (byte) =>
-      byte.toString(16).padStart(2, '0'),
-    ).join('')
-    return payloadDigest === `${MIGRATED_CANONICAL_HEX_DIGEST_PREFIX}${expected}`
-  }
-  return payloadDigest === sha256Hex(payloadJson)
-}
-
 function changed(result: unknown): number {
   return (result as { changes?: number }).changes ?? 0
-}
-
-function assertPositiveInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value <= 0) {
-    throw new Error(`${field} must be a positive safe integer`)
-  }
-}
-
-function assertNonNegativeInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${field} must be a non-negative safe integer`)
-  }
-}
-
-function assertProducerFamily(
-  producer: CommittedEventProducer,
-  family: CommittedEventFamily,
-): void {
-  const valid =
-    (producer === 'task-execution' && family === 'task-lifecycle') ||
-    (producer === 'collaboration' && family !== 'task-lifecycle')
-  if (!valid) throw new Error(`committed event producer/family mismatch: ${producer}/${family}`)
-}
-
-function cutoverFromRow(
-  row: typeof committedEventFamilyCutovers.$inferSelect,
-): CommittedEventCutover {
-  return {
-    producer: row.producer,
-    family: row.family,
-    mode: row.mode,
-    epoch: row.epoch,
-    changedAt: row.changedAt,
-    changeRef: row.changeRef,
-  }
 }
 
 export function readCommittedEventCutoverTx(
@@ -171,47 +133,6 @@ export function changeCommittedEventCutoverTx(
   return readCommittedEventCutoverTx(tx, input.producer, input.family)
 }
 
-function eventRefFromRow(row: typeof committedEvents.$inferSelect): CommittedEventRef {
-  return {
-    eventId: row.id,
-    payloadDigest: row.payloadDigest,
-    producer: row.producer,
-    family: row.family,
-    aggregate: {
-      kind: row.aggregateKind,
-      id: row.aggregateId,
-      seq: row.aggregateSeq,
-    },
-    eventGroupId: row.eventGroupId,
-    eventGroupOrdinal: row.eventGroupOrdinal,
-    deliveryMode: row.deliveryMode,
-    producerEpoch: row.producerEpoch,
-  }
-}
-
-function storedEventFromRow(row: typeof committedEvents.$inferSelect): StoredCommittedEvent {
-  if (!payloadDigestMatches(row.payloadJson, row.payloadDigest)) {
-    throw new Error(`committed event payload digest does not match: ${row.id}`)
-  }
-  let envelope: unknown
-  try {
-    envelope = JSON.parse(row.payloadJson) as unknown
-  } catch {
-    throw new Error(`committed event payload is not JSON: ${row.id}`)
-  }
-  if (envelope === null || typeof envelope !== 'object') {
-    throw new Error(`committed event payload is not an envelope: ${row.id}`)
-  }
-  return {
-    envelope: envelope as CommittedEventEnvelopeV1,
-    payloadJson: row.payloadJson,
-    payloadDigest: row.payloadDigest,
-    deliveryMode: row.deliveryMode,
-    producerEpoch: row.producerEpoch,
-    createdAt: row.createdAt,
-  }
-}
-
 function sameConsumerManifest(
   tx: DbTxSync,
   eventId: string,
@@ -280,40 +201,6 @@ function reserveAggregateSequenceTx(
       .run()
   }
   return next
-}
-
-function deterministicEventId(input: {
-  producer: CommittedEventProducer
-  family: CommittedEventFamily
-  aggregateKind: CommittedEventAggregateKind
-  aggregateId: string
-  aggregateSeq: number
-  type: string
-  operationRef: string
-}): string {
-  return `committed-event:${sha256Hex(canonicalJson(input))}`
-}
-
-function validateAppendInput(input: AppendCommittedEventInput<string, unknown>): void {
-  assertProducerFamily(input.producer, input.family)
-  assertNonNegativeInteger(input.eventGroupOrdinal, 'eventGroupOrdinal')
-  if (
-    input.type.length === 0 ||
-    input.aggregate.id.length === 0 ||
-    input.eventGroupId.length === 0 ||
-    input.operationRef.length === 0 ||
-    !Number.isSafeInteger(input.occurredAt) ||
-    input.occurredAt < 0
-  ) {
-    throw new Error('committed event append requires complete immutable identity')
-  }
-  const seen = new Set<string>()
-  for (const consumer of input.consumers) {
-    if (consumer.id.length === 0 || seen.has(consumer.id)) {
-      throw new Error(`committed event consumer manifest is invalid: '${consumer.id}'`)
-    }
-    seen.add(consumer.id)
-  }
 }
 
 export function appendCommittedEventTx<TType extends string, TPayload>(

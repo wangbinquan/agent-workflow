@@ -19,13 +19,10 @@ import type {
 } from '../public/commands'
 import { createPostgresqlTaskAuthorizationParticipantInTx } from './postgresqlTaskAuthorization'
 import { createPostgresqlNodeRunLifecycleParticipantInTx } from './postgresqlNodeRunLifecyclePersistence'
-import { submitPostgresqlTaskContinuationTx } from './postgresqlTaskExecutionIntentPersistence'
+import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  assertPostgresqlTaskOwnerlessTx,
-  type PostgresqlTaskExecutionTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+import { assertPostgresqlTaskOwnerlessTx, type PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const HOST_NODE_IDS = ['__wg_leader__', '__wg_member__'] as const
 
@@ -257,7 +254,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
         .returning({ id: tasks.id })
       if (changed[0] === undefined) return null
       const intentId = ulid()
-      await submitPostgresqlTaskContinuationTx(tx, {
+      await submitTaskContinuation(tx, {
         taskId: input.taskId,
         intentId,
         kind: 'resume',
@@ -267,7 +264,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
         now: input.occurredAt,
         advanceOperationGeneration: true,
       })
-      const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,
         lifecycleRevision: nextRevision,
         previousStatus: input.expectedStatus,
@@ -324,7 +321,7 @@ export function createPostgresqlWorkgroupTaskRoomTaskParticipantInTx(
         failureCode: input.errorSummary,
         now: input.occurredAt,
       })
-      const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,
         lifecycleRevision: nextRevision,
         previousStatus: input.expectedStatus,

@@ -58,16 +58,19 @@ describe('RFC-349 canonical schema contract', () => {
       }
       for (const column of table.columns) {
         expect(column.logicalCodec.length, `${table.id}.${column.name}.codec`).toBeGreaterThan(0)
-        expect(column.providerType.sqlite.length, `${table.id}.${column.name}.sqliteType`).toBeGreaterThan(
-          0,
-        )
+        expect(
+          column.providerType.sqlite.length,
+          `${table.id}.${column.name}.sqliteType`,
+        ).toBeGreaterThan(0)
         expect(
           column.providerType.postgresql.length,
           `${table.id}.${column.name}.postgresqlType`,
         ).toBeGreaterThan(0)
       }
       for (const foreignKey of table.foreignKeys) {
-        expect(knownTables.has(foreignKey.foreignTable), `${table.id}.${foreignKey.name}`).toBe(true)
+        expect(knownTables.has(foreignKey.foreignTable), `${table.id}.${foreignKey.name}`).toBe(
+          true,
+        )
       }
 
       if (table.disposition === 'ARCHIVE_THEN_OMIT') {
@@ -106,15 +109,17 @@ describe('RFC-349 canonical schema contract', () => {
         .map((unit) => unit.path)
       expect(consumers, `${id} regained a production consumer`).toEqual([])
     }
-  })
+    // 语料扫描在 macOS runner 上量到 5.3s（CI run 33888112485，macos shard 3/4 超时红）：这是一条扫源码的
+    // 守卫，不是被测行为；给它扫描量级的预算，别让 5s 缺省把它判成 flaky。
+  }, 60_000)
 
   test('archive-only production-consumer matcher rejects symbol and physical table references', () => {
     expect(sourceMentionsArchiveTable('const rows = legacyRows', 'legacyRows', 'legacy_rows')).toBe(
       true,
     )
-    expect(sourceMentionsArchiveTable("readTable('legacy_rows')", 'legacyRows', 'legacy_rows')).toBe(
-      true,
-    )
+    expect(
+      sourceMentionsArchiveTable("readTable('legacy_rows')", 'legacyRows', 'legacy_rows'),
+    ).toBe(true)
     expect(sourceMentionsArchiveTable('const unrelated = true', 'legacyRows', 'legacy_rows')).toBe(
       false,
     )

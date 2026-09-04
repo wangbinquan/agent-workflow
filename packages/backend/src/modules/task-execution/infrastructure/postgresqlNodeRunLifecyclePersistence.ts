@@ -14,14 +14,9 @@ import type {
   NodeRunMintInput,
 } from '../application/ports/nodeRunLifecyclePersistence'
 import type { NodeRunLifecycleParticipantInTx } from '../public/commands'
-import {
-  appendPostgresqlTaskNodeStatusesTx,
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
-import { createPostgresqlNodeRunMintParticipantInTx } from './postgresqlNodeRunMintParticipant'
+import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
+import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 
 const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
   allowedFromStatusesForEvent({ kind: 'mark-canceled' }),
@@ -158,7 +153,7 @@ export function createPostgresqlNodeRunLifecycleParticipantInTx(
         extra: { finishedAt: input.finishedAt },
         reason: input.cause,
       })
-      return await appendPostgresqlTaskNodeStatusesTx(tx, {
+      return await appendTaskNodeStatusesCommittedEvent(tx, {
         taskId: input.taskId,
         reason: 'human-gate',
         nodeChanges: [
@@ -183,7 +178,7 @@ export class PostgresqlNodeRunLifecyclePersistence implements NodeRunLifecyclePe
     const { executionContext } = input
     return await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
       await fence(tx, input.taskId, executionContext, Date.now())
-      return await createPostgresqlNodeRunMintParticipantInTx(tx).mint(input)
+      return await createNodeRunMintParticipantInTx(tx).mint(input)
     })
   }
 

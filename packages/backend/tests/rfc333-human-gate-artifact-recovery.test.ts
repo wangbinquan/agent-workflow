@@ -19,7 +19,8 @@ import {
   readCommittedReviewArtifactBody,
 } from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
-import { SqliteHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationPersistence'
+import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_788_970_000_000
@@ -161,7 +162,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
     expect(readCommittedReviewArtifactBody(db, appHome, plan.finalPath)).toBe(body)
 
     const recovery = new HumanGateOperationRecovery({
-      operations: new SqliteHumanGateOperationPersistence(db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
       artifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'retain-for-owner-retry',
@@ -226,7 +227,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
     }
     let now = NOW + 4 + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
     const firstRecovery = new HumanGateOperationRecovery({
-      operations: new SqliteHumanGateOperationPersistence(db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
       artifacts: faultingArtifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'retain-for-owner-retry',
@@ -239,7 +240,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
 
     now += DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
     const secondRecovery = new HumanGateOperationRecovery({
-      operations: new SqliteHumanGateOperationPersistence(db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
       artifacts: realArtifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'retain-for-owner-retry',
@@ -270,7 +271,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
     })
 
     const recovery = new HumanGateOperationRecovery({
-      operations: new SqliteHumanGateOperationPersistence(db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
       artifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'cleanup-stale',
@@ -330,7 +331,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
     })
     let now = NOW + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
     const recovery = new HumanGateOperationRecovery({
-      operations: new SqliteHumanGateOperationPersistence(db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
       artifacts,
       preparedInspector: {
         inspectPreparedOperation: () => 'cleanup-stale',

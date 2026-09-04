@@ -31,12 +31,8 @@ import {
 import type { OwnershipToken } from '../domain/ownership'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  appendPostgresqlTaskNodeStatusesTx,
-  withPostgresqlSerializableTaskExecution,
-  type PostgresqlTaskExecutionTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution, type PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent, appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const CANCELABLE: readonly TaskStatus[] = CANCELABLE_TASK_STATUSES
 const CANCELABLE_NODE_STATUSES = [...allowedFromStatusesForEvent({ kind: 'mark-canceled' })]
@@ -206,7 +202,7 @@ async function applyOne(
               cause: projection.code,
             })
             if (nodeChanges.length > 0) {
-              const eventRef = await appendPostgresqlTaskNodeStatusesTx(tx, {
+              const eventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
                 taskId,
                 nodeChanges,
                 occurredAt: now,
@@ -331,7 +327,7 @@ async function applyOne(
             )
           }
           statusChanged = true
-          const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+          const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
             taskId,
             lifecycleRevision: updated.lifecycleEventRevision,
             previousStatus: priorStatus,
@@ -366,7 +362,7 @@ async function applyOne(
             )
           }
           if (nodeChanges.length > 0) {
-            const eventRef = await appendPostgresqlTaskNodeStatusesTx(tx, {
+            const eventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
               taskId,
               nodeChanges,
               occurredAt: now,

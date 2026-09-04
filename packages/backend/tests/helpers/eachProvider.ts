@@ -15,8 +15,11 @@
 // 对齐，含 auth_login_policy 的 bootstrap 标记）。
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
+import { getTableName, isTable } from 'drizzle-orm'
+import { getTableConfig } from 'drizzle-orm/sqlite-core'
 
 import { createInMemoryDb } from '@/db/client'
+import * as schema from '@/db/schema'
 import { currentDatabaseSchemaProvider, selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
@@ -203,10 +206,15 @@ async function resetToSnapshot(
       .join(', ')} restart identity cascade`,
   )
   for (const seed of snapshot.seeds) {
+    // 不走绑定参数：Bun.SQL 会把字符串参数按 json 类型二次序列化成 JSON 标量（"[...]"），
+    // json_populate_recordset 收到的就不是数组。用带唯一标签的美元引号把数组文本内联进去。
+    if (seed.rowsJson.includes('$aw_seed$')) {
+      throw new Error(`seed rows for ${seed.table} contain the dollar-quote tag`)
+    }
     await raw(
       `insert into "agent_workflow"."${seed.table}" ` +
-        `select * from json_populate_recordset(null::"agent_workflow"."${seed.table}", $1::json)`,
-      [seed.rowsJson],
+        `select * from json_populate_recordset(null::"agent_workflow"."${seed.table}", ` +
+        `$aw_seed$${seed.rowsJson}$aw_seed$::json)`,
     )
   }
   if (options.bootstrap !== 'required' && snapshot.hasLoginPolicy) {
@@ -214,6 +222,61 @@ async function resetToSnapshot(
       `update "agent_workflow"."auth_login_policy" ` +
         `set bootstrap_completed_at = coalesce(bootstrap_completed_at, 0) where id = 'global'`,
     )
+  }
+}
+
+type SchemaTable = Parameters<typeof getTableConfig>[0]
+
+/** 迁移刚种下的行：按外键拓扑顺序从 SQLite 内存库整表复制到 PostgreSQL。 */
+async function seedFromSqliteSnapshot(target: ProviderNeutralDatabase): Promise<void> {
+  const restoreForRead = selectDatabaseSchemaProvider('sqlite')
+  const source = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
+  const pending: Array<{
+    name: string
+    table: SchemaTable
+    rows: Record<string, unknown>[]
+    refs: string[]
+  }> = []
+  try {
+    for (const candidate of Object.values(schema)) {
+      if (!isTable(candidate)) continue
+      const table = candidate as SchemaTable
+      const rows = source.select().from(table).all() as Record<string, unknown>[]
+      if (rows.length === 0) continue
+      const refs = getTableConfig(table).foreignKeys.map((fk) =>
+        getTableName(fk.reference().foreignTable),
+      )
+      pending.push({ name: getTableName(table), table, rows, refs })
+    }
+  } finally {
+    restoreForRead()
+  }
+  const restoreForWrite = selectDatabaseSchemaProvider('postgresql')
+  try {
+    const seeded = new Set<string>()
+    const names = new Set(pending.map((entry) => entry.name))
+    while (pending.length > 0) {
+      let progressed = false
+      for (const entry of [...pending]) {
+        const ready = entry.refs.every(
+          (ref) => ref === entry.name || seeded.has(ref) || !names.has(ref),
+        )
+        if (!ready) continue
+        for (let offset = 0; offset < entry.rows.length; offset += 200) {
+          await target.insert(entry.table).values(entry.rows.slice(offset, offset + 200))
+        }
+        seeded.add(entry.name)
+        pending.splice(pending.indexOf(entry), 1)
+        progressed = true
+      }
+      if (!progressed) {
+        throw new Error(
+          `seed tables form a foreign-key cycle: ${pending.map((entry) => entry.name).join(', ')}`,
+        )
+      }
+    }
+  } finally {
+    restoreForWrite()
   }
 }
 
@@ -254,26 +317,31 @@ function registerPostgresql(
       generationId: GENERATION_ID,
     })
     const pool = runtime.providerPool()
-    raw = (query, parameters) =>
-      parameters === undefined ? pool.unsafe(query) : pool.unsafe(query, [...parameters])
+    const query: RawQuery = async (text, parameters) =>
+      parameters === undefined ? await pool.unsafe(text) : await pool.unsafe(text, [...parameters])
+    raw = query
     // 与 rfc357 / rfc359 的真库用例同一套姿势：清干净、按基线迁移、自己登记一个活跃生成代
     // （客户端的业务写围栏按 runtime.generationId 核对 database_generations）。
-    await raw('drop schema if exists agent_workflow cascade')
-    await raw('drop schema if exists agent_workflow_meta cascade')
+    await query('drop schema if exists agent_workflow cascade')
+    await query('drop schema if exists agent_workflow_meta cascade')
     await migratePostgresqlSchema({ runtime })
-    await raw(
+    await query(
       'insert into "agent_workflow_meta"."logical_copy_operations" ' +
         '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
         `values ('${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'plan', 'prepared', 1, 1)`,
     )
-    await raw(
+    await query(
       'insert into "agent_workflow_meta"."database_generations" ' +
         '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
         `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'active', 1, 1)`,
     )
-    snapshot = await snapshotSchema(raw)
     // createPostgresqlDatabaseClient 会把进程级投影切到 postgresql 且不还原；afterAll 统一还原。
     client = createPostgresqlDatabaseClient(runtime)
+    // PostgreSQL 的迁移器只投影 DDL；迁移脚本里 INSERT 的种子行（committed_event_family_cutovers、
+    // auth_login_policy、框架内置资源……）在生产上是随 RFC-349 逻辑复制从 SQLite 带过来的。
+    // 这里做同一件事：把一个刚迁移完的 SQLite 内存库整表复制进来，两个引擎的「起点」才是同一个。
+    await seedFromSqliteSnapshot(client)
+    snapshot = await snapshotSchema(query)
   })
 
   beforeEach(async () => {

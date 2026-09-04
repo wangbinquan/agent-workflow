@@ -34,11 +34,8 @@ import { sha256Hex } from '../domain/digest'
 import type { OwnershipToken } from '../domain/ownership'
 import { createPostgresqlTaskDriverLifecyclePort } from './postgresqlTaskDriverLifecycle'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import {
-  appendPostgresqlTaskCreatedTx,
-  appendPostgresqlTaskLifecycleTransitionTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskCreatedCommittedEvent, appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const CANCELABLE_NODE_RUN_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
@@ -182,7 +179,7 @@ async function insertFusionTask(
       createdAt: now,
       updatedAt: now,
     })
-    const eventRef = await appendPostgresqlTaskCreatedTx(tx, {
+    const eventRef = await appendTaskCreatedCommittedEvent(tx, {
       taskId: command.taskId,
       status: 'pending',
       errorSummary: null,
@@ -269,7 +266,7 @@ async function cancelPostgresqlTask(
         .from(tasks)
         .where(and(eq(tasks.parentTaskId, taskId), inArray(tasks.status, CANCELABLE_TASK_STATUSES)))
     ).map((child) => child.id)
-    const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId,
       lifecycleRevision: nextRevision,
       previousStatus: row.status,

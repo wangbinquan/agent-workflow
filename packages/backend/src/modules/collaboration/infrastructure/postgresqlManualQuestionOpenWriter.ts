@@ -28,7 +28,7 @@ import {
   type ManualQuestionProjection,
 } from '../domain/manualQuestionOpen'
 import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from './humanGateOperationTransactionStore'
-import { appendPostgresqlHumanGateOpenedEventTx } from './postgresqlCollaborationCommittedEvents'
+import { appendHumanGateOpenedCommittedEvent } from './collaborationCommittedEvents'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 type PgTx = Parameters<Parameters<PostgresqlDatabaseClient['transaction']>[0]>[0]
@@ -244,7 +244,7 @@ export class PostgresqlManualQuestionOpenWriter implements ManualQuestionOpenWri
           `manual-question operation '${operationId}' changed during preparation`,
         )
       }
-      const eventRef = await appendPostgresqlHumanGateOpenedEventTx(tx, {
+      const eventRef = await appendHumanGateOpenedCommittedEvent(tx, {
         family: 'questions',
         gate: {
           taskId: input.taskId,

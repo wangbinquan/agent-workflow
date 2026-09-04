@@ -93,11 +93,8 @@ import type {
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
 import { createPostgresqlTaskAuthorizationQueries } from './postgresqlTaskAuthorization'
-import {
-  appendPostgresqlTaskCreatedTx,
-  type PostgresqlTaskExecutionTransaction,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { type PostgresqlTaskExecutionTransaction, withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 
 // These values are wire-frozen in task snapshots and node-run identities. They
 // are repeated here deliberately: TaskExecution must not import Resource
@@ -883,7 +880,7 @@ function createRootLaunch(
               updatedAt: startedAt,
             })
           }
-          return await appendPostgresqlTaskCreatedTx(tx, {
+          return await appendTaskCreatedCommittedEvent(tx, {
             taskId,
             status: failed ? 'failed' : 'pending',
             errorSummary,

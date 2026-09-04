@@ -193,9 +193,9 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
       'packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts',
     )
     expect(postgresqlLifecycle.indexOf('consumePreparedGateTx({')).toBeLessThan(
-      postgresqlLifecycle.indexOf('transitionPostgresqlHumanGateTaskTx(tx, {'),
+      postgresqlLifecycle.indexOf('transitionHumanGateTask(tx, {'),
     )
-    expect(postgresqlLifecycle.indexOf('transitionPostgresqlHumanGateTaskTx(tx, {')).toBeLessThan(
+    expect(postgresqlLifecycle.indexOf('transitionHumanGateTask(tx, {')).toBeLessThan(
       postgresqlLifecycle.indexOf('publishCommittedEventsAfterCommit(result.eventRefs)'),
     )
   })

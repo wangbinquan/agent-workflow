@@ -44,7 +44,14 @@ export const CANONICAL_MANIFEST_PATHS = {
 
 export type CanonicalManifestName = keyof typeof CANONICAL_MANIFEST_PATHS
 
-const EXACT_PUBLIC = new Set(['commands', 'events', 'operations', 'participants', 'queries', 'types'])
+const EXACT_PUBLIC = new Set([
+  'commands',
+  'events',
+  'operations',
+  'participants',
+  'queries',
+  'types',
+])
 const GOVERNED_EXTERNAL_SPECIFIERS = new Set(['drizzle-orm'])
 const MODULE_PREFIX = 'packages/backend/src/modules/'
 const BACKEND_PREFIX = 'packages/backend/src/'
@@ -1044,11 +1051,7 @@ function observedContextEdges(
           removeAfterWave:
             externalRole === 'infrastructure-external'
               ? null
-              : targetRemoveAfterWaveFor(
-                  unit.path,
-                  '$file',
-                  fromLocation.context as TargetContext,
-                ),
+              : targetRemoveAfterWaveFor(unit.path, '$file', fromLocation.context as TargetContext),
         })
       }
     }
@@ -1064,9 +1067,10 @@ function observedContextEdges(
  * 不是 provider adapter 时返回 `null`。
  */
 function providerTwinKey(path: string): string | null {
-  const match = /^(packages\/backend\/src\/modules\/[^/]+\/infrastructure\/)(?:sqlite|postgresql)([A-Z][A-Za-z0-9]*\.ts)$/.exec(
-    path,
-  )
+  const match =
+    /^(packages\/backend\/src\/modules\/[^/]+\/infrastructure\/)(?:sqlite|postgresql)([A-Z][A-Za-z0-9]*\.ts)$/.exec(
+      path,
+    )
   return match === null ? null : `${match[1]}@provider-twin/${match[2]}`
 }
 
@@ -2460,7 +2464,11 @@ function classifyTaskExecutionAuthority(input: {
   // (or from `doctor --backfill-containers`, which refuses while a daemon is
   // up), touches only rows whose frame is still unset, and is gated by the
   // `maintenance_state` completion marker — no task is claimed or driven.
-  if (/modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)FrameBackfillStore\.ts/.test(value)) {
+  if (
+    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)FrameBackfillStore\.ts/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'recovery-proof',
       controlSubtype: null,
@@ -2537,7 +2545,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /sqliteTaskExecutionIntent|submitTaskContinuation|submitContinuationIntentTx|services\/task\.ts#startTaskImpl/.test(
+    /sqliteTaskExecutionIntent|taskContinuationAdmission|submitTaskContinuation|submitContinuationIntentTx|services\/task\.ts#startTaskImpl/.test(
       value,
     )
   ) {
@@ -2589,7 +2597,11 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'GateDecisionTransaction+NodeRunLifecycleParticipantInTx',
     }
   }
-  if (/modules\/collaboration\/infrastructure\/(?:postgresql|sqlite)HumanGateTerminalSweep/.test(value)) {
+  if (
+    /modules\/collaboration\/infrastructure\/(?:postgresql|sqlite)HumanGateTerminalSweep/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'terminal-maintenance',
       controlSubtype: null,
@@ -2605,7 +2617,11 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'AuthorizedWorkgroupTaskRoomCommand',
     }
   }
-  if (/modules\/source-control\/infrastructure\/(?:postgresql|sqlite)RepositoryWorkspaceStore/.test(value)) {
+  if (
+    /modules\/source-control\/infrastructure\/(?:postgresql|sqlite)RepositoryWorkspaceStore/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'control-revision',
       controlSubtype: 'continuation-admission',
@@ -2613,7 +2629,11 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'RepositoryWorkspaceMutationAuthority',
     }
   }
-  if (/modules\/system-operations\/infrastructure\/(?:postgresql|sqlite)ResourceLimitPersistence/.test(value)) {
+  if (
+    /modules\/system-operations\/infrastructure\/(?:postgresql|sqlite)ResourceLimitPersistence/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'control-revision',
       controlSubtype: 'terminal-control',
@@ -2653,7 +2673,11 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'CanonicalControlTransaction',
     }
   }
-  if (/modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)TaskExecutionRecovery/.test(value)) {
+  if (
+    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)TaskExecutionRecovery/.test(
+      value,
+    )
+  ) {
     return {
       authorityKind: 'recovery-proof',
       controlSubtype: null,
@@ -2713,7 +2737,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskExecutionEffectPersistence|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:GateContinuationPreDrivePersistence|GateContinuationEffectStep|MergeStateLifecyclePersistence|NodeExecutionPersistence|NodeRunLifecyclePersistence|NodeRunMintParticipant|NodeRunRuntimePersistence|ProcessEffectObserver|RuntimeSessionCapturePersistence|RuntimeSessionLeaseOperations|TaskExecutionEffectPersistence|TaskLifecycleTransaction|TaskOwnershipPersistence|WorkgroupHostLedgerParticipant|WrapperRunPersistence)|nodeRunMintParticipant|humanGateTaskTransition|workspaceRollbackEffect)/.test(
       value,
     )
   ) {
@@ -2870,8 +2894,8 @@ interface NodeRunInsertSite {
 }
 
 const CANONICAL_NODE_RUN_INSERT_FILES = new Set([
+  'packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
   'packages/backend/src/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts',
-  'packages/backend/src/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts',
 ])
 
 function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRunInsertSite[] {
@@ -3065,8 +3089,7 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         else if (callee === 'createCodeHostEffectAttemptObserver') effectKind = 'code-host-mutation'
         else if (callee === 'createLocalEffectAttemptObserver' && symbol === 'runTaskLocalEffect') {
           effectKind = 'local-provider-effect'
-        }
-        else effectKind = literalText(objectProperty(argument, 'kind'))
+        } else effectKind = literalText(objectProperty(argument, 'kind'))
         if (effectKind === null) {
           unknown.push({
             file: unit.path,

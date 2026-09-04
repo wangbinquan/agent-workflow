@@ -5,10 +5,8 @@ import { taskExecutionOwners, tasks } from '@/db/schema'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionShutdownOperations } from '../application/ports/taskExecutionShutdownOperations'
 import { terminalizePostgresqlTaskExecutionIntentsTx } from './postgresqlTaskExecutionIntentTerminalPersistence'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 export class PostgresqlTaskExecutionShutdownOperations implements TaskExecutionShutdownOperations {
@@ -57,7 +55,7 @@ export class PostgresqlTaskExecutionShutdownOperations implements TaskExecutionS
         failureCode: 'daemon-shutdown-survivor',
         now: input.now,
       })
-      const event = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+      const event = await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,
         lifecycleRevision: nextRevision,
         previousStatus: 'running',

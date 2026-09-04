@@ -86,7 +86,7 @@ import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopol
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskRouteListFilters, TaskRouteOperations } from '../public/taskRoutes'
 import { PostgresqlBranchTraceSnapshotReader } from './postgresqlBranchTraceSnapshotReader'
-import { createPostgresqlNodeRunMintParticipantInTx } from './postgresqlNodeRunMintParticipant'
+import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createPostgresqlTaskAuthorizationQueries } from './postgresqlTaskAuthorization'
 import {
   createPostgresqlRootTaskLaunchKernel,
@@ -94,12 +94,8 @@ import {
   type PostgresqlTaskRouteLaunchDependencies,
 } from './postgresqlTaskRouteLaunchOperations'
 import { createPostgresqlTaskRouteRepairOperations } from './postgresqlTaskRouteRepairOperations'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  appendPostgresqlTaskNodeStatusesTx,
-  withPostgresqlSerializableTaskExecution,
-  withPostgresqlTaskAggregateTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+import { withPostgresqlSerializableTaskExecution, withPostgresqlTaskAggregateTransaction } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent, appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 
 function lacksMaterializedWorkspace(path: string): boolean {
@@ -1448,7 +1444,7 @@ async function syncWorkflow(
         `task '${input.taskId}' changed during workflow sync`,
       )
     }
-    return await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    return await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: input.taskId,
       lifecycleRevision: changedRow.revision,
       previousStatus: row.status as TaskStatus,
@@ -1573,7 +1569,7 @@ async function retryNode(
         `task '${input.taskId}' changed while retry was admitted`,
       )
     }
-    const mint = createPostgresqlNodeRunMintParticipantInTx(tx)
+    const mint = createNodeRunMintParticipantInTx(tx)
     const nodeChanges: Array<{
       nodeRunId: string
       nodeId: string
@@ -1631,7 +1627,7 @@ async function retryNode(
         cause: nodeId === target.nodeId ? 'retry-node' : 'retry-node-cascade',
       })
     }
-    const lifecycle = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+    const lifecycle = await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: input.taskId,
       lifecycleRevision: changedTask.revision,
       previousStatus: task.status as TaskStatus,
@@ -1643,7 +1639,7 @@ async function retryNode(
     const nodeStatuses =
       nodeChanges.length === 0
         ? null
-        : await appendPostgresqlTaskNodeStatusesTx(tx, {
+        : await appendTaskNodeStatusesCommittedEvent(tx, {
             taskId: input.taskId,
             reason: 'scheduler',
             nodeChanges,

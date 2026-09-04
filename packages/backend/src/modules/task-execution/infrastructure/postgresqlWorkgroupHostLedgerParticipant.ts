@@ -10,7 +10,7 @@ import type {
 } from '../public/commands'
 import { WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID } from '../public/commands'
 import type { PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
-import { createPostgresqlNodeRunMintParticipantInTx } from './postgresqlNodeRunMintParticipant'
+import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 
 class WorkgroupHostLedgerConflict extends Error {
   constructor(readonly operationKey: string) {
@@ -80,7 +80,7 @@ async function applyOperation(
   operation: WorkgroupHostLedgerOperation,
 ): Promise<WorkgroupHostLedgerMintReceipt | null> {
   if (operation.kind === 'mint-host-run') {
-    await createPostgresqlNodeRunMintParticipantInTx(transaction).mint({
+    await createNodeRunMintParticipantInTx(transaction).mint({
       id: operation.runId,
       taskId,
       nodeId: operation.nodeId,

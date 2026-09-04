@@ -1,4 +1,6 @@
 import type { DbClient } from '@/db/client'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import { PostgresqlTaskExecutionIntentPersistence } from '../infrastructure/postgresqlTaskExecutionIntentPersistence'
@@ -17,8 +19,6 @@ import { PostgresqlTaskExecutionIntentTerminalPersistence } from '../infrastruct
 import { SqliteTaskExecutionIntentTerminalPersistence } from '../infrastructure/sqliteTaskExecutionIntentTerminalPersistence'
 import { PostgresqlTaskExecutionRecoveryPersistence } from '../infrastructure/postgresqlTaskExecutionRecovery'
 import { SqliteTaskExecutionRecoveryPersistence } from '../infrastructure/sqliteTaskExecutionRecoveryPersistence'
-import { PostgresqlTaskDecisionPersistence } from '../infrastructure/postgresqlTaskDecisionPersistence'
-import { SqliteTaskDecisionPersistence } from '../infrastructure/sqliteTaskDecisionPersistence'
 import { PostgresqlHumanGateTaskLifecyclePersistence } from '../infrastructure/postgresqlHumanGateTaskLifecyclePersistence'
 import { SqliteHumanGateTaskLifecyclePersistence } from '../infrastructure/sqliteHumanGateTaskLifecyclePersistence'
 import { SqliteTaskEngineApplicationPersistence } from '../infrastructure/sqliteTaskEngineApplicationPersistence'
@@ -136,7 +136,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     runtimeLifecycle: new SqliteTaskRuntimeLifecyclePersistence(db),
     intentTerminalization: new SqliteTaskExecutionIntentTerminalPersistence(db),
     recovery: new SqliteTaskExecutionRecoveryPersistence(db),
-    humanGateDecisions: new SqliteTaskDecisionPersistence(db),
+    humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new SqliteHumanGateTaskLifecyclePersistence(db),
     reads: createSqliteTaskExecutionReadModels(db),
     recoveryAdministration: createSqliteRecoveryAdministration(db),
@@ -169,7 +169,7 @@ export function createPostgresqlTaskExecutionPersistence(
     runtimeLifecycle: new PostgresqlTaskRuntimeLifecyclePersistence(db),
     intentTerminalization: new PostgresqlTaskExecutionIntentTerminalPersistence(db),
     recovery: new PostgresqlTaskExecutionRecoveryPersistence(db),
-    humanGateDecisions: new PostgresqlTaskDecisionPersistence(db),
+    humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle: new PostgresqlHumanGateTaskLifecyclePersistence(db),
     reads: createPostgresqlTaskExecutionReadModels(db),
     recoveryAdministration: createPostgresqlTaskRecoveryOperations(db),

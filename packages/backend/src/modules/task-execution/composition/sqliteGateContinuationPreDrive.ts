@@ -1,5 +1,6 @@
 import type { DbClient } from '@/db/client'
-import { SqliteHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationPersistence'
+import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createSqliteClarifyContinuationConvergence } from '@/modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { createGateContinuationPreDriveStep } from '@/services/humanGateContinuationEffects'
@@ -13,7 +14,7 @@ export function createSqliteGateContinuationPreDriveStep(input: {
 }) {
   return createGateContinuationPreDriveStep({
     persistence: createSqliteTaskExecutionPersistence(input.db),
-    humanGateOperations: new SqliteHumanGateOperationPersistence(input.db),
+    humanGateOperations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
     clarifyConvergence: createSqliteClarifyContinuationConvergence(input),
   })
 }

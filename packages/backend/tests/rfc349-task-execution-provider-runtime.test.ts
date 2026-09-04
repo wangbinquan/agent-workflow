@@ -97,7 +97,7 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
       'tx.insert(taskRepos)',
       'tx.insert(taskExecutionIntents)',
       'tx.insert(workgroupTaskState)',
-      'appendPostgresqlTaskCreatedTx',
+      'appendTaskCreatedCommittedEvent',
     ]) {
       expect(adapter).toContain(write)
     }

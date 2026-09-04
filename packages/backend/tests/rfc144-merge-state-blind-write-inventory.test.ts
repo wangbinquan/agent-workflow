@@ -29,7 +29,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const MERGE_STATE_WRITE_ALLOWLIST: Record<string, number> = {
   'platform/persistence/sqlite/taskLifecycle.ts': 2,
   'modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant.ts': 1,
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts': 1,
   'modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts': 1,
   'modules/task-execution/infrastructure/sqliteNodeRunMintParticipant.ts': 1,
 }

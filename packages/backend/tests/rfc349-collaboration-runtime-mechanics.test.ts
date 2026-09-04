@@ -423,7 +423,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     expect(postgres).toContain('prepareReviewGateOpen')
     expect(postgres).toContain('prepareClarifyGateOpen')
     expect(postgres).toContain('withPostgresqlSerializableTaskExecution')
-    expect(postgres).toContain('createPostgresqlNodeRunMintParticipantInTx')
+    expect(postgres).toContain('createNodeRunMintParticipantInTx')
     expect(postgres).toContain('nodeRunLifecycle.inTransaction')
     expect(projection).not.toContain('DbClient')
     expect(projection).not.toContain('createSqlite')

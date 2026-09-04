@@ -24,7 +24,8 @@ import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/
 import { composeTaskExecutionHumanGateAdapter } from '@/modules/collaboration/application/adapters/task-execution-human-gate-adapter'
 import { SqliteClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/sqliteClarifyQuestionSnapshotReader'
 import { SqliteHumanGateOperationStore } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationStore'
-import { SqliteHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/sqliteHumanGateOperationPersistence'
+import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 import { GateContinuationEffectStep } from '@/modules/task-execution/infrastructure/sqliteGateContinuationEffectStep'
 import { resolveTaskDriveConfig } from '@/modules/task-execution/application/drive/taskDriveTypes'
@@ -208,7 +209,7 @@ async function prepareOpenOperation(input: {
     })
     .run()
   const result = await new ClarifyGateOpenPreparation(
-    new SqliteHumanGateOperationPersistence(input.db),
+    new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
     new SqliteClarifyQuestionSnapshotReader(input.db),
   ).prepare({
     taskId: input.taskId,

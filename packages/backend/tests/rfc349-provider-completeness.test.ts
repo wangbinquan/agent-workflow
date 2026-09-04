@@ -103,6 +103,8 @@ const PROVIDER_FORK_LEDGER = {
   'platform/background/maintenanceService.ts': { forks: 2, fence: 'discriminated-union' },
   'platform/background/maintenanceWorkerSupervisor.ts': { forks: 1, fence: 'discriminated-union' },
   'platform/persistence/databaseProviderRuntime.ts': { forks: 1, fence: 'fenced-dispatch' },
+  // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。
+  'platform/persistence/databaseTransaction.ts': { forks: 2, fence: 'fenced-dispatch' },
 } as const
 
 function providerForkCounts(): Record<string, number> {

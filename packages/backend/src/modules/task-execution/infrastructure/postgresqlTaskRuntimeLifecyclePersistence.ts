@@ -12,13 +12,8 @@ import {
 } from '@/services/lifecycle'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
-import {
-  appendPostgresqlTaskLifecycleTransitionTx,
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  withPostgresqlSerializableTaskExecution,
-  type PostgresqlTaskExecutionTransaction,
-} from './postgresqlTaskLifecycleTransaction'
+import { assertPostgresqlTaskOwnerlessTx, assertPostgresqlTaskOwnerTx, withPostgresqlSerializableTaskExecution, type PostgresqlTaskExecutionTransaction } from './postgresqlTaskLifecycleTransaction'
+import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 type LifecycleRow = Readonly<{
   status: TaskStatus
@@ -175,7 +170,7 @@ export class PostgresqlTaskRuntimeLifecyclePersistence implements TaskRuntimeLif
       if (changed === undefined) {
         throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
       }
-      const eventRef = await appendPostgresqlTaskLifecycleTransitionTx(tx, {
+      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,
         lifecycleRevision: changed.lifecycleEventRevision,
         previousStatus: from,

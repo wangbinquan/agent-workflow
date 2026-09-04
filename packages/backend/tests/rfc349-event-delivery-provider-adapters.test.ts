@@ -17,9 +17,9 @@ import {
   type EventTypeDescriptor,
 } from '@/modules/event-center/domain/model'
 import {
-  appendPostgresqlCommittedEventTx,
   createPostgresqlCommittedEventDeliveryPersistence,
 } from '@/platform/events/committed/postgresqlPersistence'
+import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -295,7 +295,7 @@ describe('RFC-349 Event Center provider behavior', () => {
     await expect(
       fake.db.transaction(
         async (tx) =>
-          await appendPostgresqlCommittedEventTx(tx, {
+          await appendCommittedEvent(tx, {
             eventId: 'committed-event-1',
             eventGroupId: 'group-1',
             eventGroupOrdinal: 0,

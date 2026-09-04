@@ -47,7 +47,7 @@ function taskRow(id: string) {
     worktreePath: '',
     baseBranch: 'main',
     branch: `agent-workflow/${id}`,
-    status: 'pending',
+    status: 'pending' as const,
     inputs: '{}',
     startedAt: 1,
   }

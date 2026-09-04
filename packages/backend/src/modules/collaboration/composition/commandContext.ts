@@ -21,7 +21,8 @@ import type { CollaborationTaskAccessPort } from '../application/ports/collabora
 import type { ClarifyDirectiveStore } from '../application/ports/clarifyDirectiveStore'
 import { FsHumanGateArtifactStore } from '../infrastructure/fsHumanGateArtifactStore'
 import { SqliteClarifyQuestionSnapshotReader } from '../infrastructure/sqliteClarifyQuestionSnapshotReader'
-import { SqliteHumanGateOperationPersistence } from '../infrastructure/sqliteHumanGateOperationPersistence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGateOperationPersistence'
 import { SqliteHumanGateOperationStore } from '../infrastructure/sqliteHumanGateOperationStore'
 import { SqliteManualQuestionOpenWriter } from '../infrastructure/sqliteManualQuestionOpenWriter'
 import { SqliteCommittedReviewArtifactReader } from '../infrastructure/sqliteCommittedReviewArtifactReader'
@@ -30,7 +31,6 @@ import { createSqliteReviewTaskAccessPort } from '../infrastructure/sqliteReview
 import { SqliteTaskFeedbackStore } from '../infrastructure/sqliteTaskFeedbackStore'
 import { PostgresqlClarifyQuestionSnapshotReader } from '../infrastructure/postgresqlClarifyQuestionSnapshotReader'
 import { PostgresqlCommittedReviewArtifactReader } from '../infrastructure/postgresqlCommittedReviewArtifactReader'
-import { PostgresqlHumanGateOperationPersistence } from '../infrastructure/postgresqlHumanGateOperationPersistence'
 import { PostgresqlManualQuestionOpenWriter } from '../infrastructure/postgresqlManualQuestionOpenWriter'
 import { PostgresqlReviewNodeReviewerStore } from '../infrastructure/postgresqlReviewNodeReviewerStore'
 import { createPostgresqlReviewTaskAccessPort } from '../infrastructure/postgresqlReviewTaskAccess'
@@ -75,7 +75,7 @@ export function createCollaborationCommandContext(
     taskAccess: createSqliteCollaborationTaskAccessPort(input.db),
     reviewTaskAccess: input.reviewTaskAccess ?? createSqliteReviewTaskAccessPort(input.db),
     persistence: {
-      operations: new SqliteHumanGateOperationPersistence(input.db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
       clarifyQuestions: new SqliteClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new SqliteManualQuestionOpenWriter(input.db, operationTransactions),
       reviewers: new SqliteReviewNodeReviewerStore(input.db),
@@ -102,7 +102,7 @@ export function createPostgresqlCollaborationCommandContext(
     taskAccess: createPostgresqlCollaborationTaskAccessPort(input.db),
     reviewTaskAccess: input.reviewTaskAccess ?? createPostgresqlReviewTaskAccessPort(input.db),
     persistence: {
-      operations: new PostgresqlHumanGateOperationPersistence(input.db),
+      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
       clarifyQuestions: new PostgresqlClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new PostgresqlManualQuestionOpenWriter(input.db),
       reviewers: new PostgresqlReviewNodeReviewerStore(input.db),

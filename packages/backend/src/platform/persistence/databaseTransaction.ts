@@ -41,10 +41,39 @@ import {
   createSqliteCapabilities,
   type EngineCapabilities,
 } from './capabilities'
+import { unhandledDatabaseProvider } from './databaseProviders'
+import type { DatabaseProvider } from './schemaContract'
 import { acquireWriterLease } from './writerLease'
 
 /** 事务句柄。两个 provider 上都是 drizzle 的同一套 query builder。 */
 export type DatabaseTransaction = ProviderNeutralDatabase
+
+// 每个引擎一份能力矩阵单例：`session.engine` 与 `engineOf(tx)` 拿到的是同一个对象。
+const SQLITE_ENGINE = createSqliteCapabilities()
+const POSTGRESQL_ENGINE = createPostgresqlCapabilities()
+
+/**
+ * 事务句柄（或客户端）背后的引擎能力。一份实现在事务体里只拿得到 `tx`，按能力提需求时从这里取。
+ *
+ * 判据是 drizzle 的 `resultKind`：bun:sqlite 驱动是 `'sync'`，sqlite-proxy 是 `'async'`——而本仓
+ * 唯一的 async SQLite-dialect 客户端就是 PostgreSQL 客户端（`postgresqlDatabaseClient.ts`）。
+ * 这比品牌字段更稳：事务句柄是 drizzle 的 `SQLiteTransaction`，不带 `$provider`。
+ */
+export function engineOf(handle: DatabaseTransaction): EngineCapabilities {
+  return (handle as unknown as { readonly resultKind?: unknown }).resultKind === 'async'
+    ? POSTGRESQL_ENGINE
+    : SQLITE_ENGINE
+}
+
+/**
+ * `.run()` 结果的受影响行数。bun:sqlite 返回 `{ changes, lastInsertRowid }`；本仓的 sqlite-proxy
+ * 回调对 `run` 也回 `{ rows: [], changes }`（`postgresqlDatabaseClient.ts` 的 executeArrays）。
+ * 两边都在 `changes`，缺失按 0 计——CAS 判据「必须恰好 1 行」因此在缺失时失败得大声。
+ */
+export function affectedRows(result: unknown): number {
+  const changes = (result as { readonly changes?: unknown } | null | undefined)?.changes
+  return typeof changes === 'number' && Number.isSafeInteger(changes) && changes >= 0 ? changes : 0
+}
 
 export interface DatabaseSession {
   /**
@@ -126,7 +155,7 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   // （写成同一个局部函数而不是 `this.transaction(...)` 自调：S-10 / RFC-317 T37 守卫按词法扫
   // `.transaction(`，自调会被误记成一处绕过 dbTxSync 的裸 drizzle 事务。）
   return Object.freeze({
-    engine: createSqliteCapabilities(),
+    engine: SQLITE_ENGINE,
     transaction,
     serializable: transaction,
   })
@@ -136,7 +165,7 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
 export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): DatabaseSession {
   const client: object = db
   return Object.freeze({
-    engine: createPostgresqlCapabilities(),
+    engine: POSTGRESQL_ENGINE,
     async transaction<T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)
@@ -168,13 +197,19 @@ export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): D
 
 const sessions = new WeakMap<object, DatabaseSession>()
 
-function isPostgresqlDatabaseClient(client: object): client is PostgresqlDatabaseClient {
-  return (client as { readonly $provider?: unknown }).$provider === 'postgresql'
+/**
+ * 客户端句柄自述的 provider。PostgreSQL 客户端带 `$provider` 品牌（`postgresqlDatabaseClient.ts`）；
+ * 没有品牌的客户端只有 bun:sqlite 一种（`db/client.ts`）。第三个 provider 必须带自己的品牌，
+ * 并在下面的分派里得到自己的分支——残余分支是 `unhandledDatabaseProvider` 的 never 汇。
+ */
+function databaseProviderOf(client: object): DatabaseProvider {
+  const brand = (client as { readonly $provider?: unknown }).$provider
+  return brand === undefined ? 'sqlite' : (brand as DatabaseProvider)
 }
 
 /**
- * 按客户端句柄取会话（按客户端记忆化）。这是全仓**唯一**看 provider 的地方之一：PostgreSQL 客户端
- * 以 `$provider` 品牌自述，其余一律当 SQLite。业务代码拿到的是 DatabaseSession，看不见 provider。
+ * 按客户端句柄取会话（按客户端记忆化）。这是全仓看 provider 的唯一地方之一：业务代码拿到的是
+ * DatabaseSession，看不见 provider。
  *
  * 传**客户端**，不要传事务句柄——重入靠 AsyncLocalStorage 帧按客户端识别，事务句柄不是帧的 key，
  * 拿它开会话会在一笔开着的事务里再发一次 BEGIN。
@@ -183,9 +218,13 @@ export function databaseSessionFor(db: ProviderNeutralDatabase): DatabaseSession
   const client = db as object
   const cached = sessions.get(client)
   if (cached !== undefined) return cached
-  const session = isPostgresqlDatabaseClient(client)
-    ? createPostgresqlDatabaseSession(client)
-    : createSqliteDatabaseSession(db as unknown as DbClient)
+  const provider = databaseProviderOf(client)
+  const session =
+    provider === 'postgresql'
+      ? createPostgresqlDatabaseSession(db as unknown as PostgresqlDatabaseClient)
+      : provider === 'sqlite'
+        ? createSqliteDatabaseSession(db as unknown as DbClient)
+        : unhandledDatabaseProvider(provider)
   sessions.set(client, session)
   return session
 }

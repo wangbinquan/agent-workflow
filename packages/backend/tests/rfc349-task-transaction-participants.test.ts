@@ -13,7 +13,7 @@ import { dbTxSync } from '@/db/txSync'
 import { nodeRuns, taskCollaborators, tasks, users } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { createSqliteNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/sqliteNodeRunMintParticipant'
-import { createPostgresqlNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/postgresqlNodeRunMintParticipant'
+import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import {
   createSqliteTaskAuthorizationParticipantInTx,
   createSqliteTaskAuthorizationQueries,
@@ -233,7 +233,7 @@ describe('RFC-349 task transaction participants', () => {
       ).resolves.toBe(false)
 
       await expect(
-        createPostgresqlNodeRunMintParticipantInTx(tx).mint({
+        createNodeRunMintParticipantInTx(tx).mint({
           id: '01RFC349000000000000000002',
           taskId: TASK_ID,
           nodeId: 'review-node',
