@@ -105378,18 +105378,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#property",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "property",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#runPostgresqlResourceCatalogTransaction",
@@ -157068,6 +157056,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "postgresqlSqlState",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "id": "owner:packages/backend/src/platform/persistence/capabilities.ts#postgresqlUniqueViolationConstraint",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "postgresqlUniqueViolationConstraint",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -313519,5 +313519,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51909f1c46c00f19ef911df00ba26d2803bdf807739ef4445b117d105b462d14"
+  "sourceDigest": "sha256:0cd8ccf434c44b4cb752bd6e2be767296bfc50c5de22fb4469e5f287f1be018d"
 }

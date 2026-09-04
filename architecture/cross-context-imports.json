@@ -74240,6 +74240,23 @@
       "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d6f87576bd011bb8b6bd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/capabilities.ts#postgresqlUniqueViolationConstraint",
+      "toPath": "packages/backend/src/platform/persistence/capabilities.ts",
+      "toSymbol": "postgresqlUniqueViolationConstraint",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/application/capabilityTemplateOperations.ts#$file",
@@ -88691,9 +88708,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5217,
+    "architectureExceptions": 5218,
     "implementationSccs": 0,
-    "observedEdges": 6351,
+    "observedEdges": 6352,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -174062,6 +174079,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/dispatchFrontier.ts#isReviewSupersededRow"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts#$file",
+      "id": "import:d6f87576bd011bb8b6bd",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/capabilities",
+      "syntax": "static-import",
+      "targetSymbol": "postgresqlUniqueViolationConstraint",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/capabilities.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/capabilities.ts#postgresqlUniqueViolationConstraint"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/application/capabilityTemplateOperations.ts",
@@ -190855,7 +190888,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:51909f1c46c00f19ef911df00ba26d2803bdf807739ef4445b117d105b462d14",
+  "sourceDigest": "sha256:0cd8ccf434c44b4cb752bd6e2be767296bfc50c5de22fb4469e5f287f1be018d",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
