@@ -178,7 +178,7 @@ SQLite 侧是 `const changeset = JSON.parse(claim.draft.changesetJson)`（prefli
 | **AC-6** 路由 decode-call-map + wire 冻结 | ✅ | `routes/intentSessions.ts` 不存在；`modules/intent/inbound/intentSessionRoutes.ts` 1094 → 836 行，详情 handler 的 ~180 行编排收进 application、两条判据进 domain；`api-contract-coverage` / `route-error-code-coverage` / 契约注册表全绿 |
 | **AC-7** 行为 oracle 除 import 外未改 | ✅ | 16 个平移文件 git 认出的都是 rename，除 `dumpBuilder.ts` / `turnEngine.ts` 各一行相对 import 外内容一字未动（design §7 R2 要的字节级绊线——没有手抄，绊线的目的结构性地不存在） |
 | **AC-8** W4-E4a 归零 + 全局净变化如实记账 | ⚠️ **176 → 41**，未归零；全局 **净减 116** | 见 §9.4 |
-| **AC-9** exact-SHA hosted CI success | ✅ | `bec6c29f0` run `33834461744` **run 级 conclusion == success**（覆盖 T4/T6/T7/T8/T9）；T4b 的取证见 §9.5 |
+| **AC-9** exact-SHA hosted CI success | ⚠️ **部分** | `bec6c29f0` 的 CI run `33834461744`（已按 `.name == "CI"` 核实）**run 级 conclusion == success**，覆盖 T4/T6/T7/T8/T9。**T4b 与实现门 r2 的后续几笔（`b21d102c2` 起）尚未拿到一轮含它们的绿 CI**——不是它们红，而是主干被并发 RFC-356 连续推红两轮（`d28a66205` 8 个 backend 分片全红、`dd06e994a` 仍红一条 `discardNodeIso` 的 act boundary），我的提交在那两轮里全部作为祖先陪跑。本地对受影响面逐轮跑绿（architecture 417 / intent 面 108 / rfc355 全套 52），但**本地不是取证**——这一格等主干转绿后补，不提前打勾 |
 
 ### 9.2 AC-3 的诚实结论：合并到「事务机制」为止
 
