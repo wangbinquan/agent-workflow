@@ -4386,29 +4386,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/questionDispatchComposition.ts",
-      "to": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition",
-      "specifier": "@/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "collaboration",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:16b906d80efbbdd0dd50"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/questionDispatchComposition.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/recovery.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations",
       "specifier": "@/modules/task-execution/application/ports/taskRecoveryOperations",
@@ -6804,6 +6781,29 @@
       ]
     },
     {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/questionDispatchComposition.ts",
+      "to": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand",
+      "specifier": "@/modules/collaboration/infrastructure/questionDispatchCommand",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "collaboration",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；RFC-359 W1-T2a 起目标已是 provider-中立的 questionDispatchCommand，这条边要等 services facade 退役才消失，仍须收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/questionDispatchComposition.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file"
+      ],
+      "canonicalImportEdgeIds": [
+        "import:754a1c00e0512e2efcb4"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/questionDispatchComposition.ts"
+      ]
+    },
+    {
       "rule": "R2-outbound-module-to-legacy",
       "from": "packages/backend/src/modules/integration/application/mrEnsure.ts",
       "to": "@/services/codeHost/call",
@@ -8743,15 +8743,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d",
+    "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "f7fa3449efe316dc64bd36e18556dc69b5d9b320",
-    "contentDigest": "sha256:c66433146926bd49a8200e8d3d2c7645b8a097a8b919b2700054daa75e9989e8",
+    "currentSnapshotSha": "ed99c55855085a58b51af0ba6f495016fdb99c12",
+    "contentDigest": "sha256:5f7d63ecf96bb0fdfb73846d3d207ab71fd0ddb54427d2f9114ac30fb6bb534c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

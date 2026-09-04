@@ -3303,7 +3303,7 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:16b906d80efbbdd0dd50"
+        "import:754a1c00e0512e2efcb4"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/questionDispatchComposition.ts",
@@ -6144,7 +6144,6 @@
     {
       "boundaryEdgeIds": [
         "import:0cc942259033b0a4d7b5",
-        "import:1e67a02e625882cb45ca",
         "import:2ee30e92acf176a08414",
         "import:bcaf0b190dfbac44dd63",
         "import:c2d20f277d3e2ac6ad27",
@@ -6876,5 +6875,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d"
+  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43"
 }

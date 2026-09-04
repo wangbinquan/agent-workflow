@@ -4780,55 +4780,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#createQuestionDispatchCommandContext",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#createQuestionDispatchCommandContext",
-      "symbol": "createQuestionDispatchCommandContext",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#createSqliteQuestionDispatchCommand",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#createSqliteQuestionDispatchCommand",
-      "symbol": "createSqliteQuestionDispatchCommand",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#addReviewComment",
@@ -6162,6 +6113,55 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/postgresqlWorkgroupTaskRoomClarifyParticipant.ts#createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx",
       "symbol": "createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommand",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommand",
+      "symbol": "createQuestionDispatchCommand",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommandContext",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommandContext",
+      "symbol": "createQuestionDispatchCommandContext",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -46120,7 +46120,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d",
+  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

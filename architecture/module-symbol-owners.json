@@ -23025,42 +23025,6 @@
       "currentContext": "collaboration",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#createQuestionDispatchCommandContext",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createQuestionDispatchCommandContext",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts",
-      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteQuestionDispatchComposition.ts#createSqliteQuestionDispatchCommand",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteQuestionDispatchCommand",
-      "targetContext": "collaboration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "collaboration",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts",
       "id": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteReview.ts#$file",
       "removeAfterWave": null,
@@ -27962,6 +27926,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createPostgresqlWorkgroupTaskRoomClarifyParticipantInTx",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommand",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createQuestionDispatchCommand",
+      "targetContext": "collaboration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "collaboration",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts",
+      "id": "owner:packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts#createQuestionDispatchCommandContext",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createQuestionDispatchCommandContext",
       "targetContext": "collaboration",
       "targetLayer": "infrastructure"
     },
@@ -313771,5 +313771,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aa66e4b7347c1d24d5c424af1f6db053a394d7f7ebe45fd81a7197dab0ed721d"
+  "sourceDigest": "sha256:ccd352f079d15abc313123b6af7b8ddb82946c596d8857c407c7b6f1f9f7de43"
 }
