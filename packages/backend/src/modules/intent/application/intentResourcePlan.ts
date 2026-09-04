@@ -3,7 +3,14 @@
 // 这个函数在此之前是**两个 provider 各一份**：`sqliteIntentApplyOperations.ts` L205-248 与
 // `postgresqlIntentApplyOperations.ts` L85-128，**逐字节相同，只有形参名 `op` vs `operation` 不同**。
 // 它不碰数据库、不碰事务、不碰任何 provider 机制——纯粹是「op + manifest → plan」的映射，
-// 属于 domain，不属于任何 provider。
+// 不属于任何 provider。
+//
+// ⚠️ **为什么在 `application/` 而不是 `domain/`**：它的两个入参类型（`ResolvedIntentOp`、
+// `IntentManifestEntry`）目前还住在 legacy 的 `services/intent/{resolveChangeset,manifest}`，
+// 而 RFC-317 R2 不许模块的 `domain/` 反向 import legacy 层（既有账本的口径是「R2 债全部落在
+// application 层」）。**T7 把那两个文件迁进 `modules/intent` 之后，本文件可以再回 domain**
+// ——那时它的依赖就全在模块内了。在此之前放 application 是如实反映当前依赖形态，
+// 不是给 domain 开一个后门。
 //
 // 抄两份的代价是实测过的：本 RFC 的 T1 在同一批文件里发现 apply 层的 changeset 校验已经真的漂了
 // （PostgreSQL 校验、SQLite 裸 `JSON.parse`）。判据只要有两份，迟早会漂——差别只在哪一条先漂。

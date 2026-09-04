@@ -1,5 +1,5 @@
 import { formatChangesetIssues } from '@agent-workflow/shared'
-import { intentResourcePlanOf } from '../domain/intentResourcePlan'
+import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
 import {
   assertIntentDraftUnresolved,

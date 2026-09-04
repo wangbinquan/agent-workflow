@@ -33,7 +33,7 @@ import { formatChangesetIssues } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import { dbTxSync, type DbTxSync } from '@/db/txSync'
-import { intentResourcePlanOf } from '../domain/intentResourcePlan'
+import { intentResourcePlanOf } from '../application/intentResourcePlan'
 import { decodeStoredChangeset } from '../domain/storedChangeset'
 import {
   requireCommittableDraft,
