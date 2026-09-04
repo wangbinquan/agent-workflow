@@ -24,9 +24,6 @@ import type { Hono } from 'hono'
 import {
   CommitIntentSchema,
   CreateIntentSessionSchema,
-  IntentApplyReceiptSchema,
-  IntentDraftDtoSchema,
-  IntentMountRequestsSchema,
   PostIntentAnswersSchema,
   PostIntentCurrentActionSchema,
   PostIntentIterationSchema,
@@ -36,12 +33,6 @@ import {
   PostIntentMountApprovalsSchema,
   IntentMountRefSchema,
   IntentProvenanceRefSchema,
-  parseIntentChangeset,
-  type IntentDraftDto,
-  type IntentJourneySnapshot,
-  type IntentSessionDetail,
-  type IntentSessionSummary,
-  type IntentTurnDto,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { actorOf, type Actor } from '@/auth/actor'
@@ -52,22 +43,20 @@ import { Paths } from '@/util/paths'
 import { INTENT_SESSIONS_CHANNEL, intentSessionsBroadcaster } from '@/ws/broadcaster'
 import type { IntentApplyOperations, IntentPersistence } from '@/modules/intent/public/operations'
 import { canAuditIntentSessions } from '@/modules/intent/public/operations'
-import { deriveIntentSlots } from '@/modules/intent/application/resolveChangeset'
-import { projectIntentJourney } from '@/modules/intent/domain/journey'
 import {
-  intentResourceVisibility,
-  listVisibleIntentResources,
-} from '@/modules/intent/application/resourceCatalog'
+  intentSessionListJourneyOf,
+  intentSessionSummaryOf,
+  newIntentSessionJourney,
+} from '@/modules/intent/application/sessionSummary'
+import { projectIntentSessionDetail } from '@/modules/intent/application/sessionDetail'
+import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import type { IntentResourceCatalogBinding } from '@/modules/intent/application/resourceCatalog'
 import { cancelIntentTurn } from '@/modules/intent/application/turnEngine'
 import {
   dispatchIntentTurn,
   type IntentDispatchDeps,
 } from '@/modules/intent/application/dispatcher'
-import {
-  getIntentTurnSession,
-  projectIntentTurnExecution,
-} from '@/modules/intent/application/turnSession'
+import { getIntentTurnSession } from '@/modules/intent/application/turnSession'
 import {
   addIntentMount,
   createIntentSessionAndReserveTurn,
@@ -76,13 +65,10 @@ import {
   insertUserTurnAndReserve,
   listIntentProvenanceForActor,
   listIntentSessionsForActor,
-  listIntentTurns,
   rebaseIntentSession,
   removeIntentMount,
-  sessionManifest,
   setIntentSessionStatus,
   type ReservedIntentTurn,
-  type IntentSessionRow,
 } from '@/modules/intent/application/session'
 import { safeJsonOrThrowInvalid } from '@/util/http'
 import {
@@ -100,36 +86,6 @@ import {
 } from '@/modules/intent/application/workingSet'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
-
-/** Zod-validated JSON-record parse — routes never `as`-cast (RFC-054 W1-7). */
-const JsonRecordSchema = z.record(z.string(), z.unknown())
-function parseJsonRecord(text: string): Record<string, unknown> {
-  return JsonRecordSchema.parse(JSON.parse(text))
-}
-
-function sessionSummary(
-  row: IntentSessionRow & { currentDraftRevision?: number | null },
-  opts: {
-    includeOwner: boolean
-    journey: IntentJourneySnapshot
-    currentDraftRevision?: number | null
-  },
-): IntentSessionSummary {
-  return {
-    id: row.id,
-    title: row.title,
-    status: row.status,
-    contextRevision: row.contextRevision,
-    turnSeq: row.turnSeq,
-    commitSeq: row.commitSeq,
-    inFlight: row.inFlightTurnId !== null,
-    currentDraftRevision: opts.currentDraftRevision ?? row.currentDraftRevision ?? null,
-    journey: opts.journey,
-    ...(opts.includeOwner ? { ownerUserId: row.ownerUserId } : {}),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  }
-}
 
 const IntentListCursorSchema = z
   .object({ updatedAt: z.number().int().min(0), id: z.string().min(1).max(128) })
@@ -231,16 +187,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       )
       void fireTurn(session.id, actor, config, reservation)
       return c.json(
-        sessionSummary(session, {
+        intentSessionSummaryOf(session, {
           includeOwner: false,
-          journey: projectIntentJourney({
-            status: session.status,
-            contextRevision: session.contextRevision,
-            commitSeq: session.commitSeq,
-            inFlight: true,
-            latestAgentTurnKind: 'running',
-            currentDraft: null,
-          }),
+          journey: newIntentSessionJourney(session),
         }),
         201,
       )
@@ -281,27 +230,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       const hasMore = paged && rows.length > limit
       const visibleRows = hasMore ? rows.slice(0, limit) : rows
       const items = visibleRows.map((row) =>
-        sessionSummary(row, {
-          includeOwner,
-          journey: projectIntentJourney({
-            status: row.status,
-            contextRevision: row.contextRevision,
-            commitSeq: row.commitSeq,
-            inFlight: row.inFlightTurnId !== null,
-            ...(row.latestAgentTurnKind === null
-              ? {}
-              : { latestAgentTurnKind: row.latestAgentTurnKind }),
-            currentDraft:
-              row.currentDraftId === null || row.currentDraftContextRevision === null
-                ? null
-                : {
-                    id: row.currentDraftId,
-                    contextRevision: row.currentDraftContextRevision,
-                    validationErrors: row.currentDraftValidationErrors,
-                  },
-            ...(row.latestCommit === null ? {} : { latestCommit: row.latestCommit }),
-          }),
-        }),
+        intentSessionSummaryOf(row, { includeOwner, journey: intentSessionListJourneyOf(row) }),
       )
       if (!paged) return c.json(items)
       const last = visibleRows.at(-1)
@@ -326,205 +255,14 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     },
     async (c) => {
       const actor = actorOf(c)
-      const session = await getIntentSessionForActor(
-        deps.intentPersistence,
-        actor,
-        c.req.param('id'),
+      return c.json(
+        await projectIntentSessionDetail(
+          deps.intentPersistence,
+          actor,
+          c.req.param('id'),
+          deps.resourceCatalogFor(actor),
+        ),
       )
-      const turns = await listIntentTurns(deps.intentPersistence, session.id)
-      const turnDtos: IntentTurnDto[] = turns.map((t) => ({
-        id: t.id,
-        seq: t.seq,
-        role: t.role,
-        kind: t.kind,
-        content: parseJsonRecord(t.contentJson),
-        contextRevision: t.contextRevision,
-        runMeta: t.runMetaJson === null ? null : parseJsonRecord(t.runMetaJson),
-        scratchRetained: t.scratchRetained,
-        execution: projectIntentTurnExecution(t),
-        createdAt: t.createdAt,
-      }))
-      const detailArtifacts = await deps.intentPersistence.loadSessionDetailArtifacts(session.id)
-      const commits = detailArtifacts.commits
-        .map((row) => ({
-          journalId: row.id,
-          draftId: row.draftId,
-          state: row.state,
-          receipt:
-            row.receiptJson === null
-              ? null
-              : IntentApplyReceiptSchema.parse(JSON.parse(row.receiptJson)),
-          error: row.error,
-          createdAt: row.createdAt,
-        }))
-        .sort((a, b) => b.createdAt - a.createdAt || b.journalId.localeCompare(a.journalId))
-      const workingSetRow = await getLatestIntentWorkingSetChange(
-        deps.intentPersistence,
-        session.id,
-      )
-      const draftRows = detailArtifacts.drafts
-      const resolutionRows = detailArtifacts.resolutions
-      const resolutionByDraft = new Map(
-        resolutionRows.map((resolution) => [resolution.draftId, resolution.reason]),
-      )
-      const committedSeqByDraft = new Map<string, number>()
-      for (const commit of commits) {
-        if (commit.state === 'committed' && commit.receipt !== null) {
-          committedSeqByDraft.set(commit.draftId, commit.receipt.commitSeq)
-        }
-      }
-      const drafts: IntentDraftDto[] = draftRows
-        .map((draft): IntentDraftDto => {
-          const parsedChangeset = parseIntentChangeset(draft.changesetJson)
-          const slots = parsedChangeset.ok
-            ? deriveIntentSlots(sessionManifest(session), parsedChangeset.changeset).slots
-            : []
-          const commitSeq = committedSeqByDraft.get(draft.id) ?? null
-          const lifecycle: IntentDraftDto['lifecycle'] =
-            session.currentDraftId === draft.id
-              ? 'current'
-              : commitSeq !== null
-                ? 'committed'
-                : (resolutionByDraft.get(draft.id) ?? 'superseded')
-          return {
-            id: draft.id,
-            revision: draft.revision,
-            changeset: JSON.parse(draft.changesetJson),
-            validation: IntentDraftDtoSchema.shape.validation.parse(
-              JSON.parse(draft.validationJson),
-            ),
-            slots,
-            draftHash: draft.draftHash,
-            contextRevision: draft.contextRevision,
-            stale: draft.contextRevision !== session.contextRevision,
-            lifecycle,
-            activity:
-              lifecycle === 'current' && session.inFlightTurnId !== null ? 'generating' : 'idle',
-            commitSeq,
-            createdAt: draft.createdAt,
-          }
-        })
-        .sort((a, b) => b.revision - a.revision || b.id.localeCompare(a.id))
-      const currentDraft = drafts.find((draft) => draft.lifecycle === 'current') ?? null
-      const visibleResources = await listVisibleIntentResources(deps.resourceCatalogFor(actor))
-      const visibleByKey = new Map(
-        visibleResources.map((resource) => [
-          `${resource.resourceType}:${resource.resourceId}`,
-          resource,
-        ]),
-      )
-      const mounts = sessionManifest(session)
-        .filter((entry) => entry.root)
-        .map((entry) => ({
-          handle: entry.handle,
-          resourceType: entry.resourceType,
-          resourceId: entry.resourceId,
-          displayName: visibleByKey.get(`${entry.resourceType}:${entry.resourceId}`)?.name ?? null,
-          detail: entry.detail,
-        }))
-      const latestAgentTurn = [...turnDtos].reverse().find((turn) => turn.role === 'agent')
-      const hasLaterApproval =
-        latestAgentTurn === undefined
-          ? false
-          : turnDtos.some(
-              (turn) => turn.kind === 'mount-approval' && turn.seq > latestAgentTurn.seq,
-            )
-      let mountSuggestions: IntentSessionDetail['mountSuggestions'] = null
-      if (
-        latestAgentTurn !== undefined &&
-        (latestAgentTurn.kind === 'questions' || latestAgentTurn.kind === 'changeset') &&
-        latestAgentTurn.contextRevision === session.contextRevision &&
-        !hasLaterApproval
-      ) {
-        const parsedRequests = IntentMountRequestsSchema.safeParse(
-          latestAgentTurn.content.mountRequests,
-        )
-        if (parsedRequests.success) {
-          const mountedKeys = new Set(
-            mounts.map((mount) => `${mount.resourceType}:${mount.resourceId}`),
-          )
-          const seen = new Set<string>()
-          const items = parsedRequests.data.flatMap((request) => {
-            const key = `${request.resourceType}\u0000${request.name}`
-            if (seen.has(key)) return []
-            seen.add(key)
-            return [
-              {
-                resourceType: request.resourceType,
-                name: request.name,
-                reason: request.reason ?? null,
-                candidates: visibleResources
-                  .filter(
-                    (resource) =>
-                      resource.resourceType === request.resourceType &&
-                      resource.name === request.name &&
-                      !mountedKeys.has(`${resource.resourceType}:${resource.resourceId}`),
-                  )
-                  .map((resource) => ({
-                    resourceId: resource.resourceId,
-                    name: resource.name,
-                    description: resource.description,
-                  })),
-              },
-            ]
-          })
-          if (items.length > 0) {
-            mountSuggestions = {
-              sourceTurnId: latestAgentTurn.id,
-              sourceTurnSeq: latestAgentTurn.seq,
-              contextRevision: session.contextRevision,
-              items,
-            }
-          }
-        }
-      }
-      const journey = projectIntentJourney({
-        status: session.status,
-        contextRevision: session.contextRevision,
-        commitSeq: session.commitSeq,
-        inFlight: session.inFlightTurnId !== null,
-        ...(latestAgentTurn === undefined ? {} : { latestAgentTurnKind: latestAgentTurn.kind }),
-        currentDraft:
-          currentDraft === null
-            ? null
-            : {
-                id: currentDraft.id,
-                contextRevision: currentDraft.contextRevision,
-                validationErrors: currentDraft.validation.errors,
-              },
-        ...(commits[0] === undefined
-          ? {}
-          : { latestCommit: { draftId: commits[0].draftId, state: commits[0].state } }),
-        workingSetChange: workingSetRow === null ? null : { state: workingSetRow.state },
-      })
-      const detail: IntentSessionDetail = {
-        session: {
-          ...sessionSummary(session, {
-            includeOwner: session.ownerUserId !== actor.user.id,
-            journey,
-            currentDraftRevision: currentDraft?.revision ?? null,
-          }),
-        },
-        mounts,
-        workingSetChange:
-          workingSetRow === null ? null : projectIntentWorkingSetChange(workingSetRow),
-        mountSuggestions,
-        turns: turnDtos,
-        currentDraft,
-        drafts,
-        composerSource:
-          currentDraft !== null
-            ? { kind: 'current-draft', draftId: currentDraft.id, revision: currentDraft.revision }
-            : session.commitSeq > 0
-              ? { kind: 'latest-checkpoint', commitSeq: session.commitSeq }
-              : { kind: 'conversation' },
-        retrySource:
-          latestAgentTurn?.kind === 'error' && session.inFlightTurnId === null
-            ? { turnId: latestAgentTurn.id, turnSeq: latestAgentTurn.seq }
-            : null,
-        commits,
-      }
-      return c.json(detail)
     },
   )
 

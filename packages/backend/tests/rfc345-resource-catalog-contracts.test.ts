@@ -657,7 +657,10 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/intent/infrastructure/sqliteIntentApplyOperations.ts'),
       'utf8',
     )
-    const route = readFileSync(resolve(sourceRoot, 'routes/intentSessions.ts'), 'utf8')
+    const route = readFileSync(
+      resolve(sourceRoot, 'modules/intent/inbound/intentSessionRoutes.ts'),
+      'utf8',
+    )
     const composition = readFileSync(
       resolve(sourceRoot, 'modules/resource-catalog/composition/intentApply.ts'),
       'utf8',

@@ -182,6 +182,7 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
   // 于是「模块外无人消费」第一次显形。T9（public 面收口）逐个裁决：留给外部的留在 public，
   // 只给自己人用的收回内部。
   { id: 'public:intent:operations:IntentDumpAuxiliaryQueries', removeAfterWave: 'W4-E4a（RFC-355 T9）' },
+  { id: 'public:intent:operations:IntentPersistence', removeAfterWave: 'W4-E4a（RFC-355 T9）' },
   { id: 'public:intent:operations:IntentPlatformInventoryRow', removeAfterWave: 'W4-E4a（RFC-355 T9）' },
   { id: 'public:intent:operations:IntentTurnRuntimeResolver', removeAfterWave: 'W4-E4a（RFC-355 T9）' },
   { id: 'public:intent:operations:IntentDraftResolutionRecord', removeAfterWave: 'W4-E4a' },

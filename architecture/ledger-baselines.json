@@ -335,8 +335,11 @@
       "id": "rfc294-review-unconsumed-public-symbols",
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "UNCONSUMED_PUBLIC_SYMBOL_DEBT",
-      "baseline": 151,
-      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。"
+      "baseline": 152,
+      "why": "RFC-294 review 2026-08-30 §C2：committed public-surfaces.json 里零生产 consumer 的 public symbol（design §3.3「无 consumer 不公开」的存量）。RFC-345 T4–T9 已消费或内部化 30 项；剩余 additive contract 必须入账并点名清偿波次，只许继续下降。",
+      "allowGrowth": {
+        "why": "RFC-355 T8：`IntentPersistence` 的模块外唯一 consumer 是 routes/intentSessions.ts，随路由迁进 intent 自己的 inbound 后「模块外无人消费」显形。归位暴露的既有事实，T9 逐个裁决去留。"
+      }
     },
     {
       "id": "rfc294-review-dead-required-ports",
@@ -426,7 +429,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6326,
+      "baseline": 6304,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +450,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5216,
+      "baseline": 5193,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +485,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25902,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25915,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-355 T8：详情投影从路由收进 application（sessionDetail / sessionSummary）+ 两条纯判据进 domain（draftLifecycle / mountSuggestions），四个新文件的具名符号入清单；同一批里路由文件从 1094 行缩到 836 行。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1",
+    "sourceDigest": "sha256:c7bac1703661062060ed6f63bf6b54029c8048984e645923497c10ab1d20239a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

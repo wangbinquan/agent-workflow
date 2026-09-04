@@ -193,7 +193,7 @@ import { mountSkillProvenanceRoutes } from '@/modules/knowledge-evolution/inboun
 import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
-} from '@/routes/intentSessions'
+} from '@/modules/intent/inbound/intentSessionRoutes'
 import { legacyIntentApplyResourceDependencies } from '@/modules/resource-catalog/composition/legacyIntentApplyResourceDependencies'
 import {
   composeSqliteIntentApplyArtifactLifecycle,

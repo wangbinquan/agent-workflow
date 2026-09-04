@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 876,
+    "consumers": 873,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1115,
@@ -50008,7 +50008,6 @@
       },
       "consumerEdgeIds": [
         "import:4448a99de82300768e99",
-        "import:456c79aadd23334a8092",
         "import:4e82be24292f4d3ee3ad",
         "import:587bdaf84e4cad53baf8",
         "import:714ed498a2de684e5a21",
@@ -50019,6 +50018,7 @@
         "import:b3a79df6adc987e325ca",
         "import:c4b800f5680ca0f70ad6",
         "import:cf3b2a3ff031d10f59d9",
+        "import:d124b259997b6ba0a882",
         "import:d650de9016dd3b78a0da",
         "import:da3c5f3c106112911945",
         "import:fe134a405f8ff67a0fc9",
@@ -50069,7 +50069,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:456c79aadd23334a8092",
             "import:587bdaf84e4cad53baf8",
             "import:79370ee6afc006216029"
           ],
@@ -50079,7 +50078,6 @@
         {
           "consumerEdgeIds": [
             "import:4448a99de82300768e99",
-            "import:456c79aadd23334a8092",
             "import:4e82be24292f4d3ee3ad",
             "import:587bdaf84e4cad53baf8",
             "import:714ed498a2de684e5a21",
@@ -50087,6 +50085,7 @@
             "import:823d0a8f93ee6eb04b30",
             "import:c4b800f5680ca0f70ad6",
             "import:cf3b2a3ff031d10f59d9",
+            "import:d124b259997b6ba0a882",
             "import:da3c5f3c106112911945",
             "import:fe134a405f8ff67a0fc9",
             "import:ff5d7c032d411b47c830"
@@ -50176,7 +50175,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:456c79aadd23334a8092",
             "import:587bdaf84e4cad53baf8",
             "import:79370ee6afc006216029"
           ],
@@ -50186,7 +50184,6 @@
         {
           "consumerEdgeIds": [
             "import:4448a99de82300768e99",
-            "import:456c79aadd23334a8092",
             "import:4e82be24292f4d3ee3ad",
             "import:587bdaf84e4cad53baf8",
             "import:714ed498a2de684e5a21",
@@ -50194,6 +50191,7 @@
             "import:823d0a8f93ee6eb04b30",
             "import:c4b800f5680ca0f70ad6",
             "import:cf3b2a3ff031d10f59d9",
+            "import:d124b259997b6ba0a882",
             "import:da3c5f3c106112911945",
             "import:fe134a405f8ff67a0fc9",
             "import:ff5d7c032d411b47c830"
@@ -50287,12 +50285,6 @@
         },
         {
           "context": "legacy",
-          "edgeId": "import:456c79aadd23334a8092",
-          "file": "packages/backend/src/routes/intentSessions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file"
-        },
-        {
-          "context": "legacy",
           "edgeId": "import:4e82be24292f4d3ee3ad",
           "file": "packages/backend/src/routes/webhookTriggers.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/webhookTriggers.ts#$file"
@@ -50350,6 +50342,12 @@
           "edgeId": "import:cf3b2a3ff031d10f59d9",
           "file": "packages/backend/src/routes/memories.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/memories.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:d124b259997b6ba0a882",
+          "file": "packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#$file"
         },
         {
           "context": "legacy",
@@ -55299,7 +55297,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:5728c463329d9b3a1fe5",
         "import:a48025a6075f6af84484"
       ],
       "context": "intent",
@@ -55343,16 +55340,12 @@
           "type": "'daemon'"
         },
         {
-          "consumerEdgeIds": [
-            "import:5728c463329d9b3a1fe5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5728c463329d9b3a1fe5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:actor.user.id",
           "type": "string"
         },
@@ -55414,12 +55407,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/public/operations.ts#canAuditIntentSessions",
       "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:5728c463329d9b3a1fe5",
-          "file": "packages/backend/src/routes/intentSessions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file"
-        },
         {
           "context": "legacy",
           "edgeId": "import:a48025a6075f6af84484",
@@ -55737,8 +55724,7 @@
         "maxUnionVariants": 14
       },
       "consumerEdgeIds": [
-        "import:2bf62c8ed389e47591a8",
-        "import:673f3e240e3d11aecf53"
+        "import:2bf62c8ed389e47591a8"
       ],
       "context": "intent",
       "dataClass": "metadata",
@@ -55782,16 +55768,14 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2bf62c8ed389e47591a8",
-            "import:673f3e240e3d11aecf53"
+            "import:2bf62c8ed389e47591a8"
           ],
           "fieldPath": "$method:apply.$parameter:input.actor.user.displayName",
           "type": "string"
         },
         {
           "consumerEdgeIds": [
-            "import:2bf62c8ed389e47591a8",
-            "import:673f3e240e3d11aecf53"
+            "import:2bf62c8ed389e47591a8"
           ],
           "fieldPath": "$method:apply.$parameter:input.actor.user.id",
           "type": "string"
@@ -55839,9 +55823,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$parameter:input.command.clientMutationId",
           "type": "string"
         },
@@ -55873,23 +55855,17 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$parameter:input.command.draftHash",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$parameter:input.command.draftRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$parameter:input.command.sessionId",
           "type": "string"
         },
@@ -55910,8 +55886,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:2bf62c8ed389e47591a8",
-            "import:673f3e240e3d11aecf53"
+            "import:2bf62c8ed389e47591a8"
           ],
           "fieldPath": "$method:apply.$return.applied[].name",
           "type": "string"
@@ -55922,30 +55897,22 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$return.applied[].resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$return.applied[].resourceType",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$return.commitSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:673f3e240e3d11aecf53"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:apply.$return.journalId",
           "type": "string"
         }
@@ -55956,8 +55923,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:2bf62c8ed389e47591a8",
-            "import:673f3e240e3d11aecf53"
+            "import:2bf62c8ed389e47591a8"
           ],
           "name": "apply",
           "signatureDigest": "sha256:fbf38dbd183418de3b05cc1bc418ed4018a33b92603f61a6305ab0920ae68a59"
@@ -55970,12 +55936,6 @@
           "edgeId": "import:2bf62c8ed389e47591a8",
           "file": "packages/backend/src/server.ts",
           "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:673f3e240e3d11aecf53",
-          "file": "packages/backend/src/routes/intentSessions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -56825,18 +56785,14 @@
         "maxTransitiveLeafFields": 1012,
         "maxUnionVariants": 443
       },
-      "consumerEdgeIds": [
-        "import:6b613405d3f61044b3c5"
-      ],
+      "consumerEdgeIds": [],
       "context": "intent",
       "dataClass": "metadata",
       "direction": "offered",
       "entrypoint": "operations",
       "fields": [
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.changeId",
           "type": "string"
         },
@@ -56846,16 +56802,12 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.sessionId",
           "type": "string"
         },
@@ -56865,16 +56817,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.visibility.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.visibility.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -56909,16 +56857,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.visibility.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$parameter:input.visibility.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -56998,9 +56942,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.commitSeq",
           "type": "number"
         },
@@ -57010,16 +56952,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.createdAt",
           "type": "number"
         },
@@ -57039,9 +56977,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.id",
           "type": "string"
         },
@@ -57056,9 +56992,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.ownerUserId",
           "type": "string"
         },
@@ -57073,30 +57007,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:activateWorkingSetChange.$return.reservation.$variant:0.turnId",
           "type": "string"
         },
@@ -57156,9 +57082,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$parameter:input.ownerUserId",
           "type": "string"
         },
@@ -57178,23 +57102,17 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$parameter:input.reservation.turnId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$parameter:input.turnId",
           "type": "string"
         },
@@ -57209,9 +57127,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.seq",
           "type": "number"
         },
@@ -57221,9 +57137,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.commitSeq",
           "type": "number"
         },
@@ -57233,16 +57147,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.createdAt",
           "type": "number"
         },
@@ -57262,9 +57172,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.id",
           "type": "string"
         },
@@ -57279,9 +57187,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.ownerUserId",
           "type": "string"
         },
@@ -57296,23 +57202,17 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:beginTurn.$return.session.updatedAt",
           "type": "number"
         },
@@ -57322,16 +57222,12 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:cancelReservedTurn.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:cancelReservedTurn.$parameter:input.sessionId",
           "type": "string"
         },
@@ -57341,23 +57237,17 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:cancelWorkingSetChange.$parameter:input.changeId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:cancelWorkingSetChange.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:cancelWorkingSetChange.$parameter:input.sessionId",
           "type": "string"
         },
@@ -57447,23 +57337,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.createdAt",
           "type": "number"
         },
@@ -57478,9 +57362,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.id",
           "type": "string"
         },
@@ -57540,23 +57422,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.approvalTurn.sessionId",
           "type": "string"
         },
@@ -57566,16 +57442,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.authorization.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.authorization.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -57610,16 +57482,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.authorization.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.authorization.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -57689,9 +57557,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].detail",
           "type": "boolean"
         },
@@ -57706,23 +57572,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:0.kind",
           "type": "'agent'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:0.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:1.kind",
           "type": "'skill'"
         },
@@ -57737,9 +57597,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:2.kind",
           "type": "'mcp'"
         },
@@ -57749,16 +57607,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:3.kind",
           "type": "'plugin'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:4.kind",
           "type": "'workflow'"
         },
@@ -57768,9 +57622,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].fence.$variant:5.kind",
           "type": "'workgroup'"
         },
@@ -57780,37 +57632,27 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].handle",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].resourceType",
           "type": "z.infer<typeof AclResourceTypeSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.manifest[].root",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.ownerUserId",
           "type": "string"
         },
@@ -57820,16 +57662,12 @@
           "type": "readonly IntentContextResourceReference[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:commitMountSuggestionDecision.$parameter:input.sourceTurnId",
           "type": "string"
         },
@@ -57924,23 +57762,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.createdAt",
           "type": "number"
         },
@@ -57955,9 +57787,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.id",
           "type": "string"
         },
@@ -58017,23 +57847,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.agentTurn.sessionId",
           "type": "string"
         },
@@ -58043,9 +57867,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.commitSeq",
           "type": "number"
         },
@@ -58055,16 +57877,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.createdAt",
           "type": "number"
         },
@@ -58084,9 +57902,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.id",
           "type": "string"
         },
@@ -58101,9 +57917,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.ownerUserId",
           "type": "string"
         },
@@ -58118,23 +57932,17 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.session.updatedAt",
           "type": "number"
         },
@@ -58219,23 +58027,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.createdAt",
           "type": "number"
         },
@@ -58250,9 +58052,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.id",
           "type": "string"
         },
@@ -58312,23 +58112,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSession.$parameter:input.userTurn.sessionId",
           "type": "string"
         },
@@ -58418,23 +58212,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.createdAt",
           "type": "number"
         },
@@ -58449,9 +58237,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.id",
           "type": "string"
         },
@@ -58511,23 +58297,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.agentTurn.sessionId",
           "type": "string"
         },
@@ -58537,16 +58317,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.authorization.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.authorization.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -58581,16 +58357,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.authorization.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.authorization.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -58650,9 +58422,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.commitSeq",
           "type": "number"
         },
@@ -58662,16 +58432,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.createdAt",
           "type": "number"
         },
@@ -58691,9 +58457,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.id",
           "type": "string"
         },
@@ -58708,9 +58472,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.ownerUserId",
           "type": "string"
         },
@@ -58725,23 +58487,17 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.session.updatedAt",
           "type": "number"
         },
@@ -58826,23 +58582,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.createdAt",
           "type": "number"
         },
@@ -58857,9 +58607,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.id",
           "type": "string"
         },
@@ -58919,23 +58667,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:createSessionWithAuthorizedResources.$parameter:input.userTurn.sessionId",
           "type": "string"
         },
@@ -58950,37 +58692,27 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.changesetJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.createdAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.draftHash",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.id",
           "type": "string"
         },
@@ -58995,23 +58727,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.revision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findDraft.$return.$variant:0.validationJson",
           "type": "string"
         },
@@ -59031,9 +58757,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.commitSeq",
           "type": "number"
         },
@@ -59043,16 +58767,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.createdAt",
           "type": "number"
         },
@@ -59072,9 +58792,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.id",
           "type": "string"
         },
@@ -59089,9 +58807,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.ownerUserId",
           "type": "string"
         },
@@ -59106,23 +58822,17 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:findSession.$return.$variant:0.updatedAt",
           "type": "number"
         },
@@ -59132,16 +58842,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.sessionId",
           "type": "string"
         },
@@ -59226,23 +58932,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.createdAt",
           "type": "number"
         },
@@ -59257,9 +58957,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.id",
           "type": "string"
         },
@@ -59319,37 +59017,27 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$parameter:input.turn.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$return.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurn.$return.turnId",
           "type": "string"
         },
@@ -59359,9 +59047,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$parameter:input.contentJson",
           "type": "string"
         },
@@ -59391,16 +59077,12 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$parameter:input.sessionId",
           "type": "string"
         },
@@ -59430,9 +59112,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.commitSeq",
           "type": "number"
         },
@@ -59442,16 +59122,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.createdAt",
           "type": "number"
         },
@@ -59471,9 +59147,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.id",
           "type": "string"
         },
@@ -59488,9 +59162,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.ownerUserId",
           "type": "string"
         },
@@ -59505,44 +59177,32 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.reservation.turnId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:insertUserTurnAndReserve.$return.turnId",
           "type": "string"
         },
@@ -59552,16 +59212,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:latestWorkingSetChange.$return.$variant:0.clientMutationId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:latestWorkingSetChange.$return.$variant:0.createdAt",
           "type": "number"
         },
@@ -59591,9 +59247,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:latestWorkingSetChange.$return.$variant:0.id",
           "type": "string"
         },
@@ -59633,9 +59287,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:latestWorkingSetChange.$return.$variant:0.sessionId",
           "type": "string"
         },
@@ -59665,9 +59317,7 @@
           "type": "'canceled'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:latestWorkingSetChange.$return.$variant:0.updatedAt",
           "type": "number"
         },
@@ -59682,16 +59332,12 @@
           "type": "readonly IntentRuntimeInventoryRow[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listProvenance.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listProvenance.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -59716,30 +59362,22 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listSessions.$parameter:input.before.id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listSessions.$parameter:input.before.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listSessions.$parameter:input.limit",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:listSessions.$parameter:input.ownerUserId",
           "type": "string"
         },
@@ -59789,23 +59427,17 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadSessionDetailArtifacts.$return.commits",
           "type": "readonly IntentApplyJournalRecord[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadSessionDetailArtifacts.$return.drafts",
           "type": "readonly IntentDraftRecord[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:loadSessionDetailArtifacts.$return.resolutions",
           "type": "readonly IntentDraftResolutionRecord[]"
         },
@@ -59910,23 +59542,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.createdAt",
           "type": "number"
         },
@@ -59941,9 +59567,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.id",
           "type": "string"
         },
@@ -60003,23 +59627,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnCapture.$return.$variant:0.sessionId",
           "type": "string"
         },
@@ -60119,23 +59737,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.contentJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.createdAt",
           "type": "number"
         },
@@ -60150,9 +59762,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.id",
           "type": "string"
         },
@@ -60212,23 +59822,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.seq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:readTurnSession.$return.$variant:0.turn.sessionId",
           "type": "string"
         },
@@ -60243,9 +59847,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:recoverTurnsOnBoot.$parameter:input.reason",
           "type": "string"
         },
@@ -60275,9 +59877,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].detail",
           "type": "boolean"
         },
@@ -60292,23 +59892,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:0.kind",
           "type": "'agent'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:0.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:1.kind",
           "type": "'skill'"
         },
@@ -60323,9 +59917,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:2.kind",
           "type": "'mcp'"
         },
@@ -60335,16 +59927,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:3.kind",
           "type": "'plugin'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:4.kind",
           "type": "'workflow'"
         },
@@ -60354,9 +59942,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].fence.$variant:5.kind",
           "type": "'workgroup'"
         },
@@ -60366,51 +59952,37 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].handle",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].resourceType",
           "type": "z.infer<typeof AclResourceTypeSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.manifest[].root",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.turnId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:refreshTurnManifest.$parameter:input.updatedAt",
           "type": "number"
         },
@@ -60425,16 +59997,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:replaceTurnRootSession.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:replaceTurnRootSession.$parameter:input.turnId",
           "type": "string"
         },
@@ -60459,23 +60027,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.request",
           "type": "z.infer<typeof PostIntentCurrentActionSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.sessionId",
           "type": "string"
         },
@@ -60485,16 +60047,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.visibility.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.visibility.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -60529,16 +60087,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.visibility.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$parameter:input.visibility.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -60588,9 +60142,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.receipt",
           "type": "z.infer<typeof IntentGenerationReceiptSchema>"
         },
@@ -60615,9 +60167,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.commitSeq",
           "type": "number"
         },
@@ -60627,16 +60177,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.createdAt",
           "type": "number"
         },
@@ -60656,9 +60202,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.id",
           "type": "string"
         },
@@ -60673,9 +60217,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.ownerUserId",
           "type": "string"
         },
@@ -60690,30 +60232,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveCurrentAction.$return.reservation.$variant:0.turnId",
           "type": "string"
         },
@@ -60728,30 +60262,22 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$parameter:input.request",
           "type": "z.infer<typeof PostIntentIterationSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.receipt",
           "type": "z.infer<typeof IntentGenerationReceiptSchema>"
         },
@@ -60776,9 +60302,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.commitSeq",
           "type": "number"
         },
@@ -60788,16 +60312,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.createdAt",
           "type": "number"
         },
@@ -60817,9 +60337,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.id",
           "type": "string"
         },
@@ -60834,9 +60352,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.ownerUserId",
           "type": "string"
         },
@@ -60851,30 +60367,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveIteration.$return.reservation.$variant:0.turnId",
           "type": "string"
         },
@@ -60889,30 +60397,22 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$parameter:input.request",
           "type": "z.infer<typeof PostIntentRetrySchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.receipt",
           "type": "z.infer<typeof IntentGenerationReceiptSchema>"
         },
@@ -60937,9 +60437,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.commitSeq",
           "type": "number"
         },
@@ -60949,16 +60447,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.createdAt",
           "type": "number"
         },
@@ -60978,9 +60472,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.id",
           "type": "string"
         },
@@ -60995,9 +60487,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.ownerUserId",
           "type": "string"
         },
@@ -61012,30 +60502,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetry.$return.reservation.$variant:0.turnId",
           "type": "string"
         },
@@ -61060,23 +60542,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$parameter:input.turnId",
           "type": "string"
         },
@@ -61101,9 +60577,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.commitSeq",
           "type": "number"
         },
@@ -61113,16 +60587,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.createdAt",
           "type": "number"
         },
@@ -61142,9 +60612,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.id",
           "type": "string"
         },
@@ -61159,9 +60627,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.ownerUserId",
           "type": "string"
         },
@@ -61176,30 +60642,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:reserveRetryTurn.$return.turnId",
           "type": "string"
         },
@@ -61234,9 +60692,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveIntentRuntime.$return.configDir.name",
           "type": "string"
         },
@@ -61276,9 +60732,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveIntentRuntime.$return.name",
           "type": "string"
         },
@@ -61323,9 +60777,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.changeId",
           "type": "string"
         },
@@ -61335,16 +60787,12 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.sessionId",
           "type": "string"
         },
@@ -61354,16 +60802,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.visibility.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.visibility.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -61398,16 +60842,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.visibility.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$parameter:input.visibility.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -61487,9 +60927,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.commitSeq",
           "type": "number"
         },
@@ -61499,16 +60937,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.createdAt",
           "type": "number"
         },
@@ -61528,9 +60962,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.id",
           "type": "string"
         },
@@ -61545,9 +60977,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.ownerUserId",
           "type": "string"
         },
@@ -61562,30 +60992,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:retryWorkingSetChange.$return.reservation.$variant:0.turnId",
           "type": "string"
         },
@@ -61595,16 +61017,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:setStatus.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:setStatus.$parameter:input.sessionId",
           "type": "string"
         },
@@ -61619,9 +61037,7 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:setStatus.$parameter:input.updatedAt",
           "type": "number"
         },
@@ -61636,9 +61052,7 @@
           "type": "'unchanged'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleReservedTurnStartFailure.$parameter:input.detail",
           "type": "string"
         },
@@ -61653,23 +61067,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleReservedTurnStartFailure.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleReservedTurnStartFailure.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleReservedTurnStartFailure.$parameter:input.turnId",
           "type": "string"
         },
@@ -61689,30 +61097,22 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.content",
           "type": "Record<string, unknown>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.draft.changesetJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.draft.draftHash",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.draft.validationJson",
           "type": "string"
         },
@@ -61742,37 +61142,27 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.runMetaJson",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.scratchRetained",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$parameter:input.turnId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$return.draftRevision",
           "type": "number"
         },
@@ -61797,9 +61187,7 @@
           "type": "'error'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurn.$return.turnId",
           "type": "string"
         },
@@ -61819,16 +61207,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurnCapture.$parameter:input.state",
           "type": "Exclude<IntentTurnRecord['captureState'], 'live' | null>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:settleTurnCapture.$parameter:input.turnId",
           "type": "string"
         },
@@ -61848,23 +61232,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.request",
           "type": "z.infer<typeof PostIntentWorkingSetChangeSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.sessionId",
           "type": "string"
         },
@@ -61874,16 +61252,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.visibility.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.visibility.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -61918,16 +61292,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.visibility.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$parameter:input.visibility.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -61977,9 +61347,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.change",
           "type": "z.infer<typeof IntentWorkingSetChangeDtoSchema>"
         },
@@ -62004,9 +61372,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.commitSeq",
           "type": "number"
         },
@@ -62016,16 +61382,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.contextRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.createdAt",
           "type": "number"
         },
@@ -62045,9 +61407,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.id",
           "type": "string"
         },
@@ -62062,9 +61422,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.ownerUserId",
           "type": "string"
         },
@@ -62079,30 +61437,22 @@
           "type": "'archived'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.title",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.turnSeq",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.launchSession.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.reservation.$variant:0.turnId",
           "type": "string"
         },
@@ -62112,9 +61462,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:submitWorkingSetChange.$return.shouldInterrupt",
           "type": "boolean"
         },
@@ -62139,9 +61487,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].detail",
           "type": "boolean"
         },
@@ -62156,23 +61502,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:0.kind",
           "type": "'agent'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:0.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:1.kind",
           "type": "'skill'"
         },
@@ -62187,9 +61527,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:2.kind",
           "type": "'mcp'"
         },
@@ -62199,16 +61537,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:3.kind",
           "type": "'plugin'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:4.kind",
           "type": "'workflow'"
         },
@@ -62218,9 +61552,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].fence.$variant:5.kind",
           "type": "'workgroup'"
         },
@@ -62230,51 +61562,37 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].handle",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].resourceType",
           "type": "z.infer<typeof AclResourceTypeSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.manifest[].root",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.ownerUserId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifest.$parameter:input.updatedAt",
           "type": "number"
         },
@@ -62294,16 +61612,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.authorization.$method:visible.$parameter:input.resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.authorization.$method:visible.$parameter:input.resourceType",
           "type": "(typeof INTENT_RESOURCE_TYPES)[number]"
         },
@@ -62338,16 +61652,12 @@
           "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.authorization.currentAuthority.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.authorization.currentAuthority.actor.user.id",
           "type": "string"
         },
@@ -62417,9 +61727,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].detail",
           "type": "boolean"
         },
@@ -62434,23 +61742,17 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:0.kind",
           "type": "'agent'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:0.updatedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:1.kind",
           "type": "'skill'"
         },
@@ -62465,9 +61767,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:2.kind",
           "type": "'mcp'"
         },
@@ -62477,16 +61777,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:3.kind",
           "type": "'plugin'"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:4.kind",
           "type": "'workflow'"
         },
@@ -62496,9 +61792,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].fence.$variant:5.kind",
           "type": "'workgroup'"
         },
@@ -62508,37 +61802,27 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].handle",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].resourceId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].resourceType",
           "type": "z.infer<typeof AclResourceTypeSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.manifest[].root",
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.ownerUserId",
           "type": "string"
         },
@@ -62548,16 +61832,12 @@
           "type": "readonly IntentContextResourceReference[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.sessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:updateManifestWithAuthorizedResources.$parameter:input.updatedAt",
           "type": "number"
         },
@@ -62632,9 +61912,7 @@
           "signatureDigest": "sha256:9843de623bb96e2c826acdebffc94008879d20c630050640ff9f92df918cbfc9"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "name": "insertUserTurnAndReserve",
           "signatureDigest": "sha256:ebf960935bbade28f7298d818629a537cfd0e9e3d2a90d70bf62f15708044eac"
         },
@@ -62684,9 +61962,7 @@
           "signatureDigest": "sha256:fb619bbede948b33056800237124ce076d2e0f3c6333bc0b26803a5c9e147fc8"
         },
         {
-          "consumerEdgeIds": [
-            "import:6b613405d3f61044b3c5"
-          ],
+          "consumerEdgeIds": [],
           "name": "loadSessionDetailArtifacts",
           "signatureDigest": "sha256:8c4583c41fe8a080d4057215d431dcb5ef99650fa3959a74882b434bf1f843c4"
         },
@@ -62792,14 +62068,7 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/public/operations.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:6b613405d3f61044b3c5",
-          "file": "packages/backend/src/routes/intentSessions.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -170915,7 +170184,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1",
+  "sourceDigest": "sha256:c7bac1703661062060ed6f63bf6b54029c8048984e645923497c10ab1d20239a",
   "targetContexts": [
     "collaboration",
     "development-automation",

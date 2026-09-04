@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 297,
+    "inboundEdges": 287,
     "outboundEdges": 36,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -1018,300 +1018,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/dispatcher",
-      "specifier": "@/modules/intent/application/dispatcher",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:7252e7a2fc8ade79603a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/dispatcher.ts#dispatchIntentTurn"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/dispatcher",
-      "specifier": "@/modules/intent/application/dispatcher",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a98f28bcb328f6da2b64"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/dispatcher.ts#IntentDispatchDeps"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/iteration",
-      "specifier": "@/modules/intent/application/iteration",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:71b59e775aac61897dcb",
-        "import:7367f0720b6b281b434e",
-        "import:ca7c913f392c85ec0692"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/iteration.ts#reserveExactIntentRetry",
-        "owner:packages/backend/src/modules/intent/application/iteration.ts#reserveIntentCurrentAction",
-        "owner:packages/backend/src/modules/intent/application/iteration.ts#reserveIntentIteration"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/resolveChangeset",
-      "specifier": "@/modules/intent/application/resolveChangeset",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:a3609018b2e5f5c4dc26"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/resolveChangeset.ts#deriveIntentSlots"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/resourceCatalog",
-      "specifier": "@/modules/intent/application/resourceCatalog",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:804d0495443ecd91c369",
-        "import:a64965301d04d1cb1d01"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#intentResourceVisibility",
-        "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#listVisibleIntentResources"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/resourceCatalog",
-      "specifier": "@/modules/intent/application/resourceCatalog",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:76523c4f80b61df54653"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#IntentResourceCatalogBinding"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/session",
-      "specifier": "@/modules/intent/application/session",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:0f7c2c8c60188242e3b3",
-        "import:18c4d4bf977e334b9bde",
-        "import:28ac156cf9d5c08f7ee0",
-        "import:2d5c92a476436917fd4f",
-        "import:4e6672032e579e501da6",
-        "import:5f7ff7f571d7e58a24ce",
-        "import:6026a88e7b95cf8c1caa",
-        "import:904e4b0e22b9e6c25cd0",
-        "import:c8b5d742fabc6913daab",
-        "import:d9b58e7812ddfbf98a55",
-        "import:dd80415af3132f6aa5b7",
-        "import:f520b4fa9e7278311833"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/session.ts#addIntentMount",
-        "owner:packages/backend/src/modules/intent/application/session.ts#createIntentSessionAndReserveTurn",
-        "owner:packages/backend/src/modules/intent/application/session.ts#decideIntentMountSuggestions",
-        "owner:packages/backend/src/modules/intent/application/session.ts#getIntentSessionForActor",
-        "owner:packages/backend/src/modules/intent/application/session.ts#insertUserTurnAndReserve",
-        "owner:packages/backend/src/modules/intent/application/session.ts#listIntentProvenanceForActor",
-        "owner:packages/backend/src/modules/intent/application/session.ts#listIntentSessionsForActor",
-        "owner:packages/backend/src/modules/intent/application/session.ts#listIntentTurns",
-        "owner:packages/backend/src/modules/intent/application/session.ts#rebaseIntentSession",
-        "owner:packages/backend/src/modules/intent/application/session.ts#removeIntentMount",
-        "owner:packages/backend/src/modules/intent/application/session.ts#sessionManifest",
-        "owner:packages/backend/src/modules/intent/application/session.ts#setIntentSessionStatus"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/session",
-      "specifier": "@/modules/intent/application/session",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:8c9ff42466c95efe1557",
-        "import:b3551ab3ada37c5f99ae"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/session.ts#IntentSessionRow",
-        "owner:packages/backend/src/modules/intent/application/session.ts#ReservedIntentTurn"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/turnEngine",
-      "specifier": "@/modules/intent/application/turnEngine",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:d77a0cb19b692bcd9411"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/turnEngine.ts#cancelIntentTurn"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/turnSession",
-      "specifier": "@/modules/intent/application/turnSession",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:1e98c56365dba8874b74",
-        "import:a0f3c621b2bdad4a2b34"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/turnSession.ts#getIntentTurnSession",
-        "owner:packages/backend/src/modules/intent/application/turnSession.ts#projectIntentTurnExecution"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/application/workingSet",
-      "specifier": "@/modules/intent/application/workingSet",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:23ce3933a0d461aea18b",
-        "import:71e1eca150edc8ba5e1e",
-        "import:7ea6da50ef2b23af68ae",
-        "import:9fa5b877a9d6827d08aa",
-        "import:a32d8307375bd3e3dc35",
-        "import:a95a320a9ea8edebefb8"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/application/workingSet.ts#activateIntentWorkingSetChange",
-        "owner:packages/backend/src/modules/intent/application/workingSet.ts#cancelIntentWorkingSetChange",
-        "owner:packages/backend/src/modules/intent/application/workingSet.ts#getLatestIntentWorkingSetChange",
-        "owner:packages/backend/src/modules/intent/application/workingSet.ts#projectIntentWorkingSetChange",
-        "owner:packages/backend/src/modules/intent/application/workingSet.ts#retryIntentWorkingSetChange",
-        "owner:packages/backend/src/modules/intent/application/workingSet.ts#submitIntentWorkingSetChange"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/routes/intentSessions.ts",
-      "to": "packages/backend/src/modules/intent/domain/journey",
-      "specifier": "@/modules/intent/domain/journey",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:852261df6032915c0351"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/routes/intentSessions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/intent/domain/journey.ts#projectIntentJourney"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/routes/memories.ts",
       "to": "packages/backend/src/modules/memory/public/catalog",
       "specifier": "@/modules/memory/public/catalog",
@@ -1649,6 +1355,48 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/intent/application/resourceCatalog.ts#composeIntentResourceCatalogFor"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/intent/inbound/intentSessionRoutes",
+      "specifier": "@/modules/intent/inbound/intentSessionRoutes",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
+      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
+      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d8ffd3a7fcb3190abb3d"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#mountIntentSessionRoutes"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/intent/inbound/intentSessionRoutes",
+      "specifier": "@/modules/intent/inbound/intentSessionRoutes",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "intent",
+      "why": "RFC-355 T7 把 intent 的 5136 行编排从 legacy `services/intent/` 平移进 `modules/intent/{domain,application}`。平移不改调用形态，于是原本 legacy→legacy 的调用变成 legacy→模块内部；路由那批由 T8（inbound 归位）清偿，bootstrap / 后台 worker 那批由 T9（public 面收口）清偿。",
+      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
+      "removeAfterWave": "RFC-355 T8/T9（inbound 归位 + public 面收口）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b3874b653e696c2e00e0"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/intent/inbound/intentSessionRoutes.ts#IntentSessionRouteDependencies"
       ],
       "canonicalFacadeIds": []
     },
@@ -9068,7 +8816,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1",
+    "sourceDigest": "sha256:c7bac1703661062060ed6f63bf6b54029c8048984e645923497c10ab1d20239a",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"

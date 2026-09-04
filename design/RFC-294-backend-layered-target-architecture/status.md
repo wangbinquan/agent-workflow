@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:b95572751fd03917099a4ea8a2e3674b282d7c87f1cf1d94f5c8c92519ac4ee1`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:c7bac1703661062060ed6f63bf6b54029c8048984e645923497c10ab1d20239a`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1934 |
+| backend production TS 文件 | 1938 |
 | `services/` 文件 | 327 |
-| `modules/**` 文件 / 非空 context | 1323 / 17 |
+| `modules/**` 文件 / 非空 context | 1328 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 367 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 77 |
-| RFC-317 boundary census（inbound / outbound） | 297 / 36 |
+| RFC-317 boundary census（inbound / outbound） | 287 / 36 |
 | `node_runs INSERT` 站点 | 2 |
 | first-party unresolved import | 0 |
 
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5216 |
+| `architectureExceptions` | 5193 |
 | `backgroundJobs` | 367 |
-| `crossContextImports` | 6326 |
+| `crossContextImports` | 6304 |
 | `facades` | 327 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25902 |
+| `moduleSymbolOwners` | 25915 |
 | `mutationEntrypoints` | 1922 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 1003 |
@@ -64,11 +64,11 @@
 | identity-access / application | 24 |
 | code-capability / application | 20 |
 | integration / application | 20 |
+| intent / application | 20 |
 | task-execution / engine | 20 |
 | integration / composition | 19 |
 | system-operations / infrastructure | 19 |
-| intent / application | 18 |
-| intent / domain | 15 |
+| intent / domain | 17 |
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
 | digital-employee / application | 13 |
@@ -128,6 +128,7 @@
 | execution-contract / composition | 1 |
 | execution-contract / domain | 1 |
 | execution-contract / infrastructure | 1 |
+| intent / inbound | 1 |
 | intent / ports | 1 |
 | knowledge-evolution / composition | 1 |
 | memory / composition | 1 |
@@ -154,7 +155,6 @@
 | system-operations | 4 |
 | digital-employee | 1 |
 | event-center | 1 |
-| intent | 1 |
 | task-catalog | 1 |
 
 ## 4. Facade 账本（`facades.json`）
@@ -200,14 +200,14 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3565 |
-| legacy-inbound | 1456 |
+| legacy-outbound | 3577 |
+| legacy-inbound | 1421 |
 | provider-mirror | 450 |
 | infrastructure-external | 400 |
 | offered-consumption | 175 |
 | off-dag-offered | 92 |
 | temporary-internal-debt | 90 |
-| authority-type-only | 66 |
+| authority-type-only | 67 |
 | required-implementation | 27 |
 | external-layer-debt | 5 |
 
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3565 |
-| legacy-inbound | 1456 |
+| legacy-outbound | 3577 |
+| legacy-inbound | 1421 |
 | off-dag-offered | 92 |
 | temporary-internal-debt | 90 |
 | no-circular | 6 |
@@ -227,18 +227,18 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2763 |
-| W4-E1 | 855 |
+| W9 | 2765 |
+| W4-E1 | 859 |
 | W4-C | 408 |
-| W4-E0 | 229 |
+| W4-E0 | 233 |
 | W4 | 207 |
 | W4-B | 186 |
 | W5 | 145 |
 | W4-E8 | 113 |
-| W4-E4a | 73 |
 | W4-E9 | 61 |
 | W4-E2 | 44 |
 | W4-E7 | 44 |
+| W4-E4a | 40 |
 | W4-E4b | 38 |
 | W4-E3 | 27 |
 | W9-E | 11 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 151 / 1003）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 152 / 1003）
 
 | context | 数量 |
 | --- | --- |
@@ -279,7 +279,7 @@
 | task-execution | 15 |
 | system-operations | 12 |
 | code-capability | 11 |
-| intent | 9 |
+| intent | 10 |
 | event-center | 8 |
 | development-automation | 7 |
 | source-control | 7 |
