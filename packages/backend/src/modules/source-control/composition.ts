@@ -58,8 +58,12 @@ export {
   composeSqliteWorkspaceMaintenanceCommand,
 } from './composition/workspaceMaintenance'
 export { buildRepositoryTransportConnectionProjection } from './application/repositoryTransportConnectionProjection'
-export { composeSqliteRepositoryWorkspaceStore } from './infrastructure/sqliteRepositoryWorkspaceStore'
-export { composePostgresqlRepositoryWorkspaceStore } from './infrastructure/postgresqlRepositoryWorkspaceStore'
+// RFC-359 W4-B6：仓库工作区存储只有一份；两个 bootstrap 与存量调用方仍经各自的具名绑定装配。
+export {
+  composeRepositoryWorkspaceStore,
+  composeRepositoryWorkspaceStore as composeSqliteRepositoryWorkspaceStore,
+  composeRepositoryWorkspaceStore as composePostgresqlRepositoryWorkspaceStore,
+} from './infrastructure/repositoryWorkspaceStore'
 export { SQLiteRepositoryTransportCredentialRepository } from './infrastructure/sqliteRepositoryTransportCredentialRepository'
 export { PostgresqlRepositoryTransportCredentialRepository } from './infrastructure/postgresqlRepositoryTransportCredentialRepository'
 

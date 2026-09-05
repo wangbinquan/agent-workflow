@@ -1,13 +1,8 @@
-import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createWorkspaceMaintenanceCommand } from '../application/workspaceMaintenance'
 import type { WorkspaceTerminalMaintenance } from '../application/ports/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '../infrastructure/nodeWorkspaceMaintenanceFilesystem'
-import { PostgresqlWorkspaceMaintenanceStore } from '../infrastructure/postgresqlWorkspaceMaintenanceStore'
-import { SqliteWorkspaceMaintenanceStore } from '../infrastructure/sqliteWorkspaceMaintenanceStore'
+import { DrizzleWorkspaceMaintenanceStore } from '../infrastructure/workspaceMaintenanceStore'
 import type {
   WorkspaceClaimFinalizationCommand,
   WorkspaceMaintenanceCommand,
@@ -28,37 +23,26 @@ function filesystem(input: WorkspaceMaintenanceCompositionInput) {
   })
 }
 
-export function composeSqliteWorkspaceMaintenanceCommand(
-  input: WorkspaceMaintenanceCompositionInput & { readonly db: DbClient },
-): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
-  return createWorkspaceMaintenanceCommand({
-    store: new SqliteWorkspaceMaintenanceStore(input.db),
-    terminalMaintenance: input.terminalMaintenance,
-    filesystem: filesystem(input),
-  })
-}
-
-export function composePostgresqlWorkspaceMaintenanceCommand(
-  input: WorkspaceMaintenanceCompositionInput & { readonly db: PostgresqlDatabaseClient },
-): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
-  return createWorkspaceMaintenanceCommand({
-    store: new PostgresqlWorkspaceMaintenanceStore(input.db),
-    terminalMaintenance: input.terminalMaintenance,
-    filesystem: filesystem(input),
-  })
-}
-
-/** RFC-359 W3-T15-B：按客户端品牌选 store；调用方（boot / 测试）看不见 provider。 */
+/** RFC-359 W3-T15-B / W4-B6：一份 store，调用方（boot / 测试）看不见 provider。 */
 export function composeWorkspaceMaintenanceCommand(
   input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
 ): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
-  const provider = databaseSessionFor(input.db).engine.provider
-  return provider === 'postgresql'
-    ? composePostgresqlWorkspaceMaintenanceCommand({
-        ...input,
-        db: input.db as unknown as PostgresqlDatabaseClient,
-      })
-    : provider === 'sqlite'
-      ? composeSqliteWorkspaceMaintenanceCommand({ ...input, db: input.db as unknown as DbClient })
-      : unhandledDatabaseProvider(provider)
+  return createWorkspaceMaintenanceCommand({
+    store: new DrizzleWorkspaceMaintenanceStore(input.db),
+    terminalMaintenance: input.terminalMaintenance,
+    filesystem: filesystem(input),
+  })
+}
+
+/** 两个 bootstrap 的具名绑定（RFC-349 起的装配入口名保持稳定）。 */
+export function composeSqliteWorkspaceMaintenanceCommand(
+  input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
+): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
+  return composeWorkspaceMaintenanceCommand(input)
+}
+
+export function composePostgresqlWorkspaceMaintenanceCommand(
+  input: WorkspaceMaintenanceCompositionInput & { readonly db: ProviderNeutralDatabase },
+): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
+  return composeWorkspaceMaintenanceCommand(input)
 }

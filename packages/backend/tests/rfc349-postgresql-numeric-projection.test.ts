@@ -45,7 +45,7 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       'Number() 再放进 expiredBundleRefsPending；这个文件同时装着两个 provider 的实现，' +
       '所以一条登记覆盖两处',
   },
-  'modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts': {
+  'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': {
     all_count:
       'repositoryWorkspaceSqlStore.cachedRepoFacets 的调用点对 all/referenced/attention ' +
       '三个字段都套了 Number()（`unused` 也是由解码后的两个数相减）',

@@ -115,6 +115,19 @@ describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
     expect(find('100%')).toEqual(['100%'])
   })
 
+  test('indexHint 渲染 INDEXED BY；reclaimScrubbedStorage 真跑 secure_delete + checkpoint + VACUUM', async () => {
+    const db = scratch()
+    expect(render(cap.indexHint('idx_cap_scratch'))).toBe('INDEXED BY "idx_cap_scratch"')
+    db.run(sql.raw('create index idx_cap_scratch on cap_scratch(v)'))
+    expect(
+      db.all<{ v: number | null }>(
+        sql`select v from cap_scratch ${cap.indexHint('idx_cap_scratch')} where v is null`,
+      ),
+    ).toEqual([])
+    await cap.reclaimScrubbedStorage(db)
+    expect(db.all<{ secure_delete: number }>(sql`PRAGMA secure_delete`)[0]?.secure_delete).toBe(1)
+  })
+
   test('classifyError：结构化 code 单独就能判——不靠 message 正则兜底', () => {
     // 变异验证发现：去掉 SQLITE_CONSTRAINT_UNIQUE 判据后正则兜底照样接住，结构化分支等于没被测。
     // 这里喂一个只有 code、message 不含关键字的错误，锁住结构化路径本身。
@@ -294,6 +307,10 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
           sql`select v from cap_scratch where name = 'counter'`,
         )
         expect(cap.numericFromRawRow(after!.v, 'v')).toBe(2)
+
+        // ⑨ 索引提示在 PG 上为空（planner 自己选）；擦除后的存储回收是 no-op（autovacuum 负责）
+        expect(render(cap.indexHint('idx_cap_scratch'))).toBe('')
+        await cap.reclaimScrubbedStorage(db)
 
         // ⑦ bigint 经驱动回来是字符串，矩阵归一成 number
         await db.run(sql`delete from cap_scratch`)

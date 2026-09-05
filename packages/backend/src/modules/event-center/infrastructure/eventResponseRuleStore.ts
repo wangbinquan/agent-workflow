@@ -1,7 +1,9 @@
+// RFC-359 W4-B6 —— 事件响应规则存储：一份实现，两个 provider 共用。
+
 import { and, desc, eq } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { eventResponseRules } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { EventResponseRuleStorePort } from '../application/ports/responseRuleStore'
 import {
   eventResponseRuleDraftSchema,
@@ -37,15 +39,13 @@ function matchesSubject(rule: EventResponseRuleRecord, subjectRef: string): bool
     : subjectRef.startsWith(rule.subjectPattern)
 }
 
-export function createPostgresqlEventResponseRuleStore(
-  db: PostgresqlDatabaseClient,
+export function createEventResponseRuleStore(
+  db: ProviderNeutralDatabase,
 ): EventResponseRuleStorePort {
   const get = async (id: string): Promise<EventResponseRuleRecord | null> => {
-    const row = await db
-      .select()
-      .from(eventResponseRules)
-      .where(eq(eventResponseRules.id, id))
-      .get()
+    const row = (
+      await db.select().from(eventResponseRules).where(eq(eventResponseRules.id, id)).limit(1)
+    )[0]
     return row === undefined ? null : recordOf(row)
   }
   return {
@@ -99,6 +99,9 @@ export function createPostgresqlEventResponseRuleStore(
       const current = await get(input.id)
       if (current === null) return null
       const draft = eventResponseRuleDraftSchema.parse(input.draft)
+      // updatedAt is also the immutable routing-definition revision. Two edits
+      // may occur in the same wall-clock millisecond, so make it monotonic per
+      // rule instead of letting an old queued delivery execute a new target.
       const definitionRevision = Math.max(input.now, current.updatedAt + 1)
       await db
         .update(eventResponseRules)

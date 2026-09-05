@@ -17,8 +17,7 @@ import { createInMemoryDb } from '@/db/client'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { taskExecutionMaintenanceClaims, tasks, workflows } from '@/db/schema'
 import { composeSqliteWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
-import { PostgresqlWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/postgresqlWorkspaceMaintenanceStore'
-import { SqliteWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/sqliteWorkspaceMaintenanceStore'
+import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { SqliteTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/sqliteTerminalMaintenancePersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -58,11 +57,13 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
     )
     expect(composition).toContain('composeSqliteWorkspaceMaintenanceCommand')
     expect(composition).toContain('composePostgresqlWorkspaceMaintenanceCommand')
-    const postgresql = readFileSync(
-      resolve(sourceRoot, 'infrastructure/postgresqlWorkspaceMaintenanceStore.ts'),
+    // RFC-359 W4-B6：只有一份中立 store，两个 provider 共用；它不得把中立句柄断言成 SQLite 客户端。
+    const neutral = readFileSync(
+      resolve(sourceRoot, 'infrastructure/workspaceMaintenanceStore.ts'),
       'utf8',
     )
-    expect(postgresql).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient|createInMemoryDb|deasync/)
+    expect(neutral).toContain('ProviderNeutralDatabase')
+    expect(neutral).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient|createInMemoryDb|deasync/)
   })
 
   test('SQLite command preserves durable claim, filesystem cleanup and tombstone ordering', async () => {
@@ -321,7 +322,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       finishedAt: 2,
       workspacePruningAt: 200,
     })
-    const store = new SqliteWorkspaceMaintenanceStore(db)
+    const store = new DrizzleWorkspaceMaintenanceStore(db)
 
     await expect(store.releaseIsoClaim(taskId, 100)).resolves.toBeFalse()
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workspacePruningAt).toBe(
@@ -389,7 +390,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       },
       async close() {},
     }
-    const store = new PostgresqlWorkspaceMaintenanceStore(createPostgresqlDatabaseClient(runtime))
+    const store = new DrizzleWorkspaceMaintenanceStore(createPostgresqlDatabaseClient(runtime))
 
     await expect(store.listGcCandidates()).resolves.toEqual([
       expect.objectContaining({ id: 'task-pg', workspacePrunedAt: null }),

@@ -15,12 +15,10 @@ import type {
   EventRoutingSubscriptionDirectoryPort,
 } from './composition/required-ports'
 import { createCustomEventObserverProgram } from './infrastructure/customEventObserverProgram'
-import { createSqliteCustomEventSourceStore } from './infrastructure/sqliteCustomEventSourceStore'
+import { createCustomEventSourceStore } from './infrastructure/customEventSourceStore'
 import { createSqliteEventStore } from './infrastructure/sqliteEventStore'
-import { createSqliteEventResponseRuleStore } from './infrastructure/sqliteEventResponseRuleStore'
+import { createEventResponseRuleStore } from './infrastructure/eventResponseRuleStore'
 import { createPostgresqlEventStore } from './infrastructure/postgresqlEventStore'
-import { createPostgresqlCustomEventSourceStore } from './infrastructure/postgresqlCustomEventSourceStore'
-import { createPostgresqlEventResponseRuleStore } from './infrastructure/postgresqlEventResponseRuleStore'
 import type { CustomEventSourceStorePort } from './application/ports/customEventSourceStore'
 import type { EventStorePort } from './application/ports/eventStore'
 import type { EventResponseRuleStorePort } from './application/ports/responseRuleStore'
@@ -490,8 +488,8 @@ export async function composeEventCenter(
     ...shared,
     persistence: {
       events: createSqliteEventStore(db),
-      customSources: createSqliteCustomEventSourceStore(db),
-      responseRules: createSqliteEventResponseRuleStore(db),
+      customSources: createCustomEventSourceStore(db),
+      responseRules: createEventResponseRuleStore(db),
       committedEvents: createSqliteCommittedEventDeliveryPersistence(db),
     },
   })
@@ -507,8 +505,8 @@ export async function composePostgresqlEventCenter(
     ...shared,
     persistence: {
       events: createPostgresqlEventStore(db),
-      customSources: createPostgresqlCustomEventSourceStore(db),
-      responseRules: createPostgresqlEventResponseRuleStore(db),
+      customSources: createCustomEventSourceStore(db),
+      responseRules: createEventResponseRuleStore(db),
       committedEvents: createPostgresqlCommittedEventDeliveryPersistence(db),
     },
   })

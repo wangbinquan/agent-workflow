@@ -1,12 +1,17 @@
+// RFC-359 W4-B6 —— 自定义事件源存储：一份实现，两个 provider 共用。
+// 发布走统一事务；最后一步对定义行做 CAS（草稿与已发布修订未变、未退役），PG 的 READ COMMITTED 下需要它，
+// SQLite 独占事务下恒成立。
+
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   customEventSourceDefinitions,
   customEventSourceRevisions,
   eventSources,
   eventTypeCatalog,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { CustomEventSourceStorePort } from '../application/ports/customEventSourceStore'
 import {
   customEventSourceDraftSchema,
@@ -29,8 +34,8 @@ function validationReceipt(value: string): CustomEventSourceValidationReceipt {
   return parsed as CustomEventSourceValidationReceipt
 }
 
-export function createPostgresqlCustomEventSourceStore(
-  db: PostgresqlDatabaseClient,
+export function createCustomEventSourceStore(
+  db: ProviderNeutralDatabase,
 ): CustomEventSourceStorePort {
   const record = async (
     row: typeof customEventSourceDefinitions.$inferSelect,
@@ -38,16 +43,18 @@ export function createPostgresqlCustomEventSourceStore(
     const published =
       row.publishedRevision === null
         ? undefined
-        : await db
-            .select({ contentDigest: customEventSourceRevisions.contentDigest })
-            .from(customEventSourceRevisions)
-            .where(
-              and(
-                eq(customEventSourceRevisions.sourceId, row.id),
-                eq(customEventSourceRevisions.revision, row.publishedRevision),
-              ),
-            )
-            .get()
+        : (
+            await db
+              .select({ contentDigest: customEventSourceRevisions.contentDigest })
+              .from(customEventSourceRevisions)
+              .where(
+                and(
+                  eq(customEventSourceRevisions.sourceId, row.id),
+                  eq(customEventSourceRevisions.revision, row.publishedRevision),
+                ),
+              )
+              .limit(1)
+          )[0]
     return {
       id: row.id,
       draft: customEventSourceDraftSchema.parse(JSON.parse(row.draftJson) as unknown),
@@ -60,6 +67,15 @@ export function createPostgresqlCustomEventSourceStore(
     }
   }
 
+  const definition = async (id: string) =>
+    (
+      await db
+        .select()
+        .from(customEventSourceDefinitions)
+        .where(eq(customEventSourceDefinitions.id, id))
+        .limit(1)
+    )[0]
+
   return {
     async create(input) {
       await db.insert(customEventSourceDefinitions).values({
@@ -71,21 +87,13 @@ export function createPostgresqlCustomEventSourceStore(
         updatedAt: input.now,
         retiredAt: null,
       })
-      const created = await db
-        .select()
-        .from(customEventSourceDefinitions)
-        .where(eq(customEventSourceDefinitions.id, input.id))
-        .get()
+      const created = await definition(input.id)
       if (created === undefined) throw new Error('custom event source insert was not visible')
       return await record(created)
     },
 
     async get(id) {
-      const row = await db
-        .select()
-        .from(customEventSourceDefinitions)
-        .where(eq(customEventSourceDefinitions.id, id))
-        .get()
+      const row = await definition(id)
       return row === undefined ? null : await record(row)
     },
 
@@ -111,23 +119,20 @@ export function createPostgresqlCustomEventSourceStore(
           ),
         )
         .returning({ id: customEventSourceDefinitions.id })
-        .get()
-      if (changed === undefined) return null
-      const row = await db
-        .select()
-        .from(customEventSourceDefinitions)
-        .where(eq(customEventSourceDefinitions.id, input.id))
-        .get()
+      if (changed.length !== 1) return null
+      const row = await definition(input.id)
       return row === undefined ? null : await record(row)
     },
 
     async publish(input) {
-      await db.transaction(async (tx) => {
-        const current = await tx
-          .select()
-          .from(customEventSourceDefinitions)
-          .where(eq(customEventSourceDefinitions.id, input.id))
-          .get()
+      await databaseSessionFor(db).transaction(async (tx) => {
+        const current = (
+          await tx
+            .select()
+            .from(customEventSourceDefinitions)
+            .where(eq(customEventSourceDefinitions.id, input.id))
+            .limit(1)
+        )[0]
         if (current === undefined || current.retiredAt !== null) {
           throw new Error('custom event source is unavailable')
         }
@@ -182,8 +187,7 @@ export function createPostgresqlCustomEventSourceStore(
             ),
           )
           .returning({ id: customEventSourceDefinitions.id })
-          .get()
-        if (published === undefined) {
+        if (published.length !== 1) {
           throw new Error('custom event source changed during publish')
         }
       })
@@ -196,32 +200,32 @@ export function createPostgresqlCustomEventSourceStore(
     },
 
     async retire(id, now) {
-      return (
-        (await db
-          .update(customEventSourceDefinitions)
-          .set({ retiredAt: now, updatedAt: now })
-          .where(
-            and(
-              eq(customEventSourceDefinitions.id, id),
-              isNull(customEventSourceDefinitions.retiredAt),
-            ),
-          )
-          .returning({ id: customEventSourceDefinitions.id })
-          .get()) !== undefined
-      )
+      const retired = await db
+        .update(customEventSourceDefinitions)
+        .set({ retiredAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(customEventSourceDefinitions.id, id),
+            isNull(customEventSourceDefinitions.retiredAt),
+          ),
+        )
+        .returning({ id: customEventSourceDefinitions.id })
+      return retired.length === 1
     },
 
     async getPublished(ref) {
-      const row = await db
-        .select()
-        .from(customEventSourceRevisions)
-        .where(
-          and(
-            eq(customEventSourceRevisions.sourceId, ref.id),
-            eq(customEventSourceRevisions.revision, ref.revision),
-          ),
-        )
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(customEventSourceRevisions)
+          .where(
+            and(
+              eq(customEventSourceRevisions.sourceId, ref.id),
+              eq(customEventSourceRevisions.revision, ref.revision),
+            ),
+          )
+          .limit(1)
+      )[0]
       if (row === undefined) return null
       return {
         sourceRef: ref,
@@ -232,24 +236,28 @@ export function createPostgresqlCustomEventSourceStore(
     },
 
     async acceptsNewSubscriptions(ref) {
-      const definition = await db
-        .select({ retiredAt: customEventSourceDefinitions.retiredAt })
-        .from(customEventSourceDefinitions)
-        .where(eq(customEventSourceDefinitions.id, ref.id))
-        .get()
-      if (definition === undefined) return true
-      if (definition.retiredAt !== null) return false
+      const definitionRow = (
+        await db
+          .select({ retiredAt: customEventSourceDefinitions.retiredAt })
+          .from(customEventSourceDefinitions)
+          .where(eq(customEventSourceDefinitions.id, ref.id))
+          .limit(1)
+      )[0]
+      if (definitionRow === undefined) return true
+      if (definitionRow.retiredAt !== null) return false
       return (
-        (await db
-          .select({ sourceId: customEventSourceRevisions.sourceId })
-          .from(customEventSourceRevisions)
-          .where(
-            and(
-              eq(customEventSourceRevisions.sourceId, ref.id),
-              eq(customEventSourceRevisions.revision, ref.revision),
-            ),
-          )
-          .get()) !== undefined
+        (
+          await db
+            .select({ sourceId: customEventSourceRevisions.sourceId })
+            .from(customEventSourceRevisions)
+            .where(
+              and(
+                eq(customEventSourceRevisions.sourceId, ref.id),
+                eq(customEventSourceRevisions.revision, ref.revision),
+              ),
+            )
+            .limit(1)
+        ).length > 0
       )
     },
   }

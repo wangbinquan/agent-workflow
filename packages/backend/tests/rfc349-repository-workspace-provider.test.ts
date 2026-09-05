@@ -6,8 +6,7 @@ import { createInMemoryDb } from '@/db/client'
 import { cachedRepos } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { composeRepositoryWorkspaceOperations } from '@/modules/source-control/composition'
-import { PostgresqlRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore'
-import { SQLiteRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore'
+import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -28,7 +27,7 @@ function rows(direct: readonly Record<string, unknown>[] = []): SqlRows {
 }
 
 function postgresqlFixture(): {
-  readonly store: PostgresqlRepositoryWorkspaceStore
+  readonly store: DrizzleRepositoryWorkspaceStore
   readonly executions: string[]
 } {
   const executions: string[] = []
@@ -68,7 +67,7 @@ function postgresqlFixture(): {
     async close() {},
   }
   return {
-    store: new PostgresqlRepositoryWorkspaceStore(createPostgresqlDatabaseClient(runtime)),
+    store: new DrizzleRepositoryWorkspaceStore(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }
@@ -80,7 +79,7 @@ afterEach(() => {
 describe('RFC-349 repository workspace provider boundary', () => {
   test('SQLite adapter preserves cache paging, due selection and group transactions', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = new SQLiteRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db)
     const inserted = await store.insertCachedRepo({
       id: 'repo-1',
       urlHash: 'hash-1',
@@ -212,11 +211,11 @@ describe('RFC-349 repository workspace provider boundary', () => {
       resolve(
         import.meta.dir,
         '..',
-        'src/modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts',
+        'src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts',
       ),
       'utf8',
     )
-    expect(postgresql).toContain('PostgresqlDatabaseClient')
+    expect(postgresql).toContain('ProviderNeutralDatabase')
     expect(postgresql).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient/)
     expect(postgresql).not.toContain('createInMemoryDb')
     expect(postgresql).not.toContain('deasync')
@@ -224,7 +223,7 @@ describe('RFC-349 repository workspace provider boundary', () => {
 
   test('facets retain the short cache and expose explicit cross-store invalidation', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = new SQLiteRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db)
     const record = {
       id: 'repo-cache-1',
       urlHash: 'hash-cache-1',

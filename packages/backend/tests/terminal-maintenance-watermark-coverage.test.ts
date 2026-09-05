@@ -28,7 +28,7 @@ import { createInMemoryDb, type DbClient } from '@/db/client'
 import { taskExecutionLineageOperationRecords, tasks } from '@/db/schema'
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
-import { SqliteWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/sqliteWorkspaceMaintenanceStore'
+import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
 import {
@@ -222,7 +222,7 @@ describe('terminal maintenance retained-watermark coverage', () => {
         .run()
 
       const command = createWorkspaceMaintenanceCommand({
-        store: new SqliteWorkspaceMaintenanceStore(database),
+        store: new DrizzleWorkspaceMaintenanceStore(database),
         terminalMaintenance: new SqliteTerminalMaintenancePersistence(database),
         filesystem: createNodeWorkspaceMaintenanceFilesystem({
           appHome,

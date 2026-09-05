@@ -62,8 +62,7 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   'modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts': 1,
-  'modules/source-control/infrastructure/postgresqlRepositoryWorkspaceStore.ts': 1,
-  'modules/source-control/infrastructure/sqliteRepositoryWorkspaceStore.ts': 1,
+  'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': 1,
   'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': 1,
   'modules/system-operations/infrastructure/sqliteResourceLimitPersistence.ts': 1,
   'modules/task-execution/infrastructure/postgresqlChildExecutionLaunchOperations.ts': 1,

@@ -70,6 +70,18 @@ export interface EngineCapabilities {
   /** 事务级 advisory lock，跨进程协调用。PG：`pg_advisory_xact_lock`；SQLite no-op。 */
   advisoryLock(tx: DatabaseTransaction, key: string): Promise<void>
 
+  /**
+   * 手写 SQL 里 `FROM <table>` 之后的索引提示。SQLite：`INDEXED BY "<index>"`（让聚合扫覆盖索引而不是
+   * 整表，RFC-311 的 repos 页刻度）；PG：空——planner 自己选，没有对应语法。
+   */
+  indexHint(indexName: string): SQL
+
+  /**
+   * 擦除凭据之后回收物理存储：SQLite 要 `secure_delete` + WAL truncate + `VACUUM`，否则旧页面里的密文
+   * 还留在文件上；PG 由 autovacuum 负责，daemon 侧 no-op。**不能在事务里调**（VACUUM 拒绝事务内执行）。
+   */
+  reclaimScrubbedStorage(db: DatabaseTransaction): Promise<void>
+
   /** `ORDER BY col ASC`，按 SQLite 的 NULL 落位（NULL 最前）。 */
   ascNullsFirst(column: SQLWrapper): SQL
   /** `ORDER BY col DESC`，按 SQLite 的 NULL 落位（NULL 最后）。 */
@@ -161,6 +173,12 @@ export function createSqliteCapabilities(): EngineCapabilities {
     async advisoryLock() {
       // 单进程单写者；跨进程协调由 daemon 级 flock 承担。
     },
+    indexHint: (indexName) => sql`INDEXED BY ${sql.identifier(indexName)}`,
+    async reclaimScrubbedStorage(db) {
+      await db.run(sql`PRAGMA secure_delete = ON`)
+      await db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
+      await db.run(sql`VACUUM`)
+    },
     ascNullsFirst: (column) => sql`${column} asc`,
     descNullsLast: (column) => sql`${column} desc`,
     likeCaseInsensitive: (column, pattern, escape) =>
@@ -230,6 +248,10 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     claimLockClause: () => sql`for update skip locked`,
     async advisoryLock(tx, key) {
       await tx.run(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
+    },
+    indexHint: () => sql``,
+    async reclaimScrubbedStorage() {
+      // PostgreSQL 由 autovacuum 回收页面；凭据单元格是事务内改写的，daemon 侧不做 VACUUM。
     },
     ascNullsFirst: (column) => sql`${column} asc nulls first`,
     descNullsLast: (column) => sql`${column} desc nulls last`,

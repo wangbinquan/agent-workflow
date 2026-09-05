@@ -2602,11 +2602,7 @@ function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'AuthorizedWorkgroupTaskRoomCommand',
     }
   }
-  if (
-    /modules\/source-control\/infrastructure\/(?:postgresql|sqlite)RepositoryWorkspaceStore/.test(
-      value,
-    )
-  ) {
+  if (/modules\/source-control\/infrastructure\/repositoryWorkspaceStore/.test(value)) {
     return {
       authorityKind: 'control-revision',
       controlSubtype: 'continuation-admission',

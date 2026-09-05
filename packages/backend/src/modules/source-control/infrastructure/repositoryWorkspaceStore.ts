@@ -1,7 +1,11 @@
+// RFC-359 W4-B6 —— 仓库工作区存储：一份实现，两个 provider 共用。
+// 仓库组的图版本核对 + 改写在统一事务里做，PG 侧原本的 `LOCK TABLE … SHARE ROW EXCLUSIVE` 改为引擎能力矩阵的
+// 事务级 advisory lock（所有仓库组写入都经本存储，写者之间互斥即等价；SQLite 单写者下 no-op）；
+// 聚合的索引提示与凭据擦除后的存储回收也走能力矩阵。
+
 import { and, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   cachedRepos,
   memories,
@@ -11,6 +15,12 @@ import {
   taskRepos,
   tasks,
 } from '@/db/schema'
+import {
+  affectedRows,
+  databaseSessionFor,
+  engineOf,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import type {
   RepositoryCredentialSealingMutation,
   RepositoryGroupDeleteResult,
@@ -24,20 +34,19 @@ import {
   type RepositoryWorkspaceSqlExecutor,
 } from './repositoryWorkspaceSqlStore'
 
-function changes(result: unknown): number {
-  return (result as { readonly changes?: number }).changes ?? 0
-}
+const REPOSITORY_GROUP_GRAPH_LOCK = 'source-control:repository-groups'
 
-function sqliteExecutor(db: DbClient): RepositoryWorkspaceSqlExecutor {
+function executor(db: ProviderNeutralDatabase): RepositoryWorkspaceSqlExecutor {
+  const engine = engineOf(db)
   return {
     async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
-      return db.all(query) as T[]
+      return (await db.all(query)) as readonly T[]
     },
     async run(query): Promise<number> {
-      return changes(db.run(query))
+      return affectedRows(await db.run(query))
     },
     async cachedRepoFacets(input) {
-      const rows = db.all<{
+      const rows = await db.all<{
         all_count: number
         referenced_count: number
         attention_count: number
@@ -46,15 +55,18 @@ function sqliteExecutor(db: DbClient): RepositoryWorkspaceSqlExecutor {
           count(*) AS all_count,
           sum(case when ${input.referenced} then 1 else 0 end) AS referenced_count,
           sum(case when ${input.attention} then 1 else 0 end) AS attention_count
-        FROM "cached_repos" INDEXED BY "idx_cached_repos_fetched_id"
+        FROM ${cachedRepos} ${engine.indexHint('idx_cached_repos_fetched_id')}
       `)
       return rows[0] ?? { all_count: 0, referenced_count: 0, attention_count: 0 }
     },
   }
 }
 
-function insertGroupNodes(tx: DbTxSync, nodes: readonly RepositoryGroupNodeRecord[]): void {
-  for (const node of nodes) tx.insert(repoGroupNodes).values(node).run()
+async function insertGroupNodes(
+  tx: DatabaseTransaction,
+  nodes: readonly RepositoryGroupNodeRecord[],
+): Promise<void> {
+  for (const node of nodes) await tx.insert(repoGroupNodes).values(node)
 }
 
 function graphVersionsMatch(
@@ -66,41 +78,45 @@ function graphVersionsMatch(
   return actual.every((row) => expectedById.get(row.id) === row.version)
 }
 
-function applySealingMutation(tx: DbTxSync, mutation: RepositoryCredentialSealingMutation): void {
+async function applySealingMutation(
+  tx: DatabaseTransaction,
+  mutation: RepositoryCredentialSealingMutation,
+): Promise<void> {
   for (const update of mutation.cachedRepoUpdates) {
-    tx.update(cachedRepos).set(update.patch).where(eq(cachedRepos.id, update.id)).run()
+    await tx.update(cachedRepos).set(update.patch).where(eq(cachedRepos.id, update.id))
   }
   for (const update of mutation.taskRepoUpdates) {
-    tx.update(taskRepos)
+    await tx
+      .update(taskRepos)
       .set(update.patch)
       .where(and(eq(taskRepos.taskId, update.taskId), eq(taskRepos.repoIndex, update.repoIndex)))
-      .run()
   }
   for (const update of mutation.taskUpdates) {
-    tx.update(tasks).set(update.patch).where(eq(tasks.id, update.id)).run()
+    await tx.update(tasks).set(update.patch).where(eq(tasks.id, update.id))
   }
   for (const update of mutation.scheduleUpdates) {
-    tx.update(scheduledTasks)
+    await tx
+      .update(scheduledTasks)
       .set({ launchPayload: update.launchPayload })
       .where(eq(scheduledTasks.id, update.id))
-      .run()
   }
 }
 
-export class SQLiteRepositoryWorkspaceStore
+export class DrizzleRepositoryWorkspaceStore
   extends RepositoryWorkspaceSqlStore
   implements RepositoryWorkspaceStore
 {
   readonly runtimeIdentity: object
 
-  constructor(private readonly db: DbClient) {
-    super(sqliteExecutor(db))
+  constructor(private readonly db: ProviderNeutralDatabase) {
+    super(executor(db))
     this.runtimeIdentity = db as object
   }
 
   async deleteCachedRepoAndDetachGroups(id: string): Promise<void> {
-    dbTxSync(this.db, (tx) => {
-      tx.update(repoGroupNodes)
+    await databaseSessionFor(this.db).transaction(async (tx) => {
+      await tx
+        .update(repoGroupNodes)
         .set({
           attachmentKind: null,
           cachedRepoId: null,
@@ -110,8 +126,7 @@ export class SQLiteRepositoryWorkspaceStore
           readonly: false,
         })
         .where(eq(repoGroupNodes.cachedRepoId, id))
-        .run()
-      tx.delete(cachedRepos).where(eq(cachedRepos.id, id)).run()
+      await tx.delete(cachedRepos).where(eq(cachedRepos.id, id))
     })
     this.invalidateCachedRepoFacets()
   }
@@ -119,29 +134,29 @@ export class SQLiteRepositoryWorkspaceStore
   async applyCredentialSealingMutation(
     mutation: RepositoryCredentialSealingMutation,
   ): Promise<void> {
-    dbTxSync(this.db, (tx) => applySealingMutation(tx, mutation))
+    await databaseSessionFor(this.db).transaction(
+      async (tx) => await applySealingMutation(tx, mutation),
+    )
   }
 
   async compactAfterCredentialScrub(): Promise<void> {
-    this.db.run(sql`PRAGMA secure_delete = ON`)
-    this.db.run(sql`PRAGMA wal_checkpoint(TRUNCATE)`)
-    this.db.run(sql`VACUUM`)
+    await engineOf(this.db).reclaimScrubbedStorage(this.db)
   }
 
   async createRepositoryGroup(
     group: RepositoryGroupRecord,
     nodes: readonly RepositoryGroupNodeRecord[],
   ): Promise<'created' | 'name-conflict'> {
-    return dbTxSync(this.db, (tx) => {
-      const duplicate = tx
+    return await databaseSessionFor(this.db).transaction(async (tx) => {
+      await engineOf(tx).advisoryLock(tx, REPOSITORY_GROUP_GRAPH_LOCK)
+      const duplicates = await tx
         .select({ id: repoGroups.id })
         .from(repoGroups)
         .where(sql`lower(${repoGroups.name}) = lower(${group.name})`)
         .limit(1)
-        .all()[0]
-      if (duplicate !== undefined) return 'name-conflict'
-      tx.insert(repoGroups).values(group).run()
-      insertGroupNodes(tx, nodes)
+      if (duplicates.length > 0) return 'name-conflict'
+      await tx.insert(repoGroups).values(group)
+      await insertGroupNodes(tx, nodes)
       return 'created'
     })
   }
@@ -158,35 +173,37 @@ export class SQLiteRepositoryWorkspaceStore
     readonly updatedAt: number
     readonly nodes: readonly RepositoryGroupNodeRecord[]
   }): Promise<RepositoryGroupWriteResult> {
-    return dbTxSync(this.db, (tx) => {
-      const graphVersions = tx
+    return await databaseSessionFor(this.db).transaction(async (tx) => {
+      await engineOf(tx).advisoryLock(tx, REPOSITORY_GROUP_GRAPH_LOCK)
+      const graphVersions = await tx
         .select({ id: repoGroups.id, version: repoGroups.version })
         .from(repoGroups)
-        .all()
       if (!graphVersionsMatch(graphVersions, input.expectedGraphVersions)) {
         return { status: 'graph-stale' }
       }
-      const current = tx
-        .select({ version: repoGroups.version })
-        .from(repoGroups)
-        .where(eq(repoGroups.id, input.id))
-        .limit(1)
-        .all()[0]
+      const current = (
+        await tx
+          .select({ version: repoGroups.version })
+          .from(repoGroups)
+          .where(eq(repoGroups.id, input.id))
+          .limit(1)
+      )[0]
       if (current === undefined) return { status: 'missing' }
       if (input.expectedVersion !== undefined && input.expectedVersion !== current.version) {
         return { status: 'stale', actualVersion: current.version }
       }
-      const duplicate = tx
+      const duplicates = await tx
         .select({ id: repoGroups.id })
         .from(repoGroups)
         .where(sql`lower(${repoGroups.name}) = lower(${input.name})`)
-        .all()
-        .some((row) => row.id !== input.id)
-      if (duplicate) return { status: 'name-conflict' }
-      tx.delete(repoGroupNodes).where(eq(repoGroupNodes.groupId, input.id)).run()
-      insertGroupNodes(tx, input.nodes)
+      if (duplicates.some((row) => row.id !== input.id)) {
+        return { status: 'name-conflict' }
+      }
+      await tx.delete(repoGroupNodes).where(eq(repoGroupNodes.groupId, input.id))
+      await insertGroupNodes(tx, input.nodes)
       const version = current.version + 1
-      tx.update(repoGroups)
+      await tx
+        .update(repoGroups)
         .set({
           name: input.name,
           description: input.description,
@@ -195,7 +212,6 @@ export class SQLiteRepositoryWorkspaceStore
           schemaVersion: 2,
         })
         .where(eq(repoGroups.id, input.id))
-        .run()
       return { status: 'ok', version }
     })
   }
@@ -208,15 +224,15 @@ export class SQLiteRepositoryWorkspaceStore
       readonly version: number
     }[]
   }): Promise<RepositoryGroupDeleteResult> {
-    return dbTxSync(this.db, (tx) => {
-      const graphVersions = tx
+    return await databaseSessionFor(this.db).transaction(async (tx) => {
+      await engineOf(tx).advisoryLock(tx, REPOSITORY_GROUP_GRAPH_LOCK)
+      const graphVersions = await tx
         .select({ id: repoGroups.id, version: repoGroups.version })
         .from(repoGroups)
-        .all()
       if (!graphVersionsMatch(graphVersions, input.expectedGraphVersions)) {
         return { status: 'graph-stale' }
       }
-      const memoryRows = tx
+      const memoryRows = await tx
         .select({ id: memories.id })
         .from(memories)
         .where(
@@ -226,9 +242,9 @@ export class SQLiteRepositoryWorkspaceStore
             inArray(memories.status, ['candidate', 'approved', 'superseded', 'rejected']),
           ),
         )
-        .all()
       if (memoryRows.length > 0) {
-        tx.update(memories)
+        await tx
+          .update(memories)
           .set({ status: 'archived' })
           .where(
             inArray(
@@ -236,15 +252,14 @@ export class SQLiteRepositoryWorkspaceStore
               memoryRows.map((row) => row.id),
             ),
           )
-          .run()
       }
-      const references = tx
+      const references = await tx
         .select({ groupId: repoGroupNodes.groupId })
         .from(repoGroupNodes)
         .where(eq(repoGroupNodes.childGroupId, input.id))
-        .all()
       if (references.length > 0) {
-        tx.update(repoGroupNodes)
+        await tx
+          .update(repoGroupNodes)
           .set({
             attachmentKind: null,
             cachedRepoId: null,
@@ -254,19 +269,18 @@ export class SQLiteRepositoryWorkspaceStore
             readonly: false,
           })
           .where(eq(repoGroupNodes.childGroupId, input.id))
-          .run()
       }
       if (input.scheduleIds.length > 0) {
-        tx.update(scheduledTasks)
+        await tx
+          .update(scheduledTasks)
           .set({
             enabled: false,
             nextRunAt: null,
             lastError: `repo group ${input.id} was deleted; re-point this schedule before re-enabling`,
           })
           .where(inArray(scheduledTasks.id, [...input.scheduleIds]))
-          .run()
       }
-      tx.delete(repoGroups).where(eq(repoGroups.id, input.id)).run()
+      await tx.delete(repoGroups).where(eq(repoGroups.id, input.id))
       return {
         status: 'ok',
         archivedMemories: memoryRows.length,
@@ -277,6 +291,8 @@ export class SQLiteRepositoryWorkspaceStore
   }
 }
 
-export function composeSqliteRepositoryWorkspaceStore(db: DbClient): RepositoryWorkspaceStore {
-  return new SQLiteRepositoryWorkspaceStore(db)
+export function composeRepositoryWorkspaceStore(
+  db: ProviderNeutralDatabase,
+): RepositoryWorkspaceStore {
+  return new DrizzleRepositoryWorkspaceStore(db)
 }
