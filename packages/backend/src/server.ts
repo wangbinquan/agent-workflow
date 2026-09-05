@@ -36,7 +36,10 @@ import { listTokenAudit, listTokenAuditForUser, takeDeleteSnapshot } from '@/ser
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { DbClient } from '@/db/client'
 import { developmentMissions, developmentMrClaims } from '@/db/schema'
-import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
+import type {
+  BuildScheduleLaunch,
+  IntegrationTriggerResourceBinding,
+} from '@/services/scheduledTasks'
 import { buildScheduleLaunch } from '@/services/scheduleLaunch'
 import type { SmokeOptions, SmokeResult } from '@/services/runtimeSmoke'
 import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
@@ -100,7 +103,6 @@ import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resourc
 import { composeIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
 import {
   canViewResource,
-  canViewResourceInTx,
   composeResourceScopeAuthorizationBinding,
   filterVisibleRows,
   getResourceAcl,
@@ -111,10 +113,7 @@ import {
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 import { resourceAclAudienceAuthority } from '@/modules/resource-catalog/domain/resourceAccess'
-import {
-  composeIntegrationTriggerResourceBinding,
-  type IntegrationTriggerResourceBinding,
-} from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type {
@@ -258,7 +257,6 @@ import {
   composeDigitalEmployee,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeePlatformInventoryParticipant,
-  composeDigitalEmployeeIntegrationTriggerParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   composeSqliteDigitalEmployeeWriterCutover,
   createEmployeeInputArtifactStore,
@@ -386,7 +384,10 @@ import {
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeSqliteApprovalGatewayRunner } from '@/modules/integration/composition/approvalGateway'
-import { composeSqliteScheduledTaskRuntime } from '@/modules/integration/composition/scheduledTasks'
+import {
+  composeIntegrationTriggerResourceQueries,
+  composeSqliteScheduledTaskRuntime,
+} from '@/modules/integration/composition/scheduledTasks'
 import { composeSqliteWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { composeSqliteWebhookTriggerServiceDependencies } from '@/modules/integration/composition/webhookDispatch'
 import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
@@ -904,9 +905,9 @@ function withIntegrationTriggerResources(
   if (hasIntegrationTriggerResources(identityAccess)) return identityAccess
   return Object.freeze({
     ...identityAccess,
-    integrationTriggerResources: composeIntegrationTriggerResourceBinding(
-      { canViewResourceInTx, assertNotBuiltin },
-      composeDigitalEmployeeIntegrationTriggerParticipant,
+    integrationTriggerResources: composeIntegrationTriggerResourceQueries(
+      db,
+      composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     ),
     taskExecutionResources: createSqliteTaskExecutionResourceBinding(
       db,
@@ -2532,10 +2533,7 @@ function composeSqliteApiRouteMounts(
   })
   const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
     db: deps.db,
-    resources: composeIntegrationTriggerResourceBinding(
-      { canViewResourceInTx, assertNotBuiltin },
-      composeDigitalEmployeeIntegrationTriggerParticipant,
-    ),
+    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     validation: Object.freeze({
       assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(deps.db, workflow),
       assertAgentIntegrity: (agentIds) =>

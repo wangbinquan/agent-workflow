@@ -17,9 +17,7 @@ import type {
   AgentPackageMutation,
   CapabilityTemplatePackageMutation,
   CatalogSelectorKind,
-  FrozenIntegrationTriggerResourceSnapshot,
   FrozenTaskExecutionResourceSnapshot,
-  IntegrationTriggerResourceRequest,
   GetAgentResourceClosureStatusInput,
   IntentResourceChangesetReceipt,
   McpAclIdentity,
@@ -155,7 +153,6 @@ export interface DemoResourceCatalogSeedParticipant {
 
 declare const taskExecutionResourceSnapshotInTxBrand: unique symbol
 declare const intentApplyResourceParticipantInTxBrand: unique symbol
-declare const integrationTriggerResourceSnapshotInTxBrand: unique symbol
 declare const resourceScopeAuthorizationInTxBrand: unique symbol
 declare const agentPackageMutationParticipantInTxBrand: unique symbol
 declare const skillPackageMutationParticipantInTxBrand: unique symbol
@@ -256,14 +253,6 @@ export interface IntentApplyResourceParticipantInTx {
     authority: ResourceRequestContext,
     plan: VersionedIntentResourceChangesetPlan,
   ): IntentResourceChangesetReceipt
-}
-
-export interface IntegrationTriggerResourceSnapshotInTx {
-  readonly [integrationTriggerResourceSnapshotInTxBrand]: 'integration-trigger-resource-snapshot'
-  loadAuthorized(
-    authority: ResourceRequestContext,
-    requests: readonly IntegrationTriggerResourceRequest[],
-  ): readonly FrozenIntegrationTriggerResourceSnapshot[]
 }
 
 export interface ResourceScopeAuthorizationInTx {

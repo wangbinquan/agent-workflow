@@ -1,22 +1,33 @@
+// RFC-359 W4-D1 —— 定时任务持久化：一份实现，两个 provider 共用。多语句写走统一事务原语；
+// 资源快照在同一个写事务里加载（Integration owner 持有事务，Resource Catalog 把 ACL / 内容读绑定到它）。
+
 import { OwnerIdentitySchema, type UserPublic } from '@agent-workflow/shared'
 import { and, asc, count, eq, inArray, isNotNull, lte, or, sql } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { resourceGrants, scheduledTasks, users } from '@/db/schema'
-import { dbTxSync, type DbTxSync } from '@/db/txSync'
+import type {
+  FrozenIntegrationTriggerResourceSnapshot,
+  IntegrationTriggerResourceRequest,
+} from '@/modules/resource-catalog/public/types'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import type {
   IntegrationTriggerAuthorityPair,
   ScheduledTaskPersistencePort,
   ScheduledTaskRecord,
 } from '../application/ports/scheduledTaskPersistence'
-import type { IntegrationTriggerResourceSnapshotInTx } from '@/modules/resource-catalog/public/participants'
 
-export interface SqliteIntegrationTriggerTransactionBinding {
-  inTransaction(
-    tx: DbTxSync,
+/** Infrastructure-private bridge: the resource snapshot joins the schedule write tx. */
+export interface IntegrationTriggerTransactionLoader {
+  loadAuthorized(
+    tx: DatabaseTransaction,
     pair: IntegrationTriggerAuthorityPair,
-  ): IntegrationTriggerResourceSnapshotInTx
+    requests: readonly IntegrationTriggerResourceRequest[],
+  ): Promise<readonly FrozenIntegrationTriggerResourceSnapshot[]>
 }
 
 const OWNER_BATCH_SIZE = 200
@@ -31,10 +42,11 @@ function toPublicUser(row: typeof users.$inferSelect): UserPublic {
   }
 }
 
-export function createSqliteScheduledTaskPersistence(
-  db: DbClient,
-  resources: SqliteIntegrationTriggerTransactionBinding,
+export function createScheduledTaskPersistence(
+  db: ProviderNeutralDatabase,
+  resources: IntegrationTriggerTransactionLoader,
 ): ScheduledTaskPersistencePort {
+  const session = databaseSessionFor(db)
   const get = async (id: string): Promise<ScheduledTaskRecord | null> =>
     (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id)).limit(1))[0] ?? null
 
@@ -112,21 +124,21 @@ export function createSqliteScheduledTaskPersistence(
       return byId
     },
     async createAtomically(input) {
-      dbTxSync(db, (tx) => {
-        const snapshots = resources
-          .inTransaction(tx, input.authority)
-          .loadAuthorized(input.authority.authority, [input.request])
+      await session.transaction(async (tx) => {
+        const snapshots = await resources.loadAuthorized(tx, input.authority, [input.request])
         const snapshot = snapshots[0]
         if (snapshot === undefined) throw new Error('integration-trigger-snapshot-missing')
-        tx.insert(scheduledTasks).values(input.finish(snapshot)).run()
+        await tx.insert(scheduledTasks).values(input.finish(snapshot))
       })
       const created = await get(input.record.id)
       if (created === null) throw new Error('scheduled task disappeared right after insert')
       return created
     },
     async updateAtomically(input) {
-      dbTxSync(db, (tx) => {
-        const fresh = tx.select().from(scheduledTasks).where(eq(scheduledTasks.id, input.id)).get()
+      await session.transaction(async (tx) => {
+        const fresh = (
+          await tx.select().from(scheduledTasks).where(eq(scheduledTasks.id, input.id)).limit(1)
+        )[0]
         if (fresh === undefined) {
           throw new NotFoundError(
             'scheduled-task-not-found',
@@ -137,16 +149,14 @@ export function createSqliteScheduledTaskPersistence(
         const snapshot =
           decision.request === null
             ? null
-            : resources
-                .inTransaction(tx, input.authority)
-                .loadAuthorized(input.authority.authority, [decision.request])[0]
+            : (await resources.loadAuthorized(tx, input.authority, [decision.request]))[0]
         if (decision.request !== null && snapshot === undefined) {
           throw new Error('integration-trigger-snapshot-missing')
         }
-        tx.update(scheduledTasks)
+        await tx
+          .update(scheduledTasks)
           .set(decision.finish(snapshot ?? null))
           .where(eq(scheduledTasks.id, input.id))
-          .run()
       })
       const updated = await get(input.id)
       if (updated === null) throw new Error('scheduled task disappeared right after update')
@@ -180,15 +190,17 @@ export function createSqliteScheduledTaskPersistence(
       }
     },
     async replaceAclAtomically(input) {
-      dbTxSync(db, (tx) => {
-        const current = tx
-          .select({
-            aclRevision: scheduledTasks.aclRevision,
-            ownerUserId: scheduledTasks.ownerUserId,
-          })
-          .from(scheduledTasks)
-          .where(eq(scheduledTasks.id, input.resourceId))
-          .get()
+      await session.transaction(async (tx) => {
+        const current = (
+          await tx
+            .select({
+              aclRevision: scheduledTasks.aclRevision,
+              ownerUserId: scheduledTasks.ownerUserId,
+            })
+            .from(scheduledTasks)
+            .where(eq(scheduledTasks.id, input.resourceId))
+            .limit(1)
+        )[0]
         if (current === undefined) {
           throw new NotFoundError(
             'scheduled-task-not-found',
@@ -212,11 +224,10 @@ export function createSqliteScheduledTaskPersistence(
         }
         const referenced = [...new Set(input.grants.map((grant) => grant.userId))]
         if (referenced.length > 0) {
-          const rows = tx
+          const rows = await tx
             .select({ id: users.id, status: users.status })
             .from(users)
             .where(inArray(users.id, referenced))
-            .all()
           const active = new Set(rows.filter((row) => row.status === 'active').map((row) => row.id))
           const invalid = referenced.filter((id) => id === input.systemUserId || !active.has(id))
           if (invalid.length > 0) {
@@ -227,32 +238,30 @@ export function createSqliteScheduledTaskPersistence(
         }
         const next = new Map(input.grants.map((grant) => [grant.userId, grant.level] as const))
         next.delete(current.ownerUserId)
-        tx.delete(resourceGrants)
+        await tx
+          .delete(resourceGrants)
           .where(
             and(
               eq(resourceGrants.resourceType, 'scheduled_task'),
               eq(resourceGrants.resourceId, input.resourceId),
             ),
           )
-          .run()
         if (next.size > 0) {
-          tx.insert(resourceGrants)
-            .values(
-              [...next].map(([userId, level]) => ({
-                resourceType: 'scheduled_task' as const,
-                resourceId: input.resourceId,
-                userId,
-                level,
-                addedBy: input.actorUserId,
-                addedAt: input.updatedAt,
-              })),
-            )
-            .run()
+          await tx.insert(resourceGrants).values(
+            [...next].map(([userId, level]) => ({
+              resourceType: 'scheduled_task' as const,
+              resourceId: input.resourceId,
+              userId,
+              level,
+              addedBy: input.actorUserId,
+              addedAt: input.updatedAt,
+            })),
+          )
         }
-        tx.update(scheduledTasks)
+        await tx
+          .update(scheduledTasks)
           .set({ aclRevision: current.aclRevision + 1, updatedAt: input.updatedAt })
           .where(eq(scheduledTasks.id, input.resourceId))
-          .run()
       })
     },
     async pollAndClaim(input) {
@@ -272,7 +281,6 @@ export function createSqliteScheduledTaskPersistence(
       const claimed: ScheduledTaskRecord[] = []
       for (const row of due) {
         if (row.nextRunAt === null) continue
-        const expectedNextRunAt = row.nextRunAt
         const decision = input.decide(row)
         if (decision.kind === 'disable') {
           await db
@@ -292,33 +300,30 @@ export function createSqliteScheduledTaskPersistence(
             )
           continue
         }
-        const didClaim = dbTxSync(
-          db,
-          (tx) =>
-            tx
-              .update(scheduledTasks)
-              .set({ nextRunAt: decision.nextRunAt, updatedAt: input.now })
-              .where(
-                and(
-                  eq(scheduledTasks.id, row.id),
-                  eq(scheduledTasks.nextRunAt, expectedNextRunAt),
-                  eq(scheduledTasks.enabled, true),
-                ),
-              )
-              .returning({ id: scheduledTasks.id })
-              .get() !== undefined,
-        )
-        if (didClaim) claimed.push(row)
+        // 认领 = 对「仍是这一次 nextRunAt 且仍启用」的行做 CAS；returning 判定可见性，两个引擎同形。
+        const result = await db
+          .update(scheduledTasks)
+          .set({ nextRunAt: decision.nextRunAt, updatedAt: input.now })
+          .where(
+            and(
+              eq(scheduledTasks.id, row.id),
+              eq(scheduledTasks.nextRunAt, row.nextRunAt),
+              eq(scheduledTasks.enabled, true),
+            ),
+          )
+          .returning({ id: scheduledTasks.id })
+        if (result.length > 0) claimed.push(row)
       }
       return claimed
     },
     async recordSuccess(input) {
-      dbTxSync(db, (tx) => {
-        tx.update(scheduledTasks)
+      await session.transaction(async (tx) => {
+        await tx
+          .update(scheduledTasks)
           .set({ consecutiveFailures: 0, updatedAt: input.recordedAt })
           .where(eq(scheduledTasks.id, input.id))
-          .run()
-        tx.update(scheduledTasks)
+        await tx
+          .update(scheduledTasks)
           .set({
             lastStatus: 'launched',
             lastError: null,
@@ -332,12 +337,11 @@ export function createSqliteScheduledTaskPersistence(
               sql`(${scheduledTasks.lastRunAt} IS NULL OR ${scheduledTasks.lastRunAt} <= ${input.firedAt})`,
             ),
           )
-          .run()
       })
     },
     async recordFailure(input) {
-      return dbTxSync(db, (tx) => {
-        const result = tx
+      return await session.transaction(async (tx) => {
+        const result = await tx
           .update(scheduledTasks)
           .set({
             consecutiveFailures: sql`${scheduledTasks.consecutiveFailures} + 1`,
@@ -350,8 +354,8 @@ export function createSqliteScheduledTaskPersistence(
           })
           .where(and(eq(scheduledTasks.id, input.id), eq(scheduledTasks.enabled, true)))
           .returning({ enabled: scheduledTasks.enabled })
-          .get()
-        tx.update(scheduledTasks)
+        await tx
+          .update(scheduledTasks)
           .set({
             lastStatus: 'failed',
             lastError: input.message,
@@ -364,8 +368,7 @@ export function createSqliteScheduledTaskPersistence(
               sql`(${scheduledTasks.lastRunAt} IS NULL OR ${scheduledTasks.lastRunAt} <= ${input.firedAt})`,
             ),
           )
-          .run()
-        return { autoDisabled: result?.enabled === false }
+        return { autoDisabled: result[0]?.enabled === false }
       })
     },
     async updateHealedPayload(input) {

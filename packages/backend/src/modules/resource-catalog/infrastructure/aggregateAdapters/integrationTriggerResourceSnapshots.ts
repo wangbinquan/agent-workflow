@@ -1,10 +1,17 @@
+// RFC-345 T4c — exact snapshots for schedule and webhook launch targets.
+//
+// Resource Catalog owns the target lookup + ACL projection. Launch-shape,
+// closure, input mapping and trigger preflight remain with their current
+// integration owners. RFC-359 W4-D1：一份实现，两个 provider 共用——每一次 ACL 与内容读取都绑定到
+// Integration owner 交来的那一个事务句柄与那一对已准入的 authority。
+
 import type { AclResourceType, Agent, WorkflowDetail, Workgroup } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 import { agents, resourceGrants, workflows, workgroupMembers, workgroups } from '@/db/schema'
 import type { DigitalEmployeeIntegrationTriggerParticipant } from '@/modules/digital-employee/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import {
   canViewAccess,
@@ -24,18 +31,14 @@ import { agentFromPersistenceRow } from '../agentPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import { workgroupFromPostgresqlRows } from '../postgresqlWorkgroupRepository'
 
-export type PostgresqlIntegrationTriggerResourceTransaction = Parameters<
-  Parameters<PostgresqlDatabaseClient['transaction']>[0]
->[0]
-
-export interface PostgresqlIntegrationTriggerResourceDependencies {
+export interface IntegrationTriggerResourceDependencies {
   readonly assertNotBuiltin: (
     type: AclResourceType,
     row: Readonly<{ readonly builtin?: boolean | null }>,
   ) => void
 }
 
-export interface PostgresqlIntegrationTriggerResourceSnapshotReader {
+export interface IntegrationTriggerResourceSnapshotReader {
   loadAuthorized(
     authority: ResourceRequestContext,
     requests: readonly IntegrationTriggerResourceRequest[],
@@ -97,7 +100,7 @@ function workgroupSnapshot(workgroup: Workgroup): TaskExecutionWorkgroupSnapshot
 }
 
 async function canView(
-  transaction: PostgresqlIntegrationTriggerResourceTransaction,
+  transaction: DatabaseTransaction,
   actor: Actor,
   resourceType: 'workflow' | 'agent' | 'workgroup' | 'digital_employee',
   row: AclRow,
@@ -117,20 +120,20 @@ async function canView(
                 eq(resourceGrants.userId, actor.user.id),
               ),
             )
-            .get()
-        )?.level ?? null)
+            .limit(1)
+        )[0]?.level ?? null)
   return canViewAccess(resolveAccessFrom(audience, actor.user.id, row, grant))
 }
 
-export function createPostgresqlIntegrationTriggerResourceSnapshotReader(
+export function createIntegrationTriggerResourceSnapshotReader(
   input: {
-    readonly transaction: PostgresqlIntegrationTriggerResourceTransaction
+    readonly transaction: DatabaseTransaction
     readonly authority: ResourceRequestContext
     readonly actor: Actor
     readonly digitalEmployees: DigitalEmployeeIntegrationTriggerParticipant
   },
-  dependencies: PostgresqlIntegrationTriggerResourceDependencies,
-): PostgresqlIntegrationTriggerResourceSnapshotReader {
+  dependencies: IntegrationTriggerResourceDependencies,
+): IntegrationTriggerResourceSnapshotReader {
   const actorFor = (authority: ResourceRequestContext): Actor => {
     if (authority !== input.authority) throw new Error('foreign-integration-trigger-authority')
     return input.actor
@@ -142,11 +145,13 @@ export function createPostgresqlIntegrationTriggerResourceSnapshotReader(
   ): Promise<FrozenIntegrationTriggerResourceSnapshot> {
     const actor = actorFor(authority)
     if (request.kind === 'scheduled-workflow' || request.kind === 'webhook-workflow') {
-      const row = await input.transaction
-        .select()
-        .from(workflows)
-        .where(eq(workflows.id, request.workflowId))
-        .get()
+      const row = (
+        await input.transaction
+          .select()
+          .from(workflows)
+          .where(eq(workflows.id, request.workflowId))
+          .limit(1)
+      )[0]
       if (row === undefined || !(await canView(input.transaction, actor, 'workflow', row))) {
         throw new NotFoundError('workflow-not-found', 'workflow not found')
       }
@@ -157,11 +162,9 @@ export function createPostgresqlIntegrationTriggerResourceSnapshotReader(
       })
     }
     if (request.kind === 'scheduled-agent') {
-      const row = await input.transaction
-        .select()
-        .from(agents)
-        .where(eq(agents.id, request.agentId))
-        .get()
+      const row = (
+        await input.transaction.select().from(agents).where(eq(agents.id, request.agentId)).limit(1)
+      )[0]
       if (row === undefined || !(await canView(input.transaction, actor, 'agent', row))) {
         throw new NotFoundError('agent-not-found', 'agent not found')
       }
@@ -172,11 +175,13 @@ export function createPostgresqlIntegrationTriggerResourceSnapshotReader(
       })
     }
     if (request.kind === 'scheduled-workgroup') {
-      const row = await input.transaction
-        .select()
-        .from(workgroups)
-        .where(eq(workgroups.id, request.workgroupId))
-        .get()
+      const row = (
+        await input.transaction
+          .select()
+          .from(workgroups)
+          .where(eq(workgroups.id, request.workgroupId))
+          .limit(1)
+      )[0]
       if (row === undefined || !(await canView(input.transaction, actor, 'workgroup', row))) {
         throw new NotFoundError('workgroup-not-found', 'workgroup not found')
       }
@@ -184,7 +189,6 @@ export function createPostgresqlIntegrationTriggerResourceSnapshotReader(
         .select()
         .from(workgroupMembers)
         .where(eq(workgroupMembers.workgroupId, row.id))
-        .all()
       return Object.freeze({
         kind: request.kind,
         workgroup: workgroupSnapshot(workgroupFromPostgresqlRows(row, members)),
@@ -225,7 +229,7 @@ export function createPostgresqlIntegrationTriggerResourceSnapshotReader(
     })
   }
 
-  const reader: PostgresqlIntegrationTriggerResourceSnapshotReader = {
+  const reader: IntegrationTriggerResourceSnapshotReader = {
     async loadAuthorized(authority, requests) {
       const snapshots: FrozenIntegrationTriggerResourceSnapshot[] = []
       for (const request of requests) snapshots.push(await loadOne(authority, request))

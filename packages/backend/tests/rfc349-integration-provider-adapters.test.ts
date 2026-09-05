@@ -12,16 +12,13 @@ import type {
   ScheduledTaskCreateRecord,
   ScheduledTaskPersistencePort,
 } from '@/modules/integration/application/ports/scheduledTaskPersistence'
-import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import type { IntegrationTriggerResourceRequest } from '@/modules/resource-catalog/public/types'
 import { createMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { createPostgresqlCapabilities } from '@/platform/persistence/capabilities'
-import { createPostgresqlIntegrationTriggerResources } from '@/modules/integration/infrastructure/postgresqlIntegrationTriggerResources'
-import { createPostgresqlScheduledTaskPersistence } from '@/modules/integration/infrastructure/postgresqlScheduledTaskPersistence'
+import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
+import { createScheduledTaskPersistence } from '@/modules/integration/infrastructure/scheduledTaskPersistence'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
 import { createPostgresqlVerifiedWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence'
 import { createPostgresqlWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence'
-import { createSqliteScheduledTaskPersistence } from '@/modules/integration/infrastructure/sqliteScheduledTaskPersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -193,19 +190,12 @@ describe('RFC-349 Integration provider adapters', () => {
     try {
       let sqliteResourceLoads = 0
       await assertScheduledCreateBehavior(
-        createSqliteScheduledTaskPersistence(sqlite, {
-          inTransaction(_transaction, pair) {
-            return {
-              loadAuthorized(
-                authority: ResourceRequestContext,
-                requests: readonly IntegrationTriggerResourceRequest[],
-              ) {
-                sqliteResourceLoads += 1
-                expect(authority).toBe(pair.authority)
-                expect(requests).toEqual([integrationTriggerRequest])
-                return [integrationTriggerSnapshot]
-              },
-            } as never
+        createScheduledTaskPersistence(sqlite, {
+          async loadAuthorized(_transaction, pair, requests) {
+            sqliteResourceLoads += 1
+            expect(pair.authority).toBeDefined()
+            expect(requests).toEqual([integrationTriggerRequest])
+            return [integrationTriggerSnapshot]
           },
         }),
       )
@@ -245,7 +235,7 @@ describe('RFC-349 Integration provider adapters', () => {
     let postgresqlResourceLoads = 0
     let resourceTransaction: unknown
     await assertScheduledCreateBehavior(
-      createPostgresqlScheduledTaskPersistence(postgresql.db, {
+      createScheduledTaskPersistence(postgresql.db, {
         async loadAuthorized(transaction, pair, requests) {
           resourceTransaction = transaction
           postgresqlResourceLoads += 1
@@ -407,7 +397,7 @@ describe('RFC-349 Integration provider adapters', () => {
       {},
     ])
     let resourceCatalogTransaction: unknown
-    const resources = createPostgresqlIntegrationTriggerResources(fake.db, {
+    const resources = createIntegrationTriggerResources(fake.db, {
       inTransaction(transaction, pair, digitalEmployees) {
         resourceCatalogTransaction = transaction
         return {

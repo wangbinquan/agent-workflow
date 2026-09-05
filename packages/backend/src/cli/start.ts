@@ -144,11 +144,8 @@ import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { startMaintenanceService } from '@/platform/background/maintenanceService'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import {
-  canViewResourceInTx,
-  composeResourceScopeAuthorizationBinding,
-} from '@/modules/resource-catalog/composition/resourceAcl'
-import { composeIntegrationTriggerResourceBinding } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeResourceScopeAuthorizationBinding } from '@/modules/resource-catalog/composition/resourceAcl'
+import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -158,7 +155,6 @@ import {
   composeSqliteDigitalEmployeeWriterCutover,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployee,
-  composeDigitalEmployeeIntegrationTriggerParticipant,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
@@ -1979,10 +1975,7 @@ async function composeSqliteProviderSession(
   }
   const scheduledTaskRuntime = composeSqliteScheduledTaskRuntime({
     db,
-    resources: composeIntegrationTriggerResourceBinding(
-      { canViewResourceInTx, assertNotBuiltin },
-      composeDigitalEmployeeIntegrationTriggerParticipant,
-    ),
+    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     validation: Object.freeze({
       assertWorkflowLaunchable: (
         workflow: Parameters<typeof assertWorkflowSnapshotLaunchable>[1],

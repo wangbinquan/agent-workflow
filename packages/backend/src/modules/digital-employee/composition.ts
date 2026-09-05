@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { DbTxSync } from '@/db/txSync'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
@@ -95,12 +95,12 @@ import type {
   DigitalEmployeePlatformInventoryResourceType,
   DigitalEmployeePlatformInventoryRow,
 } from './public/participants'
-import {
-  createSqliteDigitalEmployeeIntegrationTriggerParticipant,
-  createSqliteDigitalEmployeeIntegrationTriggerParticipantSync,
-} from './infrastructure/sqliteIntegrationTriggerParticipant'
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from './infrastructure/integrationTriggerParticipant'
 
-export { createPostgresqlDigitalEmployeeIntegrationTriggerParticipant } from './infrastructure/postgresqlIntegrationTriggerParticipant'
+export { createDigitalEmployeeIntegrationTriggerParticipantIn }
+/** RFC-359 W4-D1：两个 provider 共用一份；旧名保留为装配别名，bootstrap 收敛后删除。 */
+export const createPostgresqlDigitalEmployeeIntegrationTriggerParticipant =
+  createDigitalEmployeeIntegrationTriggerParticipantIn
 
 export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
@@ -187,13 +187,13 @@ export function composePostgresqlDigitalEmployeeBootstrapReads(
  * receives only the branded, data-only participant and therefore cannot import
  * employee tables, authoring stores, or schema-shaped rows.
  */
-export function composeDigitalEmployeeIntegrationTriggerParticipant(tx: DbTxSync) {
-  return createSqliteDigitalEmployeeIntegrationTriggerParticipantSync(tx)
+export function composeDigitalEmployeeIntegrationTriggerParticipant(tx: DatabaseTransaction) {
+  return createDigitalEmployeeIntegrationTriggerParticipantIn(tx)
 }
 
-export function composeAsyncDigitalEmployeeIntegrationTriggerParticipant(tx: DbTxSync) {
-  return createSqliteDigitalEmployeeIntegrationTriggerParticipant(tx)
-}
+/** RFC-359 W4-D1：同步参与者已退役，async 与「默认」参与者是同一份；旧名保留为装配别名。 */
+export const composeAsyncDigitalEmployeeIntegrationTriggerParticipant =
+  composeDigitalEmployeeIntegrationTriggerParticipant
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &

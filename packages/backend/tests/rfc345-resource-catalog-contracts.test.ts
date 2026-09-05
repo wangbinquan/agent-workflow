@@ -67,7 +67,6 @@ import type {
   WorkgroupQueries,
 } from '../src/modules/resource-catalog/public/queries'
 import type {
-  IntegrationTriggerResourceSnapshotInTx,
   IntentApplyResourceParticipantInTx,
   McpAclIdentityParticipant,
   ResourcePackageApplyScenarioProvider,
@@ -192,9 +191,6 @@ assertType<
 >(true)
 assertType<Equal<Extract<keyof TaskExecutionResourceSnapshotInTx, string>, 'loadAuthorized'>>(true)
 assertType<Equal<Extract<keyof IntentApplyResourceParticipantInTx, string>, 'authorizeAndCommit'>>(
-  true,
-)
-assertType<Equal<Extract<keyof IntegrationTriggerResourceSnapshotInTx, string>, 'loadAuthorized'>>(
   true,
 )
 assertType<Equal<Extract<keyof ResourceScopeAuthorizationInTx, string>, 'accessOf'>>(true)
@@ -763,7 +759,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const adapter = readFileSync(
       resolve(
         sourceRoot,
-        'modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts',
+        'modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts',
       ),
       'utf8',
     )
@@ -773,7 +769,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const scheduledPersistence = readFileSync(
-      resolve(sourceRoot, 'modules/integration/infrastructure/sqliteScheduledTaskPersistence.ts'),
+      resolve(sourceRoot, 'modules/integration/infrastructure/scheduledTaskPersistence.ts'),
       'utf8',
     )
     const webhookDispatch = readFileSync(
@@ -793,33 +789,31 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('inTransaction(')
     expect(composition).toContain('authority: pair.authority')
     expect(composition).toContain('actor: pair.actor')
-    expect(composition).toContain('createIntegrationTriggerResourceSnapshotInTx(')
+    // RFC-359 W4-D1：快照读取器一份实现两个 provider 共用，五种请求在同一个 loadOne 里按 kind 分派。
+    expect(composition).toContain('createIntegrationTriggerResourceSnapshotReader(')
     for (const variant of [
-      'scheduledWorkflow(authority, request)',
-      'scheduledAgent(authority, request)',
-      'scheduledWorkgroup(authority, request)',
-      'webhookWorkflow(authority, request)',
-      'webhookDigitalEmployee(authority, request)',
+      "request.kind === 'scheduled-workflow'",
+      "request.kind === 'webhook-workflow'",
+      "request.kind === 'scheduled-agent'",
+      "request.kind === 'scheduled-workgroup'",
+      "kind: 'webhook-digital-employee'",
     ]) {
       expect(adapter).toContain(variant)
     }
-    for (const legacyImport of [
-      '@/services/',
-      '@/modules/digital-employee/public/',
-      '@/modules/digital-employee/infrastructure/',
-    ]) {
+    // 数字员工侧只以 public 的数据型参与者类型出现（type import），不得触及其 infrastructure 或 services。
+    for (const legacyImport of ['@/services/', '@/modules/digital-employee/infrastructure/']) {
       expect(adapter).not.toContain(legacyImport)
     }
 
     const employeeIdentity = adapter.indexOf(
-      'options.digitalEmployees.loadIdentity(request.employeeDefinitionId)',
+      'input.digitalEmployees.loadIdentity(request.employeeDefinitionId)',
     )
     const employeeAcl = adapter.indexOf(
-      "canViewResourceInTx(options.tx, actor, 'digital_employee'",
+      "canView(input.transaction, actor, 'digital_employee'",
       employeeIdentity,
     )
     const employeeContent = adapter.indexOf(
-      'options.digitalEmployees.loadCurrentSnapshot(request.employeeDefinitionId)',
+      'input.digitalEmployees.loadCurrentSnapshot(request.employeeDefinitionId)',
       employeeAcl,
     )
     expect(employeeIdentity).toBeGreaterThanOrEqual(0)
@@ -835,18 +829,17 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(webhookDispatch).not.toContain('buildActor({')
     expect(triggerValidation).toContain("kind: 'webhook-workflow'")
     expect(triggerValidation).toContain("kind: 'webhook-digital-employee'")
-    expect(scheduledPersistence).toContain("from '@/modules/resource-catalog/public/participants'")
-    expect(scheduledPersistence).toContain('IntegrationTriggerResourceSnapshotInTx')
-    expect(scheduledPersistence).toContain('.inTransaction(tx, input.authority)')
+    expect(scheduledPersistence).toContain("from '@/modules/resource-catalog/public/types'")
+    expect(scheduledPersistence).toContain('IntegrationTriggerTransactionLoader')
     expect(scheduledPersistence).toContain(
-      '.loadAuthorized(input.authority.authority, [input.request])',
+      'resources.loadAuthorized(tx, input.authority, [input.request])',
     )
 
     for (const route of [scheduledRoute, webhookRoute]) {
       expect(route).toContain('directRequestAuthority(')
       expect(route).toContain('integrationTriggerResources')
     }
-    expect(composition).toContain('digitalEmployees: digitalEmployeesInTx(tx)')
+    expect(composition).toContain('digitalEmployees,')
   })
 
   test('T4a task execution consumes one authority-bound snapshot session without legacy reads', () => {

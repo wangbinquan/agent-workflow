@@ -96,17 +96,15 @@ describe('RFC-349 boolean columns never take an integer expression', () => {
   })
 
   test('the scheduled-task auto-disable keeps the boolean literal on both providers', () => {
-    for (const provider of ['postgresql', 'sqlite']) {
-      const source = readFileSync(
-        join(srcRoot, `modules/integration/infrastructure/${provider}ScheduledTaskPersistence.ts`),
-        'utf8',
-      )
-      // 只把那一行摘出来断言：整份源码进断言会让失败输出淹没在几百行里。
-      const line = source.split('\n').find((candidate) => candidate.includes('CASE WHEN')) ?? ''
-      expect(
-        line,
-        `${provider} 的失败自停用回到 THEN 0 ⇒ PostgreSQL 上 recordFailure 整条抛错`,
-      ).toContain('THEN false ELSE')
-    }
+    // RFC-359 W4-D1：定时任务持久化两个 provider 共用一份实现，这一行同时喂给两个引擎。
+    const source = readFileSync(
+      join(srcRoot, 'modules/integration/infrastructure/scheduledTaskPersistence.ts'),
+      'utf8',
+    )
+    // 只把那一行摘出来断言：整份源码进断言会让失败输出淹没在几百行里。
+    const line = source.split('\n').find((candidate) => candidate.includes('CASE WHEN')) ?? ''
+    expect(line, '失败自停用回到 THEN 0 ⇒ PostgreSQL 上 recordFailure 整条抛错').toContain(
+      'THEN false ELSE',
+    )
   })
 })

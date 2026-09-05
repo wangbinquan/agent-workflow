@@ -4,13 +4,11 @@ import {
   composeIdentityAccess,
   type IdentityAccessRuntime,
 } from '../../src/modules/identity-access/composition'
-import { composeDigitalEmployeeIntegrationTriggerParticipant } from '../../src/modules/digital-employee/composition'
-import { composeIntegrationTriggerResourceBinding } from '../../src/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerResourceSnapshotFactory } from '../../src/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { composeSqliteResourceCatalog } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSqliteAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createSqliteTaskExecutionResourceBinding } from '../../src/services/execution/taskExecutionResources'
-import { canViewResourceInTx } from '../../src/modules/resource-catalog/composition/resourceAcl'
 import { assertNotBuiltin } from '../../src/services/systemResources'
 import {
   createScheduledTask as createScheduledTaskService,
@@ -32,10 +30,7 @@ import { assertAgentResourceIntegrity } from '../../src/modules/resource-catalog
 import { triggerRevalidation } from '../../src/ws/revalidationHook'
 
 export function integrationTriggerResourceBinding() {
-  return composeIntegrationTriggerResourceBinding(
-    { canViewResourceInTx, assertNotBuiltin },
-    composeDigitalEmployeeIntegrationTriggerParticipant,
-  )
+  return composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin })
 }
 
 export function taskExecutionResourceBinding(db: DbClient) {
@@ -56,7 +51,7 @@ export function scheduledTaskRuntime(db: DbClient) {
   })
   return composeSqliteScheduledTaskRuntime({
     db,
-    resources: integrationTriggerResourceBinding(),
+    resourceSnapshots: integrationTriggerResourceBinding(),
     validation: {
       assertWorkflowLaunchable: (workflow) => assertWorkflowSnapshotLaunchable(db, workflow),
       assertAgentIntegrity: (agentIds) =>

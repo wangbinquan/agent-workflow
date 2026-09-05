@@ -58,12 +58,20 @@ describe('RFC-345 classic facade provider neutralization', () => {
   // them, which is the proof the SQLite adapter can read its own legacy module.
   test('integration-trigger snapshots read their own row mappers, not bootstrap-injected ones', () => {
     const adapter = source(
-      'src/modules/resource-catalog/infrastructure/aggregateAdapters/legacyIntegrationTriggerResourceSnapshots.ts',
+      'src/modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts',
     )
-    expect(adapter).toContain("from '../legacy/agent'")
-    expect(adapter).toContain("from '../legacy/workflow'")
-    expect(adapter).toContain("from '../legacy/workgroups'")
-    for (const mapper of ['rowToAgent', 'rowToWorkflowDetail', 'rowToWorkgroup']) {
+    // RFC-359 W4-D1：合一后读的是 Resource Catalog 自己的中立行映射器（workgroup 的那份仍在 PG 命名的仓库文件里，随 B2 合一挪名）。
+    expect(adapter).toContain("from '../agentPersistence'")
+    expect(adapter).toContain("from '../workflowPersistence'")
+    expect(adapter).toContain("from '../postgresqlWorkgroupRepository'")
+    for (const mapper of [
+      'rowToAgent',
+      'rowToWorkflowDetail',
+      'rowToWorkgroup',
+      'agentFromPersistenceRow',
+      'workflowFromPersistenceRow',
+      'workgroupFromPostgresqlRows',
+    ]) {
       expect(adapter, mapper).not.toContain(`dependencies.${mapper}`)
       expect(adapter, `${mapper} declared as an injected dependency`).not.toMatch(
         new RegExp(`readonly ${mapper}:`),

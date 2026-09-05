@@ -54,7 +54,7 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
     idleDeadlineAt:
       '同一个 WHERE 里有 isNotNull(idleDeadlineAt)：没有空闲截止的会话不是「最早截止」的候选',
   },
-  'modules/integration/infrastructure/postgresqlScheduledTaskPersistence.ts': {
+  'modules/integration/infrastructure/scheduledTaskPersistence.ts': {
     nextRunAt: '同一个 WHERE 里有 isNotNull(nextRunAt)',
   },
   'modules/development-automation/infrastructure/postgresqlMissionStore.ts': {

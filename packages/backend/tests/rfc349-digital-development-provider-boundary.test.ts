@@ -103,8 +103,7 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
         'inputUploadStore.ts',
         'postgresqlInputUploadStore.ts',
         'reactionRoundQueries.ts',
-        'sqliteIntegrationTriggerParticipant.ts',
-        'postgresqlIntegrationTriggerParticipant.ts',
+        'integrationTriggerParticipant.ts',
         'writerCutoverPersistence.ts',
       ].filter((name) => !digital.has(name)),
     ).toEqual([])
@@ -153,7 +152,7 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     )
     expect(digital).toContain('composeDigitalEmployeeIntegrationTriggerParticipant')
     expect(digital).toContain('composeAsyncDigitalEmployeeIntegrationTriggerParticipant')
-    expect(digital).toContain('createSqliteDigitalEmployeeIntegrationTriggerParticipantSync')
+    expect(digital).toContain('createDigitalEmployeeIntegrationTriggerParticipantIn')
     expect(digital).toContain('composeSqliteDigitalEmployeeBootstrapReads')
     expect(digital).toContain('composePostgresqlDigitalEmployeeBootstrapReads')
     expect(digital).toContain('createSqliteDigitalEmployeeAuthoringReads')
