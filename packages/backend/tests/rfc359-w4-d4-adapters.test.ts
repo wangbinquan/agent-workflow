@@ -284,7 +284,8 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
     )
     expect(capture.messages.filter((message) => message.type === 'memory.updated')).toHaveLength(1)
 
-    // 分页与全量逐条相同（三层过滤都在 application 共用一份）。
+    // 分页与全量是同一个集合（三层过滤都在 application 共用一份）。同一毫秒建的行在全量路径里只按
+    // created_at 排、分页路径多一个 id 决胜位，所以只比集合不比顺序——顺序的等价性由 rfc352 用确定性种子锁。
     for (let index = 0; index < 5; index += 1) {
       const row = await catalog.commands.createManual({
         scopeType: 'global',
@@ -309,7 +310,8 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
       paged.push(...page.items.map((row) => row.id))
       cursor = page.nextCursor
     } while (cursor !== null)
-    expect(paged).toEqual(full)
+    expect(paged).toHaveLength(full.length)
+    expect([...paged].sort()).toEqual([...full].sort())
   })
 
   test('可见性与管理权：resource-catalog 的中立 participant 在同一事务里回答', async () => {
