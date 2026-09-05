@@ -4,12 +4,11 @@ import {
   createCodeHostEventDeliveryAdapter,
   createCodeHostEventRoutingAdapter,
 } from './application/adapters/event-center-adapter'
-import { createSqliteCodeHostEventResponseDirectory } from './infrastructure/sqliteCodeHostEventResponseDirectory'
+import { createCodeHostEventResponseDirectory } from './infrastructure/codeHostEventResponseDirectory'
 import type { DigitalEmployeeWorkStartPort } from './public/participants'
 import type { CodeHostEventContinuationPort } from './application/ports/codeHostEventResponse'
 import type { CodeHostEventResponseDirectoryPort } from './application/ports/codeHostEventResponse'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlCodeHostEventResponseDirectory } from './infrastructure/postgresqlCodeHostEventResponseDirectory'
 
 export {
   createRepositoryEndpointDiscovery,
@@ -60,10 +59,7 @@ export function createCodeHostWebhookRoutingDirectory(
   db: DbClient,
   continuation?: CodeHostEventContinuationPort,
 ) {
-  return createCodeHostEventRoutingAdapter(
-    createSqliteCodeHostEventResponseDirectory(db),
-    continuation,
-  )
+  return createCodeHostEventRoutingAdapter(createCodeHostEventResponseDirectory(db), continuation)
 }
 
 export function createCodeHostWebhookRoutingDirectoryWithPersistence(
@@ -78,7 +74,7 @@ export function createPostgresqlCodeHostWebhookRoutingDirectory(
   continuation?: CodeHostEventContinuationPort,
 ) {
   return createCodeHostWebhookRoutingDirectoryWithPersistence(
-    createPostgresqlCodeHostEventResponseDirectory(db),
+    createCodeHostEventResponseDirectory(db),
     continuation,
   )
 }
@@ -89,7 +85,7 @@ export function createCodeHostWebhookDeliveryConsumer(
   continuation?: CodeHostEventContinuationPort,
 ) {
   return createCodeHostEventDeliveryAdapter(
-    createSqliteCodeHostEventResponseDirectory(db),
+    createCodeHostEventResponseDirectory(db),
     {
       dispatch: (input) => dispatcher.dispatchSubscription(input),
     },
@@ -115,7 +111,7 @@ export function createPostgresqlCodeHostWebhookDeliveryConsumer(
   continuation?: CodeHostEventContinuationPort,
 ) {
   return createCodeHostWebhookDeliveryConsumerWithPersistence(
-    createPostgresqlCodeHostEventResponseDirectory(db),
+    createCodeHostEventResponseDirectory(db),
     dispatcher,
     continuation,
   )

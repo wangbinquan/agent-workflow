@@ -9,10 +9,9 @@ import type { WebhookDeliveryQueries } from '../application/ports/webhookDeliver
 import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
 import { createPostgresqlVerifiedWebhookDeliveryPersistence } from '../infrastructure/postgresqlVerifiedWebhookDeliveryPersistence'
 import { createPostgresqlWebhookDeliveryPersistence } from '../infrastructure/postgresqlWebhookDeliveryPersistence'
-import { createPostgresqlWebhookDeliveryQueries } from '../infrastructure/postgresqlWebhookDeliveryQueries'
 import { createSqliteVerifiedWebhookDeliveryPersistence } from '../infrastructure/sqliteVerifiedWebhookDeliveryStore'
 import { createSqliteWebhookDeliveryPersistence } from '../infrastructure/sqliteWebhookDeliveryPersistence'
-import { createSqliteWebhookDeliveryQueries } from '../infrastructure/sqliteWebhookDeliveryQueries'
+import { createWebhookDeliveryQueries } from '../infrastructure/webhookDeliveryQueries'
 import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
 
 export interface WebhookIngressPersistence {
@@ -45,7 +44,7 @@ export function composeSqliteWebhookDeliveryRuntime(db: DbClient): WebhookDelive
   const ingress = composeSqliteWebhookIngressPersistence(db)
   return Object.freeze({
     ...ingress,
-    queries: createSqliteWebhookDeliveryQueries(db),
+    queries: createWebhookDeliveryQueries(db),
   })
 }
 
@@ -66,6 +65,6 @@ export function composePostgresqlWebhookDeliveryRuntime(
   const ingress = composePostgresqlWebhookIngressPersistence(db)
   return Object.freeze({
     ...ingress,
-    queries: createPostgresqlWebhookDeliveryQueries(db),
+    queries: createWebhookDeliveryQueries(db),
   })
 }

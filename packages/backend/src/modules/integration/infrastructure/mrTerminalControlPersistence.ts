@@ -1,14 +1,17 @@
-// RFC-349 — PostgreSQL implementation of Integration's MR launch/effect
-// Promise ports. All lease/CAS work stays on one reserved transaction.
-import { and, asc, eq, inArray, lt, lte, ne, or, sql } from 'drizzle-orm'
+// RFC-359 W4-B4 —— Integration 拥有的 MR 启动守卫 / 终态 effect 持久化：一份实现，两个 provider 共用。
+// 事务走统一原语；PG 侧「先按流序列化再看 open 状态」的事务级 advisory lock 由引擎能力矩阵表达
+// （SQLite 单写者下是 no-op）。
 
+import { and, asc, eq, inArray, lt, lte, ne, or } from 'drizzle-orm'
+
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   webhookMrControlEffects,
   webhookMrControlTargets,
   webhookMrLaunchGuards,
   webhookMrStreamStates,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   MrLaunchGuardPersistencePort,
   MrTerminalEffectPersistencePort,
@@ -27,32 +30,33 @@ function safeCode(errorCode: string): string {
   return errorCode.replace(/[^a-z0-9._-]/gi, '-').slice(0, 200)
 }
 
-export function createPostgresqlMrLaunchGuardPersistence(
-  db: PostgresqlDatabaseClient,
+export function createMrLaunchGuardPersistence(
+  db: ProviderNeutralDatabase,
 ): MrLaunchGuardPersistencePort {
+  const session = databaseSessionFor(db)
   return {
     async reserve(input) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         // The terminal-ingress adapter takes the same transaction-scoped lock.
         // Unlike a row lock this also serializes the first event, before a
         // stream-state row exists, closing terminal-update -> guard-insert.
-        await tx.run(
-          sql`select pg_advisory_xact_lock(hashtextextended(${`${input.endpointId}:${input.streamKey}`}, 0))`,
-        )
-        const stream = await tx
-          .select({
-            state: webhookMrStreamStates.state,
-            revision: webhookMrStreamStates.revision,
-            lastTerminalRevision: webhookMrStreamStates.lastTerminalRevision,
-          })
-          .from(webhookMrStreamStates)
-          .where(
-            and(
-              eq(webhookMrStreamStates.endpointId, input.endpointId),
-              eq(webhookMrStreamStates.streamKey, input.streamKey),
-            ),
-          )
-          .get()
+        await engineOf(tx).advisoryLock(tx, `${input.endpointId}:${input.streamKey}`)
+        const stream = (
+          await tx
+            .select({
+              state: webhookMrStreamStates.state,
+              revision: webhookMrStreamStates.revision,
+              lastTerminalRevision: webhookMrStreamStates.lastTerminalRevision,
+            })
+            .from(webhookMrStreamStates)
+            .where(
+              and(
+                eq(webhookMrStreamStates.endpointId, input.endpointId),
+                eq(webhookMrStreamStates.streamKey, input.streamKey),
+              ),
+            )
+            .limit(1)
+        )[0]
         if (
           stream === undefined ||
           stream.revision < input.launchRevision ||
@@ -91,23 +95,24 @@ export function createPostgresqlMrLaunchGuardPersistence(
         )
     },
     async assertCanCommit(input) {
-      const row = await db
-        .select({
-          status: webhookMrLaunchGuards.status,
-          state: webhookMrStreamStates.state,
-          lastTerminalRevision: webhookMrStreamStates.lastTerminalRevision,
-        })
-        .from(webhookMrLaunchGuards)
-        .innerJoin(
-          webhookMrStreamStates,
-          and(
-            eq(webhookMrStreamStates.endpointId, webhookMrLaunchGuards.endpointId),
-            eq(webhookMrStreamStates.streamKey, webhookMrLaunchGuards.streamKey),
-          ),
-        )
-        .where(eq(webhookMrLaunchGuards.id, input.guardId))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select({
+            status: webhookMrLaunchGuards.status,
+            state: webhookMrStreamStates.state,
+            lastTerminalRevision: webhookMrStreamStates.lastTerminalRevision,
+          })
+          .from(webhookMrLaunchGuards)
+          .innerJoin(
+            webhookMrStreamStates,
+            and(
+              eq(webhookMrStreamStates.endpointId, webhookMrLaunchGuards.endpointId),
+              eq(webhookMrStreamStates.streamKey, webhookMrLaunchGuards.streamKey),
+            ),
+          )
+          .where(eq(webhookMrLaunchGuards.id, input.guardId))
+          .limit(1)
+      )[0]
       return (
         row !== undefined &&
         OPEN_GUARD_STATUSES.includes(row.status as (typeof OPEN_GUARD_STATUSES)[number]) &&
@@ -138,12 +143,13 @@ export function createPostgresqlMrLaunchGuardPersistence(
         )
     },
     async markFailed(guardId, errorCode, now) {
-      const current = await db
-        .select({ status: webhookMrLaunchGuards.status })
-        .from(webhookMrLaunchGuards)
-        .where(eq(webhookMrLaunchGuards.id, guardId))
-        .limit(1)
-        .get()
+      const current = (
+        await db
+          .select({ status: webhookMrLaunchGuards.status })
+          .from(webhookMrLaunchGuards)
+          .where(eq(webhookMrLaunchGuards.id, guardId))
+          .limit(1)
+      )[0]
       if (current === undefined || current.status === 'launch-settled') return
       await db
         .update(webhookMrLaunchGuards)
@@ -163,7 +169,7 @@ export function createPostgresqlMrLaunchGuardPersistence(
       return rows.map((row) => row.id)
     },
     async reconcileStaleOnBoot(now) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         await tx
           .update(webhookMrLaunchGuards)
           .set({ status: 'aborted-terminal', launchOwnerKey: null, updatedAt: now })
@@ -201,29 +207,31 @@ export function createPostgresqlMrLaunchGuardPersistence(
     },
     async hasLaunchBarrier(binding, revision) {
       return (
-        (await db
-          .select({ id: webhookMrLaunchGuards.id })
-          .from(webhookMrLaunchGuards)
-          .where(
-            and(
-              eq(webhookMrLaunchGuards.binding, binding),
-              lt(webhookMrLaunchGuards.launchRevision, revision),
-              inArray(webhookMrLaunchGuards.status, BARRIER_GUARD_STATUSES),
-            ),
-          )
-          .limit(1)
-          .get()) !== undefined
+        (
+          await db
+            .select({ id: webhookMrLaunchGuards.id })
+            .from(webhookMrLaunchGuards)
+            .where(
+              and(
+                eq(webhookMrLaunchGuards.binding, binding),
+                lt(webhookMrLaunchGuards.launchRevision, revision),
+                inArray(webhookMrLaunchGuards.status, BARRIER_GUARD_STATUSES),
+              ),
+            )
+            .limit(1)
+        ).length > 0
       )
     },
   }
 }
 
-export function createPostgresqlMrTerminalEffectPersistence(
-  db: PostgresqlDatabaseClient,
+export function createMrTerminalEffectPersistence(
+  db: ProviderNeutralDatabase,
 ): MrTerminalEffectPersistencePort {
+  const session = databaseSessionFor(db)
   return {
     async claimNextDue(input) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const candidates = await tx
           .select()
           .from(webhookMrControlEffects)
@@ -245,38 +253,40 @@ export function createPostgresqlMrTerminalEffectPersistence(
           )
           .orderBy(asc(webhookMrControlEffects.createdAt), asc(webhookMrControlEffects.revision))
         for (const candidate of candidates) {
-          const older = await tx
-            .select({ id: webhookMrControlEffects.id })
-            .from(webhookMrControlEffects)
-            .where(
-              and(
-                eq(webhookMrControlEffects.endpointId, candidate.endpointId),
-                eq(webhookMrControlEffects.streamKey, candidate.streamKey),
-                lt(webhookMrControlEffects.revision, candidate.revision),
-                ne(webhookMrControlEffects.status, 'succeeded'),
-              ),
-            )
-            .limit(1)
-            .get()
+          const older = (
+            await tx
+              .select({ id: webhookMrControlEffects.id })
+              .from(webhookMrControlEffects)
+              .where(
+                and(
+                  eq(webhookMrControlEffects.endpointId, candidate.endpointId),
+                  eq(webhookMrControlEffects.streamKey, candidate.streamKey),
+                  lt(webhookMrControlEffects.revision, candidate.revision),
+                  ne(webhookMrControlEffects.status, 'succeeded'),
+                ),
+              )
+              .limit(1)
+          )[0]
           if (older !== undefined) continue
-          const claimed = await tx
-            .update(webhookMrControlEffects)
-            .set({
-              status: 'leased',
-              leaseOwner: input.workerId,
-              leaseExpiresAt: input.now + input.leaseMs,
-              attemptCount: candidate.attemptCount + 1,
-              updatedAt: input.now,
-            })
-            .where(
-              and(
-                eq(webhookMrControlEffects.id, candidate.id),
-                eq(webhookMrControlEffects.status, candidate.status),
-                eq(webhookMrControlEffects.attemptCount, candidate.attemptCount),
-              ),
-            )
-            .returning()
-            .get()
+          const claimed = (
+            await tx
+              .update(webhookMrControlEffects)
+              .set({
+                status: 'leased',
+                leaseOwner: input.workerId,
+                leaseExpiresAt: input.now + input.leaseMs,
+                attemptCount: candidate.attemptCount + 1,
+                updatedAt: input.now,
+              })
+              .where(
+                and(
+                  eq(webhookMrControlEffects.id, candidate.id),
+                  eq(webhookMrControlEffects.status, candidate.status),
+                  eq(webhookMrControlEffects.attemptCount, candidate.attemptCount),
+                ),
+              )
+              .returning()
+          )[0]
           if (claimed !== undefined) {
             return {
               id: claimed.id,
@@ -294,7 +304,7 @@ export function createPostgresqlMrTerminalEffectPersistence(
       })
     },
     async recordReceipts(effectId, receipts, now) {
-      await db.transaction(async (tx) => {
+      await session.transaction(async (tx) => {
         for (const receipt of receipts) {
           await tx
             .insert(webhookMrControlTargets)

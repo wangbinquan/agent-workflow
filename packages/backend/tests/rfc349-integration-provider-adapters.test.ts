@@ -14,7 +14,8 @@ import type {
 } from '@/modules/integration/application/ports/scheduledTaskPersistence'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { IntegrationTriggerResourceRequest } from '@/modules/resource-catalog/public/types'
-import { createPostgresqlMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence'
+import { createMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
+import { createPostgresqlCapabilities } from '@/platform/persistence/capabilities'
 import { createPostgresqlIntegrationTriggerResources } from '@/modules/integration/infrastructure/postgresqlIntegrationTriggerResources'
 import { createPostgresqlScheduledTaskPersistence } from '@/modules/integration/infrastructure/postgresqlScheduledTaskPersistence'
 import { createWebhookTerminalWorkspaceAttributionQueries } from '@/modules/integration/infrastructure/terminalWorkspaceAttribution'
@@ -263,7 +264,7 @@ describe('RFC-349 Integration provider adapters', () => {
 
   test('PostgreSQL launch reservation serializes on the MR stream before checking open state', async () => {
     const fake = fixture([{}, {}, { values: [['open', 4, null]] }, { count: 1 }, {}])
-    const persistence = createPostgresqlMrLaunchGuardPersistence(fake.db)
+    const persistence = createMrLaunchGuardPersistence(fake.db)
 
     await expect(
       persistence.reserve({
@@ -341,11 +342,15 @@ describe('RFC-349 Integration provider adapters', () => {
   })
 
   test('terminal ingress and launch reservation share one transaction lock key', () => {
-    const reserveSource = createPostgresqlMrLaunchGuardPersistence.toString()
+    // RFC-359 W4-B4：启动预留只有一份中立实现，PG 侧的事务级 advisory lock 经引擎能力矩阵表达；
+    // 锁语句本身钉在能力矩阵上，两侧仍共用同一把 `${endpointId}:${streamKey}` 键。
+    const reserveSource = createMrLaunchGuardPersistence.toString()
     const ingressSource = createPostgresqlVerifiedWebhookDeliveryPersistence.toString()
-    expect(reserveSource).toContain('pg_advisory_xact_lock')
+    expect(reserveSource).toContain('advisoryLock(tx, `${input.endpointId}:${input.streamKey}`)')
+    expect(createPostgresqlCapabilities().advisoryLock.toString()).toContain(
+      'pg_advisory_xact_lock',
+    )
     expect(ingressSource).toContain('pg_advisory_xact_lock')
-    expect(reserveSource).toContain('input.endpointId}:${input.streamKey')
     expect(ingressSource).toContain('input.endpointId}:${identity.streamKey')
   })
 

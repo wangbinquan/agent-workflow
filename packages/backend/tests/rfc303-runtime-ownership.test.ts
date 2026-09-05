@@ -9,7 +9,7 @@ import { createInMemoryDb } from '@/db/client'
 import { nodeRuns, tasks, webhookMrLaunchGuards, webhookMrStreamStates } from '@/db/schema'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { InMemoryWebhookLaunchSupervisor } from '@/modules/integration/infrastructure/inMemoryWebhookLaunchSupervisor'
-import { createSqliteMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/sqliteMrTerminalControlPersistence'
+import { createMrLaunchGuardPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { createTaskSourceTerminationParticipant } from '@/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import { sourceTerminationCapabilityMatches } from '@/modules/task-execution/application/sourceTerminationCapability'
@@ -261,7 +261,7 @@ describe('RFC-303 protected launch guard', () => {
       updatedAt: 1,
     })
     const coordinator = new MrLaunchGuardCoordinator(
-      createSqliteMrLaunchGuardPersistence(db),
+      createMrLaunchGuardPersistence(db),
       new InMemoryWebhookLaunchSupervisor(),
     )
     const guard = await coordinator.reserve({
@@ -316,7 +316,7 @@ describe('RFC-303 protected launch guard', () => {
       updatedAt: 2,
     })
     const coordinator = new MrLaunchGuardCoordinator(
-      createSqliteMrLaunchGuardPersistence(db),
+      createMrLaunchGuardPersistence(db),
       new InMemoryWebhookLaunchSupervisor(),
     )
     await expect(

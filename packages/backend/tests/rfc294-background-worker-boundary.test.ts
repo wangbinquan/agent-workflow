@@ -18,7 +18,7 @@ import { createInMemoryDb, type DbClient } from '@/db/client'
 import { scheduledTasks, webhookMrControlEffects } from '@/db/schema'
 import type { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
-import { createSqliteMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/sqliteMrTerminalControlPersistence'
+import { createMrTerminalEffectPersistence } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import { pollAndClaim, runDueSchedulesOnce } from '@/services/scheduledTaskScheduler'
@@ -72,7 +72,7 @@ describe('RFC-294 managed background compatibility', () => {
 
     let firstDaemonCalls = 0
     const first = new MrTerminalControlWorker(
-      createSqliteMrTerminalEffectPersistence(db),
+      createMrTerminalEffectPersistence(db),
       guards(),
       {
         async apply() {
@@ -97,7 +97,7 @@ describe('RFC-294 managed background compatibility', () => {
 
     let secondDaemonCalls = 0
     const second = new MrTerminalControlWorker(
-      createSqliteMrTerminalEffectPersistence(db),
+      createMrTerminalEffectPersistence(db),
       guards(),
       {
         async apply() {
@@ -129,7 +129,7 @@ describe('RFC-294 managed background compatibility', () => {
       },
     }
     const worker = new MrTerminalControlWorker(
-      createSqliteMrTerminalEffectPersistence(db),
+      createMrTerminalEffectPersistence(db),
       guards(),
       participant,
       mintSourceTerminationEffectCapability,

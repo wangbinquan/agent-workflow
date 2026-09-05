@@ -7,8 +7,7 @@ import type { ScheduledTaskOperations } from '@/services/scheduledTasks'
 import type { WebhookDispatchPersistencePort } from '../application/ports/webhookDispatchPersistence'
 import type { WebhookTriggerAdministrationPort } from '../application/ports/webhookTriggerAdministration'
 import { createSqliteWebhookDeliveryPersistence } from '../infrastructure/sqliteWebhookDeliveryPersistence'
-import { createPostgresqlWebhookDispatchPersistence } from '../infrastructure/postgresqlWebhookDispatchPersistence'
-import { createSqliteWebhookDispatchPersistence } from '../infrastructure/sqliteWebhookDispatchPersistence'
+import { createWebhookDispatchPersistence } from '../infrastructure/webhookDispatchPersistence'
 import { createWebhookTriggerAdministration } from '../infrastructure/webhookTriggerAdministration'
 import { createSqliteWebhookTriggerValidation } from '../infrastructure/sqliteWebhookTriggerValidation'
 import { createWebhookLaunchAdmission } from '../infrastructure/webhookDispatchRuntime'
@@ -34,13 +33,13 @@ export function composeWebhookDispatchPersistence(
 export function composeSqliteWebhookDispatchPersistence(
   db: DbClient,
 ): WebhookDispatchPersistencePort {
-  return composeWebhookDispatchPersistence(createSqliteWebhookDispatchPersistence(db))
+  return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
 }
 
 export function composePostgresqlWebhookDispatchPersistence(
   db: PostgresqlDatabaseClient,
 ): WebhookDispatchPersistencePort {
-  return composeWebhookDispatchPersistence(createPostgresqlWebhookDispatchPersistence(db))
+  return composeWebhookDispatchPersistence(createWebhookDispatchPersistence(db))
 }
 
 export function composeSqliteWebhookTriggerAdministration(
@@ -68,7 +67,7 @@ export function composeSqliteWebhookTriggerServiceDependencies(
 ): WebhookTriggerServiceDeps {
   return composeWebhookTriggerServiceDependencies({
     administration: createWebhookTriggerAdministration(db),
-    dispatchPersistence: createSqliteWebhookDispatchPersistence(db),
+    dispatchPersistence: createWebhookDispatchPersistence(db),
     validateSaveable: createSqliteWebhookTriggerValidation(scheduledTasks, configPath),
   })
 }
@@ -79,7 +78,7 @@ export function composePostgresqlWebhookTriggerServiceDependencies(
 ): WebhookTriggerServiceDeps {
   return composeWebhookTriggerServiceDependencies({
     administration: createWebhookTriggerAdministration(db),
-    dispatchPersistence: createPostgresqlWebhookDispatchPersistence(db),
+    dispatchPersistence: createWebhookDispatchPersistence(db),
     validateSaveable,
   })
 }
@@ -93,7 +92,7 @@ export function composeSqliteWebhookDispatchCore(
   'persistence' | 'deliveryPersistence' | 'resolveRepo' | 'admitLaunch'
 > {
   return {
-    persistence: createSqliteWebhookDispatchPersistence(db),
+    persistence: createWebhookDispatchPersistence(db),
     deliveryPersistence: createSqliteWebhookDeliveryPersistence(db),
     resolveRepo: createSqliteWebhookRepositoryResolver(db, secretBox),
     admitLaunch: createWebhookLaunchAdmission(scheduledTasks),

@@ -1,8 +1,10 @@
+// RFC-359 W4-B4 —— 代码托管事件响应目录：一份实现，两个 provider 共用。
+
 import { CodeHostEventTypeSchema } from '@agent-workflow/shared'
 import { and, asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { webhookTriggers } from '@/db/schema'
 import { matchTrigger } from '@/services/webhook/matching'
 import { parseTriggerRow } from '@/services/webhook/webhookDispatch'
@@ -55,42 +57,36 @@ function definitionOf(row: typeof webhookTriggers.$inferSelect): CodeHostEventRe
   }
 }
 
-export function createSqliteCodeHostEventResponseDirectory(
-  db: DbClient,
+export function createCodeHostEventResponseDirectory(
+  db: ProviderNeutralDatabase,
 ): CodeHostEventResponseDirectoryPort {
   return {
     async list() {
-      return db
-        .select()
-        .from(webhookTriggers)
-        .orderBy(asc(webhookTriggers.createdAt))
-        .all()
-        .map(definitionOf)
+      const rows = await db.select().from(webhookTriggers).orderBy(asc(webhookTriggers.createdAt))
+      return rows.map(definitionOf)
     },
     async matching(facts) {
       const event = codeHostSelectorEvent(facts)
-      return db
+      const rows = await db
         .select()
         .from(webhookTriggers)
         .where(
           and(eq(webhookTriggers.endpointId, facts.endpointId), eq(webhookTriggers.enabled, true)),
         )
-        .all()
-        .flatMap((row) => {
-          const parsed = parseTriggerRow(row)
-          return parsed.ok && matchTrigger(event, parsed.trigger.rule).hit
-            ? [definitionOf(row)]
-            : []
-        })
+      return rows.flatMap((row) => {
+        const parsed = parseTriggerRow(row)
+        return parsed.ok && matchTrigger(event, parsed.trigger.rule).hit ? [definitionOf(row)] : []
+      })
     },
     async has(ruleId) {
       return (
-        db
-          .select({ id: webhookTriggers.id })
-          .from(webhookTriggers)
-          .where(eq(webhookTriggers.id, ruleId))
-          .limit(1)
-          .get() !== undefined
+        (
+          await db
+            .select({ id: webhookTriggers.id })
+            .from(webhookTriggers)
+            .where(eq(webhookTriggers.id, ruleId))
+            .limit(1)
+        ).length > 0
       )
     },
   }

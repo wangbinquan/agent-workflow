@@ -421,12 +421,15 @@ describe('RFC-261 · 源码层文本锁（行为等价面的兜底，CLAUDE.md �
 
   test('/repos 必须保持 loose index scan（换回朴素 DISTINCT 行为等价、900 万行下性能塌方——P2-③）', () => {
     const persistence = readFileSync(
-      join(SRC, 'modules', 'integration', 'infrastructure', 'sqliteWebhookDeliveryQueries.ts'),
+      join(SRC, 'modules', 'integration', 'infrastructure', 'webhookDeliveryQueries.ts'),
       'utf8',
     )
     const route = readFileSync(join(SRC, 'routes', 'webhookDeliveries.ts'), 'utf8')
     expect(persistence).toContain('WITH RECURSIVE repo_walk')
-    expect(persistence).toContain('SELECT min(repo_path)')
+    // RFC-359 W4-B4：一份中立实现，表与列经 drizzle 引用渲染（PG 侧带 schema 前缀），不再写裸表名。
+    expect(persistence).toContain(
+      'SELECT (SELECT min(${webhookDeliveries.repoPath}) FROM ${webhookDeliveries}',
+    )
     expect(route).toContain('runtime.queries.listRepoPaths()')
     expect(route).not.toContain('@/db/')
   })

@@ -4030,6 +4030,13 @@ CI 是唯一权威门，但**改了几十个文件的迁移**推上去红三次�
   PostgreSQL 库上 `appendCommittedEvent` 会直接 `cutover is missing`。harness 因此在迁移后把一个刚迁移完的
   SQLite 内存库整表按外键拓扑复制进去，两个引擎的「起点」才是同一个；自己手写真库用例时同样要先种这些行。
 
+## 本地双引擎套件**不能两批并行跑**：PG harness 按文件 `drop schema … cascade`，共用一个库就互相清库（2026-09-05 实撞）
+
+`tests/helpers/eachProvider.ts` 的 PG 侧隔离是「每个文件开头 `drop schema if exists agent_workflow cascade` 再迁移」，
+schema 名固定、库由 `AW_TEST_POSTGRESQL_URL` 指定。两个 `bun test` 进程同时对着同一个库跑，A 文件的 schema 会被 B 文件
+的开头整个删掉——症状是大片 `[postgresql]` 用例 `(unnamed)` 失败（beforeAll 就挂了）、同一文件单独重跑全绿，很像 flake
+但不是。本地跑多批套件时**串行**，或给第二批换一个数据库名（同一实例下 `createdb` 一个新库即可）。
+
 ## 合一「两笔同步写」成「两笔异步事务」时，先找可见性缝（RFC-359 批 2f 事故）
 
 批 2f 把 SQLite 的 node 执行投影合到统一事务原语上，本地只跑了消费面文件与守卫，推上 main 后 backend

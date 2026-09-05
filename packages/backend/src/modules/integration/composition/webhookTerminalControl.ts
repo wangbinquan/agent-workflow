@@ -18,13 +18,9 @@ import type {
   MrTerminalEffectPersistencePort,
 } from '../application/ports/mrTerminalControlPersistence'
 import {
-  createSqliteMrLaunchGuardPersistence,
-  createSqliteMrTerminalEffectPersistence,
-} from '../infrastructure/sqliteMrTerminalControlPersistence'
-import {
-  createPostgresqlMrLaunchGuardPersistence,
-  createPostgresqlMrTerminalEffectPersistence,
-} from '../infrastructure/postgresqlMrTerminalControlPersistence'
+  createMrLaunchGuardPersistence,
+  createMrTerminalEffectPersistence,
+} from '../infrastructure/mrTerminalControlPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
@@ -94,8 +90,8 @@ export function composeMrTerminalControlWithPorts(input: {
 export function composeMrTerminalControl(db: DbClient): MrTerminalControl {
   return composeMrTerminalControlWithPorts({
     persistence: {
-      launchGuards: createSqliteMrLaunchGuardPersistence(db),
-      terminalEffects: createSqliteMrTerminalEffectPersistence(db),
+      launchGuards: createMrLaunchGuardPersistence(db),
+      terminalEffects: createMrTerminalEffectPersistence(db),
     },
     taskTermination: composeTaskSourceTermination(db),
   })
@@ -107,8 +103,8 @@ export function composePostgresqlMrTerminalControl(input: {
 }): MrTerminalControl {
   return composeMrTerminalControlWithPorts({
     persistence: {
-      launchGuards: createPostgresqlMrLaunchGuardPersistence(input.db),
-      terminalEffects: createPostgresqlMrTerminalEffectPersistence(input.db),
+      launchGuards: createMrLaunchGuardPersistence(input.db),
+      terminalEffects: createMrTerminalEffectPersistence(input.db),
     },
     taskTermination: input.taskTermination,
   })
