@@ -178,7 +178,7 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // RFC-359 W1-T2c：node_run 状态 CAS 的一份中立事务内内核（setNodeRunStatusTx / transitionNodeRunStatusTx）。
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts': 2,
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts': 1,
-  'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts': 1,
+  'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
 }
 
 const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
@@ -187,7 +187,7 @@ const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
   'modules/task-execution/infrastructure/postgresqlTaskExecutionRecovery.ts',
-  'modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts',
+  'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
 ])
 
 describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件精确账本', () => {

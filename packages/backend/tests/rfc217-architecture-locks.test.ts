@@ -133,7 +133,7 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     // configJson）都是回归。
     const allow = new Set([
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/configActions.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlWorkgroupTaskRoomTaskParticipant.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
     ])
     const offenders: string[] = []
     for (const f of walkTs(SRC)) {
