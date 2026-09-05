@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 47,
-    "transactionCallbacks": 415
+    "coLocatedCandidates": 46,
+    "transactionCallbacks": 414
   },
   "entries": [
     {
@@ -1886,56 +1886,6 @@
       "transactionCallee": "transaction"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence.ts#transaction:32",
-      "line": 32,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence.ts#createPostgresqlVerifiedWebhookDeliveryPersistence",
-      "status": "co-located-risk",
-      "symbol": "createPostgresqlVerifiedWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#transaction:101",
-      "line": 101,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#createPostgresqlWebhookDeliveryPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#transaction:138",
-      "line": 138,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#createPostgresqlWebhookDeliveryPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#transaction:168",
-      "line": 168,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#createPostgresqlWebhookDeliveryPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
       "effectTokens": [],
       "file": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
@@ -2023,15 +1973,51 @@
       "effectTokens": [
         "provider"
       ],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts#dbTxSync:37",
-      "line": 37,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts#SqliteVerifiedWebhookDeliveryStore",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#transaction:34",
+      "line": 34,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#createVerifiedWebhookDeliveryPersistence",
       "status": "co-located-risk",
-      "symbol": "SqliteVerifiedWebhookDeliveryStore",
+      "symbol": "createVerifiedWebhookDeliveryPersistence",
       "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#transaction:108",
+      "line": 108,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#createWebhookDeliveryPersistence",
+      "status": "clear",
+      "symbol": "createWebhookDeliveryPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#transaction:145",
+      "line": 145,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#createWebhookDeliveryPersistence",
+      "status": "clear",
+      "symbol": "createWebhookDeliveryPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#transaction:175",
+      "line": 175,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#createWebhookDeliveryPersistence",
+      "status": "clear",
+      "symbol": "createWebhookDeliveryPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
@@ -5092,7 +5078,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f81a28bf68bc66cc9d14c0a2d80376bfa73db20a251d9251bd97b200bc408418",
+  "sourceDigest": "sha256:2aede637cbb0b2947c2fe1649b8e021f7b10d05a35551fef64450009507a9913",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

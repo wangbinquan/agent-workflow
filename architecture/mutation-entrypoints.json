@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1895,
+    "entries": 1892,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -12662,31 +12662,6 @@
       },
       "file": "packages/backend/src/modules/integration/application/acceptVerifiedWebhookDelivery.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/application/acceptVerifiedWebhookDelivery.ts#createAcceptVerifiedWebhookDelivery",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/application/acceptVerifiedWebhookDelivery.ts#createAcceptVerifiedWebhookDelivery",
-      "symbol": "createAcceptVerifiedWebhookDelivery",
-      "targetContext": "integration",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/application/acceptVerifiedWebhookDelivery.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/integration/application/acceptVerifiedWebhookDelivery.ts#createAcceptVerifiedWebhookDeliveryAsync",
       "missingControls": [
         "audit",
@@ -13792,50 +13767,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence.ts#createPostgresqlVerifiedWebhookDeliveryPersistence",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlVerifiedWebhookDeliveryPersistence.ts#createPostgresqlVerifiedWebhookDeliveryPersistence",
-      "symbol": "createPostgresqlVerifiedWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#createPostgresqlWebhookDeliveryPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#createPostgresqlWebhookDeliveryPersistence",
-      "symbol": "createPostgresqlWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "internal-family",
         "authorization": true,
         "event": false,
@@ -13908,55 +13839,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts#createSqliteVerifiedWebhookDeliveryPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteVerifiedWebhookDeliveryStore.ts#createSqliteVerifiedWebhookDeliveryPersistence",
-      "symbol": "createSqliteVerifiedWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence.ts#createSqliteWebhookDeliveryPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence.ts#createSqliteWebhookDeliveryPersistence",
-      "symbol": "createSqliteWebhookDeliveryPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookTriggerValidation.ts#createSqliteWebhookTriggerValidation",
@@ -13994,6 +13876,50 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/terminalWorkspaceAttribution.ts#createWebhookTerminalWorkspaceAttributionQueries",
       "symbol": "createWebhookTerminalWorkspaceAttributionQueries",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#createVerifiedWebhookDeliveryPersistence",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#createVerifiedWebhookDeliveryPersistence",
+      "symbol": "createVerifiedWebhookDeliveryPersistence",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#createWebhookDeliveryPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#createWebhookDeliveryPersistence",
+      "symbol": "createWebhookDeliveryPersistence",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -45179,7 +45105,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f81a28bf68bc66cc9d14c0a2d80376bfa73db20a251d9251bd97b200bc408418",
+  "sourceDigest": "sha256:2aede637cbb0b2947c2fe1649b8e021f7b10d05a35551fef64450009507a9913",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

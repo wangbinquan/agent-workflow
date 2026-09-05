@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 368,
+    "entries": 367,
     "executionLocal": 53,
     "longRunning": 83,
     "managed": 11,
-    "periodic": 221
+    "periodic": 220
   },
   "entries": [
     {
@@ -6936,9 +6936,9 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#gcCursor",
+      "id": "background:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#gcCursor",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -6950,28 +6950,7 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryPersistence.ts#gcCursor",
-      "phase": "after-ready",
-      "symbol": "gcCursor",
-      "targetContext": "integration"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence.ts#gcCursor",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryPersistence.ts#gcCursor",
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDeliveryPersistence.ts#gcCursor",
       "phase": "after-ready",
       "symbol": "gcCursor",
       "targetContext": "integration"
@@ -13583,5 +13562,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f81a28bf68bc66cc9d14c0a2d80376bfa73db20a251d9251bd97b200bc408418"
+  "sourceDigest": "sha256:2aede637cbb0b2947c2fe1649b8e021f7b10d05a35551fef64450009507a9913"
 }
