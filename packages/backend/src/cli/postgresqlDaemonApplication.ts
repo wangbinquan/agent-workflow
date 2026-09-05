@@ -149,11 +149,11 @@ import {
   developmentImplicitAgentContractDeclarations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
 import {
-  composePostgresqlDevelopmentEmployeeWorkspace,
-  createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader,
+  composeDevelopmentEmployeeWorkspace,
+  createDevelopmentEmployeeCaseWorkspaceDetailReader,
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
-import { composePostgresqlDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { createDevelopmentActivityWorkerBinding } from '@/modules/development-automation/composition/activityOperations'
 import {
   composePostgresqlDevelopmentConfigOperations,
@@ -280,7 +280,7 @@ import { getMcpRuntimeTestService } from '@/services/mcpRuntimeTest'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 import { createRepositoryEndpointDiscovery } from '@/modules/integration/composition'
-import { createPostgresqlDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
+import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
 import { composePostgresqlPipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
 import { resolveDevelopmentRepoBinding } from '@/services/developmentDeliveryDeps'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
@@ -609,7 +609,7 @@ export async function composePostgresqlDaemonApplication(
     appHome: input.appHome,
     endpointDiscovery: repositoryEndpointDiscovery,
   })
-  const developmentDeliveryProvider = createPostgresqlDevelopmentDeliveryProvider({
+  const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
     db: input.db,
     secretBox: input.secretBox,
     connections: codeHostConnections,
@@ -1271,7 +1271,7 @@ export async function composePostgresqlDaemonApplication(
     join(input.appHome, 'artifacts', 'employee-inputs'),
   )
   const employeeReactionRounds = createPostgresqlEmployeeReactionRoundQueries(input.db)
-  const employeeWorkspace = composePostgresqlDevelopmentEmployeeWorkspace({
+  const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     db: input.db,
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
@@ -1287,7 +1287,7 @@ export async function composePostgresqlDaemonApplication(
     conflictMerge: bindConflictMergeParticipant(),
   })
   const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
-  const employeePlatformWorkItems = composePostgresqlDevelopmentEmployeePlatformWorkItems({
+  const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
     db: input.db,
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
@@ -1393,7 +1393,7 @@ export async function composePostgresqlDaemonApplication(
       codecs: [developmentEmployeeRuntimeCodec],
       detailProjectionParticipants: [
         composeDevelopmentEmployeeCaseDetailProjection(
-          createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader(input.db),
+          createDevelopmentEmployeeCaseWorkspaceDetailReader(input.db),
         ),
       ],
       execution: createReactionExecutionAdapter(employeeExecution),

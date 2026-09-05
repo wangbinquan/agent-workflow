@@ -524,6 +524,19 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   development-automation 的 infrastructure 里 provider 对至此清零；剩 `employeePlatformWorkItemPersistence` /
   `developmentDeliveryProvider` 两个在文件内分支的 sqlite / postgresql 工厂，以及 composition/ 下 digitalEmployeeWorkspace /
   digitalEmployeePlatformWorkItems / legacyMissionDrain 三组装配对——**下一刀 D13**。
+  **D13 ✅（development-automation 最后三组 provider 对）**：`employeePlatformWorkItemPersistence.ts` 一份
+  （`createEmployeePlatformWorkItemPersistence`：审批 saga 幂等准备 = onConflictDoNothing + 同事务回读，publish 两表更新在
+  统一事务里）、`developmentDeliveryProvider.ts` 一份（`createDevelopmentDeliveryProvider`；无密钥嵌入的 volatile 仓库 URL
+  按数据库句柄身份取——此前只有 SQLite 版接了这条回退，PG 上少一条能力）、`legacyMissionDrain.ts` 一份
+  （`createLegacyMissionDrainPort`；注：生产装配没有消费方，只被 rfc317 跨界端口测试与表归属账本引用）。装配层
+  `createDevelopmentEmployeeCaseWorkspaceDetailReader` / `composeDevelopmentEmployeeWorkspace` /
+  `composeDevelopmentEmployeePlatformWorkItems` 各一份（`db: ProviderNeutralDatabase`），六个 `*Sqlite*` / `*Postgresql*` 孪生
+  删除，start.ts / server.ts / postgresqlDaemonApplication / composition.ts 改接，七个测试改接，
+  rfc349-development-integration-composition 的「PG 装配必须命名自己的适配器」清单去掉三个 development-automation 条目。
+  `rfc359-w4-d13-adapters.test.ts` 两引擎各跑 workspace 读 / head 更新、审批 saga 幂等准备 / 提交 / 观测、candidate 幂等 /
+  commit / publish 原子、轮次校验取最高 attempt、仓库解析（未缓存 / volatile / SecretBox 解封）与 MR 事实目标、排空视图
+  计数与 truncated + 源码锁。**development-automation 至此没有任何 provider 命名的持久化或装配孪生。**
+  **下一刀 D14**：resource-catalog legacy 对（16 对）。
 
 ## 5. W5 —— 防复辟
 

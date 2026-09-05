@@ -10,7 +10,7 @@ import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
 import { employeeCases, employeeCaseWorkspaces, employeeReactionRounds } from '@/db/schema'
-import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import {
   bindConflictMergeParticipant,
@@ -242,7 +242,7 @@ describe('RFC-310 Digital Employee workspace repository freshness', () => {
       conflictMerge: bindConflictMergeParticipant(),
       now: () => 10,
     }
-    const workspace = composeSqliteDevelopmentEmployeeWorkspace(workspaceInput)
+    const workspace = composeDevelopmentEmployeeWorkspace(workspaceInput)
     const first = await workspace.prepare({
       planJson: JSON.stringify(plan),
       attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial' }),

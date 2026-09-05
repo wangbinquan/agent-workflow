@@ -37,9 +37,9 @@ import {
 import { createInMemoryDb } from '@/db/client'
 import { cachedRepos, employeeOsOutbox, webhookDeliveries, webhookEndpoints } from '@/db/schema'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
-import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -255,7 +255,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
     const inputArtifacts = createEmployeeInputArtifactStore(
       join(appHome, 'artifacts', 'employee-inputs'),
     )
-    const workspace = composeSqliteDevelopmentEmployeeWorkspace({
+    const workspace = composeDevelopmentEmployeeWorkspace({
       db,
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -738,7 +738,7 @@ describe('RFC-310 Digital Employee OS system mock E2E', () => {
       binding: (repositoryId) =>
         repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
     })
-    const platform = composeSqliteDevelopmentEmployeePlatformWorkItems({
+    const platform = composeDevelopmentEmployeePlatformWorkItems({
       reactionRounds: createEmployeeReactionRoundQueries(db),
       db,
       appHome,

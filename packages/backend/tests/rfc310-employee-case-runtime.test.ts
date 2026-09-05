@@ -20,7 +20,7 @@ import {
   developmentEmployeeTypePackage,
   developmentExecutionContractRegistrations,
 } from '@/modules/development-automation/composition/employeeTypePackage'
-import { createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { createDevelopmentEmployeeCaseWorkspaceDetailReader } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
@@ -750,7 +750,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         codecs: [developmentEmployeeRuntimeCodec],
         detailProjectionParticipants: [
           composeDevelopmentEmployeeCaseDetailProjection(
-            createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+            createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
           ),
         ],
         platformWorkItems: {

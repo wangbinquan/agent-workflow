@@ -354,16 +354,16 @@ import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
 import {
-  composeSqliteDevelopmentEmployeeWorkspace,
-  createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader,
+  composeDevelopmentEmployeeWorkspace,
+  createDevelopmentEmployeeCaseWorkspaceDetailReader,
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
-import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentAutomation,
   composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
-  createSqliteDevelopmentDeliveryProvider,
+  createDevelopmentDeliveryProvider,
   createMissionCodeHostEventContinuation,
   type DevelopmentAdmissionLookup,
   type DevelopmentAutomationModule,
@@ -1663,7 +1663,7 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
           store: repositoryWorkspaceStore,
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
         })
-      : createSqliteDevelopmentDeliveryProvider({
+      : createDevelopmentDeliveryProvider({
           db: deps.db,
           ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
           connections: codeHostConnections,
@@ -1897,7 +1897,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     digitalEmployeeCaseDetailProjection:
       deps.digitalEmployeeCaseDetailProjection ??
       composeDevelopmentEmployeeCaseDetailProjection(
-        createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
+        createDevelopmentEmployeeCaseWorkspaceDetailReader(deps.db),
       ),
     schedulerDriver,
     taskExecutionReadModels,
@@ -2383,7 +2383,7 @@ function composeSqliteApiRouteMounts(
     collaborationContext: deps.collaborationContext,
   }
   const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
-  const developmentWorkspace = composeSqliteDevelopmentEmployeeWorkspace({
+  const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
     db: deps.db,
     appHome,
     reactionRounds: createEmployeeReactionRoundQueries(deps.db),
@@ -2451,7 +2451,7 @@ function composeSqliteApiRouteMounts(
           executionContracts,
         }),
       ),
-      platformWorkItems: composeSqliteDevelopmentEmployeePlatformWorkItems({
+      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
         reactionRounds: createEmployeeReactionRoundQueries(deps.db),
         db: deps.db,
         appHome,

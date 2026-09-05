@@ -16,7 +16,7 @@ import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
   composeDevelopmentAdmissionLookup,
-  createSqliteDevelopmentDeliveryProvider,
+  createDevelopmentDeliveryProvider,
   createDevelopmentMissionExecutionTerminalObserver,
   createMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
@@ -176,10 +176,10 @@ import { composeSqliteCodeCapabilityDemoSeedParticipant } from '@/modules/code-c
 import { composeSqliteDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import {
-  composeSqliteDevelopmentEmployeeWorkspace,
-  createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader,
+  composeDevelopmentEmployeeWorkspace,
+  createDevelopmentEmployeeCaseWorkspaceDetailReader,
 } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
-import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentApprovalEventObserver,
@@ -1759,7 +1759,7 @@ async function composeSqliteProviderSession(
     secretBox,
     repositoryTransport: repositoryTransportModule.adminConnections,
   })
-  const developmentDeliveryProvider = createSqliteDevelopmentDeliveryProvider({
+  const developmentDeliveryProvider = createDevelopmentDeliveryProvider({
     db,
     secretBox,
     connections: repositoryMetadataConnections,
@@ -2537,7 +2537,7 @@ async function composeSqliteProviderSession(
     },
   })
   const employeeCaseDetailProjection = composeDevelopmentEmployeeCaseDetailProjection(
-    createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(db),
+    createDevelopmentEmployeeCaseWorkspaceDetailReader(db),
   )
 
   const gateContinuationDeps = {
@@ -3070,7 +3070,7 @@ async function composeSqliteProviderSession(
   const employeeInputArtifacts = createEmployeeInputArtifactStore(
     join(Paths.root, 'artifacts', 'employee-inputs'),
   )
-  const employeeWorkspace = composeSqliteDevelopmentEmployeeWorkspace({
+  const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     db,
     appHome: Paths.root,
     reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -3128,7 +3128,7 @@ async function composeSqliteProviderSession(
           executionContracts: employeeExecutionContracts,
         }),
       ),
-      platformWorkItems: composeSqliteDevelopmentEmployeePlatformWorkItems({
+      platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
         reactionRounds: createEmployeeReactionRoundQueries(db),
         db,
         appHome: Paths.root,

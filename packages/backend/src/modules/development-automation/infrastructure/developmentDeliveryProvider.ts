@@ -1,11 +1,13 @@
+// RFC-359 W4-D13 —— development 交付面的仓库 / MR 事实目录：一份实现，两个 provider 共用。
+// 无密钥嵌入下的「volatile 仓库 URL」按数据库句柄身份取（此前只有 SQLite 版接了这条回退）。
+
 import { and, eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos, developmentMissions, developmentMrClaims } from '@/db/schema'
 import { matchRepoProvider } from '@/modules/integration/composition/codeHostEffects'
 import type { PipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { DevelopmentDeliveryProvider } from '@/services/developmentDeliveryDeps'
@@ -68,105 +70,58 @@ function providerFrom(input: {
   return Object.freeze(provider)
 }
 
-function sqliteDirectory(db: DbClient): DevelopmentDeliveryDirectory {
+function directoryOf(db: ProviderNeutralDatabase): DevelopmentDeliveryDirectory {
   return {
     async repository(id) {
       return (
-        db
-          .select({
-            id: cachedRepos.id,
-            urlEnc: cachedRepos.urlEnc,
-            defaultBranch: cachedRepos.defaultBranch,
-          })
-          .from(cachedRepos)
-          .where(eq(cachedRepos.id, id))
-          .get() ?? null
+        (
+          await db
+            .select({
+              id: cachedRepos.id,
+              urlEnc: cachedRepos.urlEnc,
+              defaultBranch: cachedRepos.defaultBranch,
+            })
+            .from(cachedRepos)
+            .where(eq(cachedRepos.id, id))
+            .limit(1)
+        )[0] ?? null
       )
     },
     async mrFactTarget(input) {
-      const row = db
-        .select({
-          repositoryId: developmentMissions.repositoryId,
-          mrIid: developmentMrClaims.mrIid,
-        })
-        .from(developmentMissions)
-        .innerJoin(
-          developmentMrClaims,
-          and(
-            eq(developmentMrClaims.id, input.mrClaimId),
-            eq(developmentMrClaims.missionId, developmentMissions.id),
-          ),
-        )
-        .where(eq(developmentMissions.id, input.missionId))
-        .get()
-      return row ?? null
+      return (
+        (
+          await db
+            .select({
+              repositoryId: developmentMissions.repositoryId,
+              mrIid: developmentMrClaims.mrIid,
+            })
+            .from(developmentMissions)
+            .innerJoin(
+              developmentMrClaims,
+              and(
+                eq(developmentMrClaims.id, input.mrClaimId),
+                eq(developmentMrClaims.missionId, developmentMissions.id),
+              ),
+            )
+            .where(eq(developmentMissions.id, input.missionId))
+            .limit(1)
+        )[0] ?? null
+      )
     },
   }
 }
 
-function postgresqlDirectory(db: PostgresqlDatabaseClient): DevelopmentDeliveryDirectory {
-  return {
-    async repository(id) {
-      return (
-        (await db
-          .select({
-            id: cachedRepos.id,
-            urlEnc: cachedRepos.urlEnc,
-            defaultBranch: cachedRepos.defaultBranch,
-          })
-          .from(cachedRepos)
-          .where(eq(cachedRepos.id, id))
-          .limit(1)
-          .get()) ?? null
-      )
-    },
-    async mrFactTarget(input) {
-      const row = await db
-        .select({
-          repositoryId: developmentMissions.repositoryId,
-          mrIid: developmentMrClaims.mrIid,
-        })
-        .from(developmentMissions)
-        .innerJoin(
-          developmentMrClaims,
-          and(
-            eq(developmentMrClaims.id, input.mrClaimId),
-            eq(developmentMrClaims.missionId, developmentMissions.id),
-          ),
-        )
-        .where(eq(developmentMissions.id, input.missionId))
-        .limit(1)
-        .get()
-      return row ?? null
-    },
-  }
-}
-
-export function createSqliteDevelopmentDeliveryProvider(input: {
-  readonly db: DbClient
+export function createDevelopmentDeliveryProvider(input: {
+  readonly db: ProviderNeutralDatabase
   readonly secretBox?: SecretBox
   readonly connections: CodeHostConnectionsService
   readonly pipeline: PipelineEvidenceExecution
 }): DevelopmentDeliveryProvider {
   return providerFrom({
-    directory: sqliteDirectory(input.db),
+    directory: directoryOf(input.db),
     secretBox: input.secretBox,
     connections: input.connections,
     pipeline: input.pipeline,
     volatileRepositoryUrl: (row) => unsealRepoUrl(row, undefined, input.db),
-  })
-}
-
-export function createPostgresqlDevelopmentDeliveryProvider(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly secretBox?: SecretBox
-  readonly connections: CodeHostConnectionsService
-  readonly pipeline: PipelineEvidenceExecution
-}): DevelopmentDeliveryProvider {
-  return providerFrom({
-    directory: postgresqlDirectory(input.db),
-    secretBox: input.secretBox,
-    connections: input.connections,
-    pipeline: input.pipeline,
   })
 }

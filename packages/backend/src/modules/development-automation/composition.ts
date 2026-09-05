@@ -13,10 +13,7 @@
 import { join } from 'node:path'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-export {
-  createPostgresqlDevelopmentDeliveryProvider,
-  createSqliteDevelopmentDeliveryProvider,
-} from './infrastructure/developmentDeliveryProvider'
+export { createDevelopmentDeliveryProvider } from './infrastructure/developmentDeliveryProvider'
 import { runMissionReconcile, type ReconcileOutcome } from './application/missionReconciler'
 import {
   createDeferredMissionDrive,

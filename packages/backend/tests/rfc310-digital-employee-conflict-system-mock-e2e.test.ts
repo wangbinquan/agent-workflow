@@ -20,8 +20,8 @@ import {
 
 import { createInMemoryDb } from '@/db/client'
 import { cachedRepos, employeeOsOutbox } from '@/db/schema'
-import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
-import { composeSqliteDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
+import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import {
   developmentEmployeeRuntimeCodec,
   developmentEmployeeTypePackage,
@@ -131,7 +131,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
       const inputArtifacts = createEmployeeInputArtifactStore(
         join(appHome, 'artifacts', 'employee-inputs'),
       )
-      const workspace = composeSqliteDevelopmentEmployeeWorkspace({
+      const workspace = composeDevelopmentEmployeeWorkspace({
         db,
         appHome,
         reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -172,7 +172,7 @@ describe('RFC-310 Digital Employee conflict System Mock E2E', () => {
         ...bindCandidateDeliveryParticipant({ publicationTransport }),
         ...bindEmployeeCaseWorkspaceParticipant({ publicationTransport }),
       }
-      const platform = composeSqliteDevelopmentEmployeePlatformWorkItems({
+      const platform = composeDevelopmentEmployeePlatformWorkItems({
         db,
         appHome,
         reactionRounds: createEmployeeReactionRoundQueries(db),

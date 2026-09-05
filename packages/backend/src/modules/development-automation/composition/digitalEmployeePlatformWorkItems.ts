@@ -4,15 +4,11 @@ import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { EmployeePlatformWorkItemPersistence } from '../application/ports/employeePlatformWorkItemPersistence'
-import {
-  createPostgresqlEmployeePlatformWorkItemPersistence,
-  createSqliteEmployeePlatformWorkItemPersistence,
-} from '../infrastructure/employeePlatformWorkItemPersistence'
+import { createEmployeePlatformWorkItemPersistence } from '../infrastructure/employeePlatformWorkItemPersistence'
 import type {
   ApprovalGatewayPort,
   PipelineEvidencePort,
@@ -2194,24 +2190,15 @@ type DevelopmentEmployeePlatformWorkItemsBootstrapInput = Omit<
   'persistence'
 >
 
-export function composeSqliteDevelopmentEmployeePlatformWorkItems(
-  input: DevelopmentEmployeePlatformWorkItemsBootstrapInput & { readonly db: DbClient },
-): ReturnType<typeof composeDevelopmentEmployeePlatformWorkItemsFromPersistence> {
-  const { db, ...composition } = input
-  return composeDevelopmentEmployeePlatformWorkItemsFromPersistence({
-    ...composition,
-    persistence: createSqliteEmployeePlatformWorkItemPersistence(db),
-  })
-}
-
-export function composePostgresqlDevelopmentEmployeePlatformWorkItems(
+/** 一份装配，两个 provider 共用（RFC-359 W4-D13）。 */
+export function composeDevelopmentEmployeePlatformWorkItems(
   input: DevelopmentEmployeePlatformWorkItemsBootstrapInput & {
-    readonly db: PostgresqlDatabaseClient
+    readonly db: ProviderNeutralDatabase
   },
 ): ReturnType<typeof composeDevelopmentEmployeePlatformWorkItemsFromPersistence> {
   const { db, ...composition } = input
   return composeDevelopmentEmployeePlatformWorkItemsFromPersistence({
     ...composition,
-    persistence: createPostgresqlEmployeePlatformWorkItemPersistence(db),
+    persistence: createEmployeePlatformWorkItemPersistence(db),
   })
 }

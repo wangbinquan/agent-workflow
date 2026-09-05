@@ -106,11 +106,10 @@ describe('RFC-349 Development and Integration provider composition', () => {
       'modules/integration/composition/requirementSource.ts',
       'modules/integration/composition/approvalGateway.ts',
       'modules/integration/composition/digitalEmployeeToolConnections.ts',
-      'modules/development-automation/composition/digitalEmployeeWorkspace.ts',
-      'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
+      // RFC-359 W4-D13：development-automation 的装配已是一份中立入口（无 provider 分支可命名），
+      // 由 rfc349-digital-development-provider-boundary 与 rfc359-w4-d13-adapters 的双引擎用例覆盖。
       // RFC-359 W4-D10：executionTerminalObserver.ts 已是一份中立入口（无 provider 分支可命名），
       // 由 rfc349-digital-development-provider-boundary 与 rfc359-w4-d10-adapters 的双引擎用例覆盖。
-      'modules/development-automation/composition/legacyMissionDrain.ts',
     ]
     for (const file of files) {
       const source = readFileSync(resolve(import.meta.dir, '..', 'src', file), 'utf8')

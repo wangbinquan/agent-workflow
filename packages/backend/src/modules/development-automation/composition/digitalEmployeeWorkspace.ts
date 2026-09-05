@@ -15,9 +15,8 @@ import { dirname, join } from 'node:path'
 import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
 import type { EmployeeWorkspacePersistence } from '../application/ports/employeeWorkspacePersistence'
 import { createEmployeeWorkspacePersistence } from '../infrastructure/employeeWorkspacePersistence'
@@ -533,14 +532,9 @@ function detailReader(
   }
 }
 
-export function createSqliteDevelopmentEmployeeCaseWorkspaceDetailReader(
-  db: DbClient,
-): DevelopmentEmployeeCaseWorkspaceDetailReader {
-  return detailReader(createEmployeeWorkspacePersistence(db))
-}
-
-export function createPostgresqlDevelopmentEmployeeCaseWorkspaceDetailReader(
-  db: PostgresqlDatabaseClient,
+/** 一份读侧，两个 provider 共用（RFC-359 W4-D13）。 */
+export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
+  db: ProviderNeutralDatabase,
 ): DevelopmentEmployeeCaseWorkspaceDetailReader {
   return detailReader(createEmployeeWorkspacePersistence(db))
 }
@@ -1263,20 +1257,9 @@ type DevelopmentEmployeeWorkspaceBootstrapInput = Omit<
   'persistence'
 >
 
-export function composeSqliteDevelopmentEmployeeWorkspace(
-  input: DevelopmentEmployeeWorkspaceBootstrapInput & { readonly db: DbClient },
-): DevelopmentEmployeeWorkspaceParticipant {
-  const { db, ...composition } = input
-  return composeDevelopmentEmployeeWorkspaceFromPersistence({
-    ...composition,
-    persistence: createEmployeeWorkspacePersistence(db),
-  })
-}
-
-export function composePostgresqlDevelopmentEmployeeWorkspace(
-  input: DevelopmentEmployeeWorkspaceBootstrapInput & {
-    readonly db: PostgresqlDatabaseClient
-  },
+/** 一份装配，两个 provider 共用（RFC-359 W4-D13）。 */
+export function composeDevelopmentEmployeeWorkspace(
+  input: DevelopmentEmployeeWorkspaceBootstrapInput & { readonly db: ProviderNeutralDatabase },
 ): DevelopmentEmployeeWorkspaceParticipant {
   const { db, ...composition } = input
   return composeDevelopmentEmployeeWorkspaceFromPersistence({
