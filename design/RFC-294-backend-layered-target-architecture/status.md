@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1adb03afe1f437c792b0f27811f545b277cbf87170e693b18036eca90a90eb40`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1927 |
+| backend production TS 文件 | 1921 |
 | `services/` 文件 | 326 |
-| `modules/**` 文件 / 非空 context | 1311 / 17 |
+| `modules/**` 文件 / 非空 context | 1305 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5263 |
+| `architectureExceptions` | 5257 |
 | `backgroundJobs` | 368 |
-| `crossContextImports` | 6203 |
+| `crossContextImports` | 6157 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26034 |
-| `mutationEntrypoints` | 1927 |
+| `moduleSymbolOwners` | 26008 |
+| `mutationEntrypoints` | 1920 |
 | `nodeRunInsertSites` | 2 |
-| `publicSurfaces` | 987 |
-| `transactionExternalEffects` | 446 |
+| `publicSurfaces` | 986 |
+| `transactionExternalEffects` | 438 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -58,9 +58,9 @@
 | collaboration / application | 36 |
 | development-automation / domain | 33 |
 | resource-catalog / composition | 33 |
-| integration / infrastructure | 32 |
 | task-execution / domain | 29 |
 | code-capability / infrastructure | 28 |
+| integration / infrastructure | 28 |
 | intent / application | 25 |
 | identity-access / application | 24 |
 | code-capability / application | 20 |
@@ -73,13 +73,13 @@
 | development-automation / composition | 14 |
 | digital-employee / application | 13 |
 | digital-employee / infrastructure | 13 |
-| identity-access / infrastructure | 12 |
 | intent / infrastructure | 12 |
 | source-control / infrastructure | 12 |
 | code-capability / domain | 11 |
-| memory / infrastructure | 11 |
+| identity-access / infrastructure | 11 |
 | system-operations / application | 11 |
 | memory / application | 10 |
+| memory / infrastructure | 10 |
 | source-control / application | 10 |
 | collaboration / composition | 9 |
 | knowledge-evolution / domain | 8 |
@@ -200,10 +200,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3619 |
+| legacy-outbound | 3613 |
 | legacy-inbound | 1446 |
-| infrastructure-external | 373 |
-| provider-mirror | 297 |
+| infrastructure-external | 367 |
+| provider-mirror | 263 |
 | offered-consumption | 185 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 92 |
@@ -215,7 +215,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3619 |
+| legacy-outbound | 3613 |
 | legacy-inbound | 1446 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 92 |
@@ -227,7 +227,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2804 |
+| W9 | 2798 |
 | W4-E1 | 865 |
 | W4-C | 409 |
 | W4-E0 | 239 |
@@ -255,7 +255,7 @@
 | resource-catalog | 250 |
 | task-execution | 205 |
 | collaboration | 126 |
-| identity-access | 65 |
+| identity-access | 64 |
 | system-operations | 63 |
 | digital-employee | 51 |
 | source-control | 45 |
@@ -270,7 +270,7 @@
 | runtime-management | 8 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 142 / 987）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 142 / 986）
 
 | context | 数量 |
 | --- | --- |

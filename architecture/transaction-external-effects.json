@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 56,
-    "transactionCallbacks": 446
+    "coLocatedCandidates": 53,
+    "transactionCallbacks": 438
   },
   "entries": [
     {
@@ -1841,18 +1841,6 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts#transaction:50",
-      "line": 50,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/postgresqlOidcProviderRepository.ts#serializable",
-      "status": "clear",
-      "symbol": "serializable",
-      "targetContext": "identity-access",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
       "file": "packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/identity-access/infrastructure/postgresqlUserAccessRepository.ts#transaction:474",
@@ -1902,46 +1890,6 @@
       "transactionCallee": "dbTxSync"
     },
     {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts#dbTxSync:143",
-      "line": 143,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts#SqliteOidcProviderRepository",
-      "status": "co-located-risk",
-      "symbol": "SqliteOidcProviderRepository",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts#dbTxSync:58",
-      "line": 58,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts#SqliteOidcProviderRepository",
-      "status": "clear",
-      "symbol": "SqliteOidcProviderRepository",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "provider"
-      ],
-      "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts#dbTxSync:81",
-      "line": 81,
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/sqliteOidcProviderRepository.ts#SqliteOidcProviderRepository",
-      "status": "co-located-risk",
-      "symbol": "SqliteOidcProviderRepository",
-      "targetContext": "identity-access",
-      "transactionCallee": "dbTxSync"
-    },
-    {
       "effectTokens": [],
       "file": "packages/backend/src/modules/identity-access/infrastructure/sqliteUserAccessRepository.ts",
       "finalCriterion": "no-external-effect-observed",
@@ -1967,49 +1915,37 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#transaction:63",
-      "line": 63,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#createPostgresqlIntegrationTriggerResources",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#transaction:172",
+      "line": 172,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrLaunchGuardPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlIntegrationTriggerResources",
+      "symbol": "createMrLaunchGuardPersistence",
       "targetContext": "integration",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#transaction:166",
-      "line": 166,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrLaunchGuardPersistence",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#transaction:234",
+      "line": 234,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrTerminalEffectPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlMrLaunchGuardPersistence",
+      "symbol": "createMrTerminalEffectPersistence",
       "targetContext": "integration",
       "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#transaction:226",
-      "line": 226,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrTerminalEffectPersistence",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#transaction:307",
+      "line": 307,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrTerminalEffectPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlMrTerminalEffectPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#transaction:297",
-      "line": 297,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrTerminalEffectPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlMrTerminalEffectPersistence",
+      "symbol": "createMrTerminalEffectPersistence",
       "targetContext": "integration",
       "transactionCallee": "transaction"
     },
@@ -2017,13 +1953,25 @@
       "effectTokens": [
         "webhook"
       ],
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#transaction:35",
-      "line": 35,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrLaunchGuardPersistence",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#transaction:39",
+      "line": 39,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrLaunchGuardPersistence",
       "status": "co-located-risk",
-      "symbol": "createPostgresqlMrLaunchGuardPersistence",
+      "symbol": "createMrLaunchGuardPersistence",
+      "targetContext": "integration",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#transaction:63",
+      "line": 63,
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#createPostgresqlIntegrationTriggerResources",
+      "status": "clear",
+      "symbol": "createPostgresqlIntegrationTriggerResources",
       "targetContext": "integration",
       "transactionCallee": "transaction"
     },
@@ -2170,56 +2118,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#createSqliteIntegrationTriggerResources",
       "status": "clear",
       "symbol": "createSqliteIntegrationTriggerResources",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#dbTxSync:163",
-      "line": 163,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrLaunchGuardPersistence",
-      "status": "clear",
-      "symbol": "createSqliteMrLaunchGuardPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#dbTxSync:224",
-      "line": 224,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrTerminalEffectPersistence",
-      "status": "clear",
-      "symbol": "createSqliteMrTerminalEffectPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#dbTxSync:296",
-      "line": 296,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrTerminalEffectPersistence",
-      "status": "clear",
-      "symbol": "createSqliteMrTerminalEffectPersistence",
-      "targetContext": "integration",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [
-        "webhook"
-      ],
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#dbTxSync:35",
-      "line": 35,
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrLaunchGuardPersistence",
-      "status": "co-located-risk",
-      "symbol": "createSqliteMrLaunchGuardPersistence",
       "targetContext": "integration",
       "transactionCallee": "dbTxSync"
     },
@@ -5482,7 +5380,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1adb03afe1f437c792b0f27811f545b277cbf87170e693b18036eca90a90eb40",
+  "sourceDigest": "sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

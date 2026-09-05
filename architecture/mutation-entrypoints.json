@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1927,
+    "entries": 1920,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -13687,6 +13687,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/codeHostEventResponseDirectory.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/codeHostEventResponseDirectory.ts#createCodeHostEventResponseDirectory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/codeHostEventResponseDirectory.ts#createCodeHostEventResponseDirectory",
+      "symbol": "createCodeHostEventResponseDirectory",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -14102,23 +14126,67 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrLaunchGuardPersistence",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrLaunchGuardPersistence",
+      "symbol": "createMrLaunchGuardPersistence",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrTerminalEffectPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#createMrTerminalEffectPersistence",
+      "symbol": "createMrTerminalEffectPersistence",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlCodeHostEventResponseDirectory.ts",
+      "file": "packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlCodeHostEventResponseDirectory.ts#createPostgresqlCodeHostEventResponseDirectory",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#OPEN_GUARD_STATUSES",
       "missingControls": [
         "audit",
         "authority",
         "authorization",
+        "event",
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlCodeHostEventResponseDirectory.ts#createPostgresqlCodeHostEventResponseDirectory",
-      "symbol": "createPostgresqlCodeHostEventResponseDirectory",
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/mrTerminalControlPersistence.ts#OPEN_GUARD_STATUSES",
+      "symbol": "OPEN_GUARD_STATUSES",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -14166,74 +14234,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlIntegrationTriggerResources.ts#createPostgresqlIntegrationTriggerResources",
       "symbol": "createPostgresqlIntegrationTriggerResources",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrLaunchGuardPersistence",
-      "missingControls": [
-        "audit",
-        "authority"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrLaunchGuardPersistence",
-      "symbol": "createPostgresqlMrLaunchGuardPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrTerminalEffectPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#createPostgresqlMrTerminalEffectPersistence",
-      "symbol": "createPostgresqlMrTerminalEffectPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#OPEN_GUARD_STATUSES",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlMrTerminalControlPersistence.ts#OPEN_GUARD_STATUSES",
-      "symbol": "OPEN_GUARD_STATUSES",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -14306,75 +14306,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryQueries.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryQueries.ts#createPostgresqlWebhookDeliveryQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDeliveryQueries.ts#createPostgresqlWebhookDeliveryQueries",
-      "symbol": "createPostgresqlWebhookDeliveryQueries",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchPersistence.ts#createPostgresqlWebhookDispatchPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/postgresqlWebhookDispatchPersistence.ts#createPostgresqlWebhookDispatchPersistence",
-      "symbol": "createPostgresqlWebhookDispatchPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts#createSqliteCodeHostEventResponseDirectory",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteCodeHostEventResponseDirectory.ts#createSqliteCodeHostEventResponseDirectory",
-      "symbol": "createSqliteCodeHostEventResponseDirectory",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
@@ -14436,75 +14367,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteIntegrationTriggerResources.ts#createSqliteIntegrationTriggerResources",
       "symbol": "createSqliteIntegrationTriggerResources",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrLaunchGuardPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrLaunchGuardPersistence",
-      "symbol": "createSqliteMrLaunchGuardPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrTerminalEffectPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#createSqliteMrTerminalEffectPersistence",
-      "symbol": "createSqliteMrTerminalEffectPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#OPEN_GUARD_STATUSES",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteMrTerminalControlPersistence.ts#OPEN_GUARD_STATUSES",
-      "symbol": "OPEN_GUARD_STATUSES",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -14582,51 +14444,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryQueries.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryQueries.ts#createSqliteWebhookDeliveryQueries",
-      "missingControls": [
-        "audit",
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDeliveryQueries.ts#createSqliteWebhookDeliveryQueries",
-      "symbol": "createSqliteWebhookDeliveryQueries",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchPersistence.ts#createSqliteWebhookDispatchPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/sqliteWebhookDispatchPersistence.ts#createSqliteWebhookDispatchPersistence",
-      "symbol": "createSqliteWebhookDispatchPersistence",
-      "targetContext": "integration",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -14669,6 +14486,51 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/terminalWorkspaceAttribution.ts#createWebhookTerminalWorkspaceAttributionQueries",
       "symbol": "createWebhookTerminalWorkspaceAttributionQueries",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDeliveryQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookDeliveryQueries.ts#createWebhookDeliveryQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDeliveryQueries.ts#createWebhookDeliveryQueries",
+      "symbol": "createWebhookDeliveryQueries",
+      "targetContext": "integration",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/infrastructure/webhookDispatchPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/infrastructure/webhookDispatchPersistence.ts#createWebhookDispatchPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookDispatchPersistence.ts#createWebhookDispatchPersistence",
+      "symbol": "createWebhookDispatchPersistence",
       "targetContext": "integration",
       "targetLayer": "infrastructure"
     },
@@ -16617,7 +16479,7 @@
       },
       "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createPostgresqlMemoryDistillSessionCapture",
+      "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createMemoryDistillSessionCapture",
       "missingControls": [
         "audit",
         "authority",
@@ -16626,33 +16488,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createPostgresqlMemoryDistillSessionCapture",
-      "symbol": "createPostgresqlMemoryDistillSessionCapture",
-      "targetContext": "memory",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createSqliteMemoryDistillSessionCapture",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createSqliteMemoryDistillSessionCapture",
-      "symbol": "createSqliteMemoryDistillSessionCapture",
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createMemoryDistillSessionCapture",
+      "symbol": "createMemoryDistillSessionCapture",
       "targetContext": "memory",
       "targetLayer": "infrastructure"
     },
@@ -45926,7 +45763,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1adb03afe1f437c792b0f27811f545b277cbf87170e693b18036eca90a90eb40",
+  "sourceDigest": "sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

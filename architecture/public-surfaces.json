@@ -3,10 +3,10 @@
     "consumers": 890,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
-    "methods": 1063,
+    "methods": 1056,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20707,
-    "symbols": 987
+    "recursiveFields": 20493,
+    "symbols": 986
   },
   "entries": [
     {
@@ -40155,6 +40155,1355 @@
     {
       "authority": "request-authority",
       "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 214,
+        "maxUnionVariants": 280
+      },
+      "consumerEdgeIds": [
+        "import:6787ba2dbfc23fb62998",
+        "import:cfd66f0f538d39a5be7a"
+      ],
+      "context": "identity-access",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "operations",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$parameter:id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.allowedEmailDomainsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.authorizationEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.authorizationEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.clientId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.clientSecretEnc",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.createdAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.emailClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.emailClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.gitNameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.gitNameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.iconUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.iconUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.issuerUrl",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.jwksUri.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.jwksUri.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:0",
+          "type": "'auto'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:1",
+          "type": "'allowlist'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:2",
+          "type": "'invite'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.schemaVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.scopes",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.slug",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.subjectClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.subjectClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.tokenEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.tokenEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.trustEmailVerified",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:findById.$return.$variant:0.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.userinfoEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.userinfoEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.userinfoRequestStyle.$variant:0",
+          "type": "'get_bearer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.userinfoRequestStyle.$variant:1",
+          "type": "'post_json'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.usernameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:0.usernameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findById.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$parameter:slug",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.allowedEmailDomainsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.authorizationEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.authorizationEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.clientId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.clientSecretEnc",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.createdAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.emailClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.emailClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.gitNameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.gitNameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.iconUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.iconUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.issuerUrl",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.jwksUri.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.jwksUri.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:0",
+          "type": "'auto'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:1",
+          "type": "'allowlist'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:2",
+          "type": "'invite'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.schemaVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.scopes",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.slug",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.subjectClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.subjectClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.tokenEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.tokenEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.trustEmailVerified",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoRequestStyle.$variant:0",
+          "type": "'get_bearer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoRequestStyle.$variant:1",
+          "type": "'post_json'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.usernameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:0.usernameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:findBySlug.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.allowedEmailDomainsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.authorizationEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.authorizationEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.clientId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.clientSecretEnc",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.createdAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.emailClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.emailClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.gitNameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.gitNameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.iconUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.iconUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.issuerUrl",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.jwksUri.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.jwksUri.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:0",
+          "type": "'auto'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:1",
+          "type": "'allowlist'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:2",
+          "type": "'invite'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.schemaVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.scopes",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.slug",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.subjectClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.subjectClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.tokenEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.tokenEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.trustEmailVerified",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:insert.$parameter:record.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.userinfoEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.userinfoEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.userinfoRequestStyle.$variant:0",
+          "type": "'get_bearer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.userinfoRequestStyle.$variant:1",
+          "type": "'post_json'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.usernameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$parameter:record.usernameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$return.$variant:0.ok",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$return.$variant:0.value",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:0",
+          "type": "'oidc-provider-not-found'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:1",
+          "type": "'oidc-slug-taken'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:2",
+          "type": "'last-enabled-oidc-required'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:3",
+          "type": "'subject-claim-locked-by-identities'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:4",
+          "type": "'provider-still-linked'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:insert.$return.$variant:1.ok",
+          "type": "false"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].allowedEmailDomainsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].authorizationEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].authorizationEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].clientId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].clientSecretEnc",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].createdAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].emailClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].emailClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:list.$return[].enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].gitNameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].gitNameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].iconUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].iconUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:list.$return[].id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].issuerUrl",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].jwksUri.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].jwksUri.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].provisioning.$variant:0",
+          "type": "'auto'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].provisioning.$variant:1",
+          "type": "'allowlist'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].provisioning.$variant:2",
+          "type": "'invite'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].schemaVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].scopes",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].slug",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].subjectClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].subjectClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].tokenEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].tokenEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:list.$return[].trustEmailVerified",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:list.$return[].updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].userinfoEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].userinfoEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].userinfoRequestStyle.$variant:0",
+          "type": "'get_bearer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].userinfoRequestStyle.$variant:1",
+          "type": "'post_json'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].usernameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return[].usernameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].allowedEmailDomainsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].authorizationEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].authorizationEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].clientId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].clientSecretEnc",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].createdAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].emailClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].emailClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].enabled",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].gitNameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].gitNameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].iconUrl.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].iconUrl.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].issuerUrl",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].jwksUri.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].jwksUri.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:0",
+          "type": "'auto'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:1",
+          "type": "'allowlist'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:2",
+          "type": "'invite'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].schemaVersion",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].scopes",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].slug",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].subjectClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].subjectClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].tokenEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].tokenEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].trustEmailVerified",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:listEnabled.$return[].updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].userinfoEndpoint.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].userinfoEndpoint.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].userinfoRequestStyle.$variant:0",
+          "type": "'get_bearer'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].userinfoRequestStyle.$variant:1",
+          "type": "'post_json'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].usernameClaim.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:listEnabled.$return[].usernameClaim.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:patch.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:patch.$parameter:input.subjectClaimChanges",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:patch.$parameter:input.updates",
+          "type": "Omit<OidcProviderPersistenceRecord, 'id' | 'createdAt' | 'schemaVersion'>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:patch.$parameter:input.updates.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:patch.$return.$variant:0.ok",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:patch.$return.$variant:0.value",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:0",
+          "type": "'oidc-provider-not-found'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:1",
+          "type": "'oidc-slug-taken'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:2",
+          "type": "'last-enabled-oidc-required'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:3",
+          "type": "'subject-claim-locked-by-identities'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:4",
+          "type": "'provider-still-linked'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:patch.$return.$variant:1.ok",
+          "type": "false"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:remove.$parameter:input.force",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "fieldPath": "$method:remove.$parameter:input.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:remove.$return.$variant:0.ok",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:remove.$return.$variant:0.value",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:0",
+          "type": "'oidc-provider-not-found'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:1",
+          "type": "'oidc-slug-taken'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:2",
+          "type": "'last-enabled-oidc-required'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:3",
+          "type": "'subject-claim-locked-by-identities'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:4",
+          "type": "'provider-still-linked'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "fieldPath": "$method:remove.$return.$variant:1.ok",
+          "type": "false"
+        }
+      ],
+      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
+      "id": "public:identity-access:operations:DrizzleOidcProviderRepository",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "name": "findById",
+          "signatureDigest": "sha256:4b1c45edfc93fddc1322d51b8f78d9647dddee26d7713f3f8d4e948565f6505d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "name": "findBySlug",
+          "signatureDigest": "sha256:ba2990cc9474b9b98524f421847cd85eefaa69088f06689cd4aaac29b424a6c2"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "name": "insert",
+          "signatureDigest": "sha256:e0fc3d2b07cdcf68db4fe441c1e807caa19e111588022a3834c049763846ea2f"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998",
+            "import:cfd66f0f538d39a5be7a"
+          ],
+          "name": "list",
+          "signatureDigest": "sha256:d2270385760d4543fe2404eb09b2e3c4bbcae49a20a0d4620fcdb7a0b6bb5c32"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "name": "listEnabled",
+          "signatureDigest": "sha256:608e8163ed822f8cf566affe1421a6d38549b8ab7138b54dca2cee2a14144d22"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "name": "patch",
+          "signatureDigest": "sha256:64d9d08b08a6d6b0ba95a3076e611a5cac7e19505fd84c180217d8f17efa0a71"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:6787ba2dbfc23fb62998"
+          ],
+          "name": "remove",
+          "signatureDigest": "sha256:60f6dbdf2dc58087e7e51a51846e81720136eee5fa8053d6d3306879ea50c0ab"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6787ba2dbfc23fb62998",
+          "file": "packages/backend/src/services/oidcProviders.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/oidcProviders.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:cfd66f0f538d39a5be7a",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:f1f2adf343bf9fafcd18409d22bcffe6600f2c6094a5bfcca29d886d20c8bd93",
+      "status": "target-context-current-surface",
+      "symbol": "DrizzleOidcProviderRepository",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "Omit"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
         "maxMethods": 8,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 245,
@@ -44757,8 +46106,7 @@
         }
       ],
       "publicTypeConsumerIds": [
-        "public:identity-access:operations:PostgresqlOidcProviderRepository",
-        "public:identity-access:operations:SqliteOidcProviderRepository"
+        "public:identity-access:operations:DrizzleOidcProviderRepository"
       ],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -44907,2516 +46255,6 @@
       "transaction": "own-tx",
       "unresolvedTypeRefs": [
         "ReadonlyMap"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 7,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 214,
-        "maxUnionVariants": 280
-      },
-      "consumerEdgeIds": [
-        "import:de83ae02a14900cb32ed"
-      ],
-      "context": "identity-access",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "operations",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$parameter:id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$parameter:slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:0.ok",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:0.value",
-          "type": "T"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:0",
-          "type": "'oidc-provider-not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:1",
-          "type": "'oidc-slug-taken'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:2",
-          "type": "'last-enabled-oidc-required'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:3",
-          "type": "'subject-claim-locked-by-identities'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:4",
-          "type": "'provider-still-linked'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.ok",
-          "type": "false"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:list.$return[].enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:list.$return[].id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:list.$return[].updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:patch.$parameter:input.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$parameter:input.subjectClaimChanges",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$parameter:input.updates",
-          "type": "Omit<OidcProviderPersistenceRecord, 'id' | 'createdAt' | 'schemaVersion'>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:patch.$parameter:input.updates.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:0.ok",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:0.value",
-          "type": "T"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:0",
-          "type": "'oidc-provider-not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:1",
-          "type": "'oidc-slug-taken'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:2",
-          "type": "'last-enabled-oidc-required'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:3",
-          "type": "'subject-claim-locked-by-identities'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:4",
-          "type": "'provider-still-linked'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.ok",
-          "type": "false"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$parameter:input.force",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "fieldPath": "$method:remove.$parameter:input.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:0.ok",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:0.value",
-          "type": "T"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:0",
-          "type": "'oidc-provider-not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:1",
-          "type": "'oidc-slug-taken'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:2",
-          "type": "'last-enabled-oidc-required'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:3",
-          "type": "'subject-claim-locked-by-identities'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:4",
-          "type": "'provider-still-linked'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.ok",
-          "type": "false"
-        }
-      ],
-      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
-      "id": "public:identity-access:operations:PostgresqlOidcProviderRepository",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "findById",
-          "signatureDigest": "sha256:4b1c45edfc93fddc1322d51b8f78d9647dddee26d7713f3f8d4e948565f6505d"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "findBySlug",
-          "signatureDigest": "sha256:ba2990cc9474b9b98524f421847cd85eefaa69088f06689cd4aaac29b424a6c2"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "name": "insert",
-          "signatureDigest": "sha256:e0fc3d2b07cdcf68db4fe441c1e807caa19e111588022a3834c049763846ea2f"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:de83ae02a14900cb32ed"
-          ],
-          "name": "list",
-          "signatureDigest": "sha256:d2270385760d4543fe2404eb09b2e3c4bbcae49a20a0d4620fcdb7a0b6bb5c32"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "listEnabled",
-          "signatureDigest": "sha256:608e8163ed822f8cf566affe1421a6d38549b8ab7138b54dca2cee2a14144d22"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "patch",
-          "signatureDigest": "sha256:64d9d08b08a6d6b0ba95a3076e611a5cac7e19505fd84c180217d8f17efa0a71"
-        },
-        {
-          "consumerEdgeIds": [],
-          "name": "remove",
-          "signatureDigest": "sha256:60f6dbdf2dc58087e7e51a51846e81720136eee5fa8053d6d3306879ea50c0ab"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:de83ae02a14900cb32ed",
-          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:1abd7b047d9d151831ee13360644e46505140583b88961eeecc54b5e1a3c59dc",
-      "status": "target-context-current-surface",
-      "symbol": "PostgresqlOidcProviderRepository",
-      "transaction": "own-tx",
-      "unresolvedTypeRefs": [
-        "Omit"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 7,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 214,
-        "maxUnionVariants": 280
-      },
-      "consumerEdgeIds": [
-        "import:fc9f1b0005e8313dc553"
-      ],
-      "context": "identity-access",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "operations",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$parameter:id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findById.$return.$variant:0.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:0.usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findById.$return.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$parameter:slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:0.usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:findBySlug.$return.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$parameter:record.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$parameter:record.usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$return.$variant:0.ok",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$return.$variant:0.value",
-          "type": "T"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:0",
-          "type": "'oidc-provider-not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:1",
-          "type": "'oidc-slug-taken'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:2",
-          "type": "'last-enabled-oidc-required'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:3",
-          "type": "'subject-claim-locked-by-identities'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:insert.$return.$variant:1.code.$variant:4",
-          "type": "'provider-still-linked'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:insert.$return.$variant:1.ok",
-          "type": "false"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:list.$return[].updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:list.$return[].usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].allowedEmailDomainsJson",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].authorizationEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].authorizationEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].clientId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].clientSecretEnc",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].createdAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].displayName",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].emailClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].emailClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].enabled",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].gitNameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].gitNameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].iconUrl.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].iconUrl.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].issuerUrl",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].jwksUri.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].jwksUri.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:0",
-          "type": "'auto'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:1",
-          "type": "'allowlist'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].provisioning.$variant:2",
-          "type": "'invite'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].schemaVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].scopes",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].slug",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].subjectClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].subjectClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].tokenEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].tokenEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].trustEmailVerified",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:listEnabled.$return[].updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoEndpoint.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoEndpoint.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoRequestStyle.$variant:0",
-          "type": "'get_bearer'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].userinfoRequestStyle.$variant:1",
-          "type": "'post_json'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].usernameClaim.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:listEnabled.$return[].usernameClaim.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$parameter:input.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$parameter:input.subjectClaimChanges",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$parameter:input.updates",
-          "type": "Omit<OidcProviderPersistenceRecord, 'id' | 'createdAt' | 'schemaVersion'>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$parameter:input.updates.updatedAt",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$return.$variant:0.ok",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$return.$variant:0.value",
-          "type": "T"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:0",
-          "type": "'oidc-provider-not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:1",
-          "type": "'oidc-slug-taken'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:2",
-          "type": "'last-enabled-oidc-required'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:3",
-          "type": "'subject-claim-locked-by-identities'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:patch.$return.$variant:1.code.$variant:4",
-          "type": "'provider-still-linked'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:patch.$return.$variant:1.ok",
-          "type": "false"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:remove.$parameter:input.force",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:remove.$parameter:input.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:remove.$return.$variant:0.ok",
-          "type": "true"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:remove.$return.$variant:0.value",
-          "type": "T"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:0",
-          "type": "'oidc-provider-not-found'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:1",
-          "type": "'oidc-slug-taken'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:2",
-          "type": "'last-enabled-oidc-required'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:3",
-          "type": "'subject-claim-locked-by-identities'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:remove.$return.$variant:1.code.$variant:4",
-          "type": "'provider-still-linked'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "fieldPath": "$method:remove.$return.$variant:1.ok",
-          "type": "false"
-        }
-      ],
-      "file": "packages/backend/src/modules/identity-access/public/operations.ts",
-      "id": "public:identity-access:operations:SqliteOidcProviderRepository",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "findById",
-          "signatureDigest": "sha256:4b1c45edfc93fddc1322d51b8f78d9647dddee26d7713f3f8d4e948565f6505d"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "findBySlug",
-          "signatureDigest": "sha256:ba2990cc9474b9b98524f421847cd85eefaa69088f06689cd4aaac29b424a6c2"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "insert",
-          "signatureDigest": "sha256:e0fc3d2b07cdcf68db4fe441c1e807caa19e111588022a3834c049763846ea2f"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "list",
-          "signatureDigest": "sha256:d2270385760d4543fe2404eb09b2e3c4bbcae49a20a0d4620fcdb7a0b6bb5c32"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "listEnabled",
-          "signatureDigest": "sha256:608e8163ed822f8cf566affe1421a6d38549b8ab7138b54dca2cee2a14144d22"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "patch",
-          "signatureDigest": "sha256:64d9d08b08a6d6b0ba95a3076e611a5cac7e19505fd84c180217d8f17efa0a71"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:fc9f1b0005e8313dc553"
-          ],
-          "name": "remove",
-          "signatureDigest": "sha256:60f6dbdf2dc58087e7e51a51846e81720136eee5fa8053d6d3306879ea50c0ab"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:fc9f1b0005e8313dc553",
-          "file": "packages/backend/src/services/oidcProviders.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/oidcProviders.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:f9e06b520787084510c92e5471d17acdc1ad99c24bc1492f69cb10115dad2af4",
-      "status": "target-context-current-surface",
-      "symbol": "SqliteOidcProviderRepository",
-      "transaction": "own-tx",
-      "unresolvedTypeRefs": [
-        "Omit"
       ],
       "version": 1
     },
@@ -163748,7 +162586,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1adb03afe1f437c792b0f27811f545b277cbf87170e693b18036eca90a90eb40",
+  "sourceDigest": "sha256:6613584063dfe7672d9bbf38bc522350e1bf2c2017dc36bb40025be94279342d",
   "targetContexts": [
     "collaboration",
     "development-automation",
