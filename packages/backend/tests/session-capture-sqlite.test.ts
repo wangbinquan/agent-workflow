@@ -17,11 +17,11 @@ import {
   resolveOpencodeDbPath,
 } from '../src/services/runtime/opencode/sessionCapture'
 import type { Logger } from '../src/util/log'
-import { createSqliteRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence'
+import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-const capturePersistence = (db: DbClient) => createSqliteRuntimeSessionCapturePersistence(db)
+const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
 
 function seedNodeRun(db: DbClient): string {
   const wfId = ulid()

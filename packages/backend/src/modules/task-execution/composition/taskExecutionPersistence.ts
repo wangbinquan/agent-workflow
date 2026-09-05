@@ -21,10 +21,8 @@ import { PostgresqlTaskExecutionRecoveryPersistence } from '../infrastructure/po
 import { SqliteTaskExecutionRecoveryPersistence } from '../infrastructure/sqliteTaskExecutionRecoveryPersistence'
 import { PostgresqlHumanGateTaskLifecyclePersistence } from '../infrastructure/postgresqlHumanGateTaskLifecyclePersistence'
 import { SqliteHumanGateTaskLifecyclePersistence } from '../infrastructure/sqliteHumanGateTaskLifecyclePersistence'
-import { SqliteTaskEngineApplicationPersistence } from '../infrastructure/sqliteTaskEngineApplicationPersistence'
-import { PostgresqlTaskEngineApplicationPersistence } from '../infrastructure/postgresqlTaskEngineApplicationPersistence'
-import { SqliteGateContinuationPreDrivePersistence } from '../infrastructure/sqliteGateContinuationPreDrivePersistence'
-import { PostgresqlGateContinuationPreDrivePersistence } from '../infrastructure/postgresqlGateContinuationPreDrivePersistence'
+import { DrizzleTaskEngineApplicationPersistence } from '../infrastructure/taskEngineApplicationPersistence'
+import { DrizzleGateContinuationPreDrivePersistence } from '../infrastructure/gateContinuationPreDrivePersistence'
 import { DrizzleSchedulerCompletionPersistence } from '../infrastructure/schedulerCompletionPersistence'
 import { DrizzleChildTaskBudgetQueries } from '../infrastructure/childTaskBudgetQueries'
 import { SqliteNodeRunLifecyclePersistence } from '../infrastructure/sqliteNodeRunLifecyclePersistence'
@@ -33,15 +31,13 @@ import { DrizzleNodeRunRuntimePersistence } from '../infrastructure/nodeRunRunti
 import { DrizzleWrapperRunPersistence } from '../infrastructure/wrapperRunPersistence'
 import { SqliteTaskRuntimeLifecyclePersistence } from '../infrastructure/sqliteTaskRuntimeLifecyclePersistence'
 import { PostgresqlTaskRuntimeLifecyclePersistence } from '../infrastructure/postgresqlTaskRuntimeLifecyclePersistence'
-import { createSqliteRuntimeSessionCapturePersistence } from '../infrastructure/sqliteRuntimeSessionCapturePersistence'
-import { createPostgresqlRuntimeSessionCapturePersistence } from '../infrastructure/postgresqlRuntimeSessionCapturePersistence'
+import { createRuntimeSessionCapturePersistence } from '../infrastructure/runtimeSessionCapturePersistence'
 import { SqliteTaskExecutionShutdownOperations } from '../infrastructure/sqliteTaskExecutionShutdownOperations'
 import { PostgresqlTaskExecutionShutdownOperations } from '../infrastructure/postgresqlTaskExecutionShutdownOperations'
 import { SqliteNodeExecutionPersistence } from '../infrastructure/sqliteNodeExecutionPersistence'
 import { PostgresqlNodeExecutionPersistence } from '../infrastructure/postgresqlNodeExecutionPersistence'
 import { DrizzleNodeActivationSnapshotReader } from '../infrastructure/nodeActivationSnapshotReader'
-import { SqliteMergeStateLifecyclePersistence } from '../infrastructure/sqliteMergeStateLifecyclePersistence'
-import { PostgresqlMergeStateLifecyclePersistence } from '../infrastructure/postgresqlMergeStateLifecyclePersistence'
+import { DrizzleMergeStateLifecyclePersistence } from '../infrastructure/mergeStateLifecyclePersistence'
 import { DrizzleTaskArtifactPathQueries } from '../infrastructure/taskArtifactPathQueries'
 import { createSqliteTaskRecoveryOperations } from '../infrastructure/sqliteTaskRecoveryOperations'
 import { createPostgresqlTaskRecoveryOperations } from '../infrastructure/postgresqlTaskRecoveryOperations'
@@ -113,20 +109,20 @@ function createSqliteRecoveryAdministration(db: DbClient) {
 export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutionPersistence {
   const effects = new SqliteTaskExecutionEffectPersistence(db)
   return Object.freeze({
-    drive: new SqliteTaskEngineApplicationPersistence(db),
+    drive: new DrizzleTaskEngineApplicationPersistence(db),
     ownership: new SqliteTaskOwnershipPersistence(db),
     intents: new SqliteTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new SqliteTerminalMaintenancePersistence(db),
     gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
-    gateContinuationPreDrive: new SqliteGateContinuationPreDrivePersistence(db),
+    gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
     childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new SqliteNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new DrizzleNodeRunRuntimePersistence(db),
     nodeExecution: new SqliteNodeExecutionPersistence(db),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
-    mergeStates: new SqliteMergeStateLifecyclePersistence(db),
+    mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
     wrapperRuns: new DrizzleWrapperRunPersistence(db),
     runtimeLifecycle: new SqliteTaskRuntimeLifecyclePersistence(db),
@@ -137,7 +133,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createSqliteRecoveryAdministration(db),
     shutdown: new SqliteTaskExecutionShutdownOperations(db),
-    runtimeSessionCapture: createSqliteRuntimeSessionCapturePersistence(db),
+    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })
 }
 
@@ -146,20 +142,20 @@ export function createPostgresqlTaskExecutionPersistence(
 ): TaskExecutionPersistence {
   const effects = new PostgresqlTaskExecutionEffectPersistence(db)
   return Object.freeze({
-    drive: new PostgresqlTaskEngineApplicationPersistence(db),
+    drive: new DrizzleTaskEngineApplicationPersistence(db),
     ownership: new PostgresqlTaskOwnershipPersistence(db),
     intents: new PostgresqlTaskExecutionIntentPersistence(db),
     effects,
     terminalMaintenance: new PostgresqlTerminalMaintenancePersistence(db),
     gateContinuationEffects: new DrizzleGateContinuationEffectPersistence(db, effects),
-    gateContinuationPreDrive: new PostgresqlGateContinuationPreDrivePersistence(db),
+    gateContinuationPreDrive: new DrizzleGateContinuationPreDrivePersistence(db),
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
     childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new PostgresqlNodeRunLifecyclePersistence(db),
     nodeRunRuntime: new DrizzleNodeRunRuntimePersistence(db),
     nodeExecution: new PostgresqlNodeExecutionPersistence(db),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
-    mergeStates: new PostgresqlMergeStateLifecyclePersistence(db),
+    mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
     wrapperRuns: new DrizzleWrapperRunPersistence(db),
     runtimeLifecycle: new PostgresqlTaskRuntimeLifecyclePersistence(db),
@@ -170,7 +166,7 @@ export function createPostgresqlTaskExecutionPersistence(
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createPostgresqlTaskRecoveryOperations(db),
     shutdown: new PostgresqlTaskExecutionShutdownOperations(db),
-    runtimeSessionCapture: createPostgresqlRuntimeSessionCapturePersistence(db),
+    runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })
 }
 

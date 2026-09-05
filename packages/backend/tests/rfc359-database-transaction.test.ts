@@ -366,3 +366,73 @@ describe('RFC-359 —— serializable() opt-in（SQLite 侧等于 transaction）
     expect(values(db)).toEqual(['S2', 'S3'])
   })
 })
+
+describe('RFC-359 W4-B1 —— BEGIN IMMEDIATE 的跨进程写锁重试（沿用 RFC-111 PR-D 判据）', () => {
+  function sqliteError(code: string): Error {
+    const error = new Error('database is locked') as Error & { code: string }
+    error.name = 'SQLiteError'
+    error.code = code
+    return error
+  }
+
+  function beginFailingDb(db: DbClient, failures: readonly string[]) {
+    const pending = [...failures]
+    let beginAttempts = 0
+    const proxied = new Proxy(db, {
+      get(target, property) {
+        if (property === 'run') {
+          return (...args: Parameters<DbClient['run']>) => {
+            if (JSON.stringify(args[0]).includes('BEGIN IMMEDIATE')) {
+              beginAttempts += 1
+              const code = pending.shift()
+              if (code !== undefined) throw sqliteError(code)
+            }
+            return target.run(...args)
+          }
+        }
+        const value = Reflect.get(target, property, target) as unknown
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }) as DbClient
+    return { proxied, attempts: () => beginAttempts }
+  }
+
+  test('第一次 BEGIN 撞 SQLITE_BUSY：重试后事务照常提交', async () => {
+    const db = scratchDb()
+    const { proxied, attempts } = beginFailingDb(db, ['SQLITE_BUSY'])
+    const session = createSqliteDatabaseSession(proxied)
+    await session.transaction(async () => {
+      insert(db, 'retried')
+    })
+    expect(attempts()).toBe(2)
+    expect(values(db)).toEqual(['retried'])
+  })
+
+  test('扩展码（SQLITE_BUSY_SNAPSHOT）同样重试；非并发码（SQLITE_CONSTRAINT）不重试直接抛', async () => {
+    const db = scratchDb()
+    const snapshot = beginFailingDb(db, ['SQLITE_BUSY_SNAPSHOT'])
+    await createSqliteDatabaseSession(snapshot.proxied).transaction(async () => undefined)
+    expect(snapshot.attempts()).toBe(2)
+
+    const constraint = beginFailingDb(db, ['SQLITE_CONSTRAINT'])
+    await expect(
+      createSqliteDatabaseSession(constraint.proxied).transaction(async () => undefined),
+    ).rejects.toMatchObject({ code: 'SQLITE_CONSTRAINT' })
+    expect(constraint.attempts()).toBe(1)
+  })
+
+  test('连续三次 BUSY：放弃并抛出最后一次的错误，租约随之释放', async () => {
+    const db = scratchDb()
+    const { proxied, attempts } = beginFailingDb(db, ['SQLITE_BUSY', 'SQLITE_BUSY', 'SQLITE_BUSY'])
+    const session = createSqliteDatabaseSession(proxied)
+    await expect(session.transaction(async () => undefined)).rejects.toMatchObject({
+      code: 'SQLITE_BUSY',
+    })
+    expect(attempts()).toBe(3)
+    // 租约已释放：后续事务不被上一次的失败挡住。
+    await session.transaction(async () => {
+      insert(db, 'after-giving-up')
+    })
+    expect(values(db)).toEqual(['after-giving-up'])
+  })
+})

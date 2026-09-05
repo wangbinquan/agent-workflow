@@ -20,11 +20,11 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { startLiveSubagentCapture } from '../src/services/runtime/opencode/subagentLiveCapture'
-import { createSqliteRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence'
+import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-const capturePersistence = (db: DbClient) => createSqliteRuntimeSessionCapturePersistence(db)
+const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
 
 function seedTaskWithNodeRun(db: DbClient): { taskId: string; nodeRunId: string } {
   const wfId = ulid()

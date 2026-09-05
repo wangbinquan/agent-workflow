@@ -45,6 +45,7 @@ import { observeDbTransaction, type DbClient } from '@/db/client'
 import { createLogger } from '@/util/log'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
+import { retryableSqliteWriteErrorCode } from '@/db/sqliteWriteRetry'
 import { runInExplicitTransactionScope } from '@/db/transactionScope'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -165,6 +166,34 @@ function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promis
  * writer，再取读快照——deferred 事务的读→写升级会以 `SQLITE_BUSY_SNAPSHOT` 立即失败并绕过
  * `busy_timeout`（RFC-351 记录了它在 HTTP 边界被兜成 500 的实测）。
  */
+/**
+ * `BEGIN IMMEDIATE` 的跨进程写锁重试。进程内单写者由租约保证，但另一个进程（备份 / vacuum /
+ * CLI）仍可能正持有写锁：`busy_timeout` 到期或 `SQLITE_BUSY_SNAPSHOT` 之类的扩展码会绕过等待直接
+ * 失败。这里沿用 RFC-111 PR-D `retrySqliteWrite` 的判据（只重试写者并发码，其余 fail-fast），
+ * 且只重试 BEGIN 本身——它失败时事务尚未开始、没有任何语句执行过，重跑不会重复副作用。
+ */
+const SQLITE_BEGIN_MAX_ATTEMPTS = 3
+const SQLITE_BEGIN_RETRY_BASE_MS = 100
+
+async function beginImmediateWithRetry(db: DbClient): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      db.run(sql.raw('BEGIN IMMEDIATE'))
+      return
+    } catch (error) {
+      const code = retryableSqliteWriteErrorCode(error)
+      if (code === undefined || attempt >= SQLITE_BEGIN_MAX_ATTEMPTS) throw error
+      const delayMs = SQLITE_BEGIN_RETRY_BASE_MS * 2 ** (attempt - 1)
+      log.warn('sqlite transaction BEGIN retried after writer contention', {
+        sqliteCode: code,
+        failedAttempt: attempt,
+        delayMs,
+      })
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+    }
+  }
+}
+
 export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   const client: object = db
   const transaction = async <T>(body: (tx: DatabaseTransaction) => Promise<T>): Promise<T> => {
@@ -172,15 +201,15 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
     if (reused !== undefined) return await body(reused)
     const release = await acquireWriterLease(client)
     const tx = db as unknown as DatabaseTransaction
-    // 计时从 BEGIN 起：租约与让出的等待都不占写锁，RFC-311 的事务时长守卫看的是持锁时间。
+    // 计时从 BEGIN 起：租约、让出与 BEGIN 重试的等待都不占写锁，RFC-311 的事务时长守卫看的是持锁时间。
     let startedAt = performance.now()
     try {
       // 旁观者隔离（头注释）：让出本任务，被本轮唤醒的同步写者先跑完，事务在干净的任务里开始。
       await yieldEventLoopTask()
+      await beginImmediateWithRetry(db)
       startedAt = performance.now()
       const yieldWatch = watchEventLoopYield()
       try {
-        db.run(sql.raw('BEGIN IMMEDIATE'))
         let result: T
         try {
           result = await withFrame(client, tx, async () => await body(tx))

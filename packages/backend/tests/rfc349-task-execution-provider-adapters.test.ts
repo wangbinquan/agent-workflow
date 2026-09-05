@@ -19,7 +19,8 @@ import {
   withPostgresqlSerializableTaskExecution,
 } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
-import { PostgresqlTaskEngineApplicationPersistence } from '@/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence'
+import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
+import { DrizzleTaskEngineApplicationPersistence } from '@/modules/task-execution/infrastructure/taskEngineApplicationPersistence'
 import {
   createPostgresqlTaskExecutionResourceBinding,
   type PostgresqlTaskExecutionResourceSnapshotInTransaction,
@@ -275,18 +276,27 @@ describe('RFC-349 task-execution provider adapters', () => {
       leaseUntil: 100,
       ownerRevision: 3,
     })
-    const fake = postgresqlFixture([{}, {}, { values: [[9]] }, { values: [[0]] }, {}])
+    // RFC-359 W4-B1 批 2d：统一写事务在 PG 上是 READ COMMITTED（不再有 SET TRANSACTION 一句），
+    // 语句序列为 BEGIN → owner 围栏 UPDATE → task_repos UPDATE → COMMIT；上下文必须由
+    // createTaskExecutionContext 铸造（SQLite 正身的 assertTaskExecutionContext 现在两侧同一规则）。
+    const fake = postgresqlFixture([{}, { values: [[9]] }, { values: [[0]] }, {}])
+    const executionContext = createTaskExecutionContext({
+      intentId: 'intent-1',
+      token,
+      persistence: createSqliteTaskExecutionPersistence(createInMemoryDb(MIGRATIONS)),
+    })
 
-    await expect(
-      new PostgresqlTaskEngineApplicationPersistence(fake.db).updateWorkspaceProfile({
+    const outcome = await new DrizzleTaskEngineApplicationPersistence(fake.db)
+      .updateWorkspaceProfile({
         taskId: 'task-1',
         repoIndex: 0,
         version: 1,
         digest: 'profile-v1',
-        executionContext: { intentId: 'intent-1', token },
+        executionContext,
         now: 200,
-      }),
-    ).resolves.toBe(true)
+      })
+      .catch((error: unknown) => error)
+    expect(outcome).toBe(true)
 
     const statements = fake.executions.map((execution) => execution.sql.toLowerCase())
     expect(statements.findIndex((sql) => sql.includes('task_execution_owners'))).toBeLessThan(

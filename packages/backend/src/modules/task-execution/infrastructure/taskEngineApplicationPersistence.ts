@@ -1,20 +1,18 @@
+// RFC-359 W4-B1 —— TaskEngine drive 快照读取 + 工作区 profile 更新：一份实现，两个 provider 共用。
+
 import { and, asc, eq } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
+
 import { taskCollaborators, taskRepos, tasks } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import type {
   TaskEngineApplicationPersistence,
   TaskEngineDriveSnapshot,
 } from '../application/ports/taskEngineApplicationPersistence'
-import {
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
-export class PostgresqlTaskEngineApplicationPersistence implements TaskEngineApplicationPersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplicationPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async load(taskId: string): Promise<TaskEngineDriveSnapshot | null> {
     const task = await this.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1).get()
@@ -49,14 +47,12 @@ export class PostgresqlTaskEngineApplicationPersistence implements TaskEngineApp
   async updateWorkspaceProfile(
     input: Parameters<TaskEngineApplicationPersistence['updateWorkspaceProfile']>[0],
   ): Promise<boolean> {
-    return await withPostgresqlSerializableTaskExecution(this.db, async (transaction) => {
-      // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则）。
-      const executionContext = input.executionContext ?? currentTaskExecutionContext(input.taskId)
-      if (executionContext === undefined) {
-        await assertPostgresqlTaskOwnerlessTx(transaction, input.taskId)
-      } else {
-        await assertPostgresqlTaskOwnerTx(transaction, executionContext.token, input.now)
-      }
+    return await withTaskExecutionWrite(this.db, async (transaction) => {
+      await fenceTaskWrite(transaction, {
+        taskId: input.taskId,
+        context: input.executionContext,
+        now: input.now,
+      })
       const rows = await transaction
         .update(taskRepos)
         .set({

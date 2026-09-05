@@ -1,3 +1,5 @@
+// RFC-359 W4-B1 —— node run merge_state 迁移：一份实现，两个 provider 共用；读 + CAS 写在同一事务里。
+
 import { and, eq, isNull } from 'drizzle-orm'
 import {
   IllegalMergeStateTransition,
@@ -5,24 +7,20 @@ import {
   type MergeStateOrNull,
 } from '@agent-workflow/shared'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
+
 import { nodeRuns } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { MergeStateLifecyclePersistence } from '../application/ports/mergeStateLifecyclePersistence'
-import {
-  assertPostgresqlTaskOwnerlessTx,
-  assertPostgresqlTaskOwnerTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
-export class PostgresqlMergeStateLifecyclePersistence implements MergeStateLifecyclePersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecyclePersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async transition(
     input: Parameters<MergeStateLifecyclePersistence['transition']>[0],
   ): ReturnType<MergeStateLifecyclePersistence['transition']> {
-    return await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
+    return await withTaskExecutionWrite(this.db, async (tx) => {
       const rows = await tx
         .select({ mergeState: nodeRuns.mergeState, taskId: nodeRuns.taskId })
         .from(nodeRuns)
@@ -32,13 +30,11 @@ export class PostgresqlMergeStateLifecyclePersistence implements MergeStateLifec
       if (row === undefined) {
         throw new NotFoundError('node-run-not-found', `node_run ${input.nodeRunId} not found`)
       }
-      // RFC-359 W1-T7（P0-1）：显式上下文缺席时读环境上下文（与 SQLite 同规则）。
-      const executionContext = input.executionContext ?? currentTaskExecutionContext(row.taskId)
-      if (executionContext === undefined) {
-        await assertPostgresqlTaskOwnerlessTx(tx, row.taskId)
-      } else {
-        await assertPostgresqlTaskOwnerTx(tx, executionContext.token, input.now ?? Date.now())
-      }
+      await fenceTaskWrite(tx, {
+        taskId: row.taskId,
+        context: input.executionContext,
+        ...(input.now === undefined ? {} : { now: input.now }),
+      })
       const from = (row.mergeState ?? null) as MergeStateOrNull
       const to = nextMergeState(from, input.event)
       const updated = await tx

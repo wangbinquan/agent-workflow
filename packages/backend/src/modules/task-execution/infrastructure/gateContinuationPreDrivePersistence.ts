@@ -1,18 +1,18 @@
+// RFC-359 W4-B1 —— 人工门 continuation 的 pre-drive 检视 / 反问重试释放：一份实现，两个 provider 共用。
+
 import { and, eq, isNotNull, isNull } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
+
 import { taskExecutionIntents, taskQuestions } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { decodeClaimedClarifyContinuation } from '../application/claimedClarifyContinuation'
 import type { GateContinuationPreDrivePersistence } from '../application/ports/gateContinuationPreDrivePersistence'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
-import {
-  assertPostgresqlTaskOwnerTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { assertTaskOwnerTx, withTaskExecutionWrite } from './ownedTaskExecution'
 
-export class PostgresqlGateContinuationPreDrivePersistence implements GateContinuationPreDrivePersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleGateContinuationPreDrivePersistence implements GateContinuationPreDrivePersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async inspect(input: Parameters<GateContinuationPreDrivePersistence['inspect']>[0]) {
     const rows = await this.db
@@ -75,8 +75,8 @@ export class PostgresqlGateContinuationPreDrivePersistence implements GateContin
   async releaseClarifyForRetry(
     input: Parameters<GateContinuationPreDrivePersistence['releaseClarifyForRetry']>[0],
   ): Promise<void> {
-    await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
-      await assertPostgresqlTaskOwnerTx(tx, input.token, input.now)
+    await withTaskExecutionWrite(this.db, async (tx) => {
+      await assertTaskOwnerTx(tx, input.token, input.now)
       const released = await tx
         .update(taskExecutionIntents)
         .set({

@@ -117,7 +117,7 @@ describe('RFC-341 collaboration owner source locks', () => {
       'modules/collaboration/infrastructure/sqliteClarifyContinuationConvergence.ts',
     )
     const preDrivePersistence = source(
-      'modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts',
+      'modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts',
     )
     const seal = source('modules/collaboration/infrastructure/legacySqliteClarify/seal.ts')
     const replayAt = autoDispatch.indexOf('if (replay !== null)')

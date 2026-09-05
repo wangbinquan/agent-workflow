@@ -19,11 +19,11 @@ import {
 } from '../src/services/runtime/claudeCode/sessionCapture'
 import { claudeCodeDriver } from '../src/services/runtime/claudeCode/driver'
 import { createLogger, type Logger } from '../src/util/log'
-import { createSqliteRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence'
+import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
-const capturePersistence = (db: DbClient) => createSqliteRuntimeSessionCapturePersistence(db)
+const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
 
 async function seed(): Promise<{ db: DbClient; nodeRunId: string }> {
   const db = createInMemoryDb(MIGRATIONS)
@@ -300,21 +300,25 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
       ).join('\n'),
     )
 
-    let transactionCalls = 0
-    let failFirstTransaction = true
+    // RFC-359：写入走统一事务原语（显式 BEGIN IMMEDIATE），跨进程写锁争用体现在 BEGIN 这一句上；
+    // 原语只重试 BEGIN 本身（`beginImmediateWithRetry`），这里让第一次 BEGIN 吐 SQLITE_BUSY。
+    let beginAttempts = 0
+    let failFirstBegin = true
     const transientDb = new Proxy(db, {
       get(target, property) {
-        if (property === 'transaction') {
-          return (...args: Parameters<DbClient['transaction']>) => {
-            transactionCalls++
-            if (failFirstTransaction) {
-              failFirstTransaction = false
-              const error = new Error('database is locked') as Error & { code: string }
-              error.name = 'SQLiteError'
-              error.code = 'SQLITE_BUSY'
-              throw error
+        if (property === 'run') {
+          return (...args: Parameters<DbClient['run']>) => {
+            if (JSON.stringify(args[0]).includes('BEGIN IMMEDIATE')) {
+              beginAttempts++
+              if (failFirstBegin) {
+                failFirstBegin = false
+                const error = new Error('database is locked') as Error & { code: string }
+                error.name = 'SQLiteError'
+                error.code = 'SQLITE_BUSY'
+                throw error
+              }
             }
-            return target.transaction(...args)
+            return target.run(...args)
           }
         }
         const value = Reflect.get(target, property, target) as unknown
@@ -343,7 +347,7 @@ describe('captureClaudeSessions (RFC-111 PR-D)', () => {
     const rows = db.select().from(nodeRunEvents).where(eq(nodeRunEvents.nodeRunId, nodeRunId)).all()
     expect(rows).toHaveLength(205)
     // One failed attempt + two batches (200 and 5), not 205 autocommit writes.
-    expect(transactionCalls).toBe(3)
+    expect(beginAttempts).toBe(3)
     expect(warnings).toEqual([])
     rmSync(root, { recursive: true, force: true })
   })
