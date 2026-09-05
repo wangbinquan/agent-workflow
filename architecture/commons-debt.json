@@ -3,7 +3,7 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 285,
+    "inboundEdges": 284,
     "outboundEdges": 35,
     "registeredFindings": 79,
     "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。"
@@ -3933,29 +3933,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/mcpRuntimeTest.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
-      "edgeKind": "value",
-      "syntax": "export",
-      "owner": "resource-catalog",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:29d35ace8e2abba5acf3"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/mcpRuntimeTestTransitions.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/mcpRuntimeTestTransitions.ts"
       ]
     },
     {
@@ -8748,15 +8725,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:50373023906c81e367372e51528a110ee35db7c39e06120fc4058ec63579ea2b",
+    "sourceDigest": "sha256:1b43821ff14348b3f665aceab7229a77886fe906b845f65f5589f2ada0223c9c",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "5b8f679c60f85e71b0f5e2ee4d0eb80c6c227186",
-    "contentDigest": "sha256:91ac0bad45cb17a88aec47d56195a5571ef4fc92b0a07f2cab94ea5a7d35ca1e",
+    "currentSnapshotSha": "a40bb027b9074d36fe6a35dcddac862da177a378",
+    "contentDigest": "sha256:9c91b2fa5807a865504c7efdd746cf0e24a1cfc990d69b93d11b63ea64dd6118",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

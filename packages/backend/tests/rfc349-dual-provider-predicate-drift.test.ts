@@ -28,7 +28,6 @@ const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
   // RFC-355 T2 已销账：`intentResourcePlanOf` 收进 `modules/intent/application/intentResourcePlan.ts`，
   // 两个 provider 共用一份，fork 不复存在（账本口径：销账要把条目一并删掉）。
   'modules/resource-catalog/infrastructure/PluginRepository.ts::ownerScopedNameWhere': '方言 SQL',
-  'modules/resource-catalog/infrastructure/McpRepository.ts::ownerScopedNameWhere': '方言 SQL',
   'modules/resource-catalog/infrastructure/WorkgroupRepository.ts::ownerScopedNameWhere':
     '方言 SQL',
   'modules/resource-catalog/infrastructure/ResourcePackageMaintenance.ts::parseArtifacts':

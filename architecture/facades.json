@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "serviceFiles": 325,
-    "thinFacades": 74
+    "serviceFiles": 324,
+    "thinFacades": 73
   },
   "entries": [
     {
@@ -2619,19 +2619,6 @@
       "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTestLease.ts#$file",
       "removeAfterWave": "W4-E4b",
       "status": "legacy-implementation",
-      "targetContext": "runtime-management",
-      "targetLayer": "inbound"
-    },
-    {
-      "boundaryEdgeIds": [
-        "import:29d35ace8e2abba5acf3"
-      ],
-      "exportedSymbols": [],
-      "file": "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-      "id": "facade:packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/mcpRuntimeTestTransitions.ts#$file",
-      "removeAfterWave": "W4-E4b",
-      "status": "thin-facade",
       "targetContext": "runtime-management",
       "targetLayer": "inbound"
     },
@@ -6845,5 +6832,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:50373023906c81e367372e51528a110ee35db7c39e06120fc4058ec63579ea2b"
+  "sourceDigest": "sha256:1b43821ff14348b3f665aceab7229a77886fe906b845f65f5589f2ada0223c9c"
 }

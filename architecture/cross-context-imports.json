@@ -173,6 +173,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:002e16d9a3aa5b1de533",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/sqliteCollaborationRuntimeMechanics.ts",
       "fromSymbol": "$file",
@@ -271,23 +288,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentEffects",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:00795ef5220dd16d27be",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toSymbol": "createPostgresqlMcpTransactionLifecycle",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -5543,6 +5543,23 @@
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0f61b2719a6201fc68e3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "DatabaseTransaction",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts#$file",
@@ -6055,6 +6072,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:113aa5f11f13d056da32",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeMcpRuntimeTestProvider",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "composeMcpRuntimeTestProvider",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
       "fromSymbol": "$file",
@@ -6492,6 +6526,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract",
       "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
       "toSymbol": "LogicalSchemaContract",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:129d41c18b550120b180",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -10220,6 +10271,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1de3ef92f51ebd1416c4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "createMcpTransactionLifecycle",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
       "fromSymbol": "$file",
@@ -13127,23 +13195,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
-      "fromPath": "packages/backend/src/main.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:262e6f5432a5e63fcd12",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toSymbol": "createPostgresqlMcpTransactionLifecycle",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
       "fromPath": "packages/backend/src/services/taskDelete.ts",
       "fromSymbol": "$file",
@@ -13633,23 +13684,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:27efcf386cc3c870cfe3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeSqliteMcpRuntimeTestProvider",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toSymbol": "composeSqliteMcpRuntimeTestProvider",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -14453,23 +14487,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/mcpRuntimeTestTransitions.ts#$file",
-      "fromPath": "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:29d35ace8e2abba5acf3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "runtime-management",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "toSymbol": "*",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -14619,23 +14636,6 @@
       "toPath": "packages/backend/src/modules/execution-contract/composition.ts",
       "toSymbol": "composeExecutionContract",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2a86c18358b0c8092d8d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "dbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -15588,6 +15588,23 @@
       "toPath": "packages/backend/src/services/backup.ts",
       "toSymbol": "quickCheckOffThread",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2d615c7a234838b8c709",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeMcpRuntimeTestProvider",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "composeMcpRuntimeTestProvider",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -18686,23 +18703,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:366605b2302f748940fc",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -19072,6 +19072,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#$file",
       "toPath": "packages/backend/src/services/execution/executor.ts",
       "toSymbol": "getExecutionOutcome",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:37de322555402af01b86",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessionLeases",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "mcpRuntimeTestSessionLeases",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -23580,6 +23597,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:454e1e23dd0e3ac3eafd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessions",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "mcpRuntimeTestSessions",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#$file",
@@ -23866,23 +23900,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:46285a25e045572eafef",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -27167,6 +27184,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4f9840f8211d91d7d8a8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeMcpProbeStore",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "toSymbol": "composeMcpProbeStore",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/digitalEmployeeToolConnections.ts#$file",
@@ -28321,23 +28355,6 @@
       "toPath": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toSymbol": "developmentConfigReviseInputSchema",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:52c2ab04e7aec9d1273f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -30105,23 +30122,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:58d257f3dd26f32f151c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessionLeases",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "mcpRuntimeTestSessionLeases",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -33119,6 +33119,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:60cce967971494a1c35e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "createMcpTransactionLifecycle",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
       "fromSymbol": "$file",
@@ -34615,6 +34632,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6599bf1eadcba2321fc8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeMcpProbeStore",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "toSymbol": "composeMcpProbeStore",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
       "fromSymbol": "$file",
@@ -34730,23 +34764,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskQuestions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:660b3e72b7590cffea89",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeSqliteMcpRuntimeTestProvider",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toSymbol": "composeSqliteMcpRuntimeTestProvider",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -36230,6 +36247,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6a9d02d70a627d1f37b6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "staleConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
       "fromSymbol": "$file",
@@ -36889,6 +36923,23 @@
       "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
       "toSymbol": "WorkgroupHostLedgerMintOperation",
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6c7f2783692e242d2e5b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -37959,23 +38010,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "dbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6eef468b9da5ed2289cf",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "mcps",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -42790,23 +42824,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7d709581a4c0fab65a9f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#composePostgresqlMcpCatalog",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "toSymbol": "composePostgresqlMcpCatalog",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
@@ -44305,23 +44322,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8224fb2cf06346fa4b29",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/multipartTaskStart.ts#$file",
       "fromPath": "packages/backend/src/services/multipartTaskStart.ts",
       "fromSymbol": "$file",
@@ -45410,23 +45410,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:85905c0e7c5c3e963966",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessions",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "mcpRuntimeTestSessions",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts",
       "fromSymbol": "$file",
@@ -45729,23 +45712,6 @@
       "toPath": "packages/backend/src/modules/identity-access/composition.ts",
       "toSymbol": "createPostgresqlIdentityAccessRuntime",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8668d0dcf2fe0e76e99e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -47399,23 +47365,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8b24d5c2bb8946924a1e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composePostgresqlMcpProbeStore",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "toSymbol": "composePostgresqlMcpProbeStore",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
       "fromSymbol": "$file",
@@ -47462,23 +47411,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskFeedback",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskFeedback",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8b95fc6fe8035812439d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -51870,6 +51802,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:995a5f7dbe347a53603e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#composeMcpCatalog",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toSymbol": "composeMcpCatalog",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlanStore.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/uploadPlanStore.ts",
       "fromSymbol": "$file",
@@ -52647,6 +52596,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ValidationError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9bc353441769bee3ac45",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#users",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "users",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -55627,6 +55593,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a4585f5e5ac718c0d09a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "databaseSessionFor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -56307,23 +56290,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a66cd1e943c8d5f9abe9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeSqliteMcpProbeStore",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "toSymbol": "composeSqliteMcpProbeStore",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskPlatformInputPaths.ts#$file",
       "fromPath": "packages/backend/src/services/taskPlatformInputPaths.ts",
       "fromSymbol": "$file",
@@ -56778,6 +56744,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#composeResourcePackageOperations",
       "toPath": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
       "toSymbol": "composeResourcePackageOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a82a58737ef21166ecdc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#mcpAclRuntimeTestLifecycle",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toSymbol": "mcpAclRuntimeTestLifecycle",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -58308,6 +58291,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
       "toPath": "packages/backend/src/util/safePath.ts",
       "toSymbol": "safeJoin",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:aca4054f8235012df38c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "agents",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -61490,6 +61490,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b708d8091bc1c90b1eae",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#mcpAclRuntimeTestLifecycle",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toSymbol": "mcpAclRuntimeTestLifecycle",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
@@ -62065,6 +62082,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b841c22ae455c9d10d26",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestCreateReceipts",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "mcpRuntimeTestCreateReceipts",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -62714,6 +62748,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ba6c709e1735df4f1587",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts#$file",
@@ -63277,23 +63328,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bbe70ed565632875d56d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeSqliteMcpProbeStore",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "toSymbol": "composeSqliteMcpProbeStore",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/maintenanceDisk.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/composition/maintenanceDisk.ts",
       "fromSymbol": "$file",
@@ -63783,23 +63817,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bdb6eaba8e5394339b07",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composePostgresqlMcpRuntimeTestProvider",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toSymbol": "composePostgresqlMcpRuntimeTestProvider",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -65011,6 +65028,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c12ae119c7601dcde6a4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#userPermissionGrants",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "userPermissionGrants",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/startupVerificationRead.ts#$file",
       "fromPath": "packages/backend/src/services/execution/startupVerificationRead.ts",
       "fromSymbol": "$file",
@@ -65108,6 +65142,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentAdapterDefinitions",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "developmentAdapterDefinitions",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c17400b8369aab7e1313",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "mcps",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -65978,23 +66029,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c3d2e18a0af50f467e65",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toSymbol": "PostgresqlDatabaseClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts#$file",
@@ -66639,23 +66673,6 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts",
       "toSymbol": "composeSqliteDemoResourceCatalogSeedParticipant",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:c555331ffc1fe44c1f8a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "staleConflictError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -71335,6 +71352,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d30c5e6906c1e60bd529",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "createMcpTransactionLifecycle",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "fromSymbol": "$file",
@@ -71789,6 +71823,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient",
       "toPath": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toSymbol": "PostgresqlDatabaseClient",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d43a33e8381fdf48a73d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -74344,6 +74395,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:daf040500422b7d3ae6c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeMcpProbeStore",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "toSymbol": "composeMcpProbeStore",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskFeedbackStore.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskFeedbackStore.ts",
       "fromSymbol": "$file",
@@ -74798,23 +74866,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "DatabaseTransaction",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:dc03d1dc81e09551b2fe",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestCreateReceipts",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "mcpRuntimeTestCreateReceipts",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -75908,23 +75959,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:df7d30aeff14d3b10d89",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "ConflictError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -75972,6 +76006,23 @@
       "toPath": "packages/backend/src/util/platformExec.ts",
       "toSymbol": "platformSpawnOptionsForHost",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:df9829bc4bf0fb5514f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeMcpRuntimeTestProvider",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "composeMcpRuntimeTestProvider",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -76294,6 +76345,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#$file",
       "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts",
       "toSymbol": "grantsOfResourceWhere",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "fromPath": "packages/backend/src/main.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e0e6026d05dc4be844cd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toSymbol": "createMcpTransactionLifecycle",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -76792,6 +76860,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e27d47d393dbbc2b4d71",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#mcpAclRuntimeTestLifecycle",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toSymbol": "mcpAclRuntimeTestLifecycle",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts",
       "fromSymbol": "$file",
@@ -76924,6 +77009,23 @@
       "toPath": "packages/backend/src/modules/source-control/composition.ts",
       "toSymbol": "composeRepositoryTransportCredentials",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e2f2f6ca1a24ca1e028e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -77060,6 +77162,23 @@
       "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
       "toSymbol": "composeDigitalEmployeePlatformInventoryParticipant",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e34fc9f676602ae915a7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -77382,23 +77501,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync",
       "toPath": "packages/backend/src/db/txSync.ts",
       "toSymbol": "dbTxSync",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e4181ab0ae534ecbf15a",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "DbTxSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -78692,23 +78794,6 @@
       "toPath": "packages/backend/src/modules/identity-access/public/types.ts",
       "toSymbol": "UserAccessError",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e85e7f338f34e91c690d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -81025,23 +81110,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ef24e4ed1192c06b2a34",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents",
-      "toPath": "packages/backend/src/db/schema.ts",
-      "toSymbol": "agents",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts",
       "fromSymbol": "$file",
@@ -81581,23 +81649,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient",
       "toPath": "packages/backend/src/db/client.ts",
       "toSymbol": "DbClient",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f0ca393b7210a9d80d08",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -83281,23 +83332,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f56be2401184467b86c5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync",
-      "toPath": "packages/backend/src/db/txSync.ts",
-      "toSymbol": "DbTxSync",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -85987,23 +86021,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:fd48a6574835b4b540f5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "ConflictError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/executor.ts#$file",
@@ -86821,9 +86838,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5107,
+    "architectureExceptions": 5108,
     "implementationSccs": 0,
-    "observedEdges": 5779,
+    "observedEdges": 5773,
     "requiredPorts": 27,
     "targetEdges": 65
   },
@@ -86862,6 +86879,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/events/committed/postgresqlPersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/postgresqlPersistence.ts#PostgresqlCommittedEventTransaction"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#$file",
+      "id": "import:002e16d9a3aa5b1de533",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "type",
@@ -86958,22 +86991,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentEffects"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:00795ef5220dd16d27be",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlMcpTransactionLifecycle",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -89598,22 +89615,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:083df67babd4b330d379",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "infrastructure-external",
-      "specifier": "drizzle-orm",
-      "syntax": "static-import",
-      "targetSymbol": "*",
-      "toContext": "external",
-      "toFile": "external:drizzle-orm",
-      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "type",
@@ -92370,6 +92371,22 @@
     {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:0f61b2719a6201fc68e3",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseTransaction",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/package/ports.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/ports.ts#$file",
       "id": "import:0f621b3cca666aab99c6",
@@ -92929,6 +92946,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:113aa5f11f13d056da32",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpRuntimeTestProvider",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeMcpRuntimeTestProvider"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteLaunchOperations.ts#$file",
@@ -93422,6 +93455,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:129d41c18b550120b180",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
       "edgeKind": "value",
@@ -97409,6 +97458,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:1de3ef92f51ebd1416c4",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "createMcpTransactionLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskContinuationAdmission.ts#$file",
@@ -100640,22 +100705,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#skills"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/main.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
-      "id": "import:262e6f5432a5e63fcd12",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "./modules/resource-catalog/composition/mcpRuntimeTestPersistence",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlMcpTransactionLifecycle",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/composition/platformInventory.ts",
@@ -101198,22 +101247,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:27efcf386cc3c870cfe3",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteMcpRuntimeTestProvider",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeSqliteMcpRuntimeTestProvider"
     },
     {
       "edgeKind": "value",
@@ -102081,22 +102114,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/services/mcpRuntimeTestTransitions.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/services/mcpRuntimeTestTransitions.ts#$file",
-      "id": "import:29d35ace8e2abba5acf3",
-      "owner": "runtime-management",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions",
-      "syntax": "export",
-      "targetSymbol": "*",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts#$file",
@@ -102254,22 +102271,6 @@
       "toContext": "execution-contract",
       "toFile": "packages/backend/src/modules/execution-contract/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/composition.ts#composeExecutionContract"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:2a86c18358b0c8092d8d",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "dbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
     },
     {
       "edgeKind": "value",
@@ -103282,6 +103283,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:2d615c7a234838b8c709",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpRuntimeTestProvider",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeMcpRuntimeTestProvider"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourceAcl.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "id": "import:2d63b721547484271a65",
@@ -103806,22 +103823,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/ports/taskRollbackQueries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskRollbackQueries.ts#TaskRollbackQueries"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:2eec7efcafd4b7d35ef8",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "provider-mirror",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "ConflictError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
       "edgeKind": "value",
@@ -106129,22 +106130,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:3574ec0732527b511aaa",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "provider-mirror",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "agents",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionRuntimeParticipants.ts#$file",
@@ -106510,22 +106495,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:366605b2302f748940fc",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "type",
@@ -106990,6 +106959,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:37de322555402af01b86",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "mcpRuntimeTestSessionLeases",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessionLeases"
     },
     {
       "edgeKind": "value",
@@ -111792,6 +111777,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:454e1e23dd0e3ac3eafd",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "mcpRuntimeTestSessions",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessions"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/mcpRuntimeTestTransitions.ts",
@@ -112078,22 +112079,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
-      "id": "import:46285a25e045572eafef",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "value",
@@ -114384,22 +114369,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/dynamicWorkflowPersistence.ts#DynamicWorkflowPersistence"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "id": "import:4bf4ccb9ca2fc68fe701",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "infrastructure-external",
-      "specifier": "drizzle-orm",
-      "syntax": "static-import",
-      "targetSymbol": "*",
-      "toContext": "external",
-      "toFile": "external:drizzle-orm",
-      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
@@ -115568,6 +115537,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:4f9840f8211d91d7d8a8",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpProbeStore",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpProbeStore",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeMcpProbeStore"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/composition/digitalEmployeeToolConnections.ts",
@@ -116352,6 +116337,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/runtime.ts#publishCommittedEventsAfterCommit"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:51d1e2033df369e4c7f9",
+      "owner": "resource-catalog",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/terminalMaintenanceTransactionStore.ts",
@@ -116782,22 +116783,6 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
-      "id": "import:52c2ab04e7aec9d1273f",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
       "edgeKind": "value",
@@ -118686,22 +118671,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "id": "import:58d257f3dd26f32f151c",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "mcpRuntimeTestSessionLeases",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessionLeases"
     },
     {
       "edgeKind": "type",
@@ -121889,6 +121858,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:60cce967971494a1c35e",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "createMcpTransactionLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlChildTaskLifecycleParticipant.ts#$file",
@@ -123617,6 +123602,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:6599bf1eadcba2321fc8",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpProbeStore",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpProbeStore",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeMcpProbeStore"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteSourceTerminationParticipant.ts#$file",
@@ -123726,22 +123727,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskQuestions"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:660b3e72b7590cffea89",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteMcpRuntimeTestProvider",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeSqliteMcpRuntimeTestProvider"
     },
     {
       "edgeKind": "value",
@@ -125473,6 +125458,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:6a9d02d70a627d1f37b6",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "staleConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/legacySqliteClarify/seal.ts#$file",
@@ -126190,6 +126191,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#WorkgroupHostLedgerMintOperation"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:6c7f2783692e242d2e5b",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -127262,22 +127279,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:6eef468b9da5ed2289cf",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "mcps",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps"
     },
     {
       "edgeKind": "type",
@@ -132272,22 +132273,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#TaskExecutionResourceRequest"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:7d709581a4c0fab65a9f",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpOperations",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlMcpCatalog",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#composePostgresqlMcpCatalog"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/application/turnEngine.ts",
@@ -133889,22 +133874,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#$file",
-      "id": "import:8224fb2cf06346fa4b29",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/multipartTaskStart.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/multipartTaskStart.ts#$file",
@@ -135041,22 +135010,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "id": "import:85905c0e7c5c3e963966",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "mcpRuntimeTestSessions",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestSessions"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts#$file",
@@ -135358,22 +135311,6 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition.ts#createPostgresqlIdentityAccessRuntime"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
-      "id": "import:8668d0dcf2fe0e76e99e",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
     },
     {
       "edgeKind": "type",
@@ -137137,22 +137074,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:8b24d5c2bb8946924a1e",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpProbeStore",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlMcpProbeStore",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composePostgresqlMcpProbeStore"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts#$file",
@@ -137214,22 +137135,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:8b95fc6fe8035812439d",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
     },
     {
       "edgeKind": "value",
@@ -137630,22 +137535,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:8cc44c9d3c92d3721ef4",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "provider-mirror",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "NotFoundError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "value",
@@ -142065,6 +141954,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:995a5f7dbe347a53603e",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpOperations",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpCatalog",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#composeMcpCatalog"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/uploadPlanStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlanStore.ts#$file",
@@ -142878,6 +142783,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:9bc353441769bee3ac45",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "users",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#users"
     },
     {
       "edgeKind": "value",
@@ -143934,6 +143855,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:9ea5307525bd5b547daf",
+      "owner": "resource-catalog",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "value",
@@ -146081,6 +146018,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:a4585f5e5ac718c0d09a",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "databaseSessionFor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -146334,22 +146287,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/events/committed/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/types.ts#CommittedEventConsumerDefinition"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:a51ea038aba2f7fcfb11",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "infrastructure-external",
-      "specifier": "drizzle-orm",
-      "syntax": "static-import",
-      "targetSymbol": "*",
-      "toContext": "external",
-      "toFile": "external:drizzle-orm",
-      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "type",
@@ -146830,22 +146767,6 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:a66cd1e943c8d5f9abe9",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpProbeStore",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteMcpProbeStore",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeSqliteMcpProbeStore"
     },
     {
       "edgeKind": "value",
@@ -147374,6 +147295,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourcePackageOperations.ts#composeResourcePackageOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:a82a58737ef21166ecdc",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpOperations",
+      "syntax": "static-import",
+      "targetSymbol": "mcpAclRuntimeTestLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#mcpAclRuntimeTestLifecycle"
     },
     {
       "edgeKind": "value",
@@ -149006,6 +148943,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/safePath.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:aca4054f8235012df38c",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "agents",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
     },
     {
       "edgeKind": "value",
@@ -151362,22 +151315,6 @@
     {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:b3bcdcc7e7c21d42332a",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "provider-mirror",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "staleConflictError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#$file",
       "id": "import:b3bf072f7f66d485ac94",
@@ -152496,6 +152433,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookDispatch.ts#$file"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:b708d8091bc1c90b1eae",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpOperations",
+      "syntax": "static-import",
+      "targetSymbol": "mcpAclRuntimeTestLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#mcpAclRuntimeTestLifecycle"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
@@ -153166,6 +153119,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:b841c22ae455c9d10d26",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "mcpRuntimeTestCreateReceipts",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestCreateReceipts"
     },
     {
       "edgeKind": "value",
@@ -153856,6 +153825,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
+      "id": "import:ba6c709e1735df4f1587",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts",
@@ -154401,22 +154386,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:bbe70ed565632875d56d",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpProbeStore",
-      "syntax": "static-import",
-      "targetSymbol": "composeSqliteMcpProbeStore",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeSqliteMcpProbeStore"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/composition/maintenanceDisk.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/maintenanceDisk.ts#$file",
@@ -154926,22 +154895,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:bdb6eaba8e5394339b07",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-C",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlMcpRuntimeTestProvider",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composePostgresqlMcpRuntimeTestProvider"
     },
     {
       "edgeKind": "type",
@@ -156209,6 +156162,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts#$file",
+      "id": "import:c12ae119c7601dcde6a4",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "userPermissionGrants",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#userPermissionGrants"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/execution/startupVerificationRead.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/startupVerificationRead.ts#$file",
@@ -156318,6 +156287,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentAdapterDefinitions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:c17400b8369aab7e1313",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "mcps",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps"
     },
     {
       "edgeKind": "value",
@@ -157248,22 +157233,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRunEvents"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
-      "id": "import:c3d2e18a0af50f467e65",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlDatabaseClient",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlDatabaseClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
@@ -157934,22 +157903,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/demoResourceCatalogSeed.ts#composeSqliteDemoResourceCatalogSeedParticipant"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:c555331ffc1fe44c1f8a",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "staleConflictError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#staleConflictError"
     },
     {
       "edgeKind": "value",
@@ -162929,6 +162882,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:d30c5e6906c1e60bd529",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "createMcpTransactionLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#$file",
@@ -163454,6 +163423,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts#PostgresqlDatabaseClient"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:d43a33e8381fdf48a73d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "NotFoundError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "type",
@@ -165281,22 +165266,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:d87ca5f129dedb97c8ea",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "provider-mirror",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "mcps",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/developmentAdapterStore.ts#$file",
@@ -166209,6 +166178,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:daf040500422b7d3ae6c",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpProbeStore",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpProbeStore",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#composeMcpProbeStore"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskFeedbackStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskFeedbackStore.ts#$file",
@@ -166670,22 +166655,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "id": "import:dc03d1dc81e09551b2fe",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "mcpRuntimeTestCreateReceipts",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpRuntimeTestCreateReceipts"
     },
     {
       "edgeKind": "value",
@@ -167794,22 +167763,6 @@
     {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpTransactionLifecycle.ts#$file",
-      "id": "import:df7d30aeff14d3b10d89",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "ConflictError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlWorkgroupTaskRoom.ts#$file",
       "id": "import:df8ac2f06ae0a18b5bb6",
@@ -167886,6 +167839,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkflowValidationWorkflowOverlay"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:df9829bc4bf0fb5514f4",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "composeMcpRuntimeTestProvider",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#composeMcpRuntimeTestProvider"
     },
     {
       "edgeKind": "type",
@@ -168238,6 +168207,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/main.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/main.ts#$file",
+      "id": "import:e0e6026d05dc4be844cd",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "./modules/resource-catalog/composition/mcpRuntimeTestPersistence",
+      "syntax": "static-import",
+      "targetSymbol": "createMcpTransactionLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -168769,6 +168754,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:e27d47d393dbbc2b4d71",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-C",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/mcpOperations",
+      "syntax": "static-import",
+      "targetSymbol": "mcpAclRuntimeTestLifecycle",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#mcpAclRuntimeTestLifecycle"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree.ts#$file",
@@ -168910,6 +168911,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#composeRepositoryTransportCredentials"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file",
+      "id": "import:e2f2f6ca1a24ca1e028e",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -169054,6 +169071,22 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeDigitalEmployeePlatformInventoryParticipant"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRepository.ts#$file",
+      "id": "import:e34fc9f676602ae915a7",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
     },
     {
       "edgeKind": "value",
@@ -169390,22 +169423,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/txSync.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#dbTxSync"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpOperations.ts#$file",
-      "id": "import:e4181ab0ae534ecbf15a",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "DbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "value",
@@ -170752,22 +170769,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/types.ts#UserAccessError"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpProbeStore.ts#$file",
-      "id": "import:e85e7f338f34e91c690d",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "DbClient",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskOwnershipPersistence.ts",
@@ -171886,22 +171887,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#$file",
-      "id": "import:eb6b5f958844396b14e8",
-      "owner": "resource-catalog",
-      "removeAfterWave": null,
-      "role": "infrastructure-external",
-      "specifier": "drizzle-orm",
-      "syntax": "static-import",
-      "targetSymbol": "*",
-      "toContext": "external",
-      "toFile": "external:drizzle-orm",
-      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
       "edgeKind": "value",
@@ -173186,22 +173171,6 @@
     {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:ef24e4ed1192c06b2a34",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/schema",
-      "syntax": "static-import",
-      "targetSymbol": "agents",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/schema.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlDigitalEmployeeAgentTemplateCatalog.ts#$file",
       "id": "import:ef34bbb818c19876d5b6",
@@ -173742,22 +173711,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/client.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#DbClient"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:f0ca393b7210a9d80d08",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "NotFoundError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
       "edgeKind": "value",
@@ -175566,22 +175519,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:f56be2401184467b86c5",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/txSync",
-      "syntax": "static-import",
-      "targetSymbol": "DbTxSync",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/txSync.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/txSync.ts#DbTxSync"
     },
     {
       "edgeKind": "value",
@@ -178416,22 +178353,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#$file",
-      "id": "import:fd48a6574835b4b540f5",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "ConflictError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/execution/executor.ts",
@@ -179833,7 +179754,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:50373023906c81e367372e51528a110ee35db7c39e06120fc4058ec63579ea2b",
+  "sourceDigest": "sha256:1b43821ff14348b3f665aceab7229a77886fe906b845f65f5589f2ada0223c9c",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
