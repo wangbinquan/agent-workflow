@@ -466,6 +466,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/public/commands.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/platform/persistence/sqlite/systemOverviewReadModel.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/accountRepositoryTransportCredentials.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/commands',
       'packages/backend/src/routes/auth.ts -> @/modules/identity-access/public/participants',
