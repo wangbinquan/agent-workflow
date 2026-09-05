@@ -2034,6 +2034,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
   mcpCatalogRef = mcpCatalog
   const pluginCatalog = composePluginCatalog({
     db: effectiveDeps.db,
+    resourceCatalog: providerResourceCatalog,
     coordinator: pluginOperationCoordinator,
   })
   const skillCatalog = composeSkillCatalog({

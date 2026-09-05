@@ -1095,7 +1095,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const repository = readFileSync(
-      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/pluginRepository.ts'),
       'utf8',
     )
     const persistence = readFileSync(
@@ -1143,16 +1143,16 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).toContain('Object.freeze({ commands, updateCommands, queries })')
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
-    expect(repository).toContain('dbTxSync')
+    expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).toContain('fullPluginRowWhere')
-    expect(repository).toContain('findAgentReferencesInTx')
+    expect(repository).toContain('findAgentReferencesInTransaction')
     expect(repository).toContain("from './pluginPersistence'")
     expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
     expect(repository).not.toContain("createHash('sha256')")
     expect(repository).not.toContain("from '@/services/")
-    expect(composition).toContain('createSqlitePluginRepository')
+    expect(composition).toContain('createPluginRepository')
     expect(composition).toContain('createPluginApplication')
-    expect(composition).toContain('composeResourceAclOperationApplication')
+    expect(composition).toContain('composeProviderResourceAclOperationApplication')
     expect(composition).toContain('createLegacyPluginInstaller')
     expect(composition).toContain('application.commands')
     expect(composition).toContain('application.updateCommands')

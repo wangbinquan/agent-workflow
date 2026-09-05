@@ -30,10 +30,7 @@ import {
   createPostgresqlTaskExecutionPersistence,
   createSqliteTaskExecutionPersistence,
 } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import {
-  composePostgresqlPluginGenerationGcCommand,
-  composeSqlitePluginGenerationGcCommand,
-} from '@/modules/resource-catalog/composition/pluginGenerationGc'
+import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import {
   composePostgresqlResourcePackageApplyMaintenance,
   composeSqliteResourcePackageApplyMaintenance,
@@ -562,7 +559,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         }),
       )
       tokenCallAudit = createTokenCallAudit(client)
-      pluginGenerationGcCommand = composePostgresqlPluginGenerationGcCommand(
+      pluginGenerationGcCommand = composePluginGenerationGcCommand(
         client,
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
@@ -720,7 +717,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         log: intentMaintenanceLog,
       })
       tokenCallAudit = createTokenCallAudit(sqliteDb)
-      pluginGenerationGcCommand = composeSqlitePluginGenerationGcCommand(
+      pluginGenerationGcCommand = composePluginGenerationGcCommand(
         sqliteDb,
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )

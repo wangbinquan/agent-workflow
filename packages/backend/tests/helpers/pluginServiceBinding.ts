@@ -29,7 +29,7 @@ import {
   requireResourceEdit,
   requireResourceGovern,
 } from '../../src/modules/resource-catalog/composition/resourceAcl'
-import { createSqlitePluginRepository } from '../../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
+import { createPluginRepository } from '../../src/modules/resource-catalog/infrastructure/pluginRepository'
 import type { PluginCatalogModule } from '../../src/modules/resource-catalog/public/operations'
 import type { PluginOperationContext } from '../../src/modules/resource-catalog/public/participants'
 import {
@@ -87,8 +87,8 @@ export function composePluginServiceBindingForTest(
     { ...actor, userId: actor.user.id },
   ).actor
   const coordinator = new ResourceOperationCoordinator()
-  const sqlite = createSqlitePluginRepository(db)
-  const baseRepository = sqlite.repository
+  const neutral = createPluginRepository({ db })
+  const baseRepository = neutral.repository
   const repository: PluginRepository = Object.freeze({
     ...baseRepository,
     async publish(input: Parameters<PluginRepository['publish']>[0]) {
@@ -152,7 +152,7 @@ export function composePluginServiceBindingForTest(
   })
   const catalog = composePluginCatalogFromAdapters({
     repository,
-    projection: sqlite.projection,
+    projection: neutral.projection,
     access,
     acl,
     coordinator,

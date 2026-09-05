@@ -1,7 +1,8 @@
 import type { Plugin } from '@agent-workflow/shared'
 import { and, eq, isNull, like, ne } from 'drizzle-orm'
 import { agents, plugins } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type {
   PluginAgentReference,
@@ -16,12 +17,11 @@ import {
   type PluginPersistenceRow,
 } from './pluginPersistence'
 import {
-  isPostgresqlUniqueViolation,
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
-export interface PostgresqlPluginRepositoryBundle {
+export interface PluginRepositoryBundle {
   readonly repository: PluginRepository
   readonly projection: PluginProjection
 }
@@ -88,22 +88,21 @@ function fullPluginRowWhere(row: PluginPersistenceRow) {
 }
 
 async function selectPluginRowById(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   id: string,
 ): Promise<PluginPersistenceRow | null> {
-  return (await transaction.select().from(plugins).where(eq(plugins.id, id)).get()) ?? null
+  return (await transaction.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0] ?? null
 }
 
 async function findAgentReferencesInTransaction(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: ResourceCatalogTransaction,
   pluginId: string,
 ): Promise<PluginAgentReference[]> {
   return collectPluginAgentReferences(
     await transaction
       .select(referenceSelect)
       .from(agents)
-      .where(like(agents.plugins, `%"${pluginId}"%`))
-      .all(),
+      .where(like(agents.plugins, `%"${pluginId}"%`)),
     pluginId,
   )
 }
@@ -117,31 +116,43 @@ function requireChangedRow(
   throw staleConflictError('plugin', `plugin changed during ${action}`)
 }
 
-export function createPostgresqlPluginRepository(
-  db: PostgresqlDatabaseClient,
-): PostgresqlPluginRepositoryBundle {
+/**
+ * RFC-359 W4-D17 —— Plugin 聚合的唯一仓库实现（此前 `sqlitePluginRepository` / `postgresqlPluginRepository` 各一份）。
+ * 写路径全在统一的 serializable 事务里，行级 OCC 用整行 WHERE + RETURNING 判定；owner + name 唯一冲突经能力矩阵
+ * `uniqueViolationTarget` 映射回 `plugin-name-in-use`。
+ */
+export function createPluginRepository(deps: {
+  readonly db: ProviderNeutralDatabase
+}): PluginRepositoryBundle {
+  const db = deps.db
+  const engine = databaseSessionFor(db).engine
+  const isOwnerNameConflict = (error: unknown): boolean => {
+    const target = engine.uniqueViolationTarget(error)
+    return target !== undefined && /plugins[._](?:owner|name)/i.test(target)
+  }
   async function get(id: string): Promise<Plugin | null> {
-    const row = await db.select().from(plugins).where(eq(plugins.id, id)).limit(1).get()
+    const row = (await db.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0]
     return row === undefined ? null : pluginFromPersistenceRow(row)
   }
 
   const repository: PluginRepository = {
     async list(): Promise<Plugin[]> {
-      return (await db.select().from(plugins).all()).map(pluginFromPersistenceRow)
+      return (await db.select().from(plugins)).map(pluginFromPersistenceRow)
     },
     get,
     async assertNameAvailable(input): Promise<void> {
-      const collision = await db
-        .select({ id: plugins.id })
-        .from(plugins)
-        .where(ownerScopedNameWhere(input.ownerUserId, input.name, input.excludeId))
-        .limit(1)
-        .get()
+      const collision = (
+        await db
+          .select({ id: plugins.id })
+          .from(plugins)
+          .where(ownerScopedNameWhere(input.ownerUserId, input.name, input.excludeId))
+          .limit(1)
+      )[0]
       if (collision !== undefined) throw nameConflict(input.name, input.purpose)
     },
     async create(record): Promise<Plugin> {
       try {
-        return await runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
+        return await runResourceCatalogTransaction(db, async (transaction) => {
           const created = await transaction
             .insert(plugins)
             .values({
@@ -162,71 +173,66 @@ export function createPostgresqlPluginRepository(
               updatedAt: record.now,
             })
             .returning()
-            .all()
           if (created.length !== 1) throw new Error('plugin insert did not return one row')
           return pluginFromPersistenceRow(created[0]!)
         })
       } catch (error) {
-        if (isPostgresqlUniqueViolation(error, ['plugins_owner_name_unique'])) {
-          throw nameConflict(record.name, 'create')
-        }
+        if (isOwnerNameConflict(error)) throw nameConflict(record.name, 'create')
         throw error
       }
     },
-    async publish(input): Promise<Plugin> {
-      return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
-        const row = await selectPluginRowById(transaction, input.id)
+    async publish(publication): Promise<Plugin> {
+      return runResourceCatalogTransaction(db, async (transaction) => {
+        const row = await selectPluginRowById(transaction, publication.id)
         if (row === null) {
-          throw new NotFoundError('plugin-not-found', `plugin '${input.id}' not found`)
+          throw new NotFoundError('plugin-not-found', `plugin '${publication.id}' not found`)
         }
-        assertExpectedHash(row, input.expectedConfigHash, 'generation publication')
+        assertExpectedHash(row, publication.expectedConfigHash, 'generation publication')
         const updated = await transaction
           .update(plugins)
           .set({
-            spec: input.set.spec,
-            optionsJson: JSON.stringify(input.set.options),
-            description: input.set.description,
-            enabled: input.set.enabled,
-            sourceKind: input.set.sourceKind,
-            cachedPath: input.set.cachedPath,
-            resolvedVersion: input.set.resolvedVersion,
-            installedAt: input.set.installedAt,
-            updatedAt: input.set.updatedAt,
+            spec: publication.set.spec,
+            optionsJson: JSON.stringify(publication.set.options),
+            description: publication.set.description,
+            enabled: publication.set.enabled,
+            sourceKind: publication.set.sourceKind,
+            cachedPath: publication.set.cachedPath,
+            resolvedVersion: publication.set.resolvedVersion,
+            installedAt: publication.set.installedAt,
+            updatedAt: publication.set.updatedAt,
           })
           .where(fullPluginRowWhere(row))
           .returning()
-          .all()
-        requireChangedRow(updated, input.id, 'generation publication')
+        requireChangedRow(updated, publication.id, 'generation publication')
         return pluginFromPersistenceRow(updated[0]!)
       })
     },
-    async rename(input): Promise<Plugin> {
+    async rename(renaming): Promise<Plugin> {
       try {
-        return await runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
-          const row = await selectPluginRowById(transaction, input.id)
+        return await runResourceCatalogTransaction(db, async (transaction) => {
+          const row = await selectPluginRowById(transaction, renaming.id)
           if (row === null) {
-            throw new NotFoundError('plugin-not-found', `plugin '${input.id}' not found`)
+            throw new NotFoundError('plugin-not-found', `plugin '${renaming.id}' not found`)
           }
-          const plugin = assertExpectedHash(row, input.expectedConfigHash, 'rename')
-          const collision = await transaction
-            .select({ id: plugins.id })
-            .from(plugins)
-            .where(ownerScopedNameWhere(plugin.ownerUserId ?? null, input.newName, input.id))
-            .get()
-          if (collision !== undefined) throw nameConflict(input.newName, 'rename')
+          const plugin = assertExpectedHash(row, renaming.expectedConfigHash, 'rename')
+          const collision = (
+            await transaction
+              .select({ id: plugins.id })
+              .from(plugins)
+              .where(ownerScopedNameWhere(plugin.ownerUserId ?? null, renaming.newName, renaming.id))
+              .limit(1)
+          )[0]
+          if (collision !== undefined) throw nameConflict(renaming.newName, 'rename')
           const updated = await transaction
             .update(plugins)
-            .set({ name: input.newName, updatedAt: input.updatedAt })
+            .set({ name: renaming.newName, updatedAt: renaming.updatedAt })
             .where(fullPluginRowWhere(row))
             .returning()
-            .all()
-          requireChangedRow(updated, input.id, 'rename')
+          requireChangedRow(updated, renaming.id, 'rename')
           return pluginFromPersistenceRow(updated[0]!)
         })
       } catch (error) {
-        if (isPostgresqlUniqueViolation(error, ['plugins_owner_name_unique'])) {
-          throw nameConflict(input.newName, 'rename')
-        }
+        if (isOwnerNameConflict(error)) throw nameConflict(renaming.newName, 'rename')
         throw error
       }
     },
@@ -235,26 +241,24 @@ export function createPostgresqlPluginRepository(
         await db
           .select(referenceSelect)
           .from(agents)
-          .where(like(agents.plugins, `%"${id}"%`))
-          .all(),
+          .where(like(agents.plugins, `%"${id}"%`)),
         id,
       )
     },
-    async delete(input): Promise<readonly PluginAgentReference[]> {
-      return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
-        const row = await selectPluginRowById(transaction, input.id)
+    async delete(deletion): Promise<readonly PluginAgentReference[]> {
+      return runResourceCatalogTransaction(db, async (transaction) => {
+        const row = await selectPluginRowById(transaction, deletion.id)
         if (row === null) {
-          throw new NotFoundError('plugin-not-found', `plugin '${input.id}' not found`)
+          throw new NotFoundError('plugin-not-found', `plugin '${deletion.id}' not found`)
         }
-        assertExpectedHash(row, input.expectedConfigHash, 'delete')
-        const references = await findAgentReferencesInTransaction(transaction, input.id)
+        assertExpectedHash(row, deletion.expectedConfigHash, 'delete')
+        const references = await findAgentReferencesInTransaction(transaction, deletion.id)
         if (references.length > 0) return references
         const deleted = await transaction
           .delete(plugins)
           .where(fullPluginRowWhere(row))
           .returning({ id: plugins.id })
-          .all()
-        requireChangedRow(deleted, input.id, 'delete')
+        requireChangedRow(deleted, deletion.id, 'delete')
         return []
       })
     },

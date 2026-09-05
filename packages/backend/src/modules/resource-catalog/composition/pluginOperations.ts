@@ -1,12 +1,11 @@
 import type { Plugin } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { checkForUpdate, cleanupInstallGeneration, installPlugin } from '@/services/pluginInstaller'
 import { monotonicNow } from '@/util/time'
 import { createPluginApplication } from '../application/plugins/pluginApplication'
 import type {
   PluginAccessPort,
-  PluginAgentReference,
   PluginInstallerPort,
   PluginMutationClock,
   PluginOperationCoordinatorPort,
@@ -14,29 +13,11 @@ import type {
   PluginRepository,
 } from '../application/plugins/ports'
 import type { PluginOperationContext } from '../public/participants'
-import { createSqlitePluginRepository } from '../infrastructure/sqlitePluginRepository'
-import { createPostgresqlPluginRepository } from '../infrastructure/postgresqlPluginRepository'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import {
-  canViewResource,
-  composeProviderResourceAclOperationApplication,
-  composeResourceAclOperationApplication,
-  discloseRefs,
-  filterVisibleRows,
-  requireResourceEdit,
-  requireResourceGovern,
-} from './resourceAcl'
+import { createPluginRepository } from '../infrastructure/pluginRepository'
+import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { createPluginOperationDescriptors } from './catalogOperationDescriptors'
 import type { PluginCatalogModule } from '../public/operations'
-
-export interface PluginCatalogCompositionDependencies {
-  readonly db: DbClient
-  readonly coordinator: PluginOperationCoordinatorPort
-  readonly installer?: PluginInstallerPort
-  readonly id?: () => string
-  readonly now?: () => number
-}
 
 type PluginAclOperationApplication = Parameters<typeof createPluginOperationDescriptors>[3]
 
@@ -51,11 +32,15 @@ export interface PluginCatalogAdapterCompositionDependencies {
   readonly now?: () => number
 }
 
-export interface PostgresqlPluginCatalogCompositionDependencies extends Omit<
+/**
+ * RFC-359 W4-D17 —— Plugin 目录一份装配（此前 SQLite / PG 各一份）：仓库是中立的 `createPluginRepository`，访问判定与
+ * ACL 操作都经资源目录的 provider 中立应用；bootstrap 不再拿数据库句柄重建访问阶梯。
+ */
+export interface PluginCatalogCompositionDependencies extends Omit<
   PluginCatalogAdapterCompositionDependencies,
   'repository' | 'projection' | 'access' | 'acl'
 > {
-  readonly db: PostgresqlDatabaseClient
+  readonly db: ProviderNeutralDatabase
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }
 
@@ -101,10 +86,10 @@ export function composePluginCatalogFromAdapters(
   return Object.freeze({ queries: application.queries, operations })
 }
 
-export function composePostgresqlPluginCatalog(
-  input: PostgresqlPluginCatalogCompositionDependencies,
+export function composePluginCatalog(
+  input: PluginCatalogCompositionDependencies,
 ): PluginCatalogModule {
-  const { repository, projection } = createPostgresqlPluginRepository(input.db)
+  const { repository, projection } = createPluginRepository({ db: input.db })
   const access = Object.freeze({
     filterVisible: (authority, rows) =>
       input.resourceCatalog.authorization.filterVisibleRows(authority, 'plugin', rows),
@@ -137,49 +122,4 @@ export function composePostgresqlPluginCatalog(
     },
   })
   return composePluginCatalogFromAdapters({ ...input, repository, projection, access, acl })
-}
-
-export function composePluginCatalog(
-  input: PluginCatalogCompositionDependencies,
-): PluginCatalogModule {
-  const { repository, projection } = createSqlitePluginRepository(input.db)
-  const access: PluginAccessPort = Object.freeze({
-    filterVisible: (authority: PluginOperationContext, rows: readonly Plugin[]) =>
-      filterVisibleRows<Plugin>(input.db, authority, 'plugin', rows),
-    canView: (authority: PluginOperationContext, row: Plugin) =>
-      canViewResource(input.db, authority, 'plugin', row),
-    requireResourceEdit: async (authority: PluginOperationContext, row: Plugin) => {
-      await requireResourceEdit(input.db, authority, 'plugin', row)
-    },
-    requireResourceGovern: (authority: PluginOperationContext, row: Plugin) =>
-      requireResourceGovern(input.db, authority, 'plugin', row),
-    discloseAgentReferences: (
-      authority: PluginOperationContext,
-      references: readonly PluginAgentReference[],
-    ) => discloseRefs(input.db, authority, 'agent', references),
-  })
-  const clock: PluginMutationClock = Object.freeze({
-    nextUpdatedAt: (plugin: Plugin) => monotonicNow(plugin.updatedAt),
-    nextInstalledAt: (plugin: Plugin) => monotonicNow(plugin.installedAt),
-  })
-  const acl = composeResourceAclOperationApplication<PluginOperationContext, Plugin>({
-    db: input.db,
-    type: 'plugin',
-    load: (id) => repository.get(id),
-    linearizer: {
-      runExclusive: (resourceId, task) => input.coordinator.runExclusive(resourceId, task),
-      loadById: (resourceId) => repository.get(resourceId),
-      nextUpdatedAt: async (row) => clock.nextUpdatedAt(row),
-    },
-  })
-  return composePluginCatalogFromAdapters({
-    repository,
-    projection,
-    access,
-    acl,
-    coordinator: input.coordinator,
-    installer: input.installer,
-    id: input.id,
-    now: input.now,
-  })
 }

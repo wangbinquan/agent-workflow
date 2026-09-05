@@ -51,7 +51,7 @@ const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
   'modules/resource-catalog/infrastructure/mcpRepository.ts': {
     'agents.mcp': '按 `%"<mcpId>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
   },
-  'modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts': {
+  'modules/resource-catalog/infrastructure/pluginRepository.ts': {
     'agents.plugins': '同上，按 `%"<pluginId>"%` 找引用',
   },
   'platform/events/committed/postgresqlPersistence.ts': {

@@ -54,8 +54,10 @@ describe('RFC-349 Resource Catalog provider contributions', () => {
     expect(publicCommands).toContain("readonly executionFence: 'clear' | 'busy'")
     expect(application).toContain("command.executionFence === 'busy'")
     expect(application).toContain('listReferencedCachedPaths()')
-    expect(composition).toContain('composeSqlitePluginGenerationGcCommand')
-    expect(composition).toContain('composePostgresqlPluginGenerationGcCommand')
+    // RFC-359 W4-D17：具名 provider 装配也退役，只剩一份 composePluginGenerationGcCommand。
+    expect(composition).toContain('composePluginGenerationGcCommand')
+    expect(composition).not.toContain('PostgresqlDatabaseClient')
+    expect(composition).not.toContain('DbClient')
     expect(shared).toContain('.from(plugins)')
     expect(shared).not.toContain('PostgresqlDatabaseClient')
     expect(shared).not.toContain('DbClient')

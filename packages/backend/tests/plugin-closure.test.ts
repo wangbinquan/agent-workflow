@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Agent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createSqlitePluginRepository } from '../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
+import { createPluginRepository } from '../src/modules/resource-catalog/infrastructure/pluginRepository'
 import {
   collectPluginIdsFromClosure,
   loadPluginsByIds,
@@ -85,7 +85,7 @@ describe('loadPluginsByIds', () => {
     resetNpmProbeCacheForTests()
     process.env.FAKE_NPM_MODE = 'success'
     binding = composePluginServiceBindingForTest(db, { pluginsDir, npmBin: FAKE_NPM })
-    const repository = createSqlitePluginRepository(db).repository
+    const repository = createPluginRepository({ db }).repository
     query = Object.freeze({
       async loadByIds(ids: readonly string[]) {
         const rows = await Promise.all(ids.map((id: string) => repository.get(id)))

@@ -109,7 +109,7 @@ import {
   workgroups as workgroupsTable,
 } from '@/db/schema'
 import { listAgents } from './agent'
-import { createSqlitePluginRepository } from '@/modules/resource-catalog/infrastructure/sqlitePluginRepository'
+import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { NotFoundError } from '@/util/errors'
@@ -201,7 +201,7 @@ export async function loadWorkflowValidationContext(
         updatedAt: mcpsTable.updatedAt,
       })
       .from(mcpsTable),
-    createSqlitePluginRepository(db).repository.list(),
+    createPluginRepository({ db }).repository.list(),
   ])
   const ctx: ValidatorContext = {
     agents,

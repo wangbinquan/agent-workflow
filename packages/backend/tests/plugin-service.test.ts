@@ -17,9 +17,10 @@ import { dirname, join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import type { PluginInstallerPort } from '../src/modules/resource-catalog/application/plugins/ports'
-import { composeSqlitePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
+import { composePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
 import { composePluginCatalog } from '../src/modules/resource-catalog/composition/pluginOperations'
-import { createSqlitePluginRepository } from '../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
+import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { createPluginRepository } from '../src/modules/resource-catalog/infrastructure/pluginRepository'
 import type { PluginCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { PluginOperationContext } from '../src/modules/resource-catalog/public/participants'
 import { createAgent } from '../src/services/agent'
@@ -99,6 +100,7 @@ function testPluginInstaller(): PluginInstallerPort {
 function composeTestPluginCatalog(db: DbClient): PluginCatalogModule {
   return composePluginCatalog({
     db,
+    resourceCatalog: composeResourceCatalogFor({ db }),
     coordinator: new ResourceOperationCoordinator(),
     installer: testPluginInstaller(),
   })
@@ -113,11 +115,11 @@ function serviceBinding(
 }
 
 function findAgentReferences(pluginId: string) {
-  return createSqlitePluginRepository(db).repository.findAgentReferences(pluginId)
+  return createPluginRepository({ db }).repository.findAgentReferences(pluginId)
 }
 
 async function collectPluginGenerationGarbage(now: number): Promise<void> {
-  await composeSqlitePluginGenerationGcCommand(
+  await composePluginGenerationGcCommand(
     db,
     createPluginGenerationFilesystemGcPort(pluginsDir),
   ).run({ executionFence: 'clear', graceMs: 0, now })

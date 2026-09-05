@@ -7,7 +7,7 @@ import { composeIdentityAccess } from '../../src/modules/identity-access/composi
 import type { DirectAuthenticatedAuthority } from '../../src/modules/identity-access/public/participants'
 import { createResourceCatalogQuery } from '../../src/modules/resource-catalog/infrastructure/catalogQuery'
 import { createMcpRepository } from '../../src/modules/resource-catalog/infrastructure/mcpRepository'
-import { createSqlitePluginRepository } from '../../src/modules/resource-catalog/infrastructure/sqlitePluginRepository'
+import { createPluginRepository } from '../../src/modules/resource-catalog/infrastructure/pluginRepository'
 import { getAgentById } from '../../src/services/agent'
 import { withMcpOperationConfigHash } from '../../src/services/mcpOperationRevision'
 import { withPluginOperationConfigHash } from '../../src/services/pluginOperationRevision'
@@ -125,7 +125,7 @@ export function intentResourceCatalogBinding(
       deletePrepared: async () => undefined,
     }),
   }).repository
-  const plugins = createSqlitePluginRepository(db).repository
+  const plugins = createPluginRepository({ db }).repository
   const details: IntentResourceCatalogDetailQueries = Object.freeze({
     agents: Object.freeze({ get: (input: AgentDetailInput) => getAgentById(db, input.id) }),
     skills: Object.freeze({

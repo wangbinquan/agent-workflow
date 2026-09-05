@@ -601,7 +601,19 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   `postgresqlAgentPersistenceSemantics` 路径改指中立文件。前两条 `rfc359-w4-d14-d15-regressions.test.ts` 两引擎各锁一遍。
   教训进 `docs/dev-gotchas.md`：provider 形状成为唯一实现时，SQLite 侧的 HTTP / e2e 锁会**第一次**照到它，每刀的本地批次
   要把该聚合的 HTTP 层与 ACL / WS 用例（rfc223 / rfc228 / rfc324 / rfc099 / rfc212 家族）一并带上。
-  **下一刀 D17**：Plugin 聚合（`sqlitePluginRepository` / `postgresqlPluginRepository` 同法合一）。
+  **下一刀 D17**：Plugin 聚合。
+
+  **D17 ✅（resource-catalog · Plugin 聚合：一份仓库、一份目录装配、一份代际清扫装配）**：`infrastructure/pluginRepository.ts`
+  （`createPluginRepository({db})`：创建 / publish（按 configHash OCC，整行 WHERE + RETURNING 判定）/ 改名 / 删除只回 agent
+  引用；`plugin-name-in-use` 经能力矩阵的唯一冲突映射）一份；`composition/pluginOperations.ts` 只剩 `composePluginCatalog`
+  （PG 形状：访问判定与 ACL 操作都经资源目录的 provider 中立应用）+ `composePluginCatalogFromAdapters`；
+  `composition/pluginGenerationGc.ts` 只剩 `composePluginGenerationGcCommand`。server.ts / start.ts /
+  postgresqlDaemonApplication.ts / maintenanceWorker.ts 同一套装配，legacy `workflow.validator.ts` 的插件库存改读中立仓库。
+  两个 provider 文件删除；rfc345 contracts、rfc349（adapters / contributions / search-case-parity）、rfc284 dedup、rfc231
+  写点清单改指中立文件；`tests/helpers/pluginServiceBinding.ts` / `intentResourceCatalogBinding.ts` 不再按 provider 分叉。
+  `rfc359-w4-d17-adapters.test.ts` 两引擎各跑创建 / owner 级同名冲突 / assertNameAvailable / publish OCC / 改名撞名 /
+  引用保护删除 + 源码锁。**下一刀 D18**：Workgroup 聚合（`sqliteWorkgroupRepository` / `postgresqlWorkgroupRepository`，
+  919 / 914 行，含 legacy workgroup engine 的依赖面）。
 
 ## 5. W5 —— 防复辟
 

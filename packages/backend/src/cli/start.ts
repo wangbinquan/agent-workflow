@@ -2326,7 +2326,11 @@ async function composeSqliteProviderSession(
       unfuseAboveVersionSync(tx, selector),
     ),
   })
-  const pluginCatalog = composePluginCatalog({ db, coordinator: pluginOperationCoordinator })
+  const pluginCatalog = composePluginCatalog({
+    db,
+    resourceCatalog,
+    coordinator: pluginOperationCoordinator,
+  })
   const workflowCatalog = composeDatabaseWorkflowCatalog({
     db,
     resourceCatalog,

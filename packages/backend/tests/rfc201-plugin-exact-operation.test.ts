@@ -9,7 +9,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { nodeRuns, plugins, tasks, workflows } from '../src/db/schema'
-import { composeSqlitePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
+import { composePluginGenerationGcCommand } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
 import {
   composePluginServiceBindingForTest,
   createPlugin,
@@ -182,7 +182,7 @@ describe('generation GC safety', () => {
     })
     expect(
       await runPluginGenerationGc({
-        command: composeSqlitePluginGenerationGcCommand(
+        command: composePluginGenerationGcCommand(
           dbThatMustNotBeRead,
           createPluginGenerationFilesystemGcPort(pluginsDir),
         ),
@@ -203,7 +203,7 @@ describe('generation GC safety', () => {
     })
     expect(
       await runPluginGenerationGc({
-        command: composeSqlitePluginGenerationGcCommand(
+        command: composePluginGenerationGcCommand(
           dbThatMustNotBeRead,
           createPluginGenerationFilesystemGcPort(pluginsDir),
         ),
@@ -263,7 +263,7 @@ describe('generation GC safety', () => {
     await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
 
     const now = Date.now() + 60_000
-    const command = composeSqlitePluginGenerationGcCommand(
+    const command = composePluginGenerationGcCommand(
       db,
       createPluginGenerationFilesystemGcPort(pluginsDir),
     )

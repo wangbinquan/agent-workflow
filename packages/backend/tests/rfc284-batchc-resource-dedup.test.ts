@@ -156,12 +156,7 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
         'collectMcpAgentReferences',
       ],
       [
-        'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts',
-        'plugins',
-        'collectPluginAgentReferences',
-      ],
-      [
-        'modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts',
+        'modules/resource-catalog/infrastructure/pluginRepository.ts',
         'plugins',
         'collectPluginAgentReferences',
       ],

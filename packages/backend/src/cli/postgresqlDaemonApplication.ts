@@ -68,7 +68,7 @@ import {
   composeMcpCatalog,
   mcpAclRuntimeTestLifecycle,
 } from '@/modules/resource-catalog/composition/mcpOperations'
-import { composePostgresqlPluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
 import { composePostgresqlWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composePostgresqlWorkgroupTaskRoom } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composePostgresqlDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
@@ -550,7 +550,7 @@ export async function composePostgresqlDaemonApplication(
     }),
   })
   mcpCatalogRef = mcpCatalog
-  const pluginCatalog = composePostgresqlPluginCatalog({
+  const pluginCatalog = composePluginCatalog({
     db: input.db,
     resourceCatalog,
     coordinator: pluginOperationCoordinator,

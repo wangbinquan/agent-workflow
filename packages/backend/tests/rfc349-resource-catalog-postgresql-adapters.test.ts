@@ -20,8 +20,8 @@ function typescriptFiles(root: string): string[] {
 }
 
 describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
-  // RFC-359 W4-D16：Mcp 聚合已是一份中立实现（见下面单独的断言）。
-  const aggregates = ['Plugin', 'Workgroup'] as const
+  // RFC-359 W4-D16 / D17：Mcp / Plugin 聚合已是一份中立实现（见下面单独的断言）。
+  const aggregates = ['Workgroup'] as const
 
   test('mcp repository and composition are one provider-neutral implementation (RFC-359 W4-D16)', () => {
     const repository = source('src/modules/resource-catalog/infrastructure/mcpRepository.ts')
@@ -35,6 +35,20 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(composition).toContain('createMcpRepository({')
     expect(composition).toContain('export function composeMcpCatalog(')
     expect(composition).not.toMatch(/composePostgresqlMcpCatalog|createSqliteMcpRepository/)
+  })
+
+  test('plugin repository and composition are one provider-neutral implementation (RFC-359 W4-D17)', () => {
+    const repository = source('src/modules/resource-catalog/infrastructure/pluginRepository.ts')
+    const composition = source('src/modules/resource-catalog/composition/pluginOperations.ts')
+    expect(repository).toContain('ProviderNeutralDatabase')
+    expect(repository).toContain('runResourceCatalogTransaction')
+    expect(repository).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
+    )
+    expect(composition).toContain('composePluginCatalogFromAdapters')
+    expect(composition).toContain('createPluginRepository({')
+    expect(composition).toContain('export function composePluginCatalog(')
+    expect(composition).not.toMatch(/composePostgresqlPluginCatalog|createSqlitePluginRepository/)
   })
 
   test('classic aggregate PostgreSQL repositories use the shared async transaction owner', () => {
@@ -52,7 +66,6 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
 
   test('composition exposes exact adapter injection and PostgreSQL factories without public DB leakage', () => {
     for (const [aggregate, file] of [
-      ['Plugin', 'pluginOperations'],
       ['Workgroup', 'workgroupOperations'],
     ] as const) {
       const text = source(`src/modules/resource-catalog/composition/${file}.ts`)

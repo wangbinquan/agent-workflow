@@ -359,7 +359,7 @@ describe('RFC-231 private create invariant', () => {
       // initialPrivateResourceAcl stamp as createManagedSkillWithFiles.
       skills: { 'modules/resource-catalog/infrastructure/legacy/skill.ts': 2 },
       mcps: { 'modules/resource-catalog/infrastructure/mcpRepository.ts': 1 },
-      plugins: { 'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts': 1 },
+      plugins: { 'modules/resource-catalog/infrastructure/pluginRepository.ts': 1 },
       workflows: {
         'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
         'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
@@ -373,7 +373,7 @@ describe('RFC-231 private create invariant', () => {
       'modules/resource-catalog/infrastructure/legacy/agent.ts',
       'modules/resource-catalog/infrastructure/legacy/skill.ts',
       'modules/resource-catalog/infrastructure/mcpRepository.ts',
-      'modules/resource-catalog/infrastructure/sqlitePluginRepository.ts',
+      'modules/resource-catalog/infrastructure/pluginRepository.ts',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
