@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1940,
+    "entries": 1936,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22263,6 +22263,98 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts#claimNew",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts#claimNew",
+      "symbol": "claimNew",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts#createMcpRuntimeTestLeaseOperations",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestLease.ts#createMcpRuntimeTestLeaseOperations",
+      "symbol": "createMcpRuntimeTestLeaseOperations",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#createMcpRuntimeTestPersistence",
+      "missingControls": [
+        "audit"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#createMcpRuntimeTestPersistence",
+      "symbol": "createMcpRuntimeTestPersistence",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#RUNNING_TURN_STATUS",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence.ts#RUNNING_TURN_STATUS",
+      "symbol": "RUNNING_TURN_STATUS",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -22559,98 +22651,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts#createPostgresqlMcpRepository",
       "symbol": "createPostgresqlMcpRepository",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestLease.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestLease.ts#claimNew",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestLease.ts#claimNew",
-      "symbol": "claimNew",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestLease.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestLease.ts#createPostgresqlMcpRuntimeTestLeaseOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestLease.ts#createPostgresqlMcpRuntimeTestLeaseOperations",
-      "symbol": "createPostgresqlMcpRuntimeTestLeaseOperations",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts#createPostgresqlMcpRuntimeTestPersistence",
-      "missingControls": [
-        "audit"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts#createPostgresqlMcpRuntimeTestPersistence",
-      "symbol": "createPostgresqlMcpRuntimeTestPersistence",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts#RUNNING_TURN_STATUS",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlMcpRuntimeTestPersistence.ts#RUNNING_TURN_STATUS",
-      "symbol": "RUNNING_TURN_STATUS",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -23803,98 +23803,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRepository.ts#createSqliteMcpRepository",
       "symbol": "createSqliteMcpRepository",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease.ts#claimNewMcpRuntimeTestSessionLease",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease.ts#claimNewMcpRuntimeTestSessionLease",
-      "symbol": "claimNewMcpRuntimeTestSessionLease",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease.ts#createSqliteMcpRuntimeTestLeaseOperations",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestLease.ts#createSqliteMcpRuntimeTestLeaseOperations",
-      "symbol": "createSqliteMcpRuntimeTestLeaseOperations",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestPersistence.ts#createSqliteMcpRuntimeTestPersistence",
-      "missingControls": [
-        "audit"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestPersistence.ts#createSqliteMcpRuntimeTestPersistence",
-      "symbol": "createSqliteMcpRuntimeTestPersistence",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestPersistence.ts#RUNNING_TURN_STATUS",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/sqliteMcpRuntimeTestPersistence.ts#RUNNING_TURN_STATUS",
-      "symbol": "RUNNING_TURN_STATUS",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -46231,7 +46139,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1ef58eeadfbd6ea182b449c62b249e6f96efd7eafca0e41892667f120c513821",
+  "sourceDigest": "sha256:d4f91ff6ee96405640e35a45317b76f83fbf59a10634f052a96952863ce0561b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
