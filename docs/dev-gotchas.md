@@ -662,7 +662,7 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
 同一根因在一天里咬了两次，形态不同：
 
 - **PostgreSQL（Bun.SQL）**：错误对象是 `PostgresError{ code:'ERR_POSTGRES_SERVER_ERROR', errno:'23505',
-  constraint:'…', detail, table, … }`——**SQLSTATE 在 `errno`，`code` 恒为那个 ERR\_ 常量**（真库实测
+constraint:'…', detail, table, … }`——**SQLSTATE 在 `errno`，`code` 恒为那个 ERR\_ 常量**（真库实测
   逐字如此，经 drizzle 的 `db.run` 不再多包一层）。本仓在 `db/postgresqlSerializationRetry.ts` 早已按
   errno 修好 40001，而 `resource-catalog/infrastructure/postgresql/repositorySupport.ts` 的
   `isPostgresqlUniqueViolation` 仍只看 `code === '23505'` ⇒ **在真 PostgreSQL 上恒 false**，11 个 PG
@@ -674,6 +674,7 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
   它**——RFC-359 能力矩阵第一版就是这么写的，变异验证时才暴露。
 
 **判据**：
+
 1. 错误分类器**沿 `cause` 链逐层看**（drizzle / 调用方各会包一层），不要只读顶层；
 2. **按结构化字段判**（PG 看 `errno` 的 SQLSTATE，SQLite 看 `code` 的 `SQLITE_*`），message 正则只作兜底；
 3. 同一判据**只写一份**——现在收在 `platform/persistence/capabilities.ts` 的 `classifyError` /
@@ -731,7 +732,7 @@ CI 的 `format:check` 只覆盖 `packages/**/*.{ts,tsx,json,md}` 加 `format:che
   「要不要提交重采」时若把 `sourceDigest` / `currentSnapshotSha` / `contentDigest` 从 diff 里排除掉再看
   「有没有变化」，会把**任何** src 改动误判成「无需重采」——`sourceDigest` 本身就是 N1b「精确生成投影」
   比对的内容，CI 在干净 checkout 上重采一定和你提交的不同。判据只有一条：`bun run architecture:write
-  --snapshot-sha <tip>` 之后 `git status architecture/` 非空就提交，别自己挑行。
+--snapshot-sha <tip>` 之后 `git status architecture/` 非空就提交，别自己挑行。
 - **任何新增顶层符号都算涨**（2026-09-04 实测）：`rfc294-module-symbol-owners` 数的是文件里的全部
   顶层声明，**未 `export` 的本地 `interface` / `type` 也计**——给收红补一个 5 字段的本地 report 类型
   就让账本 +1、被迫走两笔 allowGrowth。一次性的小类型优先内联到参数位，另一处用
@@ -1061,12 +1062,12 @@ bootstrap 段），运行时的 `search_path=agent_workflow,public` 让裸函数
 
 `json_type` 的 shim 直接转发 `jsonb_typeof`，而两套返回词汇表几乎不重叠：
 
-| | SQLite `json_type` | `jsonb_typeof` |
-| --- | --- | --- |
-| 字符串 | `text` | `string` |
-| 数字 | `integer` / `real` | `number` |
-| 布尔 | `true` / `false` | `boolean` |
-| 其余 | `null` / `array` / `object` | 同名 |
+|        | SQLite `json_type`          | `jsonb_typeof` |
+| ------ | --------------------------- | -------------- |
+| 字符串 | `text`                      | `string`       |
+| 数字   | `integer` / `real`          | `number`       |
+| 布尔   | `true` / `false`            | `boolean`      |
+| 其余   | `null` / `array` / `object` | 同名           |
 
 于是 `WHERE json_type(x, '$.k') = 'text'` 这种判据在 PostgreSQL 上**恒假**，症状是那一列静默
 恒为 NULL——没有报错、没有告警，只是界面上少了一个名字。RFC-357 的真库 lane 第一次跑就抓到
@@ -1111,11 +1112,11 @@ RFC-356 把 `discardNodeIso` 里的 `removeWorktree` 换成 `reclaimWorktreePath
 `killTree(child, sig)` 包成 `killTreeForRun(sig)`、把 `await rm(leaf)` 换成
 `removeDirectoryWithRetry(leaf)`，一共踩响了三层：
 
-| 守卫                                                   | 判据形状                                        | 表现                       |
-| ------------------------------------------------------ | ----------------------------------------------- | -------------------------- |
-| `rfc328-architecture-guards` 的 `actCallees`           | 按名字要求某函数体内出现某个副作用原语          | 「missing act boundary」   |
-| `rfc287-t13-deferred-prep` 的 F4 / partial-clone       | 正则匹配 `await rm(leaf` / `await rm(path`      | 「必须异步」红             |
-| `scheduler-audit-s15` 的升级链                          | 正则匹配 `killTree\(child, 'SIGTERM'\)`         | 「升级链不见了」           |
+| 守卫                                             | 判据形状                                   | 表现                     |
+| ------------------------------------------------ | ------------------------------------------ | ------------------------ |
+| `rfc328-architecture-guards` 的 `actCallees`     | 按名字要求某函数体内出现某个副作用原语     | 「missing act boundary」 |
+| `rfc287-t13-deferred-prep` 的 F4 / partial-clone | 正则匹配 `await rm(leaf` / `await rm(path` | 「必须异步」红           |
+| `scheduler-audit-s15` 的升级链                   | 正则匹配 `killTree\(child, 'SIGTERM'\)`    | 「升级链不见了」         |
 
 **判据不变、只是拼写变了**——这三条锁的都还是同一件事（副作用要被 effect observer 括起来 /
 删除必须异步 / 先 TERM 后 KILL）。所以处置是**跟随更新守卫并在注释里写清「判据不变」**，
@@ -1127,8 +1128,7 @@ RFC-356 把 `discardNodeIso` 里的 `removeWorktree` 换成 `reclaimWorktreePath
 
 **动手前的自查**（比事后被 CI 逐层打红便宜）：改一个会被守卫点名的实现前，先
 `grep -rn "<旧符号名>" packages/backend/tests/ | grep -v "\.test\.ts:.*import"`，
-把命中的守卫一并读一遍。**光跑 `tests/architecture/**` 不够**——RFC-328 那条在
-`tests/rfc328-architecture-guards.test.ts`，不在那个目录下；RFC-356 就是因此漏了它、
+把命中的守卫一并读一遍。**光跑 `tests/architecture/**`不够**——RFC-328 那条在`tests/rfc328-architecture-guards.test.ts`，不在那个目录下；RFC-356 就是因此漏了它、
 在修完前两条之后又红了一轮。
 
 ## 「按 exact SHA 查 CI」很容易查到**另一个 workflow 的绿**（RFC-356 实撞，2026-09-04）
@@ -1166,9 +1166,7 @@ run」单独记即可。
 `buildLogicalSchemaContract()`（`platform/persistence/schemaContract.ts`）只读 `db/schema.ts` 的 drizzle 声明，PG 基线由它投影。
 迁移 SQL 里手写、没同步进 drizzle 声明的东西——部分唯一索引、CHECK、触发器——PG 上一律不存在：`webhook_deliveries` 的
 `idx_webhook_deliveries_dedupe` / `idx_webhook_deliveries_mr_fact` 只在迁移 0157 里，PG 上同 uuid 重投不撞唯一键，去重分支
-永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时进 `schema.ts`**（`uniqueIndex(...).on(...).where(sql\`…\`)`
-逐字同形），然后 `cd packages/backend && bun run db:rfc349-postgresql-schema` 重采 PG 基线与 journal（否则
-`rfc349-postgresql-schema` 守卫红、PG harness 直接 `postgresql-migration-history-drift`）。契约 digest 变了，已部署的 PG 目标要重做
+永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时进 `schema.ts`**（`uniqueIndex(...).on(...).where(sql\`…\`)`逐字同形），然后`cd packages/backend && bun run db:rfc349-postgresql-schema`重采 PG 基线与 journal（否则`rfc349-postgresql-schema`守卫红、PG harness 直接`postgresql-migration-history-drift`）。契约 digest 变了，已部署的 PG 目标要重做
 RFC-349 cutover（PG 侧暂无增量迁移）。
 
 ## prettier 只认仓库根的配置：在 `packages/backend` 下跑出来的排版会被 CI 的 format 门打回（2026-09-05 实撞）
@@ -1187,6 +1185,7 @@ Lint 一格：`rfc359-w4-b5b-adapters.test.ts` 在子目录下排过版，根配
 
 判据：**`gh run list --workflow CI` 里 `conclusion=success` 的那个 sha 才是最近的绿**；`cancelled` 一律当作
 「没验证过」。改法：
+
 - 连推之间留够一次完整 CI 的时间（~25 分钟），或者推完一笔就等它跑完再推下一笔；
 - watcher 报告 superseded 时不要只跟，要把「上一次真正的绿是哪个 sha」一起打印出来；
 - 本地守卫清单要含 `tests/architecture/rfc317-module-boundary.test.ts`（R1/R2 边逐条相等）——这条只在 CI 跑，
@@ -1202,6 +1201,7 @@ RFC-268 取消 500、RFC-303 终态控制落成 retryable），或者 successor 
 （RFC-092 `already has owner state 'claimed'`）。
 
 修法与判据：
+
 - 原语拿到租约后先 `await new Promise(setImmediate)` 再 BEGIN：被本轮唤醒的同步写者先跑完，事务在干净的任务里开始；
 - 事务体**只 await 数据库操作**——await fs / spawn / fetch / timer 就跨出了本任务，隔离失效。现在旁观者的任何语句
   都会被 `guardForeignStatements` 拦成 `CrossContextTransactionError`（在 `DrizzleError.cause` 上），事务自身在
@@ -1221,8 +1221,7 @@ SQLite 列的恒等映射，`bigint` 原样回成字符串——mission 列表�
 修法在根上：`db/providerSchema.ts` 把**列**也做成访问时解析的 facade（按属性名缓存、身份稳定；`get` / 原型 / `ownKeys` 都转到
 当前 provider 的具体列），无论何时捕获，drizzle 取到的 `mapFromDriverValue` / `mapToDriverValue` / 所属表都是当前 provider 的。
 锁：`rfc359-provider-schema-column-facade.test.ts` 故意在模块加载期捕获列，两引擎各验解码 / 编码 / 行值比较 / 原型。
-仍要注意的例外：`db.all(sql\`…\`)` 这类裸 SQL 读**不经列 mapper**，数值列在 PG 上照样是字符串——投影层用能力矩阵的
-`numericFromRawRow` 归一（`taskListPage/projection.ts` 的既有做法）。
+仍要注意的例外：`db.all(sql\`…\`)`这类裸 SQL 读**不经列 mapper**，数值列在 PG 上照样是字符串——投影层用能力矩阵的`numericFromRawRow` 归一（`taskListPage/projection.ts` 的既有做法）。
 
 ## 全树源码扫描类守卫要缓存解析结果（rfc305 CI 超时，2026-09-05）
 
@@ -4151,3 +4150,17 @@ B2 批 b/c 推上 main 后两个 OS 的 backend 分片 2 同一条红：`rfc349-
   次序**（实时订阅唤醒、结构化预检先于围栏、广播受众）逐条搬进一份实现；本地批次要把该聚合的 HTTP 层与 ACL / WS 用例
   （`rfc223-*` / `rfc228-*` / `rfc324-*` / `rfc099-*` / `rfc212-*` / `agent-*` / `workflows*`）一并带上，别只跑 `rfc3xx-<聚合名>-*`。
 - **锁**：`tests/rfc359-w4-d14-d15-regressions.test.ts` 两引擎各锁一遍这两条。
+
+### 本地 `bun run lint` 绿、CI 的 eslint 红：缓存 + codemod 生成的正则转义
+
+2026-09-05 实撞两次，损失两轮 CI：
+
+- **eslint 有缓存**。仓库的 `lint` 脚本带 `--cache`，改动过的文件若命中旧缓存条目就**不会重新检查**；
+  本地 `bun run lint` 报 0 problems，CI 在干净 checkout 上（无缓存）同一份代码报 2 errors。
+  **判红之前先用 `--no-cache` 复跑**：`bunx eslint <files> --max-warnings 0 --no-cache`。
+- **codemod 生成的正则要验字节**。用 Python 脚本改测试时，`"\\b"` 在多层引号（heredoc → Python 字符串 →
+  正则字面量）里很容易塌成**退格控制符 0x08**，eslint 报 `no-control-regex`；更隐蔽的是塌成**双反斜杠**
+  （`/\\bDbClient\\b/`），它匹配的是字面反斜杠——`not.toMatch` 一律通过，**锁静默失效且测试全绿**。
+  生成完用 `cat -v` 看一眼字节，再喂一个应当命中的字符串验证判别力（`re.test('import type { DbClient }')`）。
+- **`format:check` / `lint` 的覆盖面比 backend 大**：`packages/**/*.{ts,tsx,json,md}` 加上仓库根的
+  `e2e/` / `scripts/` / workflow yml。只对 backend 跑等于没跑全，`bun run format:check` 才是 CI 的那一条。

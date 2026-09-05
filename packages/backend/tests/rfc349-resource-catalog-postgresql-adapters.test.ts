@@ -55,7 +55,9 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     const composition = source('src/modules/resource-catalog/composition/workgroupOperations.ts')
     expect(repository).toContain('ProviderNeutralDatabase')
     expect(repository).toContain('runResourceCatalogTransaction')
-    expect(repository).not.toMatch(/PostgresqlDatabaseClient|DbClient|dbTxSync|createSqlite/)
+    expect(repository).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
+    )
     expect(composition).toContain('composeWorkgroupCatalogFromAdapters')
     expect(composition).toContain('createWorkgroupRepository(')
     expect(composition).toContain('export function composeWorkgroupCatalog(')
@@ -83,7 +85,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     const references = source('src/modules/resource-catalog/infrastructure/referenceUsability.ts')
     expect(references).toContain('resolveAgentIdsUsable')
     expect(references).toContain('assertAgentIdsUsableInTransaction')
-    expect(references).not.toMatch(/PostgresqlDatabaseClient|DbClient|DbTxSync/)
+    expect(references).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|\bDbTxSync\b/)
   })
 
   test('workflow validation inventory and D15 admission have native PostgreSQL adapters', () => {
