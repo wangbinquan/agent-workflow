@@ -46404,7 +46404,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e3b4efcd5c1a3c747721b7b1f7475932a55e7fc3e9ec30ec04b2ade524612f2d",
+  "sourceDigest": "sha256:e01cd09d5a4d4712912aa17904cefb72c978865505bd72335e898f2d7c383291",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46514,7 +46514,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 270,
+      "durableWriterSites": 269,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -48489,38 +48489,6 @@
       },
       {
         "allowedTables": [
-          "tasks"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "interruptSurvivor",
-        "controlSubtype": "terminal-control",
-        "dataClass": "tasks",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts#34:tasks",
-        "line": 34,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts#PostgresqlTaskExecutionShutdownOperations",
-        "requiredBrandedProof": "CanonicalControlTransaction",
-        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
-        "symbol": "PostgresqlTaskExecutionShutdownOperations"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionOwners"
-        ],
-        "authorityKind": "control-revision",
-        "consumer": "markRecoveryRequired",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionOwners",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts#77:taskExecutionOwners",
-        "line": 77,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts#PostgresqlTaskExecutionShutdownOperations",
-        "requiredBrandedProof": "VerifiedStopProofOrExactControlTuple",
-        "revisionPredicate": "exact-owner-tuple-state-and-revision",
-        "symbol": "PostgresqlTaskExecutionShutdownOperations"
-      },
-      {
-        "allowedTables": [
           "taskExecutionOwners"
         ],
         "authorityKind": "worker-epoch",
@@ -49851,22 +49819,6 @@
         "allowedTables": [
           "taskExecutionOwners"
         ],
-        "authorityKind": "control-revision",
-        "consumer": "markRecoveryRequired",
-        "controlSubtype": "terminal-control",
-        "dataClass": "taskExecutionOwners",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts#81:taskExecutionOwners",
-        "line": 81,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts#SqliteTaskExecutionShutdownOperations",
-        "requiredBrandedProof": "VerifiedStopProofOrExactControlTuple",
-        "revisionPredicate": "exact-owner-tuple-state-and-revision",
-        "symbol": "SqliteTaskExecutionShutdownOperations"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionOwners"
-        ],
         "authorityKind": "worker-epoch",
         "consumer": "claimPendingIntent",
         "controlSubtype": null,
@@ -50187,33 +50139,65 @@
         "allowedTables": [
           "taskExecutionIntents"
         ],
-        "authorityKind": "worker-epoch",
+        "authorityKind": "control-revision",
         "consumer": "terminalizeTaskExecutionIntentsInTx",
-        "controlSubtype": null,
+        "controlSubtype": "terminal-control",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts",
         "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#49:taskExecutionIntents",
         "line": 49,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#terminalizeTaskExecutionIntentsInTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "terminalizeTaskExecutionIntentsInTx"
       },
       {
         "allowedTables": [
           "taskExecutionLineageOperationRecords"
         ],
-        "authorityKind": "worker-epoch",
+        "authorityKind": "control-revision",
         "consumer": "terminalizeTaskExecutionIntentsInTx",
-        "controlSubtype": null,
+        "controlSubtype": "terminal-control",
         "dataClass": "taskExecutionLineageOperationRecords",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts",
         "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#79:taskExecutionLineageOperationRecords",
         "line": 79,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionIntentTerminalPersistence.ts#terminalizeTaskExecutionIntentsInTx",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "terminalizeTaskExecutionIntentsInTx"
+      },
+      {
+        "allowedTables": [
+          "taskExecutionOwners"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "markRecoveryRequired",
+        "controlSubtype": "terminal-control",
+        "dataClass": "taskExecutionOwners",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts#101:taskExecutionOwners",
+        "line": 101,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts#DrizzleTaskExecutionShutdownOperations",
+        "requiredBrandedProof": "VerifiedStopProofOrExactControlTuple",
+        "revisionPredicate": "exact-owner-tuple-state-and-revision",
+        "symbol": "DrizzleTaskExecutionShutdownOperations"
+      },
+      {
+        "allowedTables": [
+          "tasks"
+        ],
+        "authorityKind": "control-revision",
+        "consumer": "interruptSurvivor",
+        "controlSubtype": "terminal-control",
+        "dataClass": "tasks",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts#41:tasks",
+        "line": 41,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts#DrizzleTaskExecutionShutdownOperations",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
+        "symbol": "DrizzleTaskExecutionShutdownOperations"
       },
       {
         "allowedTables": [
@@ -50283,32 +50267,32 @@
         "allowedTables": [
           "tasks"
         ],
-        "authorityKind": "worker-epoch",
+        "authorityKind": "control-revision",
         "consumer": "set",
-        "controlSubtype": null,
+        "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
         "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#110:tasks",
         "line": 110,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "DrizzleTaskRuntimeLifecyclePersistence"
       },
       {
         "allowedTables": [
           "tasks"
         ],
-        "authorityKind": "worker-epoch",
+        "authorityKind": "control-revision",
         "consumer": "set",
-        "controlSubtype": null,
+        "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
         "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#142:tasks",
         "line": 142,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "requiredBrandedProof": "CanonicalControlTransaction",
+        "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
         "symbol": "DrizzleTaskRuntimeLifecyclePersistence"
       },
       {

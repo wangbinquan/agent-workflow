@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1949,
+    "backendFiles": 1948,
     "frontendFiles": 622,
     "legacyFiles": 616,
-    "moduleFiles": 1333,
-    "productionFiles": 2726,
+    "moduleFiles": 1332,
+    "productionFiles": 2725,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26118
+    "symbolsIncludingFileRoots": 26115
   },
   "entries": [
     {
@@ -143626,30 +143626,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts#PostgresqlTaskExecutionShutdownOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlTaskExecutionShutdownOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleAutoRepairCommand.ts#$file",
       "removeAfterWave": null,
@@ -147286,42 +147262,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts#changed",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "changed",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts#SqliteTaskExecutionShutdownOperations",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteTaskExecutionShutdownOperations",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskLifecycleAutoRepairCommand.ts#$file",
       "removeAfterWave": null,
@@ -148659,6 +148599,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createTaskExecutionReadModels",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts#DrizzleTaskExecutionShutdownOperations",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DrizzleTaskExecutionShutdownOperations",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -314121,5 +314085,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e3b4efcd5c1a3c747721b7b1f7475932a55e7fc3e9ec30ec04b2ade524612f2d"
+  "sourceDigest": "sha256:e01cd09d5a4d4712912aa17904cefb72c978865505bd72335e898f2d7c383291"
 }
