@@ -1,17 +1,13 @@
 import { join } from 'node:path'
 
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   createMissionInputUploadOperations,
   type MissionInputBlobPersistence,
   type MissionInputUploadOperations,
 } from '../application/missionInputUploadOperations'
 import { EvidenceStore } from '../infrastructure/evidenceStore'
-import {
-  createPostgresqlMissionInputUploadPersistence,
-  createSqliteMissionInputUploadPersistence,
-} from '../infrastructure/missionInputUploadPersistence'
+import { createMissionInputUploadPersistence } from '../infrastructure/missionInputUploadPersistence'
 
 function lazyEvidenceBlobs(appHome: string): MissionInputBlobPersistence {
   let evidence: EvidenceStore | undefined
@@ -23,22 +19,13 @@ function lazyEvidenceBlobs(appHome: string): MissionInputBlobPersistence {
   }
 }
 
-export function composeSqliteMissionInputUploadOperations(input: {
-  readonly db: DbClient
+/** RFC-359 W4-D11：一份装配，两个 provider 共用（persistence 已是中立实现）。 */
+export function composeMissionInputUploadOperations(input: {
+  readonly db: ProviderNeutralDatabase
   readonly appHome: string
 }): MissionInputUploadOperations {
   return createMissionInputUploadOperations({
-    persistence: createSqliteMissionInputUploadPersistence(input.db),
-    blobs: lazyEvidenceBlobs(input.appHome),
-  })
-}
-
-export function composePostgresqlMissionInputUploadOperations(input: {
-  readonly db: PostgresqlDatabaseClient
-  readonly appHome: string
-}): MissionInputUploadOperations {
-  return createMissionInputUploadOperations({
-    persistence: createPostgresqlMissionInputUploadPersistence(input.db),
+    persistence: createMissionInputUploadPersistence(input.db),
     blobs: lazyEvidenceBlobs(input.appHome),
   })
 }

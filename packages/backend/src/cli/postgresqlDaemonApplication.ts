@@ -163,7 +163,7 @@ import {
   composePostgresqlDevelopmentMissionOperations,
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
-import { composePostgresqlMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
+import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
 import { composePostgresqlRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
 import { composePostgresqlDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
@@ -1620,7 +1620,7 @@ export async function composePostgresqlDaemonApplication(
         operations: developmentMissions,
         contexts: identityAccess.directAuthority,
       }),
-      missionInputUploads: composePostgresqlMissionInputUploadOperations({
+      missionInputUploads: composeMissionInputUploadOperations({
         db: input.db,
         appHome: input.appHome,
       }),

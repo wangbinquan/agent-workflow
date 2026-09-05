@@ -18,11 +18,8 @@ import {
   handleChildMissionDecision,
   selectPlaybookStepDecision,
 } from '../src/modules/development-automation/application/playbookStepCoordinator'
-import {
-  createSqlitePlaybookSagaPersistence,
-  createSqlitePlaybookSagaStore,
-} from '../src/modules/development-automation/infrastructure/sqlitePlaybookSagaStore'
-import type { PlaybookSagaStore } from '../src/modules/development-automation/application/ports/playbookSagaStore'
+import { createPlaybookSagaPersistence } from '../src/modules/development-automation/infrastructure/playbookSagaStore'
+import type { PlaybookSagaPersistence } from '../src/modules/development-automation/application/ports/playbookSagaStore'
 import type { ReconcilerPorts } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { ReconcileDeps } from '../src/modules/development-automation/application/missionReconciler'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
@@ -115,12 +112,12 @@ async function setup(
 ): Promise<{
   deps: ReconcileDeps
   mission: NonNullable<Awaited<ReturnType<ReconcileDeps['store']['getMission']>>>
-  saga: PlaybookSagaStore
+  saga: PlaybookSagaPersistence
   snapshot: ReturnType<typeof buildFactSnapshot>
   launchSibling(idempotencyKey: string): Promise<string>
   reopenSaga(): {
-    readonly store: PlaybookSagaStore
-    readonly persistence: ReturnType<typeof createSqlitePlaybookSagaPersistence>
+    readonly store: PlaybookSagaPersistence
+    readonly persistence: ReturnType<typeof createPlaybookSagaPersistence>
   }
 }> {
   const fx = await buildPr3Fixture()
@@ -168,10 +165,10 @@ async function setup(
       state: 'materialized',
       createdAt: Date.now(),
     })
-  const saga = createSqlitePlaybookSagaStore(fx.db)
+  const saga = createPlaybookSagaPersistence(fx.db)
   const base = fx.deps({
     ...extraPorts,
-    playbookSaga: createSqlitePlaybookSagaPersistence(fx.db),
+    playbookSaga: createPlaybookSagaPersistence(fx.db),
     actionTemplates: {
       async content(id) {
         if (id === 'tpl-classifier') return actionTemplate('problem.classify')
@@ -202,20 +199,20 @@ async function setup(
     }),
     launchSibling: (idempotencyKey) => fx.launchDirect(idempotencyKey),
     reopenSaga: () => ({
-      store: createSqlitePlaybookSagaStore(fx.db),
-      persistence: createSqlitePlaybookSagaPersistence(fx.db),
+      store: createPlaybookSagaPersistence(fx.db),
+      persistence: createPlaybookSagaPersistence(fx.db),
     }),
   }
 }
 
-function settle(
-  saga: PlaybookSagaStore,
+async function settle(
+  saga: PlaybookSagaPersistence,
   id: string,
   state: 'succeeded' | 'failed' | 'waiting',
   failureCode: string | null = null,
-): void {
+): Promise<void> {
   expect(
-    saga.updateStepRun({
+    await saga.updateStepRun({
       id,
       from: ['claimed', 'running', 'waiting'],
       state,
@@ -235,10 +232,12 @@ describe('employee step routing', () => {
     const first = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     expect(first).toMatchObject({ kind: 'run-agent-action' })
     if (first?.kind !== 'run-agent-action') return
-    settle(env.saga, first.stepRunRef!, 'succeeded')
+    await settle(env.saga, first.stepRunRef!, 'succeeded')
 
     expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toBeNull()
-    expect(env.saga.listStepRuns(env.mission.id).map((run) => run.stepId)).toEqual(['attempt'])
+    expect((await env.saga.listStepRuns(env.mission.id)).map((run) => run.stepId)).toEqual([
+      'attempt',
+    ])
   })
 
   // 回归锁：业务说明书只写「这一步吃 mission 需求」，把需求变成可挂载 bundle 是
@@ -255,7 +254,7 @@ describe('employee step routing', () => {
     const first = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     expect(first).toMatchObject({ kind: 'materialize-direct-requirement' })
     // 物化属于平台，不占任何业务步骤的 run —— 说明书里那一步还没开始。
-    expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(0)
+    expect(await env.saga.listStepRuns(env.mission.id)).toHaveLength(0)
 
     await env.deps.store.insertMissionSource({
       id: `src-late-${env.mission.id}`,
@@ -287,11 +286,11 @@ describe('employee step routing', () => {
     expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toMatchObject({
       kind: 'run-agent-action',
     })
-    expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(1)
+    expect(await env.saga.listStepRuns(env.mission.id)).toHaveLength(1)
 
     const rewritten = { ...env.mission, requirementBundleRef: `fact-snapshot-${Date.now()}` }
     await selectPlaybookStepDecision(env.deps, rewritten, env.snapshot)
-    expect(env.saga.listStepRuns(env.mission.id)).toHaveLength(1)
+    expect(await env.saga.listStepRuns(env.mission.id)).toHaveLength(1)
   })
 
   test('exhaustion follows the configured recovery step without blocking the Mission', async () => {
@@ -300,12 +299,12 @@ describe('employee step routing', () => {
     })
     const first = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     if (first?.kind !== 'run-agent-action') throw new Error('expected root action')
-    settle(env.saga, first.stepRunRef!, 'failed', 'agent-contract-exhausted')
+    await settle(env.saga, first.stepRunRef!, 'failed', 'agent-contract-exhausted')
 
     const recovery = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     expect(recovery).toMatchObject({ kind: 'collect-repository-facts' })
     if (recovery?.kind !== 'collect-repository-facts') return
-    expect(env.saga.getStepRun(recovery.stepRunRef!)?.stepId).toBe('recover')
+    expect((await env.saga.getStepRun(recovery.stepRunRef!))?.stepId).toBe('recover')
     expect((await env.deps.store.getMission(env.mission.id))?.status).not.toBe('blocked')
   })
 
@@ -327,32 +326,34 @@ describe('employee step routing', () => {
     })
     const owner = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     if (owner?.kind !== 'collect-repository-facts') throw new Error('expected owner')
-    settle(env.saga, owner.stepRunRef!, 'succeeded')
+    await settle(env.saga, owner.stepRunRef!, 'succeeded')
 
     const memberA = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     if (memberA?.kind !== 'collect-repository-facts') throw new Error('expected first member')
-    settle(env.saga, memberA.stepRunRef!, 'succeeded')
-    const memberARow = env.saga.getStepRun(memberA.stepRunRef!)!
-    const memberB = env.saga.claimStepRun({
-      id: 'join-member-b',
-      missionId: env.mission.id,
-      employeeId: env.mission.employeeId!,
-      employeeRevision: env.mission.employeeRevision!,
-      stepId: 'check-b',
-      attempt: 0,
-      inputDigest: memberARow.inputDigest,
-      producerKind: 'platform',
-      deadlineAt: null,
-      now: Date.now(),
-    }).row
-    settle(env.saga, memberB.id, 'waiting')
+    await settle(env.saga, memberA.stepRunRef!, 'succeeded')
+    const memberARow = (await env.saga.getStepRun(memberA.stepRunRef!))!
+    const memberB = (
+      await env.saga.claimStepRun({
+        id: 'join-member-b',
+        missionId: env.mission.id,
+        employeeId: env.mission.employeeId!,
+        employeeRevision: env.mission.employeeRevision!,
+        stepId: 'check-b',
+        attempt: 0,
+        inputDigest: memberARow.inputDigest,
+        producerKind: 'platform',
+        deadlineAt: null,
+        now: Date.now(),
+      })
+    ).row
+    await settle(env.saga, memberB.id, 'waiting')
 
     expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toBeNull()
-    expect(env.saga.getStepRun(memberB.id)?.state).toBe('observation-only')
+    expect((await env.saga.getStepRun(memberB.id))?.state).toBe('observation-only')
     expect(
-      env.saga
-        .listJoinMembers(env.mission.id, 'parallel-checks')
-        .every((member) => member.settledResult === 'satisfied'),
+      (await env.saga.listJoinMembers(env.mission.id, 'parallel-checks')).every(
+        (member) => member.settledResult === 'satisfied',
+      ),
     ).toBe(true)
   })
 })
@@ -410,7 +411,7 @@ describe('problem production and handling', () => {
       problemInput: { producerId: 'primary' },
     })
     if (primary?.kind !== 'run-agent-action') return
-    settle(env.saga, primary.stepRunRef!, 'failed', 'producer-contract-exhausted')
+    await settle(env.saga, primary.stepRunRef!, 'failed', 'producer-contract-exhausted')
 
     expect(await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)).toMatchObject({
       kind: 'run-agent-action',
@@ -474,13 +475,15 @@ describe('problem production and handling', () => {
     )
     const handler = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     if (handler?.kind !== 'run-agent-action') throw new Error('expected high-priority handler')
-    expect(env.saga.getStepRun(handler.stepRunRef!)?.stepId).toBe('problem-handler:handle-high')
-    settle(env.saga, handler.stepRunRef!, 'succeeded')
+    expect((await env.saga.getStepRun(handler.stepRunRef!))?.stepId).toBe(
+      'problem-handler:handle-high',
+    )
+    await settle(env.saga, handler.stepRunRef!, 'succeeded')
 
     const verification = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     expect(verification).toMatchObject({ kind: 'collect-repository-facts' })
     if (verification?.kind !== 'collect-repository-facts') return
-    expect(env.saga.getStepRun(verification.stepRunRef!)?.stepId).toBe('verify')
+    expect((await env.saga.getStepRun(verification.stepRunRef!))?.stepId).toBe('verify')
   })
 })
 
@@ -489,31 +492,35 @@ describe('cross-repository employee and approval saga', () => {
     const env = await setup({})
     const now = Date.now()
     const childMissionId = await env.launchSibling(`retained-child-${crypto.randomUUID()}`)
-    const childStep = env.saga.claimStepRun({
-      id: 'retained-child-step',
-      missionId: env.mission.id,
-      employeeId: env.mission.employeeId!,
-      employeeRevision: env.mission.employeeRevision!,
-      stepId: 'delegate-retained-child',
-      attempt: 0,
-      inputDigest: '4'.repeat(64),
-      producerKind: 'digital-employee',
-      deadlineAt: now + 60_000,
-      now,
-    }).row
-    const childLink = env.saga.claimMissionLink({
-      id: 'retained-child-link',
-      parentMissionId: env.mission.id,
-      parentStepRunId: childStep.id,
-      targetRepositoryId: 'retained-child-repository',
-      targetEmployeeId: 'retained-child-employee',
-      targetEmployeeRevision: 2,
-      inputDigest: '5'.repeat(64),
-      idempotencyKey: '6'.repeat(64),
-      completion: 'ready-to-merge',
-      now,
-    }).row
-    env.saga.observeMissionLink({
+    const childStep = (
+      await env.saga.claimStepRun({
+        id: 'retained-child-step',
+        missionId: env.mission.id,
+        employeeId: env.mission.employeeId!,
+        employeeRevision: env.mission.employeeRevision!,
+        stepId: 'delegate-retained-child',
+        attempt: 0,
+        inputDigest: '4'.repeat(64),
+        producerKind: 'digital-employee',
+        deadlineAt: now + 60_000,
+        now,
+      })
+    ).row
+    const childLink = (
+      await env.saga.claimMissionLink({
+        id: 'retained-child-link',
+        parentMissionId: env.mission.id,
+        parentStepRunId: childStep.id,
+        targetRepositoryId: 'retained-child-repository',
+        targetEmployeeId: 'retained-child-employee',
+        targetEmployeeRevision: 2,
+        inputDigest: '5'.repeat(64),
+        idempotencyKey: '6'.repeat(64),
+        completion: 'ready-to-merge',
+        now,
+      })
+    ).row
+    await env.saga.observeMissionLink({
       id: childLink.id,
       childMissionId,
       childRevision: 7,
@@ -523,38 +530,42 @@ describe('cross-repository employee and approval saga', () => {
       observedAt: now + 1,
     })
 
-    const approvalStep = env.saga.claimStepRun({
-      id: 'retained-approval-step',
-      missionId: env.mission.id,
-      employeeId: env.mission.employeeId!,
-      employeeRevision: env.mission.employeeRevision!,
-      stepId: 'wait-retained-approval',
-      attempt: 0,
-      inputDigest: '7'.repeat(64),
-      producerKind: 'approval-observe',
-      deadlineAt: now + 120_000,
-      now,
-    }).row
-    const approval = env.saga.claimApprovalSaga({
-      id: 'retained-approval-saga',
-      missionId: env.mission.id,
-      stepRunId: approvalStep.id,
-      adapterId: 'retained-approval-system',
-      adapterRevision: 3,
-      draftRef: 'retained-approval-draft',
-      submitIntentDigest: '8'.repeat(64),
-      idempotencyKey: '9'.repeat(64),
-      deadlineAt: now + 120_000,
-      now,
-    }).row
-    env.saga.recordApprovalSubmitted({
+    const approvalStep = (
+      await env.saga.claimStepRun({
+        id: 'retained-approval-step',
+        missionId: env.mission.id,
+        employeeId: env.mission.employeeId!,
+        employeeRevision: env.mission.employeeRevision!,
+        stepId: 'wait-retained-approval',
+        attempt: 0,
+        inputDigest: '7'.repeat(64),
+        producerKind: 'approval-observe',
+        deadlineAt: now + 120_000,
+        now,
+      })
+    ).row
+    const approval = (
+      await env.saga.claimApprovalSaga({
+        id: 'retained-approval-saga',
+        missionId: env.mission.id,
+        stepRunId: approvalStep.id,
+        adapterId: 'retained-approval-system',
+        adapterRevision: 3,
+        draftRef: 'retained-approval-draft',
+        submitIntentDigest: '8'.repeat(64),
+        idempotencyKey: '9'.repeat(64),
+        deadlineAt: now + 120_000,
+        now,
+      })
+    ).row
+    await env.saga.recordApprovalSubmitted({
       id: approval.id,
       correlationRef: 'retained-correlation',
       externalRequestRef: 'APP-RETAINED',
       submittedRevision: 'submit-retained',
       now: now + 2,
     })
-    env.saga.recordApprovalObservation({
+    await env.saga.recordApprovalObservation({
       id: approval.id,
       status: 'approved',
       observedRevision: 'approved-retained',
@@ -580,7 +591,7 @@ describe('cross-repository employee and approval saga', () => {
     )
     expect(terminal.ok).toBe(true)
 
-    expect(env.saga.listMissionLinks(env.mission.id)).toMatchObject([
+    expect(await env.saga.listMissionLinks(env.mission.id)).toMatchObject([
       {
         childMissionId,
         latestStatus: 'ready-to-merge',
@@ -588,7 +599,7 @@ describe('cross-repository employee and approval saga', () => {
         outputRef: 'child-ready-receipt',
       },
     ])
-    expect(env.saga.listApprovalSagas(env.mission.id)).toMatchObject([
+    expect(await env.saga.listApprovalSagas(env.mission.id)).toMatchObject([
       {
         externalRequestRef: 'APP-RETAINED',
         latestStatus: 'approved',
@@ -623,7 +634,7 @@ describe('cross-repository employee and approval saga', () => {
       kind: 'block',
       reason: 'child-mission-cycle',
     })
-    expect(env.saga.listMissionLinks(env.mission.id)).toEqual([])
+    expect(await env.saga.listMissionLinks(env.mission.id)).toEqual([])
   })
 
   test('resumes the published parent chain after child readiness and a pending-to-approved receipt', async () => {
@@ -786,7 +797,7 @@ describe('cross-repository employee and approval saga', () => {
       capabilityId: 'approval.prepare',
       approvalInput: { approvalType: 'gate-rollout' },
     })
-    settle(env.saga, prepare.stepRunRef!, 'succeeded')
+    await settle(env.saga, prepare.stepRunRef!, 'succeeded')
 
     const submit = await selectPlaybookStepDecision(env.deps, env.mission, env.snapshot)
     if (submit?.kind !== 'submit-approval') throw new Error('expected approval submit')
@@ -812,7 +823,7 @@ describe('cross-repository employee and approval saga', () => {
       ...env.deps,
       ports: { ...env.deps.ports, playbookSaga: restartedSaga.persistence },
     }
-    expect(restartedSaga.store.listApprovalSagas(env.mission.id)).toMatchObject([
+    expect(await restartedSaga.store.listApprovalSagas(env.mission.id)).toMatchObject([
       {
         externalRequestRef: 'APP-1',
         latestStatus: 'pending',
@@ -839,7 +850,7 @@ describe('cross-repository employee and approval saga', () => {
     const resumed = await selectPlaybookStepDecision(restartedDeps, env.mission, env.snapshot)
     expect(resumed).toMatchObject({ kind: 'collect-repository-facts' })
     if (resumed?.kind !== 'collect-repository-facts') return
-    settle(restartedSaga.store, resumed.stepRunRef!, 'succeeded')
+    await settle(restartedSaga.store, resumed.stepRunRef!, 'succeeded')
     expect(await selectPlaybookStepDecision(restartedDeps, env.mission, env.snapshot)).toBeNull()
 
     expect({ childCreates, childObserves, approvalSubmits, approvalObserves }).toEqual({
@@ -898,7 +909,7 @@ describe('cross-repository employee and approval saga', () => {
     expect(
       await handleChildMissionDecision(env.deps, env.mission, selected, 'decision-foreign-child'),
     ).toBe('collected')
-    expect(env.saga.getStepRun(selected.stepRunRef)).toMatchObject({
+    expect(await env.saga.getStepRun(selected.stepRunRef)).toMatchObject({
       state: 'failed',
       failureCategory: 'contract-violation',
       failureCode: 'child-intent-digest-mismatch',
@@ -933,31 +944,35 @@ describe('cross-repository employee and approval saga', () => {
       },
     )
     const now = Date.now()
-    const run = env.saga.claimStepRun({
-      id: 'observe-expired-step',
-      missionId: env.mission.id,
-      employeeId: env.mission.employeeId!,
-      employeeRevision: env.mission.employeeRevision!,
-      stepId: 'observe-expired',
-      attempt: 0,
-      inputDigest: '1'.repeat(64),
-      producerKind: 'approval-observe',
-      deadlineAt: now - 1,
-      now,
-    }).row
-    const saga = env.saga.claimApprovalSaga({
-      id: 'approval-expired-saga',
-      missionId: env.mission.id,
-      stepRunId: run.id,
-      adapterId: 'approval-system',
-      adapterRevision: 1,
-      draftRef: 'approval-draft',
-      submitIntentDigest: '2'.repeat(64),
-      idempotencyKey: '3'.repeat(64),
-      deadlineAt: now - 1,
-      now,
-    }).row
-    env.saga.recordApprovalSubmitted({
+    const run = (
+      await env.saga.claimStepRun({
+        id: 'observe-expired-step',
+        missionId: env.mission.id,
+        employeeId: env.mission.employeeId!,
+        employeeRevision: env.mission.employeeRevision!,
+        stepId: 'observe-expired',
+        attempt: 0,
+        inputDigest: '1'.repeat(64),
+        producerKind: 'approval-observe',
+        deadlineAt: now - 1,
+        now,
+      })
+    ).row
+    const saga = (
+      await env.saga.claimApprovalSaga({
+        id: 'approval-expired-saga',
+        missionId: env.mission.id,
+        stepRunId: run.id,
+        adapterId: 'approval-system',
+        adapterRevision: 1,
+        draftRef: 'approval-draft',
+        submitIntentDigest: '2'.repeat(64),
+        idempotencyKey: '3'.repeat(64),
+        deadlineAt: now - 1,
+        now,
+      })
+    ).row
+    await env.saga.recordApprovalSubmitted({
       id: saga.id,
       correlationRef: 'approval-correlation-expired',
       externalRequestRef: 'APP-EXPIRED',
@@ -978,10 +993,10 @@ describe('cross-repository employee and approval saga', () => {
         'decision-observe-expired',
       ),
     ).toBe('collected')
-    expect(env.saga.getStepRun(run.id)).toMatchObject({
+    expect(await env.saga.getStepRun(run.id)).toMatchObject({
       state: 'failed',
       failureCode: 'approval-expired',
     })
-    expect(env.saga.getApprovalSaga(saga.id)?.latestStatus).toBe('expired')
+    expect((await env.saga.getApprovalSaga(saga.id))?.latestStatus).toBe('expired')
   })
 })

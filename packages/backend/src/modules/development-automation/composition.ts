@@ -103,8 +103,7 @@ import {
   type RetentionSweepResult,
 } from './infrastructure/retentionSweeper'
 import type { DevelopmentAutomationMaintenanceCommands } from './public/commands'
-import { createSqlitePlaybookSagaPersistence } from './infrastructure/sqlitePlaybookSagaStore'
-import { createPostgresqlPlaybookSagaPersistence } from './infrastructure/postgresqlPlaybookSagaStore'
+import { createPlaybookSagaPersistence } from './infrastructure/playbookSagaStore'
 import { createChildMissionParticipant } from './infrastructure/childMissionParticipant'
 import {
   createActionTemplatePersistence,
@@ -124,10 +123,7 @@ import {
 } from './infrastructure/verificationRunner'
 import { verificationProfileContentSchema } from './domain/verificationProfile'
 import { readUploadPlan } from './infrastructure/uploadPlanStore'
-import {
-  createPostgresqlUploadMaintenancePersistence,
-  createSqliteUploadMaintenancePersistence,
-} from './infrastructure/missionInputUploadPersistence'
+import { createUploadMaintenancePersistence } from './infrastructure/missionInputUploadPersistence'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
 import {
   createPostgresqlUploadPlacementPersistence,
@@ -160,14 +156,13 @@ export function composePostgresqlDevelopmentAdmissionLookup(
   return createAdmissionLookup(db)
 }
 
-export const composeSqlitePlaybookSaga = createSqlitePlaybookSagaPersistence
-export const composePostgresqlPlaybookSaga = createPostgresqlPlaybookSagaPersistence
+export const composePlaybookSaga = createPlaybookSagaPersistence
 
 /** Worker-bootstrap composition for the context-owned maintenance slice. */
 export function composeDevelopmentAutomationMaintenanceCommands(
   db: DbClient,
 ): DevelopmentAutomationMaintenanceCommands {
-  const uploads = createSqliteUploadMaintenancePersistence(db)
+  const uploads = createUploadMaintenancePersistence(db)
   const lookup = composeSqliteDevelopmentAdmissionLookup(db)
   return {
     sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
@@ -185,7 +180,7 @@ export function composeDevelopmentAutomationMaintenanceCommands(
 export function composePostgresqlDevelopmentAutomationMaintenanceCommands(
   db: PostgresqlDatabaseClient,
 ): DevelopmentAutomationMaintenanceCommands {
-  const uploads = createPostgresqlUploadMaintenancePersistence(db)
+  const uploads = createUploadMaintenancePersistence(db)
   const lookup = composePostgresqlDevelopmentAdmissionLookup(db)
   return {
     sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
@@ -456,13 +451,13 @@ export function composeDevelopmentAutomation(
     uploadPlanReader: { read: async (planId) => readUploadPlan(deps.db, planId) },
     actionTemplates: createActionTemplatePersistence(deps.db),
     verificationProfiles: createVerificationProfilePersistence(deps.db),
-    playbookSaga: createSqlitePlaybookSagaPersistence(deps.db),
+    playbookSaga: createPlaybookSagaPersistence(deps.db),
     repositoryLocations: repositories,
     repositoryFacts: createRepositoryFactsCollector(deps.db),
     uploadPublication: {
       record: async (input) => recordUploadPublicationReceipt(deps.db, input),
     },
-    uploads: createSqliteUploadMaintenancePersistence(deps.db),
+    uploads: createUploadMaintenancePersistence(deps.db),
     wakeReaders: {
       listUnconsumedWakeHintMissionIds: async () => listUnconsumedWakeHintMissionIds(deps.db),
     },
@@ -496,13 +491,13 @@ export function composePostgresqlDevelopmentAutomation(
     uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
     actionTemplates: createActionTemplatePersistence(deps.db),
     verificationProfiles: createVerificationProfilePersistence(deps.db),
-    playbookSaga: createPostgresqlPlaybookSagaPersistence(deps.db),
+    playbookSaga: createPlaybookSagaPersistence(deps.db),
     repositoryLocations: repositories,
     repositoryFacts: createPostgresqlRepositoryFactsCollector(deps.db),
     uploadPublication: {
       record: (input) => recordPostgresqlUploadPublicationReceipt(deps.db, input),
     },
-    uploads: createPostgresqlUploadMaintenancePersistence(deps.db),
+    uploads: createUploadMaintenancePersistence(deps.db),
     wakeReaders: {
       listUnconsumedWakeHintMissionIds: () => listUnconsumedWakeHintMissionIds(deps.db),
     },

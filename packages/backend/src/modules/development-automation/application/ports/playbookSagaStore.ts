@@ -79,6 +79,10 @@ export interface StepJoinRow {
   readonly settledResult: string | null
 }
 
+/**
+ * 同步形态只保留为类型源（`PlaybookSagaPersistence` 由它映射出 Promise 合同）；RFC-359 W4-D11 起没有同步实现，
+ * 唯一实现是 `infrastructure/playbookSagaStore.ts`，两个 provider 共用。
+ */
 export interface PlaybookSagaStore {
   claimStepRun(input: {
     readonly id: string
@@ -170,10 +174,7 @@ export interface PlaybookSagaStore {
   sagaDigest(missionId: string): string
 }
 
-/**
- * Provider-neutral asynchronous saga persistence. SQLite keeps its synchronous
- * oracle behind an adapter; live PostgreSQL callers only see this Promise port.
- */
+/** Provider-neutral asynchronous saga persistence（两个 provider 共用的唯一合同）。 */
 export type PlaybookSagaPersistence = {
   readonly [K in keyof PlaybookSagaStore]: PlaybookSagaStore[K] extends (
     ...args: infer Args

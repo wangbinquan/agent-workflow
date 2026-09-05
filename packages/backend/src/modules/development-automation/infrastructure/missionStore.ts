@@ -7,7 +7,7 @@
 // 多语句原子操作（launch、快照 + 决策、effect 状态机迁移、wake hint 消费）走统一事务原语；effect 迁移是
 // 读—判—写，先 `lockAggregateRoot` 锁 effect 行（PG FOR UPDATE，SQLite 独占事务下 no-op）。
 
-import { and, asc, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -22,13 +22,12 @@ import {
   developmentMissionSources,
   developmentMrClaims,
   developmentWakeHints,
-  missionInputUploads,
 } from '@/db/schema'
 import {
   databaseSessionFor,
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ValidationError } from '@/util/errors'
 import type { DeferredWakeRow } from '../domain/deferredWake'
 import { MISSION_STATUSES } from '../domain/mission'
 import type {
@@ -44,6 +43,7 @@ import type {
   OccResult,
 } from '../application/ports/missionStore'
 import { insertUploadPlan } from './uploadPlanStore'
+import { claimUploadSessions } from './uploadSessionStore'
 
 type MissionDbRow = typeof developmentMissions.$inferSelect
 
@@ -289,49 +289,12 @@ export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPe
         const created = await insertMissionRow(tx, input.mission)
         if (!created.created) return created
         if (input.upload !== null) {
-          for (const uploadRef of input.upload.uploadRefs) {
-            const actorFence =
-              input.upload.actorUserId === null
-                ? isNull(missionInputUploads.actorUserId)
-                : eq(missionInputUploads.actorUserId, input.upload.actorUserId)
-            const claimed = await tx
-              .update(missionInputUploads)
-              .set({
-                state: 'claimed',
-                claimedByMissionId: input.mission.id,
-                claimedAt: input.upload.now,
-              })
-              .where(
-                and(
-                  eq(missionInputUploads.id, uploadRef),
-                  actorFence,
-                  eq(missionInputUploads.state, 'pending'),
-                  gt(missionInputUploads.expiresAt, input.upload.now),
-                ),
-              )
-              .returning({ id: missionInputUploads.id })
-            if (claimed.length === 1) continue
-            const current = (
-              await tx
-                .select()
-                .from(missionInputUploads)
-                .where(eq(missionInputUploads.id, uploadRef))
-                .limit(1)
-            )[0]
-            if (current === undefined || current.actorUserId !== input.upload.actorUserId) {
-              throw new NotFoundError('upload-not-found', `upload not found: ${uploadRef}`)
-            }
-            if (current.state === 'claimed') {
-              throw new ConflictError(
-                'upload-already-claimed',
-                `upload claimed elsewhere: ${uploadRef}`,
-              )
-            }
-            throw new ConflictError(
-              'upload-not-claimable',
-              `upload expired or unusable: ${uploadRef}`,
-            )
-          }
+          await claimUploadSessions(tx, {
+            missionId: input.mission.id,
+            actorUserId: input.upload.actorUserId,
+            uploadRefs: input.upload.uploadRefs,
+            now: input.upload.now,
+          })
           await insertUploadPlan(tx, input.upload.plan)
         }
         await tx.insert(developmentMissionSources).values(input.source)

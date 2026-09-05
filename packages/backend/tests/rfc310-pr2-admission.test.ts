@@ -37,9 +37,9 @@ import {
   upsertAssignment,
 } from '../src/modules/development-automation/infrastructure/assignmentStore'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
-import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
-import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
+import { createMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
+import { createUploadSessionPersistence } from '../src/modules/development-automation/infrastructure/uploadSessionStore'
+import type { UploadSessionPersistence } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -63,7 +63,7 @@ interface Fixture {
   deps: LaunchDeps
   employees: { single: string; multi: string; none: string }
   policyId: string
-  uploads: UploadSessionStore
+  uploads: UploadSessionPersistence
 }
 
 function lookupOf(db: DbClient): AdmissionLookup {
@@ -210,7 +210,7 @@ async function buildFixture(): Promise<Fixture> {
   const none = await mkEmployee('emp-none', [])
 
   const store = createMissionPersistence(db)
-  const uploads = createSqliteUploadSessionStore(db)
+  const uploads = createUploadSessionPersistence(db)
   return {
     db,
     deps: {
@@ -218,7 +218,7 @@ async function buildFixture(): Promise<Fixture> {
       lookup: lookupOf(db),
       now,
       uploadAdmission: {
-        uploads: createSqliteMissionInputUploadPersistence(db),
+        uploads: createMissionInputUploadPersistence(db),
         // PR-2 admission 测试只关心 admission 链；baseline 一律「文件缺席」。
         resolveBaseline: async () => ({
           repositoryRef: 'repo-1',
@@ -234,16 +234,18 @@ async function buildFixture(): Promise<Fixture> {
   }
 }
 
-function mkUpload(store: UploadSessionStore, name: string): string {
-  return store.createUpload({
-    actorUserId: 'u-1',
-    originalName: name,
-    bytes: 4,
-    sha256: 'a'.repeat(64),
-    blobRef: 'a'.repeat(64),
-    idempotencyKey: null,
-    now: Date.now(),
-  }).id
+async function mkUpload(store: UploadSessionPersistence, name: string): Promise<string> {
+  return (
+    await store.createUpload({
+      actorUserId: 'u-1',
+      originalName: name,
+      bytes: 4,
+      sha256: 'a'.repeat(64),
+      blobRef: 'a'.repeat(64),
+      idempotencyKey: null,
+      now: Date.now(),
+    })
+  ).id
 }
 
 function directInput(
@@ -275,14 +277,14 @@ describe('rfc310 pr2 admission', () => {
     const filesOnly = await launchMission(
       f.deps,
       directInput('idem-files-only-1', f.employees.single, null, [
-        { uploadRef: mkUpload(f.uploads, 'spec.md'), repositoryTargetPath: 'docs/spec.md' },
+        { uploadRef: await mkUpload(f.uploads, 'spec.md'), repositoryTargetPath: 'docs/spec.md' },
       ]),
     )
     expect(filesOnly).toMatchObject({ status: 'working', created: true })
     const both = await launchMission(
       f.deps,
       directInput('idem-both-1', f.employees.single, 'and this', [
-        { uploadRef: mkUpload(f.uploads, 'spec2.md'), repositoryTargetPath: 'docs/spec.md' },
+        { uploadRef: await mkUpload(f.uploads, 'spec2.md'), repositoryTargetPath: 'docs/spec.md' },
       ]),
     )
     expect(both).toMatchObject({ status: 'working', created: true })
@@ -301,7 +303,7 @@ describe('rfc310 pr2 admission', () => {
 
   test('working launch with uploads claims rows, persists the plan, and backfills uploadPlanRef', async () => {
     const f = await buildFixture()
-    const ref = mkUpload(f.uploads, 'spec.md')
+    const ref = await mkUpload(f.uploads, 'spec.md')
     const result = await launchMission(
       f.deps,
       directInput('idem-plan-persist-1', f.employees.single, null, [
@@ -309,7 +311,7 @@ describe('rfc310 pr2 admission', () => {
       ]),
     )
     expect(result.status).toBe('working')
-    const claimed = f.uploads.getUpload(ref)!
+    const claimed = (await f.uploads.getUpload(ref))!
     expect(claimed.state).toBe('claimed')
     expect(claimed.claimedByMissionId).toBe(result.missionId)
     const mission = (await f.deps.store.getMission(result.missionId))!
@@ -333,9 +335,9 @@ describe('rfc310 pr2 admission', () => {
 
   test('launch transaction is atomic: in-transaction claim failure rolls back the mission row', async () => {
     const f = await buildFixture()
-    const ok = mkUpload(f.uploads, 'a.md')
-    const stolen = mkUpload(f.uploads, 'b.md')
-    f.uploads.claimUploads({
+    const ok = await mkUpload(f.uploads, 'a.md')
+    const stolen = await mkUpload(f.uploads, 'b.md')
+    await f.uploads.claimUploads({
       missionId: 'm-thief',
       actorUserId: 'u-1',
       uploadRefs: [stolen],
@@ -344,8 +346,8 @@ describe('rfc310 pr2 admission', () => {
     // TOCTOU 注入：预读谎报 stolen 仍 pending，让失败落在事务内的真实 claim 上。
     const lyingSessions = {
       ...f.uploads,
-      getUpload: (id: string) => {
-        const row = f.uploads.getUpload(id)
+      getUpload: async (id: string) => {
+        const row = await f.uploads.getUpload(id)
         return row !== null && row.id === stolen
           ? { ...row, state: 'pending', claimedByMissionId: null }
           : row
@@ -370,8 +372,8 @@ describe('rfc310 pr2 admission', () => {
     // 整体回滚：零 mission、零 plan、ok 行零消费、stolen 归属不变。
     expect(await f.deps.store.findByIdempotencyKey('idem-atomic-1')).toBeNull()
     expect(f.db.select().from(developmentRepositoryUploadPlans).all()).toHaveLength(0)
-    expect(f.uploads.getUpload(ok)!.state).toBe('pending')
-    expect(f.uploads.getUpload(stolen)!.claimedByMissionId).toBe('m-thief')
+    expect((await f.uploads.getUpload(ok))!.state).toBe('pending')
+    expect((await f.uploads.getUpload(stolen))!.claimedByMissionId).toBe('m-thief')
   })
 
   test('upload admission not wired blocks honestly instead of pretending', async () => {

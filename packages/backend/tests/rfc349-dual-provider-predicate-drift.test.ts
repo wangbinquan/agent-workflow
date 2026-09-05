@@ -25,8 +25,6 @@ const SRC = resolve(import.meta.dir, '..', 'src')
  * 业务判据（谁能改、算什么、默认值、失败怎么归类）**不在此列**——那种必须收成一份。
  */
 const ALLOWED_DIVERGENCE: Readonly<Record<string, string>> = {
-  'modules/development-automation/infrastructure/PlaybookSagaStore.ts::approval': '仅换行排版',
-  'modules/development-automation/infrastructure/PlaybookSagaStore.ts::step': '仅换行排版',
   // RFC-355 T2 已销账：`intentResourcePlanOf` 收进 `modules/intent/application/intentResourcePlan.ts`，
   // 两个 provider 共用一份，fork 不复存在（账本口径：销账要把条目一并删掉）。
   'modules/resource-catalog/infrastructure/PluginRepository.ts::ownerScopedNameWhere': '方言 SQL',

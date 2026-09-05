@@ -1,12 +1,21 @@
+// RFC-359 W4-D11 —— Playbook saga 持久化（RFC-310 PR-4 的 step run / mission link / approval saga / step join）：
+// 一份实现，两个 provider 共用。
+//
+// 幂等认领全部落在唯一索引上：`insert … onConflictDoNothing().returning()` 在两个引擎上同形，进程内只把
+// 索引冲突翻译成 `{ created: false, row }`。`updateStepRun` 是读—判—写：状态机门槛在进程内判，落库用
+// `where state = from` 的 CAS，整段放在统一事务原语里。`sagaDigest` 要三张表的同一快照，走 `serializable`
+// （PG 是 SERIALIZABLE 快照，SQLite 是独占事务）。
+
 import { and, asc, eq, sql } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   developmentApprovalSagas,
   developmentMissionLinks,
   developmentStepJoins,
   developmentStepRuns,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type {
   ApprovalSagaRow,
   MissionLinkRow,
@@ -41,9 +50,10 @@ function join(row: typeof developmentStepJoins.$inferSelect): StepJoinRow {
   }
 }
 
-export function createPostgresqlPlaybookSagaPersistence(
-  db: PostgresqlDatabaseClient,
+export function createPlaybookSagaPersistence(
+  db: ProviderNeutralDatabase,
 ): PlaybookSagaPersistence {
+  const session = databaseSessionFor(db)
   return {
     async claimStepRun(input) {
       const inserted = await db
@@ -64,33 +74,30 @@ export function createPostgresqlPlaybookSagaPersistence(
         })
         .onConflictDoNothing()
         .returning()
-        .all()
       if (inserted[0] !== undefined) return { created: true, row: step(inserted[0]) }
-      const existing = await db
-        .select()
-        .from(developmentStepRuns)
-        .where(
-          and(
-            eq(developmentStepRuns.missionId, input.missionId),
-            eq(developmentStepRuns.employeeId, input.employeeId),
-            eq(developmentStepRuns.employeeRevision, input.employeeRevision),
-            eq(developmentStepRuns.stepId, input.stepId),
-            eq(developmentStepRuns.attempt, input.attempt),
-            eq(developmentStepRuns.inputDigest, input.inputDigest),
-          ),
-        )
-        .limit(1)
-        .get()
+      const existing = (
+        await db
+          .select()
+          .from(developmentStepRuns)
+          .where(
+            and(
+              eq(developmentStepRuns.missionId, input.missionId),
+              eq(developmentStepRuns.employeeId, input.employeeId),
+              eq(developmentStepRuns.employeeRevision, input.employeeRevision),
+              eq(developmentStepRuns.stepId, input.stepId),
+              eq(developmentStepRuns.attempt, input.attempt),
+              eq(developmentStepRuns.inputDigest, input.inputDigest),
+            ),
+          )
+          .limit(1)
+      )[0]
       if (existing === undefined) throw new Error('step-run claim winner is unavailable')
       return { created: false, row: step(existing) }
     },
     async getStepRun(id) {
-      const row = await db
-        .select()
-        .from(developmentStepRuns)
-        .where(eq(developmentStepRuns.id, id))
-        .limit(1)
-        .get()
+      const row = (
+        await db.select().from(developmentStepRuns).where(eq(developmentStepRuns.id, id)).limit(1)
+      )[0]
       return row === undefined ? null : step(row)
     },
     async listStepRuns(missionId) {
@@ -100,26 +107,27 @@ export function createPostgresqlPlaybookSagaPersistence(
           .from(developmentStepRuns)
           .where(eq(developmentStepRuns.missionId, missionId))
           .orderBy(asc(developmentStepRuns.createdAt), asc(developmentStepRuns.id))
-          .all()
       ).map(step)
     },
     async findStepRunByAction(actionRunId) {
-      const row = await db
-        .select()
-        .from(developmentStepRuns)
-        .where(eq(developmentStepRuns.actionRunId, actionRunId))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentStepRuns)
+          .where(eq(developmentStepRuns.actionRunId, actionRunId))
+          .limit(1)
+      )[0]
       return row === undefined ? null : step(row)
     },
     async updateStepRun(input) {
-      return await db.transaction(async (tx) => {
-        const current = await tx
-          .select({ state: developmentStepRuns.state })
-          .from(developmentStepRuns)
-          .where(eq(developmentStepRuns.id, input.id))
-          .limit(1)
-          .get()
+      return await session.transaction(async (tx) => {
+        const current = (
+          await tx
+            .select({ state: developmentStepRuns.state })
+            .from(developmentStepRuns)
+            .where(eq(developmentStepRuns.id, input.id))
+            .limit(1)
+        )[0]
         if (current === undefined) return false
         const from = stepRunStateSchema.parse(current.state)
         if (!input.from.includes(from) || !canTransitionStepRun(from, input.state)) return false
@@ -141,7 +149,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           })
           .where(and(eq(developmentStepRuns.id, input.id), eq(developmentStepRuns.state, from)))
           .returning({ id: developmentStepRuns.id })
-          .all()
         return updated.length === 1
       })
     },
@@ -165,33 +172,35 @@ export function createPostgresqlPlaybookSagaPersistence(
         })
         .onConflictDoNothing()
         .returning()
-        .all()
       if (inserted[0] !== undefined) return { created: true, row: link(inserted[0]) }
-      const existing = await db
-        .select()
-        .from(developmentMissionLinks)
-        .where(eq(developmentMissionLinks.idempotencyKey, input.idempotencyKey))
-        .limit(1)
-        .get()
+      const existing = (
+        await db
+          .select()
+          .from(developmentMissionLinks)
+          .where(eq(developmentMissionLinks.idempotencyKey, input.idempotencyKey))
+          .limit(1)
+      )[0]
       if (existing === undefined) throw new Error('mission-link claim winner is unavailable')
       return { created: false, row: link(existing) }
     },
     async getMissionLinkByStepRun(stepRunId) {
-      const row = await db
-        .select()
-        .from(developmentMissionLinks)
-        .where(eq(developmentMissionLinks.parentStepRunId, stepRunId))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentMissionLinks)
+          .where(eq(developmentMissionLinks.parentStepRunId, stepRunId))
+          .limit(1)
+      )[0]
       return row === undefined ? null : link(row)
     },
     async findParentMissionLink(childMissionId) {
-      const row = await db
-        .select()
-        .from(developmentMissionLinks)
-        .where(eq(developmentMissionLinks.childMissionId, childMissionId))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentMissionLinks)
+          .where(eq(developmentMissionLinks.childMissionId, childMissionId))
+          .limit(1)
+      )[0]
       return row === undefined ? null : link(row)
     },
     async listMissionLinks(missionId) {
@@ -201,7 +210,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           .from(developmentMissionLinks)
           .where(eq(developmentMissionLinks.parentMissionId, missionId))
           .orderBy(asc(developmentMissionLinks.createdAt), asc(developmentMissionLinks.id))
-          .all()
       ).map(link)
     },
     async observeMissionLink(input) {
@@ -218,7 +226,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           updatedAt: input.observedAt,
         })
         .where(eq(developmentMissionLinks.id, input.id))
-        .run()
     },
 
     async claimApprovalSaga(input) {
@@ -240,33 +247,35 @@ export function createPostgresqlPlaybookSagaPersistence(
         })
         .onConflictDoNothing()
         .returning()
-        .all()
       if (inserted[0] !== undefined) return { created: true, row: approval(inserted[0]) }
-      const existing = await db
-        .select()
-        .from(developmentApprovalSagas)
-        .where(eq(developmentApprovalSagas.idempotencyKey, input.idempotencyKey))
-        .limit(1)
-        .get()
+      const existing = (
+        await db
+          .select()
+          .from(developmentApprovalSagas)
+          .where(eq(developmentApprovalSagas.idempotencyKey, input.idempotencyKey))
+          .limit(1)
+      )[0]
       if (existing === undefined) throw new Error('approval-saga claim winner is unavailable')
       return { created: false, row: approval(existing) }
     },
     async getApprovalSaga(id) {
-      const row = await db
-        .select()
-        .from(developmentApprovalSagas)
-        .where(eq(developmentApprovalSagas.id, id))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentApprovalSagas)
+          .where(eq(developmentApprovalSagas.id, id))
+          .limit(1)
+      )[0]
       return row === undefined ? null : approval(row)
     },
     async getApprovalSagaByStepRun(stepRunId) {
-      const row = await db
-        .select()
-        .from(developmentApprovalSagas)
-        .where(eq(developmentApprovalSagas.stepRunId, stepRunId))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentApprovalSagas)
+          .where(eq(developmentApprovalSagas.stepRunId, stepRunId))
+          .limit(1)
+      )[0]
       return row === undefined ? null : approval(row)
     },
     async listApprovalSagas(missionId) {
@@ -276,7 +285,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           .from(developmentApprovalSagas)
           .where(eq(developmentApprovalSagas.missionId, missionId))
           .orderBy(asc(developmentApprovalSagas.createdAt), asc(developmentApprovalSagas.id))
-          .all()
       ).map(approval)
     },
     async recordApprovalSubmitted(input) {
@@ -290,7 +298,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           updatedAt: input.now,
         })
         .where(eq(developmentApprovalSagas.id, input.id))
-        .run()
     },
     async recordApprovalObservation(input) {
       const settled = ['approved', 'rejected', 'expired', 'unavailable'].includes(input.status)
@@ -306,7 +313,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           ...(settled ? { settledAt: input.now } : {}),
         })
         .where(eq(developmentApprovalSagas.id, input.id))
-        .run()
     },
 
     async upsertJoinMember(input) {
@@ -337,7 +343,6 @@ export function createPostgresqlPlaybookSagaPersistence(
             updatedAt: input.now,
           },
         })
-        .run()
     },
     async listJoinMembers(missionId, groupId) {
       return (
@@ -351,7 +356,6 @@ export function createPostgresqlPlaybookSagaPersistence(
             ),
           )
           .orderBy(asc(developmentStepJoins.memberStepId))
-          .all()
       ).map(join)
     },
     async settleJoin(missionId, groupId, result, now) {
@@ -364,10 +368,9 @@ export function createPostgresqlPlaybookSagaPersistence(
             eq(developmentStepJoins.groupId, groupId),
           ),
         )
-        .run()
     },
     async sagaDigest(missionId) {
-      return await db.transaction(async (tx) => {
+      return await session.serializable(async (tx) => {
         const steps = await tx
           .select({
             id: developmentStepRuns.id,
@@ -380,7 +383,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           .from(developmentStepRuns)
           .where(eq(developmentStepRuns.missionId, missionId))
           .orderBy(asc(developmentStepRuns.createdAt), asc(developmentStepRuns.id))
-          .all()
         const links = await tx
           .select({
             id: developmentMissionLinks.id,
@@ -392,7 +394,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           .from(developmentMissionLinks)
           .where(eq(developmentMissionLinks.parentMissionId, missionId))
           .orderBy(asc(developmentMissionLinks.id))
-          .all()
         const approvals = await tx
           .select({
             id: developmentApprovalSagas.id,
@@ -403,7 +404,6 @@ export function createPostgresqlPlaybookSagaPersistence(
           .from(developmentApprovalSagas)
           .where(eq(developmentApprovalSagas.missionId, missionId))
           .orderBy(asc(developmentApprovalSagas.id))
-          .all()
         return canonicalDigest({ steps, links, approvals })
       })
     },

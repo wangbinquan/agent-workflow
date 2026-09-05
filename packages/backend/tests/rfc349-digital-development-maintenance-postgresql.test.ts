@@ -44,7 +44,8 @@ function fixture() {
       return rows({ values: [['mission-upload-1']] })
     }
     if (normalized.startsWith('delete') && normalized.includes('mission_input_uploads')) {
-      return rows({ count: 1 })
+      // RFC-359 W4-D11：过期上传清扫是「子查询取一批 id + DELETE … RETURNING」一条语句，计数来自 RETURNING 行。
+      return rows({ values: [['mission-upload-1']], count: 1 })
     }
     if (normalized.startsWith('select') && normalized.includes('employee_input_uploads')) {
       return rows({ values: [['employee-upload-1']] })

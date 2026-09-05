@@ -30,10 +30,7 @@ import { createDevelopmentMigrationPersistence } from '../infrastructure/migrati
 import { createMissionReadModelQueries } from '../infrastructure/missionReadModels'
 import { createFactSnapshotReader } from '../infrastructure/reconcilerReaders'
 import { createCutoverStore } from '../infrastructure/cutoverStore'
-import {
-  createPostgresqlMissionInputUploadPersistence,
-  createSqliteMissionInputUploadPersistence,
-} from '../infrastructure/missionInputUploadPersistence'
+import { createMissionInputUploadPersistence } from '../infrastructure/missionInputUploadPersistence'
 import { createMissionPersistence } from '../infrastructure/missionStore'
 import type { MissionInputUploadPersistence } from '../application/missionInputUploadOperations'
 import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
@@ -704,7 +701,7 @@ export function composeDevelopmentMissionOperations(
   deps: DevelopmentMissionOperationCompositionDeps,
 ): DevelopmentMissionOperations {
   return composeDevelopmentMissionOperationsFromPersistence(deps, {
-    uploads: createSqliteMissionInputUploadPersistence(deps.db),
+    uploads: createMissionInputUploadPersistence(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
     missions: createMissionPersistence(deps.db),
     repositories: createSqliteRepositoryLocationRead(deps.db),
@@ -720,7 +717,7 @@ export function composePostgresqlDevelopmentMissionOperations(
   },
 ): DevelopmentMissionOperations {
   return composeDevelopmentMissionOperationsFromPersistence(deps, {
-    uploads: createPostgresqlMissionInputUploadPersistence(deps.db),
+    uploads: createMissionInputUploadPersistence(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
     missions: createMissionPersistence(deps.db),
     repositories: createPostgresqlRepositoryLocationRead(deps.db),

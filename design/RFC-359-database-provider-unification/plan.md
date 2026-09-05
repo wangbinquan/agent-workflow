@@ -486,6 +486,26 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   原型 / 映射 / 所属表随当前 provider），`rfc359-provider-schema-column-facade.test.ts` 故意在模块加载期捕获列，两引擎锁住
   解码 / 编码 / 行值比较 / 原型。**下一刀 D11**：development-automation 的 `PlaybookSagaStore` 对与 upload store，
   再到 resource-catalog legacy 对。
+  **D11 ✅（development-automation 的 Playbook saga 持久化 + 上传会话 store）**：
+  `infrastructure/playbookSagaStore.ts` 一份（`createPlaybookSagaPersistence(db)`：step run / mission link / approval saga
+  的幂等认领全部落在唯一索引上——`insert … onConflictDoNothing().returning()` 两引擎同形；`updateStepRun` 读—判—写
+  放在统一事务里、落库 `where state = from` 的 CAS；`sagaDigest` 三张表同一快照走 `serializable`）。
+  `infrastructure/uploadSessionStore.ts` 一份（`createUploadSessionPersistence(db)`；**`claimUploadSessions(tx, …)` 是唯一的
+  认领原语**：条件 UPDATE … RETURNING 的 CAS + 失败后读一行分类，launch 事务 `missionStore.commitMissionLaunch` 直接调用它，
+  D10 里内联的那份认领循环删除；`deleteUpload` 是本人 + pending 围栏写进语句的单条 DELETE … RETURNING；`sweepExpired`
+  是子查询取一批 id + DELETE … RETURNING 一条语句；`createUpload` 的幂等键查—插在一笔事务里，并发由 insert 冲突路径兜底，
+  null actor 也按 `is null` 幂等——旧 SQLite 版 `actorUserId ?? ''` 永远匹配不到匿名行）。
+  `missionInputUploadPersistence.ts` 只剩两份建在它上面的薄适配（`createMissionInputUploadPersistence` /
+  `createUploadMaintenancePersistence`），`composition/missionInputUploads.ts` 一个 `composeMissionInputUploadOperations`，
+  server.ts / postgresqlDaemonApplication 改接；`composePlaybookSaga` 一个别名。端口：`UploadSessionPersistence` 改成
+  Promise 合同（同步 `UploadSessionStore` 删除），同步 `PlaybookSagaStore` 只保留为类型源。
+  `sqlitePlaybookSagaStore.ts`（493 行）/ `postgresqlPlaybookSagaStore.ts`（411 行）/ `sqliteUploadSessionStore.ts`（144 行）与
+  只跑 SQLite 的 `rfc310-pr3-upload-session` 删除；playbook-coordinator / pr2-admission / pr3-upload-security / pr3-journey /
+  rfc338 五个测试按 codemod 改 await；boundary 锁改指中立文件，predicate-drift 的两条 `PlaybookSagaStore.ts::*` 豁免删除
+  （基线 7 → 5）。`rfc359-w4-d11-adapters.test.ts` 两引擎各跑上传会话合同①–⑥（含 null actor 幂等、sweep limit）与 saga
+  的认领幂等 / 状态机 CAS / link / approval / join / digest，附源码锁。**下一刀 D12**：development-automation 剩余
+  provider 对（retentionSweeper / repositoryFactsCollector / uploadPublicationReceipt / uploadPlacementPersistence /
+  requirementBundleRef / repositoryLocationRead / admissionLookup 装配对），再到 resource-catalog legacy 对。
 
 ## 5. W5 —— 防复辟
 

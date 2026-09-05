@@ -43,9 +43,9 @@ import {
 import { composeSqliteRequirementSourceRunner } from '../src/modules/integration/composition/requirementSource'
 import type { MissionRow } from '../src/modules/development-automation/application/ports/missionStore'
 import {
-  createSqliteUploadSessionStore,
+  createUploadSessionPersistence,
   UPLOAD_SESSION_TTL_MS,
-} from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
+} from '../src/modules/development-automation/infrastructure/uploadSessionStore'
 import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import { createApp } from '../src/server'
@@ -375,7 +375,9 @@ describe('rfc310 pr3 journey — direct uploads (file-only / body+file)', () => 
     const mission = (await fx.store.getMission(launched.missionId))!
     expect(mission.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
     expect(mission.uploadPlanRef).not.toBeNull()
-    expect(createSqliteUploadSessionStore(db).getUpload(upload.uploadRef)!.state).toBe('claimed')
+    expect((await createUploadSessionPersistence(db).getUpload(upload.uploadRef))!.state).toBe(
+      'claimed',
+    )
 
     // 同 idempotencyKey 重放：200 + created:false + 同 mission，不重复 claim。
     const replay = await reqAs('/api/code/missions', { method: 'POST', body })
@@ -637,8 +639,8 @@ describe('rfc310 pr3 journey — composition sweeps and recovery', () => {
     expect((await automation.sweepWakes()).reconciled).toBe(1)
     expect((await automation.sweepWakes()).reconciled).toBe(0)
 
-    const uploads = createSqliteUploadSessionStore(db)
-    uploads.createUpload({
+    const uploads = createUploadSessionPersistence(db)
+    await uploads.createUpload({
       actorUserId: 'admin',
       originalName: 'stale.bin',
       bytes: 4,

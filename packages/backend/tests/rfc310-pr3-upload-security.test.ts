@@ -39,9 +39,9 @@ import {
 } from '../src/modules/development-automation/application/commands/launchMission'
 import { createRepositoryBaselineResolver } from '../src/modules/development-automation/infrastructure/gitBaselineReader'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
-import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
-import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
+import { createMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
+import { createUploadSessionPersistence } from '../src/modules/development-automation/infrastructure/uploadSessionStore'
+import type { UploadSessionPersistence } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
@@ -325,8 +325,8 @@ async function mkRealRepo(binary: Uint8Array): Promise<string> {
   return repoPath
 }
 
-function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionStore } {
-  const sessions = createSqliteUploadSessionStore(db)
+function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionPersistence } {
+  const sessions = createUploadSessionPersistence(db)
   return {
     sessions,
     deps: {
@@ -338,7 +338,7 @@ function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionS
       },
       now: () => Date.now(),
       uploadAdmission: {
-        uploads: createSqliteMissionInputUploadPersistence(db),
+        uploads: createMissionInputUploadPersistence(db),
         resolveBaseline: createRepositoryBaselineResolver(db),
       },
     },
@@ -361,24 +361,26 @@ describe('rfc310 pr3 upload security — real git baseline chain', () => {
       .run()
     const { deps, sessions } = previewDeps(db)
 
-    const mkUp = (name: string, bytes: Uint8Array) => {
+    const mkUp = async (name: string, bytes: Uint8Array) => {
       const tmp = join(appHome, name)
       writeFileSync(tmp, bytes)
-      return sessions.createUpload({
-        actorUserId: 'u-1',
-        originalName: name,
-        bytes: bytes.byteLength,
-        sha256: createHash('sha256').update(bytes).digest('hex'),
-        blobRef: createHash('sha256').update(bytes).digest('hex'),
-        idempotencyKey: null,
-        now: Date.now(),
-      }).id
+      return (
+        await sessions.createUpload({
+          actorUserId: 'u-1',
+          originalName: name,
+          bytes: bytes.byteLength,
+          sha256: createHash('sha256').update(bytes).digest('hex'),
+          blobRef: createHash('sha256').update(bytes).digest('hex'),
+          idempotencyKey: null,
+          now: Date.now(),
+        })
+      ).id
     }
-    const sameBinary = mkUp('same.bin', binary)
-    const fresh = mkUp('fresh.md', new TextEncoder().encode('new\n'))
-    const ontoSymlink = mkUp('l.md', new TextEncoder().encode('x'))
-    const ontoDir = mkUp('d.md', new TextEncoder().encode('x'))
-    const sameShellRegular = mkUp('run.sh', new TextEncoder().encode('#!/bin/sh\n'))
+    const sameBinary = await mkUp('same.bin', binary)
+    const fresh = await mkUp('fresh.md', new TextEncoder().encode('new\n'))
+    const ontoSymlink = await mkUp('l.md', new TextEncoder().encode('x'))
+    const ontoDir = await mkUp('d.md', new TextEncoder().encode('x'))
+    const sameShellRegular = await mkUp('run.sh', new TextEncoder().encode('#!/bin/sh\n'))
 
     const preview = await previewDirectInput(deps, {
       repositoryId: 'repo-real',
@@ -408,7 +410,7 @@ describe('rfc310 pr3 upload security — real git baseline chain', () => {
     expect(preview.dispositions[4]!.blockedReason).toBe('target-exists-with-different-content')
 
     // preview 只读：不 claim、不落 plan。
-    expect(sessions.getUpload(sameBinary)!.state).toBe('pending')
+    expect((await sessions.getUpload(sameBinary))!.state).toBe('pending')
     expect(db.select().from(developmentRepositoryUploadPlans).all()).toHaveLength(0)
     rmSync(repoPath, { recursive: true, force: true })
   })
@@ -416,15 +418,17 @@ describe('rfc310 pr3 upload security — real git baseline chain', () => {
   test('missing cached repo resolves to baseline-reader-not-wired (no default-branch guessing)', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { deps, sessions } = previewDeps(db)
-    const ref = sessions.createUpload({
-      actorUserId: 'u-1',
-      originalName: 'a.md',
-      bytes: 1,
-      sha256: 'a'.repeat(64),
-      blobRef: 'a'.repeat(64),
-      idempotencyKey: null,
-      now: Date.now(),
-    }).id
+    const ref = (
+      await sessions.createUpload({
+        actorUserId: 'u-1',
+        originalName: 'a.md',
+        bytes: 1,
+        sha256: 'a'.repeat(64),
+        blobRef: 'a'.repeat(64),
+        idempotencyKey: null,
+        now: Date.now(),
+      })
+    ).id
     try {
       await previewDirectInput(deps, {
         repositoryId: 'repo-unknown',

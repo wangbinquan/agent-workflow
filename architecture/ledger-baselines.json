@@ -62,7 +62,7 @@
       "id": "rfc349-dual-provider-predicate-forks",
       "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
       "symbol": "ALLOWED_DIVERGENCE",
-      "baseline": 7,
+      "baseline": 5,
       "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。 RFC-359 W4-D6c：digital-employee 作者面孪生对合一为 authoringStore.ts，`toTool` / `uniqueError` 两条豁免随孪生对消失删除，12 → 10。"
     },
     {

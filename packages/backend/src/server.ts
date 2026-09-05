@@ -283,7 +283,7 @@ import {
   composeDevelopmentMissionOperations,
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
-import { composeSqliteMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
+import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
 import { composeSqliteCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
   composeSqliteCapabilityTemplateOperations,
@@ -2724,7 +2724,7 @@ function composeSqliteApiRouteMounts(
         }),
     }),
   })
-  const missionInputUploads = composeSqliteMissionInputUploadOperations({ db: deps.db, appHome })
+  const missionInputUploads = composeMissionInputUploadOperations({ db: deps.db, appHome })
   const collaborationRouteOperations = composeSqliteCollaborationRouteOperations({
     db: deps.db,
     context: deps.collaborationContext,
