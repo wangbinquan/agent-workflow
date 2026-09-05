@@ -2,13 +2,11 @@
 // task-execution atoms. They intentionally expose a provider-private
 // transaction type, never a callback through an application/public port.
 
-import { and, eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
-import { nodeRuns, taskExecutionOwners, tasks } from '@/db/schema'
+import { nodeRuns, tasks } from '@/db/schema'
 import { type PostgresqlCommittedEventTransaction } from '@/platform/events/committed/postgresqlPersistence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { assertOwnershipToken, type OwnershipToken } from '../domain/ownership'
-import { TaskExecutionError } from '../application/taskExecutionError'
 import { retryPostgresqlSerialization } from '@/db/postgresqlSerializationRetry'
 
 export type PostgresqlTaskExecutionTransaction = PostgresqlCommittedEventTransaction
@@ -111,39 +109,4 @@ export async function withPostgresqlTaskAggregateTransaction<T>(
     await tx.run(sql`select ${tasks.id} from ${tasks} where ${tasks.id} = ${taskId} for update`)
     return await body(tx)
   })
-}
-
-export async function assertPostgresqlTaskOwnerTx(
-  tx: PostgresqlTaskExecutionTransaction,
-  token: OwnershipToken,
-  now: number,
-): Promise<void> {
-  assertOwnershipToken(token)
-  // Match SQLite's withOwnedTaskTx fence: the immutable capability names the
-  // exact owner identity + epoch, while revision is advanced for every atomic
-  // mutation. Heartbeats may already have advanced revision after this token
-  // was minted, so revision/lease snapshots are deliberately not equality
-  // predicates here.
-  const rows = await tx
-    .update(taskExecutionOwners)
-    .set({
-      revision: sql`${taskExecutionOwners.revision} + 1`,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(taskExecutionOwners.taskId, token.taskId),
-        eq(taskExecutionOwners.ownerId, token.ownerId),
-        eq(taskExecutionOwners.daemonGeneration, token.daemonGeneration),
-        eq(taskExecutionOwners.epoch, token.epoch),
-        eq(taskExecutionOwners.state, 'claimed'),
-      ),
-    )
-    .returning({ revision: taskExecutionOwners.revision })
-  if (rows[0] === undefined) {
-    throw new TaskExecutionError(
-      'task-execution-stale-owner',
-      `task '${token.taskId}' mutation was fenced`,
-    )
-  }
 }

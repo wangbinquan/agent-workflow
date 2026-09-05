@@ -8,5 +8,5 @@ set -e
 cd "$(dirname "$0")/.."
 [ $# -gt 0 ] || { echo "usage: $0 <path-or-symbol> [...]" >&2; exit 2; }
 for needle in "$@"; do
-  grep -rl --include='*.ts' -- "$needle" packages/backend/tests 2>/dev/null || true
+  grep -rl --include='*.test.ts' -- "$needle" packages/backend/tests 2>/dev/null || true
 done | sort -u

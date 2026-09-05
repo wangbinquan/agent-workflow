@@ -50,11 +50,13 @@ import {
   workgroupAssignments,
 } from '@/db/schema'
 import {
-  assertPostgresqlTaskOwnerTx,
   type PostgresqlTaskExecutionTransaction,
   withPostgresqlSerializableTaskExecution,
 } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
-import { assertTaskOwnerlessTx } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
+import {
+  assertTaskOwnerTx,
+  assertTaskOwnerlessTx,
+} from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
@@ -1035,7 +1037,7 @@ async function inspectPostgresqlCrossClarify(
           `execution context for '${executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
         )
       }
-      await assertPostgresqlTaskOwnerTx(tx, executionContext.token, now)
+      await assertTaskOwnerTx(tx, executionContext.token, now)
     }
     await dependencies.nodeRunLifecycle.inTransaction(tx).set({
       nodeRunId: input.nodeRunId,
@@ -1181,7 +1183,7 @@ async function autoApproveEmptyPostgresqlReview(input: {
           `execution context for '${executionContext.token.taskId}' cannot mutate task '${input.taskId}'`,
         )
       }
-      await assertPostgresqlTaskOwnerTx(tx, executionContext.token, now)
+      await assertTaskOwnerTx(tx, executionContext.token, now)
     }
 
     const currentTasks = await tx

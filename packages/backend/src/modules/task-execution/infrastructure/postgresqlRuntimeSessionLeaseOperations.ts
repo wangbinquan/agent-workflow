@@ -10,11 +10,10 @@ import type {
 import { RuntimeSessionLeaseError } from '../application/ports/runtimeSessionLeaseOperations'
 import { currentTaskExecutionContext } from '../application/taskExecutionContext'
 import {
-  assertPostgresqlTaskOwnerTx,
   type PostgresqlTaskExecutionTransaction,
   withPostgresqlSerializableTaskExecution,
 } from './postgresqlTaskLifecycleTransaction'
-import { assertTaskOwnerlessTx } from './ownedTaskExecution'
+import { assertTaskOwnerTx, assertTaskOwnerlessTx } from './ownedTaskExecution'
 
 const TERMINAL = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
@@ -43,7 +42,7 @@ async function fence(
     await assertTaskOwnerlessTx(tx, taskId)
     return
   }
-  await assertPostgresqlTaskOwnerTx(tx, context.token, now)
+  await assertTaskOwnerTx(tx, context.token, now)
 }
 
 export function createPostgresqlRuntimeSessionLeaseOperations(

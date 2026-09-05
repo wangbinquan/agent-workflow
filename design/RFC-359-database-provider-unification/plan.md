@@ -741,9 +741,10 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   - **真同步宿主**：只有 Intent 上下文授权那半是货真价实的——Intent 宿主在 SQLite 上确实跑在
     `dbTxSync` 回调里（D20 已把异步半合掉、同步半按债保留）。
 
-  **共同的机会**：`assertPostgresqlTaskOwnerTx` 与中立的 `assertTaskOwnerTx` 又是一对**逐字重复**
-  （D19a 已经这样去重掉 `assertPostgresqlTaskOwnerlessTx`），四个消费方改指中立模块即可，
-  这一条不需要任何语义判断，可以随下一刀顺手清掉。
+  **共同的机会（已清 ✅ D21）**：`assertPostgresqlTaskOwnerTx` 与中立的 `assertTaskOwnerTx` 又是一对
+  **逐字重复**（归一化后逐字相等，与 D19a 去重掉的 `assertPostgresqlTaskOwnerlessTx` 同形）。
+  已删掉 PG 那份定义，三个生产消费方（协作运行时机制 / 运行时会话租约 / 人类闸门）与一个测试改指中立模块；
+  owner CAS 围栏至此只有 `ownedTaskExecution.ts` 一处定义。这一条不需要任何语义判断。
 
 ## 5. W5 —— 防复辟
 

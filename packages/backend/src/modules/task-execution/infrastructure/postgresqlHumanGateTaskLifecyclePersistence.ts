@@ -15,11 +15,10 @@ import type {
 } from '../application/ports/humanGateTaskLifecycle'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
 import {
-  assertPostgresqlTaskOwnerTx,
   withPostgresqlSerializableTaskExecution,
   type PostgresqlTaskExecutionTransaction,
 } from './postgresqlTaskLifecycleTransaction'
-import { assertTaskOwnerlessTx } from './ownedTaskExecution'
+import { assertTaskOwnerTx, assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
@@ -45,7 +44,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       if (input.token === undefined) {
         await assertTaskOwnerlessTx(tx, input.prepared.taskId)
       } else {
-        await assertPostgresqlTaskOwnerTx(tx, input.token, input.now)
+        await assertTaskOwnerTx(tx, input.token, input.now)
       }
       const consumed = await new PostgresqlHumanGateOpenParticipantInTx(
         tx,
@@ -89,7 +88,7 @@ export class PostgresqlHumanGateTaskLifecyclePersistence implements HumanGateTas
       if (input.token === undefined) {
         await assertTaskOwnerlessTx(tx, input.taskId)
       } else {
-        await assertPostgresqlTaskOwnerTx(tx, input.token, input.now)
+        await assertTaskOwnerTx(tx, input.token, input.now)
       }
       const taskRows = await tx
         .select({
