@@ -320,6 +320,19 @@ export class DigitalEmployeeAuthoringService {
     }
 
     this.#ready = this.#initialize(deps.typePackages)
+    // 初始化失败由第一个等 #ready 的调用方（启动装配的 ready() / settleAutomaticUpgrades()，或任一请求）收到；
+    // 这里只标记「已有人接手」，避免装配后还没人来得及等它（例如测试关库、进程退出）时被当成 unhandled
+    // rejection 击穿进程。
+    this.#ready.catch(() => undefined)
+  }
+
+  /**
+   * Bootstrap barrier: type packages registered, compatible closures upgraded and the global
+   * execution policy ensured. Boot awaits it so a broken registration fails the daemon loudly
+   * instead of surfacing on the first request.
+   */
+  async ready(): Promise<void> {
+    await this.#ready
   }
 
   async #initialize(typePackages: readonly EmployeeTypeRuntimePackage[]): Promise<void> {

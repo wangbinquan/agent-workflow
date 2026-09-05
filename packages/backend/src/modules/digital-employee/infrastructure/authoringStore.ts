@@ -453,42 +453,59 @@ export function createDigitalEmployeeAuthoringPersistence(
     }),
 
     async ensureTypePackage(input) {
-      const existing = (
-        await db
-          .select()
-          .from(employeeTypePackages)
-          .where(typeWhere(input.descriptor.typeRef))
-          .limit(1)
-      )[0]
+      const { typeId, revision } = input.descriptor.typeRef
+      const registered = async () =>
+        (
+          await db
+            .select()
+            .from(employeeTypePackages)
+            .where(typeWhere(input.descriptor.typeRef))
+            .limit(1)
+        )[0]
+      const assertSameDigest = (existing: typeof employeeTypePackages.$inferSelect) => {
+        if (existing.descriptorDigest === input.descriptorDigest) return
+        throw new ConflictError(
+          'employee-type-revision-drift',
+          typePackageDriftMessage(
+            typeId,
+            revision,
+            existing.descriptorDigest,
+            input.descriptorDigest,
+          ),
+          {
+            typeId,
+            revision,
+            registeredDigest: existing.descriptorDigest,
+            currentDigest: input.descriptorDigest,
+          },
+        )
+      }
+      const existing = await registered()
       if (existing !== undefined) {
-        if (existing.descriptorDigest !== input.descriptorDigest) {
-          const { typeId, revision } = input.descriptor.typeRef
-          throw new ConflictError(
-            'employee-type-revision-drift',
-            typePackageDriftMessage(
-              typeId,
-              revision,
-              existing.descriptorDigest,
-              input.descriptorDigest,
-            ),
-            {
-              typeId,
-              revision,
-              registeredDigest: existing.descriptorDigest,
-              currentDigest: input.descriptorDigest,
-            },
-          )
-        }
+        assertSameDigest(existing)
         return
       }
-      await db.insert(employeeTypePackages).values({
-        typeId: input.descriptor.typeRef.typeId,
-        revision: input.descriptor.typeRef.revision,
-        descriptorJson: JSON.stringify(input.descriptor),
-        descriptorDigest: input.descriptorDigest,
-        state: input.state,
-        registeredAt: input.registeredAt,
-      })
+      // 启动期不止一份装配（路由层与 worker 各构造一个 service）会在同一拍并发注册同一个类型包：读—插之间
+      // 有让出点，第二个 insert 不能撞 (type_id, revision) 主键。ON CONFLICT DO NOTHING 在两个引擎上同形；
+      // 插完回读再比对 digest——谁先落库谁算数，漂移仍按同一条规则报错。
+      await db
+        .insert(employeeTypePackages)
+        .values({
+          typeId,
+          revision,
+          descriptorJson: JSON.stringify(input.descriptor),
+          descriptorDigest: input.descriptorDigest,
+          state: input.state,
+          registeredAt: input.registeredAt,
+        })
+        .onConflictDoNothing({
+          target: [employeeTypePackages.typeId, employeeTypePackages.revision],
+        })
+      const settled = await registered()
+      if (settled === undefined) {
+        throw new Error(`employee type package vanished after registration: ${typeId}@${revision}`)
+      }
+      assertSameDigest(settled)
     },
 
     async listTypePackageRegistrations() {
@@ -1028,6 +1045,9 @@ export function createDigitalEmployeeAuthoringPersistence(
 
     async ensureExecutionPolicy(input) {
       return await session.transaction(async (tx) => {
+        // 首次启动时 'global' 单例行还不存在，行锁锁不住「同时创建」：advisory lock 让 PG 上并发的两份装配串行
+        // 拿到同一个 revision（SQLite 独占事务下 no-op）。
+        await session.engine.advisoryLock(tx, 'digital-employee:execution-policy')
         await session.engine.lockAggregateRoot(
           tx,
           employeeOsSettings,

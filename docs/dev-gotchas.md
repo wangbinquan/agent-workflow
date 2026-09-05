@@ -1209,6 +1209,24 @@ RFC-268 取消 500、RFC-303 终态控制落成 retryable），或者 successor 
 - 「先 resolve 别人的 promise，再做自己的库事务」这种顺序本身就是风险：等待者要的往往是**库里的状态已转移**，
   不是「运行时停了」。runtime registry 因此改成两阶段（`release` 记结果、库里 owner 行转移完才 `settle` 唤醒等待者）。
 
+## 同步存储改成异步后，构造期 fire-and-forget 的「读—插」不再原子：启动直接撞主键（RFC-359 W4-D6c 实撞，2026-09-05）
+
+`DigitalEmployeeAuthoringService` 在构造函数里 `this.#ready = this.#initialize()` 起手就注册类型包，启动期路由层与 worker
+各构造一份、共用一个库。SQLite 存储还是同步的时候，`ensureTypePackage` 的 select + insert 在同一个同步调用里跑完，两份
+装配天然串行；D6c 把它改成真异步后，读与插之间多了一个让出点，两份装配在同一拍各自读到「没有」、各自 insert，第二个撞
+`(type_id, revision)` 主键——daemon 在 CI 上直接起不来（后端全部分片 + e2e 全红，8f89a3ee4 / d03fc3694），本地测试却全绿：
+单元用例只构造一份 service，e2e 的启动路径本地不跑。
+
+规矩：
+
+- **同步存储改异步，逐个检查 ensure- / upsert- 类的「先读后写」**：只要调用方可能并发（启动期多份装配、PG 多进程 daemon），
+  写必须 DB 级幂等——`insert … onConflictDoNothing({ target })` 后**回读**再比对（漂移仍按原规则报错）；单例行的「首次创建」
+  行锁锁不到，加 `engine.advisoryLock`（PG `pg_advisory_xact_lock`，SQLite 独占事务下 no-op）；
+- 构造期 fire-and-forget 的初始化必须暴露 `ready()` 给启动装配 await，并给后台 promise 挂一个空 `catch` 标记「已有人接手」——
+  否则测试关库 / 进程退出时它会变成 unhandled rejection，把毫不相干的用例（RFC-326 那几条）打红；
+- 改动碰到启动路径时本地冒烟一次：`AGENT_WORKFLOW_HOME=<空目录> bun packages/backend/src/main.ts start --host 127.0.0.1 --port <p>`，
+  看到 `agent-workflow ready` 才算；老代码用同一命令会当场复现 `UNIQUE constraint failed`。
+
 ## 被 `needs:` 挡着从没跑过的 CI lane，等于**没被验证过能跑完**（RFC-349 实测，2026-09-03）
 
 `postgresql-evidence` 的 `functional-regression` lane 写着 `needs: [crash-large-and-soak,

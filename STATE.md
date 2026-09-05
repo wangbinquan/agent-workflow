@@ -148,6 +148,7 @@
 > **W4-D6c 已落（digital-employee 作者面 + foreign ACL 收尾）**：类型包 / 工具 / 岗位模版 / 员工定义 / 全局执行策略持久化一份实现（`authoringStore.ts`，publish 与员工定义更新先判 identity、`ensureExecutionPolicy` 先 `lockAggregateRoot`），端口只剩异步形态，employee_* 的 ACL identity 面改成与目录同形的异步端口并在两个 bootstrap 都走 `composeForeignResourceAclFor`；`postgresqlForeignResourceAcl.ts` 与目录的 `SyncResourceAclIdentity*` 形态退役，三个 provider 文件删除；`rfc359-w4-d6c-adapters.test.ts` 两引擎各跑。
 > **W4-D7a 已落（digital-employee 临时上传 + writer cutover）**：`inputUploadStore.ts` / `writerCutoverPersistence.ts` 各一份（writer 的读—改—写先 `lockAggregateRoot`，快照读改逐语句、S-10 裸事务账本归零），装配单一入口，一个 provider 文件删除；`rfc359-w4-d7a-adapters.test.ts` 两引擎各跑。下一刀 D7b：digital-employee RuntimeStore 对。
 > **W4-D7b 已落（digital-employee 运行时案件持久化）**：`runtimeStore.ts` 一份（14 处事务走统一原语、计量 / 成员替换先 `lockAggregateRoot`、搜索与 NULL 排序走能力矩阵），两个 provider 文件（~4000 行）删除、digital-employee dbTxSync 归零；`rfc359-w4-d7b-adapters.test.ts` 两引擎各跑。下一刀 D8：identity-access 两对大 PG 底。
+> **W4-D6c 补（启动期并发注册幂等）**：作者面存储改异步后两份装配同拍注册同一类型包撞主键、daemon 起不来（8f89a3ee4 / d03fc3694 CI 全红）；`ensureTypePackage` 改 ON CONFLICT DO NOTHING + 回读比 digest、`ensureExecutionPolicy` 先 advisory lock、service `ready()` 启动屏障；`rfc359-w4-d6c-bootstrap-idempotency.test.ts` 两引擎各跑。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

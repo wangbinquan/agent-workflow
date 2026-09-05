@@ -431,6 +431,12 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   resume / upgradePolicy / terminate 级联与终态后投递直接 obsolete），末尾源码锁；rfc349 案件搜索 parity 锁改成「两个引擎都
   走能力矩阵」。**下一刀 D8**：identity-access 的两对大 PG 底（`UserAccessRepository` 554 / 760 行、`OidcIdentityCrossContext`
   318 / 781 行）。
+  **D6c 补 ✅（启动期并发注册幂等，2026-09-05）**：作者面存储改成真异步后，同一拍构造的两份 `DigitalEmployeeAuthoringService`
+  （路由层 + worker）并发注册同一类型包，读—插之间有让出点，第二个 insert 撞 `(type_id, revision)` 主键，daemon 在 8f89a3ee4 /
+  d03fc3694 的 CI 上起不来（后端全部分片 + e2e 全红）。修法：`ensureTypePackage` 改「insert … ON CONFLICT DO NOTHING + 回读比
+  digest」（两引擎同形，漂移仍报错）；`ensureExecutionPolicy` 先 `advisoryLock` 再锁单例行（PG 上首次创建也串行）；service 暴露
+  `ready()`、后台初始化的拒绝标记为已接手；`composeDigitalEmployee` 收中立句柄、PG 入口成别名。
+  `rfc359-w4-d6c-bootstrap-idempotency.test.ts` 两引擎各跑（改前 5/6 红），教训进 `docs/dev-gotchas.md`。
 
 ## 5. W5 —— 防复辟
 

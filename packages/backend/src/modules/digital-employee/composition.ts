@@ -336,6 +336,8 @@ export interface DigitalEmployeeModule {
   readonly commands: DigitalEmployeeCommands
   readonly queries: DigitalEmployeeQueries
   readonly maintenance: {
+    /** Bootstrap barrier: registrations / upgrades / global policy done, or the boot error. */
+    ready(): Promise<void>
     /** Bootstrap-only async validation for changed WorkContract successors. */
     settleAutomaticUpgrades(): Promise<void>
   }
@@ -431,7 +433,8 @@ export interface DigitalEmployeeCompositionOptions {
 }
 
 export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
-  readonly db: DbClient
+  /** 两个 provider 同一份持久化（RFC-359 W4-D6c/D7a/D7b），装配入口收中立句柄。 */
+  readonly db: ProviderNeutralDatabase
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
   readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
 }
@@ -887,6 +890,7 @@ function composeDigitalEmployeeFromPersistence(
 
   return {
     maintenance: {
+      ready: () => service.ready(),
       settleAutomaticUpgrades: () => service.settleAutomaticUpgrades(),
     },
     inputUploads: {
@@ -1065,7 +1069,7 @@ function composeDigitalEmployeeFromPersistence(
   }
 }
 
-/** SQLite compatibility composition and behavior oracle. */
+/** Provider-neutral composition（SQLite 与 PostgreSQL 同一份）。 */
 export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
@@ -1081,20 +1085,11 @@ export function composeDigitalEmployee(
   })
 }
 
-/** Real PostgreSQL composition; all durable Digital Employee behavior shares one provider. */
+/** RFC-349 期的 PostgreSQL 入口名；与中立入口同一实现。 */
 export function composePostgresqlDigitalEmployee(
   options: ComposePostgresqlDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
-  const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
-  return composeDigitalEmployeeFromPersistence(options, {
-    authoring:
-      options.typePackageDriftPolicy === 'draft-overlay'
-        ? withTypePackageDraftOverlay(persisted)
-        : persisted,
-    runtime: createRuntimePersistence(options.db),
-    inputUploads: createEmployeeInputUploadPersistence(options.db),
-    migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
-  })
+  return composeDigitalEmployee(options)
 }
 
 export { createDigitalEmployeeResourceCatalogAclProviders } from './composition/resourceCatalogAcl'
