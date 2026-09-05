@@ -698,6 +698,39 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   `rfc359-w4-d20-adapters.test.ts` 两引擎各跑身份读取 / 授权三元组精确命中 / owner-name 查找 /
   读模型按 id 与 name 取快照 / 只回活跃用户 + 源码锁。
 
+  ---
+
+  ## W4 机械阶段收尾：剩余 provider 对的全仓普查（2026-09-06）
+
+  D14–D20 之后，**能靠「PG 异步实现改名成中立实现 + SQLite 装配切过去」机械合掉的对已经清空**。
+  全仓仍有 176 个 provider 命名的文件、约 39 对，逐对量过之后它们全部落进下面两类，**每一类都需要
+  先做一个决定，不能再当重构顺手推**：
+
+  ### 甲类：薄壳对——SQLite 是 legacy 上的壳，PG 是原生实现，且**测试覆盖倒挂**
+
+  | 对 | SQLite / PG 行数 | SQLite 侧行为套件 | PG 侧 |
+  | --- | --- | --- | --- |
+  | 工作组任务房 | 71 / 1457 | 13（含 rfc164 / rfc167 / rfc311 / rfc329） | 3（多为源码形状锁） |
+  | 工作组回合引擎 | 34 / 567（+ 中立驱动 2819） | 同上 | 同上 |
+  | Skill 三对 | 22–129 / 505–1418 | 52 个文件 | 6 |
+  | ResourcePackageMaintenance | 293 / 379（5 处 legacy import） | — | — |
+  | DigitalEmployeeAgentTemplateCatalog | 59 / 390 | — | — |
+  | task-execution 十对（TaskRouteOperations 292 / 2048、TaskRouteLaunchOperations 92 / 1362、TerminalMaintenancePersistence 33 / 543、TaskOwnershipPersistence 43 / 444、TaskArchiveMaintenanceCommand 66 / 746、ChildExecutionLaunchOperations 87 / 770、TaskExecutionEffectPersistence 369 / 1007、TaskExecutionRecovery 393 / 674、TaskLifecycleAutoRepairCommand 65 / 198、TaskExecutionResourceSnapshots 40 / 69） | — | — |
+
+  **这一类的共同问题**：两侧不是同一份逻辑的两种写法，而是**两套实现**；哪一份是正典要先裁。
+  D19b 已经实证了代价——任务房照 PG 形状合完，双引擎测试全绿，却撞出 6 条用户可见的行为回归
+  （confirm 恢复失败从 410 变 200），根因是「daemon 是否与 API 同进程」的部署形态差异。
+  **做法建议**：逐对先出「形态勘察 + 覆盖对比 + 行为差异清单」，呈用户裁定后再动手；不要按文件数排优先级。
+
+  ### 乙类：同步宿主对——SQLite 侧的调用方仍跑在 `dbTxSync` 回调里
+
+  典型：Intent 上下文授权（D20 已把异步那半合掉、同步那半留着）、
+  `TaskExecutionResourceSnapshots`（SQLite 走 `freezeTaskExecutionCallClosureSync`、PG 走 `...Async`）、
+  `HumanGateTaskLifecyclePersistence` / `RuntimeSessionLeaseOperations` / `SourceTerminationParticipant`
+  / `TaskExecutionRuntimeParticipants`（归一化 diff 43%–77%，同一判据的同步 / 异步两种写法）。
+  **这一类不需要产品决策，需要的是把宿主从 `dbTxSync` 迁到统一事务原语**——迁完之后合并是机械的。
+  建议单独立一波「同步宿主迁移」，一次迁一个宿主，迁一个合一批。
+
 ## 5. W5 —— 防复辟
 
 - **T19g（D2 新增）** 「迁移后 `sqlite_master` vs 逻辑契约」对账守卫：把 SQLite 迁移跑完后的索引（含部分索引谓词）/ CHECK /
