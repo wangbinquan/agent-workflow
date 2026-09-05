@@ -7921,7 +7921,7 @@
         "packages/backend/src/services/resourceAcl.ts:664-679",
         "packages/backend/src/services/resourceAcl.ts:709-723",
         "packages/backend/src/services/ownerScopedName.ts:8-34",
-        "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts:26-29"
+        "packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts:80-88"
       ],
       "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。",
       "removeWhen": "随该锚点所属域的下一个 RFC 顺带清理；清理后必须从本表删除（stale 条目会红）。"
@@ -7964,7 +7964,7 @@
       "title": "The RFC-310 five bypass the ACL kernel's create-default triple, inlining the literal instead",
       "anchors": [
         "packages/backend/src/services/resourceAcl.ts:86-124",
-        "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts:70-93",
+        "packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts:98-118",
         "packages/backend/src/modules/development-automation/application/commands/actionTemplateCommands.ts:37-59",
         "packages/backend/src/services/capabilityTemplates.ts:305-315",
         "packagesets/shared/src/schemas/capabilityTemplate.ts:92",

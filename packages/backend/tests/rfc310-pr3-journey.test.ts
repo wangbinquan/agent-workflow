@@ -46,10 +46,7 @@ import {
   createSqliteUploadSessionStore,
   UPLOAD_SESSION_TTL_MS,
 } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import {
-  createAutomationPolicy,
-  publishAutomationPolicy,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import { createApp } from '../src/server'
 import { createUser } from '../src/services/users'

@@ -31,15 +31,12 @@ import type {
   AgentExecutionSnapshot,
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
-import {
-  createAutomationPolicy,
-  publishAutomationPolicy,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import {
   createVerificationProfile,
   publishVerificationProfile,
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
-import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
@@ -124,7 +121,7 @@ beforeAll(async () => {
     .run()
 
   // verification profile：仓内 verify.sh（由 Agent 随改动写入）。
-  const vStore = createSqliteVerificationProfilePersistence(fx.db)
+  const vStore = createVerificationProfilePersistence(fx.db)
   const profile = await createVerificationProfile(
     { store: vStore, now: () => Date.now() },
     {

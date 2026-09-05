@@ -32,10 +32,7 @@ import type { NextDecision } from '../src/modules/development-automation/domain/
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
-import {
-  createAutomationPolicy,
-  publishAutomationPolicy,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 

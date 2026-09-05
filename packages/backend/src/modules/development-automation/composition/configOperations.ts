@@ -3,9 +3,8 @@
 import type { AclResourceType, ResourceAccess } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import {
   archiveActionTemplate,
@@ -41,17 +40,10 @@ import { projectEmployeeSetupJourney } from '../domain/journeyProjection'
 import { evaluatePolicy } from '../engine/policy/evaluatePolicy'
 import { resolveEmployeeSelection } from '../engine/policy/workSelection'
 import {
-  createPostgresqlDevelopmentConfigPersistence,
-  createSqliteDevelopmentConfigPersistence,
-} from '../infrastructure/developmentConfigPersistence'
-import {
-  createPostgresqlActionTemplatePersistence,
-  createPostgresqlVerificationProfilePersistence,
-} from '../infrastructure/postgresqlConfigResourceStore'
-import {
-  createSqliteActionTemplatePersistence,
-  createSqliteVerificationProfilePersistence,
-} from '../infrastructure/sqliteConfigResourceStore'
+  createActionTemplatePersistence,
+  createVerificationProfilePersistence,
+} from '../infrastructure/configResourceStore'
+import { createDevelopmentConfigPersistence } from '../infrastructure/developmentConfigPersistence'
 import type {
   DevelopmentConfigAclRow,
   DevelopmentConfigIdentityView,
@@ -660,34 +652,31 @@ export function composeDevelopmentConfigOperationsFromPersistence(
   return Object.freeze(operations)
 }
 
-/** Existing SQLite bootstrap factory retained as the behavioral oracle. */
-export function composeDevelopmentConfigOperations(
-  db: DbClient,
-  developmentAdapter: DevelopmentConfigResourceOperations,
-  access: DevelopmentConfigResourceAccess,
-): DevelopmentConfigOperations {
-  return composeDevelopmentConfigOperationsFromPersistence({
-    actionTemplates: createSqliteActionTemplatePersistence(db),
-    verificationProfiles: createSqliteVerificationProfilePersistence(db),
-    persistence: createSqliteDevelopmentConfigPersistence(db),
-    developmentAdapter,
-    access,
-  })
-}
-
-/** PostgreSQL bootstrap factory; Resource Catalog supplies the bound ACL participant. */
-export function composePostgresqlDevelopmentConfigOperations(input: {
-  readonly db: PostgresqlDatabaseClient
+/** 两个 provider 共用的装配入口：persistence 全部走 provider-中立实现，ACL 参与者由 Resource Catalog 交来。 */
+export function composeDevelopmentConfigOperationsFor(input: {
+  readonly db: ProviderNeutralDatabase
   readonly developmentAdapter: DevelopmentConfigResourceOperations
   readonly access: DevelopmentConfigResourceAccess
   readonly now?: () => number
 }): DevelopmentConfigOperations {
   return composeDevelopmentConfigOperationsFromPersistence({
-    actionTemplates: createPostgresqlActionTemplatePersistence(input.db),
-    verificationProfiles: createPostgresqlVerificationProfilePersistence(input.db),
-    persistence: createPostgresqlDevelopmentConfigPersistence(input.db),
+    actionTemplates: createActionTemplatePersistence(input.db),
+    verificationProfiles: createVerificationProfilePersistence(input.db),
+    persistence: createDevelopmentConfigPersistence(input.db),
     developmentAdapter: input.developmentAdapter,
     access: input.access,
     ...(input.now === undefined ? {} : { now: input.now }),
   })
 }
+
+/** 位置参数形态的装配入口（server / cli bootstrap 沿用），语义同 composeDevelopmentConfigOperationsFor。 */
+export function composeDevelopmentConfigOperations(
+  db: ProviderNeutralDatabase,
+  developmentAdapter: DevelopmentConfigResourceOperations,
+  access: DevelopmentConfigResourceAccess,
+): DevelopmentConfigOperations {
+  return composeDevelopmentConfigOperationsFor({ db, developmentAdapter, access })
+}
+
+/** RFC-349 期的 PostgreSQL 入口名，RFC-359 W4-D6b 起与中立入口同一实现。 */
+export const composePostgresqlDevelopmentConfigOperations = composeDevelopmentConfigOperationsFor

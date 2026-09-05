@@ -12,7 +12,7 @@ import {
 import {
   publishAutomationPolicy,
   reviseAutomationPolicyDraft,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+} from './helpers/digitalEmployeeStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
 import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { buildPr2Fixture } from './helpers/rfc310Pr2Fixture'

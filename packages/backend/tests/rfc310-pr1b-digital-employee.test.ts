@@ -26,7 +26,7 @@ import {
   publishAutomationPolicy,
   publishDigitalEmployee,
   reviseDigitalEmployeeDraft,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+} from './helpers/digitalEmployeeStore'
 import { unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
 const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')

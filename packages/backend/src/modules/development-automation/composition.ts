@@ -108,13 +108,9 @@ import { createSqlitePlaybookSagaPersistence } from './infrastructure/sqlitePlay
 import { createPostgresqlPlaybookSagaPersistence } from './infrastructure/postgresqlPlaybookSagaStore'
 import { createChildMissionParticipant } from './infrastructure/childMissionParticipant'
 import {
-  createSqliteActionTemplatePersistence,
-  createSqliteVerificationProfilePersistence,
-} from './infrastructure/sqliteConfigResourceStore'
-import {
-  createPostgresqlActionTemplatePersistence,
-  createPostgresqlVerificationProfilePersistence,
-} from './infrastructure/postgresqlConfigResourceStore'
+  createActionTemplatePersistence,
+  createVerificationProfilePersistence,
+} from './infrastructure/configResourceStore'
 import {
   createPostgresqlRepositoryFactsCollector,
   createRepositoryFactsCollector,
@@ -463,8 +459,8 @@ export function composeDevelopmentAutomation(
     bundleRefs: createSqliteRequirementBundleRefPersistence(deps.db),
     uploadPlacement: createSqliteUploadPlacementPersistence(deps.db),
     uploadPlanReader: { read: async (planId) => readUploadPlan(deps.db, planId) },
-    actionTemplates: createSqliteActionTemplatePersistence(deps.db),
-    verificationProfiles: createSqliteVerificationProfilePersistence(deps.db),
+    actionTemplates: createActionTemplatePersistence(deps.db),
+    verificationProfiles: createVerificationProfilePersistence(deps.db),
     playbookSaga: createSqlitePlaybookSagaPersistence(deps.db),
     repositoryLocations: repositories,
     repositoryFacts: createRepositoryFactsCollector(deps.db),
@@ -503,8 +499,8 @@ export function composePostgresqlDevelopmentAutomation(
     bundleRefs: createPostgresqlRequirementBundleRefPersistence(deps.db),
     uploadPlacement: createPostgresqlUploadPlacementPersistence(deps.db),
     uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
-    actionTemplates: createPostgresqlActionTemplatePersistence(deps.db),
-    verificationProfiles: createPostgresqlVerificationProfilePersistence(deps.db),
+    actionTemplates: createActionTemplatePersistence(deps.db),
+    verificationProfiles: createVerificationProfilePersistence(deps.db),
     playbookSaga: createPostgresqlPlaybookSagaPersistence(deps.db),
     repositoryLocations: repositories,
     repositoryFacts: createPostgresqlRepositoryFactsCollector(deps.db),

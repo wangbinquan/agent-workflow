@@ -376,6 +376,22 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   rfc317 表归属锁改指中立文件。**下一刀 D6b / D6c**：development-automation `ConfigResourceStore`（employee_job_template）与
   digital-employee `AuthoringStore`（employee_definition / employee_tool）接同一个异步 identity 端口，之后删
   `postgresqlForeignResourceAcl.ts` 与 Sync* 形态。
+  **D6b ✅（development-automation 配置族）**：`configResourceStore.ts` 一份（action template / verification profile 的
+  identity + immutable revisions；撞 (owner, name) 经能力矩阵归类成 typed 409，publishRevision 走统一事务原语，archive 单语句
+  returning 判 not-found；`list` 按 createdAt, id 定序），同步 `ConfigResourceStore` 端口形态随 bun-sqlite 专属实现一起退役、
+  端口只剩异步 `ConfigResourcePersistence`；`developmentConfigPersistence.ts` 一份（digital employee / automation policy 的
+  identity 与 revision：publish 先 `lockAggregateRoot` 再「draft 未变」CAS，PG 上即 FOR UPDATE、SQLite 独占事务下 no-op；
+  错误码沿 SQLite 语义）；`assignmentStore.ts` 一份（引用存在性校验与 upsert 同一写事务，scope 谓词直接下推 `IS NULL` / `=`
+  而不是全量拉回 JS 过滤，`now` 由调用方给）；员工 publish lookup 只剩异步形态、`publishLookup.ts` 删除；`migrationAssets.ts`
+  一份（幂等键 (owner, name) 用同一条 SQL 谓词，employee / policy 落库改走 `DevelopmentConfigPersistence`）。生产里再无
+  `sqliteDigitalEmployeeStore.ts` 消费者，它的函数面搬到 `tests/helpers/digitalEmployeeStore.ts`（底层走中立持久化，publish
+  校验与生产同一套，`lookup` 参数可省）供 14 个 RFC-310 用例沿用。装配：`composeDevelopmentConfigOperationsFor({db, …})` 单一
+  入口（位置参数形态与 PG 入口名留别名），`composition.ts` / `missionOperations.ts` 两个 bootstrap 同一份 persistence。六个
+  provider 文件删除，development-automation 配置族 dbTxSync 归零。`rfc359-w4-d6b-adapters.test.ts` 两引擎各跑（配置资源的
+  identity / revisions / 撞名 / archive；identity 持久化的 revise / publish CAS / archive 与 publish lookup 四类引用；assignment
+  的 scope 校验、引用存在性、同 scope 覆盖、§3.8 解析与删除；legacy 迁移的读—析—落库与幂等），末尾源码锁保证该族不再出现
+  provider 专属文件。**下一刀 D6c**：digital-employee `AuthoringStore`（employee_definition / employee_tool /
+  employee_job_template）接同一个异步 identity 端口，之后删 `postgresqlForeignResourceAcl.ts` 与 `Sync*` 形态。
 
 ## 5. W5 —— 防复辟
 

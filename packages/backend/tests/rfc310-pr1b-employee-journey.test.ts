@@ -16,19 +16,18 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
   createDigitalEmployee,
   publishDigitalEmployee,
   getDigitalEmployeeRevision,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+} from './helpers/digitalEmployeeStore'
 import {
   resolveAdmissionAssignment,
   upsertAssignment,
-} from '../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
-import { createEmployeePublishLookup } from '../src/modules/development-automation/infrastructure/publishLookup'
+} from '../src/modules/development-automation/infrastructure/assignmentStore'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -79,7 +78,7 @@ describe('rfc310 pr1b employee journey', () => {
   test('define templates/policy/adapter/employees, then deterministic selection end-to-end', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = () => Date.now()
-    const templates = createSqliteActionTemplatePersistence(db)
+    const templates = createActionTemplatePersistence(db)
     const adapters = createDevelopmentAdapterStore(db)
 
     // 1) 三份 change.implement 模板（java/cpp/polyglot）各 publish 一版。
@@ -171,7 +170,6 @@ describe('rfc310 pr1b employee journey', () => {
       defaultPolicyRef: { id: policy.id, revision: 1 },
     })
 
-    const lookup = createEmployeePublishLookup(db)
     const javaEmployee = await createDigitalEmployee(db, {
       name: 'java-employee',
       ownerUserId: 'u-admin',
@@ -182,7 +180,6 @@ describe('rfc310 pr1b employee journey', () => {
     const javaReceipt = await publishDigitalEmployee(db, {
       id: javaEmployee.id,
       publishedBy: 'u-admin',
-      lookup,
     })
     expect(javaReceipt.revision).toBe(1)
 
@@ -205,7 +202,6 @@ describe('rfc310 pr1b employee journey', () => {
     const polyglotReceipt = await publishDigitalEmployee(db, {
       id: polyglotEmployee.id,
       publishedBy: 'u-admin',
-      lookup,
     })
     expect(polyglotReceipt.revision).toBe(1)
 
@@ -218,7 +214,7 @@ describe('rfc310 pr1b employee journey', () => {
       ]),
     })
     await expect(
-      publishDigitalEmployee(db, { id: broken.id, publishedBy: 'u-admin', lookup }),
+      publishDigitalEmployee(db, { id: broken.id, publishedBy: 'u-admin' }),
     ).rejects.toThrow()
 
     // 6) assignment：repo 精确 → java；group 规则 → 按语言 facts 选 polyglot。

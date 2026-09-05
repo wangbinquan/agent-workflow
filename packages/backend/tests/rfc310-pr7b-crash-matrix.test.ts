@@ -28,10 +28,7 @@ import {
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
-import {
-  createAutomationPolicy,
-  publishAutomationPolicy,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)

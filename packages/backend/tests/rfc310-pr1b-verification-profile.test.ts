@@ -20,7 +20,7 @@ import {
   reviseVerificationProfileDraft,
   type VerificationProfileCommandDeps,
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
-import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -54,7 +54,7 @@ const VALID_CONTENT = {
 function newDeps(): VerificationProfileCommandDeps {
   const db = createInMemoryDb(MIGRATIONS)
   let tick = 2_000_000
-  return { store: createSqliteVerificationProfilePersistence(db), now: () => ++tick }
+  return { store: createVerificationProfilePersistence(db), now: () => ++tick }
 }
 
 describe('rfc310 pr1b verification profile', () => {

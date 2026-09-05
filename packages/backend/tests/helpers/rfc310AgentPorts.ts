@@ -11,7 +11,7 @@ import type {
   ReconcilerPorts,
   WorkspaceValidationPort,
 } from '../../src/modules/development-automation/application/ports/reconcilerPorts'
-import { createSqliteActionTemplateStore } from '../../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/configResourceStore'
 
 export interface FakeAgentPortsOptions {
   readonly db: DbClient
@@ -22,7 +22,7 @@ export interface FakeAgentPortsOptions {
 export function fakeAgentActionPorts(
   options: FakeAgentPortsOptions,
 ): Partial<ReconcilerPorts> & { workspaceValidation: WorkspaceValidationPort } {
-  const templates = createSqliteActionTemplateStore(options.db)
+  const templates = createActionTemplatePersistence(options.db)
   const contexts = new Map<string, string>()
   let contextSeq = 0
   const base = {
@@ -61,8 +61,8 @@ export function fakeAgentActionPorts(
       },
     },
     actionTemplates: {
-      content(id: string, revision: number) {
-        const row = templates.getRevision(id, revision)
+      async content(id: string, revision: number) {
+        const row = await templates.getRevision(id, revision)
         return row === null ? null : (JSON.parse(row.contentJson) as unknown)
       },
     },

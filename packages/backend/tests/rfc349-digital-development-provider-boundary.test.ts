@@ -109,8 +109,9 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     ).toEqual([])
     expect(
       [
-        'sqliteConfigResourceStore.ts',
-        'postgresqlConfigResourceStore.ts',
+        'configResourceStore.ts',
+        'developmentConfigPersistence.ts',
+        'assignmentStore.ts',
         'sqliteMissionStore.ts',
         'postgresqlMissionStore.ts',
         'sqlitePlaybookSagaStore.ts',
@@ -121,7 +122,7 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
         'postgresqlMissionReadModels.ts',
         'uploadPlanStore.ts',
         'missionInputUploadPersistence.ts',
-        'postgresqlMigrationAssets.ts',
+        'migrationAssets.ts',
       ].filter((name) => !development.has(name)),
     ).toEqual([])
   })

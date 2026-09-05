@@ -26,7 +26,7 @@ import {
   getConfigResource,
   listConfigResources,
 } from '../src/modules/development-automation/application/queries/configResourceQueries'
-import { createSqliteActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import { parseOk, unknownKeySurvivors } from './helpers/rfc310UnknownKeyHarness'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -53,7 +53,7 @@ const VALID_CONTENT = {
 function newDeps(): ActionTemplateCommandDeps {
   const db = createInMemoryDb(MIGRATIONS)
   let tick = 1_000_000
-  return { store: createSqliteActionTemplatePersistence(db), now: () => ++tick }
+  return { store: createActionTemplatePersistence(db), now: () => ++tick }
 }
 
 describe('rfc310 pr1b action template', () => {

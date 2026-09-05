@@ -15,7 +15,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/configResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
@@ -23,9 +23,8 @@ import {
   publishDigitalEmployee,
   getDigitalEmployeeRevision,
   getAutomationPolicyRevision,
-} from '../../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
-import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
-import { createEmployeePublishLookup } from '../../src/modules/development-automation/infrastructure/publishLookup'
+} from './digitalEmployeeStore'
+import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/assignmentStore'
 import {
   createSqliteMissionPersistence,
   createSqliteMissionStore,
@@ -85,7 +84,7 @@ function lookupOf(db: DbClient): AdmissionLookup {
 export async function buildPr2Fixture(): Promise<Pr2Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
-  const templates = createSqliteActionTemplatePersistence(db)
+  const templates = createActionTemplatePersistence(db)
 
   const template = await createActionTemplate(
     { store: templates, now },
@@ -138,7 +137,6 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
   })
   await publishAutomationPolicy(db, { id: policy.id, publishedBy: 'admin' })
 
-  const lookup = createEmployeePublishLookup(db)
   const employee = await createDigitalEmployee(db, {
     name: 'emp-java',
     ownerUserId: 'admin',
@@ -164,7 +162,7 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
       defaultPolicyRef: { id: policy.id, revision: 1 },
     },
   })
-  await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin', lookup })
+  await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin' })
 
   const store = createSqliteMissionStore(db)
   const persistence = createSqliteMissionPersistence(db)

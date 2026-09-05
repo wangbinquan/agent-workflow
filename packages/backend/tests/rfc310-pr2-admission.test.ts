@@ -23,7 +23,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '../src/modules/development-automation/application/commands/actionTemplateCommands'
-import { createSqliteActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import {
   createAutomationPolicy,
   publishAutomationPolicy,
@@ -31,12 +31,11 @@ import {
   publishDigitalEmployee,
   getDigitalEmployeeRevision,
   getAutomationPolicyRevision,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+} from './helpers/digitalEmployeeStore'
 import {
   resolveAdmissionAssignment,
   upsertAssignment,
-} from '../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
-import { createEmployeePublishLookup } from '../src/modules/development-automation/infrastructure/publishLookup'
+} from '../src/modules/development-automation/infrastructure/assignmentStore'
 import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
 import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
 import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
@@ -100,7 +99,7 @@ function lookupOf(db: DbClient): AdmissionLookup {
 async function buildFixture(): Promise<Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const now = () => Date.now()
-  const templates = createSqliteActionTemplatePersistence(db)
+  const templates = createActionTemplatePersistence(db)
   const adapters = createDevelopmentAdapterStore(db)
 
   const template = await createActionTemplate(
@@ -162,7 +161,6 @@ async function buildFixture(): Promise<Fixture> {
   const adapterA = await mkAdapter('sys-a')
   const adapterB = await mkAdapter('sys-b')
 
-  const lookup = createEmployeePublishLookup(db)
   const mkEmployee = async (
     name: string,
     sources: { sourceKey: string; adapterId: string; isDefault: boolean }[],
@@ -198,7 +196,7 @@ async function buildFixture(): Promise<Fixture> {
         defaultPolicyRef: { id: policy.id, revision: 1 },
       },
     })
-    await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin', lookup })
+    await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin' })
     return employee.id
   }
 

@@ -21,7 +21,7 @@ import type {
 import type { RepositoryFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
-import { createSqliteActionTemplateStore } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 
 setDefaultTimeout(120_000)
 
@@ -349,9 +349,9 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     ).toBe(true)
     mission = fx.store.getMission(missionId)!
 
-    const template = createSqliteActionTemplateStore(fx.db)
-      .list()
-      .find((row) => row.extra.capabilityId === 'mr.feedback.apply')
+    const template = (await createActionTemplatePersistence(fx.db).list()).find(
+      (row) => row.extra.capabilityId === 'mr.feedback.apply',
+    )
     expect(template?.publishedRevision).toBe(1)
     const feedbackDecision = fx.store.insertDecision({
       id: 'feedback-retry-decision',

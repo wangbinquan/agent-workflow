@@ -16,13 +16,13 @@ import {
   createDigitalEmployee,
   publishAutomationPolicy,
   publishDigitalEmployee,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+} from './helpers/digitalEmployeeStore'
 import {
   deleteAssignment,
   listAssignments,
   resolveAdmissionAssignment,
   upsertAssignment,
-} from '../src/modules/development-automation/infrastructure/sqliteAssignmentStore'
+} from '../src/modules/development-automation/infrastructure/assignmentStore'
 
 const MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
 

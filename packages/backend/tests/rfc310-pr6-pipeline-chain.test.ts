@@ -37,10 +37,7 @@ import type { NextDecision } from '../src/modules/development-automation/domain/
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import type { PipelineEvidenceManifestV1 } from '../src/modules/development-automation/domain/pipelineManifest'
-import {
-  createAutomationPolicy,
-  publishAutomationPolicy,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 

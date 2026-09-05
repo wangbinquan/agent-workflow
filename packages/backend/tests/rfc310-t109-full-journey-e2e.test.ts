@@ -46,15 +46,12 @@ import {
   canonicalDigest,
   canonicalStringify,
 } from '../src/modules/development-automation/domain/canonicalJson'
-import {
-  createAutomationPolicy,
-  publishAutomationPolicy,
-} from '../src/modules/development-automation/infrastructure/sqliteDigitalEmployeeStore'
+import { createAutomationPolicy, publishAutomationPolicy } from './helpers/digitalEmployeeStore'
 import {
   createVerificationProfile,
   publishVerificationProfile,
 } from '../src/modules/development-automation/application/commands/verificationProfileCommands'
-import { createSqliteVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createVerificationProfilePersistence } from '../src/modules/development-automation/infrastructure/configResourceStore'
 import { adoptActiveMr } from '../src/modules/development-automation/application/cutover'
 import { createCutoverStore } from '../src/modules/development-automation/infrastructure/cutoverStore'
 import {
@@ -171,7 +168,7 @@ beforeAll(async () => {
     })
     .run()
 
-  const vStore = createSqliteVerificationProfilePersistence(fx.db)
+  const vStore = createVerificationProfilePersistence(fx.db)
   const profile = await createVerificationProfile(
     { store: vStore, now: () => Date.now() },
     {

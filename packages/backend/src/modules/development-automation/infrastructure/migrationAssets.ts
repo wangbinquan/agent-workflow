@@ -1,8 +1,9 @@
-// RFC-310 PR-9 T94/T95 —— 迁移分析的读侧 + candidates 落库（design §13.1/§13.2）。
+// RFC-310 PR-9 T94/T95 —— 迁移分析的读侧 + candidates 落库（design §13.1/§13.2）。RFC-359 W4-D6b 起一份
+// 实现，两个 provider 共用。
 //
 // 读侧只读 legacy 表（capability_templates / repo_capability_config 是被
 // PR-10 退役的只读历史，本文件绝不写它们）；落库侧把 mappable/partial 的
-// targets 通过**既有创建命令**建为 draft——绝不 publish、绝不写 assignment
+// targets 通过**既有创建路径**建为 draft——绝不 publish、绝不写 assignment
 // 路由面。幂等：同 (owner, name) 已存在即 skipped，重跑不重复建。
 //
 // 呈报过的两个判定（fork Y 契约判断点，详见 migrationAnalyzer.ts 文件头）：
@@ -18,14 +19,15 @@
 // （key 'rfc310-migration-report'）供 CLI/UI/cutover preflight 对账；删掉后
 // 重跑分析即可重建（可推导，符合该表「维护缓存」定位）。
 //
-// visibility 沿 legacy 行：创建命令按 RFC-099 统一落 private，这里在创建后
+// visibility 沿 legacy 行：创建路径按 RFC-099 统一落 private，这里在创建后
 // 对 legacy 'public' 行做一次 migration-only 直写恢复——这不是新建路径放宽，
 // 是既有资源的 ACL 事实随迁移保留（§13.2「id、owner、visibility、ACL、
 // upstream provenance 尽可能保留」）。
 
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
+import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   actionTemplates,
   automationPolicies,
@@ -41,9 +43,15 @@ import {
   type MigrationReport,
   type MigrationTargetResource,
 } from '../application/migrationAnalyzer'
-import { createSqliteActionTemplatePersistence } from './sqliteConfigResourceStore'
-import { createAutomationPolicy, createDigitalEmployee } from './sqliteDigitalEmployeeStore'
-import type { DevelopmentMigrationPersistence } from '../application/ports/migrationPersistence'
+import type {
+  DevelopmentMigrationPersistence,
+  MaterializedMigrationCandidate,
+  MaterializeMigrationResult,
+  PersistedMigrationRun,
+  SkippedMigrationCandidate,
+} from '../application/ports/migrationPersistence'
+import { createActionTemplatePersistence } from './configResourceStore'
+import { createDevelopmentConfigPersistence } from './developmentConfigPersistence'
 
 export const MIGRATION_REPORT_KEY = 'rfc310-migration-report'
 
@@ -51,7 +59,9 @@ export const MIGRATION_REPORT_KEY = 'rfc310-migration-report'
 // T94 读侧
 // ---------------------------------------------------------------------------
 
-export async function collectLegacyAssets(db: DbClient): Promise<AnalyzeLegacyInput> {
+export async function collectLegacyAssets(
+  db: ProviderNeutralDatabase,
+): Promise<AnalyzeLegacyInput> {
   const templates = await db
     .select({
       id: capabilityTemplates.id,
@@ -85,7 +95,7 @@ export async function collectLegacyAssets(db: DbClient): Promise<AnalyzeLegacyIn
 }
 
 export async function runMigrationAnalysis(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   generatedAt: number,
 ): Promise<MigrationReport> {
   return analyzeLegacyAssets(await collectLegacyAssets(db), generatedAt)
@@ -95,28 +105,24 @@ export async function runMigrationAnalysis(
 // T95 落库
 // ---------------------------------------------------------------------------
 
-export interface MaterializedCandidate {
-  readonly resource: MigrationTargetResource
-  readonly proposedName: string
-  readonly resourceId: string
-  readonly sourceDigest: string
-}
-
-export interface SkippedCandidate {
-  readonly resource: MigrationTargetResource
-  readonly proposedName: string
-  readonly reason: 'name-exists' | 'manual-authoring-required' | 'proposal-only'
-}
-
-export interface MaterializeResult {
-  readonly created: readonly MaterializedCandidate[]
-  readonly skipped: readonly SkippedCandidate[]
-}
+type MaterializableResource = Extract<
+  MigrationTargetResource,
+  'action-template' | 'digital-employee' | 'automation-policy'
+>
 
 type IdentityTable = typeof actionTemplates | typeof digitalEmployees | typeof automationPolicies
 
+function identityTableOf(resource: MaterializableResource): IdentityTable {
+  return resource === 'action-template'
+    ? actionTemplates
+    : resource === 'digital-employee'
+      ? digitalEmployees
+      : automationPolicies
+}
+
+/** 幂等键 (owner, name)：owner 为 NULL 的 legacy 行按 IS NULL 命中，两个引擎同一条谓词。 */
 async function nameExists(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   table: IdentityTable,
   ownerUserId: string | null,
   name: string,
@@ -125,7 +131,10 @@ async function nameExists(
     .select({ id: table.id })
     .from(table)
     .where(
-      and(eq(table.name, name), eq(sql`COALESCE(${table.ownerUserId}, '')`, ownerUserId ?? '')),
+      and(
+        eq(table.name, name),
+        ownerUserId === null ? isNull(table.ownerUserId) : eq(table.ownerUserId, ownerUserId),
+      ),
     )
     .limit(1)
   return rows.length > 0
@@ -133,7 +142,7 @@ async function nameExists(
 
 /** migration-only：把 legacy 'public' 的 ACL 事实带到 candidate 上（见文件头）。 */
 async function restoreVisibility(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   table: IdentityTable,
   id: string,
   visibility: 'public' | 'private',
@@ -143,14 +152,15 @@ async function restoreVisibility(
 }
 
 export async function materializeMigrationCandidates(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
   report: MigrationReport,
   opts: { readonly now?: () => number } = {},
-): Promise<MaterializeResult> {
+): Promise<MaterializeMigrationResult> {
   const now = opts.now ?? (() => Date.now())
-  const created: MaterializedCandidate[] = []
-  const skipped: SkippedCandidate[] = []
-  const templateStore = createSqliteActionTemplatePersistence(db)
+  const created: MaterializedMigrationCandidate[] = []
+  const skipped: SkippedMigrationCandidate[] = []
+  const templates = createActionTemplatePersistence(db)
+  const config = createDevelopmentConfigPersistence(db)
 
   for (const item of report.items) {
     if (item.disposition === 'blocked') continue
@@ -171,12 +181,7 @@ export async function materializeMigrationCandidates(
         })
         continue
       }
-      const table =
-        target.resource === 'action-template'
-          ? actionTemplates
-          : target.resource === 'digital-employee'
-            ? digitalEmployees
-            : automationPolicies
+      const table = identityTableOf(target.resource)
       if (await nameExists(db, table, item.ownerUserId, target.proposedName)) {
         skipped.push({
           resource: target.resource,
@@ -188,7 +193,7 @@ export async function materializeMigrationCandidates(
       let resourceId: string
       if (target.resource === 'action-template') {
         const record = await createActionTemplate(
-          { store: templateStore, now },
+          { store: templates, now },
           {
             actorUserId: item.ownerUserId,
             name: target.proposedName,
@@ -197,18 +202,14 @@ export async function materializeMigrationCandidates(
           },
         )
         resourceId = record.id
-      } else if (target.resource === 'digital-employee') {
-        const record = await createDigitalEmployee(db, {
-          name: target.proposedName,
-          ownerUserId: item.ownerUserId,
-          draft: target.draft,
-        })
-        resourceId = record.id
       } else {
-        const record = await createAutomationPolicy(db, {
+        const store = target.resource === 'digital-employee' ? config.employees : config.policies
+        const record = await store.create({
+          id: ulid(),
           name: target.proposedName,
           ownerUserId: item.ownerUserId,
-          draft: target.draft,
+          draftJson: JSON.stringify(target.draft ?? {}),
+          now: now(),
         })
         resourceId = record.id
       }
@@ -222,34 +223,29 @@ export async function materializeMigrationCandidates(
     }
   }
 
-  const payload = JSON.stringify({ report, materializedAt: now(), created, skipped })
+  const materializedAt = now()
+  const value = JSON.stringify({ report, materializedAt, created, skipped })
   await db
     .insert(maintenanceState)
-    .values({ key: MIGRATION_REPORT_KEY, value: payload, updatedAt: now() })
+    .values({ key: MIGRATION_REPORT_KEY, value, updatedAt: materializedAt })
     .onConflictDoUpdate({
       target: maintenanceState.key,
-      set: { value: payload, updatedAt: now() },
+      set: { value, updatedAt: materializedAt },
     })
 
   return { created, skipped }
 }
 
-export interface PersistedMigrationRun {
-  readonly report: MigrationReport
-  readonly materializedAt: number
-  readonly created: readonly MaterializedCandidate[]
-  readonly skipped: readonly SkippedCandidate[]
-}
-
 export async function readPersistedMigrationRun(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): Promise<PersistedMigrationRun | null> {
-  const rows = await db
-    .select({ value: maintenanceState.value })
-    .from(maintenanceState)
-    .where(eq(maintenanceState.key, MIGRATION_REPORT_KEY))
-    .limit(1)
-  const row = rows[0]
+  const row = (
+    await db
+      .select({ value: maintenanceState.value })
+      .from(maintenanceState)
+      .where(eq(maintenanceState.key, MIGRATION_REPORT_KEY))
+      .limit(1)
+  )[0]
   if (row === undefined) return null
   try {
     return JSON.parse(row.value) as PersistedMigrationRun
@@ -258,12 +254,14 @@ export async function readPersistedMigrationRun(
   }
 }
 
-export function createSqliteDevelopmentMigrationPersistence(
-  db: DbClient,
+export function createDevelopmentMigrationPersistence(
+  db: ProviderNeutralDatabase,
+  options: { readonly now?: () => number } = {},
 ): DevelopmentMigrationPersistence {
+  const now = options.now ?? (() => Date.now())
   return {
     analyze: (generatedAt) => runMigrationAnalysis(db, generatedAt),
-    materialize: (report) => materializeMigrationCandidates(db, report),
+    materialize: (report) => materializeMigrationCandidates(db, report, { now }),
     readPersisted: () => readPersistedMigrationRun(db),
   }
 }

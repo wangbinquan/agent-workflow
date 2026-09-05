@@ -23,7 +23,7 @@ import {
 } from '@/db/schema'
 import { createEmployeeInputUploadStore } from '@/modules/digital-employee/infrastructure/inputUploadStore'
 import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
-import { createSqliteActionTemplateStore } from '@/modules/development-automation/infrastructure/sqliteConfigResourceStore'
+import { createActionTemplatePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createSqliteTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -576,8 +576,8 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       statusCode: 200,
       createdAt: 1,
     })
-    const store = createSqliteActionTemplateStore(primary)
-    store.create({
+    const store = createActionTemplatePersistence(primary)
+    await store.create({
       id: 'action-template-race',
       name: 'Action template race',
       draftJson: '{}',
@@ -598,18 +598,19 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       worker.postMessage({ dbPath })
       expect(await locked).toEqual({ type: 'locked' })
       const released = nextMessage()
-      expect(() =>
-        store.publishRevision({
-          resourceId: 'action-template-race',
-          revision: 1,
-          contentJson: '{}',
-          contentDigest: 'sha256:action-template-race',
-          publishedAt: 2,
-          publishedBy: 'user',
-        }),
-      ).not.toThrow()
+      // RFC-359 W4-D6b：publish 是异步的统一事务原语；BEGIN IMMEDIATE 仍在 busy_timeout 内等 worker 释放，
+      // 不会以 transient 500 收场。
+      const publish = store.publishRevision({
+        resourceId: 'action-template-race',
+        revision: 1,
+        contentJson: '{}',
+        contentDigest: 'sha256:action-template-race',
+        publishedAt: 2,
+        publishedBy: 'user',
+      })
       expect(await released).toEqual({ type: 'released' })
-      expect(store.getRevision('action-template-race', 1)).toMatchObject({
+      await expect(publish).resolves.toBeUndefined()
+      expect(await store.getRevision('action-template-race', 1)).toMatchObject({
         revision: 1,
         contentDigest: 'sha256:action-template-race',
       })

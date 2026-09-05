@@ -26,8 +26,7 @@ import {
   createRepositoryBaselineResolverFromLocations,
   createSqliteRepositoryLocationRead,
 } from '../infrastructure/gitBaselineReader'
-import { createSqliteDevelopmentMigrationPersistence } from '../infrastructure/migrationAssets'
-import { createPostgresqlDevelopmentMigrationPersistence } from '../infrastructure/postgresqlMigrationAssets'
+import { createDevelopmentMigrationPersistence } from '../infrastructure/migrationAssets'
 import { createSqliteMissionReadModelQueries } from '../infrastructure/missionReadModels'
 import { createFactSnapshotReader } from '../infrastructure/reconcilerReaders'
 import { createCutoverStore } from '../infrastructure/cutoverStore'
@@ -713,7 +712,7 @@ export function composeDevelopmentMissionOperations(
     repositories: createSqliteRepositoryLocationRead(deps.db),
     readModels: createSqliteMissionReadModelQueries(deps.db),
     cutover: createCutoverStore(deps.db),
-    migration: createSqliteDevelopmentMigrationPersistence(deps.db),
+    migration: createDevelopmentMigrationPersistence(deps.db),
   })
 }
 
@@ -729,6 +728,6 @@ export function composePostgresqlDevelopmentMissionOperations(
     repositories: createPostgresqlRepositoryLocationRead(deps.db),
     readModels: createPostgresqlMissionReadModelQueries(deps.db),
     cutover: createCutoverStore(deps.db),
-    migration: createPostgresqlDevelopmentMigrationPersistence(deps.db),
+    migration: createDevelopmentMigrationPersistence(deps.db),
   })
 }
