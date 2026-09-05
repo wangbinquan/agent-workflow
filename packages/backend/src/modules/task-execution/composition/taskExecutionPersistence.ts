@@ -28,8 +28,7 @@ import { DrizzleNodeRunRuntimePersistence } from '../infrastructure/nodeRunRunti
 import { DrizzleWrapperRunPersistence } from '../infrastructure/wrapperRunPersistence'
 import { DrizzleTaskRuntimeLifecyclePersistence } from '../infrastructure/taskRuntimeLifecyclePersistence'
 import { createRuntimeSessionCapturePersistence } from '../infrastructure/runtimeSessionCapturePersistence'
-import { SqliteTaskExecutionShutdownOperations } from '../infrastructure/sqliteTaskExecutionShutdownOperations'
-import { PostgresqlTaskExecutionShutdownOperations } from '../infrastructure/postgresqlTaskExecutionShutdownOperations'
+import { DrizzleTaskExecutionShutdownOperations } from '../infrastructure/taskExecutionShutdownOperations'
 import { DrizzleNodeExecutionPersistence } from '../infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeActivationSnapshotReader } from '../infrastructure/nodeActivationSnapshotReader'
 import { DrizzleMergeStateLifecyclePersistence } from '../infrastructure/mergeStateLifecyclePersistence'
@@ -189,7 +188,7 @@ export function createSqliteTaskExecutionPersistence(db: DbClient): TaskExecutio
     humanGateLifecycle: new SqliteHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createSqliteRecoveryAdministration(db),
-    shutdown: new SqliteTaskExecutionShutdownOperations(db),
+    shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })
 }
@@ -222,7 +221,7 @@ export function createPostgresqlTaskExecutionPersistence(
     humanGateLifecycle: new PostgresqlHumanGateTaskLifecyclePersistence(db),
     reads: createTaskExecutionReadModels(db),
     recoveryAdministration: createPostgresqlRecoveryAdministration(db),
-    shutdown: new PostgresqlTaskExecutionShutdownOperations(db),
+    shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })
 }

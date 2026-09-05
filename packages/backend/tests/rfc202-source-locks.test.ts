@@ -52,8 +52,7 @@ describe('RFC-202 source locks', () => {
     )
     expect(shutdown).toContain('dependencies.operations.interruptSurvivor({')
     for (const adapter of [
-      'packages/backend/src/modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts',
-      'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts',
     ]) {
       const source = read(adapter)
       expect(source).toContain('DAEMON_RESTART_ERROR_SUMMARY')

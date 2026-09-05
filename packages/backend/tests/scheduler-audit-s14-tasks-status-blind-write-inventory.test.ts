@@ -44,7 +44,7 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskRouteOperations.ts': 2,
   'modules/task-execution/infrastructure/postgresqlRepositoryPreparationRetryCommand.ts': 3,
-  'modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts': 1,
+  'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlFusionEngineTaskOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
   'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,

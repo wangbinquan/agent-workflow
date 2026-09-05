@@ -120,6 +120,8 @@
 > 两笔同步写合成两笔异步事务后暴露 born-done 行「先可见、后有输出」的缝（scheduler 多边并入丢输入）+ 只包 BEGIN 的 SQLite
 > 写锁重试兜不住 insert 上的 BUSY；修法：`NodeRunMintInput.outputs`（行与初始输出同一事务）+ SQLite 统一事务整笔重跑。
 > 合一批次**必须**把 `scheduler*.test.ts` / `runner*.test.ts` 大套件跑进本地自查，不能只跑消费面文件。
+> **W4-B1 批 2h 已落**：停机幸存者处置一对合一（`taskExecutionShutdownOperations.ts`，控制面 CAS 不过围栏），
+> `rfc359-w4-b1-batch2h-adapters.test.ts` 两引擎各跑。剩 14 对（全部是薄壳套 legacy 同步内核 vs PG 整份实现，随 dbTxSync 归零一起合）。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

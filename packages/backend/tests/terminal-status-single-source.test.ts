@@ -49,8 +49,7 @@ describe('终态集合单源化（flag-audit W0）', () => {
     for (const rel of [
       'services/orphans.ts',
       'modules/task-execution/infrastructure/taskRecoveryOperations.ts',
-      'modules/task-execution/infrastructure/sqliteTaskExecutionShutdownOperations.ts',
-      'modules/task-execution/infrastructure/postgresqlTaskExecutionShutdownOperations.ts',
+      'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts',
     ]) {
       const src = SRC(rel)
       expect(src).toContain('DAEMON_RESTART_ERROR_SUMMARY')
