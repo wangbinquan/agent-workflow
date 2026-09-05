@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e72acbd4d49c63d1e8bb96e5140ee4cb5089efa9c153f328dba8a94ea69e8b93`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6543a13158d65b50abf50f9b444655c293cac2de22906a4269346a82740b1d47`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1917 |
+| backend production TS 文件 | 1901 |
 | `services/` 文件 | 326 |
-| `modules/**` 文件 / 非空 context | 1301 / 17 |
+| `modules/**` 文件 / 非空 context | 1285 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5251 |
+| `architectureExceptions` | 5236 |
 | `backgroundJobs` | 368 |
-| `crossContextImports` | 6134 |
+| `crossContextImports` | 6061 |
 | `facades` | 326 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25989 |
-| `mutationEntrypoints` | 1917 |
+| `moduleSymbolOwners` | 25924 |
+| `mutationEntrypoints` | 1902 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 986 |
-| `transactionExternalEffects` | 432 |
+| `transactionExternalEffects` | 422 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -54,12 +54,11 @@
 | task-execution / composition | 58 |
 | resource-catalog / application | 54 |
 | development-automation / application | 50 |
-| development-automation / infrastructure | 45 |
+| development-automation / infrastructure | 43 |
 | collaboration / application | 36 |
 | development-automation / domain | 33 |
 | resource-catalog / composition | 33 |
 | task-execution / domain | 29 |
-| code-capability / infrastructure | 28 |
 | integration / infrastructure | 28 |
 | intent / application | 25 |
 | identity-access / application | 24 |
@@ -69,10 +68,11 @@
 | integration / composition | 19 |
 | system-operations / infrastructure | 19 |
 | intent / domain | 18 |
+| code-capability / infrastructure | 17 |
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
 | digital-employee / application | 13 |
-| digital-employee / infrastructure | 13 |
+| digital-employee / infrastructure | 12 |
 | intent / infrastructure | 12 |
 | code-capability / domain | 11 |
 | identity-access / infrastructure | 11 |
@@ -80,8 +80,8 @@
 | memory / application | 10 |
 | memory / infrastructure | 10 |
 | source-control / application | 10 |
-| source-control / infrastructure | 10 |
 | collaboration / composition | 9 |
+| source-control / infrastructure | 9 |
 | knowledge-evolution / domain | 8 |
 | memory / domain | 8 |
 | development-automation / engine | 7 |
@@ -96,13 +96,13 @@
 | collaboration / public | 5 |
 | digital-employee / composition | 5 |
 | digital-employee / public | 5 |
-| event-center / infrastructure | 5 |
 | event-center / public | 5 |
 | identity-access / composition | 5 |
 | integration / public | 5 |
 | resource-catalog / public | 5 |
 | source-control / public | 5 |
 | development-automation / public | 4 |
+| event-center / infrastructure | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
 | system-operations / composition | 4 |
@@ -200,13 +200,13 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3607 |
+| legacy-outbound | 3593 |
 | legacy-inbound | 1446 |
-| infrastructure-external | 362 |
-| provider-mirror | 251 |
+| infrastructure-external | 346 |
+| provider-mirror | 209 |
 | offered-consumption | 185 |
 | off-dag-offered | 94 |
-| temporary-internal-debt | 92 |
+| temporary-internal-debt | 91 |
 | authority-type-only | 66 |
 | required-implementation | 27 |
 | external-layer-debt | 4 |
@@ -215,10 +215,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3607 |
+| legacy-outbound | 3593 |
 | legacy-inbound | 1446 |
 | off-dag-offered | 94 |
-| temporary-internal-debt | 92 |
+| temporary-internal-debt | 91 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
 | no-util-to-upper | 2 |
@@ -227,14 +227,14 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2792 |
+| W9 | 2778 |
 | W4-E1 | 865 |
 | W4-C | 409 |
 | W4-E0 | 239 |
 | W4 | 211 |
 | W4-B | 188 |
 | W5 | 149 |
-| W4-E8 | 116 |
+| W4-E8 | 115 |
 | W4-E9 | 61 |
 | W4-E2 | 44 |
 | W4-E4a | 44 |

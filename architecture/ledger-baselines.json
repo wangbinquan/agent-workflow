@@ -62,8 +62,8 @@
       "id": "rfc349-dual-provider-predicate-forks",
       "file": "packages/backend/tests/rfc349-dual-provider-predicate-drift.test.ts",
       "symbol": "ALLOWED_DIVERGENCE",
-      "baseline": 14,
-      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。"
+      "baseline": 13,
+      "why": "RFC-349：SQLite / PostgreSQL 同名 adapter 的同名顶层函数实现不同的 exact 清单。正当分叉只认三类（方言 SQL / 驱动错误形状 / 行命名），业务判据分叉一律红——两份判据各自演进就会让用户看到的行为取决于部署选了哪个数据库。 RFC-355 T5：intentResourcePlanOf 的「仅形参命名」分叉已被真正的共享纯函数消除，18 → 17。 RFC-357：两个 provider 的任务目录源适配合并成一份 `taskExecutionCatalogSources.ts`，`source` / `targetLabel` 两条 fork 随之不复存在，17 → 15。销账要把条目一并删掉，否则差额会变成下一个人的免费槽位。 RFC-359 W4-B2 批 b 合掉 CatalogQuery 对后其 catalogWhere 登记退役，15 → 14（W4 期间只降不升）。 RFC-359 W4-B5 批 b：DeliveryChain 孪生对合一为 deliveryChainRead.ts，`toRow` 的豁免随孪生对消失删除，14 → 13。"
     },
     {
       "id": "rfc294-cross-context-pilot-debt",
@@ -391,7 +391,7 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1917,
+      "baseline": 1902,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
@@ -405,7 +405,7 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 432,
+      "baseline": 422,
       "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
@@ -426,7 +426,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6134,
+      "baseline": 6061,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -447,7 +447,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5251,
+      "baseline": 5236,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -482,12 +482,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25989,
+      "baseline": 25924,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e72acbd4d49c63d1e8bb96e5140ee4cb5089efa9c153f328dba8a94ea69e8b93",
+    "sourceDigest": "sha256:6543a13158d65b50abf50f9b444655c293cac2de22906a4269346a82740b1d47",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -500,8 +500,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9e1c168b740f2a3c41f5af62c49af82cbf34e107",
-    "contentDigest": "sha256:2817680e32d6eabf58abf0a4a27bbb2d74f8f27e81e51618cca7d2eb90fb2844",
+    "currentSnapshotSha": "7d014b935fbb498469f2df0b91ccf6f30701b65a",
+    "contentDigest": "sha256:e1195291427b0981452af55d52fcfb214cfb4020fb728f547fbcb7f233d2d81e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

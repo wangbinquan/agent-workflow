@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 5251,
+    "architectureExceptions": 5236,
     "backgroundJobs": 368,
-    "crossContextImports": 6134,
+    "crossContextImports": 6061,
     "facades": 326,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25989,
-    "mutationEntrypoints": 1917,
+    "moduleSymbolOwners": 25924,
+    "mutationEntrypoints": 1902,
     "nodeRunInsertSites": 2,
     "publicSurfaces": 986,
-    "transactionExternalEffects": 432
+    "transactionExternalEffects": 422
   },
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1917,
+    "backendProductionFiles": 1901,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -55,7 +55,7 @@
     "moduleContexts": [
       {
         "context": "code-capability",
-        "files": 65
+        "files": 54
       },
       {
         "context": "collaboration",
@@ -63,15 +63,15 @@
       },
       {
         "context": "development-automation",
-        "files": 153
+        "files": 151
       },
       {
         "context": "digital-employee",
-        "files": 39
+        "files": 38
       },
       {
         "context": "event-center",
-        "files": 21
+        "files": 20
       },
       {
         "context": "execution-contract",
@@ -107,7 +107,7 @@
       },
       {
         "context": "source-control",
-        "files": 36
+        "files": 35
       },
       {
         "context": "system-operations",
@@ -122,7 +122,7 @@
         "files": 327
       }
     ],
-    "moduleFiles": 1301,
+    "moduleFiles": 1285,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -168,5 +168,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e72acbd4d49c63d1e8bb96e5140ee4cb5089efa9c153f328dba8a94ea69e8b93"
+  "sourceDigest": "sha256:6543a13158d65b50abf50f9b444655c293cac2de22906a4269346a82740b1d47"
 }
