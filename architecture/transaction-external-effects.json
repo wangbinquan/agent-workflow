@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 40,
-    "transactionCallbacks": 344
+    "transactionCallbacks": 343
   },
   "entries": [
     {
@@ -798,23 +798,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#dbTxSync:101",
-      "line": 101,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createSqliteRequirementBundleRefPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#transaction:114",
+      "line": 114,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createRequirementBundleRefPersistence",
       "status": "clear",
-      "symbol": "createSqliteRequirementBundleRefPersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#transaction:180",
-      "line": 180,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createPostgresqlRequirementBundleRefPersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlRequirementBundleRefPersistence",
+      "symbol": "createRequirementBundleRefPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -824,11 +812,11 @@
       ],
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#transaction:81",
-      "line": 81,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#recordPostgresqlUploadPublicationReceipt",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#transaction:38",
+      "line": 38,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#recordUploadPublicationReceipt",
       "status": "co-located-risk",
-      "symbol": "recordPostgresqlUploadPublicationReceipt",
+      "symbol": "recordUploadPublicationReceipt",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -4224,7 +4212,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4",
+  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

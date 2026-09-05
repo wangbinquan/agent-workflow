@@ -553,9 +553,9 @@
     {
       "callee": "installMaintenanceWorkerErrorBoundary",
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:181",
+      "id": "ambient:packages/backend/src/platform/background/maintenanceWorker.ts#installMaintenanceWorkerErrorBoundary:178",
       "kind": "register-call",
-      "line": 181,
+      "line": 178,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
@@ -5454,11 +5454,11 @@
   "denominator": {
     "ambientWiring": 494,
     "disabled": 11,
-    "entries": 364,
+    "entries": 363,
     "executionLocal": 51,
     "longRunning": 82,
     "managed": 11,
-    "periodic": 220
+    "periodic": 219
   },
   "entries": [
     {
@@ -6377,29 +6377,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#sweepDevelopmentRetention",
       "phase": "unknown",
       "symbol": "sweepDevelopmentRetention",
-      "targetContext": "development-automation"
-    },
-    {
-      "dependencies": [
-        "db"
-      ],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#sweepPostgresqlDevelopmentRetention",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#sweepPostgresqlDevelopmentRetention",
-      "phase": "unknown",
-      "symbol": "sweepPostgresqlDevelopmentRetention",
       "targetContext": "development-automation"
     },
     {
@@ -9825,7 +9802,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:746",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:742",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9839,7 +9816,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:746",
+      "symbol": "$setInterval:742",
       "targetContext": "platform"
     },
     {
@@ -9848,7 +9825,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:748",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:744",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9862,7 +9839,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:748",
+      "symbol": "$setInterval:744",
       "targetContext": "platform"
     },
     {
@@ -9871,7 +9848,7 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:236",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setTimeout:233",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9885,7 +9862,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:236",
+      "symbol": "$setTimeout:233",
       "targetContext": "platform"
     },
     {
@@ -13497,5 +13474,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4"
+  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c"
 }

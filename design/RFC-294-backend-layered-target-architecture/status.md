@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -18,7 +18,7 @@
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 494 |
-| background work entries | 364 |
+| background work entries | 363 |
 | direct native `setInterval`（call / files） | 23 / 20 |
 | direct native timers（全部） | 78 |
 | RFC-317 boundary census（inbound / outbound） | 285 / 35 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 5126 |
-| `backgroundJobs` | 364 |
-| `crossContextImports` | 5802 |
+| `architectureExceptions` | 5118 |
+| `backgroundJobs` | 363 |
+| `crossContextImports` | 5794 |
 | `facades` | 325 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25649 |
-| `mutationEntrypoints` | 1845 |
+| `moduleSymbolOwners` | 25641 |
+| `mutationEntrypoints` | 1841 |
 | `nodeRunInsertSites` | 2 |
 | `publicSurfaces` | 981 |
-| `transactionExternalEffects` | 344 |
+| `transactionExternalEffects` | 343 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -200,8 +200,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3492 |
-| legacy-inbound | 1438 |
+| legacy-outbound | 3485 |
+| legacy-inbound | 1437 |
 | infrastructure-external | 320 |
 | offered-consumption | 170 |
 | provider-mirror | 108 |
@@ -215,8 +215,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3492 |
-| legacy-inbound | 1438 |
+| legacy-outbound | 3485 |
+| legacy-inbound | 1437 |
 | off-dag-offered | 94 |
 | temporary-internal-debt | 91 |
 | no-circular | 6 |
@@ -227,14 +227,14 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2694 |
+| W9 | 2687 |
 | W4-E1 | 859 |
 | W4-C | 406 |
 | W4-E0 | 227 |
 | W4 | 211 |
 | W4-B | 188 |
 | W5 | 149 |
-| W4-E8 | 115 |
+| W4-E8 | 114 |
 | W4-E9 | 60 |
 | W4-E4a | 44 |
 | W4-E7 | 44 |

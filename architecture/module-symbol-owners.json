@@ -6,7 +6,7 @@
     "moduleFiles": 1257,
     "productionFiles": 2646,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25649
+    "symbolsIncludingFileRoots": 25641
   },
   "entries": [
     {
@@ -35233,6 +35233,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/composition.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAdmissionLookup",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeDevelopmentAdmissionLookup",
+      "targetContext": "development-automation",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/composition.ts",
       "id": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomation",
       "removeAfterWave": null,
       "status": "current-module",
@@ -35273,54 +35285,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composePlaybookSaga",
-      "targetContext": "development-automation",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition.ts#composePostgresqlDevelopmentAdmissionLookup",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentAdmissionLookup",
-      "targetContext": "development-automation",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition.ts#composePostgresqlDevelopmentAutomation",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentAutomation",
-      "targetContext": "development-automation",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition.ts#composePostgresqlDevelopmentAutomationMaintenanceCommands",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentAutomationMaintenanceCommands",
-      "targetContext": "development-automation",
-      "targetLayer": "composition"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition.ts#composeSqliteDevelopmentAdmissionLookup",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "composeSqliteDevelopmentAdmissionLookup",
       "targetContext": "development-automation",
       "targetLayer": "composition"
     },
@@ -38153,18 +38117,6 @@
       "removeAfterWave": "W4-E8",
       "status": "current-module",
       "symbol": "composeDevelopmentMissionOperationsFromPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#composePostgresqlDevelopmentMissionOperations",
-      "removeAfterWave": "W4-E8",
-      "status": "current-module",
-      "symbol": "composePostgresqlDevelopmentMissionOperations",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -45001,18 +44953,6 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createPostgresqlRepositoryLocationRead",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlRepositoryLocationRead",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryBaselineResolver",
       "removeAfterWave": null,
       "status": "current-module",
@@ -45037,10 +44977,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createSqliteRepositoryLocationRead",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryLocationRead",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createSqliteRepositoryLocationRead",
+      "symbol": "createRepositoryLocationRead",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -46045,18 +45985,6 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts#createPostgresqlRepositoryFactsCollector",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlRepositoryFactsCollector",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts#createRepositoryFactsCollector",
       "removeAfterWave": null,
       "status": "current-module",
@@ -46177,22 +46105,22 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createPostgresqlRequirementBundleRefPersistence",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createRequirementBundleRefPersistence",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createPostgresqlRequirementBundleRefPersistence",
+      "symbol": "createRequirementBundleRefPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
       "currentContext": "development-automation",
       "currentLayer": "infrastructure",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createSqliteRequirementBundleRefPersistence",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#latestOf",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createSqliteRequirementBundleRefPersistence",
+      "symbol": "latestOf",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -46475,18 +46403,6 @@
     {
       "currentContext": "development-automation",
       "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/retentionSweeper.ts#sweepPostgresqlDevelopmentRetention",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "sweepPostgresqlDevelopmentRetention",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPlacement.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacement.ts#$file",
@@ -46573,22 +46489,10 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createPostgresqlUploadPlacementPersistence",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createUploadPlacementPersistence",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "createPostgresqlUploadPlacementPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createSqliteUploadPlacementPersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteUploadPlacementPersistence",
+      "symbol": "createUploadPlacementPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -46703,12 +46607,12 @@
     {
       "currentContext": "development-automation",
       "currentLayer": "infrastructure",
-      "exported": true,
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#recordPostgresqlUploadPublicationReceipt",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#publicationOf",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "recordPostgresqlUploadPublicationReceipt",
+      "symbol": "publicationOf",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -308489,5 +308393,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4"
+  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c"
 }

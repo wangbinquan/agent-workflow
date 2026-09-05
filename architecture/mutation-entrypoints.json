@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1845,
+    "entries": 1841,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -8879,31 +8879,6 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createPostgresqlRepositoryLocationRead",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createPostgresqlRepositoryLocationRead",
-      "symbol": "createPostgresqlRepositoryLocationRead",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryBaselineResolver",
       "missingControls": [
         "audit",
@@ -8954,7 +8929,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createSqliteRepositoryLocationRead",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryLocationRead",
       "missingControls": [
         "audit",
         "authority",
@@ -8963,8 +8938,8 @@
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createSqliteRepositoryLocationRead",
-      "symbol": "createSqliteRepositoryLocationRead",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryLocationRead",
+      "symbol": "createRepositoryLocationRead",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -9243,31 +9218,6 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts#createPostgresqlRepositoryFactsCollector",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts#createPostgresqlRepositoryFactsCollector",
-      "symbol": "createPostgresqlRepositoryFactsCollector",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts",
-      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/repositoryFactsCollector.ts#createRepositoryFactsCollector",
       "missingControls": [
         "audit",
@@ -9316,38 +9266,15 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createPostgresqlRequirementBundleRefPersistence",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createRequirementBundleRefPersistence",
       "missingControls": [
         "audit",
         "authority",
         "event",
         "fenceOrOcc"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createPostgresqlRequirementBundleRefPersistence",
-      "symbol": "createPostgresqlRequirementBundleRefPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createSqliteRequirementBundleRefPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createSqliteRequirementBundleRefPersistence",
-      "symbol": "createSqliteRequirementBundleRefPersistence",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/requirementBundleRefPersistence.ts#createRequirementBundleRefPersistence",
+      "symbol": "createRequirementBundleRefPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -9408,7 +9335,7 @@
       },
       "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createPostgresqlUploadPlacementPersistence",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createUploadPlacementPersistence",
       "missingControls": [
         "audit",
         "authority",
@@ -9416,33 +9343,8 @@
         "event",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createPostgresqlUploadPlacementPersistence",
-      "symbol": "createPostgresqlUploadPlacementPersistence",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createSqliteUploadPlacementPersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createSqliteUploadPlacementPersistence",
-      "symbol": "createSqliteUploadPlacementPersistence",
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacementPersistence.ts#createUploadPlacementPersistence",
+      "symbol": "createUploadPlacementPersistence",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -44033,7 +43935,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eabffe3f439377f40133e4de411b3dd25af278e7945e82340256438ac72b6af4",
+  "sourceDigest": "sha256:8db35dedee2de37b09f9f06f488cee25296ed331914d39f13952265d319a639c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
