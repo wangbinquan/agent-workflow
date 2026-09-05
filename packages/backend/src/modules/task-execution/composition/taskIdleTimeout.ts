@@ -19,8 +19,12 @@ export {
   type IdleTimeoutSweepResult,
   type TaskIdleTimeoutConfig,
 } from '../application/taskIdleTimeoutReaper'
-export { createPostgresqlTaskIdleTimeoutPersistence } from '../infrastructure/postgresqlTaskIdleTimeoutPersistence'
-export { createSqliteTaskIdleTimeoutPersistence } from '../infrastructure/sqliteTaskIdleTimeoutPersistence'
+// RFC-359 W4-B1：实现只有一份；两个 provider 具名工厂只做绑定（bootstrap 收敛后一并删）。
+export {
+  createTaskIdleTimeoutPersistence,
+  createTaskIdleTimeoutPersistence as createSqliteTaskIdleTimeoutPersistence,
+  createTaskIdleTimeoutPersistence as createPostgresqlTaskIdleTimeoutPersistence,
+} from '../infrastructure/taskIdleTimeoutPersistence'
 export type {
   IdleTimeoutRunSnapshot,
   IdleTimeoutTreeSnapshot,

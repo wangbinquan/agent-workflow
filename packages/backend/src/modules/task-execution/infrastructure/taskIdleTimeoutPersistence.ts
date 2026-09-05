@@ -1,7 +1,7 @@
 // RFC-350 —— 不活跃超时收割的持久化实现。
 //
-// **一份实现，两个 provider 共用**（`sqliteTaskIdleTimeoutPersistence.ts` /
-// `postgresqlTaskIdleTimeoutPersistence.ts` 只是两个具名工厂）。可以这么做是因为本
+// **一份实现，两个 provider 共用**（RFC-359 W4-B1 起两个 provider 具名工厂只是
+// `composition/taskIdleTimeout.ts` 里的绑定别名）。可以这么做是因为本
 // adapter 只有纯读 + 两条单语句写、**没有事务**：SQLite 的 `dbTxSync` 与 PostgreSQL 的
 // 异步事务那道真正的分歧在这里不存在，而 `DbClient` 与 `PostgresqlDatabaseClient` 都是
 // drizzle 的 `BaseSQLiteDatabase`，同一套 query builder 在 `await` 下行为一致。

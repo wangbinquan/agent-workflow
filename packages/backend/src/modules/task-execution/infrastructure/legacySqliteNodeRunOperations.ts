@@ -4,7 +4,7 @@ import { composeSqliteRuntimeRegistryOperations } from '@/platform/runtime-regis
 import { SqliteNodeExecutionPersistence } from './sqliteNodeExecutionPersistence'
 import { SqliteNodeRunLifecyclePersistence } from './sqliteNodeRunLifecyclePersistence'
 import { createSqliteNodeRunMintParticipantInTx } from './sqliteNodeRunMintParticipant'
-import { SqliteNodeRunRuntimePersistence } from './sqliteNodeRunRuntimePersistence'
+import { DrizzleNodeRunRuntimePersistence } from './nodeRunRuntimePersistence'
 
 export type LegacySqliteNodeRunDatabase = DbClient
 export type LegacySqliteNodeRunTransaction = DbTxSync
@@ -14,7 +14,7 @@ export function createLegacySqliteNodeRunOperations(db: DbClient) {
   return Object.freeze({
     lifecycle: new SqliteNodeRunLifecyclePersistence(db),
     projections: new SqliteNodeExecutionPersistence(db),
-    runtimes: new SqliteNodeRunRuntimePersistence(db),
+    runtimes: new DrizzleNodeRunRuntimePersistence(db),
     runtimeRegistry: composeSqliteRuntimeRegistryOperations(db),
   })
 }

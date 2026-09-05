@@ -1,14 +1,16 @@
+// RFC-359 W4-B1 —— wrapper run 持久化：一份实现，两个 provider 共用。
+
 import { and, desc, eq, isNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns } from '@/db/schema'
 import { pickFrameSourceRun } from '@/services/freshness'
 import type { WrapperRunPersistence } from '../application/ports/wrapperRunPersistence'
-import { withCurrentTaskExecutionMutation } from './sqliteOwnedTaskMutation'
+import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import { clearReuseDisabledProgress, wrapperRunSnapshot } from './wrapperRunPersistenceShared'
 
-export class SqliteWrapperRunPersistence implements WrapperRunPersistence {
-  constructor(private readonly db: DbClient) {}
+export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async findResumable(
     input: Parameters<WrapperRunPersistence['findResumable']>[0],
@@ -71,23 +73,25 @@ export class SqliteWrapperRunPersistence implements WrapperRunPersistence {
   async clearReuseDisabled(
     input: Parameters<WrapperRunPersistence['clearReuseDisabled']>[0],
   ): Promise<void> {
-    const row = (
-      await this.db
-        .select({ wrapperProgressJson: nodeRuns.wrapperProgressJson })
+    await withTaskExecutionWrite(this.db, async (tx) => {
+      const rows = await tx
+        .select({
+          taskId: nodeRuns.taskId,
+          wrapperProgressJson: nodeRuns.wrapperProgressJson,
+        })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, input.nodeRunId))
         .limit(1)
-    )[0]
-    const next = clearReuseDisabledProgress(row?.wrapperProgressJson ?? null)
-    if (next === null) return
-    withCurrentTaskExecutionMutation({
-      db: this.db,
-      run: (tx) =>
-        tx
-          .update(nodeRuns)
-          .set({ wrapperProgressJson: next })
-          .where(eq(nodeRuns.id, input.nodeRunId))
-          .run(),
+      const row = rows[0]
+      if (row === undefined) return
+      await fenceTaskWrite(tx, { taskId: row.taskId, context: input.executionContext })
+      const next = clearReuseDisabledProgress(row.wrapperProgressJson)
+      if (next === null) return
+      await tx
+        .update(nodeRuns)
+        .set({ wrapperProgressJson: next })
+        .where(eq(nodeRuns.id, input.nodeRunId))
+        .run()
     })
   }
 }

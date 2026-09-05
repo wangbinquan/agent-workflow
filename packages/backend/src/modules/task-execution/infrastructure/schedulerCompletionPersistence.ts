@@ -1,30 +1,25 @@
+// RFC-359 W4-B1 —— 调度器收尾读写：一份实现，两个 provider 共用。
+
 import { and, eq } from 'drizzle-orm'
 
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, taskRepos } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { SchedulerCompletionPersistence } from '../application/ports/schedulerCompletionPersistence'
-import {
-  assertPostgresqlTaskOwnerTx,
-  assertPostgresqlTaskOwnerlessTx,
-  withPostgresqlSerializableTaskExecution,
-} from './postgresqlTaskLifecycleTransaction'
+import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
-export class PostgresqlSchedulerCompletionPersistence implements SchedulerCompletionPersistence {
-  constructor(private readonly db: PostgresqlDatabaseClient) {}
+export class DrizzleSchedulerCompletionPersistence implements SchedulerCompletionPersistence {
+  constructor(private readonly db: ProviderNeutralDatabase) {}
 
   async recordReadonlyDirty(
     input: Parameters<SchedulerCompletionPersistence['recordReadonlyDirty']>[0],
   ): Promise<void> {
-    await withPostgresqlSerializableTaskExecution(this.db, async (tx) => {
-      if (input.execution === undefined) {
-        await assertPostgresqlTaskOwnerlessTx(tx, input.taskId)
-      } else {
-        await assertPostgresqlTaskOwnerTx(tx, input.execution.token, input.now)
-      }
+    await withTaskExecutionWrite(this.db, async (tx) => {
+      await fenceTaskWrite(tx, { taskId: input.taskId, context: input.execution, now: input.now })
       await tx
         .update(taskRepos)
         .set({ readonlyDirtyCount: input.changedCount })
         .where(and(eq(taskRepos.taskId, input.taskId), eq(taskRepos.repoIndex, input.repoIndex)))
+        .run()
     })
   }
 

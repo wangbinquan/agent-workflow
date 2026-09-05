@@ -205,7 +205,8 @@ test('源码锁：每个 PG owner 围栏都先读环境上下文；effect 账本
   for (const file of [
     'postgresqlNodeExecutionPersistence.ts',
     'postgresqlNodeRunLifecyclePersistence.ts',
-    'postgresqlWrapperRunPersistence.ts',
+    // RFC-359 W4-B1 批 2c：wrapper run / node-run runtime / scheduler completion 的围栏合到中立原语。
+    'ownedTaskExecution.ts',
     'postgresqlMergeStateLifecyclePersistence.ts',
     'postgresqlTaskEngineApplicationPersistence.ts',
     'postgresqlTaskRuntimeLifecyclePersistence.ts',
