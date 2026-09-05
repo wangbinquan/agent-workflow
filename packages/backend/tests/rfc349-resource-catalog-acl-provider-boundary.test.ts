@@ -51,15 +51,17 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
     expect(composition).not.toMatch(/as\s+(?:unknown|DbClient|PostgresqlDatabaseClient)/)
   })
 
-  test('PostgreSQL adapters use their native client and SQL dialect without fallback', () => {
-    const postgresqlPaths = [
-      'src/modules/resource-catalog/infrastructure/postgresqlAclReadRepository.ts',
-      'src/modules/resource-catalog/infrastructure/postgresqlResourceAclRepository.ts',
+  // RFC-359 W4-D3：目录自有 ACL 类型的读 / 写端口只有一份中立实现，不再有 PG 专属文件；中立文件不得夹带 SQLite 机制。
+  test('the neutral ACL adapters carry no provider mechanism', () => {
+    const neutralPaths = [
+      'src/modules/resource-catalog/infrastructure/aclReadRepository.ts',
+      'src/modules/resource-catalog/infrastructure/resourceAclRepository.ts',
     ]
 
-    for (const path of postgresqlPaths) {
+    for (const path of neutralPaths) {
       const text = source(path)
-      expect(text).toContain('PostgresqlDatabaseClient')
+      expect(text).toContain('ProviderNeutralDatabase')
+      expect(text).not.toContain('PostgresqlDatabaseClient')
       expect(text).not.toMatch(
         /\bDbClient\b|\bDbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core|createSqlite|as\s+(?:unknown|DbClient|PostgresqlDatabaseClient)/,
       )

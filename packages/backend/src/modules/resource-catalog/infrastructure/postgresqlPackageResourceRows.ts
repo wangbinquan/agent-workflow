@@ -16,7 +16,7 @@ import type {
   ResourcePackageReadPort,
   ResourcePackageResourceSnapshot,
 } from '../application/package/ports'
-import { POSTGRESQL_ACL_TABLES } from './postgresqlAclRegistry'
+import { POSTGRESQL_ACL_TABLES } from './aclRegistry'
 import { createResourceGrantReadPort } from './resourceVisibility'
 import {
   runPostgresqlResourceCatalogTransaction,

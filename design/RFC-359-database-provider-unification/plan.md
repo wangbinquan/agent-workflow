@@ -311,6 +311,16 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   目标须按 RFC-349 重做 cutover——与 RFC-354 PR-1 同规则；PG 侧尚无增量迁移，记 W5-T19h）。**这是一类系统性缺口**：凡是
   迁移 SQL 里手写而未进 drizzle 声明的索引 / CHECK / 触发器，PG 都没有（B6 记的 `repo_group_nodes` / 传输凭据 CHECK 是同一类）。
   W5-T19g 做一次「迁移后 sqlite_master vs 逻辑契约」的对账守卫，把所有此类差异要么补进声明、要么显式登记为 SQLite 专属。
+  **D3 ✅（resource-catalog ACL 内核）**：目录自有 ACL 类型的读端口（`aclReadRepository.ts`：快照读在目录写事务原语里，
+  owner / name 预检与七个异步读助手中立）、写端口（`resourceAclRepository.ts`：identity 行 CAS + grants 整体替换 +
+  after-write 钩子同一事务，owner+name 撞库经能力矩阵 `classifyError` 归类再核约束名）与 `aclRegistry.ts`（唯一性类型集 /
+  约束名一份，旧 PG 名留作别名）合一，PG 三个文件删除；`providerResourceCatalog.ts` 两条装配路径装同一份
+  （`composeResourceCatalogFor`），`composition/resourceAcl.ts` 的默认路径（无 owner 侧 identity persistence、无同步
+  after-write 钩子）改走中立端口，带同步参与者的调用（development_adapter / employee_* 的 identity persistence、mcp 装配的
+  同步钩子）仍走 SQLite 同步路径，随各 owner 的 dbTxSync 归零一起退。`rfc359-w4-d3-adapters.test.ts` 两引擎各跑。
+  剩余 SQLite 专属：`sqliteResourceAclRepository.ts`（identityPersistence 分支 + 同步 withMutation）、
+  `sqliteAclReadRepository.ts`（`*InTx` 同步读 + 同步快照读端口，memory / workgroup / legacy 快照消费）、
+  `sqliteResourceGrantRepository.ts`（`*InTx`）——它们是「同步参与者」的最后一层，随 D 系列逐链退役。
 
 ## 5. W5 —— 防复辟
 

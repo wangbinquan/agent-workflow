@@ -16,22 +16,16 @@ import type {
   ResourceCatalogSummaryReadPort,
 } from '../application/ports/providerResourceCatalogPersistence'
 import type { ResourceCatalogQuery } from '../public/queries'
-import { createSqliteResourceCatalogAclIdentityReadPort } from '../infrastructure/sqliteAclReadRepository'
 import { createResourceCatalogSummaryReadPort } from '../infrastructure/catalogQuery'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
-  createSqliteResourceAclMutationPort,
-  createSqliteResourceAclReadPort,
-  type SqliteResourceAclMutationLifecycle,
-} from '../infrastructure/sqliteResourceAclRepository'
-import { createSqliteResourceGrantReadPort } from '../infrastructure/sqliteResourceGrantRepository'
+  createResourceAclReadPort,
+  createResourceCatalogAclIdentityReadPort,
+} from '../infrastructure/aclReadRepository'
 import {
-  createPostgresqlResourceAclReadPort,
-  createPostgresqlResourceCatalogAclIdentityReadPort,
-} from '../infrastructure/postgresqlAclReadRepository'
-import {
-  createPostgresqlResourceAclMutationPort,
-  type PostgresqlResourceAclMutationLifecycle,
-} from '../infrastructure/postgresqlResourceAclRepository'
+  createResourceAclMutationPort,
+  type ResourceAclMutationLifecycle,
+} from '../infrastructure/resourceAclRepository'
 import { createResourceGrantReadPort } from '../infrastructure/resourceVisibility'
 
 export interface ResourceCatalogQueryFactory {
@@ -69,32 +63,36 @@ export function composeProviderResourceCatalog(
   })
 }
 
-export function composeSqliteResourceCatalog(input: {
-  readonly db: DbClient
-  readonly lifecycle?: SqliteResourceAclMutationLifecycle
+/**
+ * RFC-359 W4-D3：目录自有 ACL 类型的读 / 写 / owner-name 预检端口只有一份中立实现，两个 provider 装同一份。
+ * 非自有类型（development_adapter / employee_*）仍由各 owner 的 identity persistence 经 composition/resourceAcl.ts 承担。
+ */
+export function composeResourceCatalogFor(input: {
+  readonly db: ProviderNeutralDatabase
+  readonly lifecycle?: ResourceAclMutationLifecycle
 }): ProviderResourceCatalogComposition {
   return composeProviderResourceCatalog(
     Object.freeze({
-      grants: createSqliteResourceGrantReadPort(input.db),
-      reads: createSqliteResourceAclReadPort(input.db),
-      mutations: createSqliteResourceAclMutationPort(input.db, input.lifecycle),
-      identities: createSqliteResourceCatalogAclIdentityReadPort(input.db),
+      grants: createResourceGrantReadPort(input.db),
+      reads: createResourceAclReadPort(input.db),
+      mutations: createResourceAclMutationPort(input.db, input.lifecycle),
+      identities: createResourceCatalogAclIdentityReadPort(input.db),
     }),
     createResourceCatalogSummaryReadPort(input.db),
   )
 }
 
+/** 旧名保留为装配别名，bootstrap 收敛后删除。 */
+export function composeSqliteResourceCatalog(input: {
+  readonly db: DbClient
+  readonly lifecycle?: ResourceAclMutationLifecycle
+}): ProviderResourceCatalogComposition {
+  return composeResourceCatalogFor(input)
+}
+
 export function composePostgresqlResourceCatalog(input: {
   readonly db: PostgresqlDatabaseClient
-  readonly lifecycle?: PostgresqlResourceAclMutationLifecycle
+  readonly lifecycle?: ResourceAclMutationLifecycle
 }): ProviderResourceCatalogComposition {
-  return composeProviderResourceCatalog(
-    Object.freeze({
-      grants: createResourceGrantReadPort(input.db),
-      reads: createPostgresqlResourceAclReadPort(input.db),
-      mutations: createPostgresqlResourceAclMutationPort(input.db, input.lifecycle),
-      identities: createPostgresqlResourceCatalogAclIdentityReadPort(input.db),
-    }),
-    createResourceCatalogSummaryReadPort(input.db),
-  )
+  return composeResourceCatalogFor(input)
 }

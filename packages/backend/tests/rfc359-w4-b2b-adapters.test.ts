@@ -21,7 +21,7 @@ import {
   ACL_TABLES,
   createResourceGrantReadPort,
 } from '@/modules/resource-catalog/infrastructure/resourceVisibility'
-import { POSTGRESQL_ACL_TABLES } from '@/modules/resource-catalog/infrastructure/postgresqlAclRegistry'
+import { POSTGRESQL_ACL_TABLES } from '@/modules/resource-catalog/infrastructure/aclRegistry'
 import { SQLITE_ACL_TABLES } from '@/modules/resource-catalog/infrastructure/sqliteAclRegistry'
 import { describeEachProvider } from './helpers/eachProvider'
 

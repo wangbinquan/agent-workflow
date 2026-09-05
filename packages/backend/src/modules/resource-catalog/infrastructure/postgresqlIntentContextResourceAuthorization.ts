@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { resourceGrants } from '@/db/schema'
 import type { IntentContextResourceAuthorizationReadPort } from '../application/ports/intentContextResourceAuthorization'
-import { POSTGRESQL_ACL_TABLES } from './postgresqlAclRegistry'
+import { POSTGRESQL_ACL_TABLES } from './aclRegistry'
 import type { PostgresqlResourceCatalogTransaction } from './postgresql/repositorySupport'
 
 /** Bind Intent context identity/grant reads to the caller's current PostgreSQL tx. */

@@ -12,7 +12,7 @@ import {
   projectAgentImportResolutionSnapshot,
   type AgentImportIdentityRow,
 } from './agentImportSnapshot'
-import { POSTGRESQL_ACL_TABLES } from './postgresqlAclRegistry'
+import { POSTGRESQL_ACL_TABLES } from './aclRegistry'
 import {
   runPostgresqlResourceCatalogTransaction,
   type PostgresqlResourceCatalogTransaction,
