@@ -214,6 +214,11 @@ async function assertDependencyGraph(
   for (const dependency of unique(dependencyIds)) await visit(dependency)
 }
 
+function onlyNew(next: readonly string[], previous: readonly string[] | undefined): string[] {
+  const existing = new Set(previous ?? [])
+  return unique(next).filter((id) => !existing.has(id))
+}
+
 async function assertCandidate(input: {
   readonly transaction: ResourceCatalogTransaction
   readonly authority: AgentOperationContext
@@ -223,10 +228,6 @@ async function assertCandidate(input: {
 }): Promise<void> {
   assertBranchPortsDeclared(input.candidate)
   await assertRuntime(input.runtimeProfiles, input.candidate.runtime, input.previous?.runtime)
-  const onlyNew = (next: readonly string[], previous: readonly string[] | undefined) => {
-    const existing = new Set(previous ?? [])
-    return unique(next).filter((id) => !existing.has(id))
-  }
   await assertReferencesUsable({
     transaction: input.transaction,
     authority: input.authority,
@@ -251,6 +252,19 @@ async function assertCandidate(input: {
     missingCode: 'plugin-not-found',
     missingLabel: 'plugin',
   })
+  await assertDependencyGraph(input.transaction, input.candidate.id, input.candidate.dependsOn)
+}
+
+/**
+ * managed skill 的可用性围栏放在 RFC-228 结构化预检**之后**：合一前的 SQLite 路径没有逐类的 skill 存在性守卫，缺失的
+ * managed skill 一律由预检以 `agent-resources-invalid` + issues 报出（rfc223-pr1-impl-gate 锁）；这里只兜授权与并发。
+ */
+async function assertSkillReferencesUsable(input: {
+  readonly transaction: ResourceCatalogTransaction
+  readonly authority: AgentOperationContext
+  readonly candidate: Agent
+  readonly previous?: Agent
+}): Promise<void> {
   await assertReferencesUsable({
     transaction: input.transaction,
     authority: input.authority,
@@ -262,7 +276,6 @@ async function assertCandidate(input: {
     missingCode: 'skill-not-found',
     missingLabel: 'managed skill',
   })
-  await assertDependencyGraph(input.transaction, input.candidate.id, input.candidate.dependsOn)
 }
 
 async function assertNotReferenced(
@@ -381,6 +394,8 @@ export function createAgentPersistenceSemantics(input: {
     async canonicalizeUpdate(_authority, current, patch) {
       return reconcileUpdatedAgentExecutionContractPorts(current, patch)
     },
+    // 次序与合一前的 SQLite 路径一致：逐类守卫（依赖 / mcp / plugin / runtime）→ RFC-228 闭包预检
+    // （`agent-resources-invalid` + issues，缺失的 managed skill 在这里报）→ managed skill 的授权围栏。
     async assertCreateInTransaction(transaction, authority, candidate) {
       await assertCandidate({
         transaction,
@@ -391,6 +406,7 @@ export function createAgentPersistenceSemantics(input: {
       await assertAgentResourceIntegrity(input.resourceInventory, [candidate.id], {
         overrides: [candidate],
       })
+      await assertSkillReferencesUsable({ transaction, authority, candidate })
     },
     async assertUpdateInTransaction(transaction, authority, current, candidate) {
       await assertCandidate({
@@ -403,6 +419,7 @@ export function createAgentPersistenceSemantics(input: {
       await assertAgentResourceIntegrity(input.resourceInventory, [candidate.id], {
         overrides: [candidate],
       })
+      await assertSkillReferencesUsable({ transaction, authority, candidate, previous: current })
     },
     async assertDeleteInTransaction(transaction, _authority, current) {
       await assertNotReferenced(transaction, current)

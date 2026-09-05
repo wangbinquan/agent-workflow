@@ -87,7 +87,7 @@
         "modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts -> public/commands",
         "modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts -> public/commands",
         "modules/resource-catalog/infrastructure/legacy/agent.ts -> public/commands",
-        "modules/resource-catalog/infrastructure/postgresqlAgentPersistenceSemantics.ts -> public/commands",
+        "modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts -> public/commands",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
         "routes/executionContracts.ts -> public/types",
         "server.ts -> composition"

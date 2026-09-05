@@ -304,7 +304,14 @@ export function composeProviderResourceAclOperationApplication<
     assertMutable: (row) => assertNotBuiltin(input.type, row),
     read: (authority, row) => input.acl.getResourceAcl(authority, input.type, row),
     update: (authority, row, body, updatedAt) =>
-      input.acl.updateResourceAcl(authority, input.type, row, body, { updatedAt }),
+      input.acl.updateResourceAcl(authority, input.type, row, body, {
+        updatedAt,
+        // 每一次 ACL 写入都从这里唤醒实时订阅（与 SQLite 旧路径 / foreign 路径同一处）：被升档、降档的观众不刷新
+        // 页面也要拿到新的控件。provider 路径此前漏了这一发，D15 把 Workflow 装配切过来后 rfc324 e2e 立刻变红。
+        afterCommit: async () => {
+          triggerRevalidation('resource-acl-changed')
+        },
+      }),
     linearizer: input.linearizer,
     afterUpdated: input.afterUpdated,
   })
