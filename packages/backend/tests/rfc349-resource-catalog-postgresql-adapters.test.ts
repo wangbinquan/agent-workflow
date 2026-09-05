@@ -111,12 +111,13 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(composition).toContain('composeResourcePackageOperationsFromAdapters')
     expect(composition).toContain('composeSqliteResourcePackageProvider')
     expect(composition).toContain('ResourcePackageExecutionAdapter')
-    expect(composition).toContain('createSqliteResourcePackageOwnedResourceLookup')
-    expect(composition).toContain('createSqliteResourcePackageReadPort')
+    // RFC-359 W4-D20：资源包读模型与 owner/name 查找合成一份中立实现，两个装配都接它。
+    expect(composition).toContain('createResourcePackageOwnedResourceLookup')
+    expect(composition).toContain('createResourcePackageReadPort')
     expect(composition).toContain('readSqlitePackageSkillTree')
     expect(postgresqlComposition).toContain('composePostgresqlResourcePackageProvider')
-    expect(postgresqlComposition).toContain('createPostgresqlResourcePackageOwnedResourceLookup')
-    expect(postgresqlComposition).toContain('createPostgresqlResourcePackageReadPort')
+    expect(postgresqlComposition).toContain('createResourcePackageOwnedResourceLookup')
+    expect(postgresqlComposition).toContain('createResourcePackageReadPort')
     expect(postgresqlComposition).toContain('createPostgresqlResourcePackageMutationSessionFactory')
     expect(postgresqlComposition).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(postgresqlComposition).toContain('execution: input.execution')
@@ -261,16 +262,19 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       /@\/services\/|PostgresqlDatabaseClient|\bDbClient\b|\bDbTxSync\b|createSqlite|legacyResourcePackage|runPostgresqlResourceCatalogTransaction|as unknown|node:fs|node:path|\.transaction\(/,
     )
 
-    const postgresqlLookup = source(
-      'src/modules/resource-catalog/infrastructure/postgresqlPackageResourceRows.ts',
+    // RFC-359 W4-D20：owner/name 查找与预览 / 导出读模型合成一份中立实现；SQLite 命名的那个文件只剩
+    // legacy 提交路径用的同步助手。
+    const lookup = source('src/modules/resource-catalog/infrastructure/packageResourceRows.ts')
+    expect(lookup).toContain('ProviderNeutralDatabase')
+    expect(lookup).toContain('ResourcePackageOwnedResourceLookupPort')
+    expect(lookup).toContain('createResourcePackageReadPort')
+    expect(lookup).toContain('createResourceGrantReadPort')
+    expect(lookup).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|\bDbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core|createSqlite|\bas\s+(?:unknown|DbClient)/,
     )
-    expect(postgresqlLookup).toContain('PostgresqlDatabaseClient')
-    expect(postgresqlLookup).toContain('ResourcePackageOwnedResourceLookupPort')
-    expect(postgresqlLookup).toContain('createPostgresqlResourcePackageReadPort')
-    expect(postgresqlLookup).toContain('createResourceGrantReadPort')
-    expect(postgresqlLookup).not.toMatch(
-      /\bDbClient\b|\bDbTxSync\b|bun:sqlite|drizzle-orm\/sqlite-core|createSqlite|\bas\s+(?:unknown|DbClient)/,
-    )
+    expect(() =>
+      source('src/modules/resource-catalog/infrastructure/postgresqlPackageResourceRows.ts'),
+    ).toThrow()
 
     const ports = source('src/modules/resource-catalog/application/package/ports.ts')
     expect(ports).toContain('ResourcePackageOwnedResourceLookupPort')
@@ -301,7 +305,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     }
 
     const testBinding = source('tests/helpers/resourcePackageProvider.ts')
-    expect(testBinding).toContain('createSqliteResourcePackageReadPort')
+    expect(testBinding).toContain('createResourcePackageReadPort')
     expect(testBinding).toContain('readSqlitePackageSkillTree')
 
     const route = source('src/routes/resourcePackages.ts')

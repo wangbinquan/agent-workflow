@@ -1098,10 +1098,8 @@ test('resource ACL compatibility barrels retire only consumer-zero symbols', () 
   expect(packageCli).toContain('catalog.transport.findOwnedResourceIdsByName')
   expect(packageComposition).toContain('readonly resources: ResourcePackageOwnedResourceLookupPort')
   expect(packageComposition).toContain('return deps.resources.findOwnedIdsByName({')
-  expect(packageComposition).toContain('createSqliteResourcePackageOwnedResourceLookup')
-  expect(postgresqlPackageComposition).toContain(
-    'createPostgresqlResourcePackageOwnedResourceLookup',
-  )
+  expect(packageComposition).toContain('createResourcePackageOwnedResourceLookup')
+  expect(postgresqlPackageComposition).toContain('createResourcePackageOwnedResourceLookup')
   expect(packageComposition).not.toContain('findOwnedAclResourceIdsByName(deps.db,')
 
   expect(

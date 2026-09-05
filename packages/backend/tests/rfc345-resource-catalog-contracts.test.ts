@@ -1780,7 +1780,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createResourcePackageOperationDescriptors')
     expect(composition).toContain('readonly execution: ResourcePackageExecutionAdapter')
     expect(composition).toContain('composeSqliteResourcePackageProvider')
-    expect(composition).toContain('createSqliteResourcePackageReadPort')
+    expect(composition).toContain('createResourcePackageReadPort')
     expect(composition).toContain('readSqlitePackageSkillTree')
     expect(composition).not.toMatch(
       /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,

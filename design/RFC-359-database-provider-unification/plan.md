@@ -675,8 +675,28 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
      （例如意图提交后由本进程 daemon 同步驱动一次并回传结果），代价最大但两种部署形态语义完全一致。
 
   在用户裁定前 D19b 不落地：现状是 SQLite 房间保留 legacy 同步恢复（行为更强、有 13 个套件盯着），
-  PG 房间保留意图模型。**下一刀改为 D19c**：回合引擎的持久化端口中立化——它与「继续执行」语义无关，
-  可以独立推进。
+  PG 房间保留意图模型。
+
+  **剩余 provider 对的形态普查（决定后续排序）**：把 resource-catalog 里剩下的成对文件按
+  「SQLite 是不是 legacy 薄壳」分两类——
+  - **对称对（机械可合，无行为风险）**：`PackageResourceRows`（230 / 220 行，无 legacy import）、
+    `IntentContextResourceAuthorization`（63 / 52 行，无 legacy import）→ 已由 **D20** 合掉。
+  - **薄壳对（SQLite 是 legacy 上的壳，PG 是原生实现，且测试覆盖倒挂）**：任务房（71 / 1457）、
+    回合（34 / 567）、Skill 三对（22–129 / 505–1418，52 个套件盯 SQLite 侧、PG 侧只有 6 个）、
+    `ResourcePackageMaintenance`（293 / 379，5 处 legacy import）、
+    `DigitalEmployeeAgentTemplateCatalog`（59 / 390）。这一类**都不是机械合一**：合的时候要先裁
+    「哪一份实现是正典」，且大概率会像 D19b 一样撞出用户可见的行为差异。建议逐个先做「形态勘察 +
+    覆盖对比」再动手，不要按文件数排优先级。
+
+  **D20 ✅（两对对称适配器合一）**：`infrastructure/intentContextResourceAuthorization.ts`
+  （Intent 上下文的资源身份 / 授权等级读取；异步端口一份，SQLite 的同步变体保留——Intent 宿主在
+  SQLite 上仍跑在 `dbTxSync` 回调里，随宿主切统一事务原语后退役）与
+  `infrastructure/packageResourceRows.ts`（资源包的 owner+name 查找 + 预览 / 导出读模型）各一份。
+  同批清掉两处死代码：SQLite 的 Intent **异步**工厂零生产消费（两个 SQLite bootstrap 用的都是同步版）、
+  `listSqlitePackageResourceRowsByIds/ByNames` 零消费；`sqlitePackageResourceRows.ts` 缩到只剩
+  legacy 提交路径用的四个同步助手。三个 provider 文件删除；rfc345 三把锁与 rfc349 adapters 锁改指中立实现。
+  `rfc359-w4-d20-adapters.test.ts` 两引擎各跑身份读取 / 授权三元组精确命中 / owner-name 查找 /
+  读模型按 id 与 name 取快照 / 只回活跃用户 + 源码锁。
 
 ## 5. W5 —— 防复辟
 

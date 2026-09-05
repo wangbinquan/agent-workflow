@@ -10,31 +10,34 @@ import type {
   workflows,
   workgroups,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   ResourcePackageOwnedResourceLookupPort,
   ResourcePackageReadPort,
   ResourcePackageResourceSnapshot,
 } from '../application/package/ports'
-import { POSTGRESQL_ACL_TABLES } from './aclRegistry'
+import { ACL_TABLES } from './aclRegistry'
 import { createResourceGrantReadPort } from './resourceVisibility'
 import {
-  runPostgresqlResourceCatalogTransaction,
-  type PostgresqlResourceCatalogTransaction,
-} from './postgresql/repositorySupport'
+  runResourceCatalogTransaction,
+  type ResourceCatalogTransaction,
+} from './resourceCatalogTransaction'
 
-/** PostgreSQL owner/name lookup for the ResourcePackage transport boundary. */
-export function createPostgresqlResourcePackageOwnedResourceLookup(
-  db: PostgresqlDatabaseClient,
+/**
+ * RFC-359 W4-D20 —— 资源包传输边界的 owner/name 查找与预览 / 导出读模型：一份实现，两个 provider 共用。
+ * 此前 `sqlitePackageResourceRows.ts` 与 `postgresqlPackageResourceRows.ts` 各一份（前者另有两个零消费导出
+ * 与四个只服务 legacy 提交路径的同步助手，那四个仍留在 SQLite 命名的文件里，随 legacy 提交路径退役）。
+ */
+export function createResourcePackageOwnedResourceLookup(
+  db: ProviderNeutralDatabase,
 ): ResourcePackageOwnedResourceLookupPort {
   const port: ResourcePackageOwnedResourceLookupPort = {
     async findOwnedIdsByName(input) {
-      const table = POSTGRESQL_ACL_TABLES[input.kind]
+      const table = ACL_TABLES[input.kind]
       const rows = await db
         .select({ id: table.id })
         .from(table)
         .where(and(eq(table.ownerUserId, input.ownerUserId), eq(table.name, input.name)))
-        .all()
       return rows.map((row) => row.id)
     },
   }
@@ -62,8 +65,8 @@ interface PackageWorkgroupMemberDocument {
   readonly sortOrder: number
 }
 
-async function postgresqlWorkgroupMembers(
-  db: PostgresqlResourceCatalogTransaction,
+async function packageWorkgroupMembers(
+  db: ResourceCatalogTransaction,
   workgroupIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly PackageWorkgroupMemberDocument[]>> {
   if (workgroupIds.length === 0) return new Map()
@@ -72,7 +75,6 @@ async function postgresqlWorkgroupMembers(
     .from(workgroupMembers)
     .where(inArray(workgroupMembers.workgroupId, [...workgroupIds]))
     .orderBy(asc(workgroupMembers.sortOrder), asc(workgroupMembers.id))
-    .all()
   const userIds = [
     ...new Set(
       members.flatMap((member) =>
@@ -86,7 +88,6 @@ async function postgresqlWorkgroupMembers(
       .select({ id: users.id, username: users.username })
       .from(users)
       .where(inArray(users.id, userIds))
-      .all()
     for (const user of userRows) usernameById.set(user.id, user.username)
   }
   const byWorkgroup = new Map<string, PackageWorkgroupMemberDocument[]>()
@@ -110,14 +111,14 @@ async function postgresqlWorkgroupMembers(
   return byWorkgroup
 }
 
-async function postgresqlSnapshots(
-  db: PostgresqlResourceCatalogTransaction,
+async function packageSnapshots(
+  db: ResourceCatalogTransaction,
   type: BundleResourceType,
   rows: readonly PackageResourceRow[],
 ): Promise<readonly ResourcePackageResourceSnapshot[]> {
   const membersByWorkgroup =
     type === 'workgroup'
-      ? await postgresqlWorkgroupMembers(
+      ? await packageWorkgroupMembers(
           db,
           rows.map((row) => row.id),
         )
@@ -137,69 +138,64 @@ async function postgresqlSnapshots(
   })
 }
 
-async function listPostgresqlPackageRowsByIds(
-  db: PostgresqlResourceCatalogTransaction,
+async function listPackageRowsByIds(
+  db: ResourceCatalogTransaction,
   type: BundleResourceType,
   ids: readonly string[],
   orderById: boolean,
 ): Promise<readonly PackageResourceRow[]> {
   if (ids.length === 0) return []
-  const table = POSTGRESQL_ACL_TABLES[type]
+  const table = ACL_TABLES[type]
   const query = db
     .select()
     .from(table)
     .where(inArray(table.id, [...ids]))
-  return orderById ? await query.orderBy(asc(table.id)).all() : await query.all()
+  return orderById ? await query.orderBy(asc(table.id)) : await query
 }
 
-async function listPostgresqlPackageRowsByNames(
-  db: PostgresqlResourceCatalogTransaction,
+async function listPackageRowsByNames(
+  db: ResourceCatalogTransaction,
   type: BundleResourceType,
   names: readonly string[],
   orderById: boolean,
 ): Promise<readonly PackageResourceRow[]> {
   if (names.length === 0) return []
-  const table = POSTGRESQL_ACL_TABLES[type]
+  const table = ACL_TABLES[type]
   const query = db
     .select()
     .from(table)
     .where(inArray(table.name, [...names]))
-  return orderById ? await query.orderBy(asc(table.id)).all() : await query.all()
+  return orderById ? await query.orderBy(asc(table.id)) : await query
 }
 
-/** PostgreSQL implementation of the package preview/export read model. */
-export function createPostgresqlResourcePackageReadPort(
-  db: PostgresqlDatabaseClient,
+/** 预览 / 导出读模型。 */
+export function createResourcePackageReadPort(
+  db: ProviderNeutralDatabase,
 ): ResourcePackageReadPort {
   const grants = createResourceGrantReadPort(db)
   const port: ResourcePackageReadPort = {
     async listByIds(type, ids, options = {}) {
-      return runPostgresqlResourceCatalogTransaction(db, async (transaction) =>
-        postgresqlSnapshots(
+      return runResourceCatalogTransaction(db, async (transaction) =>
+        packageSnapshots(
           transaction,
           type,
-          await listPostgresqlPackageRowsByIds(transaction, type, ids, options.orderById === true),
+          await listPackageRowsByIds(transaction, type, ids, options.orderById === true),
         ),
       )
     },
     async listByNames(type, names, options = {}) {
-      return runPostgresqlResourceCatalogTransaction(db, async (transaction) =>
-        postgresqlSnapshots(
+      return runResourceCatalogTransaction(db, async (transaction) =>
+        packageSnapshots(
           transaction,
           type,
-          await listPostgresqlPackageRowsByNames(
-            transaction,
-            type,
-            names,
-            options.orderById === true,
-          ),
+          await listPackageRowsByNames(transaction, type, names, options.orderById === true),
         ),
       )
     },
     async getById(type, id) {
-      return runPostgresqlResourceCatalogTransaction(db, async (transaction) => {
-        const rows = await listPostgresqlPackageRowsByIds(transaction, type, [id], false)
-        const snapshots = await postgresqlSnapshots(transaction, type, rows)
+      return runResourceCatalogTransaction(db, async (transaction) => {
+        const rows = await listPackageRowsByIds(transaction, type, [id], false)
+        const snapshots = await packageSnapshots(transaction, type, rows)
         return snapshots[0]
       })
     },
@@ -210,7 +206,6 @@ export function createPostgresqlResourcePackageReadPort(
         .select({ id: users.id, username: users.username, status: users.status })
         .from(users)
         .where(inArray(users.username, [...usernames]))
-        .all()
       return rows
         .filter((row) => row.status === 'active')
         .map((row) => Object.freeze({ username: row.username, userId: row.id }))

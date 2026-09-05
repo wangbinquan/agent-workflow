@@ -4,7 +4,7 @@ import {
   composeResourcePackageOperations,
   composeSqliteResourcePackageProvider,
 } from '../../src/modules/resource-catalog/composition/resourcePackageOperations'
-import { createSqliteResourcePackageReadPort } from '../../src/modules/resource-catalog/infrastructure/sqlitePackageResourceRows'
+import { createResourcePackageReadPort } from '../../src/modules/resource-catalog/infrastructure/packageResourceRows'
 import { readSqlitePackageSkillTree } from '../../src/modules/resource-catalog/infrastructure/sqlitePackageSkillTree'
 import { createSqliteResourcePackageExecutionAdapter } from '../../src/services/resourcePackage/executionAdapter'
 import { walkExportClosureFromReadPort } from '../../src/services/resourcePackage/closure'
@@ -41,7 +41,7 @@ export function walkExportClosure(
   actor: ClosureParameters[1],
   root: ClosureParameters[2],
 ): ReturnType<typeof walkExportClosureFromReadPort> {
-  return walkExportClosureFromReadPort(createSqliteResourcePackageReadPort(db), actor, root)
+  return walkExportClosureFromReadPort(createResourcePackageReadPort(db), actor, root)
 }
 
 /** Test-only SQLite binding for provider-neutral package preview. */
@@ -51,12 +51,7 @@ export function buildPackagePreview(
   pkg: PreviewParameters[2],
   options: PreviewParameters[3],
 ): ReturnType<typeof buildPackagePreviewFromReadPort> {
-  return buildPackagePreviewFromReadPort(
-    createSqliteResourcePackageReadPort(db),
-    actor,
-    pkg,
-    options,
-  )
+  return buildPackagePreviewFromReadPort(createResourcePackageReadPort(db), actor, pkg, options)
 }
 
 /** Test-only SQLite/filesystem binding for provider-neutral package export. */
@@ -67,7 +62,7 @@ export function exportResourcePackage(
   options: ExportParameters[4] & Readonly<{ appHome: string }>,
 ): ReturnType<typeof exportResourcePackageFromReadPort> {
   return exportResourcePackageFromReadPort(
-    createSqliteResourcePackageReadPort(db),
+    createResourcePackageReadPort(db),
     (skillId) => readSqlitePackageSkillTree(db, options.appHome, skillId),
     actor,
     root,

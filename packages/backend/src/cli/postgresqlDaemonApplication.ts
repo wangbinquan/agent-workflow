@@ -202,7 +202,7 @@ import {
   createPostgresqlIntentSkillArtifactLifecycle,
 } from '@/modules/resource-catalog/composition/intentApply'
 import { composePostgresqlIntentApplyResourceBinding } from '@/modules/resource-catalog/composition/intentApply'
-import { composePostgresqlIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
+import { composeIntentContextResourceAuthorizationFactory } from '@/modules/resource-catalog/composition/intentContextAuthorization'
 import { composeIntentResourceCatalogFor } from '@/modules/intent/application/resourceCatalog'
 import { composePostgresqlFusionOperations } from '@/modules/knowledge-evolution/composition/fusion'
 import { composePostgresqlIntentMaintenanceSnapshotQueries } from '@/modules/intent/composition/maintenance'
@@ -1663,7 +1663,7 @@ export async function composePostgresqlDaemonApplication(
   })
   const intentPersistence = composePostgresqlIntentPersistence({
     db: input.db,
-    contextAuthorization: composePostgresqlIntentContextResourceAuthorizationFactory(),
+    contextAuthorization: composeIntentContextResourceAuthorizationFactory(),
   })
   const intentArtifactRecovery = createPostgresqlIntentApplyArtifactLifecycle({
     skillArtifacts: composePostgresqlSkillArtifactCompensation(),

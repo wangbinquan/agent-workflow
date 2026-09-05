@@ -21,22 +21,32 @@ describe('RFC-345 Intent context resource authorization seam', () => {
     expect(contract).not.toMatch(/DbClient|DbTxSync|Postgresql|drizzle|Actor/)
   })
 
-  test('both provider factories bind the session to a caller-owned transaction', () => {
+  // RFC-359 W4-D20：异步读端口合成一份中立实现（此前 SQLite 的那份异步工厂零生产消费）；
+  // 同步变体仍留着，因为 Intent 宿主在 SQLite 上还跑在 dbTxSync 回调里。
+  test('the async factory binds one neutral session to a caller-owned transaction', () => {
     const composition = source('composition/intentContextAuthorization.ts')
-    const sqlite = source('infrastructure/sqliteIntentContextResourceAuthorization.ts')
-    const postgresql = source('infrastructure/postgresqlIntentContextResourceAuthorization.ts')
+    const reads = source('infrastructure/intentContextResourceAuthorization.ts')
 
-    expect(composition).toContain('composeSqliteIntentContextResourceAuthorizationFactory')
+    expect(composition).toContain('composeIntentContextResourceAuthorizationFactory')
     expect(composition).toContain('composeSqliteIntentContextResourceAuthorizationSyncFactory')
-    expect(composition).toContain('composePostgresqlIntentContextResourceAuthorizationFactory')
+    expect(composition).not.toMatch(
+      /composeSqliteIntentContextResourceAuthorizationFactory\b|composePostgresqlIntentContextResourceAuthorizationFactory/,
+    )
     expect(composition).toContain('authority !== pair.authority')
     expect(composition).toContain('foreign-intent-context-resource-authority')
-    expect(sqlite).toContain('getAclResourceIdentityRowInTx(transaction')
-    expect(sqlite).toContain('loadGrantLevelInTx(transaction')
-    expect(sqlite).toContain('createSqliteIntentContextResourceAuthorizationSyncReadPort')
-    expect(postgresql).toContain('POSTGRESQL_ACL_TABLES[resourceType]')
-    expect(postgresql).toContain('resourceGrants.resourceType')
-    expect(postgresql).not.toContain('runPostgresqlResourceCatalogTransaction')
+    expect(reads).toContain('ACL_TABLES[resourceType]')
+    expect(reads).toContain('resourceGrants.resourceType')
+    expect(reads).toContain('getAclResourceIdentityRowInTx(transaction')
+    expect(reads).toContain('loadGrantLevelInTx(transaction')
+    expect(reads).not.toMatch(
+      /PostgresqlDatabaseClient|\bDbClient\b|runPostgresqlResourceCatalogTransaction/,
+    )
+    for (const retired of [
+      'infrastructure/sqliteIntentContextResourceAuthorization.ts',
+      'infrastructure/postgresqlIntentContextResourceAuthorization.ts',
+    ]) {
+      expect(() => source(retired), retired).toThrow()
+    }
   })
 
   test('SQLite exposes a provider-private synchronous session for dbTxSync owners', () => {
@@ -50,7 +60,7 @@ describe('RFC-345 Intent context resource authorization seam', () => {
     expect(application).toContain('createIntentContextResourceAuthorizationSyncSession')
     expect(application).toContain('loadVisibleSync(authority, reference)')
     expect(composition).toContain('SqliteIntentContextResourceAuthorizationSyncFactory')
-    expect(composition).toContain('createSqliteIntentContextResourceAuthorizationSyncReadPort')
+    expect(composition).toContain('createIntentContextResourceAuthorizationSyncReadPort')
     expect(composition).not.toMatch(/deasync|as unknown|plain Actor fallback/)
   })
 

@@ -118,7 +118,8 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
     expect(source).toContain('readonly provider: PostgresqlResourcePackageProviderComposition')
     expect(source).toContain('execution: input.execution')
     expect(source).toContain('mutationSessionFactory,')
-    expect(source).toContain('createPostgresqlResourcePackageReadPort(input.db)')
+    // RFC-359 W4-D20：读模型与 owner/name 查找合成一份中立实现，PG 装配接的是它。
+    expect(source).toContain('createResourcePackageReadPort(input.db)')
     expect(source).toContain('readPostgresqlPackageSkillTree(input.db, input.appHome, skillId)')
     expect(source).not.toMatch(
       /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,

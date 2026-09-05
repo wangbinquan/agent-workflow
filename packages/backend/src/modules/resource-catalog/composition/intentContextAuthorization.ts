@@ -9,23 +9,15 @@ import type {
   IntentContextResourceAuthorizationSession,
   ResourceRequestContext,
 } from '../public/participants'
-import { createPostgresqlIntentContextResourceAuthorizationReadPort } from '../infrastructure/postgresqlIntentContextResourceAuthorization'
-import type { PostgresqlResourceCatalogTransaction } from '../infrastructure/postgresql/repositorySupport'
 import {
-  createSqliteIntentContextResourceAuthorizationReadPort,
-  createSqliteIntentContextResourceAuthorizationSyncReadPort,
-} from '../infrastructure/sqliteIntentContextResourceAuthorization'
+  createIntentContextResourceAuthorizationReadPort,
+  createIntentContextResourceAuthorizationSyncReadPort,
+} from '../infrastructure/intentContextResourceAuthorization'
+import type { ResourceCatalogTransaction } from '../infrastructure/resourceCatalogTransaction'
 
 export interface IntentContextResourceAuthorityPair {
   readonly authority: ResourceRequestContext
   readonly actor: DirectAuthenticatedAuthority
-}
-
-export interface SqliteIntentContextResourceAuthorizationFactory {
-  inTransaction(
-    transaction: DbTxSync,
-    pair: IntentContextResourceAuthorityPair,
-  ): IntentContextResourceAuthorizationSession
 }
 
 /** Provider-private SQLite seam for a synchronous dbTxSync owner. */
@@ -36,9 +28,9 @@ export interface SqliteIntentContextResourceAuthorizationSyncFactory {
   ): IntentContextResourceAuthorizationSyncSession
 }
 
-export interface PostgresqlIntentContextResourceAuthorizationFactory {
+export interface IntentContextResourceAuthorizationFactory {
   inTransaction(
-    transaction: PostgresqlResourceCatalogTransaction,
+    transaction: ResourceCatalogTransaction,
     pair: IntentContextResourceAuthorityPair,
   ): IntentContextResourceAuthorizationSession
 }
@@ -54,40 +46,31 @@ function currentAuthorityResolver(pair: IntentContextResourceAuthorityPair) {
   })
 }
 
-/** SQLite bootstrap seam; it never opens or owns the surrounding transaction. */
-export function composeSqliteIntentContextResourceAuthorizationFactory(): SqliteIntentContextResourceAuthorizationFactory {
-  return Object.freeze({
-    inTransaction(transaction: DbTxSync, pair: IntentContextResourceAuthorityPair) {
-      return createIntentContextResourceAuthorizationSession(
-        currentAuthorityResolver(pair),
-        createSqliteIntentContextResourceAuthorizationReadPort(transaction),
-      )
-    },
-  })
-}
-
 /** SQLite-only composition seam that never returns a Promise inside dbTxSync. */
 export function composeSqliteIntentContextResourceAuthorizationSyncFactory(): SqliteIntentContextResourceAuthorizationSyncFactory {
   return Object.freeze({
     inTransaction(transaction: DbTxSync, pair: IntentContextResourceAuthorityPair) {
       return createIntentContextResourceAuthorizationSyncSession(
         currentAuthorityResolver(pair),
-        createSqliteIntentContextResourceAuthorizationSyncReadPort(transaction),
+        createIntentContextResourceAuthorizationSyncReadPort(transaction),
       )
     },
   })
 }
 
-/** PostgreSQL bootstrap seam; the external Intent owner supplies its live tx. */
-export function composePostgresqlIntentContextResourceAuthorizationFactory(): PostgresqlIntentContextResourceAuthorizationFactory {
+/**
+ * RFC-359 W4-D20 —— 异步装配一份，两个 provider 共用：外部 Intent 宿主交进自己的事务。
+ * SQLite 的同步装配（下面那个）仍在，因为 Intent 宿主在 SQLite 上还跑在 `dbTxSync` 回调里。
+ */
+export function composeIntentContextResourceAuthorizationFactory(): IntentContextResourceAuthorizationFactory {
   return Object.freeze({
     inTransaction(
-      transaction: PostgresqlResourceCatalogTransaction,
+      transaction: ResourceCatalogTransaction,
       pair: IntentContextResourceAuthorityPair,
     ) {
       return createIntentContextResourceAuthorizationSession(
         currentAuthorityResolver(pair),
-        createPostgresqlIntentContextResourceAuthorizationReadPort(transaction),
+        createIntentContextResourceAuthorizationReadPort(transaction),
       )
     },
   })
