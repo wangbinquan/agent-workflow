@@ -48,7 +48,7 @@ const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
     'nodeRuns.errorMessage':
       "按运行时写死的机器标记 '%child-unkillable%' 找无法回收子进程的证据；标记是常量，精确匹配才对",
   },
-  'modules/resource-catalog/infrastructure/postgresqlMcpRepository.ts': {
+  'modules/resource-catalog/infrastructure/mcpRepository.ts': {
     'agents.mcp': '按 `%"<mcpId>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
   },
   'modules/resource-catalog/infrastructure/postgresqlPluginRepository.ts': {
