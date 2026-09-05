@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 44,
-    "transactionCallbacks": 396
+    "transactionCallbacks": 392
   },
   "entries": [
     {
@@ -698,37 +698,37 @@
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
+      "file": "packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#dbTxSync:118",
-      "line": 118,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#createSqliteEmployeeIdentityPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts#transaction:144",
+      "line": 144,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts#upsertAssignment",
       "status": "clear",
-      "symbol": "createSqliteEmployeeIdentityPersistence",
+      "symbol": "upsertAssignment",
       "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
+      "file": "packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#dbTxSync:225",
-      "line": 225,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#createSqlitePolicyIdentityPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts#transaction:142",
+      "line": 142,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts#createActionTemplatePersistence",
       "status": "clear",
-      "symbol": "createSqlitePolicyIdentityPersistence",
+      "symbol": "createActionTemplatePersistence",
       "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
+      "transactionCallee": "transaction"
     },
     {
       "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
+      "file": "packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#transaction:359",
-      "line": 359,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#createPostgresqlIdentityPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts#transaction:267",
+      "line": 267,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/configResourceStore.ts#createVerificationProfilePersistence",
       "status": "clear",
-      "symbol": "createPostgresqlIdentityPersistence",
+      "symbol": "createVerificationProfilePersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -736,11 +736,11 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#transaction:455",
-      "line": 455,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#createPostgresqlDevelopmentConfigPersistence",
+      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#transaction:126",
+      "line": 126,
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#identityPersistence",
       "status": "clear",
-      "symbol": "createPostgresqlDevelopmentConfigPersistence",
+      "symbol": "identityPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -803,30 +803,6 @@
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#createPostgresqlMissionInputUploadPersistence",
       "status": "co-located-risk",
       "symbol": "createPostgresqlMissionInputUploadPersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts#transaction:112",
-      "line": 112,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts#createPostgresqlActionTemplatePersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlActionTemplatePersistence",
-      "targetContext": "development-automation",
-      "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts#transaction:263",
-      "line": 263,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/postgresqlConfigResourceStore.ts#createPostgresqlVerificationProfilePersistence",
-      "status": "clear",
-      "symbol": "createPostgresqlVerificationProfilePersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
@@ -951,30 +927,6 @@
       "symbol": "createPostgresqlRequirementBundleRefPersistence",
       "targetContext": "development-automation",
       "transactionCallee": "transaction"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#dbTxSync:136",
-      "line": 136,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteActionTemplateStore",
-      "status": "clear",
-      "symbol": "createSqliteActionTemplateStore",
-      "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
-    },
-    {
-      "effectTokens": [],
-      "file": "packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#dbTxSync:271",
-      "line": 271,
-      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/sqliteConfigResourceStore.ts#createSqliteVerificationProfileStore",
-      "status": "clear",
-      "symbol": "createSqliteVerificationProfileStore",
-      "targetContext": "development-automation",
-      "transactionCallee": "dbTxSync"
     },
     {
       "effectTokens": [],
@@ -4857,7 +4809,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:88780f166672b8a9a61e265359df35c3c4ec1a0ef1a22d9161964ed658e1ca6d",
+  "sourceDigest": "sha256:a533cc3d45fbdf9590fa49d0b645f12a43c675ed51e39913d3c8a2f8f1b3478d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

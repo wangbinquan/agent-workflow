@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 870,
+    "consumers": 869,
     "exactEntrypointFiles": 65,
     "governedFieldSurfaces": 5,
     "methods": 1054,
@@ -22413,7 +22413,6 @@
         "maxUnionVariants": 79
       },
       "consumerEdgeIds": [
-        "import:5434b90fde536d9d38af",
         "import:db2c604c444508276f58"
       ],
       "context": "development-automation",
@@ -22437,9 +22436,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:archive.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -22455,7 +22452,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:archive.$parameter:actor.user.id",
@@ -22502,9 +22498,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:archive.$parameter:actor.userId",
           "type": "string"
         },
@@ -22534,9 +22528,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -22552,7 +22544,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:create.$parameter:actor.user.id",
@@ -22599,9 +22590,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$parameter:actor.userId",
           "type": "string"
         },
@@ -22621,24 +22610,19 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$return.createdAt",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:create.$return.id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$return.name",
           "type": "string"
         },
@@ -22663,9 +22647,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:create.$return.updatedAt",
           "type": "number"
         },
@@ -22695,9 +22677,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:get.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -22713,7 +22693,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:get.$parameter:actor.user.id",
@@ -22760,9 +22739,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:get.$parameter:actor.userId",
           "type": "string"
         },
@@ -22782,31 +22759,24 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:get.$return.$variant:0.createdAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:get.$return.$variant:0.draft",
           "type": "unknown"
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:get.$return.$variant:0.id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:get.$return.$variant:0.name",
           "type": "string"
         },
@@ -22831,9 +22801,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:get.$return.$variant:0.updatedAt",
           "type": "number"
         },
@@ -22868,9 +22836,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -22886,7 +22852,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:list.$parameter:actor.user.id",
@@ -22933,9 +22898,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$parameter:actor.userId",
           "type": "string"
         },
@@ -22950,24 +22913,19 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return[].createdAt",
           "type": "number"
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:list.$return[].id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return[].name",
           "type": "string"
         },
@@ -22992,9 +22950,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return[].updatedAt",
           "type": "number"
         },
@@ -23015,7 +22971,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:loadAclRow.$return.$variant:0.id",
@@ -23062,9 +23017,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:publish.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -23080,7 +23033,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:publish.$parameter:actor.user.id",
@@ -23127,9 +23079,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:publish.$parameter:actor.userId",
           "type": "string"
         },
@@ -23164,9 +23114,7 @@
           "type": "(typeof PERMISSIONS)[number]"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:revise.$parameter:actor.purpose",
           "type": "z.infer<typeof PatPurposeSchema>"
         },
@@ -23182,7 +23130,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "fieldPath": "$method:revise.$parameter:actor.user.id",
@@ -23229,9 +23176,7 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:revise.$parameter:actor.userId",
           "type": "string"
         },
@@ -23282,7 +23227,6 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "archive",
@@ -23290,7 +23234,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "create",
@@ -23298,7 +23241,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "get",
@@ -23306,7 +23248,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "list",
@@ -23314,7 +23255,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "loadAclRow",
@@ -23322,7 +23262,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "publish",
@@ -23330,7 +23269,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:5434b90fde536d9d38af",
             "import:db2c604c444508276f58"
           ],
           "name": "revise",
@@ -23339,12 +23277,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/public/operations.ts#$file",
       "productionConsumers": [
-        {
-          "context": "integration",
-          "edgeId": "import:5434b90fde536d9d38af",
-          "file": "packages/backend/src/modules/integration/composition/developmentAdapterConfigOperations.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/integration/composition/developmentAdapterConfigOperations.ts#$file"
-        },
         {
           "context": "legacy",
           "edgeId": "import:db2c604c444508276f58",
@@ -162208,7 +162140,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:88780f166672b8a9a61e265359df35c3c4ec1a0ef1a22d9161964ed658e1ca6d",
+  "sourceDigest": "sha256:a533cc3d45fbdf9590fa49d0b645f12a43c675ed51e39913d3c8a2f8f1b3478d",
   "targetContexts": [
     "collaboration",
     "development-automation",
