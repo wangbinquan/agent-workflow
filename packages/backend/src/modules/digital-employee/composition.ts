@@ -24,7 +24,7 @@ import { createProgramArtifactStore } from './infrastructure/programArtifactStor
 import { createReactionRoundQueries } from './infrastructure/reactionRoundQueries'
 import type { EmployeeReactionRoundQueryPort } from './public/types'
 import { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
-import { createSqliteEmployeeInputUploadPersistence } from './infrastructure/inputUploadStore'
+import { createEmployeeInputUploadPersistence } from './infrastructure/inputUploadStore'
 import type {
   EmployeeInputUploadPersistence,
   EmployeeInputUploadRecord,
@@ -35,16 +35,12 @@ import { withTypePackageDraftOverlay } from './application/typePackageDraftOverl
 import { createSqliteRuntimePersistence } from './infrastructure/sqliteRuntimeStore'
 import { createPostgresqlRuntimePersistence } from './infrastructure/postgresqlRuntimeStore'
 import type { RuntimeCasePersistence } from './application/ports/runtimeStore'
-import { createPostgresqlEmployeeInputUploadPersistence } from './infrastructure/postgresqlInputUploadStore'
 import {
   createDigitalEmployeeWriterCutoverOperations,
   type DigitalEmployeeMigrationStatus,
   type DigitalEmployeeWriterCutoverOperations,
 } from './composition/writerCutover'
-import {
-  createPostgresqlDigitalEmployeeWriterCutoverPersistence,
-  createSqliteDigitalEmployeeWriterCutoverPersistence,
-} from './infrastructure/writerCutoverPersistence'
+import { createDigitalEmployeeWriterCutoverPersistence } from './infrastructure/writerCutoverPersistence'
 import { z } from 'zod'
 import {
   contractValidationCheckSchema,
@@ -107,40 +103,31 @@ export type {
 } from './composition/writerCutover'
 export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 
-/** Worker-bootstrap composition for the context-owned temporary-input cleanup. */
+/** Worker-bootstrap composition for the context-owned temporary-input cleanup（两个 provider 同一份，RFC-359 W4-D7a）。 */
 export function composeDigitalEmployeeMaintenanceCommands(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): DigitalEmployeeMaintenanceCommands {
-  const uploads = createSqliteEmployeeInputUploadPersistence(db)
+  const uploads = createEmployeeInputUploadPersistence(db)
   return {
     sweepExpiredInputUploads: (now, limit) => uploads.sweepExpired(now, limit),
   }
 }
 
-export function composePostgresqlDigitalEmployeeMaintenanceCommands(
-  db: PostgresqlDatabaseClient,
-): DigitalEmployeeMaintenanceCommands {
-  const uploads = createPostgresqlEmployeeInputUploadPersistence(db)
-  return {
-    sweepExpiredInputUploads: (now, limit) => uploads.sweepExpired(now, limit),
-  }
-}
+/** RFC-349 期的 PostgreSQL 入口名，与中立入口同一实现。 */
+export const composePostgresqlDigitalEmployeeMaintenanceCommands =
+  composeDigitalEmployeeMaintenanceCommands
 
-export function composeSqliteDigitalEmployeeWriterCutover(
-  db: DbClient,
+/** 两个 provider 同一份（RFC-359 W4-D7a）。 */
+export function composeDigitalEmployeeWriterCutoverFor(
+  db: ProviderNeutralDatabase,
 ): DigitalEmployeeWriterCutoverOperations {
   return createDigitalEmployeeWriterCutoverOperations(
-    createSqliteDigitalEmployeeWriterCutoverPersistence(db),
+    createDigitalEmployeeWriterCutoverPersistence(db),
   )
 }
 
-export function composePostgresqlDigitalEmployeeWriterCutover(
-  db: PostgresqlDatabaseClient,
-): DigitalEmployeeWriterCutoverOperations {
-  return createDigitalEmployeeWriterCutoverOperations(
-    createPostgresqlDigitalEmployeeWriterCutoverPersistence(db),
-  )
-}
+/** RFC-349 期的 PostgreSQL 入口名，与中立入口同一实现。 */
+export const composePostgresqlDigitalEmployeeWriterCutover = composeDigitalEmployeeWriterCutoverFor
 
 /** Bootstrap projection owned by Digital Employee; consumers never read its tables directly. */
 export async function readPersistedDigitalEmployeeTypePackageDescriptorJsons(
@@ -1090,8 +1077,8 @@ export function composeDigitalEmployee(
         ? withTypePackageDraftOverlay(persisted)
         : persisted,
     runtime: createSqliteRuntimePersistence(options.db),
-    inputUploads: createSqliteEmployeeInputUploadPersistence(options.db),
-    migrationStatus: () => composeSqliteDigitalEmployeeWriterCutover(options.db).analyze(),
+    inputUploads: createEmployeeInputUploadPersistence(options.db),
+    migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
   })
 }
 
@@ -1106,8 +1093,8 @@ export function composePostgresqlDigitalEmployee(
         ? withTypePackageDraftOverlay(persisted)
         : persisted,
     runtime: createPostgresqlRuntimePersistence(options.db),
-    inputUploads: createPostgresqlEmployeeInputUploadPersistence(options.db),
-    migrationStatus: () => composePostgresqlDigitalEmployeeWriterCutover(options.db).analyze(),
+    inputUploads: createEmployeeInputUploadPersistence(options.db),
+    migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
   })
 }
 

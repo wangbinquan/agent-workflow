@@ -152,7 +152,7 @@ import { composeSqliteAgentResourceIntegrity } from '@/modules/resource-catalog/
 import { composeSqliteDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
 import {
-  composeSqliteDigitalEmployeeWriterCutover,
+  composeDigitalEmployeeWriterCutoverFor,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployee,
   createEmployeeInputArtifactStore,
@@ -2407,7 +2407,7 @@ async function composeSqliteProviderSession(
   })
   const developmentApprovalGateway = composeSqliteApprovalGatewayRunner(db)
   const missionEventContinuation = createSqliteMissionCodeHostEventContinuation(db)
-  const employeeWriterCutover = composeSqliteDigitalEmployeeWriterCutover(db)
+  const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
   const employeeWriterState = await employeeWriterCutover.activate()
   log.info('digital employee writer activated', { ...employeeWriterState })
 

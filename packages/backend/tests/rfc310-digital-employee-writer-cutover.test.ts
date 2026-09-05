@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '@/db/client'
 import { developmentMissions, developmentMrClaims } from '@/db/schema'
-import { composeSqliteDigitalEmployeeWriterCutover } from '@/modules/digital-employee/composition'
+import { composeDigitalEmployeeWriterCutoverFor } from '@/modules/digital-employee/composition'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -22,7 +22,7 @@ afterEach(() => {
 describe('RFC-310 Digital Employee OS single-writer cutover', () => {
   test('boot atomically retires legacy admission and activates generation one', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const writer = composeSqliteDigitalEmployeeWriterCutover(db)
+    const writer = composeDigitalEmployeeWriterCutoverFor(db)
     await expect(writer.read()).resolves.toMatchObject({
       activeGeneration: 0,
       mode: 'pre-cutover',
@@ -69,7 +69,7 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       })
       .run()
 
-    const writer = composeSqliteDigitalEmployeeWriterCutover(db)
+    const writer = composeDigitalEmployeeWriterCutoverFor(db)
     await expect(
       writer.activate({
         now: 20_000,
@@ -121,7 +121,7 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       )
       .run()
 
-    const writer = composeSqliteDigitalEmployeeWriterCutover(db)
+    const writer = composeDigitalEmployeeWriterCutoverFor(db)
     await writer.activate({
       now: 35_000,
       legacyAdmissionsEnabled: false,
@@ -142,7 +142,7 @@ describe('RFC-310 Digital Employee OS single-writer cutover', () => {
       import('@/services/users'),
     ])
     const db = createInMemoryDb(MIGRATIONS)
-    await composeSqliteDigitalEmployeeWriterCutover(db).activate({
+    await composeDigitalEmployeeWriterCutoverFor(db).activate({
       now: 40_000,
       legacyAdmissionsEnabled: false,
     })

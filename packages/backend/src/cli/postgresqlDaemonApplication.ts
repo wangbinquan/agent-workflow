@@ -127,7 +127,7 @@ import {
   composeDigitalEmployeeTaskCatalogSource,
   composePostgresqlDigitalEmployee,
   composeDigitalEmployeeBootstrapReadsFor,
-  composePostgresqlDigitalEmployeeWriterCutover,
+  composeDigitalEmployeeWriterCutoverFor,
   createDigitalEmployeeResourceCatalogAclProviders,
   createEmployeeInputArtifactStore,
   createPostgresqlEmployeeReactionRoundQueries,
@@ -1404,7 +1404,7 @@ export async function composePostgresqlDaemonApplication(
       platformWorkItems: employeePlatformWorkItems,
     },
   })
-  await composePostgresqlDigitalEmployeeWriterCutover(input.db).activate()
+  await composeDigitalEmployeeWriterCutoverFor(input.db).activate()
   await digitalEmployee.maintenance.settleAutomaticUpgrades()
   if (digitalEmployee.runtime === null) {
     throw new Error('postgresql-digital-employee-runtime-not-composed')
@@ -1528,7 +1528,7 @@ export async function composePostgresqlDaemonApplication(
     admissionLookup: developmentAdmissionLookup,
     automation: developmentAutomation,
     legacyAdmissionsEnabled: createLegacyMissionAdmissionsEnabledQuery(
-      composePostgresqlDigitalEmployeeWriterCutover(input.db),
+      composeDigitalEmployeeWriterCutoverFor(input.db),
     ),
   })
   // RFC-359 W4-D6c：employee_* 的 ACL 与 SQLite 根同一条目录中立 foreign-owner 路径，identity 行由

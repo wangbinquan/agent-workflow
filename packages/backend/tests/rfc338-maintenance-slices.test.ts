@@ -21,7 +21,7 @@ import {
   webhookDeliveries,
   workflows,
 } from '@/db/schema'
-import { createEmployeeInputUploadStore } from '@/modules/digital-employee/infrastructure/inputUploadStore'
+import { createEmployeeInputUploadPersistence } from '@/modules/digital-employee/infrastructure/inputUploadStore'
 import { createSqliteUploadSessionStore } from '@/modules/development-automation/infrastructure/sqliteUploadSessionStore'
 import { createActionTemplatePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
@@ -398,10 +398,10 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     expect(await db.select().from(memoryDistillEvents)).toHaveLength(1)
   })
 
-  test('temporary upload owners delete only one bounded batch per maintenance slice', () => {
+  test('temporary upload owners delete only one bounded batch per maintenance slice', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const development = createSqliteUploadSessionStore(db)
-    const employee = createEmployeeInputUploadStore(db)
+    const employee = createEmployeeInputUploadPersistence(db)
     for (let index = 0; index < 3; index += 1) {
       development.createUpload({
         actorUserId: null,
@@ -412,7 +412,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
         idempotencyKey: null,
         now: 0,
       })
-      employee.create({
+      await employee.create({
         actorUserId: null,
         originalName: `employee-${index}.txt`,
         bytes: 1,
@@ -424,12 +424,12 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     }
 
     expect(development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
-    expect(employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
+    expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(2)
     expect(db.select().from(missionInputUploads).all()).toHaveLength(1)
     expect(db.select().from(employeeInputUploads).all()).toHaveLength(1)
 
     expect(development.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
-    expect(employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
+    expect(await employee.sweepExpired(Number.MAX_SAFE_INTEGER, 2)).toBe(1)
     expect(db.select().from(missionInputUploads).all()).toHaveLength(0)
     expect(db.select().from(employeeInputUploads).all()).toHaveLength(0)
   })

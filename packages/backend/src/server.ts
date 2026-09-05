@@ -258,7 +258,7 @@ import {
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeTaskCatalogSource,
-  composeSqliteDigitalEmployeeWriterCutover,
+  composeDigitalEmployeeWriterCutoverFor,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
@@ -1950,7 +1950,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
     admissionLookup: runtimeDeps.developmentAdmissionLookup,
     automation: developmentAutomation,
     legacyAdmissionsEnabled: createLegacyMissionAdmissionsEnabledQuery(
-      composeSqliteDigitalEmployeeWriterCutover(runtimeDeps.db),
+      composeDigitalEmployeeWriterCutoverFor(runtimeDeps.db),
     ),
   })
   const effectiveDeps: SqliteComposedAppDeps = {

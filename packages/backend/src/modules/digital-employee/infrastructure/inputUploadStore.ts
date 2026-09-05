@@ -1,7 +1,12 @@
+// RFC-359 W4-D7a —— 数字员工临时输入上传（employee_input_uploads）：一份实现，两个 provider 共用。
+//
+// 语义沿 RFC-310 的 SQLite store：幂等键命中即返回既有行；resolveForCase 逐个 id 校验归属 / 状态 / 过期；
+// delete 只删本人的 pending 行（单语句 returning 判 404）；sweepExpired 每片只删一个有界批次。
+
 import { and, eq, inArray, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { employeeInputUploads } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
@@ -29,45 +34,33 @@ function recordOf(row: typeof employeeInputUploads.$inferSelect): EmployeeInputU
   }
 }
 
-export interface EmployeeInputUploadStore {
-  create(input: {
-    readonly actorUserId: string | null
-    readonly originalName: string
-    readonly bytes: number
-    readonly sha256: string
-    readonly blobRef: string
-    readonly idempotencyKey: string | null
-    readonly now: number
-  }): EmployeeInputUploadRecord
-  resolveForCase(input: {
-    readonly ids: readonly string[]
-    readonly actorUserId: string | null
-    readonly caseId: string
-    readonly now: number
-  }): EmployeeInputUploadRecord[]
-  delete(id: string, actorUserId: string | null): void
-  sweepExpired(now: number, limit?: number): number
+function actorWhere(actorUserId: string | null) {
+  return actorUserId === null
+    ? isNull(employeeInputUploads.actorUserId)
+    : eq(employeeInputUploads.actorUserId, actorUserId)
 }
 
-export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploadStore {
+export function createEmployeeInputUploadPersistence(
+  db: ProviderNeutralDatabase,
+): EmployeeInputUploadPersistence {
   return {
-    create(input) {
+    async create(input) {
       if (input.idempotencyKey !== null) {
-        const existing = db
-          .select()
-          .from(employeeInputUploads)
-          .where(
-            and(
-              input.actorUserId === null
-                ? isNull(employeeInputUploads.actorUserId)
-                : eq(employeeInputUploads.actorUserId, input.actorUserId),
-              eq(employeeInputUploads.uploadIdempotencyKey, input.idempotencyKey),
-            ),
-          )
-          .get()
+        const existing = (
+          await db
+            .select()
+            .from(employeeInputUploads)
+            .where(
+              and(
+                actorWhere(input.actorUserId),
+                eq(employeeInputUploads.uploadIdempotencyKey, input.idempotencyKey),
+              ),
+            )
+            .limit(1)
+        )[0]
         if (existing !== undefined) return recordOf(existing)
       }
-      const row: typeof employeeInputUploads.$inferInsert = {
+      const row = {
         id: ulid(),
         actorUserId: input.actorUserId,
         originalName: input.originalName,
@@ -75,19 +68,20 @@ export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploa
         sha256: input.sha256,
         blobRef: input.blobRef,
         uploadIdempotencyKey: input.idempotencyKey,
-        state: 'pending',
+        state: 'pending' as const,
         claimedByCaseId: null,
         expiresAt: input.now + EMPLOYEE_INPUT_UPLOAD_TTL_MS,
         createdAt: input.now,
         claimedAt: null,
       }
-      db.insert(employeeInputUploads).values(row).run()
-      return recordOf(row as typeof employeeInputUploads.$inferSelect)
+      await db.insert(employeeInputUploads).values(row)
+      return recordOf(row)
     },
 
-    resolveForCase(input) {
+    async resolveForCase(input) {
       const seen = new Set<string>()
-      return input.ids.map((id) => {
+      const records: EmployeeInputUploadRecord[] = []
+      for (const id of input.ids) {
         if (seen.has(id)) {
           throw new ConflictError(
             'employee-upload-duplicate',
@@ -95,16 +89,19 @@ export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploa
           )
         }
         seen.add(id)
-        const row = db
-          .select()
-          .from(employeeInputUploads)
-          .where(eq(employeeInputUploads.id, id))
-          .get()
+        const row = (
+          await db
+            .select()
+            .from(employeeInputUploads)
+            .where(eq(employeeInputUploads.id, id))
+            .limit(1)
+        )[0]
         if (row === undefined || row.actorUserId !== input.actorUserId) {
           throw new NotFoundError('employee-upload-not-found', 'upload not found')
         }
         if (row.state === 'claimed' && row.claimedByCaseId === input.caseId) {
-          return recordOf(row)
+          records.push(recordOf(row))
+          continue
         }
         if (row.state !== 'pending' || row.expiresAt <= input.now) {
           throw new ConflictError(
@@ -112,54 +109,44 @@ export function createEmployeeInputUploadStore(db: DbClient): EmployeeInputUploa
             `upload is expired or already claimed: ${id}`,
           )
         }
-        return recordOf(row)
-      })
+        records.push(recordOf(row))
+      }
+      return records
     },
 
-    delete(id, actorUserId) {
-      const row = db
-        .select()
-        .from(employeeInputUploads)
-        .where(eq(employeeInputUploads.id, id))
-        .get()
-      if (row === undefined || row.actorUserId !== actorUserId || row.state !== 'pending') {
+    async delete(id, actorUserId) {
+      const deleted = await db
+        .delete(employeeInputUploads)
+        .where(
+          and(
+            eq(employeeInputUploads.id, id),
+            actorWhere(actorUserId),
+            eq(employeeInputUploads.state, 'pending'),
+          ),
+        )
+        .returning({ id: employeeInputUploads.id })
+      if (deleted.length !== 1) {
         throw new NotFoundError('employee-upload-not-found', 'upload not found')
       }
-      db.delete(employeeInputUploads).where(eq(employeeInputUploads.id, id)).run()
     },
 
-    sweepExpired(now, limit = EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT) {
-      const expired = db
+    async sweepExpired(now, limit = EMPLOYEE_INPUT_UPLOAD_SWEEP_LIMIT) {
+      const expired = await db
         .select({ id: employeeInputUploads.id })
         .from(employeeInputUploads)
         .where(
           and(eq(employeeInputUploads.state, 'pending'), lt(employeeInputUploads.expiresAt, now)),
         )
         .limit(limit)
-        .all()
       if (expired.length > 0) {
-        db.delete(employeeInputUploads)
-          .where(
-            inArray(
-              employeeInputUploads.id,
-              expired.map((row) => row.id),
-            ),
-          )
-          .run()
+        await db.delete(employeeInputUploads).where(
+          inArray(
+            employeeInputUploads.id,
+            expired.map((row) => row.id),
+          ),
+        )
       }
       return expired.length
     },
-  }
-}
-
-export function createSqliteEmployeeInputUploadPersistence(
-  db: DbClient,
-): EmployeeInputUploadPersistence {
-  const store = createEmployeeInputUploadStore(db)
-  return {
-    create: async (input) => store.create(input),
-    resolveForCase: async (input) => store.resolveForCase(input),
-    delete: async (id, actorUserId) => store.delete(id, actorUserId),
-    sweepExpired: async (now, limit) => store.sweepExpired(now, limit),
   }
 }

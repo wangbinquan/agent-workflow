@@ -411,6 +411,15 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   即 not-found），末尾源码锁保证该族不再有 provider 专属文件、目录不再有同步 identity 形态。rfc223 / rfc351 / drift 等用例改接
   异步持久化与中立 foreign 路径。**下一刀**：digital-employee runtime / input-upload / writer-cutover 三对与 identity-access 的两对
   大 PG 底。
+  **D7a ✅（digital-employee 临时上传 + writer cutover）**：`inputUploadStore.ts` 一份（幂等键按 actor 分区命中即返回既有行；
+  delete 单语句 returning 判本人 pending 行；sweepExpired 每片一个有界批次），同步 `EmployeeInputUploadStore` 形态退役；
+  `writerCutoverPersistence.ts` 一份（activate / refresh 先 `lockAggregateRoot` 锁 'global' 单例行再数旧 Mission、翻 mode 写回；
+  migrationSnapshot 改成逐语句快照读——旧 SQLite 实现刻意用 deferred 事务不抢 writer，PG 的 READ COMMITTED 事务对多条
+  select 也不提供更强一致性，两边语义一致，S-10 的裸事务账本随之归零）。装配：`composeDigitalEmployeeMaintenanceCommands` /
+  `composeDigitalEmployeeWriterCutoverFor` 各一份（PG 入口名留别名给 fake-PG 用例与 provider 边界锁），server / start / PG
+  daemon 三处 bootstrap 同一入口。一个 provider 文件删除。`rfc359-w4-d7a-adapters.test.ts` 两引擎各跑（上传的幂等 / 解析校验
+  / 删除 / 有界清扫；writer 的第 0 代升第 1 代、refresh、快照投影、重复 activate 幂等），末尾源码锁。**下一刀 D7b**：
+  digital-employee `RuntimeStore` 对（1955 / 2003 行，15 处 dbTxSync）；之后 identity-access 的两对大 PG 底。
 
 ## 5. W5 —— 防复辟
 
