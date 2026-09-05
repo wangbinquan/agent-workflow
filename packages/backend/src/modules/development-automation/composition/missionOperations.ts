@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 import { z } from 'zod'
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   cancelMission,
   launchMission,
@@ -22,9 +22,8 @@ import { projectMissionJourney } from '../domain/journeyProjection'
 import type { OperationFailureReceipt } from '../domain/operationFailure'
 import { pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 import {
-  createPostgresqlRepositoryLocationRead,
   createRepositoryBaselineResolverFromLocations,
-  createSqliteRepositoryLocationRead,
+  createRepositoryLocationRead,
 } from '../infrastructure/gitBaselineReader'
 import { createDevelopmentMigrationPersistence } from '../infrastructure/migrationAssets'
 import { createMissionReadModelQueries } from '../infrastructure/missionReadModels'
@@ -55,7 +54,6 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { DIGITAL_EMPLOYEE_MISSION_STATUSES } from '@agent-workflow/shared'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 const log = createLogger('development-missions')
 
@@ -694,9 +692,10 @@ function composeDevelopmentMissionOperationsFromPersistence(
 }
 
 export interface DevelopmentMissionOperationCompositionDeps extends DevelopmentMissionOperationCompositionOptions {
-  readonly db: DbClient
+  readonly db: ProviderNeutralDatabase
 }
 
+/** 一份装配，两个 provider 共用（RFC-359 W4-D12）。 */
 export function composeDevelopmentMissionOperations(
   deps: DevelopmentMissionOperationCompositionDeps,
 ): DevelopmentMissionOperations {
@@ -704,23 +703,7 @@ export function composeDevelopmentMissionOperations(
     uploads: createMissionInputUploadPersistence(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
     missions: createMissionPersistence(deps.db),
-    repositories: createSqliteRepositoryLocationRead(deps.db),
-    readModels: createMissionReadModelQueries(deps.db),
-    cutover: createCutoverStore(deps.db),
-    migration: createDevelopmentMigrationPersistence(deps.db),
-  })
-}
-
-export function composePostgresqlDevelopmentMissionOperations(
-  deps: DevelopmentMissionOperationCompositionOptions & {
-    readonly db: PostgresqlDatabaseClient
-  },
-): DevelopmentMissionOperations {
-  return composeDevelopmentMissionOperationsFromPersistence(deps, {
-    uploads: createMissionInputUploadPersistence(deps.db),
-    snapshots: createFactSnapshotReader(deps.db),
-    missions: createMissionPersistence(deps.db),
-    repositories: createPostgresqlRepositoryLocationRead(deps.db),
+    repositories: createRepositoryLocationRead(deps.db),
     readModels: createMissionReadModelQueries(deps.db),
     cutover: createCutoverStore(deps.db),
     migration: createDevelopmentMigrationPersistence(deps.db),

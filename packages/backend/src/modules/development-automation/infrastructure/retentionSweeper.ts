@@ -25,17 +25,20 @@
 // 波的工作量，plan.md 已如实登记。
 //
 // 单轮有上限：大库上一次全表扫会把 hourly 维护变成一次停顿。
+//
+// RFC-359 W4-D12：一份实现，两个 provider 共用。删 attempt / 标 bundle 指针各是**一条**带子查询的语句 +
+// RETURNING 计数（两引擎同形），不再先取 id 列表再按 id 删——id 列表当绑定参数在大 Mission 上会撞
+// 绑定参数上限，且多一趟往返。
 
-import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, count, eq, inArray, isNotNull } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   developmentActionRuns,
   developmentAgentAttempts,
   developmentBundleRefs,
   developmentMissions,
 } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { automationPolicyContentSchema } from '../domain/automationPolicy'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -93,107 +96,7 @@ async function retentionOf(
 }
 
 export async function sweepDevelopmentRetention(
-  db: DbClient,
-  reader: RetentionPolicyReader,
-  now: number,
-  limit: number = RETENTION_SWEEP_MISSION_LIMIT,
-): Promise<RetentionSweepResult> {
-  const missions = db
-    .select({
-      id: developmentMissions.id,
-      terminalAt: developmentMissions.terminalAt,
-      policyId: developmentMissions.policyId,
-      policyRevision: developmentMissions.policyRevision,
-    })
-    .from(developmentMissions)
-    .where(isNotNull(developmentMissions.terminalAt))
-    .orderBy(developmentMissions.terminalAt)
-    .limit(limit)
-    .all()
-
-  const cache = new Map<string, PolicyRetention | null>()
-  let prunedAttempts = 0
-  let markedBundleRefs = 0
-
-  for (const mission of missions) {
-    const terminalAt = mission.terminalAt
-    if (terminalAt === null) continue
-    const retention = await retentionOf(reader, cache, mission.policyId, mission.policyRevision)
-    if (retention === null) continue
-    const age = now - terminalAt
-
-    if (age > retention.attemptLedgerTtlDays * DAY_MS) {
-      // 只删**已结算**的 attempt：终态 Mission 理论上不该还有在途行，但真有的话
-      // 那是需要有人看的异常，不该被保留期清理顺手抹掉。
-      const runIds = db
-        .select({ id: developmentActionRuns.id })
-        .from(developmentActionRuns)
-        .where(eq(developmentActionRuns.missionId, mission.id))
-        .all()
-        .map((row) => row.id)
-      if (runIds.length > 0) {
-        // 先取 id 再按 id 删：本仓 drizzle 的 `.run()` 不回传 changes，而这个数字
-        // 要进 hourly 日志——没有它，运维看不出保留期到底清掉了什么。
-        const doomed = db
-          .select({ id: developmentAgentAttempts.id })
-          .from(developmentAgentAttempts)
-          .where(
-            and(
-              inArray(developmentAgentAttempts.actionRunId, runIds),
-              isNotNull(developmentAgentAttempts.settledAt),
-            ),
-          )
-          .all()
-          .map((row) => row.id)
-        if (doomed.length > 0) {
-          db.delete(developmentAgentAttempts)
-            .where(inArray(developmentAgentAttempts.id, doomed))
-            .run()
-          prunedAttempts += doomed.length
-        }
-      }
-    }
-
-    if (age > retention.requirementBundleTerminalTtlDays * DAY_MS) {
-      const stale = db
-        .select({ id: developmentBundleRefs.id })
-        .from(developmentBundleRefs)
-        .where(
-          and(
-            eq(developmentBundleRefs.missionId, mission.id),
-            eq(developmentBundleRefs.retentionState, 'active'),
-          ),
-        )
-        .all()
-        .map((row) => row.id)
-      if (stale.length > 0) {
-        db.update(developmentBundleRefs)
-          .set({ retentionState: 'expired' })
-          .where(inArray(developmentBundleRefs.id, stale))
-          .run()
-        markedBundleRefs += stale.length
-      }
-    }
-  }
-
-  const pending =
-    db
-      .select({ n: sql<number>`count(*)` })
-      .from(developmentBundleRefs)
-      .where(eq(developmentBundleRefs.retentionState, 'expired'))
-      .get()?.n ?? 0
-
-  return {
-    missionsScanned: missions.length,
-    prunedAttempts,
-    markedBundleRefs,
-    expiredBundleRefsPending: Number(pending),
-  }
-}
-
-/** Same retention oracle over real asynchronous PostgreSQL queries. */
-export async function sweepPostgresqlDevelopmentRetention(
-  db: PostgresqlDatabaseClient,
+  db: ProviderNeutralDatabase,
   reader: RetentionPolicyReader,
   now: number,
   limit: number = RETENTION_SWEEP_MISSION_LIMIT,
@@ -209,7 +112,6 @@ export async function sweepPostgresqlDevelopmentRetention(
     .where(isNotNull(developmentMissions.terminalAt))
     .orderBy(developmentMissions.terminalAt)
     .limit(limit)
-    .all()
 
   const cache = new Map<string, PolicyRetention | null>()
   let prunedAttempts = 0
@@ -222,66 +124,45 @@ export async function sweepPostgresqlDevelopmentRetention(
     const age = now - mission.terminalAt
 
     if (age > retention.attemptLedgerTtlDays * DAY_MS) {
-      const runIds = (
-        await db
-          .select({ id: developmentActionRuns.id })
-          .from(developmentActionRuns)
-          .where(eq(developmentActionRuns.missionId, mission.id))
-          .all()
-      ).map((row) => row.id)
-      if (runIds.length > 0) {
-        const doomed = (
-          await db
-            .select({ id: developmentAgentAttempts.id })
-            .from(developmentAgentAttempts)
-            .where(
-              and(
-                inArray(developmentAgentAttempts.actionRunId, runIds),
-                isNotNull(developmentAgentAttempts.settledAt),
-              ),
-            )
-            .all()
-        ).map((row) => row.id)
-        if (doomed.length > 0) {
-          await db
-            .delete(developmentAgentAttempts)
-            .where(inArray(developmentAgentAttempts.id, doomed))
-            .run()
-          prunedAttempts += doomed.length
-        }
-      }
+      // 只删**已结算**的 attempt：终态 Mission 理论上不该还有在途行，但真有的话
+      // 那是需要有人看的异常，不该被保留期清理顺手抹掉。RETURNING 给出进 hourly 日志的计数。
+      const runIds = db
+        .select({ id: developmentActionRuns.id })
+        .from(developmentActionRuns)
+        .where(eq(developmentActionRuns.missionId, mission.id))
+      const pruned = await db
+        .delete(developmentAgentAttempts)
+        .where(
+          and(
+            inArray(developmentAgentAttempts.actionRunId, runIds),
+            isNotNull(developmentAgentAttempts.settledAt),
+          ),
+        )
+        .returning({ id: developmentAgentAttempts.id })
+      prunedAttempts += pruned.length
     }
 
     if (age > retention.requirementBundleTerminalTtlDays * DAY_MS) {
-      const stale = (
-        await db
-          .select({ id: developmentBundleRefs.id })
-          .from(developmentBundleRefs)
-          .where(
-            and(
-              eq(developmentBundleRefs.missionId, mission.id),
-              eq(developmentBundleRefs.retentionState, 'active'),
-            ),
-          )
-          .all()
-      ).map((row) => row.id)
-      if (stale.length > 0) {
-        await db
-          .update(developmentBundleRefs)
-          .set({ retentionState: 'expired' })
-          .where(inArray(developmentBundleRefs.id, stale))
-          .run()
-        markedBundleRefs += stale.length
-      }
+      const marked = await db
+        .update(developmentBundleRefs)
+        .set({ retentionState: 'expired' })
+        .where(
+          and(
+            eq(developmentBundleRefs.missionId, mission.id),
+            eq(developmentBundleRefs.retentionState, 'active'),
+          ),
+        )
+        .returning({ id: developmentBundleRefs.id })
+      markedBundleRefs += marked.length
     }
   }
 
-  const pending = await db
-    .select({ n: sql<number>`count(*)` })
-    .from(developmentBundleRefs)
-    .where(eq(developmentBundleRefs.retentionState, 'expired'))
-    .limit(1)
-    .get()
+  const pending = (
+    await db
+      .select({ n: count() })
+      .from(developmentBundleRefs)
+      .where(eq(developmentBundleRefs.retentionState, 'expired'))
+  )[0]
 
   return {
     missionsScanned: missions.length,

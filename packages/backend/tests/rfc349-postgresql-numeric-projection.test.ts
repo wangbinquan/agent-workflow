@@ -39,12 +39,6 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
   'modules/system-operations/infrastructure/postgresqlResourceLimitPersistence.ts': {
     total: 'decodeResourceLimitTokenTotal() 显式接受 string / bigint / number 三种形态',
   },
-  'modules/development-automation/infrastructure/retentionSweeper.ts': {
-    n:
-      '两条保留期清扫（SQLite 同步版 / PostgreSQL 异步版）都把 count(*) 交给调用点的 ' +
-      'Number() 再放进 expiredBundleRefsPending；这个文件同时装着两个 provider 的实现，' +
-      '所以一条登记覆盖两处',
-  },
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': {
     all_count:
       'repositoryWorkspaceSqlStore.cachedRepoFacets 的调用点对 all/referenced/attention ' +

@@ -15,10 +15,7 @@ import {
   composeSqliteIntentMaintenanceCommandsForAppHome,
 } from '@/modules/intent/composition/maintenance'
 import type { IntentMaintenanceCommands } from '@/modules/intent/public/commands'
-import {
-  composeDevelopmentAutomationMaintenanceCommands,
-  composePostgresqlDevelopmentAutomationMaintenanceCommands,
-} from '@/modules/development-automation/composition'
+import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import {
   composeDigitalEmployeeMaintenanceCommands,
   composePostgresqlDigitalEmployeeMaintenanceCommands,
@@ -570,8 +567,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
       maintenanceExecutionFence = createPostgresqlMaintenanceExecutionFence(client)
-      developmentAutomationMaintenance =
-        composePostgresqlDevelopmentAutomationMaintenanceCommands(client)
+      developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(client)
       digitalEmployeeMaintenance = composePostgresqlDigitalEmployeeMaintenanceCommands(client)
       const operational = createPostgresqlDatabaseOperationalAdapter({
         runtime,

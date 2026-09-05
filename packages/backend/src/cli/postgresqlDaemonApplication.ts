@@ -140,8 +140,8 @@ import {
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { readTaskResourceUsage } from '@/services/limits'
 import {
-  composePostgresqlDevelopmentAdmissionLookup,
-  composePostgresqlDevelopmentAutomation,
+  composeDevelopmentAdmissionLookup,
+  composeDevelopmentAutomation,
 } from '@/modules/development-automation/composition'
 import {
   developmentEmployeeRuntimeCodec,
@@ -160,7 +160,7 @@ import {
   type DevelopmentConfigResourceAccess,
 } from '@/modules/development-automation/composition/configOperations'
 import {
-  composePostgresqlDevelopmentMissionOperations,
+  composeDevelopmentMissionOperations,
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
 import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
@@ -375,7 +375,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly scheduledTasks: ReturnType<typeof composePostgresqlScheduledTaskRuntime>
   readonly scheduledTaskIdentityAccess: TaskExecutionBackgroundStartDependencies['scheduled']['identityAccess']
   readonly memory: ReturnType<typeof composePostgresqlMemoryOperations>
-  readonly developmentAutomation: ReturnType<typeof composePostgresqlDevelopmentAutomation>
+  readonly developmentAutomation: ReturnType<typeof composeDevelopmentAutomation>
   readonly digitalEmployee: ReturnType<typeof composePostgresqlDigitalEmployee>
   readonly eventCenter: Awaited<ReturnType<typeof composePostgresqlEventCenter>>
   readonly fusion: ReturnType<typeof composePostgresqlFusionOperations>
@@ -1419,7 +1419,7 @@ export async function composePostgresqlDaemonApplication(
   const developmentActivity = createDevelopmentActivityWorkerBinding()
   developmentActivity.bind(digitalEmployee.runtime.worker)
 
-  const developmentAdmissionLookup = composePostgresqlDevelopmentAdmissionLookup(input.db)
+  const developmentAdmissionLookup = composeDevelopmentAdmissionLookup(input.db)
   const developmentConfigAccess: DevelopmentConfigResourceAccess = {
     filterVisible: (actor, type, rows) =>
       resourceCatalog.authorization.filterVisibleRows(actor, type, rows),
@@ -1490,7 +1490,7 @@ export async function composePostgresqlDaemonApplication(
       get: (id: string) => classicCatalogs.agent.queries.get(authorityFor(systemActor), { id }),
     },
   }
-  const developmentAutomation = composePostgresqlDevelopmentAutomation({
+  const developmentAutomation = composeDevelopmentAutomation({
     db: input.db,
     appHome: input.appHome,
     admissionLookup: developmentAdmissionLookup,
@@ -1518,7 +1518,7 @@ export async function composePostgresqlDaemonApplication(
     }),
   })
   developmentAutomationRef.current = developmentAutomation
-  const developmentMissions = composePostgresqlDevelopmentMissionOperations({
+  const developmentMissions = composeDevelopmentMissionOperations({
     db: input.db,
     deliveryProvider: developmentDeliveryProvider,
     admissionLookup: developmentAdmissionLookup,

@@ -14,17 +14,13 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { runGit } from '@/util/git'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
 import type { RepositoryFactsCollectorPort } from '../application/ports/reconcilerPorts'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
-import {
-  createPostgresqlRepositoryLocationRead,
-  createSqliteRepositoryLocationRead,
-} from './gitBaselineReader'
+import { createRepositoryLocationRead } from './gitBaselineReader'
 
 const EXTENSION_LANGUAGES: Readonly<Record<string, string>> = {
   '.java': 'java',
@@ -205,12 +201,9 @@ export function createRepositoryFactsCollectorFromLocations(
   }
 }
 
-export function createRepositoryFactsCollector(db: DbClient): RepositoryFactsCollectorPort {
-  return createRepositoryFactsCollectorFromLocations(createSqliteRepositoryLocationRead(db))
-}
-
-export function createPostgresqlRepositoryFactsCollector(
-  db: PostgresqlDatabaseClient,
+/** 一份实现，两个 provider 共用（RFC-359 W4-D12）。 */
+export function createRepositoryFactsCollector(
+  db: ProviderNeutralDatabase,
 ): RepositoryFactsCollectorPort {
-  return createRepositoryFactsCollectorFromLocations(createPostgresqlRepositoryLocationRead(db))
+  return createRepositoryFactsCollectorFromLocations(createRepositoryLocationRead(db))
 }

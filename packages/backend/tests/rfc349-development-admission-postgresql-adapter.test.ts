@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { composePostgresqlDevelopmentAdmissionLookup } from '@/modules/development-automation/composition'
+import { composeDevelopmentAdmissionLookup } from '@/modules/development-automation/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -72,7 +72,7 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    lookup: composePostgresqlDevelopmentAdmissionLookup(createPostgresqlDatabaseClient(runtime)),
+    lookup: composeDevelopmentAdmissionLookup(createPostgresqlDatabaseClient(runtime)),
     executions,
   }
 }

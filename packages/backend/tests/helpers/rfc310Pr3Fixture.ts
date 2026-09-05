@@ -29,7 +29,7 @@ import {
 import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/assignmentStore'
 import { createMissionPersistence } from '../../src/modules/development-automation/infrastructure/missionStore'
 import { createFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/reconcilerReaders'
-import { createSqliteRequirementBundleRefPersistence } from '../../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
+import { createRequirementBundleRefPersistence } from '../../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { EvidenceStore } from '../../src/modules/development-automation/infrastructure/evidenceStore'
 import {
   createRequirementMaterializer,
@@ -439,7 +439,7 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
           },
         })
   const materializer = createRequirementMaterializer({
-    bundleRefs: createSqliteRequirementBundleRefPersistence(db),
+    bundleRefs: createRequirementBundleRefPersistence(db),
     store: persistence,
     snapshots,
     evidence,

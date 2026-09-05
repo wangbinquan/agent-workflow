@@ -506,6 +506,24 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   的认领幂等 / 状态机 CAS / link / approval / join / digest，附源码锁。**下一刀 D12**：development-automation 剩余
   provider 对（retentionSweeper / repositoryFactsCollector / uploadPublicationReceipt / uploadPlacementPersistence /
   requirementBundleRef / repositoryLocationRead / admissionLookup 装配对），再到 resource-catalog legacy 对。
+  **D12 ✅（development-automation 剩余六个 infrastructure 对 + 三组装配对）**：`uploadPlacementPersistence.ts`
+  （`createUploadPlacementPersistence`：record 的幂等落 `dev_upload_receipts_unique`，旧 SQLite 版「plan 下任何 receipt 都
+  拦」的过宽判定退役）、`uploadPublicationReceipt.ts`（`recordUploadPublicationReceipt` / `hasUploadPublicationReceipt`
+  中立异步，查—插一笔事务 + 冲突路径兜底）、`requirementBundleRefPersistence.ts`（`createRequirementBundleRefPersistence`，
+  copyLatestRequirements 在统一事务里）、`gitBaselineReader.ts`（`createRepositoryLocationRead`；`resolveActionBaseline` /
+  `createRepositoryBaselineResolver` 收中立句柄）、`repositoryFactsCollector.ts`（`createRepositoryFactsCollector` 一个）、
+  `retentionSweeper.ts`（`sweepDevelopmentRetention` 一份：删已结算 attempt / 标 bundle 指针各是一条带子查询的语句 +
+  RETURNING 计数——不再先取 id 列表再按 id 删，大 Mission 上 id 列表当绑定参数会撞上限；`count()` 走 drizzle 的
+  Number 映射，numeric-projection 登记项随之删除）。装配层三组对收口：`composeDevelopmentAdmissionLookup` /
+  `composeDevelopmentAutomationMaintenanceCommands` / `composeDevelopmentAutomation` / `composeDevelopmentMissionOperations`
+  各一份（`db: ProviderNeutralDatabase`），`composeSqlite*` / `composePostgresql*` 五个孪生删除，start.ts / server.ts /
+  postgresqlDaemonApplication / maintenanceWorker 改接；composition.ts 与 missionOperations.ts 不再 import 任一 provider
+  客户端类型。pr5-seed-absorption / pr3-placement / rfc310Pr3Fixture / 两个假 PG 测试改接，boundary 锁改成「只有中立入口」。
+  `rfc359-w4-d12-adapters.test.ts` 两引擎各跑 placement 读写幂等、publication receipt 首次 / 重放 / 换 baseline、bundle 指针
+  latest / findManifest / 复制、仓库位置读取、保留期清扫（只删已结算、只标 active、无策略 / 未终态不动、limit）+ 源码锁。
+  development-automation 的 infrastructure 里 provider 对至此清零；剩 `employeePlatformWorkItemPersistence` /
+  `developmentDeliveryProvider` 两个在文件内分支的 sqlite / postgresql 工厂，以及 composition/ 下 digitalEmployeeWorkspace /
+  digitalEmployeePlatformWorkItems / legacyMissionDrain 三组装配对——**下一刀 D13**。
 
 ## 5. W5 —— 防复辟
 

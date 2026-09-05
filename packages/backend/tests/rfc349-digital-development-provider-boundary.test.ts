@@ -157,6 +157,7 @@ describe('RFC-349 Digital Employee / Development Automation provider boundary', 
     expect(digital).toContain('composePostgresqlDigitalEmployeeMaintenanceCommands')
     expect(digital).toContain('composePostgresqlDigitalEmployeeWriterCutover')
     expect(development).toContain('composeDevelopmentAutomationMaintenanceCommands')
-    expect(development).toContain('composePostgresqlDevelopmentAutomationMaintenanceCommands')
+    // RFC-359 W4-D12：维护装配只剩一份中立入口，不再有 provider 命名的孪生。
+    expect(development).not.toContain('composePostgresqlDevelopmentAutomationMaintenanceCommands')
   })
 })

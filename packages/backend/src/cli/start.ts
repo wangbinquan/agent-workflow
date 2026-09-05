@@ -15,7 +15,7 @@ import {
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
-  composeSqliteDevelopmentAdmissionLookup,
+  composeDevelopmentAdmissionLookup,
   createSqliteDevelopmentDeliveryProvider,
   createDevelopmentMissionExecutionTerminalObserver,
   createMissionCodeHostEventContinuation,
@@ -2414,7 +2414,7 @@ async function composeSqliteProviderSession(
   // RFC-310 PR-3/PR-4 + RFC-344 —— bootstrap owns exactly one
   // development-automation composition. HTTP and MCP receive this participant;
   // boot recovery, terminal callbacks and wake sweeps drive the same instance.
-  const developmentAdmissionLookup = composeSqliteDevelopmentAdmissionLookup(db)
+  const developmentAdmissionLookup = composeDevelopmentAdmissionLookup(db)
   const developmentAutomationRef: {
     current: ReturnType<typeof composeDevelopmentAutomation> | null
   } = { current: null }

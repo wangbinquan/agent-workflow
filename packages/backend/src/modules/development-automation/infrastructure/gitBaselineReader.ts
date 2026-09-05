@@ -12,9 +12,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { runGit, nonInteractiveGitEnv } from '@/util/git'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import type { BaselineFileReader, BaselineStat } from '../application/uploadPlan'
@@ -71,42 +70,29 @@ export function createRepositoryBaselineResolverFromLocations(
   }
 }
 
-export function createSqliteRepositoryLocationRead(db: DbClient): RepositoryLocationRead {
+/** repositoryId → cached_repos.localPath：一份实现，两个 provider 共用（RFC-359 W4-D12）。 */
+export function createRepositoryLocationRead(db: ProviderNeutralDatabase): RepositoryLocationRead {
   return {
     async localPath(repositoryId) {
-      const row = db
-        .select({ localPath: cachedRepos.localPath })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, repositoryId))
-        .get()
+      const row = (
+        await db
+          .select({ localPath: cachedRepos.localPath })
+          .from(cachedRepos)
+          .where(eq(cachedRepos.id, repositoryId))
+          .limit(1)
+      )[0]
       return row?.localPath ?? null
     },
   }
 }
 
-export function createPostgresqlRepositoryLocationRead(
-  db: PostgresqlDatabaseClient,
-): RepositoryLocationRead {
-  return {
-    async localPath(repositoryId) {
-      const row = await db
-        .select({ localPath: cachedRepos.localPath })
-        .from(cachedRepos)
-        .where(eq(cachedRepos.id, repositoryId))
-        .limit(1)
-        .get()
-      return row?.localPath ?? null
-    },
-  }
+/** 直接吃数据库句柄的便捷工厂（focused 调用方 / 测试用）。 */
+export function resolveActionBaseline(db: ProviderNeutralDatabase) {
+  return createActionBaselineResolver(createRepositoryLocationRead(db))
 }
 
-/** SQLite compatibility factories retained for existing focused callers. */
-export function resolveActionBaseline(db: DbClient) {
-  return createActionBaselineResolver(createSqliteRepositoryLocationRead(db))
-}
-
-export function createRepositoryBaselineResolver(db: DbClient) {
-  return createRepositoryBaselineResolverFromLocations(createSqliteRepositoryLocationRead(db))
+export function createRepositoryBaselineResolver(db: ProviderNeutralDatabase) {
+  return createRepositoryBaselineResolverFromLocations(createRepositoryLocationRead(db))
 }
 
 export function createGitBaselineReader(repoPath: string, headSha: string): BaselineFileReader {

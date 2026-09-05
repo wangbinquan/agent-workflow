@@ -361,7 +361,7 @@ import { composeSqliteDevelopmentEmployeePlatformWorkItems } from '@/modules/dev
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentAutomation,
-  composeSqliteDevelopmentAdmissionLookup,
+  composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
   createSqliteDevelopmentDeliveryProvider,
   createMissionCodeHostEventContinuation,
@@ -1911,7 +1911,7 @@ export function composeSqliteAppDeps(deps: AppDeps): ComposedAppDeps {
       }),
     codeHistoryQueries: deps.codeHistoryQueries ?? composeSqliteCodeHistoryQueries(deps.db),
     developmentAdmissionLookup:
-      deps.developmentAdmissionLookup ?? composeSqliteDevelopmentAdmissionLookup(deps.db),
+      deps.developmentAdmissionLookup ?? composeDevelopmentAdmissionLookup(deps.db),
     memoryDistillCommands: memoryOperations.distillCommands,
     memoryDistillQueries: deps.memoryDistillQueries ?? memoryOperations.distillQueries,
     memoryOperations,

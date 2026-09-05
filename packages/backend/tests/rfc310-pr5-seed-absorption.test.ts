@@ -65,9 +65,9 @@ async function seededPlan(): Promise<{ db: ReturnType<typeof createInMemoryDb>; 
 describe('rfc310 pr5 — upload publication receipt', () => {
   test('first publish records once; same-baseline replay is idempotent; new baseline records separately', async () => {
     const { db, planId } = await seededPlan()
-    expect(hasUploadPublicationReceipt(db, planId)).toBe(false)
+    expect(await hasUploadPublicationReceipt(db, planId)).toBe(false)
 
-    const first = recordUploadPublicationReceipt(db, {
+    const first = await recordUploadPublicationReceipt(db, {
       planId,
       baselineSnapshotRef: `git:${'a'.repeat(40)}`,
       commitSha: 'c'.repeat(40),
@@ -77,9 +77,9 @@ describe('rfc310 pr5 — upload publication receipt', () => {
       now: Date.now(),
     })
     expect(first.created).toBe(true)
-    expect(hasUploadPublicationReceipt(db, planId)).toBe(true)
+    expect(await hasUploadPublicationReceipt(db, planId)).toBe(true)
 
-    const replay = recordUploadPublicationReceipt(db, {
+    const replay = await recordUploadPublicationReceipt(db, {
       planId,
       baselineSnapshotRef: `git:${'a'.repeat(40)}`,
       commitSha: 'c'.repeat(40),
@@ -92,7 +92,7 @@ describe('rfc310 pr5 — upload publication receipt', () => {
     expect(replay.receiptId).toBe(first.receiptId)
 
     // 新 head 上的重发布是另一次吸收事实（restart-action-from-new-head 语义）。
-    const rebased = recordUploadPublicationReceipt(db, {
+    const rebased = await recordUploadPublicationReceipt(db, {
       planId,
       baselineSnapshotRef: `git:${'d'.repeat(40)}`,
       commitSha: 'e'.repeat(40),

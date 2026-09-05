@@ -12,8 +12,7 @@
 
 import { join } from 'node:path'
 
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 export {
   createPostgresqlDevelopmentDeliveryProvider,
   createSqliteDevelopmentDeliveryProvider,
@@ -78,8 +77,7 @@ import {
 import { EvidenceStore } from './infrastructure/evidenceStore'
 import {
   createActionBaselineResolver,
-  createPostgresqlRepositoryLocationRead,
-  createSqliteRepositoryLocationRead,
+  createRepositoryLocationRead,
 } from './infrastructure/gitBaselineReader'
 import {
   createRequirementMaterializer,
@@ -95,11 +93,9 @@ import {
   missionEpochsOf,
 } from './infrastructure/reconcilerReaders'
 import { createMissionPersistence } from './infrastructure/missionStore'
-import { createSqliteRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
-import { createPostgresqlRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
+import { createRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
 import {
   sweepDevelopmentRetention,
-  sweepPostgresqlDevelopmentRetention,
   type RetentionSweepResult,
 } from './infrastructure/retentionSweeper'
 import type { DevelopmentAutomationMaintenanceCommands } from './public/commands'
@@ -109,14 +105,8 @@ import {
   createActionTemplatePersistence,
   createVerificationProfilePersistence,
 } from './infrastructure/configResourceStore'
-import {
-  createPostgresqlRepositoryFactsCollector,
-  createRepositoryFactsCollector,
-} from './infrastructure/repositoryFactsCollector'
-import {
-  recordPostgresqlUploadPublicationReceipt,
-  recordUploadPublicationReceipt,
-} from './infrastructure/uploadPublicationReceipt'
+import { createRepositoryFactsCollector } from './infrastructure/repositoryFactsCollector'
+import { recordUploadPublicationReceipt } from './infrastructure/uploadPublicationReceipt'
 import {
   createRepoScriptResolver,
   runVerificationProfile,
@@ -125,10 +115,7 @@ import { verificationProfileContentSchema } from './domain/verificationProfile'
 import { readUploadPlan } from './infrastructure/uploadPlanStore'
 import { createUploadMaintenancePersistence } from './infrastructure/missionInputUploadPersistence'
 import { createUploadPlacementProvider } from './infrastructure/uploadPlacement'
-import {
-  createPostgresqlUploadPlacementPersistence,
-  createSqliteUploadPlacementPersistence,
-} from './infrastructure/uploadPlacementPersistence'
+import { createUploadPlacementPersistence } from './infrastructure/uploadPlacementPersistence'
 import { createPipelineImportAdapter } from './infrastructure/pipelineEvidenceImport'
 export { createMissionCodeHostEventContinuation } from './infrastructure/missionCodeHostEventContinuation'
 
@@ -146,46 +133,23 @@ const PIPELINE_IMPORT_BUDGET = {
 
 export type DevelopmentAdmissionLookup = AdmissionLookup
 
-export function composeSqliteDevelopmentAdmissionLookup(db: DbClient): AdmissionLookup {
-  return createAdmissionLookup(db)
-}
-
-export function composePostgresqlDevelopmentAdmissionLookup(
-  db: PostgresqlDatabaseClient,
-): AdmissionLookup {
+/** 一份装配，两个 provider 共用（RFC-359 W4-D12）。 */
+export function composeDevelopmentAdmissionLookup(db: ProviderNeutralDatabase): AdmissionLookup {
   return createAdmissionLookup(db)
 }
 
 export const composePlaybookSaga = createPlaybookSagaPersistence
 
-/** Worker-bootstrap composition for the context-owned maintenance slice. */
+/** Worker-bootstrap composition for the context-owned maintenance slice（一份装配，两个 provider 共用）. */
 export function composeDevelopmentAutomationMaintenanceCommands(
-  db: DbClient,
+  db: ProviderNeutralDatabase,
 ): DevelopmentAutomationMaintenanceCommands {
   const uploads = createUploadMaintenancePersistence(db)
-  const lookup = composeSqliteDevelopmentAdmissionLookup(db)
+  const lookup = composeDevelopmentAdmissionLookup(db)
   return {
     sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
     sweepRetention: (now) =>
       sweepDevelopmentRetention(
-        db,
-        {
-          getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
-        },
-        now,
-      ),
-  }
-}
-
-export function composePostgresqlDevelopmentAutomationMaintenanceCommands(
-  db: PostgresqlDatabaseClient,
-): DevelopmentAutomationMaintenanceCommands {
-  const uploads = createUploadMaintenancePersistence(db)
-  const lookup = composePostgresqlDevelopmentAdmissionLookup(db)
-  return {
-    sweepExpiredUploads: (now, limit) => uploads.sweepExpired(now, limit),
-    sweepRetention: (now) =>
-      sweepPostgresqlDevelopmentRetention(
         db,
         {
           getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
@@ -437,65 +401,25 @@ function composeDevelopmentAutomationFromPersistence(
   }
 }
 
-/** SQLite behavior oracle retained behind the same asynchronous application ports. */
+/** 一份装配，两个 provider 共用：每个持久化入口都已是中立实现（RFC-359 W4-D12）。 */
 export function composeDevelopmentAutomation(
-  deps: DevelopmentAutomationCompositionOptions & { readonly db: DbClient },
+  deps: DevelopmentAutomationCompositionOptions & { readonly db: ProviderNeutralDatabase },
 ): DevelopmentAutomationModule {
-  const repositories = createSqliteRepositoryLocationRead(deps.db)
+  const repositories = createRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
     store: createMissionPersistence(deps.db),
     admissionLookup: createAdmissionLookup(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
-    bundleRefs: createSqliteRequirementBundleRefPersistence(deps.db),
-    uploadPlacement: createSqliteUploadPlacementPersistence(deps.db),
-    uploadPlanReader: { read: async (planId) => readUploadPlan(deps.db, planId) },
+    bundleRefs: createRequirementBundleRefPersistence(deps.db),
+    uploadPlacement: createUploadPlacementPersistence(deps.db),
+    uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
     actionTemplates: createActionTemplatePersistence(deps.db),
     verificationProfiles: createVerificationProfilePersistence(deps.db),
     playbookSaga: createPlaybookSagaPersistence(deps.db),
     repositoryLocations: repositories,
     repositoryFacts: createRepositoryFactsCollector(deps.db),
     uploadPublication: {
-      record: async (input) => recordUploadPublicationReceipt(deps.db, input),
-    },
-    uploads: createUploadMaintenancePersistence(deps.db),
-    wakeReaders: {
-      listUnconsumedWakeHintMissionIds: async () => listUnconsumedWakeHintMissionIds(deps.db),
-    },
-    recoveryReaders: {
-      listFencedMissionIds: async () => listFencedMissionIds(deps.db),
-      listPreparedEffectRows: async () => listPreparedEffectRows(deps.db),
-      missionEpochsOf: async (ids) => missionEpochsOf(deps.db, ids),
-    },
-    sweepRetention: (lookup, now) =>
-      sweepDevelopmentRetention(
-        deps.db,
-        {
-          getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
-        },
-        now,
-      ),
-  })
-}
-
-/** Real PostgreSQL composition. No SQLite client, shadow store or sync bridge is involved. */
-export function composePostgresqlDevelopmentAutomation(
-  deps: DevelopmentAutomationCompositionOptions & { readonly db: PostgresqlDatabaseClient },
-): DevelopmentAutomationModule {
-  const repositories = createPostgresqlRepositoryLocationRead(deps.db)
-  return composeDevelopmentAutomationFromPersistence(deps, {
-    store: createMissionPersistence(deps.db),
-    admissionLookup: createAdmissionLookup(deps.db),
-    snapshots: createFactSnapshotReader(deps.db),
-    bundleRefs: createPostgresqlRequirementBundleRefPersistence(deps.db),
-    uploadPlacement: createPostgresqlUploadPlacementPersistence(deps.db),
-    uploadPlanReader: { read: (planId) => readUploadPlan(deps.db, planId) },
-    actionTemplates: createActionTemplatePersistence(deps.db),
-    verificationProfiles: createVerificationProfilePersistence(deps.db),
-    playbookSaga: createPlaybookSagaPersistence(deps.db),
-    repositoryLocations: repositories,
-    repositoryFacts: createPostgresqlRepositoryFactsCollector(deps.db),
-    uploadPublication: {
-      record: (input) => recordPostgresqlUploadPublicationReceipt(deps.db, input),
+      record: (input) => recordUploadPublicationReceipt(deps.db, input),
     },
     uploads: createUploadMaintenancePersistence(deps.db),
     wakeReaders: {
@@ -507,7 +431,7 @@ export function composePostgresqlDevelopmentAutomation(
       missionEpochsOf: (ids) => missionEpochsOf(deps.db, ids),
     },
     sweepRetention: (lookup, now) =>
-      sweepPostgresqlDevelopmentRetention(
+      sweepDevelopmentRetention(
         deps.db,
         {
           getPolicyRevisionContent: (id, revision) => lookup.getPolicyRevisionContent(id, revision),
