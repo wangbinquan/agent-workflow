@@ -17,7 +17,7 @@ import type {
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 
 setDefaultTimeout(120_000)
 
@@ -62,7 +62,7 @@ async function launchWithInFlightAction(
   await runMissionReconcile(deps, missionId) // collect facts
   const launched = await runMissionReconcile(deps, missionId)
   expect(launched.kind === 'decided' && launched.handled).toBe('action-launched')
-  const mission = fx.store.getMission(missionId)!
+  const mission = (await fx.store.getMission(missionId))!
   return { missionId, actionRunId: mission.currentActionRunId! }
 }
 
@@ -89,17 +89,17 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
     expect(stashed.ok).toBe(true)
     if (!stashed.ok) return
     {
-      const mission = fx.store.getMission(missionId)!
-      const moved = fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+      const mission = (await fx.store.getMission(missionId))!
+      const moved = await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
         status: 'awaiting-information',
       })
       expect(moved.ok).toBe(true)
     }
-    expect(fx.store.getMission(missionId)!.currentActionRunId).toBe(actionRunId)
+    expect((await fx.store.getMission(missionId))!.currentActionRunId).toBe(actionRunId)
 
     const result = await submitMissionAnswers(
       {
-        store: createSqliteMissionPersistence(fx.db),
+        store: createMissionPersistence(fx.db),
         snapshots: fx.snapshots,
         requirement: fx.materializer,
         ports: deps.ports,
@@ -115,29 +115,29 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
 
     // in-flight attempt：cancel 被调、attempt discarded、run failed、指针清。
     expect(tracking.canceled).toEqual(['exec-1'])
-    const attempts = fx.store.listAttempts(actionRunId)
+    const attempts = await fx.store.listAttempts(actionRunId)
     expect(attempts[attempts.length - 1]).toMatchObject({ status: 'discarded' })
     expect(JSON.parse(attempts[attempts.length - 1]!.rejectionJson!)).toMatchObject({
       code: 'input-invalidated',
     })
-    expect(fx.store.getActionRun(actionRunId)!.status).toBe('failed')
-    expect(fx.store.getMission(missionId)!.currentActionRunId).toBeNull()
+    expect((await fx.store.getActionRun(actionRunId))!.status).toBe('failed')
+    expect((await fx.store.getMission(missionId))!.currentActionRunId).toBeNull()
 
     // 不计 fresh 预算：下一轮开全新 ActionRun（rerunSeq 重新 0/0）。
     const relaunched = await runMissionReconcile(deps, missionId)
     expect(relaunched.kind === 'decided' && relaunched.handled).toBe('action-launched')
-    const fresh = fx.store.getMission(missionId)!
+    const fresh = (await fx.store.getMission(missionId))!
     expect(fresh.currentActionRunId).not.toBe(actionRunId)
-    const newAttempts = fx.store.listAttempts(fresh.currentActionRunId!)
+    const newAttempts = await fx.store.listAttempts(fresh.currentActionRunId!)
     expect(newAttempts[0]).toMatchObject({ rerunSeq: 0, attemptSeq: 0 })
   })
 
   test('no in-flight action → helper is a no-op', async () => {
     const fx = await buildPr3Fixture()
     const missionId = await fx.launchDirect('t55-noop-1')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     const out = await invalidateInFlightAction(
-      { store: createSqliteMissionPersistence(fx.db), now: () => Date.now() },
+      { store: createMissionPersistence(fx.db), now: () => Date.now() },
       mission,
       'input-invalidated',
     )
@@ -162,10 +162,10 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
       ...fakeAgentActionPorts({ db: fx.db, overrides: { agentLauncher: throwing } }),
     })
     const { missionId, actionRunId } = await launchWithInFlightAction(fx, deps, 't55-cancelfail-1')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     const out = await invalidateInFlightAction(
       {
-        store: createSqliteMissionPersistence(fx.db),
+        store: createMissionPersistence(fx.db),
         ports: deps.ports,
         now: () => Date.now(),
       },
@@ -173,7 +173,7 @@ describe('rfc310 pr5 T55 — answers invalidate in-flight actions', () => {
       'input-invalidated',
     )
     expect(out).toBe(true)
-    expect(fx.store.getActionRun(actionRunId)!.status).toBe('failed')
-    expect(fx.store.getMission(missionId)!.currentActionRunId).toBeNull()
+    expect((await fx.store.getActionRun(actionRunId))!.status).toBe('failed')
+    expect((await fx.store.getMission(missionId))!.currentActionRunId).toBeNull()
   })
 })

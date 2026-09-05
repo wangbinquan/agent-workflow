@@ -27,16 +27,14 @@ import {
   createSqliteRepositoryLocationRead,
 } from '../infrastructure/gitBaselineReader'
 import { createDevelopmentMigrationPersistence } from '../infrastructure/migrationAssets'
-import { createSqliteMissionReadModelQueries } from '../infrastructure/missionReadModels'
+import { createMissionReadModelQueries } from '../infrastructure/missionReadModels'
 import { createFactSnapshotReader } from '../infrastructure/reconcilerReaders'
 import { createCutoverStore } from '../infrastructure/cutoverStore'
 import {
   createPostgresqlMissionInputUploadPersistence,
   createSqliteMissionInputUploadPersistence,
 } from '../infrastructure/missionInputUploadPersistence'
-import { createSqliteMissionPersistence } from '../infrastructure/sqliteMissionStore'
-import { createPostgresqlMissionPersistence } from '../infrastructure/postgresqlMissionStore'
-import { createPostgresqlMissionReadModelQueries } from '../infrastructure/postgresqlMissionReadModels'
+import { createMissionPersistence } from '../infrastructure/missionStore'
 import type { MissionInputUploadPersistence } from '../application/missionInputUploadOperations'
 import type { FactSnapshotReader } from '../application/ports/reconcilerPorts'
 import type { MissionPersistence } from '../application/ports/missionStore'
@@ -708,9 +706,9 @@ export function composeDevelopmentMissionOperations(
   return composeDevelopmentMissionOperationsFromPersistence(deps, {
     uploads: createSqliteMissionInputUploadPersistence(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
-    missions: createSqliteMissionPersistence(deps.db),
+    missions: createMissionPersistence(deps.db),
     repositories: createSqliteRepositoryLocationRead(deps.db),
-    readModels: createSqliteMissionReadModelQueries(deps.db),
+    readModels: createMissionReadModelQueries(deps.db),
     cutover: createCutoverStore(deps.db),
     migration: createDevelopmentMigrationPersistence(deps.db),
   })
@@ -724,9 +722,9 @@ export function composePostgresqlDevelopmentMissionOperations(
   return composeDevelopmentMissionOperationsFromPersistence(deps, {
     uploads: createPostgresqlMissionInputUploadPersistence(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
-    missions: createPostgresqlMissionPersistence(deps.db),
+    missions: createMissionPersistence(deps.db),
     repositories: createPostgresqlRepositoryLocationRead(deps.db),
-    readModels: createPostgresqlMissionReadModelQueries(deps.db),
+    readModels: createMissionReadModelQueries(deps.db),
     cutover: createCutoverStore(deps.db),
     migration: createDevelopmentMigrationPersistence(deps.db),
   })

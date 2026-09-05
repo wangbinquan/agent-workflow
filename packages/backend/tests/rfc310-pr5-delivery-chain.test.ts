@@ -41,7 +41,7 @@ import type { NextDecision } from '../src/modules/development-automation/domain/
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -74,14 +74,14 @@ function deliveredCells(runId: string): Record<string, FactCell<FactCellValue>> 
   }
 }
 
-function persistCellsSnapshot(
+async function persistCellsSnapshot(
   fx: Pr3Fixture,
   missionId: string,
   cells: Record<string, FactCell<FactCellValue>>,
-): void {
-  const mission = fx.store.getMission(missionId)!
+): Promise<void> {
+  const mission = (await fx.store.getMission(missionId))!
   const id = ulid()
-  fx.store.insertFactSnapshot({
+  await fx.store.insertFactSnapshot({
     id,
     missionId,
     missionRevision: mission.revision,
@@ -91,14 +91,14 @@ function persistCellsSnapshot(
     digest: canonicalDigest(cells),
     now: Date.now(),
   })
-  fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: id })
+  await fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: id })
 }
 
 async function currentCells(
   fx: Pr3Fixture,
   missionId: string,
 ): Promise<Record<string, FactCell<FactCellValue>>> {
-  const mission = fx.store.getMission(missionId)!
+  const mission = (await fx.store.getMission(missionId))!
   return { ...((await fx.snapshots.getCells(mission.requirementBundleRef!)) ?? {}) }
 }
 
@@ -113,7 +113,7 @@ async function seedDeliveredMission(fx: Pr3Fixture): Promise<{
   const runId = `run-${missionId}`
   const overlayRoot = mkdtempSync(join(tmpdir(), 'rfc310-dc-overlay-'))
   writeFileSync(join(overlayRoot, 'Main.java'), 'class Main {}\n')
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -155,7 +155,7 @@ async function seedDeliveredMission(fx: Pr3Fixture): Promise<{
     createdAt: now,
     updatedAt: now,
   })
-  fx.store.createActionRun({
+  await fx.store.createActionRun({
     id: runId,
     missionId,
     missionRevision: 0,
@@ -170,7 +170,7 @@ async function seedDeliveredMission(fx: Pr3Fixture): Promise<{
     writable: true,
     now,
   })
-  fx.store.settleActionRun({
+  await fx.store.settleActionRun({
     id: runId,
     status: 'settled',
     resultRef: 'f'.repeat(64),
@@ -185,7 +185,7 @@ async function seedDeliveredMission(fx: Pr3Fixture): Promise<{
       workspacePath: overlayRoot,
     }),
   )
-  fx.store.claimAttempt({
+  await fx.store.claimAttempt({
     id: `att-${missionId}`,
     actionRunId: runId,
     rerunSeq: 0,
@@ -197,14 +197,14 @@ async function seedDeliveredMission(fx: Pr3Fixture): Promise<{
     preSnapshotRef: preRef,
     now,
   })
-  fx.store.settleAttempt({
+  await fx.store.settleAttempt({
     id: `att-${missionId}`,
     status: 'validated',
     rejectionJson: null,
     outcomeRef: 'f'.repeat(64),
     now,
   })
-  persistCellsSnapshot(fx, missionId, deliveredCells(runId))
+  await persistCellsSnapshot(fx, missionId, deliveredCells(runId))
   return { missionId, runId, overlayRoot }
 }
 
@@ -462,23 +462,23 @@ describe('rfc310 pr5 — verification arm', () => {
       },
     }
     const chainDeps: DeliveryChainDeps = {
-      store: createSqliteMissionPersistence(fx.db),
+      store: createMissionPersistence(fx.db),
       ports,
       now: () => Date.now(),
       persistCells: async (id, patch) => {
-        persistCellsSnapshot(fx, id, { ...(await currentCells(fx, id)), ...patch })
+        await persistCellsSnapshot(fx, id, { ...(await currentCells(fx, id)), ...patch })
       },
       block: async (id, code, detail) => {
         blocks.push({ code, detail })
-        const mission = fx.store.getMission(id)!
-        fx.store.occUpdate(id, mission.revision, mission.epoch, {
+        const mission = (await fx.store.getMission(id))!
+        await fx.store.occUpdate(id, mission.revision, mission.epoch, {
           status: 'blocked',
           blockCode: code,
           blockDetail: detail,
         })
       },
     }
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     const outcome = await handleRunVerification(
       chainDeps,
       mission,
@@ -515,7 +515,7 @@ describe('rfc310 pr5 — verification arm', () => {
     const failed = await runArm(fx, b.missionId, { verifyOk: false })
     expect(failed.outcome).toBe('blocked')
     expect(failed.blocks[0]!.code).toBe('verification-failed:unit@1')
-    expect(fx.store.getMission(b.missionId)!.status).toBe('blocked')
+    expect((await fx.store.getMission(b.missionId))!.status).toBe('blocked')
     // 失败同样升 fact——这正是「失败就派 verification.repair」那条规则的读面。
     // block 仍然存在：它是**没有规则接手时**的兜底，不是唯一出口（同 pipeline 形态）。
     const cellsB = await currentCells(fx, b.missionId)
@@ -543,7 +543,7 @@ describe('rfc310 pr5 — verification arm', () => {
   test('a later read-only action does not steal the candidate context from its producing run', async () => {
     const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
-    persistCellsSnapshot(fx, seeded.missionId, {
+    await persistCellsSnapshot(fx, seeded.missionId, {
       ...(await currentCells(fx, seeded.missionId)),
       // 审批准备动作跑完：runId 换人，candidate 三件套仍指向 implement 那一轮。
       '__action.runId': cell(`run-approval-${seeded.missionId}`),
@@ -597,21 +597,21 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     let cells = await currentCells(fx, seeded.missionId)
     expect(cells['__delivery.commitSha']).toMatchObject({ value: COMMIT })
     expect(cells['__delivery.publishState']).toMatchObject({ value: 'committed' })
-    expect(fx.store.getMission(seeded.missionId)!.status).toBe('publishing')
+    expect((await fx.store.getMission(seeded.missionId))!.status).toBe('publishing')
 
     // 轮 2：push（CAS null=分支必须缺席；deliverySourceBranch 落行）。
     const r2 = await runMissionReconcile(deps, seeded.missionId)
     expect(r2).toMatchObject({ kind: 'decided', handled: 'collected' })
     cells = await currentCells(fx, seeded.missionId)
     expect(cells['__delivery.publishState']).toMatchObject({ value: 'pushed' })
-    const mission2 = fx.store.getMission(seeded.missionId)!
+    const mission2 = (await fx.store.getMission(seeded.missionId))!
     expect(mission2.deliverySourceBranch).toBe(`aw/mission/${seeded.missionId}`)
     expect(pushes[0]).toMatchObject({ expectedRemoteSha: null, commitSha: COMMIT })
 
     // 轮 3：ensure-MR（claim 落行 + __mr cells + publishing→watching）。
     const r3 = await runMissionReconcile(deps, seeded.missionId)
     expect(r3).toMatchObject({ kind: 'decided', handled: 'collected' })
-    const mission3 = fx.store.getMission(seeded.missionId)!
+    const mission3 = (await fx.store.getMission(seeded.missionId))!
     expect(mission3.mrClaimId).not.toBeNull()
     expect(mission3.status).toBe('watching')
     cells = await currentCells(fx, seeded.missionId)
@@ -625,19 +625,19 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
       kind: 'collect-mr-facts',
     })
     // collector 未注入 → 诚实 typed block（接线缺席可见，不静默）。
-    expect(fx.store.getMission(seeded.missionId)!.blockCode).toBe(
+    expect((await fx.store.getMission(seeded.missionId))!.blockCode).toBe(
       'collector-not-wired:merge-request',
     )
 
     // effect 台账：全部 confirmed（无悬挂），且只有发布链三类。
-    expect(fx.store.listUnsettledEffects(seeded.missionId)).toEqual([])
+    expect(await fx.store.listUnsettledEffects(seeded.missionId)).toEqual([])
   })
 
   test('dispatched effect from a crashed round is replayed by idempotency key, not stuck', async () => {
     const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
     // 模拟上一轮 crash：commit effect 已 dispatched、cells 未推进。
-    const mission = fx.store.getMission(seeded.missionId)!
+    const mission = (await fx.store.getMission(seeded.missionId))!
     const intent = {
       kind: 'candidate-commit',
       missionId: seeded.missionId,
@@ -645,7 +645,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
       baselineSha: 'b'.repeat(40),
       summarySource: seeded.missionId,
     }
-    const prepared = fx.store.prepareEffect({
+    const prepared = await fx.store.prepareEffect({
       id: ulid(),
       missionId: seeded.missionId,
       actionRunId: seeded.runId,
@@ -655,7 +655,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
       epoch: mission.epoch,
       now: Date.now(),
     })
-    fx.store.markEffectDispatched(prepared.effect.id, Date.now())
+    await fx.store.markEffectDispatched(prepared.effect.id, Date.now())
     expect(DELIVERY_EFFECT_KINDS.has('candidate-commit')).toBe(true)
 
     const commits: unknown[] = []
@@ -674,7 +674,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     const r = await runMissionReconcile(deps, seeded.missionId)
     expect(r).toMatchObject({ kind: 'decided', handled: 'collected' })
     expect(commits).toHaveLength(1)
-    expect(fx.store.getEffect(prepared.effect.id)!.state).toBe('confirmed')
+    expect((await fx.store.getEffect(prepared.effect.id))!.state).toBe('confirmed')
     expect((await currentCells(fx, seeded.missionId))['__delivery.publishState']).toMatchObject({
       value: 'committed',
     })
@@ -683,9 +683,9 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
   test('intent drift on an existing effect row fails the effect and blocks the mission', async () => {
     const fx = await buildPr3Fixture({ rules: NEVER_MATCH_RULES })
     const seeded = await seedDeliveredMission(fx)
-    const mission = fx.store.getMission(seeded.missionId)!
+    const mission = (await fx.store.getMission(seeded.missionId))!
     // 同 idempotencyKey、不同 intent digest 的悬挂行（载荷漂移）。
-    const prepared = fx.store.prepareEffect({
+    const prepared = await fx.store.prepareEffect({
       id: ulid(),
       missionId: seeded.missionId,
       actionRunId: seeded.runId,
@@ -695,7 +695,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
       epoch: mission.epoch,
       now: Date.now(),
     })
-    fx.store.markEffectDispatched(prepared.effect.id, Date.now())
+    await fx.store.markEffectDispatched(prepared.effect.id, Date.now())
     const deps = fx.deps({
       attemptContext: createAttemptContextStore(fx.evidence),
       candidateDelivery: fakeDelivery(),
@@ -704,10 +704,10 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     })
     const r = await runMissionReconcile(deps, seeded.missionId)
     expect(r).toMatchObject({ kind: 'decided', handled: 'blocked' })
-    const after = fx.store.getMission(seeded.missionId)!
+    const after = (await fx.store.getMission(seeded.missionId))!
     expect(after.status).toBe('blocked')
     expect(after.blockCode).toBe('delivery-intent-drift:candidate-commit')
-    expect(fx.store.getEffect(prepared.effect.id)!.state).toBe('failed')
+    expect((await fx.store.getEffect(prepared.effect.id))!.state).toBe('failed')
   })
 
   test('push CAS refusal (remote-head-changed) fails the effect and blocks typed', async () => {
@@ -727,12 +727,14 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     expect(r1).toMatchObject({ kind: 'decided', handled: 'collected' })
     const r2 = await runMissionReconcile(deps, seeded.missionId) // push → CAS 拒
     expect(r2).toMatchObject({ kind: 'decided', handled: 'blocked' })
-    const after = fx.store.getMission(seeded.missionId)!
+    const after = (await fx.store.getMission(seeded.missionId))!
     expect(after.status).toBe('blocked')
     expect(after.blockCode).toBe('remote-head-changed')
     // push effect 落 failed（不 confirmed、不悬挂）。
     expect(
-      fx.store.listUnsettledEffects(seeded.missionId).filter((e) => e.state === 'dispatched'),
+      (await fx.store.listUnsettledEffects(seeded.missionId)).filter(
+        (e) => e.state === 'dispatched',
+      ),
     ).toEqual([])
   })
 
@@ -742,7 +744,7 @@ describe('rfc310 pr5 — publish chain through reconcile rounds', () => {
     const deps = fx.deps({ attemptContext: createAttemptContextStore(fx.evidence) })
     const r = await runMissionReconcile(deps, seeded.missionId)
     expect(r).toMatchObject({ kind: 'decided', handled: 'blocked' })
-    expect(fx.store.getMission(seeded.missionId)!.blockCode).toBe(
+    expect((await fx.store.getMission(seeded.missionId))!.blockCode).toBe(
       'delivery-port-missing:candidateDelivery',
     )
   })

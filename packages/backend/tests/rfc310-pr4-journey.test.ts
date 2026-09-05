@@ -90,19 +90,19 @@ beforeAll(async () => {
 
 /** repositoryFacts 未接线（PR-5）：以既有 requirement 快照通道预置 repo cells。 */
 async function seedRepositoryCells(missionId: string): Promise<void> {
-  const { createSqliteMissionStore } =
-    await import('../src/modules/development-automation/infrastructure/sqliteMissionStore')
+  const { createMissionPersistence } =
+    await import('../src/modules/development-automation/infrastructure/missionStore')
   const { canonicalStringify, canonicalDigest } =
     await import('../src/modules/development-automation/domain/canonicalJson')
-  const store = createSqliteMissionStore(fx.db)
-  const mission = store.getMission(missionId)!
+  const store = createMissionPersistence(fx.db)
+  const mission = (await store.getMission(missionId))!
   const base =
     mission.requirementBundleRef === null
       ? {}
       : ((await fx.snapshots.getCells(mission.requirementBundleRef)) ?? {})
   const merged = { ...base, ...structuredClone(PR3_JAVA_CELLS) }
   const id = `snap-repo-${missionId.slice(-6)}`
-  store.insertFactSnapshot({
+  await store.insertFactSnapshot({
     id,
     missionId,
     missionRevision: mission.revision,
@@ -112,7 +112,7 @@ async function seedRepositoryCells(missionId: string): Promise<void> {
     digest: canonicalDigest(merged as never),
     now: Date.now(),
   })
-  store.occUpdate(mission.id, mission.revision, mission.epoch, { requirementBundleRef: id })
+  await store.occUpdate(mission.id, mission.revision, mission.epoch, { requirementBundleRef: id })
 }
 
 async function launchMissionToAction(key: string): Promise<{
@@ -131,7 +131,7 @@ async function launchMissionToAction(key: string): Promise<{
   await seedRepositoryCells(missionId)
   const launched = await automation.reconcile(missionId)
   expect(launched.kind === 'decided' && launched.handled).toBe('action-launched')
-  const mission = fx.store.getMission(missionId)!
+  const mission = (await fx.store.getMission(missionId))!
   const last = launches[launches.length - 1]!
   return {
     missionId,
@@ -211,12 +211,12 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
       disposition: 'validated-changed',
     })
 
-    const attempt = fx.store.listAttempts(actionRunId)[0]!
+    const attempt = (await fx.store.listAttempts(actionRunId))[0]!
     expect(attempt.status).toBe('validated')
     expect(attempt.outcomeRef).toMatch(/^[0-9a-f]{64}$/)
     // PR-5 起 changed 不再打 stage block：candidateState='derived' 落 cells，
     // mission 保持 working，发布链（missionDeliveryChain）下轮接管。
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('working')
     const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__action.candidateRef']).toMatchObject({ state: 'known' })
@@ -252,7 +252,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
     // boundary 检出 → 整树废弃 + fresh rerun（same-session 禁止）。
     expect(collected.result).toMatchObject({ kind: 'action-retry', rerunSeq: 1 })
 
-    const attempts = fx.store.listAttempts(first.actionRunId)
+    const attempts = await fx.store.listAttempts(first.actionRunId)
     expect(attempts).toHaveLength(2)
     expect(attempts[0]!.status).toBe('discarded')
     const rejection = JSON.parse(attempts[0]!.rejectionJson!) as { code: string }
@@ -289,7 +289,7 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
       kind: 'action-collected',
       disposition: 'validated-changed',
     })
-    expect(fx.store.listAttempts(first.actionRunId)[1]!.status).toBe('validated')
+    expect((await fx.store.listAttempts(first.actionRunId))[1]!.status).toBe('validated')
   })
 
   test('no-change against the action baseline is legal and settles honestly', async () => {
@@ -303,9 +303,11 @@ describe('rfc310 pr4 journey — real workspace / validator / candidate chain', 
       kind: 'action-collected',
       disposition: 'validated-no-change',
     })
-    expect(fx.store.listAttempts(actionRunId)[0]!.status).toBe('validated')
-    expect(fx.store.listAttempts(actionRunId)[0]!.outcomeRef).toBeNull()
-    expect(fx.store.getMission(missionId)!.blockCode).toBe('action-stage-complete:no-change')
+    expect((await fx.store.listAttempts(actionRunId))[0]!.status).toBe('validated')
+    expect((await fx.store.listAttempts(actionRunId))[0]!.outcomeRef).toBeNull()
+    expect((await fx.store.getMission(missionId))!.blockCode).toBe(
+      'action-stage-complete:no-change',
+    )
   })
 })
 

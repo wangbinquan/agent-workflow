@@ -153,7 +153,7 @@ async function launchToAction(
   await runMissionReconcile(deps, missionId)
   const third = await runMissionReconcile(deps, missionId)
   expect(third.kind === 'decided' && third.handled).toBe('action-launched')
-  const mission = fx.store.getMission(missionId)!
+  const mission = (await fx.store.getMission(missionId))!
   expect(mission.currentActionRunId).not.toBeNull()
   return { missionId, actionRunId: mission.currentActionRunId! }
 }
@@ -168,7 +168,7 @@ describe('rfc310 pr4 — attempt orchestration (launch half)', () => {
     })
     const { actionRunId } = await launchToAction(fx, deps, 'orc-launch-1')
 
-    const attempts = fx.store.listAttempts(actionRunId)
+    const attempts = await fx.store.listAttempts(actionRunId)
     expect(attempts).toHaveLength(1)
     const attempt = attempts[0]!
     expect(attempt.rerunSeq).toBe(0)
@@ -210,9 +210,9 @@ describe('rfc310 pr4 — attempt orchestration (launch half)', () => {
     await runMissionReconcile(deps, missionId)
     const third = await runMissionReconcile(deps, missionId)
     expect(third.kind === 'decided' && third.handled).toBe('action-launch-failed')
-    expect(fx.store.getMission(missionId)!.blockCode).toBe('workspace-validation-not-wired')
+    expect((await fx.store.getMission(missionId))!.blockCode).toBe('workspace-validation-not-wired')
     // launch 失败清 currentActionRunId：mission 可经 retry 走出，不留悬挂动作。
-    expect(fx.store.getMission(missionId)!.currentActionRunId).toBeNull()
+    expect((await fx.store.getMission(missionId))!.currentActionRunId).toBeNull()
   })
 })
 
@@ -245,12 +245,12 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
       disposition: 'validated-changed',
     })
 
-    const attempts = fx.store.listAttempts(actionRunId)
+    const attempts = await fx.store.listAttempts(actionRunId)
     expect(attempts[0]!.status).toBe('validated')
     expect(attempts[0]!.outcomeRef).toBe('c'.repeat(64))
-    const run = fx.store.getActionRun(actionRunId)!
+    const run = (await fx.store.getActionRun(actionRunId))!
     expect(run.status).toBe('settled')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.currentActionRunId).toBeNull()
     // PR-5 起 changed 不再打 stage block：candidateState='derived' 落 cells，
     // mission 保持 working，发布链（missionDeliveryChain）下轮接管。
@@ -272,7 +272,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
 
     // A newer source generation arriving while the Agent is running must not
     // change a fresh-session retry into a different task.
-    fx.store.insertMissionSource({
+    await fx.store.insertMissionSource({
       id: 'source-drift-after-launch',
       missionId,
       generation: 99,
@@ -297,7 +297,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     if (retried.kind !== 'action-collect') return
     expect(retried.result).toMatchObject({ kind: 'action-retry', rerunSeq: 1 })
 
-    const attempts = fx.store.listAttempts(actionRunId)
+    const attempts = await fx.store.listAttempts(actionRunId)
     expect(attempts).toHaveLength(2)
     expect(attempts[0]!.status).toBe('rejected')
     expect(JSON.parse(attempts[0]!.rejectionJson!)).toMatchObject({ code: 'frame-missing' })
@@ -315,11 +315,11 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
       kind: 'action-failed',
       blockCode: 'agent-contract-exhausted',
     })
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('blocked')
     expect(mission.blockCode).toBe('agent-contract-exhausted')
     expect(mission.currentActionRunId).toBeNull()
-    expect(fx.store.getActionRun(actionRunId)!.status).toBe('failed')
+    expect((await fx.store.getActionRun(actionRunId))!.status).toBe('failed')
   })
 
   test('feedback protocol retry rebuilds from the exact frozen comment body', async () => {
@@ -334,26 +334,28 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
       deps,
       'orc-feedback-retry-1',
     )
-    fx.store.settleActionRun({
+    await fx.store.settleActionRun({
       id: priorRunId,
       status: 'settled',
       resultRef: null,
       failureJson: null,
       now: Date.now(),
     })
-    let mission = fx.store.getMission(missionId)!
+    let mission = (await fx.store.getMission(missionId))!
     expect(
-      fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
-        currentActionRunId: null,
-      }).ok,
+      (
+        await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+          currentActionRunId: null,
+        })
+      ).ok,
     ).toBe(true)
-    mission = fx.store.getMission(missionId)!
+    mission = (await fx.store.getMission(missionId))!
 
     const template = (await createActionTemplatePersistence(fx.db).list()).find(
       (row) => row.extra.capabilityId === 'mr.feedback.apply',
     )
     expect(template?.publishedRevision).toBe(1)
-    const feedbackDecision = fx.store.insertDecision({
+    const feedbackDecision = await fx.store.insertDecision({
       id: 'feedback-retry-decision',
       missionId,
       missionRevision: mission.revision,
@@ -373,28 +375,32 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     })
     const feedbackRunId = 'feedback-retry-action-run'
     expect(
-      fx.store.createActionRun({
-        id: feedbackRunId,
-        missionId,
-        missionRevision: mission.revision,
-        decisionId: feedbackDecision.decisionId,
-        capabilityId: 'mr.feedback.apply',
-        capabilityContractVersion: 1,
-        templateId: template!.id,
-        templateRevision: 1,
-        workSetDigest: null,
-        inputFactDigest: 'e'.repeat(64),
-        baselineRef: null,
-        writable: true,
-        now: Date.now(),
-      }).ok,
+      (
+        await fx.store.createActionRun({
+          id: feedbackRunId,
+          missionId,
+          missionRevision: mission.revision,
+          decisionId: feedbackDecision.decisionId,
+          capabilityId: 'mr.feedback.apply',
+          capabilityContractVersion: 1,
+          templateId: template!.id,
+          templateRevision: 1,
+          workSetDigest: null,
+          inputFactDigest: 'e'.repeat(64),
+          baselineRef: null,
+          writable: true,
+          now: Date.now(),
+        })
+      ).ok,
     ).toBe(true)
     expect(
-      fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
-        currentActionRunId: feedbackRunId,
-      }).ok,
+      (
+        await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+          currentActionRunId: feedbackRunId,
+        })
+      ).ok,
     ).toBe(true)
-    mission = fx.store.getMission(missionId)!
+    mission = (await fx.store.getMission(missionId))!
 
     const first = await launchAgentAttempt(deps, mission, {
       actionRunId: feedbackRunId,
@@ -426,7 +432,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     if (retried.kind !== 'action-collect') return
     expect(retried.result).toMatchObject({ kind: 'action-retry', rerunSeq: 0 })
 
-    const attempts = fx.store.listAttempts(feedbackRunId)
+    const attempts = await fx.store.listAttempts(feedbackRunId)
     expect(attempts).toHaveLength(2)
     expect(attempts.map((attempt) => [attempt.rerunSeq, attempt.attemptSeq])).toEqual([
       [0, 0],
@@ -476,7 +482,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     expect(outcome.kind).toBe('action-collect')
     if (outcome.kind !== 'action-collect') return
     expect(outcome.result).toMatchObject({ kind: 'action-retry', rerunSeq: 1 })
-    const attempts = fx.store.listAttempts(actionRunId)
+    const attempts = await fx.store.listAttempts(actionRunId)
     expect(attempts[0]!.status).toBe('discarded')
     expect(JSON.parse(attempts[0]!.rejectionJson!)).toMatchObject({ code: 'protected-root-write' })
   })
@@ -521,7 +527,7 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     expect(published.kind === 'decided' && published.selected.kind).toBe(
       'publish-requirement-questions',
     )
-    expect(fx.store.getMission(missionId)!.status).toBe('awaiting-information')
+    expect((await fx.store.getMission(missionId))!.status).toBe('awaiting-information')
   })
 
   test('execution not-found → runtime-transient fresh rerun path', async () => {
@@ -537,6 +543,6 @@ describe('rfc310 pr4 — attempt orchestration (collect half)', () => {
     expect(outcome.kind).toBe('action-collect')
     if (outcome.kind !== 'action-collect') return
     expect(outcome.result).toMatchObject({ kind: 'action-retry', rerunSeq: 1 })
-    expect(fx.store.listAttempts(actionRunId)[0]!.status).toBe('rejected')
+    expect((await fx.store.listAttempts(actionRunId))[0]!.status).toBe('rejected')
   })
 })

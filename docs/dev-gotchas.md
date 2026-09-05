@@ -1209,6 +1209,27 @@ RFC-268 取消 500、RFC-303 终态控制落成 retryable），或者 successor 
 - 「先 resolve 别人的 promise，再做自己的库事务」这种顺序本身就是风险：等待者要的往往是**库里的状态已转移**，
   不是「运行时停了」。runtime registry 因此改成两阶段（`release` 记结果、库里 owner 行转移完才 `settle` 唤醒等待者）。
 
+## 模块加载期捕获的列对象曾固定在 SQLite 投影：PG 上解码绕开 `bigint → number`（RFC-359 W4-D10 实撞，2026-09-05）
+
+RFC-349 的 schema 是「一份 SQLite 声明 + 进程级 provider 围栏」：`schema.ts` 里每张表都是 Proxy facade，**访问属性时**
+才解析到当前 provider 的具体表（SQLite 表或 pgTable 投影）。业务模块很常见的写法是在模块加载期就把列捕获进常量
+（`const SUMMARY_COLUMNS = { createdAt: table.createdAt, … }`），而模块加载发生在 `selectDatabaseSchemaProvider('postgresql')`
+之前（daemon 装配顺序如此，测试里也一样），于是捕获到的是 **SQLite 列对象**：在 PG 上用它 `select({...})`，drizzle 解码走的是
+SQLite 列的恒等映射，`bigint` 原样回成字符串——mission 列表页游标 `createdAt: "1700000000003"`，API 合同写的是 number。
+全仓这种模块级列常量有 12 处，都是同一类「PG 更差」的隐患。
+
+修法在根上：`db/providerSchema.ts` 把**列**也做成访问时解析的 facade（按属性名缓存、身份稳定；`get` / 原型 / `ownKeys` 都转到
+当前 provider 的具体列），无论何时捕获，drizzle 取到的 `mapFromDriverValue` / `mapToDriverValue` / 所属表都是当前 provider 的。
+锁：`rfc359-provider-schema-column-facade.test.ts` 故意在模块加载期捕获列，两引擎各验解码 / 编码 / 行值比较 / 原型。
+仍要注意的例外：`db.all(sql\`…\`)` 这类裸 SQL 读**不经列 mapper**，数值列在 PG 上照样是字符串——投影层用能力矩阵的
+`numericFromRawRow` 归一（`taskListPage/projection.ts` 的既有做法）。
+
+## 全树源码扫描类守卫要缓存解析结果（rfc305 CI 超时，2026-09-05）
+
+`rfc305-architecture-lock` 的每条锁各自 `readdirSync` + `ts.createSourceFile` 整棵 backend src，一条锁里六七次全树扫描；
+本地 13s 看着没事，CI shard 负载一高单条就撞 20s 超时，红得与提交内容无关。规矩：按路径缓存 `ts.SourceFile`
+（源码在一次运行里不会变），新写的源码扫描守卫从第一版起就带缓存，不靠调高 timeout 兜。
+
 ## 同步存储改成异步后，构造期 fire-and-forget 的「读—插」不再原子：启动直接撞主键（RFC-359 W4-D6c 实撞，2026-09-05）
 
 `DigitalEmployeeAuthoringService` 在构造函数里 `this.#ready = this.#initialize()` 起手就注册类型包，启动期路由层与 worker

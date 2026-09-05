@@ -47,10 +47,7 @@ import {
   runCutoverCommand,
 } from '../src/modules/development-automation/application/cutover'
 import { createCutoverStore } from '../src/modules/development-automation/infrastructure/cutoverStore'
-import {
-  createSqliteMissionPersistence,
-  createSqliteMissionStore,
-} from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import type { MrEffectsPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeSqliteWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
@@ -327,9 +324,9 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
   }
 
   test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
-    const store = createSqliteMissionStore(db)
+    const store = createMissionPersistence(db)
     const deps = {
-      store: createSqliteMissionPersistence(db),
+      store: createMissionPersistence(db),
       ports: { mrEffects: mrEffectsObserving('opened') },
       ...freshDeps(db),
     }
@@ -338,14 +335,14 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
     if (!result.ok) return
     expect(result.terminal).toBeNull()
 
-    const mission = store.getMission(result.missionId)!
+    const mission = (await store.getMission(result.missionId))!
     expect(mission.status).toBe('watching')
     expect(mission.deliveryKind).toBe('adopt-merge-request')
     expect(mission.adoptedMrRef).toBe('42')
     expect(mission.deliveryTargetRef).toBe('main')
     expect(mission.employeeRevision).toBe(3)
     expect(mission.mrClaimId).not.toBeNull()
-    const claim = store.findMrClaim({
+    const claim = await store.findMrClaim({
       codeHostEndpointRef: 'gitlab',
       stableProjectRef: 'team/app',
       mrIid: '42',
@@ -365,9 +362,9 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
   })
 
   test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
-    const store = createSqliteMissionStore(db)
+    const store = createMissionPersistence(db)
     const deps = {
-      store: createSqliteMissionPersistence(db),
+      store: createMissionPersistence(db),
       ports: { mrEffects: mrEffectsObserving('merged') },
       ...freshDeps(db),
     }
@@ -375,13 +372,13 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.terminal).toBe('merged')
-    const mission = store.getMission(result.missionId)!
+    const mission = (await store.getMission(result.missionId))!
     expect(mission.status).toBe('merged')
     expect(mission.terminalAt).toBe(NOW)
     expect(mission.mrClaimId).toBeNull()
     expect(mission.currentActionRunId).toBeNull()
     expect(
-      store.findMrClaim({
+      await store.findMrClaim({
         codeHostEndpointRef: 'gitlab',
         stableProjectRef: 'team/app',
         mrIid: '42',
@@ -390,9 +387,9 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
   })
 
   test('a closed MR maps to closed-unmerged', async () => {
-    const store = createSqliteMissionStore(db)
+    const store = createMissionPersistence(db)
     const deps = {
-      store: createSqliteMissionPersistence(db),
+      store: createMissionPersistence(db),
       ports: { mrEffects: mrEffectsObserving('closed') },
       ...freshDeps(db),
     }
@@ -400,20 +397,20 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.terminal).toBe('closed-unmerged')
-      expect(store.getMission(result.missionId)!.status).toBe('closed-unmerged')
+      expect((await store.getMission(result.missionId))!.status).toBe('closed-unmerged')
     }
   })
 
   test('re-running the same adopt is idempotent (runbook is re-runnable)', async () => {
     const deps = {
-      store: createSqliteMissionPersistence(db),
+      store: createMissionPersistence(db),
       ports: { mrEffects: mrEffectsObserving('opened') },
       ...freshDeps(db),
     }
     const first = await adoptActiveMr(deps, input)
     const second = await adoptActiveMr(
       {
-        store: createSqliteMissionPersistence(db),
+        store: createMissionPersistence(db),
         ports: { mrEffects: mrEffectsObserving('opened') },
         ...freshDeps(db),
       },
@@ -430,9 +427,9 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
     // 上一测试锁定）；「被另一 mission 占用」发生在 MR 已被正常 delivery 链
     // （create-merge-request mission 的 claimMr）持有时——adopt 的 createMission
     // 走新 launch key 成功建行，claim 撞唯一后 findMrClaim 归属他人 ⇒ typed 拒。
-    const store = createSqliteMissionStore(db)
+    const store = createMissionPersistence(db)
     const holdingMissionId = ulid()
-    store.createMission({
+    await store.createMission({
       id: holdingMissionId,
       revision: 0,
       epoch: 0,
@@ -475,20 +472,22 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
       updatedAt: NOW,
     })
     expect(
-      store.claimMr({
-        id: ulid(),
-        codeHostEndpointRef: 'gitlab',
-        stableProjectRef: 'team/app',
-        mrIid: '42',
-        missionId: holdingMissionId,
-        epoch: 0,
-        headSha: null,
-        now: NOW,
-      }).ok,
+      (
+        await store.claimMr({
+          id: ulid(),
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'team/app',
+          mrIid: '42',
+          missionId: holdingMissionId,
+          epoch: 0,
+          headSha: null,
+          now: NOW,
+        })
+      ).ok,
     ).toBe(true)
     const clashing = await adoptActiveMr(
       {
-        store: createSqliteMissionPersistence(db),
+        store: createMissionPersistence(db),
         ports: { mrEffects: mrEffectsObserving('opened') },
         ...freshDeps(db),
       },
@@ -507,7 +506,7 @@ describe('RFC-310 PR-9 — adoptActiveMr builds missions from external truth', (
     }
     const result = await adoptActiveMr(
       {
-        store: createSqliteMissionPersistence(db),
+        store: createMissionPersistence(db),
         ports: { mrEffects: failing },
         ...freshDeps(db),
       },

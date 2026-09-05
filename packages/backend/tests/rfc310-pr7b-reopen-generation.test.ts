@@ -23,7 +23,7 @@ import type { MergeRequestFactsCollectorPort } from '../src/modules/development-
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import { shouldWakeForWebhook } from '../src/modules/development-automation/domain/webhookWake'
-import { createSqliteMissionCodeHostEventContinuation } from '../src/modules/development-automation/composition'
+import { createMissionCodeHostEventContinuation } from '../src/modules/development-automation/composition'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -74,7 +74,7 @@ async function seedClosedMission(
 ): Promise<{ claimId: string }> {
   const now = 30_000_000
   const sourceKind = options.sourceKind ?? 'direct'
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -118,7 +118,7 @@ async function seedClosedMission(
   })
 
   const claimId = `claim-${missionId}`
-  const claimed = fx.store.claimMr({
+  const claimed = await fx.store.claimMr({
     id: claimId,
     codeHostEndpointRef: 'endpoint-1',
     stableProjectRef: 'project-1',
@@ -130,13 +130,13 @@ async function seedClosedMission(
   })
   expect(claimed.ok).toBe(true)
   // 终态时释放 claim（与 mark-terminal arm 同款），reopen 必须能在这之后重新 claim。
-  fx.store.releaseMr(claimId, now)
+  await fx.store.releaseMr(claimId, now)
   {
-    const m = fx.store.getMission(missionId)!
-    fx.store.occUpdate(m.id, m.revision, m.epoch, { mrClaimId: claimId })
+    const m = (await fx.store.getMission(missionId))!
+    await fx.store.occUpdate(m.id, m.revision, m.epoch, { mrClaimId: claimId })
   }
 
-  fx.store.insertMissionSource({
+  await fx.store.insertMissionSource({
     id: ulid(),
     missionId,
     generation: 1,
@@ -208,7 +208,7 @@ describe('rfc310 pr7b T81 — the reopen signal actually reaches the probe', () 
     const fx = await buildPr3Fixture()
     const missionId = 'm-event-center-reopen-wake'
     await seedClosedMission(fx, missionId)
-    const continuation = createSqliteMissionCodeHostEventContinuation(fx.db)
+    const continuation = createMissionCodeHostEventContinuation(fx.db)
 
     expect(
       await continuation.match({ provider: 'endpoint-1', repoPath: 'project-1', mrIid: '77' }),
@@ -223,7 +223,7 @@ describe('rfc310 pr7b T81 — the reopen signal actually reaches the probe', () 
       eventDeliveryId: 'event-delivery-reopen-1',
       occurredAt: 30_000_002,
     })
-    expect(fx.store.consumeWakeHints(missionId, 30_000_003)).toBe(1)
+    expect(await fx.store.consumeWakeHints(missionId, 30_000_003)).toBe(1)
   })
 })
 
@@ -239,7 +239,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     expect(await runMissionReconcile(deps, missionId)).toEqual({ kind: 'terminal-noop' })
     expect(collector.calls()).toBe(0)
 
-    fx.store.recordWakeHint({
+    await fx.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'code-host',
@@ -252,7 +252,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     expect(collector.calls()).toBe(1)
 
     // ①原 Mission 终态逐字不动。
-    const closed = fx.store.getMission(missionId)!
+    const closed = (await fx.store.getMission(missionId))!
     expect({
       status: closed.status,
       terminalKind: closed.terminalKind,
@@ -264,7 +264,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     })
 
     // ②后继带链接、adopt 模式、继承钉住的配置。
-    const successor = fx.store.getMission(outcome.successorMissionId)!
+    const successor = (await fx.store.getMission(outcome.successorMissionId))!
     expect({
       reopenedFromMissionId: successor.reopenedFromMissionId,
       status: successor.status,
@@ -286,8 +286,8 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     // ③重新 claim 到同一条 MR：旧 claim 仍是 released，新的是 active。
     expect(successor.mrClaimId).not.toBeNull()
     expect(successor.mrClaimId).not.toBe(claimId)
-    expect(fx.store.getMrClaim(claimId)!.state).toBe('released')
-    const freshClaim = fx.store.getMrClaim(successor.mrClaimId!)!
+    expect((await fx.store.getMrClaim(claimId))!.state).toBe('released')
+    const freshClaim = (await fx.store.getMrClaim(successor.mrClaimId!))!
     expect({
       state: freshClaim.state,
       missionId: freshClaim.missionId,
@@ -303,7 +303,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     })
 
     // ⑥direct：继承需求证据，来源直接 materialized 且指向同一个 bundle。
-    const successorSources = fx.store.listMissionSources(successor.id)
+    const successorSources = await fx.store.listMissionSources(successor.id)
     expect(successorSources).toHaveLength(1)
     expect({
       generation: successorSources[0]!.generation,
@@ -312,7 +312,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     }).toEqual({ generation: 2, state: 'materialized', bundleRef: 'bundle-old' })
 
     // ④幂等：再来一次投递不会派生第二条。
-    fx.store.recordWakeHint({
+    await fx.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'code-host',
@@ -320,7 +320,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
       now: 30_000_200,
     })
     expect(await runMissionReconcile(deps, missionId)).toEqual({ kind: 'terminal-noop' })
-    expect(fx.store.findByIdempotencyKey(`reopen:${missionId}`)!.id).toBe(successor.id)
+    expect((await fx.store.findByIdempotencyKey(`reopen:${missionId}`))!.id).toBe(successor.id)
   })
 
   test('a delivery that is not actually a reopen changes nothing', async () => {
@@ -331,7 +331,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     const collector = collectorFor('closed')
     const deps = fx.deps({ mergeRequestFacts: collector.port })
 
-    fx.store.recordWakeHint({
+    await fx.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'code-host',
@@ -340,7 +340,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     })
     expect(await runMissionReconcile(deps, missionId)).toEqual({ kind: 'terminal-noop' })
     expect(collector.calls()).toBe(1)
-    expect(fx.store.findByIdempotencyKey(`reopen:${missionId}`)).toBeNull()
+    expect(await fx.store.findByIdempotencyKey(`reopen:${missionId}`)).toBeNull()
   })
 
   test('external-reference successors re-collect instead of inheriting a stale snapshot', async () => {
@@ -349,7 +349,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     await seedClosedMission(fx, missionId, { sourceKind: 'external-reference' })
     const deps = fx.deps({ mergeRequestFacts: collectorFor('active').port })
 
-    fx.store.recordWakeHint({
+    await fx.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'code-host',
@@ -360,7 +360,7 @@ describe('rfc310 pr7b T81 — external reopen creates a linked successor generat
     expect(outcome.kind).toBe('mission-reopened')
     if (outcome.kind !== 'mission-reopened') return
 
-    const sources = fx.store.listMissionSources(outcome.successorMissionId)
+    const sources = await fx.store.listMissionSources(outcome.successorMissionId)
     expect(sources).toHaveLength(1)
     // 工单在 MR 关闭期间很可能已经变了：留 active、由既有链重新向 adapter 采集，
     // **绝不**照搬旧 bundle（那等于让新一轮基于过期需求干活）。

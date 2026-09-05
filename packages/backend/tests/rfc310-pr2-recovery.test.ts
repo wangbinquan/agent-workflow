@@ -24,7 +24,7 @@ import {
   listPreparedEffectRows,
   missionEpochsOf,
 } from '../src/modules/development-automation/infrastructure/reconcilerReaders'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr2Fixture, type Pr2Fixture } from './helpers/rfc310Pr2Fixture'
 
 function readersOf(f: Pr2Fixture) {
@@ -45,9 +45,9 @@ describe('rfc310 pr2 recovery', () => {
   test('cancel with a dispatched effect settles through the executor, then reaches canceled', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-cancel-1')
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     const claim = ulid()
-    f.store.claimMr({
+    await f.store.claimMr({
       id: claim,
       codeHostEndpointRef: 'ep',
       stableProjectRef: 'p',
@@ -57,9 +57,9 @@ describe('rfc310 pr2 recovery', () => {
       headSha: null,
       now: Date.now(),
     })
-    f.store.occUpdate(mission.id, mission.revision, mission.epoch, { mrClaimId: claim })
-    const withClaim = f.store.getMission(missionId)!
-    const effect = f.store.prepareEffect({
+    await f.store.occUpdate(mission.id, mission.revision, mission.epoch, { mrClaimId: claim })
+    const withClaim = (await f.store.getMission(missionId))!
+    const effect = await f.store.prepareEffect({
       id: ulid(),
       missionId,
       actionRunId: null,
@@ -69,44 +69,48 @@ describe('rfc310 pr2 recovery', () => {
       epoch: withClaim.epoch,
       now: Date.now(),
     })
-    f.store.markEffectDispatched(effect.effect.id, Date.now())
+    await f.store.markEffectDispatched(effect.effect.id, Date.now())
 
     const cancelResult = await cancelMission(
       {
-        store: createSqliteMissionPersistence(f.db),
+        store: createMissionPersistence(f.db),
         lookup: f.lookup,
         now: () => Date.now(),
       },
       { missionId },
     )
     expect(cancelResult.pending).toBe(true)
-    expect(f.store.getMission(missionId)!.transitionFence).toBe('cancel-pending')
+    expect((await f.store.getMission(missionId))!.transitionFence).toBe('cancel-pending')
 
     // executor 缺席 ⇒ 保持 pending，不伪造外部结果。
     const withoutExecutor = await recoverMissions(f.deps({}), readersOf(f))
     expect(withoutExecutor.pendingFences).toBe(1)
-    expect(f.store.getMission(missionId)!.status).not.toBe('canceled')
+    expect((await f.store.getMission(missionId))!.status).not.toBe('canceled')
 
     const report = await recoverMissions(f.deps({ effectExecutor: okExecutor }), readersOf(f))
     expect(report.settledFences).toBe(1)
-    const settled = f.store.getMission(missionId)!
+    const settled = (await f.store.getMission(missionId))!
     expect(settled.status).toBe('canceled')
     expect(settled.transitionFence).toBe('none')
     expect(settled.epoch).toBeGreaterThan(mission.epoch)
-    expect(f.store.getEffect(effect.effect.id)!.state).toBe('confirmed')
+    expect((await f.store.getEffect(effect.effect.id))!.state).toBe('confirmed')
   })
 
   test('handoff-pending settles into tracking-only with automation writes fenced off', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-handoff-1')
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     expect(
-      f.store.bumpEpoch(mission.id, mission.revision, { transitionFence: 'handoff-pending' }).ok,
+      (
+        await f.store.bumpEpoch(mission.id, mission.revision, {
+          transitionFence: 'handoff-pending',
+        })
+      ).ok,
     ).toBe(true)
 
     const report = await recoverMissions(f.deps({}), readersOf(f))
     expect(report.settledFences).toBe(1)
-    const settled = f.store.getMission(missionId)!
+    const settled = (await f.store.getMission(missionId))!
     expect(settled.automationMode).toBe('tracking-only')
     expect(settled.transitionFence).toBe('none')
     expect(settled.status).not.toBe('canceled')
@@ -115,8 +119,8 @@ describe('rfc310 pr2 recovery', () => {
   test('prepared effects from an older epoch are invalidated, current-epoch ones survive', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-epoch-1')
-    const mission = f.store.getMission(missionId)!
-    const stale = f.store.prepareEffect({
+    const mission = (await f.store.getMission(missionId))!
+    const stale = await f.store.prepareEffect({
       id: ulid(),
       missionId,
       actionRunId: null,
@@ -126,9 +130,9 @@ describe('rfc310 pr2 recovery', () => {
       epoch: mission.epoch,
       now: Date.now(),
     })
-    expect(f.store.bumpEpoch(mission.id, mission.revision, {}).ok).toBe(true)
-    const bumped = f.store.getMission(missionId)!
-    const current = f.store.prepareEffect({
+    expect((await f.store.bumpEpoch(mission.id, mission.revision, {})).ok).toBe(true)
+    const bumped = (await f.store.getMission(missionId))!
+    const current = await f.store.prepareEffect({
       id: ulid(),
       missionId,
       actionRunId: null,
@@ -141,15 +145,15 @@ describe('rfc310 pr2 recovery', () => {
 
     const report = await recoverMissions(f.deps({}), readersOf(f))
     expect(report.invalidatedEffects).toBe(1)
-    expect(f.store.getEffect(stale.effect.id)!.state).toBe('invalidated')
-    expect(f.store.getEffect(current.effect.id)!.state).toBe('prepared')
+    expect((await f.store.getEffect(stale.effect.id))!.state).toBe('invalidated')
+    expect((await f.store.getEffect(current.effect.id))!.state).toBe('prepared')
   })
 
   test('due wakes fire (ordinal preserved) and drive an ordinary reconcile', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-wake-1')
     const wakeId = ulid()
-    f.store.armWake({
+    await f.store.armWake({
       id: wakeId,
       missionId,
       decisionId: ulid(),
@@ -162,9 +166,9 @@ describe('rfc310 pr2 recovery', () => {
 
     const report = await recoverMissions(f.deps({}), readersOf(f))
     expect(report.firedWakes).toBe(1)
-    expect(f.store.listDueWakes(Date.now())).toHaveLength(0)
+    expect(await f.store.listDueWakes(Date.now())).toHaveLength(0)
     // reconcile 正常跑过（decision 落库）——blocked（launcher/collector 缺席）也算跑过。
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     expect(mission.readinessJson).not.toBeNull()
   })
 
@@ -199,8 +203,8 @@ describe('rfc310 pr2 recovery', () => {
   test('reconcile on a fenced mission goes through the same settle path as recovery', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-fence-direct-1')
-    const mission = f.store.getMission(missionId)!
-    f.store.bumpEpoch(mission.id, mission.revision, { transitionFence: 'cancel-pending' })
+    const mission = (await f.store.getMission(missionId))!
+    await f.store.bumpEpoch(mission.id, mission.revision, { transitionFence: 'cancel-pending' })
     const outcome = await runMissionReconcile(f.deps({}), missionId)
     expect(outcome).toMatchObject({ kind: 'fence-settled', result: 'canceled' })
   })

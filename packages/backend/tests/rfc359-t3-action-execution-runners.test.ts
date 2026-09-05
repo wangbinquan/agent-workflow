@@ -421,7 +421,7 @@ test('源码锁：PG daemon 接上 launcher 与终态观察者；两个 composer
   const daemon = readFileSync(join(root, 'cli', 'postgresqlDaemonApplication.ts'), 'utf8')
   expect(daemon).toContain('agentLauncher: composePostgresqlAgentActionExecution({')
   expect(daemon).toContain('scriptLauncher: composePostgresqlScriptActionExecution({')
-  expect(daemon).toContain('createPostgresqlDevelopmentMissionExecutionTerminalObserver({')
+  expect(daemon).toContain('createDevelopmentMissionExecutionTerminalObserver({')
   expect(daemon).toContain('developmentAutomationRef.current = developmentAutomation')
   expect(daemon.indexOf('const taskLaunchKernel = ')).toBeLessThan(
     daemon.indexOf('agentLauncher: composePostgresqlAgentActionExecution({'),

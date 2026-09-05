@@ -94,8 +94,7 @@ import {
   listUnconsumedWakeHintMissionIds,
   missionEpochsOf,
 } from './infrastructure/reconcilerReaders'
-import { createSqliteMissionPersistence } from './infrastructure/sqliteMissionStore'
-import { createPostgresqlMissionPersistence } from './infrastructure/postgresqlMissionStore'
+import { createMissionPersistence } from './infrastructure/missionStore'
 import { createSqliteRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
 import { createPostgresqlRequirementBundleRefPersistence } from './infrastructure/requirementBundleRefPersistence'
 import {
@@ -135,14 +134,10 @@ import {
   createSqliteUploadPlacementPersistence,
 } from './infrastructure/uploadPlacementPersistence'
 import { createPipelineImportAdapter } from './infrastructure/pipelineEvidenceImport'
-export {
-  createPostgresqlMissionCodeHostEventContinuation,
-  createSqliteMissionCodeHostEventContinuation,
-} from './infrastructure/missionCodeHostEventContinuation'
+export { createMissionCodeHostEventContinuation } from './infrastructure/missionCodeHostEventContinuation'
 
 export {
-  createPostgresqlDevelopmentMissionExecutionTerminalObserver,
-  createSqliteDevelopmentMissionExecutionTerminalObserver,
+  createDevelopmentMissionExecutionTerminalObserver,
   type DevelopmentMissionExecutionTerminalObserver,
 } from './composition/executionTerminalObserver'
 
@@ -453,7 +448,7 @@ export function composeDevelopmentAutomation(
 ): DevelopmentAutomationModule {
   const repositories = createSqliteRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
-    store: createSqliteMissionPersistence(deps.db),
+    store: createMissionPersistence(deps.db),
     admissionLookup: createAdmissionLookup(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
     bundleRefs: createSqliteRequirementBundleRefPersistence(deps.db),
@@ -493,7 +488,7 @@ export function composePostgresqlDevelopmentAutomation(
 ): DevelopmentAutomationModule {
   const repositories = createPostgresqlRepositoryLocationRead(deps.db)
   return composeDevelopmentAutomationFromPersistence(deps, {
-    store: createPostgresqlMissionPersistence(deps.db),
+    store: createMissionPersistence(deps.db),
     admissionLookup: createAdmissionLookup(deps.db),
     snapshots: createFactSnapshotReader(deps.db),
     bundleRefs: createPostgresqlRequirementBundleRefPersistence(deps.db),

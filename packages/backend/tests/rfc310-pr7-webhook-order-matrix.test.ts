@@ -51,7 +51,7 @@ interface HostTruth {
 }
 
 async function seedWatchingMission(fx: Pr3Fixture, missionId: string, now: number): Promise<void> {
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -95,7 +95,7 @@ async function seedWatchingMission(fx: Pr3Fixture, missionId: string, now: numbe
   })
   const seed = { 'requirement.bundleComplete': cell(true), '__mr.ref': cell('11') }
   const snapId = ulid()
-  fx.store.insertFactSnapshot({
+  await fx.store.insertFactSnapshot({
     id: snapId,
     missionId,
     missionRevision: 0,
@@ -105,8 +105,10 @@ async function seedWatchingMission(fx: Pr3Fixture, missionId: string, now: numbe
     digest: canonicalDigest(seed),
     now,
   })
-  const mission = fx.store.getMission(missionId)!
-  fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: snapId })
+  const mission = (await fx.store.getMission(missionId))!
+  await fx.store.occUpdate(missionId, mission.revision, mission.epoch, {
+    requirementBundleRef: snapId,
+  })
 }
 
 /**
@@ -120,19 +122,21 @@ async function deliverAndDrain(
   deps: Parameters<typeof runMissionReconcile>[0],
   now: number,
 ): Promise<{ accepted: boolean; rounds: number }> {
-  const accepted = fx.store.recordWakeHint({
-    id: ulid(),
-    missionId,
-    source: 'code-host',
-    deliveryKey,
-    now,
-  }).accepted
+  const accepted = (
+    await fx.store.recordWakeHint({
+      id: ulid(),
+      missionId,
+      source: 'code-host',
+      deliveryKey,
+      now,
+    })
+  ).accepted
   let rounds = 0
   for (; rounds < 6; rounds += 1) {
     const outcome = await runMissionReconcile(deps, missionId)
     const kind = (outcome as { kind: string }).kind
     if (kind === 'terminal-noop' || kind === 'deduped' || kind === 'not-found') break
-    const mission = fx.store.getMission(missionId)
+    const mission = await fx.store.getMission(missionId)
     if (mission !== null && (mission.status === 'merged' || mission.status === 'closed-unmerged')) {
       break
     }
@@ -213,7 +217,7 @@ async function runOrder(
     if (step.mergeBefore === true) truth.terminal = 'merged'
     await deliverAndDrain(fx, missionId, step.key, deps, now + index + 1)
   }
-  const m = fx.store.getMission(missionId)!
+  const m = (await fx.store.getMission(missionId))!
   // blockCode 一并回传：收敛失败时最想知道的就是"停在哪条 typed block 上"。
   return { status: m.status, blockCode: m.blockCode, replies, collectCount }
 }
@@ -248,14 +252,14 @@ describe('RFC-310 T82 — webhook replay / out-of-order / late delivery matrix',
     const now = 20_000_000
     await seedWatchingMission(fx, missionId, now)
 
-    const first = fx.store.recordWakeHint({
+    const first = await fx.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'code-host',
       deliveryKey: 'wh:same-delivery',
       now,
     })
-    const second = fx.store.recordWakeHint({
+    const second = await fx.store.recordWakeHint({
       id: ulid(),
       missionId,
       source: 'code-host',
@@ -265,7 +269,7 @@ describe('RFC-310 T82 — webhook replay / out-of-order / late delivery matrix',
     expect(first.accepted).toBe(true)
     // 重放不是"再唤醒一次"，是同一次投递 —— 幂等键挡住，消费面只见一条。
     expect(second.accepted).toBe(false)
-    expect(fx.store.consumeWakeHints(missionId, now + 2)).toBe(1)
-    expect(fx.store.consumeWakeHints(missionId, now + 3)).toBe(0)
+    expect(await fx.store.consumeWakeHints(missionId, now + 2)).toBe(1)
+    expect(await fx.store.consumeWakeHints(missionId, now + 3)).toBe(0)
   })
 })

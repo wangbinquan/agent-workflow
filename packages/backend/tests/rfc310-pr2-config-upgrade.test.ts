@@ -14,7 +14,7 @@ import {
   reviseAutomationPolicyDraft,
 } from './helpers/digitalEmployeeStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr2Fixture } from './helpers/rfc310Pr2Fixture'
 
 const now = () => Date.now()
@@ -26,9 +26,9 @@ function codeOf(err: unknown): string {
 describe('rfc310 pr2 configuration upgrade', () => {
   test('noop preview/apply; real apply repins policy and bumps epoch; prepared effects die', async () => {
     const f = await buildPr2Fixture()
-    const persistence = createSqliteMissionPersistence(f.db)
+    const persistence = createMissionPersistence(f.db)
     const missionId = await f.launch('t31a-main')
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
 
     // 第二个 policy revision 供升级目标。
     await reviseAutomationPolicyDraft(f.db, {
@@ -43,9 +43,9 @@ describe('rfc310 pr2 configuration upgrade', () => {
       { missionId: mission.id, nextEmployee: null, nextPolicy: null },
     )
     expect(noop.noop).toBe(true)
-    expect(f.store.getMission(mission.id)!.epoch).toBe(mission.epoch)
+    expect((await f.store.getMission(mission.id))!.epoch).toBe(mission.epoch)
 
-    const prepared = f.store.prepareEffect({
+    const prepared = await f.store.prepareEffect({
       id: '01T31APREPAREDEFFECTXXXXX0',
       missionId: mission.id,
       actionRunId: null,
@@ -69,18 +69,18 @@ describe('rfc310 pr2 configuration upgrade', () => {
       { missionId: mission.id, nextEmployee: null, nextPolicy: { id: f.policyId, revision: 2 } },
     )
     expect(applied.noop).toBe(false)
-    const after = f.store.getMission(mission.id)!
+    const after = (await f.store.getMission(mission.id))!
     expect(after.epoch).toBe(mission.epoch + 1)
     expect(after.policyRevision).toBe(2)
-    const effects = f.store.listUnsettledEffects(mission.id)
+    const effects = await f.store.listUnsettledEffects(mission.id)
     expect(effects.find((e) => e.id === prepared.effect.id)).toBeUndefined()
   })
 
   test('rejects missing revision, active writable action, and fenced missions', async () => {
     const f = await buildPr2Fixture()
-    const persistence = createSqliteMissionPersistence(f.db)
+    const persistence = createMissionPersistence(f.db)
     const missionId = await f.launch('t31a-neg')
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
 
     let missingCode = ''
     try {
@@ -93,7 +93,7 @@ describe('rfc310 pr2 configuration upgrade', () => {
     }
     expect(missingCode).toBe('configuration-upgrade-policy-missing')
 
-    f.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+    await f.store.occUpdate(mission.id, mission.revision, mission.epoch, {
       transitionFence: 'cancel-pending',
     })
     let fencedCode = ''

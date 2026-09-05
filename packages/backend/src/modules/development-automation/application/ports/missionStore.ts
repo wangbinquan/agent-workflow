@@ -139,6 +139,10 @@ import type { FeedbackLedgerRow } from '../../domain/feedbackLedger'
 
 export type { FeedbackLedgerRow }
 
+/**
+ * RFC-359 W4-D10 起这个同步形状**没有实现**了（两个 provider 共用 `infrastructure/missionStore.ts` 一份异步实现），
+ * 它只作为下面 `MissionPersistence` 映射类型的来源保留；`inTx` 被两个具名原子操作取代。
+ */
 export interface MissionStore {
   /** launchIdempotencyKey 撞唯一索引 ⇒ 返回既有行（HTTP 重试幂等）。 */
   createMission(row: MissionRow): { readonly created: boolean; readonly mission: MissionRow }

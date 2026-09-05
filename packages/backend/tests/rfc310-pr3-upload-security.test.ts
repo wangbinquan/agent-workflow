@@ -38,7 +38,7 @@ import {
   type LaunchDeps,
 } from '../src/modules/development-automation/application/commands/launchMission'
 import { createRepositoryBaselineResolver } from '../src/modules/development-automation/infrastructure/gitBaselineReader'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
 import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
 import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
@@ -330,7 +330,7 @@ function previewDeps(db: DbClient): { deps: LaunchDeps; sessions: UploadSessionS
   return {
     sessions,
     deps: {
-      store: createSqliteMissionPersistence(db),
+      store: createMissionPersistence(db),
       lookup: {
         resolveAssignment: async () => null,
         getEmployeeRevisionContent: async () => EMPLOYEE_CONTENT,

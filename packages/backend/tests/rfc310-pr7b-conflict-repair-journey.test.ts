@@ -162,9 +162,9 @@ function cell(value: FactCellValue): FactCell<FactCellValue> {
 }
 
 /** conflict 已被采集到、MR 在跑、source 分支已知的 watching Mission。 */
-function seedConflictedMission(missionId: string): void {
+async function seedConflictedMission(missionId: string): Promise<void> {
   const now = Date.now()
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -218,7 +218,7 @@ function seedConflictedMission(missionId: string): void {
     '__mr.factsCollectedAt': cell(String(Date.now())),
   }
   const snapId = `snap-${missionId}`
-  fx.store.insertFactSnapshot({
+  await fx.store.insertFactSnapshot({
     id: snapId,
     missionId,
     missionRevision: 0,
@@ -228,8 +228,10 @@ function seedConflictedMission(missionId: string): void {
     digest: canonicalDigest(cells),
     now,
   })
-  const mission = fx.store.getMission(missionId)!
-  fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: snapId })
+  const mission = (await fx.store.getMission(missionId))!
+  await fx.store.occUpdate(missionId, mission.revision, mission.epoch, {
+    requirementBundleRef: snapId,
+  })
   // 远端上这条 MR source 分支的 head 就是 S（本用例私有的 ref）。
   git(repoPath, 'push', '-q', remotePath, `${sourceSha}:refs/heads/${branchOf(missionId)}`)
 }
@@ -270,13 +272,13 @@ function exited(executionRef: string, resultText: string): AgentExecutionSnapsho
 async function dispatchRepair(
   missionId: string,
 ): Promise<{ workspacePath: string; prompt: string; executionRef: string }> {
-  seedConflictedMission(missionId)
+  await seedConflictedMission(missionId)
   const launched = await automation.reconcile(missionId)
   // 失败时把 block code 一起亮出来——「没派出去」有十几种原因，光看
   // action-launch-failed 排查不了。
   expect({
     handled: launched.kind === 'decided' ? launched.handled : launched.kind,
-    blockCode: fx.store.getMission(missionId)?.blockCode ?? null,
+    blockCode: (await fx.store.getMission(missionId))?.blockCode ?? null,
   }).toEqual({ handled: 'action-launched', blockCode: null })
   const last = launches[launches.length - 1]!
   return last
@@ -319,7 +321,7 @@ describe('rfc310 pr7b T78 — conflict repair agent surface (real git + real rem
     expect(git(repoPath, 'show', `${remoteHead}:X.txt`)).toBe('line1-merged\nline2\n')
 
     // candidate 那条路没被误用：merge 不是 baseline 上的 overlay diff。
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__action.candidateRef']).toBeUndefined()
     expect(cells['__conflict.mergedSha']).toMatchObject({ state: 'known', value: remoteHead })
@@ -355,7 +357,7 @@ describe('rfc310 pr7b T78 — conflict repair agent surface (real git + real rem
     // 而不是等到 source-control 的 finish 才发现：前者是「Agent 越界」的诚实
     // 分级（boundary ⇒ 整树废弃），后者只是合并收不了口。
     const failedRun = (collected.result as { actionRunId: string }).actionRunId
-    const attempts = fx.store.listAttempts(failedRun)
+    const attempts = await fx.store.listAttempts(failedRun)
     const last = attempts[attempts.length - 1]!
     expect(last.status).toBe('discarded')
     expect(JSON.parse(last.rejectionJson ?? '{}')).toMatchObject({

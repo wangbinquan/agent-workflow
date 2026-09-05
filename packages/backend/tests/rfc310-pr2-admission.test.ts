@@ -36,7 +36,7 @@ import {
   resolveAdmissionAssignment,
   upsertAssignment,
 } from '../src/modules/development-automation/infrastructure/assignmentStore'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { createSqliteMissionInputUploadPersistence } from '../src/modules/development-automation/infrastructure/missionInputUploadPersistence'
 import { createSqliteUploadSessionStore } from '../src/modules/development-automation/infrastructure/sqliteUploadSessionStore'
 import type { UploadSessionStore } from '../src/modules/development-automation/application/ports/uploadSessionStore'
@@ -209,7 +209,7 @@ async function buildFixture(): Promise<Fixture> {
   ])
   const none = await mkEmployee('emp-none', [])
 
-  const store = createSqliteMissionPersistence(db)
+  const store = createMissionPersistence(db)
   const uploads = createSqliteUploadSessionStore(db)
   return {
     db,

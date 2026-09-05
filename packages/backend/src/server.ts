@@ -362,9 +362,9 @@ import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/develo
 import {
   composeDevelopmentAutomation,
   composeSqliteDevelopmentAdmissionLookup,
-  createSqliteDevelopmentMissionExecutionTerminalObserver,
+  createDevelopmentMissionExecutionTerminalObserver,
   createSqliteDevelopmentDeliveryProvider,
-  createSqliteMissionCodeHostEventContinuation,
+  createMissionCodeHostEventContinuation,
   type DevelopmentAdmissionLookup,
   type DevelopmentAutomationModule,
 } from '@/modules/development-automation/composition'
@@ -1518,7 +1518,7 @@ function composeApplicationEventCenter(
   developmentDeliveryProvider: DevelopmentDeliveryProvider,
 ): EventCenterModule {
   const approvalGateway = composeSqliteApprovalGatewayRunner(deps.db)
-  const missionContinuation = createSqliteMissionCodeHostEventContinuation(deps.db)
+  const missionContinuation = createMissionCodeHostEventContinuation(deps.db)
   const codeHostDeliveryDispatcher =
     deps.webhookDispatcher !== undefined &&
     supportsEventCenterCodeHostDelivery(deps.webhookDispatcher)
@@ -1712,7 +1712,7 @@ function composeFallbackDevelopmentAutomation(
   agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
 ): DevelopmentAutomationModule {
   const automationRef: { current: DevelopmentAutomationModule | null } = { current: null }
-  const terminalObserver = createSqliteDevelopmentMissionExecutionTerminalObserver({
+  const terminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db: deps.db,
     drive: (missionId) => {
       const automation = automationRef.current

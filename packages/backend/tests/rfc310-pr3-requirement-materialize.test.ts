@@ -19,7 +19,7 @@ import { runMissionReconcile } from '../src/modules/development-automation/appli
 import { retryBlockedMission } from '../src/modules/development-automation/application/commands/launchMission'
 import { canonicalDigest } from '../src/modules/development-automation/domain/canonicalJson'
 import { directSubmissionDigest } from '../src/modules/development-automation/infrastructure/requirementMaterializer'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 
@@ -31,7 +31,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
   test('stash digest must match the digest frozen at launch (structural pairing lock)', async () => {
     const fx = await buildPr3Fixture()
     const missionId = await fx.launchDirect('rfc310-pr3-pair-1')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.sourceContentDigest).toBe(directSubmissionDigest(SUBMISSION))
 
     const drifted = await fx.materializer.stashDirectSubmission({
@@ -86,9 +86,9 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
       expect(round1.selected.kind).toBe('materialize-direct-requirement')
       expect(round1.handled).toBe('collected')
     }
-    const afterMaterialize = fx.store.getMission(missionId)!
+    const afterMaterialize = (await fx.store.getMission(missionId))!
     expect(afterMaterialize.requirementBundleRef).not.toBeNull()
-    const sources = fx.store.listMissionSources(missionId)
+    const sources = await fx.store.listMissionSources(missionId)
     expect(sources).toHaveLength(2)
     const materialized = sources.find((s) => s.state === 'materialized')!
     expect(materialized.sourceKind).toBe('direct')
@@ -134,7 +134,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     const missionId = await fx.launchDirect('rfc310-pr3-nowire-1')
     const outcome = await runMissionReconcile(
       {
-        store: createSqliteMissionPersistence(fx.db),
+        store: createMissionPersistence(fx.db),
         lookup: fx.lookup,
         snapshots: fx.snapshots,
         ports: {},
@@ -146,7 +146,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
       'materialize-direct-requirement',
     )
     expect(outcome.kind === 'decided' && outcome.handled).toBe('blocked')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('blocked')
     expect(mission.blockCode).toBe('requirement-port-not-wired')
   })
@@ -159,7 +159,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     // 未 stash：materialize 失败 → typed block（不是静默/不是 crash）。
     const round1 = await runMissionReconcile(deps, missionId)
     expect(round1.kind === 'decided' && round1.handled).toBe('blocked')
-    const blocked = fx.store.getMission(missionId)!
+    const blocked = (await fx.store.getMission(missionId))!
     expect(blocked.status).toBe('blocked')
     expect(blocked.blockCode).toBe('requirement-acquire-failed:direct-submission-not-staged')
 
@@ -167,7 +167,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
     await retryBlockedMission(
       {
-        store: createSqliteMissionPersistence(fx.db),
+        store: createMissionPersistence(fx.db),
         lookup: fx.lookup,
         now: () => Date.now(),
       },
@@ -177,7 +177,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(round2.kind).toBe('decided')
     expect(round2.kind === 'decided' && round2.selected.kind).toBe('materialize-direct-requirement')
     expect(round2.kind === 'decided' && round2.handled).toBe('collected')
-    expect(fx.store.getMission(missionId)!.status).toBe('working')
+    expect((await fx.store.getMission(missionId))!.status).toBe('working')
   })
 
   test('empty-body direct submission materializes to an empty (but valid) bundle', async () => {
@@ -193,7 +193,7 @@ describe('rfc310 pr3 — direct requirement materialization', () => {
     expect(stashed.ok).toBe(true)
     const done = await fx.materializer.materializeDirect({
       missionId,
-      submissionRef: fx.store.getMission(missionId)!.sourceContentDigest!,
+      submissionRef: (await fx.store.getMission(missionId))!.sourceContentDigest!,
     })
     expect(done.ok).toBe(true)
     if (done.ok) {

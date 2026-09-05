@@ -1,12 +1,10 @@
 // RFC-344 — context-owned terminal wake participant for bootstrap launchers.
 
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { MissionPersistence } from '../application/ports/missionStore'
 import { missionIdOfExecutionRef } from '../infrastructure/reconcilerReaders'
-import { createPostgresqlMissionPersistence } from '../infrastructure/postgresqlMissionStore'
-import { createSqliteMissionPersistence } from '../infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../infrastructure/missionStore'
 
 export interface DevelopmentMissionExecutionTerminalObserver {
   agent(executionRef: string): Promise<void>
@@ -41,23 +39,13 @@ function observer(deps: {
   })
 }
 
-export function createSqliteDevelopmentMissionExecutionTerminalObserver(deps: {
-  readonly db: DbClient
+/** 两个 provider 同一份（RFC-359 W4-D10）：终态观察者只依赖中立的 Mission 持久化与执行引用读面。 */
+export function createDevelopmentMissionExecutionTerminalObserver(deps: {
+  readonly db: ProviderNeutralDatabase
   readonly drive: (missionId: string) => Promise<unknown>
 }): DevelopmentMissionExecutionTerminalObserver {
   return observer({
-    store: createSqliteMissionPersistence(deps.db),
-    missionIdOfExecutionRef: async (executionRef) => missionIdOfExecutionRef(deps.db, executionRef),
-    drive: deps.drive,
-  })
-}
-
-export function createPostgresqlDevelopmentMissionExecutionTerminalObserver(deps: {
-  readonly db: PostgresqlDatabaseClient
-  readonly drive: (missionId: string) => Promise<unknown>
-}): DevelopmentMissionExecutionTerminalObserver {
-  return observer({
-    store: createPostgresqlMissionPersistence(deps.db),
+    store: createMissionPersistence(deps.db),
     missionIdOfExecutionRef: (executionRef) => missionIdOfExecutionRef(deps.db, executionRef),
     drive: deps.drive,
   })

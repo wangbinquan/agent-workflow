@@ -22,7 +22,7 @@ import {
   selectableFeedback,
 } from '../src/modules/development-automation/domain/feedbackLedger'
 import { projectMrCells } from '../src/modules/development-automation/domain/mrFacts'
-import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 
 setDefaultTimeout(120_000)
 
@@ -32,7 +32,7 @@ const HEAD_B = 'bb'.repeat(20)
 
 function missionRow(
   id: string,
-): Parameters<ReturnType<typeof createSqliteMissionStore>['createMission']>[0] {
+): Parameters<ReturnType<typeof createMissionPersistence>['createMission']>[0] {
   const now = Date.now()
   return {
     id,
@@ -102,43 +102,47 @@ function observation(
 }
 
 describe('rfc310 pr7 T73 — feedback ledger store', () => {
-  test('observation upsert is idempotent; state machine records; obsolete hits only stale-head open rows', () => {
+  test('observation upsert is idempotent; state machine records; obsolete hits only stale-head open rows', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const store = createSqliteMissionStore(db)
+    const store = createMissionPersistence(db)
     const missionId = ulid()
-    store.createMission(missionRow(missionId))
+    await store.createMission(missionRow(missionId))
 
     // 入账 + 重放幂等（同 thread/revision/head）。
     const first = observation(missionId)
-    expect(store.upsertFeedbackObservation(first)).toEqual({ created: true })
-    expect(store.upsertFeedbackObservation({ ...first, id: ulid() })).toEqual({ created: false })
+    expect(await store.upsertFeedbackObservation(first)).toEqual({ created: true })
+    expect(await store.upsertFeedbackObservation({ ...first, id: ulid() })).toEqual({
+      created: false,
+    })
     // 新 revision / 新 head 是新观察。
-    expect(store.upsertFeedbackObservation(observation(missionId, { revision: 'rev-2' }))).toEqual({
+    expect(
+      await store.upsertFeedbackObservation(observation(missionId, { revision: 'rev-2' })),
+    ).toEqual({
       created: true,
     })
     expect(
-      store.upsertFeedbackObservation(
+      await store.upsertFeedbackObservation(
         observation(missionId, { threadRef: 'thread-2', revision: 'rev-9', headSha: HEAD_B }),
       ),
     ).toEqual({ created: true })
 
     // state 机：selected → addressed 带 actionRun/replyEffect 归属。
-    const rows = store.listFeedback(missionId)
+    const rows = await store.listFeedback(missionId)
     expect(rows).toHaveLength(3)
     const target = rows.find((r) => r.revision === 'rev-2')!
-    store.setFeedbackState({
+    await store.setFeedbackState({
       id: target.id,
       state: 'selected',
       actionRunId: 'run-9',
       now: Date.now(),
     })
-    store.setFeedbackState({
+    await store.setFeedbackState({
       id: target.id,
       state: 'addressed',
       replyEffectId: 'eff-1',
       now: Date.now(),
     })
-    const after = store.listFeedback(missionId).find((r) => r.id === target.id)!
+    const after = (await store.listFeedback(missionId)).find((r) => r.id === target.id)!
     expect(after).toMatchObject({
       state: 'addressed',
       actionRunId: 'run-9',
@@ -147,9 +151,9 @@ describe('rfc310 pr7 T73 — feedback ledger store', () => {
 
     // obsolete：HEAD_B 为当前 head → HEAD_A 的 observed 行标 obsolete；
     // addressed（已终结）不被涂改。
-    const changed = store.obsoleteFeedbackForOtherHeads(missionId, HEAD_B, Date.now())
+    const changed = await store.obsoleteFeedbackForOtherHeads(missionId, HEAD_B, Date.now())
     expect(changed).toBe(1)
-    const final = store.listFeedback(missionId)
+    const final = await store.listFeedback(missionId)
     // 查找键用 (threadRef, revision) 双键——单 revision 键会在多 thread 下撞行
     //（此前用 revision 单键 + 默认 rev-1 的 thread-2 行，同毫秒排序下间歇误中）。
     expect(final.find((r) => r.threadRef === 'thread-1' && r.revision === 'rev-1')!.state).toBe(
@@ -160,7 +164,7 @@ describe('rfc310 pr7 T73 — feedback ledger store', () => {
     )
     expect(final.find((r) => r.threadRef === 'thread-2')!.state).toBe('observed')
     // 幂等：再跑无行可打。
-    expect(store.obsoleteFeedbackForOtherHeads(missionId, HEAD_B, Date.now())).toBe(0)
+    expect(await store.obsoleteFeedbackForOtherHeads(missionId, HEAD_B, Date.now())).toBe(0)
   })
 })
 

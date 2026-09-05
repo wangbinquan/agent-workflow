@@ -54,7 +54,7 @@ async function seedMission(
   missionId: string,
   options: SeedOptions,
 ): Promise<{ attemptId: string; bundleRefId: string }> {
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -98,7 +98,7 @@ async function seedMission(
   })
 
   const runId = `run-${missionId}`
-  fx.store.createActionRun({
+  await fx.store.createActionRun({
     id: runId,
     missionId,
     missionRevision: 0,

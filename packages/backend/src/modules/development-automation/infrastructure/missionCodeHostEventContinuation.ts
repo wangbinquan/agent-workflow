@@ -1,12 +1,10 @@
 import { ulid } from 'ulid'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import type { CodeHostEventContinuationPort } from '@/modules/integration/application/ports/codeHostEventResponse'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { shouldWakeForWebhook } from '../domain/webhookWake'
 import type { MissionPersistence } from '../application/ports/missionStore'
-import { createPostgresqlMissionPersistence } from './postgresqlMissionStore'
-import { createSqliteMissionPersistence } from './sqliteMissionStore'
+import { createMissionPersistence } from './missionStore'
 
 /**
  * Development Automation's narrow Event Center participant. It translates an
@@ -55,14 +53,9 @@ function continuationFrom(
   }
 }
 
-export function createSqliteMissionCodeHostEventContinuation(
-  db: DbClient,
+/** 两个 provider 同一份（RFC-359 W4-D10）。 */
+export function createMissionCodeHostEventContinuation(
+  db: ProviderNeutralDatabase,
 ): CodeHostEventContinuationPort {
-  return continuationFrom(createSqliteMissionPersistence(db))
-}
-
-export function createPostgresqlMissionCodeHostEventContinuation(
-  db: PostgresqlDatabaseClient,
-): CodeHostEventContinuationPort {
-  return continuationFrom(createPostgresqlMissionPersistence(db))
+  return continuationFrom(createMissionPersistence(db))
 }

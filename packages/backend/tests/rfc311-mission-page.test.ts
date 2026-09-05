@@ -102,11 +102,11 @@ async function seedVaried(db: DbClient, count: number): Promise<void> {
   }
 }
 
-function pageAll(db: DbClient, limit: number): string[] {
+async function pageAll(db: DbClient, limit: number): Promise<string[]> {
   const ids: string[] = []
   let cursor = undefined as undefined | { createdAt: number; id: string }
   for (let guard = 0; guard < 100; guard += 1) {
-    const page = listMissionSummariesPage(db, {
+    const page = await listMissionSummariesPage(db, {
       limit,
       ...(cursor !== undefined ? { cursor } : {}),
     })
@@ -121,11 +121,11 @@ describe('RFC-311 — mission list paging === the legacy full listing', () => {
   test('every page size reproduces the full-list order exactly, ties included', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seed(db, 25)
-    const expected = listMissionSummaries(db).map((m) => m.id)
+    const expected = (await listMissionSummaries(db)).map((m) => m.id)
     expect(expected).toHaveLength(25)
 
     for (const limit of [1, 2, 3, 4, 7, 25, 100]) {
-      expect(pageAll(db, limit), `limit=${limit}`).toEqual(expected)
+      expect(await pageAll(db, limit), `limit=${limit}`).toEqual(expected)
     }
   })
 
@@ -239,7 +239,7 @@ describe('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', ()
   test('64 组过滤逐页对拍，且 facets 恒为全集计数', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedVaried(db, 40)
-    const all = listMissionSummaries(db) as unknown as Array<Record<string, unknown>>
+    const all = (await listMissionSummaries(db)) as unknown as Array<Record<string, unknown>>
 
     const views = ['all', 'active', 'attention', 'finished']
     const statusSets: string[][] = [[], ['running'], ['done', 'failed'], ['awaiting_review']]
@@ -255,7 +255,7 @@ describe('RFC-311 — mission 服务端过滤/facets === 旧的前端实现', ()
           const got: string[] = []
           let cursor: undefined | { createdAt: number; id: string }
           for (let guard = 0; guard < 200; guard += 1) {
-            const page = listMissionSummariesPage(db, {
+            const page = await listMissionSummariesPage(db, {
               limit: 7,
               view: view as never,
               statuses: statuses as never,
@@ -284,12 +284,12 @@ describe('RFC-311 — employeeId / missionStatuses 过滤与 counts', () => {
   test('counts 算在过滤集上，且原始状态过滤不会把 blocked 混进终态', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedVaried(db, 40)
-    const all = listMissionSummaries(db)
+    const all = await listMissionSummaries(db)
 
     // ① employeeId 收敛：counts 的总和 === 该员工的 mission 数
     const employeeId = all.find((m) => m.employeeId !== null)?.employeeId ?? null
     expect(employeeId).not.toBeNull()
-    const scoped = listMissionSummariesPage(db, { limit: 1, employeeId: employeeId! })
+    const scoped = await listMissionSummariesPage(db, { limit: 1, employeeId: employeeId! })
     const scopedTotal = Object.values(scoped.counts).reduce((a, b) => a + b, 0)
     expect(scopedTotal).toBe(all.filter((m) => m.employeeId === employeeId).length)
     // facets 仍是全集语义，不随过滤走
@@ -304,7 +304,7 @@ describe('RFC-311 — employeeId / missionStatuses 过滤与 counts', () => {
       'canceled',
       'failed',
     ] as const
-    const terminal = listMissionSummariesPage(db, { limit: 200, missionStatuses: TERMINAL })
+    const terminal = await listMissionSummariesPage(db, { limit: 200, missionStatuses: TERMINAL })
     expect(terminal.items.map((m) => m.id).sort()).toEqual(
       all
         .filter((m) => (TERMINAL as readonly string[]).includes(m.status))
@@ -317,7 +317,7 @@ describe('RFC-311 — employeeId / missionStatuses 过滤与 counts', () => {
     ).toBe(false)
 
     // 反证：用任务状态表达会捞到 blocked——这正是必须新增原始状态过滤的理由
-    const byTaskStatus = listMissionSummariesPage(db, { limit: 200, statuses: ['failed'] })
+    const byTaskStatus = await listMissionSummariesPage(db, { limit: 200, statuses: ['failed'] })
     expect(byTaskStatus.items.some((m) => m.status === 'blocked')).toBe(true)
   })
 })

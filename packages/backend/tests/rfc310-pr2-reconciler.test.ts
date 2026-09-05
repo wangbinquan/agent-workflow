@@ -64,7 +64,7 @@ describe('rfc310 pr2 reconciler', () => {
       selected: { kind: 'collect-repository-facts' },
       handled: 'collected',
     })
-    const afterCollect = f.store.getMission(missionId)!
+    const afterCollect = (await f.store.getMission(missionId))!
     expect(afterCollect.repositoryFactsRef).not.toBeNull()
 
     const second = await runMissionReconcile(deps, missionId)
@@ -85,7 +85,7 @@ describe('rfc310 pr2 reconciler', () => {
     expect(attempts).toHaveLength(1)
     expect(attempts[0]!.executionRef).toBe('exec-001')
     expect(attempts[0]!.rerunSeq).toBe(0)
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     expect(mission.currentActionRunId).toBe(runs[0]!.id)
     expect(mission.readinessJson).not.toBeNull()
 
@@ -111,7 +111,7 @@ describe('rfc310 pr2 reconciler', () => {
     await runMissionReconcile(deps, missionId)
     const second = await runMissionReconcile(deps, missionId)
     expect(second).toMatchObject({ kind: 'decided', handled: 'action-launch-failed' })
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     expect(mission.status).toBe('blocked')
     expect(mission.blockCode).toBe('agent-launcher-not-wired')
     const run = f.db.select().from(developmentActionRuns).all()[0]!
@@ -122,8 +122,8 @@ describe('rfc310 pr2 reconciler', () => {
   test('unsettled effect stops at the guard, arms a durable wake, and dedupes on replay', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-wait-1')
-    const mission = f.store.getMission(missionId)!
-    const effect = f.store.prepareEffect({
+    const mission = (await f.store.getMission(missionId))!
+    const effect = await f.store.prepareEffect({
       id: ulid(),
       missionId,
       actionRunId: null,
@@ -133,7 +133,7 @@ describe('rfc310 pr2 reconciler', () => {
       epoch: mission.epoch,
       now: Date.now(),
     })
-    f.store.markEffectDispatched(effect.effect.id, Date.now())
+    await f.store.markEffectDispatched(effect.effect.id, Date.now())
 
     const deps = f.deps({})
     const first = await runMissionReconcile(deps, missionId)
@@ -143,7 +143,7 @@ describe('rfc310 pr2 reconciler', () => {
       handled: 'wake-armed',
     })
     const decisionId = (first as { decisionId: string }).decisionId
-    expect(f.store.getWake(missionId, decisionId)).not.toBeNull()
+    expect(await f.store.getWake(missionId, decisionId)).not.toBeNull()
 
     const replay = await runMissionReconcile(deps, missionId)
     expect(replay).toMatchObject({ kind: 'deduped', decisionId })
@@ -152,10 +152,10 @@ describe('rfc310 pr2 reconciler', () => {
   test('external MR terminal wins over everything; claim released; terminal absorbs', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-terminal-1')
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     const claim = ulid()
     expect(
-      f.store.claimMr({
+      await f.store.claimMr({
         id: claim,
         codeHostEndpointRef: 'ep-1',
         stableProjectRef: 'proj-1',
@@ -168,7 +168,7 @@ describe('rfc310 pr2 reconciler', () => {
     ).toEqual({ ok: true })
     // 把 mission 推到 watching 并注入含 mr.terminalState=merged 的采集快照。
     const snapshotId = ulid()
-    f.store.insertFactSnapshot({
+    await f.store.insertFactSnapshot({
       id: snapshotId,
       missionId,
       missionRevision: mission.revision,
@@ -181,19 +181,23 @@ describe('rfc310 pr2 reconciler', () => {
       digest: 'e'.repeat(64),
       now: Date.now(),
     })
-    const fresh = f.store.getMission(missionId)!
+    const fresh = (await f.store.getMission(missionId))!
     expect(
-      f.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
-        status: 'publishing',
-        mrClaimId: claim,
-        repositoryFactsRef: snapshotId,
-      }).ok,
+      (
+        await f.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+          status: 'publishing',
+          mrClaimId: claim,
+          repositoryFactsRef: snapshotId,
+        })
+      ).ok,
     ).toBe(true)
-    const toWatching = f.store.getMission(missionId)!
+    const toWatching = (await f.store.getMission(missionId))!
     expect(
-      f.store.occUpdate(toWatching.id, toWatching.revision, toWatching.epoch, {
-        status: 'watching',
-      }).ok,
+      (
+        await f.store.occUpdate(toWatching.id, toWatching.revision, toWatching.epoch, {
+          status: 'watching',
+        })
+      ).ok,
     ).toBe(true)
 
     const deps = f.deps({})
@@ -203,7 +207,7 @@ describe('rfc310 pr2 reconciler', () => {
       selected: { kind: 'mark-terminal', terminal: 'merged' },
       handled: 'terminal',
     })
-    const terminal = f.store.getMission(missionId)!
+    const terminal = (await f.store.getMission(missionId))!
     expect(terminal.status).toBe('merged')
     expect(terminal.terminalKind).toBe('merged')
 
@@ -214,9 +218,9 @@ describe('rfc310 pr2 reconciler', () => {
   test('readinessJson never counts an unknown required gate as pass', async () => {
     const f = await buildPr2Fixture()
     const missionId = await f.launch('idem-readiness-1')
-    const mission = f.store.getMission(missionId)!
+    const mission = (await f.store.getMission(missionId))!
     const snapshotId = ulid()
-    f.store.insertFactSnapshot({
+    await f.store.insertFactSnapshot({
       id: snapshotId,
       missionId,
       missionRevision: mission.revision,
@@ -234,12 +238,14 @@ describe('rfc310 pr2 reconciler', () => {
       digest: 'f'.repeat(64),
       now: Date.now(),
     })
-    const fresh = f.store.getMission(missionId)!
-    f.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, { repositoryFactsRef: snapshotId })
+    const fresh = (await f.store.getMission(missionId))!
+    await f.store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+      repositoryFactsRef: snapshotId,
+    })
 
     // launcher 缺席会把 mission block——这里只关心 readiness 投影本身。
     await runMissionReconcile(f.deps({}), missionId)
-    const after = f.store.getMission(missionId)!
+    const after = (await f.store.getMission(missionId))!
     expect(after.readinessJson).not.toBeNull()
     const readiness = JSON.parse(after.readinessJson!) as {
       automationReady: boolean

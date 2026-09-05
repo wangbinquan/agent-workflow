@@ -33,7 +33,7 @@ import {
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
-import { createSqliteMissionStore } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, type Pr3Fixture } from './helpers/rfc310Pr3Fixture'
 
 setDefaultTimeout(120_000)
@@ -90,8 +90,8 @@ beforeAll(async () => {
 
   const missionNow = Date.now()
   missionId = ulid()
-  const store = createSqliteMissionStore(db)
-  store.createMission({
+  const store = createMissionPersistence(db)
+  await store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -170,7 +170,7 @@ beforeAll(async () => {
   const manifestRef = await putBlobText(JSON.stringify(manifest))
   const cells = { '__pipeline.manifestRef': cell(manifestRef) }
   const snapshotId = ulid()
-  store.insertFactSnapshot({
+  await store.insertFactSnapshot({
     id: snapshotId,
     missionId,
     missionRevision: 0,
@@ -180,7 +180,7 @@ beforeAll(async () => {
     digest: canonicalDigest(cells),
     now: missionNow,
   })
-  store.occUpdate(missionId, 0, 0, { requirementBundleRef: snapshotId })
+  await store.occUpdate(missionId, 0, 0, { requirementBundleRef: snapshotId })
 })
 
 afterAll(() => {
@@ -275,12 +275,12 @@ describe('rfc310 pr6 T67 — pipeline evidence HTTP face', () => {
 
     // manifest blob 丢失（GC/损坏）与内容非法 → 各自 typed 404，不冒充未采集
     // 也不 500（route-error-code coverage 点名这两个 code）。
-    const store = createSqliteMissionStore(db)
+    const store = createMissionPersistence(db)
     const pointRef = async (target: string, ref: string): Promise<void> => {
       const cells = { '__pipeline.manifestRef': cell(ref) }
       const snapshotId = ulid()
-      const mission = store.getMission(target)!
-      store.insertFactSnapshot({
+      const mission = (await store.getMission(target))!
+      await store.insertFactSnapshot({
         id: snapshotId,
         missionId: target,
         missionRevision: mission.revision,
@@ -290,7 +290,7 @@ describe('rfc310 pr6 T67 — pipeline evidence HTTP face', () => {
         digest: canonicalDigest(cells),
         now: Date.now(),
       })
-      store.occUpdate(target, mission.revision, mission.epoch, {
+      await store.occUpdate(target, mission.revision, mission.epoch, {
         requirementBundleRef: snapshotId,
       })
     }

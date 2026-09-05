@@ -84,7 +84,7 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
   test('full external chain: collect-external-requirement → bundle + manifest + source generation → action', async () => {
     const fx = await externalFixture()
     const missionId = await fx.launchExternal('rfc310-pr3-ext-1', 'REQ-1')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('working')
     expect(mission.resolvedAdapterId).toBe(fx.adapterId!)
 
@@ -101,7 +101,7 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
     expect(round1.kind === 'decided' && round1.selected.kind).toBe('collect-external-requirement')
     expect(round1.kind === 'decided' && round1.handled).toBe('collected')
 
-    const sources = fx.store.listMissionSources(missionId)
+    const sources = await fx.store.listMissionSources(missionId)
     expect(sources).toHaveLength(2)
     const materialized = sources.find((s) => s.state === 'materialized')!
     expect(materialized.sourceRevision).toBe('r1')
@@ -135,7 +135,7 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
     const missionId = await fx.launchExternal('rfc310-pr3-ext-404', 'REQ-MISSING')
     const outcome = await runMissionReconcile(fx.deps(), missionId)
     expect(outcome.kind === 'decided' && outcome.handled).toBe('blocked')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.blockCode).toBe('requirement-acquire-failed:adapter-exit-4')
   })
 
@@ -256,11 +256,11 @@ describe('rfc310 pr3 — external requirement acquisition via real adapter subpr
         expect(preview.newSourceRevision).toBe('r2')
       }
       // preview 不落台账。
-      expect(fx.store.listMissionSources(missionId)).toHaveLength(2)
+      expect(await fx.store.listMissionSources(missionId)).toHaveLength(2)
 
       const applied = await fx.materializer.applyExternalRefresh(missionId)
       expect(applied.ok && applied.changed).toBe(true)
-      const sources = fx.store.listMissionSources(missionId)
+      const sources = await fx.store.listMissionSources(missionId)
       expect(sources).toHaveLength(3)
       expect(sources.find((s) => s.generation === 3)!.sourceRevision).toBe('r2')
       const manifest = (await fx.materializer.getRequirementManifest(missionId))!

@@ -125,7 +125,7 @@ async function setup(
 }> {
   const fx = await buildPr3Fixture()
   const missionId = await fx.launchDirect(`playbook-${crypto.randomUUID()}`)
-  const mission = fx.store.getMission(missionId)!
+  const mission = (await fx.store.getMission(missionId))!
   const contentPatch =
     typeof patch === 'function'
       ? patch({
@@ -152,7 +152,7 @@ async function setup(
   // 的 mission-requirement 前置检查）。这些用例锁的是**步骤路由**，所以在这里把
   // 那一步的结果直接摆好；「没物化就派发」这条路由本身另有专门用例。
   if (options.requirementMaterialized !== false)
-    fx.store.insertMissionSource({
+    await fx.store.insertMissionSource({
       id: `src-${mission.id}`,
       missionId: mission.id,
       generation: 1,

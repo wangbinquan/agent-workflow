@@ -17,8 +17,8 @@ import {
   composeDevelopmentAutomation,
   composeSqliteDevelopmentAdmissionLookup,
   createSqliteDevelopmentDeliveryProvider,
-  createSqliteDevelopmentMissionExecutionTerminalObserver,
-  createSqliteMissionCodeHostEventContinuation,
+  createDevelopmentMissionExecutionTerminalObserver,
+  createMissionCodeHostEventContinuation,
 } from '@/modules/development-automation/composition'
 import { composeSqliteRequirementSourceRunner } from '@/modules/integration/composition/requirementSource'
 import { composeSqlitePipelineEvidenceRunner } from '@/modules/integration/composition/pipelineEvidence'
@@ -2406,7 +2406,7 @@ async function composeSqliteProviderSession(
     }),
   })
   const developmentApprovalGateway = composeSqliteApprovalGatewayRunner(db)
-  const missionEventContinuation = createSqliteMissionCodeHostEventContinuation(db)
+  const missionEventContinuation = createMissionCodeHostEventContinuation(db)
   const employeeWriterCutover = composeDigitalEmployeeWriterCutoverFor(db)
   const employeeWriterState = await employeeWriterCutover.activate()
   log.info('digital employee writer activated', { ...employeeWriterState })
@@ -2418,7 +2418,7 @@ async function composeSqliteProviderSession(
   const developmentAutomationRef: {
     current: ReturnType<typeof composeDevelopmentAutomation> | null
   } = { current: null }
-  const developmentTerminalObserver = createSqliteDevelopmentMissionExecutionTerminalObserver({
+  const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db,
     async drive(missionId) {
       const current = developmentAutomationRef.current

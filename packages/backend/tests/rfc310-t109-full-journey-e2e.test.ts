@@ -333,7 +333,7 @@ let lastSeededRevision = ''
 
 /** staleness 快进：把 repositoryFactsRef cells 的 factsCollectedAt patch 回过去。 */
 async function expireMrFacts(missionId: string): Promise<void> {
-  const m = fx.store.getMission(missionId)!
+  const m = (await fx.store.getMission(missionId))!
   const ref = m.repositoryFactsRef
   if (ref === null) return
   const cells = await fx.snapshots.getCells(ref)
@@ -343,7 +343,7 @@ async function expireMrFacts(missionId: string): Promise<void> {
     '__mr.factsCollectedAt': { state: 'known', value: '0', origin: 'test-expire' },
   }
   const id = ulid()
-  fx.store.insertFactSnapshot({
+  await fx.store.insertFactSnapshot({
     id,
     missionId,
     missionRevision: m.revision,
@@ -353,7 +353,7 @@ async function expireMrFacts(missionId: string): Promise<void> {
     digest: canonicalDigest(merged),
     now: Date.now(),
   })
-  fx.store.occUpdate(m.id, m.revision, m.epoch, { repositoryFactsRef: id })
+  await fx.store.occUpdate(m.id, m.revision, m.epoch, { repositoryFactsRef: id })
 }
 
 interface Milestone {
@@ -380,7 +380,7 @@ async function reconcileUntil(
       round: trail.length + 1,
       kind: outcome.kind,
       selected: outcome.selected?.kind ?? '',
-      status: fx.store.getMission(missionId)!.status,
+      status: (await fx.store.getMission(missionId))!.status,
     })
     // scripted Agent：发射后立即由测试落盘并结算 outcome（下一轮 collect）。
     const last = launches[launches.length - 1]
@@ -389,7 +389,7 @@ async function reconcileUntil(
     }
   }
   if (!(await pred())) {
-    const m = fx.store.getMission(missionId)
+    const m = await fx.store.getMission(missionId)
     const rejections = fx.db
       .select({
         s: developmentAgentAttempts.status,
@@ -442,8 +442,8 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     })
     expect(stashed.ok).toBe(true)
     {
-      const mission = fx.store.getMission(missionId)!
-      fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+      const mission = (await fx.store.getMission(missionId))!
+      await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
         policyId: (fx as unknown as Record<string, unknown>).t109PolicyId as string,
         policyRevision: 1,
       })
@@ -454,7 +454,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     await reconcileUntil(
       missionId,
       trail,
-      () => fx.store.getMission(missionId)!.status === 'watching',
+      async () => (await fx.store.getMission(missionId))!.status === 'watching',
       { max: 12, label: 'to-watching' },
     )
     const branch = `aw/mission/${missionId}`
@@ -481,7 +481,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
       missionId,
       trail,
       async () => {
-        const ref = fx.store.getMission(missionId)!.repositoryFactsRef
+        const ref = (await fx.store.getMission(missionId))!.repositoryFactsRef
         return (
           ref !== null &&
           (await fx.snapshots.getCells(ref))?.['__mr.factsCollectedAt'] !== undefined
@@ -509,20 +509,25 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     // facts 过期 → 再采 → 台账 selectable → policy 路由 feedback.apply →
     // 「Agent」修复 → verify/commit/push 第二轮 → reply 真回帖。
     await expireMrFacts(missionId)
-    await reconcileUntil(missionId, trail, () => fx.store.listFeedback(missionId).length > 0, {
-      max: 4,
-      label: 'ledger-populated',
-    })
+    await reconcileUntil(
+      missionId,
+      trail,
+      async () => (await fx.store.listFeedback(missionId)).length > 0,
+      {
+        max: 4,
+        label: 'ledger-populated',
+      },
+    )
     // ledger 的 threadRef/revision 是平台侧真采集的产物——以它为准喂 envelope。
     {
-      const row = fx.store.listFeedback(missionId)[0]!
+      const row = (await fx.store.listFeedback(missionId))[0]!
       lastSeededThreadRef = row.threadRef
       lastSeededRevision = row.revision
     }
     await reconcileUntil(
       missionId,
       trail,
-      () => fx.store.listFeedback(missionId).some((r) => r.state === 'addressed'),
+      async () => (await fx.store.listFeedback(missionId)).some((r) => r.state === 'addressed'),
       { max: 14, label: 'feedback-applied-and-replied' },
     )
 
@@ -556,23 +561,23 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     await reconcileUntil(
       missionId,
       trail,
-      () => fx.store.getMission(missionId)!.status === 'merged',
+      async () => (await fx.store.getMission(missionId))!.status === 'merged',
       { max: 6, label: 'to-terminal' },
     )
 
-    const final = fx.store.getMission(missionId)!
+    const final = (await fx.store.getMission(missionId))!
     expect(final.status).toBe('merged')
     expect(final.terminalKind).toBe('merged')
     expect(final.currentActionRunId).toBeNull()
     // active claim 已释放（terminal 结算的一部分）。
-    const claim = fx.store.findMrClaim({
+    const claim = await fx.store.findMrClaim({
       codeHostEndpointRef: 'gitlab',
       stableProjectRef: PROJECT_PATH,
       mrIid: final.adoptedMrRef ?? '',
     })
     if (claim !== null) expect(claim.state).not.toBe('active')
     // effect 台账零悬挂：commit/push/mr-ensure/mr-reply 全部结算。
-    expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
 
     // MR 分支上第二轮修复真实到达 remote（reply 前必须先 push 修复）。
     const checkout = mkdtempSync(join(tmpdir(), 'rfc310-t109-verify-'))
@@ -639,7 +644,7 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     if (!adopted.ok) return
     expect(adopted.terminal).toBeNull()
     const missionId = adopted.missionId
-    expect(fx.store.getMission(missionId)!.status).toBe('watching')
+    expect((await fx.store.getMission(missionId))!.status).toBe('watching')
 
     // 外部 merged → adopt mission 也以 authoritative terminal 收场。
     await suite.client.mutateCodeHost({
@@ -654,11 +659,11 @@ describe('rfc310 T109 — full mission journey on the system mock', () => {
     await reconcileUntil(
       missionId,
       trail,
-      () => fx.store.getMission(missionId)!.status === 'merged',
+      async () => (await fx.store.getMission(missionId))!.status === 'merged',
       { max: 6, label: 'adopt-to-terminal' },
     )
-    const final = fx.store.getMission(missionId)!
+    const final = (await fx.store.getMission(missionId))!
     expect(final.terminalKind).toBe('merged')
-    expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
   })
 })

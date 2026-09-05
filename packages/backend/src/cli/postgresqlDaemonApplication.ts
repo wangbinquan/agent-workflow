@@ -240,9 +240,9 @@ import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/e
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
-import { createPostgresqlMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
+import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'
 import type { DevelopmentAutomationModule } from '@/modules/development-automation/composition'
-import { createPostgresqlDevelopmentMissionExecutionTerminalObserver } from '@/modules/development-automation/composition/executionTerminalObserver'
+import { createDevelopmentMissionExecutionTerminalObserver } from '@/modules/development-automation/composition/executionTerminalObserver'
 import { composePostgresqlAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composePostgresqlScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/application/overview'
@@ -1197,7 +1197,7 @@ export async function composePostgresqlDaemonApplication(
     terminalControl: webhookTerminalControl,
   })
   const developmentApprovalGateway = composePostgresqlApprovalGatewayRunner(input.db)
-  const missionEventContinuation = createPostgresqlMissionCodeHostEventContinuation(input.db)
+  const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composePostgresqlEventCenter({
     db: input.db,
     typePackageDescriptorJsons: [
@@ -1451,7 +1451,7 @@ export async function composePostgresqlDaemonApplication(
   const developmentAutomationRef: { current: DevelopmentAutomationModule | null } = {
     current: null,
   }
-  const developmentTerminalObserver = createPostgresqlDevelopmentMissionExecutionTerminalObserver({
+  const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db: input.db,
     async drive(missionId) {
       const current = developmentAutomationRef.current

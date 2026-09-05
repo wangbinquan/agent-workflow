@@ -296,7 +296,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
       disposition: 'analysis-completed',
     })
     // completed 不打 stage block：mission 保持可推进。
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('working')
     const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['requirement.scopeDisposition']).toMatchObject({ state: 'known', value: 'ready' })
@@ -377,7 +377,7 @@ describe('rfc310 pr5 T54 — analyze → implement chain (end to end)', () => {
     expect(collected.kind).toBe('action-collect')
     if (collected.kind !== 'action-collect') return
     expect(collected.result.kind).toBe('action-retry')
-    const attempts = fx.store.listAttempts(
+    const attempts = await fx.store.listAttempts(
       (collected.result as { actionRunId: string }).actionRunId,
     )
     expect(JSON.parse(attempts[0]!.rejectionJson!)).toMatchObject({

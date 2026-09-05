@@ -27,10 +27,7 @@ import {
   getAutomationPolicyRevision,
 } from './digitalEmployeeStore'
 import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/assignmentStore'
-import {
-  createSqliteMissionPersistence,
-  createSqliteMissionStore,
-} from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../../src/modules/development-automation/infrastructure/missionStore'
 import { createFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { createSqliteRequirementBundleRefPersistence } from '../../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { EvidenceStore } from '../../src/modules/development-automation/infrastructure/evidenceStore'
@@ -40,7 +37,7 @@ import {
 } from '../../src/modules/development-automation/infrastructure/requirementMaterializer'
 import { defaultAutomationPolicyContent } from '../../src/modules/development-automation/domain/automationPolicy'
 import type { AdmissionLookup } from '../../src/modules/development-automation/application/ports/admissionLookup'
-import type { MissionStore } from '../../src/modules/development-automation/application/ports/missionStore'
+import type { MissionPersistence } from '../../src/modules/development-automation/application/ports/missionStore'
 import type {
   FactSnapshotReader,
   ReconcilerPorts,
@@ -110,7 +107,7 @@ export interface Pr3FixtureOptions {
 
 export interface Pr3Fixture {
   readonly db: DbClient
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly lookup: AdmissionLookup
   readonly evidence: EvidenceStore
@@ -421,8 +418,8 @@ export async function buildPr3Fixture(options: Pr3FixtureOptions = {}): Promise<
   })
   await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin' })
 
-  const store = createSqliteMissionStore(db)
-  const persistence = createSqliteMissionPersistence(db)
+  const store = createMissionPersistence(db)
+  const persistence = createMissionPersistence(db)
   const snapshots = createFactSnapshotReader(db)
   const admissionLookup = lookupOf(db)
 

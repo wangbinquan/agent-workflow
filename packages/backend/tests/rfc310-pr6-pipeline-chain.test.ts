@@ -316,7 +316,7 @@ describe('rfc310 pr6 — pipeline redispatch (pure)', () => {
 async function seedWatchingMission(fx: Pr3Fixture, policyId: string): Promise<string> {
   const now = Date.now()
   const missionId = ulid()
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -360,7 +360,7 @@ async function seedWatchingMission(fx: Pr3Fixture, policyId: string): Promise<st
   })
   const cells = watchingCells()
   const id = ulid()
-  fx.store.insertFactSnapshot({
+  await fx.store.insertFactSnapshot({
     id,
     missionId,
     missionRevision: 0,
@@ -370,8 +370,8 @@ async function seedWatchingMission(fx: Pr3Fixture, policyId: string): Promise<st
     digest: canonicalDigest(cells),
     now,
   })
-  const mission = fx.store.getMission(missionId)!
-  fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: id })
+  const mission = (await fx.store.getMission(missionId))!
+  await fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: id })
   return missionId
 }
 
@@ -541,7 +541,7 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
       kind: 'collect-pipeline-evidence',
     })
     let cells = (await fx.snapshots.getCells(
-      fx.store.getMission(missionId)!.requirementBundleRef!,
+      (await fx.store.getMission(missionId))!.requirementBundleRef!,
     ))!
     expect(cells['pipeline.missingRequiredGateKeys']).toMatchObject({ value: ['unit'] })
     expect(cells['__pipeline.manifestRef']).toMatchObject({ state: 'known' })
@@ -553,8 +553,10 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
       gateKeys: ['unit'],
     })
     expect(triggers).toHaveLength(1)
-    expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
-    cells = (await fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!))!
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
+    cells = (await fx.snapshots.getCells(
+      (await fx.store.getMission(missionId))!.requirementBundleRef!,
+    ))!
     expect(cells['__pipeline.triggerCounts']).toMatchObject({ value: '{"unit":1}' })
 
     // 轮 3：recollect → 全过。
@@ -562,7 +564,9 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     expect((r3 as { selected: NextDecision }).selected).toMatchObject({
       kind: 'collect-pipeline-evidence',
     })
-    cells = (await fx.snapshots.getCells(fx.store.getMission(missionId)!.requirementBundleRef!))!
+    cells = (await fx.snapshots.getCells(
+      (await fx.store.getMission(missionId))!.requirementBundleRef!,
+    ))!
     expect(cells['pipeline.requiredGatesAllPass']).toMatchObject({ value: true })
 
     // 轮 4：全过 → PR-7 care 链推进 readiness（machine holds 清零）。
@@ -613,7 +617,7 @@ describe('rfc310 pr6 — pipeline chain through reconcile rounds', () => {
     )
     const r = await runMissionReconcile(deps, missionId)
     expect(r).toMatchObject({ kind: 'decided', handled: 'collected' })
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('watching') // 不 block
     const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__pipeline.manifestRef']).toBeUndefined()

@@ -88,7 +88,7 @@ test('mission driver crosses every settled setup step and stops at the Agent bou
     last: { kind: 'decided', handled: 'action-launched' },
   })
   expect(launches).toHaveLength(1)
-  expect(fx.store.getMission(missionId)?.currentActionRunId).toBe(launches[0])
+  expect((await fx.store.getMission(missionId))?.currentActionRunId).toBe(launches[0])
 })
 
 // 这条锁的是「child Mission 的 drive 与 ReconcileDeps 互相引用」那处延迟绑定：守卫

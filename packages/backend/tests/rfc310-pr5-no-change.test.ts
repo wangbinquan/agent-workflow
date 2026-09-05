@@ -47,18 +47,18 @@ async function settleNoChange(
   await runMissionReconcile(deps, missionId) // materialize
   // 直接注入 no-change 后置 cells（orchestrator 结算路径在 PR-4 测试已锁；
   // 这里聚焦重派与确认命令）。
-  const mission = fx.store.getMission(missionId)!
+  const mission = (await fx.store.getMission(missionId))!
   const base = (await fx.snapshots.getCells(mission.requirementBundleRef!)) ?? {}
-  const { createSqliteMissionStore } =
-    await import('../src/modules/development-automation/infrastructure/sqliteMissionStore')
+  const { createMissionPersistence } =
+    await import('../src/modules/development-automation/infrastructure/missionStore')
   const { canonicalStringify, canonicalDigest } =
     await import('../src/modules/development-automation/domain/canonicalJson')
-  const store = createSqliteMissionStore(fx.db)
+  const store = createMissionPersistence(fx.db)
   const merged = {
     ...base,
     'action.lastOutcome': { state: 'known', value: 'no-change', sourceRevision: 'att-1' },
   }
-  store.insertFactSnapshot({
+  await store.insertFactSnapshot({
     id: `snap-nc-${key}`,
     missionId,
     missionRevision: mission.revision,
@@ -68,7 +68,7 @@ async function settleNoChange(
     digest: canonicalDigest(merged as never),
     now: Date.now(),
   })
-  store.occUpdate(mission.id, mission.revision, mission.epoch, {
+  await store.occUpdate(mission.id, mission.revision, mission.epoch, {
     requirementBundleRef: `snap-nc-${key}`,
   })
   return missionId
@@ -97,7 +97,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     // no-change 形态 + 规则无匹配 ⇒ 重派 human gate。
     const gateRound = await runMissionReconcile(deps, missionId)
     expect(gateRound.kind === 'decided' && gateRound.selected.kind).toBe('request-human-decision')
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('awaiting-information')
     const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
     expect(cells['__gate.pendingHumanDecision']).toMatchObject({
@@ -112,7 +112,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     })
     expect(confirmed.status).toBe('completed-no-change')
     expect(confirmed.receiptRef).toMatch(/^[0-9a-f]{64}$/)
-    const terminal = fx.store.getMission(missionId)!
+    const terminal = (await fx.store.getMission(missionId))!
     expect(terminal.status).toBe('completed-no-change')
     expect(terminal.terminalKind).toBe('no-change-confirmed')
     expect(terminal.terminalAt).not.toBeNull()
@@ -141,7 +141,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     const missionId = await settleNoChange(fx, deps, 'nc-program-1')
     const round = await runMissionReconcile(deps, missionId)
     expect(round.kind === 'decided' && round.selected.kind).not.toBe('request-human-decision')
-    expect(fx.store.getMission(missionId)!.status).not.toBe('awaiting-information')
+    expect((await fx.store.getMission(missionId))!.status).not.toBe('awaiting-information')
   })
 
   test('created/replaced upload entries keep the gate shut and the confirm command refuses', async () => {
@@ -161,8 +161,8 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     })
     const missionId = await settleNoChange(fx, deps, 'nc-upload-1')
     // 模拟带 created entry 的 plan：uploadPlanReader fake + mission 指针。
-    const mission = fx.store.getMission(missionId)!
-    fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+    const mission = (await fx.store.getMission(missionId))!
+    await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
       uploadPlanRef: 'plan-1',
     })
     const depsWithPlan = {
@@ -192,12 +192,12 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     expect(round.kind === 'decided' && round.selected.kind).not.toBe('request-human-decision')
 
     // 防御复检：即使 gate cells 被人为摆上，confirm 也拒。
-    const { createSqliteMissionStore } =
-      await import('../src/modules/development-automation/infrastructure/sqliteMissionStore')
+    const { createMissionPersistence } =
+      await import('../src/modules/development-automation/infrastructure/missionStore')
     const { canonicalStringify, canonicalDigest } =
       await import('../src/modules/development-automation/domain/canonicalJson')
-    const store = createSqliteMissionStore(fx.db)
-    const fresh = fx.store.getMission(missionId)!
+    const store = createMissionPersistence(fx.db)
+    const fresh = (await fx.store.getMission(missionId))!
     const base = (await fx.snapshots.getCells(fresh.requirementBundleRef!)) ?? {}
     const merged = {
       ...base,
@@ -207,7 +207,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
         sourceRevision: 'forged',
       },
     }
-    store.insertFactSnapshot({
+    await store.insertFactSnapshot({
       id: 'snap-forged-gate',
       missionId,
       missionRevision: fresh.revision,
@@ -217,7 +217,7 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
       digest: canonicalDigest(merged as never),
       now: Date.now(),
     })
-    store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
+    await store.occUpdate(fresh.id, fresh.revision, fresh.epoch, {
       requirementBundleRef: 'snap-forged-gate',
       status: 'awaiting-information',
     })
@@ -253,8 +253,8 @@ describe('rfc310 pr5 T55a — no-change human gate', () => {
     )
 
     // awaiting-information 但无 gate：cells 复核拒。
-    const mission = fx.store.getMission(missionId)!
-    fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+    const mission = (await fx.store.getMission(missionId))!
+    await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
       status: 'awaiting-information',
     })
     expect(await codeOf(confirmNoChange(deps, { missionId, receiptNote: 'x' }))).toBe(

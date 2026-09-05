@@ -27,7 +27,7 @@ import {
 } from '../src/modules/development-automation/domain/questionSet'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
-import { createSqliteMissionPersistence } from '../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 
 setDefaultTimeout(120_000)
 
@@ -121,7 +121,7 @@ describe('rfc310 pr3 — requirement-source clarification loop', () => {
       'collect-requirement-answers',
     )
     expect(pollRound.kind === 'decided' && pollRound.handled).toBe('wake-armed')
-    expect(fx.store.getMission(missionId)!.status).toBe('working')
+    expect((await fx.store.getMission(missionId))!.status).toBe('working')
 
     // 原渠道作答 → 收取 → answers-committed + exact revision + evidence 台账。
     mock.mock.seedAnswers(
@@ -138,7 +138,7 @@ describe('rfc310 pr3 — requirement-source clarification loop', () => {
     )
     expect(commitRound.kind === 'decided' && commitRound.handled).toBe('collected')
     const cells = (await fx.snapshots.getCells(
-      fx.store.getMission(missionId)!.requirementBundleRef!,
+      (await fx.store.getMission(missionId))!.requirementBundleRef!,
     ))!
     expect(cells['requirement.clarificationState']).toMatchObject({
       state: 'known',
@@ -183,7 +183,7 @@ describe('rfc310 pr3 — platform clarification channel', () => {
     expect(publishRound.kind === 'decided' && publishRound.selected.kind).toBe(
       'publish-requirement-questions',
     )
-    expect(fx.store.getMission(missionId)!.status).toBe('awaiting-information')
+    expect((await fx.store.getMission(missionId))!.status).toBe('awaiting-information')
 
     // 等待人答：wait（wake-armed），绝不 block。
     const waitRound = await runMissionReconcile(deps, missionId)
@@ -191,7 +191,7 @@ describe('rfc310 pr3 — platform clarification channel', () => {
     expect(waitRound.kind === 'decided' && waitRound.handled).toBe('wake-armed')
 
     const commandDeps = {
-      store: createSqliteMissionPersistence(fx.db),
+      store: createMissionPersistence(fx.db),
       snapshots: fx.snapshots,
       requirement: fx.materializer,
       now: () => Date.now(),
@@ -240,7 +240,7 @@ describe('rfc310 pr3 — platform clarification channel', () => {
       ]),
     )
     const cells = (await fx.snapshots.getCells(
-      fx.store.getMission(missionId)!.requirementBundleRef!,
+      (await fx.store.getMission(missionId))!.requirementBundleRef!,
     ))!
     expect(cells['requirement.clarificationState']).toMatchObject({
       value: 'answers-committed',

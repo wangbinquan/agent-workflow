@@ -57,10 +57,10 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
   'modules/integration/infrastructure/scheduledTaskPersistence.ts': {
     nextRunAt: '同一个 WHERE 里有 isNotNull(nextRunAt)',
   },
-  'modules/development-automation/infrastructure/postgresqlMissionStore.ts': {
+  'modules/development-automation/infrastructure/missionStore.ts': {
     resumeAt: 'WHERE 是 lte(resumeAt, now)；NULL 比不过任何比较，两个 provider 都被排除',
   },
-  'modules/development-automation/infrastructure/postgresqlMissionReadModels.ts': {
+  'modules/development-automation/infrastructure/missionReadModels.ts': {
     employeeId: '同一个 WHERE 里有 isNotNull(employeeId)',
   },
   'modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts': {

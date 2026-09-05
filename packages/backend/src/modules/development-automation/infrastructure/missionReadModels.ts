@@ -1,10 +1,10 @@
-// RFC-310 PR-2 T31 —— Mission read models（列表/详情/决策 trace）。
+// RFC-310 PR-2 T31 —— Mission read models（列表/详情/决策 trace）。RFC-359 W4-D10：一份实现，两个 provider 共用。
 //
 // 只读投影：列表回摘要（design §1.4 DevelopmentMissionSummary 的 PR-2 子集），
 // 详情附 source/upload/decision 摘要，trace 回 canonical guard/rule trace。
 // 不返回 host path/nonce/secret/raw 正文（§12.4）。
 
-import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNotNull, sql, type SQL } from 'drizzle-orm'
 
 import {
   DIGITAL_EMPLOYEE_MISSION_STATUSES,
@@ -14,7 +14,7 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   cachedRepos,
   developmentDecisions,
@@ -76,13 +76,15 @@ function summaryOf(row: MissionSummaryView): MissionSummaryView {
   return row
 }
 
-export function listMissionSummaries(db: DbClient): MissionSummaryView[] {
-  return db
-    .select(SUMMARY_COLUMNS)
-    .from(developmentMissions)
-    .orderBy(desc(developmentMissions.createdAt))
-    .all()
-    .map(summaryOf)
+export async function listMissionSummaries(
+  db: ProviderNeutralDatabase,
+): Promise<MissionSummaryView[]> {
+  return (
+    await db
+      .select(SUMMARY_COLUMNS)
+      .from(developmentMissions)
+      .orderBy(desc(developmentMissions.createdAt))
+  ).map(summaryOf)
 }
 
 const TERMINAL_MISSION_STATUSES = [
@@ -98,41 +100,36 @@ const MAX_EMPLOYEE_OUTCOME_GROUPS = 50_000
  * Legacy-drain outcome projection for employee cards. This bounded context
  * emits raw status groups; the UI owns the stable cross-generation buckets.
  */
-export function listMissionTerminalOutcomeGroups(db: DbClient): readonly {
-  readonly employeeId: string
-  readonly terminalKind: string
-  readonly count: number
-}[] {
-  const rows = db
+export async function listMissionTerminalOutcomeGroups(db: ProviderNeutralDatabase): Promise<
+  readonly {
+    readonly employeeId: string
+    readonly terminalKind: string
+    readonly count: number
+  }[]
+> {
+  const rows = await db
     .select({
       employeeId: developmentMissions.employeeId,
       terminalKind: developmentMissions.status,
-      count: sql<number>`count(*)`,
+      count: count(),
     })
     .from(developmentMissions)
     .where(
       and(
-        sql`${developmentMissions.employeeId} is not null`,
+        isNotNull(developmentMissions.employeeId),
         inArray(developmentMissions.status, [...TERMINAL_MISSION_STATUSES]),
       ),
     )
     .groupBy(developmentMissions.status, developmentMissions.employeeId)
     .orderBy(asc(developmentMissions.status), asc(developmentMissions.employeeId))
     .limit(MAX_EMPLOYEE_OUTCOME_GROUPS + 1)
-    .all()
   if (rows.length > MAX_EMPLOYEE_OUTCOME_GROUPS) {
     throw new Error('employee-outcome-group-limit-exceeded')
   }
   return rows.flatMap((row) =>
     row.employeeId === null
       ? []
-      : [
-          {
-            employeeId: row.employeeId,
-            terminalKind: row.terminalKind,
-            count: Number(row.count),
-          },
-        ],
+      : [{ employeeId: row.employeeId, terminalKind: row.terminalKind, count: Number(row.count) }],
   )
 }
 
@@ -198,12 +195,12 @@ export function missionStatusesFor(filters: MissionPageFilters): string[] {
  * 排序键 `(created_at DESC, id DESC)`;断点写成**行值比较** `(a, id) < (?, ?)`——
  * 展开成 `a < ? OR (a = ? AND id < ?)` 会让 SQLite 在绑定参数下选 MULTI-INDEX OR
  * 并回落 TEMP B-TREE 全排序（RFC-311 在 10 万任务库上实测过这一条,判据见
- * `docs/dev-gotchas.md`）。
+ * `docs/dev-gotchas.md`）；行值比较是标准 SQL，PostgreSQL 同形。
  */
-export function listMissionSummariesPage(
-  db: DbClient,
+export async function listMissionSummariesPage(
+  db: ProviderNeutralDatabase,
   opts: { limit: number; cursor?: MissionPageCursor } & MissionPageFilters,
-): MissionPage {
+): Promise<MissionPage> {
   const boundary =
     opts.cursor === undefined
       ? sql`1 = 1`
@@ -231,36 +228,37 @@ export function listMissionSummariesPage(
           or lower(coalesce(${developmentMissions.employeeId}, '')) like ${`%${needle}%`})`
   const filters = and(statusCond, qCond, employeeCond, missionStatusCond)!
   if (statuses.length === 0) {
-    return { items: [], nextCursor: null, facets: missionFacets(db), counts: {} }
+    return { items: [], nextCursor: null, facets: await missionFacets(db), counts: {} }
   }
-  const rows = db
+  const rows = await db
     .select(SUMMARY_COLUMNS)
     .from(developmentMissions)
     .where(and(boundary, filters))
     .orderBy(desc(developmentMissions.createdAt), desc(developmentMissions.id))
     .limit(opts.limit + 1)
-    .all()
   const hasMore = rows.length > opts.limit
   const page = hasMore ? rows.slice(0, opts.limit) : rows
   const last = page[page.length - 1]
   return {
     items: page.map(summaryOf),
     nextCursor: hasMore && last !== undefined ? { createdAt: last.createdAt, id: last.id } : null,
-    facets: missionFacets(db),
-    counts: missionCounts(db, filters),
+    facets: await missionFacets(db),
+    counts: await missionCounts(db, filters),
   }
 }
 
 /** 过滤集上按原始 mission 状态分组的计数。一条 group by，行数被枚举封顶。 */
-function missionCounts(db: DbClient, where: SQL): Record<string, number> {
-  const rows = db
-    .select({ status: developmentMissions.status, n: sql<number>`count(*)` })
+async function missionCounts(
+  db: ProviderNeutralDatabase,
+  where: SQL,
+): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ status: developmentMissions.status, n: count() })
     .from(developmentMissions)
     .where(where)
     .groupBy(developmentMissions.status)
-    .all()
   const out: Record<string, number> = {}
-  for (const row of rows) out[row.status] = row.n
+  for (const row of rows) out[row.status] = Number(row.n)
   return out
 }
 
@@ -268,47 +266,50 @@ function missionCounts(db: DbClient, where: SQL): Record<string, number> {
  * 四个视图桶的计数。**一条按状态分组的语句**，不是四条 count——分组结果在内存里按
  * shared 的同一张映射表折算，避免把 view 语义复制进 SQL。
  */
-function missionFacets(db: DbClient): MissionPage['facets'] {
-  const rows = db
-    .select({ status: developmentMissions.status, n: sql<number>`count(*)` })
+async function missionFacets(db: ProviderNeutralDatabase): Promise<MissionPage['facets']> {
+  const rows = await db
+    .select({ status: developmentMissions.status, n: count() })
     .from(developmentMissions)
     .groupBy(developmentMissions.status)
-    .all()
   const facets = { all: 0, active: 0, attention: 0, finished: 0 }
   for (const row of rows) {
+    const n = Number(row.n)
     const status = digitalEmployeeTaskStatus(row.status)
-    facets.all += row.n
-    if (taskMatchesListView('active', status)) facets.active += row.n
-    if (taskMatchesListView('attention', status)) facets.attention += row.n
-    if (taskMatchesListView('finished', status)) facets.finished += row.n
+    facets.all += n
+    if (taskMatchesListView('active', status)) facets.active += n
+    if (taskMatchesListView('attention', status)) facets.attention += n
+    if (taskMatchesListView('finished', status)) facets.finished += n
   }
   return facets
 }
 
-export function getMissionDetail(
-  db: DbClient,
+export async function getMissionDetail(
+  db: ProviderNeutralDatabase,
   id: string,
-):
+): Promise<
   | (MissionSummaryView & { sources: unknown[]; readiness: unknown; blockDetail: string | null })
-  | null {
-  const row = db.select().from(developmentMissions).where(eq(developmentMissions.id, id)).get()
+  | null
+> {
+  const row = (
+    await db.select().from(developmentMissions).where(eq(developmentMissions.id, id)).limit(1)
+  )[0]
   if (row === undefined) return null
-  const sources = db
-    .select()
-    .from(developmentMissionSources)
-    .where(eq(developmentMissionSources.missionId, id))
-    .all()
-    .map((s) => ({
-      generation: s.generation,
-      sourceKind: s.sourceKind,
-      externalId: s.externalId,
-      adapterId: s.adapterId,
-      adapterRevision: s.adapterRevision,
-      sourceRevision: s.sourceRevision,
-      bundleRef: s.bundleRef,
-      manifestDigest: s.manifestDigest,
-      state: s.state,
-    }))
+  const sources = (
+    await db
+      .select()
+      .from(developmentMissionSources)
+      .where(eq(developmentMissionSources.missionId, id))
+  ).map((s) => ({
+    generation: s.generation,
+    sourceKind: s.sourceKind,
+    externalId: s.externalId,
+    adapterId: s.adapterId,
+    adapterRevision: s.adapterRevision,
+    sourceRevision: s.sourceRevision,
+    bundleRef: s.bundleRef,
+    manifestDigest: s.manifestDigest,
+    state: s.state,
+  }))
   return {
     ...summaryOf(row),
     sources,
@@ -356,22 +357,26 @@ export interface MissionMergeRequestView {
  * 路由层不得直接读库（depcheck `no-routes-to-db`），因此 claim 与仓库地址这两次点查
  * 连同 href 拼装一并落在读模型里；路由只消费结果。无 claim ⇒ `null`（尚未建 MR）。
  */
-export function getMissionMergeRequestView(
-  db: DbClient,
+export async function getMissionMergeRequestView(
+  db: ProviderNeutralDatabase,
   missionId: string,
   repositoryId: string,
-): MissionMergeRequestView | null {
-  const claim = db
-    .select()
-    .from(developmentMrClaims)
-    .where(eq(developmentMrClaims.missionId, missionId))
-    .get()
+): Promise<MissionMergeRequestView | null> {
+  const claim = (
+    await db
+      .select()
+      .from(developmentMrClaims)
+      .where(eq(developmentMrClaims.missionId, missionId))
+      .limit(1)
+  )[0]
   if (claim === undefined) return null
-  const repository = db
-    .select({ urlRedacted: cachedRepos.urlRedacted })
-    .from(cachedRepos)
-    .where(eq(cachedRepos.id, repositoryId))
-    .get()
+  const repository = (
+    await db
+      .select({ urlRedacted: cachedRepos.urlRedacted })
+      .from(cachedRepos)
+      .where(eq(cachedRepos.id, repositoryId))
+      .limit(1)
+  )[0]
   return {
     iid: claim.mrIid,
     state: claim.state,
@@ -384,69 +389,64 @@ export function getMissionMergeRequestView(
 }
 
 /** PR-5 T61 —— effect 台账投影（outbox 状态可见；intent digest 只作指纹）。 */
-export function listMissionEffects(db: DbClient, missionId: string): unknown[] {
-  return db
-    .select()
-    .from(developmentEffects)
-    .where(eq(developmentEffects.missionId, missionId))
-    .orderBy(desc(developmentEffects.createdAt))
-    .all()
-    .map((e) => ({
-      id: e.id,
-      effectKind: e.effectKind,
-      state: e.state,
-      intentDigest: e.intentDigest,
-      epoch: e.epoch,
-      createdAt: e.createdAt,
-      settledAt: e.settledAt,
-    }))
+export async function listMissionEffects(
+  db: ProviderNeutralDatabase,
+  missionId: string,
+): Promise<unknown[]> {
+  return (
+    await db
+      .select()
+      .from(developmentEffects)
+      .where(eq(developmentEffects.missionId, missionId))
+      .orderBy(desc(developmentEffects.createdAt))
+  ).map((e) => ({
+    id: e.id,
+    effectKind: e.effectKind,
+    state: e.state,
+    intentDigest: e.intentDigest,
+    epoch: e.epoch,
+    createdAt: e.createdAt,
+    settledAt: e.settledAt,
+  }))
 }
 
-export function getDecisionTrace(db: DbClient, missionId: string): unknown[] {
-  return db
-    .select()
-    .from(developmentDecisions)
-    .where(eq(developmentDecisions.missionId, missionId))
-    .orderBy(desc(developmentDecisions.decidedAt))
-    .all()
-    .map((d) => ({
-      id: d.id,
-      missionRevision: d.missionRevision,
-      policyId: d.policyId,
-      policyRevision: d.policyRevision,
-      employeeId: d.employeeId,
-      employeeRevision: d.employeeRevision,
-      factDigest: d.factDigest,
-      guardTrace: JSON.parse(d.guardTraceJson) as unknown,
-      ruleTrace: JSON.parse(d.ruleTraceJson) as unknown,
-      selected: JSON.parse(d.selectedJson) as unknown,
-      canonicalDigest: d.canonicalDigest,
-      decidedAt: d.decidedAt,
-    }))
+export async function getDecisionTrace(
+  db: ProviderNeutralDatabase,
+  missionId: string,
+): Promise<unknown[]> {
+  return (
+    await db
+      .select()
+      .from(developmentDecisions)
+      .where(eq(developmentDecisions.missionId, missionId))
+      .orderBy(desc(developmentDecisions.decidedAt))
+  ).map((d) => ({
+    id: d.id,
+    missionRevision: d.missionRevision,
+    policyId: d.policyId,
+    policyRevision: d.policyRevision,
+    employeeId: d.employeeId,
+    employeeRevision: d.employeeRevision,
+    factDigest: d.factDigest,
+    guardTrace: JSON.parse(d.guardTraceJson) as unknown,
+    ruleTrace: JSON.parse(d.ruleTraceJson) as unknown,
+    selected: JSON.parse(d.selectedJson) as unknown,
+    canonicalDigest: d.canonicalDigest,
+    decidedAt: d.decidedAt,
+  }))
 }
 
-export function createSqliteMissionReadModelQueries(db: DbClient): MissionReadModelQueries {
+export function createMissionReadModelQueries(
+  db: ProviderNeutralDatabase,
+): MissionReadModelQueries {
   return {
-    async list() {
-      return listMissionSummaries(db)
-    },
-    async listPage(input) {
-      return listMissionSummariesPage(db, input)
-    },
-    async terminalOutcomeGroups() {
-      return listMissionTerminalOutcomeGroups(db)
-    },
-    async detail(missionId) {
-      return getMissionDetail(db, missionId)
-    },
-    async mergeRequest(missionId, repositoryId) {
-      return getMissionMergeRequestView(db, missionId, repositoryId)
-    },
-    async effects(missionId) {
-      return listMissionEffects(db, missionId)
-    },
-    async decisionTrace(missionId) {
-      return getDecisionTrace(db, missionId)
-    },
+    list: () => listMissionSummaries(db),
+    listPage: (input) => listMissionSummariesPage(db, input),
+    terminalOutcomeGroups: () => listMissionTerminalOutcomeGroups(db),
+    detail: (missionId) => getMissionDetail(db, missionId),
+    mergeRequest: (missionId, repositoryId) =>
+      getMissionMergeRequestView(db, missionId, repositoryId),
+    effects: (missionId) => listMissionEffects(db, missionId),
+    decisionTrace: (missionId) => getDecisionTrace(db, missionId),
   }
 }

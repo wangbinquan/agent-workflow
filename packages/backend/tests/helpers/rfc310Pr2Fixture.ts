@@ -25,14 +25,11 @@ import {
   getAutomationPolicyRevision,
 } from './digitalEmployeeStore'
 import { resolveAdmissionAssignment } from '../../src/modules/development-automation/infrastructure/assignmentStore'
-import {
-  createSqliteMissionPersistence,
-  createSqliteMissionStore,
-} from '../../src/modules/development-automation/infrastructure/sqliteMissionStore'
+import { createMissionPersistence } from '../../src/modules/development-automation/infrastructure/missionStore'
 import { createFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { defaultAutomationPolicyContent } from '../../src/modules/development-automation/domain/automationPolicy'
 import type { AdmissionLookup } from '../../src/modules/development-automation/application/ports/admissionLookup'
-import type { MissionStore } from '../../src/modules/development-automation/application/ports/missionStore'
+import type { MissionPersistence } from '../../src/modules/development-automation/application/ports/missionStore'
 import type {
   FactSnapshotReader,
   ReconcilerPorts,
@@ -44,7 +41,7 @@ const MIGRATIONS = resolve(import.meta.dirname, '..', '..', 'db', 'migrations')
 
 export interface Pr2Fixture {
   readonly db: DbClient
-  readonly store: MissionStore
+  readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly lookup: AdmissionLookup
   readonly employeeId: string
@@ -164,8 +161,8 @@ export async function buildPr2Fixture(): Promise<Pr2Fixture> {
   })
   await publishDigitalEmployee(db, { id: employee.id, publishedBy: 'admin' })
 
-  const store = createSqliteMissionStore(db)
-  const persistence = createSqliteMissionPersistence(db)
+  const store = createMissionPersistence(db)
+  const persistence = createMissionPersistence(db)
   const snapshots = createFactSnapshotReader(db)
   const admissionLookup = lookupOf(db)
 

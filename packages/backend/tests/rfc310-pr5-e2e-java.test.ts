@@ -250,8 +250,8 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect(stashed.ok).toBe(true)
     // mission 指到带 verification 要求的 policy。
     {
-      const mission = fx.store.getMission(missionId)!
-      fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
+      const mission = (await fx.store.getMission(missionId))!
+      await fx.store.occUpdate(mission.id, mission.revision, mission.epoch, {
         policyId: (fx as unknown as Record<string, unknown>).e2ePolicyId as string,
         policyRevision: 1,
       })
@@ -290,7 +290,7 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect((collectedAction as { result: { disposition?: string } }).result).toMatchObject({
       disposition: 'validated-changed',
     })
-    expect(fx.store.getMission(missionId)!.status).toBe('working')
+    expect((await fx.store.getMission(missionId))!.status).toBe('working')
 
     // 轮 5：发布链接管 → run-verification（stage 重放 + 真子进程跑 verify.sh）。
     const verified = await automation.reconcile(missionId)
@@ -298,7 +298,7 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect((verified as { selected: { kind: string } }).selected.kind).toBe('run-verification')
     {
       const cells = (await fx.snapshots.getCells(
-        fx.store.getMission(missionId)!.requirementBundleRef!,
+        (await fx.store.getMission(missionId))!.requirementBundleRef!,
       ))!
       expect(cells['__delivery.verifiedProfiles']).toMatchObject({ state: 'known' })
       expect(String((cells['__delivery.verifiedProfiles'] as { value: unknown }).value)).toContain(
@@ -312,18 +312,18 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect((committed as { selected: { kind: string } }).selected.kind).toBe(
       'commit-and-publish-candidate',
     )
-    expect(fx.store.getMission(missionId)!.status).toBe('publishing')
+    expect((await fx.store.getMission(missionId))!.status).toBe('publishing')
 
     // 轮 7：push（新分支 exact-head CAS：expectedRemoteSha=null）→ 真推回 mock remote。
     const pushed = await automation.reconcile(missionId)
     expect(pushed).toMatchObject({ kind: 'decided', handled: 'collected' })
-    const missionAfterPush = fx.store.getMission(missionId)!
+    const missionAfterPush = (await fx.store.getMission(missionId))!
     expect(missionAfterPush.deliverySourceBranch).toBe(`aw/mission/${missionId}`)
 
     // 轮 8：ensure-MR（真 mrEnsure 先查后建，打到 mock GitLab API）→ claim → watching。
     const ensured = await automation.reconcile(missionId)
     expect(ensured).toMatchObject({ kind: 'decided', handled: 'collected' })
-    const missionAfterMr = fx.store.getMission(missionId)!
+    const missionAfterMr = (await fx.store.getMission(missionId))!
     expect(missionAfterMr.status).toBe('watching')
     expect(missionAfterMr.mrClaimId).not.toBeNull()
 
@@ -345,7 +345,7 @@ describe('rfc310 pr5 T62 — java mission end-to-end on the system mock', () => 
     expect(missionMr.title).toBe('Add feature')
     expect(missionMr.targetBranch).toBe('main')
     expect(missionMr.state).toBe('opened')
-    expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
 
     // 推上去的分支确实带着 Agent 的业务文件（clone 下来对拍——不信 API，只信 git）。
     const checkout = mkdtempSync(join(tmpdir(), 'rfc310-e2e-verify-'))

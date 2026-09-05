@@ -71,7 +71,7 @@ async function seedDeliveredMission(
   const runId = `run-${missionId}`
   const overlayRoot = mkdtempSync(join(tmpdir(), 'rfc310-crash-overlay-'))
   writeFileSync(join(overlayRoot, 'Main.java'), 'class Main {}\n')
-  fx.store.createMission({
+  await fx.store.createMission({
     id: missionId,
     revision: 0,
     epoch: 0,
@@ -113,7 +113,7 @@ async function seedDeliveredMission(
     createdAt: now,
     updatedAt: now,
   })
-  fx.store.createActionRun({
+  await fx.store.createActionRun({
     id: runId,
     missionId,
     missionRevision: 0,
@@ -128,7 +128,7 @@ async function seedDeliveredMission(
     writable: true,
     now,
   })
-  fx.store.settleActionRun({
+  await fx.store.settleActionRun({
     id: runId,
     status: 'settled',
     resultRef: null,
@@ -143,7 +143,7 @@ async function seedDeliveredMission(
       workspacePath: overlayRoot,
     }),
   )
-  fx.store.claimAttempt({
+  await fx.store.claimAttempt({
     id: `att-${missionId}`,
     actionRunId: runId,
     rerunSeq: 0,
@@ -155,7 +155,7 @@ async function seedDeliveredMission(
     preSnapshotRef: preRef,
     now,
   })
-  fx.store.settleAttempt({
+  await fx.store.settleAttempt({
     id: `att-${missionId}`,
     status: 'validated',
     rejectionJson: null,
@@ -171,7 +171,7 @@ async function seedDeliveredMission(
     '__action.runId': cell(runId),
   }
   const snapId = ulid()
-  fx.store.insertFactSnapshot({
+  await fx.store.insertFactSnapshot({
     id: snapId,
     missionId,
     missionRevision: 0,
@@ -181,8 +181,10 @@ async function seedDeliveredMission(
     digest: canonicalDigest(cells),
     now,
   })
-  const mission = fx.store.getMission(missionId)!
-  fx.store.occUpdate(missionId, mission.revision, mission.epoch, { requirementBundleRef: snapId })
+  const mission = (await fx.store.getMission(missionId))!
+  await fx.store.occUpdate(missionId, mission.revision, mission.epoch, {
+    requirementBundleRef: snapId,
+  })
   return { missionId, runId }
 }
 
@@ -269,7 +271,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
       mrEffects: goodMr(ensures),
     })
     await expect(runMissionReconcile(crashDeps, missionId)).rejects.toThrow('simulated daemon')
-    const hanging = fx.store.listUnsettledEffects(missionId)
+    const hanging = await fx.store.listUnsettledEffects(missionId)
     expect(hanging).toHaveLength(1)
     expect(hanging[0]).toMatchObject({ effectKind: 'candidate-commit', state: 'dispatched' })
 
@@ -283,12 +285,12 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
     })
     const r1 = await runMissionReconcile(restarted, missionId) // commit 重放
     expect(r1).toMatchObject({ kind: 'decided', handled: 'collected' })
-    expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
     const r2 = await runMissionReconcile(restarted, missionId) // push
     expect(r2).toMatchObject({ kind: 'decided', handled: 'collected' })
     const r3 = await runMissionReconcile(restarted, missionId) // ensure-MR
     expect(r3).toMatchObject({ kind: 'decided', handled: 'collected' })
-    const mission = fx.store.getMission(missionId)!
+    const mission = (await fx.store.getMission(missionId))!
     expect(mission.status).toBe('watching')
     expect(mission.mrClaimId).not.toBeNull()
     expect(commits).toHaveLength(1) // crash 轮没打到端口；重放轮恰一次
@@ -312,8 +314,8 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
     await runMissionReconcile(deps, missionId) // push
 
     // 手工构造「ensure 已 confirm、claim/cells 未落」的 crash 后态。
-    const mission = fx.store.getMission(missionId)!
-    const prepared = fx.store.prepareEffect({
+    const mission = (await fx.store.getMission(missionId))!
+    const prepared = await fx.store.prepareEffect({
       id: ulid(),
       missionId,
       actionRunId: null,
@@ -328,15 +330,15 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
       epoch: mission.epoch,
       now: Date.now(),
     })
-    fx.store.markEffectDispatched(prepared.effect.id, Date.now())
-    fx.store.confirmEffect(prepared.effect.id, 'gitlab:grp/repo!7', Date.now())
-    expect(fx.store.getMission(missionId)!.mrClaimId).toBeNull()
+    await fx.store.markEffectDispatched(prepared.effect.id, Date.now())
+    await fx.store.confirmEffect(prepared.effect.id, 'gitlab:grp/repo!7', Date.now())
+    expect((await fx.store.getMission(missionId))!.mrClaimId).toBeNull()
 
     // 重启轮：claim 撞回 already-confirmed 分派 → ensure 幂等重查（adopt）→
     // claim 消歧落库；不造第二个 MR。
     const r = await runMissionReconcile(deps, missionId)
     expect(r).toMatchObject({ kind: 'decided', handled: 'collected' })
-    const after = fx.store.getMission(missionId)!
+    const after = (await fx.store.getMission(missionId))!
     expect(after.mrClaimId).not.toBeNull()
     expect(after.status).toBe('watching')
     expect(ensures).toHaveLength(1) // already-confirmed 分派只重查一次
@@ -346,7 +348,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
     const { fx, policyId } = await fixtureWithNeverPolicy()
     const missionId = ulid()
     const now = Date.now()
-    fx.store.createMission({
+    await fx.store.createMission({
       id: missionId,
       revision: 0,
       epoch: 0,
@@ -388,7 +390,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
       createdAt: now,
       updatedAt: now,
     })
-    fx.store.upsertFeedbackObservation({
+    await fx.store.upsertFeedbackObservation({
       id: 'fb-z',
       missionId,
       threadRef: 'th-z',
@@ -408,7 +410,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
       ),
     }
     const snapId = ulid()
-    fx.store.insertFactSnapshot({
+    await fx.store.insertFactSnapshot({
       id: snapId,
       missionId,
       missionRevision: 0,
@@ -419,8 +421,8 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
       now,
     })
     {
-      const m = fx.store.getMission(missionId)!
-      fx.store.occUpdate(missionId, m.revision, m.epoch, { requirementBundleRef: snapId })
+      const m = (await fx.store.getMission(missionId))!
+      await fx.store.occUpdate(missionId, m.revision, m.epoch, { requirementBundleRef: snapId })
     }
 
     const replies: unknown[] = []
@@ -436,7 +438,7 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
     })
     await expect(runMissionReconcile(crashDeps, missionId)).rejects.toThrow('mid-reply')
     expect(
-      fx.store.listUnsettledEffects(missionId).filter((e) => e.effectKind === 'mr-reply'),
+      (await fx.store.listUnsettledEffects(missionId)).filter((e) => e.effectKind === 'mr-reply'),
     ).toHaveLength(1)
 
     const okMr: MrEffectsPort = {
@@ -453,8 +455,8 @@ describe('rfc310 pr7b T83 — crash matrix converges after restart', () => {
     const r = await runMissionReconcile(restarted, missionId)
     expect(r).toMatchObject({ kind: 'decided', handled: 'collected' })
     expect(replies).toHaveLength(1)
-    const row = fx.store.listFeedback(missionId).find((x) => x.id === 'fb-z')!
+    const row = (await fx.store.listFeedback(missionId)).find((x) => x.id === 'fb-z')!
     expect(row.state).toBe('addressed')
-    expect(fx.store.listUnsettledEffects(missionId)).toEqual([])
+    expect(await fx.store.listUnsettledEffects(missionId)).toEqual([])
   })
 })

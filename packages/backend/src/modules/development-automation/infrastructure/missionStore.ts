@@ -1,10 +1,15 @@
-// RFC-349 — real PostgreSQL Mission persistence. Every operation is async;
-// CAS, claim and transition decisions are fenced in provider transactions.
+// RFC-359 W4-D10 —— Mission 持久化（RFC-310 PR-2 的存储合同）：一份实现，两个 provider 共用。
+//
+// 并发模型不变（port 头注释）：**OCC 即 lease**——每次 mutation 带 (expectedRevision, expectedEpoch)，条件
+// UPDATE + RETURNING 就是 CAS；不变量的最终兜底全部落在 0177 的唯一 / 部分唯一索引上（launch idempotency、
+// active MR claim、writable action 单活、attempt ordinal、effect idempotency、decision input 去重）——
+// `insert … onConflictDoNothing().returning()` 在两个引擎上同形，进程内检查只负责把索引冲突翻译成 typed 结果。
+// 多语句原子操作（launch、快照 + 决策、effect 状态机迁移、wake hint 消费）走统一事务原语；effect 迁移是
+// 读—判—写，先 `lockAggregateRoot` 锁 effect 行（PG FOR UPDATE，SQLite 独占事务下 no-op）。
 
 import { and, asc, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 
-import { insertUploadPlan } from './uploadPlanStore'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   developmentActionRuns,
   developmentAgentAttempts,
@@ -19,6 +24,10 @@ import {
   developmentWakeHints,
   missionInputUploads,
 } from '@/db/schema'
+import {
+  databaseSessionFor,
+  type DatabaseTransaction,
+} from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { DeferredWakeRow } from '../domain/deferredWake'
 import { MISSION_STATUSES } from '../domain/mission'
@@ -26,11 +35,15 @@ import type {
   ActionRunRow,
   EffectRow,
   FeedbackLedgerRow,
+  MissionDecisionWrite,
+  MissionDecisionWriteReceipt,
+  MissionFactSnapshotWrite,
   MissionRow,
   MissionPersistence,
   MissionSourceRow,
   OccResult,
 } from '../application/ports/missionStore'
+import { insertUploadPlan } from './uploadPlanStore'
 
 type MissionDbRow = typeof developmentMissions.$inferSelect
 
@@ -157,24 +170,103 @@ const EFFECT_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
   failed: [],
 }
 
-export function createPostgresqlMissionPersistence(
-  db: PostgresqlDatabaseClient,
-): MissionPersistence {
+async function insertMissionRow(
+  handle: ProviderNeutralDatabase,
+  row: MissionRow,
+): Promise<{ readonly created: boolean; readonly mission: MissionRow }> {
+  const inserted = await handle
+    .insert(developmentMissions)
+    .values({ ...row, reopenedFromMissionId: row.reopenedFromMissionId ?? null })
+    .onConflictDoNothing()
+    .returning()
+  if (inserted[0] !== undefined) return { created: true, mission: toMissionRow(inserted[0]) }
+  if (row.launchIdempotencyKey === null) {
+    throw new Error(`mission insert conflicted for non-idempotent id ${row.id}`)
+  }
+  const winner = (
+    await handle
+      .select()
+      .from(developmentMissions)
+      .where(eq(developmentMissions.launchIdempotencyKey, row.launchIdempotencyKey))
+      .limit(1)
+  )[0]
+  if (winner === undefined) throw new Error('mission idempotency winner is unavailable')
+  return { created: false, mission: toMissionRow(winner) }
+}
+
+async function insertFactSnapshotRow(
+  handle: ProviderNeutralDatabase,
+  input: MissionFactSnapshotWrite,
+): Promise<void> {
+  await handle.insert(developmentFactSnapshots).values({
+    id: input.id,
+    missionId: input.missionId,
+    missionRevision: input.missionRevision,
+    capturedAt: input.capturedAt,
+    cellsJson: input.cellsJson,
+    refsJson: input.refsJson,
+    digest: input.digest,
+    createdAt: input.now,
+  })
+}
+
+async function insertDecisionRow(
+  handle: ProviderNeutralDatabase,
+  input: MissionDecisionWrite,
+): Promise<MissionDecisionWriteReceipt> {
+  const inserted = await handle
+    .insert(developmentDecisions)
+    .values({
+      id: input.id,
+      missionId: input.missionId,
+      missionRevision: input.missionRevision,
+      policyId: input.policyId,
+      policyRevision: input.policyRevision,
+      employeeId: input.employeeId,
+      employeeRevision: input.employeeRevision,
+      factSnapshotId: input.factSnapshotId,
+      factDigest: input.factDigest,
+      workSetJson: input.workSetJson,
+      guardTraceJson: input.guardTraceJson,
+      ruleTraceJson: input.ruleTraceJson,
+      selectedJson: input.selectedJson,
+      canonicalDigest: input.canonicalDigest,
+      decisionInputDigest: input.decisionInputDigest,
+      decidedAt: input.now,
+    })
+    .onConflictDoNothing()
+    .returning({ id: developmentDecisions.id })
+  if (inserted.length === 1) return { created: true, decisionId: input.id }
+  const existing = (
+    await handle
+      .select({ id: developmentDecisions.id })
+      .from(developmentDecisions)
+      .where(
+        and(
+          eq(developmentDecisions.missionId, input.missionId),
+          eq(developmentDecisions.decisionInputDigest, input.decisionInputDigest),
+        ),
+      )
+      .limit(1)
+  )[0]
+  if (existing === undefined) throw new Error('decision idempotency winner is unavailable')
+  return { created: false, decisionId: existing.id }
+}
+
+export function createMissionPersistence(db: ProviderNeutralDatabase): MissionPersistence {
+  const session = databaseSessionFor(db)
+  const engine = session.engine
+
   async function transitionEffect(
     id: string,
     to: EffectRow['state'],
     patch: Record<string, unknown>,
   ): Promise<void> {
-    await db.transaction(async (tx) => {
-      await tx.run(
-        sql`select ${developmentEffects.id} from ${developmentEffects} where ${developmentEffects.id} = ${id} for update`,
-      )
-      const row = await tx
-        .select()
-        .from(developmentEffects)
-        .where(eq(developmentEffects.id, id))
-        .limit(1)
-        .get()
+    await session.transaction(async (tx: DatabaseTransaction) => {
+      await engine.lockAggregateRoot(tx, developmentEffects, developmentEffects.id, id)
+      const row = (
+        await tx.select().from(developmentEffects).where(eq(developmentEffects.id, id)).limit(1)
+      )[0]
       if (row === undefined) {
         throw new ValidationError('development-effect-not-found', `effect not found: ${id}`)
       }
@@ -188,36 +280,14 @@ export function createPostgresqlMissionPersistence(
         .update(developmentEffects)
         .set({ state: to, ...patch })
         .where(eq(developmentEffects.id, id))
-        .run()
     })
   }
 
   return {
     async commitMissionLaunch(input) {
-      return await db.transaction(async (tx) => {
-        const inserted = await tx
-          .insert(developmentMissions)
-          .values({
-            ...input.mission,
-            reopenedFromMissionId: input.mission.reopenedFromMissionId ?? null,
-          })
-          .onConflictDoNothing()
-          .returning()
-          .all()
-        if (inserted[0] === undefined) {
-          if (input.mission.launchIdempotencyKey === null) {
-            throw new Error(`mission insert conflicted for non-idempotent id ${input.mission.id}`)
-          }
-          const winner = await tx
-            .select()
-            .from(developmentMissions)
-            .where(eq(developmentMissions.launchIdempotencyKey, input.mission.launchIdempotencyKey))
-            .limit(1)
-            .get()
-          if (winner === undefined) throw new Error('mission idempotency winner is unavailable')
-          return { created: false, mission: toMissionRow(winner) }
-        }
-
+      return await session.transaction(async (tx) => {
+        const created = await insertMissionRow(tx, input.mission)
+        if (!created.created) return created
         if (input.upload !== null) {
           for (const uploadRef of input.upload.uploadRefs) {
             const actorFence =
@@ -240,14 +310,14 @@ export function createPostgresqlMissionPersistence(
                 ),
               )
               .returning({ id: missionInputUploads.id })
-              .all()
             if (claimed.length === 1) continue
-            const current = await tx
-              .select()
-              .from(missionInputUploads)
-              .where(eq(missionInputUploads.id, uploadRef))
-              .limit(1)
-              .get()
+            const current = (
+              await tx
+                .select()
+                .from(missionInputUploads)
+                .where(eq(missionInputUploads.id, uploadRef))
+                .limit(1)
+            )[0]
             if (current === undefined || current.actorUserId !== input.upload.actorUserId) {
               throw new NotFoundError('upload-not-found', `upload not found: ${uploadRef}`)
             }
@@ -264,53 +334,31 @@ export function createPostgresqlMissionPersistence(
           }
           await insertUploadPlan(tx, input.upload.plan)
         }
-
-        await tx.insert(developmentMissionSources).values(input.source).run()
-        return { created: true, mission: toMissionRow(inserted[0]) }
+        await tx.insert(developmentMissionSources).values(input.source)
+        return created
       })
     },
     async createMission(row) {
-      const inserted = await db
-        .insert(developmentMissions)
-        .values({ ...row, reopenedFromMissionId: row.reopenedFromMissionId ?? null })
-        .onConflictDoNothing()
-        .returning()
-        .all()
-      if (inserted[0] !== undefined) {
-        return { created: true, mission: toMissionRow(inserted[0]) }
-      }
-      if (row.launchIdempotencyKey === null) {
-        throw new Error(`mission insert conflicted for non-idempotent id ${row.id}`)
-      }
-      const existing = await db
-        .select()
-        .from(developmentMissions)
-        .where(eq(developmentMissions.launchIdempotencyKey, row.launchIdempotencyKey))
-        .limit(1)
-        .get()
-      if (existing === undefined) throw new Error('mission idempotency winner is unavailable')
-      return { created: false, mission: toMissionRow(existing) }
+      return await insertMissionRow(db, row)
     },
     async getMission(id) {
-      const row = await db
-        .select()
-        .from(developmentMissions)
-        .where(eq(developmentMissions.id, id))
-        .limit(1)
-        .get()
+      const row = (
+        await db.select().from(developmentMissions).where(eq(developmentMissions.id, id)).limit(1)
+      )[0]
       return row === undefined ? null : toMissionRow(row)
     },
     async findByIdempotencyKey(key) {
-      const row = await db
-        .select()
-        .from(developmentMissions)
-        .where(eq(developmentMissions.launchIdempotencyKey, key))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentMissions)
+          .where(eq(developmentMissions.launchIdempotencyKey, key))
+          .limit(1)
+      )[0]
       return row === undefined ? null : toMissionRow(row)
     },
     async occUpdate(missionId, expectedRevision, expectedEpoch, patch): Promise<OccResult> {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const next = expectedRevision + 1
         const updated = await tx
           .update(developmentMissions)
@@ -323,14 +371,14 @@ export function createPostgresqlMissionPersistence(
             ),
           )
           .returning({ id: developmentMissions.id })
-          .all()
         if (updated.length === 1) return { ok: true, revision: next }
-        const current = await tx
-          .select({ revision: developmentMissions.revision, epoch: developmentMissions.epoch })
-          .from(developmentMissions)
-          .where(eq(developmentMissions.id, missionId))
-          .limit(1)
-          .get()
+        const current = (
+          await tx
+            .select({ revision: developmentMissions.revision, epoch: developmentMissions.epoch })
+            .from(developmentMissions)
+            .where(eq(developmentMissions.id, missionId))
+            .limit(1)
+        )[0]
         if (current === undefined) return { ok: false, code: 'not-found' }
         return current.epoch !== expectedEpoch
           ? { ok: false, code: 'epoch-conflict' }
@@ -338,24 +386,20 @@ export function createPostgresqlMissionPersistence(
       })
     },
     async bumpEpoch(missionId, expectedRevision, patch): Promise<OccResult> {
-      return await db.transaction(async (tx) => {
-        const row = await tx
-          .select()
-          .from(developmentMissions)
-          .where(eq(developmentMissions.id, missionId))
-          .limit(1)
-          .get()
+      return await session.transaction(async (tx) => {
+        const row = (
+          await tx
+            .select()
+            .from(developmentMissions)
+            .where(eq(developmentMissions.id, missionId))
+            .limit(1)
+        )[0]
         if (row === undefined) return { ok: false, code: 'not-found' }
         if (row.revision !== expectedRevision) return { ok: false, code: 'revision-conflict' }
         const next = expectedRevision + 1
         const updated = await tx
           .update(developmentMissions)
-          .set({
-            ...patch,
-            revision: next,
-            epoch: row.epoch + 1,
-            updatedAt: Date.now(),
-          })
+          .set({ ...patch, revision: next, epoch: row.epoch + 1, updatedAt: Date.now() })
           .where(
             and(
               eq(developmentMissions.id, missionId),
@@ -363,7 +407,6 @@ export function createPostgresqlMissionPersistence(
             ),
           )
           .returning({ id: developmentMissions.id })
-          .all()
         return updated.length === 1
           ? { ok: true, revision: next }
           : { ok: false, code: 'revision-conflict' }
@@ -371,7 +414,7 @@ export function createPostgresqlMissionPersistence(
     },
 
     async insertMissionSource(row) {
-      await db.insert(developmentMissionSources).values(row).run()
+      await db.insert(developmentMissionSources).values(row)
     },
     async listMissionSources(missionId) {
       return (
@@ -379,7 +422,6 @@ export function createPostgresqlMissionPersistence(
           .select()
           .from(developmentMissionSources)
           .where(eq(developmentMissionSources.missionId, missionId))
-          .all()
       ).map(toMissionSourceRow)
     },
 
@@ -399,7 +441,6 @@ export function createPostgresqlMissionPersistence(
         })
         .onConflictDoNothing()
         .returning({ id: developmentMrClaims.id })
-        .all()
       return inserted.length === 1
         ? { ok: true }
         : { ok: false, code: 'mr-owned-by-another-mission' }
@@ -409,50 +450,50 @@ export function createPostgresqlMissionPersistence(
         .update(developmentMrClaims)
         .set({ state: 'released', releasedAt: now })
         .where(eq(developmentMrClaims.id, claimId))
-        .run()
     },
     async getMrClaim(claimId) {
-      const row = await db
-        .select({
-          id: developmentMrClaims.id,
-          codeHostEndpointRef: developmentMrClaims.codeHostEndpointRef,
-          stableProjectRef: developmentMrClaims.stableProjectRef,
-          mrIid: developmentMrClaims.mrIid,
-          missionId: developmentMrClaims.missionId,
-          state: developmentMrClaims.state,
-        })
-        .from(developmentMrClaims)
-        .where(eq(developmentMrClaims.id, claimId))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select({
+            id: developmentMrClaims.id,
+            codeHostEndpointRef: developmentMrClaims.codeHostEndpointRef,
+            stableProjectRef: developmentMrClaims.stableProjectRef,
+            mrIid: developmentMrClaims.mrIid,
+            missionId: developmentMrClaims.missionId,
+            state: developmentMrClaims.state,
+          })
+          .from(developmentMrClaims)
+          .where(eq(developmentMrClaims.id, claimId))
+          .limit(1)
+      )[0]
       return row ?? null
     },
     async findMrClaim(input) {
-      // 同一条 MR 可以有多行：唯一索引只约束 `state='active'`，released 的历史
-      // 会累积——T81 的 reopen 链更是**每重开一次就多一行**。所以这里必须显式
-      // 定序：active 优先，同态取最新。不定序时 SQLite 返回哪一行是未定义的，
+      // 同一条 MR 可以有多行：唯一索引只约束 `state='active'`，released 的历史会累积——T81 的 reopen 链更是
+      // **每重开一次就多一行**。所以这里必须显式定序：active 优先，同态取最新。不定序时返回哪一行是未定义的，
       // 而这个读面的调用方（webhook 反查、claim 撞车消歧）恰恰只关心「现在归谁」。
-      const row = await db
-        .select({
-          id: developmentMrClaims.id,
-          missionId: developmentMrClaims.missionId,
-          state: developmentMrClaims.state,
-        })
-        .from(developmentMrClaims)
-        .where(
-          and(
-            eq(developmentMrClaims.codeHostEndpointRef, input.codeHostEndpointRef),
-            eq(developmentMrClaims.stableProjectRef, input.stableProjectRef),
-            eq(developmentMrClaims.mrIid, input.mrIid),
-          ),
-        )
-        .orderBy(
-          sql`case when ${developmentMrClaims.state} = 'active' then 0 else 1 end`,
-          desc(developmentMrClaims.createdAt),
-          desc(developmentMrClaims.id),
-        )
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select({
+            id: developmentMrClaims.id,
+            missionId: developmentMrClaims.missionId,
+            state: developmentMrClaims.state,
+          })
+          .from(developmentMrClaims)
+          .where(
+            and(
+              eq(developmentMrClaims.codeHostEndpointRef, input.codeHostEndpointRef),
+              eq(developmentMrClaims.stableProjectRef, input.stableProjectRef),
+              eq(developmentMrClaims.mrIid, input.mrIid),
+            ),
+          )
+          .orderBy(
+            sql`case when ${developmentMrClaims.state} = 'active' then 0 else 1 end`,
+            desc(developmentMrClaims.createdAt),
+            desc(developmentMrClaims.id),
+          )
+          .limit(1)
+      )[0]
       return row ?? null
     },
 
@@ -468,13 +509,12 @@ export function createPostgresqlMissionPersistence(
         })
         .onConflictDoNothing()
         .returning({ id: developmentWakeHints.id })
-        .all()
       return { accepted: inserted.length === 1 }
     },
     async consumeWakeHints(missionId, now) {
-      return await db.transaction(async (tx) => {
+      return await session.transaction(async (tx) => {
         const open = await tx
-          .select()
+          .select({ id: developmentWakeHints.id })
           .from(developmentWakeHints)
           .where(
             and(
@@ -482,7 +522,6 @@ export function createPostgresqlMissionPersistence(
               isNull(developmentWakeHints.consumedAt),
             ),
           )
-          .all()
         if (open.length > 0) {
           await tx
             .update(developmentWakeHints)
@@ -493,7 +532,6 @@ export function createPostgresqlMissionPersistence(
                 open.map((hint) => hint.id),
               ),
             )
-            .run()
         }
         return open.length
       })
@@ -516,7 +554,6 @@ export function createPostgresqlMissionPersistence(
         })
         .onConflictDoNothing()
         .returning({ id: developmentFeedbackLedger.id })
-        .all()
       return { created: inserted.length === 1 }
     },
     async listFeedback(missionId) {
@@ -524,8 +561,10 @@ export function createPostgresqlMissionPersistence(
         .select()
         .from(developmentFeedbackLedger)
         .where(eq(developmentFeedbackLedger.missionId, missionId))
-        .orderBy(asc(developmentFeedbackLedger.createdAt), asc(developmentFeedbackLedger.id))
-        .all()) as FeedbackLedgerRow[]
+        .orderBy(
+          asc(developmentFeedbackLedger.createdAt),
+          asc(developmentFeedbackLedger.id),
+        )) as FeedbackLedgerRow[]
     },
     async setFeedbackState(input) {
       await db
@@ -537,7 +576,6 @@ export function createPostgresqlMissionPersistence(
           ...(input.replyEffectId === undefined ? {} : { replyEffectId: input.replyEffectId }),
         })
         .where(eq(developmentFeedbackLedger.id, input.id))
-        .run()
     },
     async obsoleteFeedbackForOtherHeads(missionId, currentHeadSha, now) {
       const stale = await db
@@ -551,38 +589,35 @@ export function createPostgresqlMissionPersistence(
           ),
         )
         .returning({ id: developmentFeedbackLedger.id })
-        .all()
       return stale.length
     },
 
     async armWake(input) {
-      await db
-        .insert(developmentDeferredWakes)
-        .values({
-          id: input.id,
-          missionId: input.missionId,
-          decisionId: input.decisionId,
-          reason: input.reason,
-          resumeAt: input.resumeAt,
-          wakeSourcesJson: JSON.stringify(input.wakeSources),
-          attemptOrdinal: input.attemptOrdinal,
-          state: 'armed',
-          createdAt: input.now,
-        })
-        .run()
+      await db.insert(developmentDeferredWakes).values({
+        id: input.id,
+        missionId: input.missionId,
+        decisionId: input.decisionId,
+        reason: input.reason,
+        resumeAt: input.resumeAt,
+        wakeSourcesJson: JSON.stringify(input.wakeSources),
+        attemptOrdinal: input.attemptOrdinal,
+        state: 'armed',
+        createdAt: input.now,
+      })
     },
     async getWake(missionId, decisionId) {
-      const row = await db
-        .select()
-        .from(developmentDeferredWakes)
-        .where(
-          and(
-            eq(developmentDeferredWakes.missionId, missionId),
-            eq(developmentDeferredWakes.decisionId, decisionId),
-          ),
-        )
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentDeferredWakes)
+          .where(
+            and(
+              eq(developmentDeferredWakes.missionId, missionId),
+              eq(developmentDeferredWakes.decisionId, decisionId),
+            ),
+          )
+          .limit(1)
+      )[0]
       return row === undefined ? null : toWakeRow(row)
     },
     async fireWake(id, _now) {
@@ -593,7 +628,6 @@ export function createPostgresqlMissionPersistence(
           and(eq(developmentDeferredWakes.id, id), eq(developmentDeferredWakes.state, 'armed')),
         )
         .returning({ id: developmentDeferredWakes.id })
-        .all()
       return updated.length === 1
     },
     async settleWake(id, now) {
@@ -601,7 +635,6 @@ export function createPostgresqlMissionPersistence(
         .update(developmentDeferredWakes)
         .set({ state: 'settled', settledAt: now })
         .where(eq(developmentDeferredWakes.id, id))
-        .run()
     },
     async listDueWakes(now) {
       return (
@@ -616,64 +649,14 @@ export function createPostgresqlMissionPersistence(
             ),
           )
           .orderBy(asc(developmentDeferredWakes.resumeAt))
-          .all()
       ).map(toWakeRow)
     },
 
     async insertFactSnapshot(input) {
-      await db
-        .insert(developmentFactSnapshots)
-        .values({
-          id: input.id,
-          missionId: input.missionId,
-          missionRevision: input.missionRevision,
-          capturedAt: input.capturedAt,
-          cellsJson: input.cellsJson,
-          refsJson: input.refsJson,
-          digest: input.digest,
-          createdAt: input.now,
-        })
-        .run()
+      await insertFactSnapshotRow(db, input)
     },
-
     async insertDecision(input) {
-      const inserted = await db
-        .insert(developmentDecisions)
-        .values({
-          id: input.id,
-          missionId: input.missionId,
-          missionRevision: input.missionRevision,
-          policyId: input.policyId,
-          policyRevision: input.policyRevision,
-          employeeId: input.employeeId,
-          employeeRevision: input.employeeRevision,
-          factSnapshotId: input.factSnapshotId,
-          factDigest: input.factDigest,
-          workSetJson: input.workSetJson,
-          guardTraceJson: input.guardTraceJson,
-          ruleTraceJson: input.ruleTraceJson,
-          selectedJson: input.selectedJson,
-          canonicalDigest: input.canonicalDigest,
-          decisionInputDigest: input.decisionInputDigest,
-          decidedAt: input.now,
-        })
-        .onConflictDoNothing()
-        .returning({ id: developmentDecisions.id })
-        .all()
-      if (inserted.length === 1) return { created: true, decisionId: input.id }
-      const existing = await db
-        .select({ id: developmentDecisions.id })
-        .from(developmentDecisions)
-        .where(
-          and(
-            eq(developmentDecisions.missionId, input.missionId),
-            eq(developmentDecisions.decisionInputDigest, input.decisionInputDigest),
-          ),
-        )
-        .limit(1)
-        .get()
-      if (existing === undefined) throw new Error('decision idempotency winner is unavailable')
-      return { created: false, decisionId: existing.id }
+      return await insertDecisionRow(db, input)
     },
 
     async createActionRun(input) {
@@ -697,7 +680,6 @@ export function createPostgresqlMissionPersistence(
         })
         .onConflictDoNothing()
         .returning({ id: developmentActionRuns.id })
-        .all()
       return inserted.length === 1
         ? { ok: true }
         : { ok: false, code: 'writable-action-already-active' }
@@ -712,7 +694,6 @@ export function createPostgresqlMissionPersistence(
           settledAt: input.now,
         })
         .where(eq(developmentActionRuns.id, input.id))
-        .run()
     },
     async countActionRuns(missionId, capabilityId) {
       return (
@@ -725,16 +706,16 @@ export function createPostgresqlMissionPersistence(
               eq(developmentActionRuns.capabilityId, capabilityId),
             ),
           )
-          .all()
       ).length
     },
     async getActionRun(id) {
-      const row = await db
-        .select()
-        .from(developmentActionRuns)
-        .where(eq(developmentActionRuns.id, id))
-        .limit(1)
-        .get()
+      const row = (
+        await db
+          .select()
+          .from(developmentActionRuns)
+          .where(eq(developmentActionRuns.id, id))
+          .limit(1)
+      )[0]
       if (row === undefined) return null
       return {
         id: row.id,
@@ -766,7 +747,6 @@ export function createPostgresqlMissionPersistence(
         })
         .onConflictDoNothing()
         .returning({ id: developmentAgentAttempts.id })
-        .all()
       return inserted.length === 1 ? { ok: true } : { ok: false, code: 'attempt-ordinal-taken' }
     },
     async settleAttempt(input) {
@@ -779,7 +759,6 @@ export function createPostgresqlMissionPersistence(
           settledAt: input.now,
         })
         .where(eq(developmentAgentAttempts.id, input.id))
-        .run()
     },
     async listAttempts(actionRunId) {
       return (
@@ -788,7 +767,6 @@ export function createPostgresqlMissionPersistence(
           .from(developmentAgentAttempts)
           .where(eq(developmentAgentAttempts.actionRunId, actionRunId))
           .orderBy(asc(developmentAgentAttempts.rerunSeq), asc(developmentAgentAttempts.attemptSeq))
-          .all()
       ).map((row) => ({
         id: row.id,
         actionRunId: row.actionRunId,
@@ -821,16 +799,14 @@ export function createPostgresqlMissionPersistence(
         })
         .onConflictDoNothing()
         .returning()
-        .all()
-      if (inserted[0] !== undefined) {
-        return { created: true, effect: toEffectRow(inserted[0]) }
-      }
-      const existing = await db
-        .select()
-        .from(developmentEffects)
-        .where(eq(developmentEffects.idempotencyKey, input.idempotencyKey))
-        .limit(1)
-        .get()
+      if (inserted[0] !== undefined) return { created: true, effect: toEffectRow(inserted[0]) }
+      const existing = (
+        await db
+          .select()
+          .from(developmentEffects)
+          .where(eq(developmentEffects.idempotencyKey, input.idempotencyKey))
+          .limit(1)
+      )[0]
       if (existing === undefined) throw new Error('effect idempotency winner is unavailable')
       return { created: false, effect: toEffectRow(existing) }
     },
@@ -847,12 +823,9 @@ export function createPostgresqlMissionPersistence(
       await transitionEffect(id, 'failed', { failureJson, settledAt: now })
     },
     async getEffect(id) {
-      const row = await db
-        .select()
-        .from(developmentEffects)
-        .where(eq(developmentEffects.id, id))
-        .limit(1)
-        .get()
+      const row = (
+        await db.select().from(developmentEffects).where(eq(developmentEffects.id, id)).limit(1)
+      )[0]
       return row === undefined ? null : toEffectRow(row)
     },
     async listUnsettledEffects(missionId) {
@@ -869,7 +842,6 @@ export function createPostgresqlMissionPersistence(
               ),
             ),
           )
-          .all()
       ).map(toEffectRow)
     },
     async listPreparedEffects() {
@@ -879,63 +851,13 @@ export function createPostgresqlMissionPersistence(
           .from(developmentEffects)
           .where(eq(developmentEffects.state, 'prepared'))
           .orderBy(asc(developmentEffects.createdAt))
-          .all()
       ).map(toEffectRow)
     },
 
     async commitFactSnapshotAndDecision(input) {
-      return await db.transaction(async (tx) => {
-        await tx
-          .insert(developmentFactSnapshots)
-          .values({
-            id: input.snapshot.id,
-            missionId: input.snapshot.missionId,
-            missionRevision: input.snapshot.missionRevision,
-            capturedAt: input.snapshot.capturedAt,
-            cellsJson: input.snapshot.cellsJson,
-            refsJson: input.snapshot.refsJson,
-            digest: input.snapshot.digest,
-            createdAt: input.snapshot.now,
-          })
-          .run()
-        const decision = input.decision
-        const inserted = await tx
-          .insert(developmentDecisions)
-          .values({
-            id: decision.id,
-            missionId: decision.missionId,
-            missionRevision: decision.missionRevision,
-            policyId: decision.policyId,
-            policyRevision: decision.policyRevision,
-            employeeId: decision.employeeId,
-            employeeRevision: decision.employeeRevision,
-            factSnapshotId: decision.factSnapshotId,
-            factDigest: decision.factDigest,
-            workSetJson: decision.workSetJson,
-            guardTraceJson: decision.guardTraceJson,
-            ruleTraceJson: decision.ruleTraceJson,
-            selectedJson: decision.selectedJson,
-            canonicalDigest: decision.canonicalDigest,
-            decisionInputDigest: decision.decisionInputDigest,
-            decidedAt: decision.now,
-          })
-          .onConflictDoNothing()
-          .returning({ id: developmentDecisions.id })
-          .all()
-        if (inserted.length === 1) return { created: true, decisionId: decision.id }
-        const existing = await tx
-          .select({ id: developmentDecisions.id })
-          .from(developmentDecisions)
-          .where(
-            and(
-              eq(developmentDecisions.missionId, decision.missionId),
-              eq(developmentDecisions.decisionInputDigest, decision.decisionInputDigest),
-            ),
-          )
-          .limit(1)
-          .get()
-        if (existing === undefined) throw new Error('decision idempotency winner is unavailable')
-        return { created: false, decisionId: existing.id }
+      return await session.transaction(async (tx) => {
+        await insertFactSnapshotRow(tx, input.snapshot)
+        return await insertDecisionRow(tx, input.decision)
       })
     },
   }

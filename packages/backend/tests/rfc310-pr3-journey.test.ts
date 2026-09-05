@@ -137,7 +137,7 @@ async function pumpUntil(
 ): Promise<MissionRow> {
   let lastError: unknown = null
   for (let i = 0; i < rounds; i += 1) {
-    const mission = fx.store.getMission(missionId)
+    const mission = await fx.store.getMission(missionId)
     if (mission === null) throw new Error(`mission disappeared: ${missionId}`)
     if (await predicate(mission)) return mission
     try {
@@ -149,7 +149,7 @@ async function pumpUntil(
     }
     await new Promise((resolveSleep) => setTimeout(resolveSleep, 25))
   }
-  const last = fx.store.getMission(missionId)
+  const last = await fx.store.getMission(missionId)
   throw new Error(
     `pumpUntil exhausted: status=${last?.status ?? 'gone'} blockCode=${last?.blockCode ?? 'null'}` +
       (lastError instanceof Error ? ` lastError=${lastError.message}` : ''),
@@ -262,7 +262,7 @@ describe('rfc310 pr3 journey — direct body-only', () => {
 
     // digest 在 launch 冻结；route stash 的 doc 必须与之对上（对不上 launch 就
     // 已 409，能走到这里即配对成立）。
-    expect(fx.store.getMission(missionId)!.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
+    expect((await fx.store.getMission(missionId))!.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
 
     // PR-5 起 repositoryFacts collector 已接线：真 collector 对测试仓收集出
     // 空 Java 集 → implement 规则（set-contains-any java）诚实失配 block。
@@ -372,7 +372,7 @@ describe('rfc310 pr3 journey — direct uploads (file-only / body+file)', () => 
     expect(res.status).toBe(201)
     const launched = (await res.json()) as { missionId: string; created: boolean }
 
-    const mission = fx.store.getMission(launched.missionId)!
+    const mission = (await fx.store.getMission(launched.missionId))!
     expect(mission.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
     expect(mission.uploadPlanRef).not.toBeNull()
     expect(createSqliteUploadSessionStore(db).getUpload(upload.uploadRef)!.state).toBe('claimed')
@@ -607,7 +607,7 @@ describe('rfc310 pr3 journey — composition sweeps and recovery', () => {
     const missionId = await fx.launchDirect('journey-sweep-1')
     const now = Date.now()
 
-    fx.store.armWake({
+    await fx.store.armWake({
       id: ulid(),
       missionId,
       decisionId: 'journey-decision-1',
@@ -619,18 +619,20 @@ describe('rfc310 pr3 journey — composition sweeps and recovery', () => {
     })
     const first = await automation.sweepWakes()
     expect(first.reconciled).toBeGreaterThanOrEqual(1)
-    expect(fx.store.getWake(missionId, 'journey-decision-1')!.state).toBe('fired')
+    expect((await fx.store.getWake(missionId, 'journey-decision-1'))!.state).toBe('fired')
     // fired 行不再 due：安静 tick 恒 0（无 hint 时）。
     expect((await automation.sweepWakes()).reconciled).toBe(0)
 
     expect(
-      fx.store.recordWakeHint({
-        id: ulid(),
-        missionId,
-        source: 'webhook',
-        deliveryKey: 'journey-delivery-1', // gitleaks:allow（幂等/去重键测试值，非凭据）
-        now: Date.now(),
-      }).accepted,
+      (
+        await fx.store.recordWakeHint({
+          id: ulid(),
+          missionId,
+          source: 'webhook',
+          deliveryKey: 'journey-delivery-1', // gitleaks:allow（幂等/去重键测试值，非凭据）
+          now: Date.now(),
+        })
+      ).accepted,
     ).toBe(true)
     expect((await automation.sweepWakes()).reconciled).toBe(1)
     expect((await automation.sweepWakes()).reconciled).toBe(0)

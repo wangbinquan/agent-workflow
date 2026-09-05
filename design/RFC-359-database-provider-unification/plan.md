@@ -469,6 +469,23 @@ T7c（删除恢复）四条**在 PG 侧根本没有实现**，或**中立端口�
   登录方法发现、口令登录 / 会话解析 / touch 节流 / 撤销 / 清扫、PAT 解析与本地口令写入、审计归属 / 脱敏 / 逆序 / 有界清扫）。
   legacy SQLite 夹具（`legacySqliteLoginPolicy` / `SessionStore` / `PatStore` / `AuthRuntime`）不是 provider 对，仍为测试夹具，
   另行退役。**下一刀 D10**：development-automation 剩余的 mission / playbook / upload store 对与 resource-catalog legacy 对。
+  **D10 ✅（development-automation 的 Mission 持久化 + 读模型，附带列 facade 修根）**：
+  `development-automation/infrastructure/missionStore.ts` 一份（`createMissionPersistence(db)`：launch 幂等与上传认领 / plan
+  一笔事务、OCC / epoch、MR claim 唯一、wake hint 去重、deferred wake、decision digest 去重 + 快照原子落、writable action
+  单活、attempt ordinal、effect 幂等与状态机、feedback 台账），`missionReadModels.ts` 改成中立异步（`listMissionSummariesPage`
+  行值 keyset + `createMissionReadModelQueries(db)`：分页 / facets / counts / 详情 / MR 投影 / effect 台账 / 决策 trace /
+  终态分组）；同步的 `MissionStore` 端口只保留为类型源，`createMissionCodeHostEventContinuation` /
+  `createDevelopmentMissionExecutionTerminalObserver` 各剩一个中立入口，composition / start.ts / server.ts /
+  postgresqlDaemonApplication 消费者改接。`sqliteMissionStore.ts`（886 行）/ `postgresqlMissionStore.ts` /
+  `postgresqlMissionReadModels.ts` 与只跑 SQLite 的 `rfc310-pr2-mission-store` 删除；32 个 rfc310 / rfc311 测试文件按 codemod
+  改成 await；boundary / null-ordering / predicate-drift（基线 8 → 7）/ t3 runners / pr7b 各锁改指中立文件。
+  `rfc359-w4-d10-adapters.test.ts` 两引擎各跑全部存储不变量 + 读模型 + 源码锁。
+  **修根**：D10 双引擎用例抓到 PG 上列表页游标 `createdAt` 回成字符串——表 facade 只在访问时解析到当前 provider，
+  而模块加载期捕获进常量的列对象（`const COLUMNS = { createdAt: table.createdAt }`，全仓 12 处）那时还是 SQLite 列，
+  在 PG 上解码就绕开了 pg 投影的 `bigint → number`。`db/providerSchema.ts` 把列也做成访问时解析的 facade（身份稳定、
+  原型 / 映射 / 所属表随当前 provider），`rfc359-provider-schema-column-facade.test.ts` 故意在模块加载期捕获列，两引擎锁住
+  解码 / 编码 / 行值比较 / 原型。**下一刀 D11**：development-automation 的 `PlaybookSagaStore` 对与 upload store，
+  再到 resource-catalog legacy 对。
 
 ## 5. W5 —— 防复辟
 
