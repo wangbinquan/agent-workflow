@@ -4164,3 +4164,21 @@ B2 批 b/c 推上 main 后两个 OS 的 backend 分片 2 同一条红：`rfc349-
   生成完用 `cat -v` 看一眼字节，再喂一个应当命中的字符串验证判别力（`re.test('import type { DbClient }')`）。
 - **`format:check` / `lint` 的覆盖面比 backend 大**：`packages/**/*.{ts,tsx,json,md}` 加上仓库根的
   `e2e/` / `scripts/` / workflow yml。只对 backend 跑等于没跑全，`bun run format:check` 才是 CI 的那一条。
+
+### 改文件名的刀：本地批次要按「谁引用了这个路径」选，不能按 RFC 号选
+
+RFC-359 的合一每刀都在删 / 改 provider 命名的文件，而本仓有一批**逐文件对账**的账本散落在与该 RFC
+毫无关系的测试里——写点白名单（`scheduler-audit-s14-…` 的 tasks.status、`lifecycle-grep-guard` 的
+node_runs.status）、架构锁（`rfc217-architecture-locks` 的房间表写点）、能力债清单
+（`rfc294-architecture-preflight`）、反查语料（`rfc284-batchc-…`）、裸 like 清单
+（`rfc349-provider-search-case-parity`）。它们按**字符串路径**逐条相等，改名不跟上就红，
+且红在与本次改动看不出关系的分片里。
+
+2026-09-05 连撞两次（D18 漏 rfc284 / rfc349，D19a 漏 s14 / rfc217 / lifecycle-grep，两次都是
+六个 backend 分片红）。**做法**：改名 / 删文件后先跑
+
+    scripts/tests-referencing.sh <旧文件名或符号>
+
+把它列出的文件并进本地批次；`architecture:write` 之前也先跑一遍——分类器
+（`tests/architecture/rfc294Canonical.ts` 的 `classifyTaskExecutionAuthority` 等）同样按
+`(postgresql|sqlite)` 前缀白名单认文件，中立化后的名字要补进它已有的中立名尾巴，否则 census 直接失败。
