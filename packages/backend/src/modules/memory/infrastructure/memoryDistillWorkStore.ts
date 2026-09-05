@@ -1,6 +1,8 @@
+// RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
+
 import { and, asc, eq, inArray, lte } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
+import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   cachedRepos,
   clarifyRounds,
@@ -18,28 +20,29 @@ import type {
   MemoryDistillWorkStore,
 } from '../application/ports/distillWorkStore'
 
-export type SqliteMemoryDistillSessionCapture = (input: MemoryDistillCaptureInput) => Promise<void>
+export type MemoryDistillSessionCapture = (input: MemoryDistillCaptureInput) => Promise<void>
 
-export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
+export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   constructor(
-    private readonly db: DbClient,
-    private readonly capture: SqliteMemoryDistillSessionCapture,
+    private readonly db: ProviderNeutralDatabase,
+    private readonly capture: MemoryDistillSessionCapture,
   ) {}
 
   async findTaskScope(taskId: string) {
-    const row = this.db
-      .select({
-        workflowSnapshot: tasks.workflowSnapshot,
-        workgroupConfigJson: tasks.workgroupConfigJson,
-        workflowId: tasks.workflowId,
-        cachedRepoId: tasks.cachedRepoId,
-        cachedRepoMatch: cachedRepos.id,
-      })
-      .from(tasks)
-      .leftJoin(cachedRepos, eq(cachedRepos.id, tasks.cachedRepoId))
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-      .get()
+    const row = (
+      await this.db
+        .select({
+          workflowSnapshot: tasks.workflowSnapshot,
+          workgroupConfigJson: tasks.workgroupConfigJson,
+          workflowId: tasks.workflowId,
+          cachedRepoId: tasks.cachedRepoId,
+          cachedRepoMatch: cachedRepos.id,
+        })
+        .from(tasks)
+        .leftJoin(cachedRepos, eq(cachedRepos.id, tasks.cachedRepoId))
+        .where(eq(tasks.id, taskId))
+        .limit(1)
+    )[0]
     return row === undefined
       ? null
       : {
@@ -52,36 +55,32 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async enqueue(input: Parameters<MemoryDistillWorkStore['enqueue']>[0]): Promise<void> {
-    this.db
-      .insert(memoryDistillJobs)
-      .values({
-        id: input.id,
-        debounceKey: input.debounceKey,
-        sourceKind: input.sourceKind,
-        sourceEventId: input.sourceEventId,
-        taskId: input.taskId,
-        scopeResolvedJson: JSON.stringify(input.scope),
-        status: 'pending',
-        attempts: 0,
-        nextRunAt: input.nextRunAt,
-        createdAt: input.createdAt,
-        outputLang: input.outputLang,
-      })
-      .run()
+    await this.db.insert(memoryDistillJobs).values({
+      id: input.id,
+      debounceKey: input.debounceKey,
+      sourceKind: input.sourceKind,
+      sourceEventId: input.sourceEventId,
+      taskId: input.taskId,
+      scopeResolvedJson: JSON.stringify(input.scope),
+      status: 'pending',
+      attempts: 0,
+      nextRunAt: input.nextRunAt,
+      createdAt: input.createdAt,
+      outputLang: input.outputLang,
+    })
   }
 
   async listDue(now: number, limit: number) {
-    return this.db
+    return await this.db
       .select()
       .from(memoryDistillJobs)
       .where(and(eq(memoryDistillJobs.status, 'pending'), lte(memoryDistillJobs.nextRunAt, now)))
       .orderBy(asc(memoryDistillJobs.nextRunAt))
       .limit(limit)
-      .all()
   }
 
   async listPendingSiblings(debounceKey: string) {
-    return this.db
+    return await this.db
       .select()
       .from(memoryDistillJobs)
       .where(
@@ -91,25 +90,22 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
         ),
       )
       .orderBy(asc(memoryDistillJobs.createdAt))
-      .all()
   }
 
   async markRunning(ids: readonly string[], startedAt: number): Promise<void> {
     if (ids.length === 0) return
-    this.db
+    await this.db
       .update(memoryDistillJobs)
       .set({ status: 'running', startedAt })
       .where(and(inArray(memoryDistillJobs.id, [...ids]), eq(memoryDistillJobs.status, 'pending')))
-      .run()
   }
 
   async markDone(ids: readonly string[], finishedAt: number): Promise<void> {
     if (ids.length === 0) return
-    this.db
+    await this.db
       .update(memoryDistillJobs)
       .set({ status: 'done', finishedAt })
       .where(inArray(memoryDistillJobs.id, [...ids]))
-      .run()
   }
 
   async markFailed(input: Parameters<MemoryDistillWorkStore['markFailed']>[0]): Promise<void> {
@@ -129,64 +125,58 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
             nextRunAt: input.retryAt,
             startedAt: null,
           }
-    this.db
+    await this.db
       .update(memoryDistillJobs)
       .set(patch)
       .where(inArray(memoryDistillJobs.id, [...input.ids]))
-      .run()
   }
 
   async recoverRunning(): Promise<number> {
-    return this.db
+    const rows = await this.db
       .update(memoryDistillJobs)
       .set({ status: 'pending', startedAt: null })
       .where(eq(memoryDistillJobs.status, 'running'))
       .returning({ id: memoryDistillJobs.id })
-      .all().length
+    return rows.length
   }
 
   async retryFailed(jobId: string, now: number) {
-    return (
-      this.db
-        .update(memoryDistillJobs)
-        .set({
-          status: 'pending',
-          attempts: 0,
-          lastError: null,
-          nextRunAt: now,
-          startedAt: null,
-          finishedAt: null,
-        })
-        .where(and(eq(memoryDistillJobs.id, jobId), eq(memoryDistillJobs.status, 'failed')))
-        .returning()
-        .get() ?? null
-    )
+    const rows = await this.db
+      .update(memoryDistillJobs)
+      .set({
+        status: 'pending',
+        attempts: 0,
+        lastError: null,
+        nextRunAt: now,
+        startedAt: null,
+        finishedAt: null,
+      })
+      .where(and(eq(memoryDistillJobs.id, jobId), eq(memoryDistillJobs.status, 'failed')))
+      .returning()
+    return rows[0] ?? null
   }
 
   async cancelPending(jobId: string, now: number): Promise<boolean> {
-    return (
-      this.db
-        .update(memoryDistillJobs)
-        .set({ status: 'canceled', finishedAt: now })
-        .where(and(eq(memoryDistillJobs.id, jobId), eq(memoryDistillJobs.status, 'pending')))
-        .returning({ id: memoryDistillJobs.id })
-        .get() !== undefined
-    )
+    const rows = await this.db
+      .update(memoryDistillJobs)
+      .set({ status: 'canceled', finishedAt: now })
+      .where(and(eq(memoryDistillJobs.id, jobId), eq(memoryDistillJobs.status, 'pending')))
+      .returning({ id: memoryDistillJobs.id })
+    return rows.length > 0
   }
 
   async listJobs(status?: string) {
     const query = this.db.select().from(memoryDistillJobs)
     return status === undefined
-      ? query.orderBy(asc(memoryDistillJobs.createdAt)).all()
-      : query
+      ? await query.orderBy(asc(memoryDistillJobs.createdAt))
+      : await query
           .where(eq(memoryDistillJobs.status, status as 'pending'))
           .orderBy(asc(memoryDistillJobs.createdAt))
-          .all()
   }
 
   async listClarifySources(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: clarifyRounds.id,
         taskId: clarifyRounds.taskId,
@@ -197,12 +187,11 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       })
       .from(clarifyRounds)
       .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, [...ids])))
-      .all()
   }
 
   async listReviewSources(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: docVersions.id,
         taskId: docVersions.taskId,
@@ -212,12 +201,11 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       })
       .from(docVersions)
       .where(inArray(docVersions.id, [...ids]))
-      .all()
   }
 
   async listReviewComments(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         docVersionId: reviewComments.docVersionId,
         body: reviewComments.commentText,
@@ -227,12 +215,11 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       .from(reviewComments)
       .where(inArray(reviewComments.docVersionId, [...ids]))
       .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-      .all()
   }
 
   async listFeedbackSources(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: taskFeedback.id,
         taskId: taskFeedback.taskId,
@@ -241,12 +228,11 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       })
       .from(taskFeedback)
       .where(inArray(taskFeedback.id, [...ids]))
-      .all()
   }
 
   async listNodeRuns(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: nodeRuns.id,
         promptText: nodeRuns.promptText,
@@ -256,12 +242,11 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       })
       .from(nodeRuns)
       .where(inArray(nodeRuns.id, [...ids]))
-      .all()
   }
 
   async listNodeRunEvents(ids: readonly string[]) {
     if (ids.length === 0) return []
-    return this.db
+    return await this.db
       .select({
         id: nodeRunEvents.id,
         nodeRunId: nodeRunEvents.nodeRunId,
@@ -274,7 +259,6 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       .from(nodeRunEvents)
       .where(inArray(nodeRunEvents.nodeRunId, [...ids]))
       .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
-      .all()
   }
 
   async listApprovedMemories(
@@ -289,7 +273,7 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
             eq(memories.scopeId, scopeId),
             eq(memories.status, 'approved'),
           )
-    return this.db
+    return await this.db
       .select({
         id: memories.id,
         title: memories.title,
@@ -299,7 +283,6 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
       .from(memories)
       .where(where)
       .orderBy(asc(memories.createdAt))
-      .all()
   }
 
   async savePrompt(
@@ -307,18 +290,17 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
     userPromptMd: string,
     dedupSnapshotIdsJson: string,
   ): Promise<void> {
-    this.db
+    await this.db
       .update(memoryDistillJobs)
       .set({ userPromptMd, dedupSnapshotIdsJson })
       .where(eq(memoryDistillJobs.id, jobId))
-      .run()
   }
 
   async saveSpawnResult(
     jobId: string,
     input: Parameters<MemoryDistillWorkStore['saveSpawnResult']>[1],
   ): Promise<void> {
-    this.db
+    await this.db
       .update(memoryDistillJobs)
       .set({
         opencodeSessionId: input.sessionId,
@@ -326,7 +308,6 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
         stderrExcerpt: input.stderrExcerpt,
       })
       .where(eq(memoryDistillJobs.id, jobId))
-      .run()
   }
 
   async captureSession(input: MemoryDistillCaptureInput): Promise<void> {
@@ -335,28 +316,25 @@ export class SqliteMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   async insertCandidate(input: Parameters<MemoryDistillWorkStore['insertCandidate']>[0]) {
     const memory = input.memory
-    this.db
-      .insert(memories)
-      .values({
-        id: memory.id,
-        scopeType: memory.scopeType,
-        scopeId: memory.scopeId,
-        title: memory.title,
-        bodyMd: memory.bodyMd,
-        tags: JSON.stringify(memory.tags),
-        status: 'candidate',
-        sourceKind: memory.sourceKind,
-        sourceEventId: memory.sourceEventId,
-        sourceTaskId: memory.sourceTaskId,
-        distillJobId: memory.distillJobId,
-        distillAction: memory.distillAction,
-        supersedesId: null,
-        supersededById: null,
-        approvedByUserId: null,
-        approvedAt: null,
-        createdAt: memory.createdAt,
-        version: 1,
-      })
-      .run()
+    await this.db.insert(memories).values({
+      id: memory.id,
+      scopeType: memory.scopeType,
+      scopeId: memory.scopeId,
+      title: memory.title,
+      bodyMd: memory.bodyMd,
+      tags: JSON.stringify(memory.tags),
+      status: 'candidate',
+      sourceKind: memory.sourceKind,
+      sourceEventId: memory.sourceEventId,
+      sourceTaskId: memory.sourceTaskId,
+      distillJobId: memory.distillJobId,
+      distillAction: memory.distillAction,
+      supersedesId: null,
+      supersededById: null,
+      approvedByUserId: null,
+      approvedAt: null,
+      createdAt: memory.createdAt,
+      version: 1,
+    })
   }
 }

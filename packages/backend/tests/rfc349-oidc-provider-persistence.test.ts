@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
-import { PostgresqlOidcProviderRepository } from '@/modules/identity-access/infrastructure/postgresqlOidcProviderRepository'
+import { DrizzleOidcProviderRepository } from '@/modules/identity-access/infrastructure/oidcProviderRepository'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -146,7 +146,7 @@ describe('RFC-349 PostgreSQL OIDC provider persistence', () => {
       { values: [['identity-1']] },
       {},
     ])
-    const repository = new PostgresqlOidcProviderRepository(fake.db)
+    const repository = new DrizzleOidcProviderRepository(fake.db)
 
     const result = await repository
       .patch({
@@ -187,7 +187,7 @@ describe('RFC-349 PostgreSQL OIDC provider persistence', () => {
       { values: [] },
       {},
     ])
-    const repository = new PostgresqlOidcProviderRepository(fake.db)
+    const repository = new DrizzleOidcProviderRepository(fake.db)
 
     await expect(
       repository.patch({

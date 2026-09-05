@@ -13,13 +13,13 @@ import { OidcProviderSchema } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import { resolveEndpoints, type EndpointSource } from '@/auth/oidc/endpoints'
 import {
-  SqliteOidcProviderRepository,
+  DrizzleOidcProviderRepository,
   type OidcProviderRepository,
 } from '@/modules/identity-access/public/operations'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
-type SqliteOidcProviderDatabase = ConstructorParameters<typeof SqliteOidcProviderRepository>[0]
+type OidcProviderDatabase = ConstructorParameters<typeof DrizzleOidcProviderRepository>[0]
 type OidcProviderPersistenceRecord = NonNullable<
   Awaited<ReturnType<OidcProviderRepository['findById']>>
 >
@@ -66,10 +66,10 @@ export interface OidcProvidersService {
 export function createOidcProvidersService(
   deps:
     | { readonly repository: OidcProviderRepository; readonly secretBox: SecretBox }
-    | { readonly db: SqliteOidcProviderDatabase; readonly secretBox: SecretBox },
+    | { readonly db: OidcProviderDatabase; readonly secretBox: SecretBox },
 ): OidcProvidersService {
   const repository =
-    'repository' in deps ? deps.repository : new SqliteOidcProviderRepository(deps.db)
+    'repository' in deps ? deps.repository : new DrizzleOidcProviderRepository(deps.db)
   const { secretBox } = deps
 
   function materialize(row: OidcProviderPersistenceRecord): OidcProvider {

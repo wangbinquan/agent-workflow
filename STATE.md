@@ -130,6 +130,7 @@
 > **W4-B3 批 a 已落**：collaboration 六对（反馈存储 / 评审人存储 / 任务可见性 ×2 / continuation 恢复 / 终态清扫）合一，`rfc359-w4-b3a-adapters.test.ts` 两引擎各跑；PG daemon 直连 collaboration infrastructure 的一条 R1 债还清。B3 剩 13 对。
 > **W4-B4 批 a 已落**：identity-access / memory / integration 七对合一（含 webhook 执行器调用面），`rfc359-w4-b4a-adapters.test.ts` 两引擎各跑；真 PG 抓到并修掉记忆注入读存储的顶层列捕获缺陷。同批把 RFC-359 中立句柄纳入 PG 执行面判据（三条 RFC-349 陷阱守卫此前对中立文件全盲），处置 10 处。B4 剩 18 对。
 > **W4-B4 批 b 已落**：integration 四对合一（事件响应目录 / 派发持久化 / 投递审计读模型 / MR 守卫与终态 effect，advisory lock 走引擎能力矩阵），`rfc359-w4-b4b-adapters.test.ts` 两引擎各跑。B4 剩 14 对。
+> **W4-B4 批 c 已落**：OIDC provider 仓库（serializable 走统一原语）与记忆蒸馏工作存储（含会话捕获 sink）两对合一，`rfc359-w4-b4c-adapters.test.ts` 两引擎各跑。B4 剩 12 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

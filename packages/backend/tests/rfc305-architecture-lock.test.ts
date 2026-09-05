@@ -337,6 +337,7 @@ describe('RFC-305 identity-access architecture', () => {
       'IdentityAccessEventSink',
     ])
     expect(exportedNames(resolve(publicRoot, 'operations.ts'))).toEqual([
+      'DrizzleOidcProviderRepository',
       'IdentityUserOperationDeps',
       'IdentityUserOperations',
       'OWNER_IDENTITY_SQL_BATCH_SIZE',
@@ -344,8 +345,6 @@ describe('RFC-305 identity-access architecture', () => {
       'OidcIdentityProfileAccess',
       'OidcProviderRepository',
       'OwnerIdentityQueries',
-      'PostgresqlOidcProviderRepository',
-      'SqliteOidcProviderRepository',
       'createIdentityUserOperations',
       'isOwnerScopedNameConflict',
     ])

@@ -1,6 +1,6 @@
-import type { DbClient } from '@/db/client'
+// RFC-359 W4-B4 —— 蒸馏会话捕获落库：一份 sink，两个 provider 共用。
+import type { ProviderNeutralDatabase } from '@/db/query'
 import { memoryDistillEvents } from '@/db/schema'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { DISTILL_CAPTURE_FAILED_KIND, getRuntimeDriver } from '@/services/runtime'
 import type {
   DistillSessionCaptureContext,
@@ -24,7 +24,7 @@ function captureContext(
   }
 }
 
-function sqliteSink(db: DbClient): DistillSessionCaptureSink {
+function sink(db: ProviderNeutralDatabase): DistillSessionCaptureSink {
   return Object.freeze({
     async append(events: Parameters<DistillSessionCaptureSink['append']>[0]) {
       if (events.length === 0) return
@@ -48,40 +48,11 @@ function sqliteSink(db: DbClient): DistillSessionCaptureSink {
   })
 }
 
-function postgresqlSink(db: PostgresqlDatabaseClient): DistillSessionCaptureSink {
-  return Object.freeze({
-    async append(events: Parameters<DistillSessionCaptureSink['append']>[0]) {
-      if (events.length === 0) return
-      await db.insert(memoryDistillEvents).values([...events])
-    },
-    async markFailed(input: Parameters<DistillSessionCaptureSink['markFailed']>[0]) {
-      try {
-        await db.insert(memoryDistillEvents).values({
-          distillJobId: input.distillJobId,
-          attemptIndex: input.attemptIndex,
-          ts: Date.now(),
-          kind: DISTILL_CAPTURE_FAILED_KIND,
-          payload: JSON.stringify({ sessionID: input.rootSessionId, reason: input.reason }),
-          sessionId: input.rootSessionId,
-          parentSessionId: null,
-        })
-      } catch {
-        // Capture is diagnostic and must never replace the distiller outcome.
-      }
-    },
-  })
-}
-
-export function createSqliteMemoryDistillSessionCapture(db: DbClient) {
-  const sink = sqliteSink(db)
+export function createMemoryDistillSessionCapture(db: ProviderNeutralDatabase) {
+  const captureSink = sink(db)
   return async (input: MemoryDistillCaptureInput): Promise<void> => {
-    await getRuntimeDriver(input.protocol).captureDistillSession?.(captureContext(input, sink))
-  }
-}
-
-export function createPostgresqlMemoryDistillSessionCapture(db: PostgresqlDatabaseClient) {
-  const sink = postgresqlSink(db)
-  return async (input: MemoryDistillCaptureInput): Promise<void> => {
-    await getRuntimeDriver(input.protocol).captureDistillSession?.(captureContext(input, sink))
+    await getRuntimeDriver(input.protocol).captureDistillSession?.(
+      captureContext(input, captureSink),
+    )
   }
 }

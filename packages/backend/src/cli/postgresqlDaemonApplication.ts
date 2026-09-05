@@ -37,7 +37,7 @@ import {
   createPostgresqlIdentityAccessCrossContextBindings,
   composePostgresqlOidcIdentityOperations,
 } from '@/modules/identity-access/composition/providerOperations'
-import { PostgresqlOidcProviderRepository } from '@/modules/identity-access/public/operations'
+import { DrizzleOidcProviderRepository } from '@/modules/identity-access/public/operations'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { composePostgresqlOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import {
@@ -573,7 +573,7 @@ export async function composePostgresqlDaemonApplication(
     identityAccess,
   })
   const oidcProviders = createOidcProvidersService({
-    repository: new PostgresqlOidcProviderRepository(input.db),
+    repository: new DrizzleOidcProviderRepository(input.db),
     secretBox: input.secretBox,
   })
   const identityUserOperations = composeIdentityUserOperations({

@@ -21,8 +21,7 @@ import {
 // RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
 export { setMemoryDistillLangProvider } from './application/distill/schedule'
 import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillReadStore'
-import { PostgresqlMemoryDistillWorkStore } from './infrastructure/postgresqlMemoryDistillWorkStore'
-import { SqliteMemoryDistillWorkStore } from './infrastructure/sqliteMemoryDistillWorkStore'
+import { DrizzleMemoryDistillWorkStore } from './infrastructure/memoryDistillWorkStore'
 import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'
 import {
   composePostgresqlMemoryCatalogOperations,
@@ -31,10 +30,7 @@ import {
 import type { RepositoryScopeAuthorizationInTx } from '@/modules/source-control/public/participants'
 import type { DbTxSync } from '@/db/txSync'
 import { composeSqliteMemoryCatalogOperations } from './infrastructure/sqliteMemoryCatalogOperations'
-import {
-  createPostgresqlMemoryDistillSessionCapture,
-  createSqliteMemoryDistillSessionCapture,
-} from './infrastructure/memoryDistillSessionCapture'
+import { createMemoryDistillSessionCapture } from './infrastructure/memoryDistillSessionCapture'
 import {
   markFusedSync,
   reassignFusedSkillSync,
@@ -159,9 +155,9 @@ export function composeSqliteMemoryOperations(input: {
 }): MemoryOperations {
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db),
-    workStore: new SqliteMemoryDistillWorkStore(
+    workStore: new DrizzleMemoryDistillWorkStore(
       input.db,
-      createSqliteMemoryDistillSessionCapture(input.db),
+      createMemoryDistillSessionCapture(input.db),
     ),
     runtimeResolver: new SqliteMemoryDistillRuntimeResolver(input.db),
     reviewedArtifacts: input.reviewedArtifacts,
@@ -188,9 +184,9 @@ export function composePostgresqlMemoryOperations(input: {
 }): MemoryOperations {
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db),
-    workStore: new PostgresqlMemoryDistillWorkStore(
+    workStore: new DrizzleMemoryDistillWorkStore(
       input.db,
-      createPostgresqlMemoryDistillSessionCapture(input.db),
+      createMemoryDistillSessionCapture(input.db),
     ),
     runtimeResolver: new PostgresqlMemoryDistillRuntimeResolver(input.db),
     reviewedArtifacts: input.reviewedArtifacts,

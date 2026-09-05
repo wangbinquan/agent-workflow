@@ -30,8 +30,7 @@ export type {
   OidcIdentityProfileAccess,
 } from '../application/ports/oidcIdentityCrossContext'
 export type { OidcProviderRepository } from '../application/ports/oidcProviderPersistence'
-export { SqliteOidcProviderRepository } from '../infrastructure/sqliteOidcProviderRepository'
-export { PostgresqlOidcProviderRepository } from '../infrastructure/postgresqlOidcProviderRepository'
+export { DrizzleOidcProviderRepository } from '../infrastructure/oidcProviderRepository'
 export {
   OWNER_IDENTITY_SQL_BATCH_SIZE,
   type OwnerIdentityQueries,
