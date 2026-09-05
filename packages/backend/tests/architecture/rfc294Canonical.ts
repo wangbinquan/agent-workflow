@@ -2691,7 +2691,7 @@ function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant)/.test(
       value,
     )
   ) {
