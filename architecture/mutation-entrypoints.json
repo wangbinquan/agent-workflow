@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1950,
+    "entries": 1949,
     "nodeRunInsertSites": 2,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -31193,28 +31193,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts#createPostgresqlRuntimeSessionCapturePersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts#createPostgresqlRuntimeSessionCapturePersistence",
-      "symbol": "createPostgresqlRuntimeSessionCapturePersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": true,
@@ -32245,6 +32223,28 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#createRuntimeSessionCapturePersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#createRuntimeSessionCapturePersistence",
+      "symbol": "createRuntimeSessionCapturePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -32419,29 +32419,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteProcessEffectObserver.ts#createProcessEffectAttemptObserver",
       "symbol": "createProcessEffectAttemptObserver",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts#createSqliteRuntimeSessionCapturePersistence",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts#createSqliteRuntimeSessionCapturePersistence",
-      "symbol": "createSqliteRuntimeSessionCapturePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46475,7 +46452,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2cbcda9b7c201517ef9c53f5b7f08057b0906710646ae458d8a63ffe636a8f6c",
+  "sourceDigest": "sha256:73369ddbb5eca538a00505b3b41cc374dafbba62fd9bbc79ca2bd303fe8e76fa",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46585,7 +46562,7 @@
     ],
     "denominator": {
       "controlSubtypes": 6,
-      "durableWriterSites": 281,
+      "durableWriterSites": 278,
       "unknownAuthoritySites": 0,
       "unknownControlSubtypes": 0
     },
@@ -47376,6 +47353,22 @@
       },
       {
         "allowedTables": [
+          "taskExecutionIntents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "releaseClarifyForRetry",
+        "controlSubtype": null,
+        "dataClass": "taskExecutionIntents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts#80:taskExecutionIntents",
+        "line": 80,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts#DrizzleGateContinuationPreDrivePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleGateContinuationPreDrivePersistence"
+      },
+      {
+        "allowedTables": [
           "tasks"
         ],
         "authorityKind": "worker-epoch",
@@ -47389,6 +47382,22 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "transitionHumanGateTask"
+      },
+      {
+        "allowedTables": [
+          "nodeRuns"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "transition",
+        "controlSubtype": null,
+        "dataClass": "nodeRuns",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts#40:nodeRuns",
+        "line": 40,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts#DrizzleMergeStateLifecyclePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "DrizzleMergeStateLifecyclePersistence"
       },
       {
         "allowedTables": [
@@ -47680,38 +47689,6 @@
       },
       {
         "allowedTables": [
-          "taskExecutionIntents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "releaseClarifyForRetry",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionIntents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts#80:taskExecutionIntents",
-        "line": 80,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts#PostgresqlGateContinuationPreDrivePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlGateContinuationPreDrivePersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "transition",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts#44:nodeRuns",
-        "line": 44,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts#PostgresqlMergeStateLifecyclePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "PostgresqlMergeStateLifecyclePersistence"
-      },
-      {
-        "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
@@ -47885,22 +47862,6 @@
         "requiredBrandedProof": "RecoveryCandidateProof",
         "revisionPredicate": "task-recovery-generation-and-lifecycle-revision",
         "symbol": "commitPreparedWorkspace"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "appendEvents",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts#56:nodeRunEvents",
-        "line": 56,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts#createPostgresqlRuntimeSessionCapturePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createPostgresqlRuntimeSessionCapturePersistence"
       },
       {
         "allowedTables": [
@@ -49120,6 +49081,22 @@
       },
       {
         "allowedTables": [
+          "nodeRunEvents"
+        ],
+        "authorityKind": "worker-epoch",
+        "consumer": "appendEvents",
+        "controlSubtype": null,
+        "dataClass": "nodeRunEvents",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#52:nodeRunEvents",
+        "line": 52,
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#createRuntimeSessionCapturePersistence",
+        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
+        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
+        "symbol": "createRuntimeSessionCapturePersistence"
+      },
+      {
+        "allowedTables": [
           "nodeRuns"
         ],
         "authorityKind": "worker-epoch",
@@ -49133,38 +49110,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "GateContinuationEffectStep"
-      },
-      {
-        "allowedTables": [
-          "taskExecutionIntents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "releaseClarifyForRetry",
-        "controlSubtype": null,
-        "dataClass": "taskExecutionIntents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts#82:taskExecutionIntents",
-        "line": 82,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts#SqliteGateContinuationPreDrivePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteGateContinuationPreDrivePersistence"
-      },
-      {
-        "allowedTables": [
-          "nodeRuns"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "transition",
-        "controlSubtype": null,
-        "dataClass": "nodeRuns",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts#36:nodeRuns",
-        "line": 36,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts#SqliteMergeStateLifecyclePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "SqliteMergeStateLifecyclePersistence"
       },
       {
         "allowedTables": [
@@ -49325,22 +49270,6 @@
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
         "symbol": "createProcessEffectAttemptObserver"
-      },
-      {
-        "allowedTables": [
-          "nodeRunEvents"
-        ],
-        "authorityKind": "worker-epoch",
-        "consumer": "appendEvents",
-        "controlSubtype": null,
-        "dataClass": "nodeRunEvents",
-        "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts#56:nodeRunEvents",
-        "line": 56,
-        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts#createSqliteRuntimeSessionCapturePersistence",
-        "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
-        "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
-        "symbol": "createSqliteRuntimeSessionCapturePersistence"
       },
       {
         "allowedTables": [

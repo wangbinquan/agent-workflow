@@ -108,6 +108,9 @@
 > **W4-B1 批 2c 已落**：中立「统一写事务 + owner 围栏」原语 `infrastructure/ownedTaskExecution.ts`（PG READ COMMITTED、
 > 围栏规则两引擎同一：显式上下文 > 环境上下文 > 无主围栏），wrapper run / node-run runtime / scheduler completion /
 > idle timeout 四对合到它上面，八个 provider 文件删除；`rfc359-w4-b1-batch2c-adapters.test.ts` 两引擎各跑。剩 26 对。
+> **W4-B1 批 2d 已落**：runtime session capture / gate pre-drive / merge state / task engine application 四对合到同一原语上，
+> 八个 provider 文件删除；SQLite 统一事务补回 `BEGIN IMMEDIATE` 的跨进程写锁重试（复用 `retrySqliteWrite`）；
+> `rfc359-w4-b1-batch2d-adapters.test.ts` 两引擎各跑。剩 22 对。
 > **下一步**：W4 成对删除（sync 孪生 / SkillCatalogBoot 适配器 / effect persistence 对 / legacy workgroup engine /
 > `resolveCodeHostMutations` 孪生 / SQLite 同步终态维护 store）；`cli/sqliteDaemonApplication.ts` 拆文件随之。
 > SQLite 侧同步孪生（`sqlite*Participant` / `sqliteHumanGateOperationStore` / `sqliteTaskExecutionIntent*` /

@@ -83,6 +83,11 @@ BEGIN 到 COMMIT 之间没有任何别的上下文能运行。三条守卫：
 **读连接分离**：事务外的读走既有的只读连接（`platform/persistence/sqlite/readonlySqliteDatabase.ts`），
 WAL 下不被写事务阻塞，也不会误入他人事务。
 
+**跨进程写锁重试（W4-B1 批 2d 补）**：`BEGIN IMMEDIATE` 撞 `SQLITE_BUSY` / `SQLITE_BUSY_*` / `SQLITE_LOCKED*`
+时按 RFC-111 PR-D 的 `retrySqliteWrite` 判据退避重试（最多三次），且只包 BEGIN 本身——它失败时事务尚未开始、
+没有任何语句执行过，重跑不会重复副作用；其余错误码 fail-fast。进程内写者由租约串行，这条只对付另一个进程
+（备份 / vacuum / CLI）正持有写锁、`busy_timeout` 到期或扩展码绕过等待的情形。
+
 ### 3.3 PostgreSQL 实现（并发优先，绝不继承 SQLite 的单写者）
 
 - 沿用驱动自带的异步事务，**不取写者租约**：PG 每笔事务一条独立连接，多写并发是它的核心优势，

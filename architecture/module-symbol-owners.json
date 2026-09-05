@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1961,
+    "backendFiles": 1957,
     "frontendFiles": 622,
     "legacyFiles": 616,
-    "moduleFiles": 1345,
-    "productionFiles": 2738,
+    "moduleFiles": 1341,
+    "productionFiles": 2734,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 26157
+    "symbolsIncludingFileRoots": 26150
   },
   "entries": [
     {
@@ -140782,6 +140782,30 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/gateContinuationPreDrivePersistence.ts#DrizzleGateContinuationPreDrivePersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DrizzleGateContinuationPreDrivePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecycleTransaction.ts#$file",
       "removeAfterWave": null,
@@ -141495,6 +141519,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SkillsResolution",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts#DrizzleMergeStateLifecyclePersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DrizzleMergeStateLifecyclePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -142330,30 +142378,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlGateContinuationPreDrivePersistence.ts#PostgresqlGateContinuationPreDrivePersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlGateContinuationPreDrivePersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlHumanGateTaskLifecyclePersistence.ts#$file",
       "removeAfterWave": null,
@@ -142383,30 +142407,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlHumanGateTaskLifecyclePersistence",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlMergeStateLifecyclePersistence.ts#PostgresqlMergeStateLifecyclePersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlMergeStateLifecyclePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -142767,30 +142767,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "workspaceRepoRows",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlRuntimeSessionCapturePersistence.ts#createPostgresqlRuntimeSessionCapturePersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createPostgresqlRuntimeSessionCapturePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -143271,30 +143247,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "PostgresqlTaskDriverLifecycleOptions",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskEngineApplicationPersistence.ts#PostgresqlTaskEngineApplicationPersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PostgresqlTaskEngineApplicationPersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -146326,6 +146278,30 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence.ts#createRuntimeSessionCapturePersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createRuntimeSessionCapturePersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/schedulerCompletionPersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/schedulerCompletionPersistence.ts#$file",
       "removeAfterWave": null,
@@ -146511,30 +146487,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TRANSPORT_VERSION",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteGateContinuationPreDrivePersistence.ts#SqliteGateContinuationPreDrivePersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteGateContinuationPreDrivePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -146739,30 +146691,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ManualQuestionParkTransaction",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteMergeStateLifecyclePersistence.ts#SqliteMergeStateLifecyclePersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteMergeStateLifecyclePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -147075,30 +147003,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "sha256",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteRuntimeSessionCapturePersistence.ts#createSqliteRuntimeSessionCapturePersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createSqliteRuntimeSessionCapturePersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -147435,30 +147339,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskDecisionParticipantInTx",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskEngineApplicationPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskEngineApplicationPersistence.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskEngineApplicationPersistence.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskEngineApplicationPersistence.ts#SqliteTaskEngineApplicationPersistence",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "SqliteTaskEngineApplicationPersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -149115,6 +148995,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "transferOwnerRow",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts#DrizzleTaskEngineApplicationPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DrizzleTaskEngineApplicationPersistence",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -158306,6 +158210,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "affectedRows",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#beginImmediateWithRetry",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "beginImmediateWithRetry",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -314589,5 +314505,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2cbcda9b7c201517ef9c53f5b7f08057b0906710646ae458d8a63ffe636a8f6c"
+  "sourceDigest": "sha256:73369ddbb5eca538a00505b3b41cc374dafbba62fd9bbc79ca2bd303fe8e76fa"
 }
