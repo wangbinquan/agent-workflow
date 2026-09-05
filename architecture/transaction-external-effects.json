@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 62,
-    "transactionCallbacks": 482
+    "transactionCallbacks": 483
   },
   "entries": [
     {
@@ -4964,6 +4964,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts#transaction:35",
+      "line": 35,
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/ownedTaskExecution.ts#withTaskExecutionWrite",
+      "status": "clear",
+      "symbol": "withTaskExecutionWrite",
+      "targetContext": "task-execution",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskArchiveMaintenanceCommand.ts#transaction:374",
@@ -5926,7 +5938,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4f1c26affd6817ea4ae69cd6aa16de2786a71acd7f3f55927aaf0c31c7202b93",
+  "sourceDigest": "sha256:2cbcda9b7c201517ef9c53f5b7f08057b0906710646ae458d8a63ffe636a8f6c",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
